@@ -6,6 +6,29 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.128.0] - 2026-10-14
+### Cải thiện
+- **Bot Zalo cá nhân chờ khách nhắn xong rồi mới trả lời.** Khách nhắn một ý thành mấy tin liền thì bot đợi khách im 5 giây, rồi đáp một lần đủ các ý, thay vì đáp từng mẩu như máy.
+- **Gửi ảnh rồi nhắn "xem giúp em"** ở chat riêng giờ tới bot thành một câu hỏi kèm ảnh.
+- Trong lúc chờ mà bạn nhắn tay vào cuộc chat, hoặc tắt bot, thì bot không gửi gì. Nhóm Zalo giữ nguyên cách cũ.
+- Để khách không chờ lâu, tài khoản vừa có khách nhắn riêng được đọc tin 2 giây một lần (thay vì 20) trong một phút. Việc đọc chỉ chạm bộ đệm trên máy, không gọi thêm lên Zalo.
+- Cảm ơn @thanhtmfyu-lang đã đóng góp.
+
+## [0.127.0] - 2026-10-14
+### Sửa lỗi
+- **Bot chạy bằng gói ChatGPT không còn bỏ sót lệnh gọi công cụ.** Có lúc ChatGPT trả lệnh gọi công cụ theo từng mảnh mà phần tổng kết cuối lại rỗng, nên bot bỏ qua lệnh đó và trả lời thiếu. Giờ bot gom đủ, không chạy trùng, và luồng bị đứt giữa chừng thì tự thử lại thay vì chạy dở.
+- Cảm ơn @tuanlong1989florist đã đóng góp.
+
+## [0.125.0] - 2026-10-14
+### Sửa lỗi
+- **Việc nền chạy bằng ChatGPT (Codex) không còn báo xong giả khi mất công cụ.** Nhắc hẹn, việc lặp và việc Kanban chạy bằng Codex giờ chờ MCP Hub của Javis lên hẳn. Hub không lên thì việc báo lỗi rõ ràng, thay vì chạy mà không có công cụ rồi vẫn ghi là đã xong.
+- Cảm ơn @dev23072005 đã đóng góp.
+
+## [0.123.0] - 2026-10-14
+### Sửa lỗi
+- **Bot tag thật mọi người nó nhắc tên trong nhóm Zalo.** Trước đây chỉ người bot đang trả lời được tag; bot viết thêm "@Minh Quý" hay "@Phạm Đại" trong câu thì đó chỉ là chữ thường, Zalo không báo cho ai. Giờ mỗi "@Tên" khớp một người đã từng nhắn trong nhóm đều thành tag thật, không phân biệt hoa thường hay dấu.
+- **Câu bạn gõ ở Hộp thư có "@Tên" cũng tag thật.** Người chưa từng nhắn trong nhóm thì chưa tag được, tên vẫn hiện như chữ thường.
+
 ## [0.122.0] - 2026-10-14
 ### Bảo mật
 - **Công cụ mở file không còn chạy file chương trình.** Lệnh mở file trên máy chạy Javis giờ từ chối file chạy được (script, chương trình, lối tắt). Mở app theo tên vẫn như cũ.

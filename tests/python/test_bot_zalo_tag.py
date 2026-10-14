@@ -242,6 +242,51 @@ finally:
     mod.gui = real_mod_gui
 check("channels.gui chuyển `mention` cho kênh, và không thêm gì khi người gọi không truyền", FWD == [{"mention": LAN}, {}], FWD)
 
+# ============================================================
+# 6. Tag MỌI người được nhắc "@Tên" trong câu (0.123.0)
+# ============================================================
+# Báo cáo 14/10/2026: bot được dặn tag "@Minh Quý" và "@Phạm Đại", viết đủ hai tên, nhưng chỉ người
+# đang được trả lời có tag thật; tên còn lại là chữ thường nên Zalo không báo ai.
+DANH_BA = [{"uid": "7770001", "name": "Minh Quý"}, {"uid": "7770002", "name": "Phạm Đại"},
+           {"uid": "7770003", "name": "Minh Quý Trần"}, {"uid": "7770009", "name": "Javis Vũ"}]
+zp._danh_ba_nhom = lambda cid, chat: list(DANH_BA)
+zc._ID_MINH[CID] = {"uid": "7770009", "ten": "Javis Vũ"}
+KHACH = {"uid": "7770005", "name": "Lan"}
+
+reset()
+ok, _ = send("Dạ em đã báo @Minh Quý và @Phạm Đại xem giúp chị ạ", mention=KHACH)
+c = CLI[0] if CLI else {}
+txt = "@Lan Dạ em đã báo @Minh Quý và @Phạm Đại xem giúp chị ạ"
+specs = [x for x in c.get("opts", []) if x.count(":") == 2]
+check("CANARY: người được trả lời VÀ hai người được nhắc tên đều có tag thật, một lần gửi",
+      c.get("pos") == [GROUP, txt] and specs == [
+          f"0:7770005:4", f"{txt.index('@Minh Quý')}:7770001:9", f"{txt.index('@Phạm Đại')}:7770002:9"], c)
+check("các tag đi sau MỘT cờ --mention (CLI nhận danh sách)", c.get("opts", [])[:3] == ["-t", "1", "--mention"], c)
+
+reset()
+ok, _ = send("Anh @minh quy ơi, chị Lan hỏi giá", mention=None)
+c = CLI[0] if CLI else {}
+check("không có người được trả lời (chủ gõ ở Hộp thư) mà câu có @Tên: vẫn tag, không phân biệt hoa thường và dấu",
+      ok and len(CLI) == 1 and MCP == [] and [x for x in c["opts"] if x.count(":") == 2] == ["4:7770001:9"], (CLI, MCP))
+
+reset()
+send("Nhờ @Minh Quý Trần kiểm tra", mention=None)
+check("tên dài thắng tên ngắn trùng đầu ('@Minh Quý Trần' không thành '@Minh Quý')",
+      CLI and [x for x in CLI[0]["opts"] if x.count(":") == 2] == ["4:7770003:14"], CLI)
+
+reset()
+send("Chào @Minh Quýnh và @Javis Vũ", mention=None)
+check("không ăn vào đầu tên dài hơn ('@Minh Quýnh'), không tự tag chính tài khoản: gửi thường",
+      CLI == [] and len(MCP) == 1, (CLI, MCP))
+
+reset()
+send("Gửi @Ai Đó lạ nhé", mention=None)
+check("@Tên không có trong danh bạ nhóm: gửi thường qua MCP, không chạy CLI", CLI == [] and len(MCP) == 1, (CLI, MCP))
+
+reset()
+send("Dạ @Lan ơi, @Lan nhé", mention=KHACH)
+check("người được trả lời được nhắc hai lần: chỉ một tag", CLI and len([x for x in CLI[0]["opts"] if x.count(":") == 2]) == 1, CLI)
+
 check("không dùng em dash trong file này và code mới", chr(0x2014) not in open(__file__, encoding="utf-8").read()
       and chr(0x2014) not in (SERVER / "channels" / "zalo_personal.py").read_text(encoding="utf-8"))
 

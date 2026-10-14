@@ -99,6 +99,22 @@ MAX_CHO_TIN = 5         # trần số tin gom lại khi bot đang bận (chống
 MAX_CHO_KY_TU = 4000
 
 
+def noi_tin(texts):
+    """Gộp nhiều tin của một người thành MỘT lượt, giữ thứ tự, nối bằng xuống dòng, trong trần
+    MAX_CHO_KY_TU ký tự. Dùng cho kênh tự gom ngoài hàng đợi này (Zalo cá nhân chờ khách nhắn xong).
+
+    Khác hàng đợi lúc bot bận (giữ MAX_CHO_TIN tin ĐẦU để chống spam làm phình bộ nhớ): ở đây khách
+    hay mở bằng vài câu chào rồi mới hỏi, nên giữ các tin MỚI NHẤT vừa trần ký tự. Giữ tin đầu thì
+    7 tin "Thầy ơi / cho em hỏi / ..." tới bot chỉ còn 5 câu chào, mất đúng câu hỏi."""
+    giu, tong = [], 0
+    for t in reversed([str(x or "") for x in (texts or [])]):
+        if tong + len(t) > MAX_CHO_KY_TU:
+            continue
+        giu.append(t)
+        tong += len(t)
+    return "\n".join(reversed(giu))
+
+
 class HangLuot:
     """Mixin: điều phối lượt trả lời theo từng chat.
 

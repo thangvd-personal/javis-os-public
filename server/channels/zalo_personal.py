@@ -96,6 +96,65 @@ def tagged_text(text: str, name: str) -> tuple:
     return tok + " " + text, 0, _utf16_len(tok)
 
 
+def _bo_dau(s: str) -> str:
+    """Lowercase without Vietnamese diacritics, SAME length as the input (one char in, one out), so a
+    match found on this form maps back to the same positions in the real text."""
+    import unicodedata
+    out = []
+    for ch in s:
+        if ch in "đĐ":
+            out.append("d")
+            continue
+        base = unicodedata.normalize("NFD", ch)[0]
+        out.append(base.lower() if len(base) == 1 else ch.lower())
+    return "".join(out)
+
+
+def tag_ten_trong_cau(text: str, danh_ba, bo_qua=()) -> list:
+    """`[(pos, uid, len)]` (UTF-16 units) for every "@Name" in `text` that names someone in `danh_ba`.
+
+    Field report 2026-10-14: a bot told to tag "@Minh Quý" and "@Phạm Đại" wrote both names, but only
+    the person it was answering got a real Zalo tag; the others were plain text and Zalo notified no
+    one. `danh_ba` is `[{uid, name}]` (conversations.group_speakers: everyone who has written in the
+    group). Longest names are tried first ("@Minh Quý Phạm" beats "@Minh Quý"), case and diacritics
+    are ignored ("@minh quy" still tags), a name must end on a word boundary, and `bo_qua` holds uids
+    already tagged (the person being answered) or never to tag (the account itself)."""
+    import re as _re
+    ten = []
+    for d in danh_ba or []:
+        uid = str((d or {}).get("uid") or "").strip()
+        name = " ".join(str((d or {}).get("name") or "").split())
+        if _UID_RE.fullmatch(uid) and len(name) >= 2 and uid not in bo_qua:
+            ten.append((_bo_dau(name), uid, len(name)))
+    if not ten or "@" not in text:
+        return []
+    ten.sort(key=lambda x: -x[2])
+    chuan = _bo_dau(text)
+    ra, da_tag = [], set(bo_qua)
+    for m in _re.finditer("@", text):
+        i = m.start() + 1
+        for key, uid, n in ten:
+            if uid in da_tag or chuan[i:i + n] != key:
+                continue
+            nxt = text[i + n:i + n + 1]
+            if nxt and (nxt.isalnum() or nxt == "_"):
+                continue
+            ra.append((_utf16_len(text[:m.start()]), uid, _utf16_len(text[m.start():i + n])))
+            da_tag.add(uid)
+            break
+    return ra
+
+
+def _danh_ba_nhom(conn_id: str, chat_id: str) -> list:
+    """Everyone who has written in this group, from the inbox store (instant, no network call)."""
+    try:
+        import conversations
+        return conversations.group_speakers(f"zalo_personal:{conn_id}", str(chat_id))
+    except Exception as e:      # noqa: BLE001 - no directory = only the answered person gets tagged
+        print(f"[zalo-personal] danh bạ nhóm lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+        return []
+
+
 def _clean_mention(mention) -> tuple:
     """`(uid, tên)` dùng được, hoặc `("", "")`. uid phải là số (nó đi vào tham số lệnh); tên chưa biết thì không có gì để tô."""
     if not isinstance(mention, dict):
@@ -134,13 +193,23 @@ async def _send_tagged(conn: dict, chat_id: str, text: str, mention) -> Optional
     uid, name = _clean_mention(mention)
     home = zalo_cli.home_of(conn)
     cid = str(conn.get("id") or "")
-    if not uid or not home or _tag_paused(cid):
+    if not home or _tag_paused(cid):
         return None
-    final, pos, ln = tagged_text(text, name)
+    final, specs = text, []
+    if uid:
+        final, pos, ln = tagged_text(text, name)
+        specs.append((pos, uid, ln))
+    # Every other "@Name" the message carries (0.123.0), never the account itself.
+    minh = str((zc._ID_MINH.get(cid) or {}).get("uid") or "")
+    specs += tag_ten_trong_cau(final, _danh_ba_nhom(cid, chat_id), bo_qua={u for u in (uid, minh) if u})
+    if not specs:
+        return None
+    specs.sort()
     # Tiếng vọng của tin có tag mang cả "@Tên": nhớ luôn bản này, không thì vòng đọc tưởng chủ vừa tự tay nhắn và bot im 10 phút.
     zc.ghi_da_gui(cid, chat_id, final)
     ok, _data, err = await zalo_cli.run_cli(
-        {"home": home}, ["msg", "send"], [chat_id, final], ["-t", "1", "--mention", f"{pos}:{uid}:{ln}"], timeout=TAG_TIMEOUT)
+        {"home": home}, ["msg", "send"], [chat_id, final],
+        ["-t", "1", "--mention"] + [f"{p}:{u}:{n}" for p, u, n in specs], timeout=TAG_TIMEOUT)
     if ok:
         _tag_result(cid, True)
         return True, ""
@@ -168,7 +237,7 @@ async def gui(tk: dict, chat_id: str, text: str, chat_type: str = "private", men
         return False, localefmt.chu("tài khoản Zalo này không còn ở trang Kết nối (hoặc đang tắt)",
                                      "this Zalo account is no longer on the Connections page (or is turned off)")
     loai = 1 if str(chat_type or "") == "group" else 0
-    if loai == 1 and mention:
+    if loai == 1 and (mention or "@" in str(text or "")):
         r = await _send_tagged(conn, str(chat_id), str(text or ""), mention)
         if r is not None:
             return r
@@ -340,7 +409,9 @@ class Transport:
             # instructions say nothing about newcomers.
             text = cau_vao_nhom(ev)
         else:
-            text = (conversations.chu_thich_anh(ev.get("text")) if co_anh else str(ev.get("text") or "").strip())
+            # Lượt gộp (0.128.0, `zalo_personal_channel.gop_tin`) đã bóc chú thích ảnh từng tin rồi nối lại: lấy nguyên.
+            gop = bool((ev.get("metadata") or {}).get("gop"))
+            text = (conversations.chu_thich_anh(ev.get("text")) if co_anh and not gop else str(ev.get("text") or "").strip())
         thread = str(ev.get("external_chat_id") or "")
         if not thread:
             return

@@ -2072,6 +2072,8 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
             if reasoning not in (None, "", "off"):
                 payload["reasoning"] = {"effort": api_effort(reasoning)}
             output, round_text = [], ""
+            streamed_items = {}
+            completed = False
             try:
                 async with client.stream("POST", CODEX_RESPONSES_URL, headers=headers, json=payload) as r:
                     if r.status_code != 200:
@@ -2105,7 +2107,15 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
                             # Bóc dấu trích dẫn nội bộ ngay tại nguồn, y như đường không-tool:
                             # backend Codex phát chúng ở CẢ hai đường.
                             round_text += strip_provider_markers(obj.get("delta") or "")
+                        elif et == "response.output_item.done":
+                            item = obj.get("item") or {}
+                            if isinstance(item, dict) and item.get("type"):
+                                key = (item.get("id") or item.get("call_id")
+                                       or obj.get("output_index"))
+                                if key is not None:
+                                    streamed_items[key] = item
                         elif et == "response.completed":
+                            completed = True
                             _resp = obj.get("response") or {}
                             output = (_resp.get("output")) or []
                             _u = _resp.get("usage") or {}
@@ -2119,6 +2129,32 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
             except Exception as e:
                 yield ev_loi_exc(_c("ChatGPT lỗi", "ChatGPT error"), e)
                 return
+            if not completed:
+                # A cut stream is the textbook temporary failure. `tam_thoi` lets
+                # thu_lai_khi_tam_thoi run the turn again, which it only does while nothing
+                # (no text, no tool call) has gone out yet, so no tool can run twice.
+                yield {"type": "error", "tam_thoi": True,
+                       "content": _c("ChatGPT: luồng phản hồi chưa hoàn tất.",
+                                     "ChatGPT: response stream did not complete.")}
+                return
+            if not output:
+                # Fallback to the items streamed one by one. A streamed `reasoning` item carries
+                # no encrypted content (the payload does not ask for it and store is False), so
+                # sending it back as input can be rejected by the API: keep only the ones that
+                # can be replayed.
+                output = [it for it in streamed_items.values()
+                          if it.get("type") != "reasoning" or it.get("encrypted_content")]
+            # A repeated SSE item must not execute a tool twice.
+            unique_output, seen_calls = [], set()
+            for item in output:
+                if item.get("type") == "function_call":
+                    call_id = item.get("call_id") or item.get("id")
+                    if call_id and call_id in seen_calls:
+                        continue
+                    if call_id:
+                        seen_calls.add(call_id)
+                unique_output.append(item)
+            output = unique_output
             fcalls = [o for o in output if o.get("type") == "function_call"]
             if fcalls:
                 for o in output:
