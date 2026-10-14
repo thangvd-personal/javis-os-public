@@ -137,6 +137,13 @@ trong_brain = Path(ctx.vault_root) / "bao-cao.md"
 trong_brain.write_text("x", encoding="utf-8")
 out = m._open({"name": str(trong_brain)}, ctx)
 check("mở file trong brain: được, kind=path", calls["launch"][-1][1] == "path" and out.startswith("Đã mở"))
+n_truoc = len(calls["launch"])
+for duoi in (".bat", ".cmd", ".ps1", ".exe", ".vbs", ".lnk", ".sh", ".command"):
+    f = Path(ctx.vault_root) / f"chay{duoi}"
+    f.write_text("echo x", encoding="utf-8")
+    out = m._open({"name": str(f)}, ctx)
+    check(f"CANARY: file chạy được {duoi} trong brain KHÔNG được mở (lượt auto có thể vừa ghi nó)",
+          out.startswith("ERROR") and len(calls["launch"]) == n_truoc)
 out = m._open({"name": ""}, ctx)
 check("mở thiếu name: ERROR", out.startswith("ERROR"))
 

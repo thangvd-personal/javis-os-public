@@ -8,6 +8,23 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.122.0] - 2026-10-14
+### Security
+- **The open-file tool no longer runs programs.** Opening a file on the machine running Javis now refuses runnable files (scripts, programs, shortcuts). Opening an app by name works as before.
+- **The login session file is readable by the owner only**, like the secret key and the hub token.
+
+## [0.119.0] - 2026-10-14
+### Fixed
+- **Tools no longer land on the wrong brain when a session stores a short brain name.** Some chat sessions stored the brain as "brain" (the default brain) instead of a full path, so tools through the MCP Hub could not tell which brain to use, or could end up in a folder that is not a brain. They now resolve to the right brain. Thanks to @dev23072005 for the report.
+
+## [0.118.0] - 2026-10-14
+### Security
+- **Tighter checks on live connections to Javis.** Every real-time connection (chat, terminal, voice, graph) now passes the same origin checks as write actions, including on machines with no password set. Your dashboard, Telegram and command-line tools are not affected. Updating soon is recommended.
+
+## [0.117.0] - 2026-10-14
+### Security
+- **Background jobs on ChatGPT (Codex) keep their permission level.** A reminder, loop or Kanban job set to Read-only or Draft that ran on Codex could still call tools at Full access. It now runs at the level it was given, like the other engines.
+
 ## [0.114.0] - 2026-10-14
 ### Fixed
 - **The Zalo bot no longer goes silent after Javis restarts.** A Javis that stopped uncleanly (a crash, a hard stop during an update) used to leave the old Zalo process running, so the account had two listening sessions. Zalo delivers to only one of them, the bot read the other and stayed quiet. Javis now records every connector process it starts and clears what an earlier run left behind.

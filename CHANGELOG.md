@@ -6,6 +6,23 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.122.0] - 2026-10-14
+### Bảo mật
+- **Công cụ mở file không còn chạy file chương trình.** Lệnh mở file trên máy chạy Javis giờ từ chối file chạy được (script, chương trình, lối tắt). Mở app theo tên vẫn như cũ.
+- **File phiên đăng nhập chỉ chủ máy đọc được**, giống khoá bí mật và token của hub.
+
+## [0.119.0] - 2026-10-14
+### Sửa lỗi
+- **Công cụ không còn chạy nhầm brain khi phiên ghi tên brain kiểu viết tắt.** Một số phiên chat lưu brain là "brain" (brain mặc định) thay vì đường dẫn đầy đủ, nên công cụ qua MCP Hub không xác định được brain, hoặc có lúc rơi vào một thư mục không phải brain. Giờ chúng về đúng brain. Cảm ơn @dev23072005 đã báo lỗi.
+
+## [0.118.0] - 2026-10-14
+### Bảo mật
+- **Siết kết nối trực tiếp tới Javis.** Mọi kết nối thời gian thực (khung chat, terminal, giọng nói, đồ thị) giờ qua cùng lớp kiểm nguồn gốc như các thao tác ghi, kể cả trên máy chưa đặt mật khẩu. Dashboard của bạn, Telegram và các công cụ dòng lệnh không bị ảnh hưởng. Nên cập nhật sớm.
+
+## [0.117.0] - 2026-10-14
+### Bảo mật
+- **Việc nền chạy bằng ChatGPT (Codex) giữ đúng mức quyền.** Nhắc hẹn, việc lặp hay việc Kanban đặt ở mức Chỉ đọc hoặc Ghi nháp mà chạy bằng Codex trước đây vẫn gọi được công cụ ở mức Toàn quyền. Giờ chúng chạy đúng mức đã đặt, như các engine khác.
+
 ## [0.114.0] - 2026-10-14
 ### Sửa lỗi
 - **Bot Zalo không còn im sau khi Javis khởi động lại.** Javis tắt không êm (crash, dừng cứng khi cập nhật) từng để lại tiến trình Zalo cũ còn chạy, nên tài khoản có hai phiên nghe. Zalo chỉ gửi tin về một phiên, bot đọc phiên kia và im luôn. Giờ Javis ghi lại mọi tiến trình kết nối nó mở và tự dọn phần sót của lần chạy trước.

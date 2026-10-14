@@ -371,6 +371,10 @@ class _NenTinh:
 
 
 app.add_middleware(_NenTinh, minimum_size=1024)
+# Every WebSocket handshake passes the same Origin/Host rules as HTTP writes (web_security.ws_decision).
+# The http middlewares below never see websocket scopes, and the WS routes only check a session when a
+# password is set, so without this a web page could open /ws/terminal on a default local install.
+app.add_middleware(web_security.WebSocketGuard, gate_active=lambda: cfgmod.gate_active())
 
 
 @app.middleware("http")
@@ -17050,7 +17054,8 @@ async def sessions_set_model(session_id: str, provider: str = Form(""),
     if prov and not _provider_def(prov):
         return JSONResponse({"error": localefmt.chu(f"provider không tồn tại: {prov}",
                                                     f"provider does not exist: {prov}")}, status_code=400)
-    ok = get_store().set_pinned_model(session_id, prov, model, brain=(brain or "").strip() or None)
+    ok = get_store().set_pinned_model(session_id, prov, model,
+                                      brain=_brain_key(brain) if (brain or "").strip() else None)
     if not ok:
         return JSONResponse({"error": localefmt.chu("phiên không tồn tại", "session does not exist")}, status_code=404)
     return {"ok": True, "pinned_provider": prov or None, "pinned_model": (model or "").strip() or None}
@@ -17069,7 +17074,8 @@ async def sessions_set_project(session_id: str, project_id: str = Form(""),
     store = get_store()
     if pid and not store.get_project(pid):
         return JSONResponse({"error": localefmt.chu("project không tồn tại", "project does not exist")}, status_code=404)
-    if not store.set_project(session_id, pid, brain=(brain or "").strip() or None):
+    if not store.set_project(session_id, pid,
+                             brain=_brain_key(brain) if (brain or "").strip() else None):
         return JSONResponse({"error": "not found"}, status_code=404)
     return {"ok": True}
 

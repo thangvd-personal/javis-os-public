@@ -574,6 +574,9 @@ def _build_codex(spec, claude_cli_obj, mode, tag, codex_profile=None):
     try:
         import mcp_hub
         mcp_hub.dat_codex_vault(cc.extra_config, getattr(claude_cli_obj, "javis_vault", None))
+        # The job's own level, not the profile's `full` (see mcp_hub.dat_codex_mode).
+        mcp_hub.dat_codex_mode(cc.extra_config,
+                               mode or getattr(claude_cli_obj, "javis_mode", None) or "full")
     except Exception as e:
         print(f"[aux codex vault] {e}", file=sys.stderr)
     return cc

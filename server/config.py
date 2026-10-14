@@ -1257,6 +1257,11 @@ def _save_sessions():
     try:
         _SESS_PATH.write_text(json.dumps(SESSIONS), encoding="utf-8")
     except Exception:
+        return
+    try:
+        # Raw login session tokens: owner-only, like .secret_key and .hub_token (no-op on Windows).
+        os.chmod(_SESS_PATH, 0o600)
+    except Exception:
         pass
 
 

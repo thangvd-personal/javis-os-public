@@ -303,6 +303,29 @@ def check_ready() -> Optional[str]:
     return None
 
 
+# Extensions the OS RUNS instead of opening in a viewer. This tool is `safe` (it works at auto), and
+# javis_write_file can write any extension into the brain, so without this an auto-level turn could
+# write a .bat and launch it. Apps are opened by NAME (installed scan, kind "lnk"/"app"), not by
+# path, so blocking these paths costs nothing legitimate.
+_DUOI_CHAY_DUOC = frozenset({
+    ".exe", ".bat", ".cmd", ".com", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh",
+    ".msi", ".msc", ".msp", ".scr", ".cpl", ".pif", ".hta", ".reg", ".lnk", ".url", ".appref-ms",
+    ".jar", ".sh", ".bash", ".command", ".tool", ".app", ".desktop", ".run", ".bin", ".appimage",
+    ".py", ".pyw", ".rb", ".pl",
+})
+
+
+def _la_file_chay_duoc(p: Path) -> bool:
+    if p.suffix.lower() in _DUOI_CHAY_DUOC:
+        return True
+    if not IS_WIN:
+        try:
+            return p.is_file() and os.access(p, os.X_OK)
+        except OSError:
+            return True
+    return False
+
+
 def _duong_dan_cho_phep(p: Path, vault_root: Optional[str]) -> bool:
     try:
         rp = p.resolve()
@@ -368,6 +391,10 @@ def resolve_open(name: str, vault_root: Optional[str]) -> Tuple[str, str, str]:
         if not _duong_dan_cho_phep(p, vault_root):
             return "", "", ("đường dẫn nằm ngoài thư mục người dùng và ngoài brain, tool không mở "
                             "để tránh chạy nhầm file hệ thống.")
+        if _la_file_chay_duoc(p):
+            return "", "", ("đây là file CHẠY ĐƯỢC (script, chương trình, lối tắt), tool không mở "
+                            "để không chạy mã vừa được ghi trong lượt chat. Mở app thì dùng tên app; "
+                            "muốn chạy file này thì người dùng tự mở.")
         return str(p), "path", str(p)
     installed = _installed()
     ten = [a["name"] for a in installed]

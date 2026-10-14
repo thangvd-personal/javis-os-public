@@ -63,7 +63,9 @@ def _recv_json(ws, timeout=10):
 _write("cu.md", "note cũ, chưa có link")
 time.sleep(0.2)
 
-with client.websocket_connect(f"/ws/graph?path={root}") as ws:
+# Loopback Host: with no password a foreign Host is refused as DNS rebinding
+# (web_security.ws_decision), and TestClient always sends "testserver" on websockets.
+with client.websocket_connect(f"/ws/graph?path={root}", headers={"host": "127.0.0.1"}) as ws:
     time.sleep(1.0)   # chờ watcher gắn xong vào thư mục (awatch khởi động nền)
 
     _write("moi.md", "note mới trỏ [[cu]]")

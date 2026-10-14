@@ -172,6 +172,58 @@ def host_hop_le(host_header) -> bool:
     return not any(c in (host_header or "") for c in _HOST_KY_TU_CAM)
 
 
+def ws_decision(host_header: str, origin_header, gate_active: bool):
+    """Same idea as `csrf_decision`, for a WebSocket handshake. None = let it through.
+
+    The HTTP middleware never sees WebSockets (Starlette's `@app.middleware("http")` only wraps
+    http scopes), and the WebSocket routes only check a session when a password is set. On a
+    default install (127.0.0.1, no password) any web page could open `/ws/terminal` or `/ws`
+    from the user's own browser. A browser always sends Origin on a WebSocket, and a page cannot
+    forge it, so a cross-origin Origin is refused in EVERY gate state (unlike HTTP, there is no
+    "not mutating" exception: opening the socket is the action). No Origin = not a browser, so
+    not a page acting through the user: let it through, as for HTTP. The DNS-rebinding Host
+    check applies exactly as for HTTP."""
+    if not host_hop_le(host_header):
+        return 400, "invalid host header"
+    host = host_only(host_header)
+    allowed = None
+    if origin_header:
+        oh = host_only(origin_header)
+        if not oh or oh != host:
+            allowed = allowed_web_hosts()
+            if not oh or oh not in allowed:
+                return 403, "cross-origin websocket blocked"
+    if not gate_active and host and not _is_ip(host):
+        if allowed is None:
+            allowed = allowed_web_hosts()
+        if host not in allowed:
+            return 403, "host not allowed"
+    return None
+
+
+class WebSocketGuard:
+    """ASGI middleware applying `ws_decision` to every WebSocket before any route sees it,
+    including routes added later. `gate_active` is a callable read per connection."""
+
+    def __init__(self, app, gate_active):
+        self.app = app
+        self.gate_active = gate_active
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "websocket":
+            headers = {k.decode("latin-1").lower(): v.decode("latin-1")
+                       for k, v in scope.get("headers") or []}
+            try:
+                gate = bool(self.gate_active())
+            except Exception:      # noqa: BLE001 - unknown gate state: treat as open, the stricter case
+                gate = False
+            if ws_decision(headers.get("host", ""), headers.get("origin"), gate):
+                # Closing before accept makes the server answer the handshake with HTTP 403.
+                await send({"type": "websocket.close", "code": 1008})
+                return
+        await self.app(scope, receive, send)
+
+
 def csrf_decision(method: str, host_header: str, origin_header, gate_active: bool):
     """Trả None nếu CHO QUA, hoặc (status_code, message) nếu CHẶN. Hàm THUẦN - dễ test."""
     if not host_hop_le(host_header):

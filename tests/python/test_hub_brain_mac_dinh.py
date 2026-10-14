@@ -139,6 +139,40 @@ async def chay():
 asyncio.run(chay())
 
 
+# ── 5b. Cột sessions.brain giữ BÍ DANH chứ không phải đường dẫn (#610) ────────
+# Dashboard gửi "brain" cho brain mặc định; phiên tạo trước 0.43.1 hay tạo sớm qua
+# /sessions/{id}/model|project giữ nguyên chữ đó. Hub phải hiểu nó như phần còn lại của Javis,
+# và một giá trị TƯƠNG ĐỐI như "." tuyệt đối không được resolve theo cwd thành một "brain".
+def _phien_moi_nhat(brain):
+    import time
+    time.sleep(0.02)
+    st = sessions.get_store()
+    sid = st.create_session(brain=brain)
+    st.append_message(sid, "user", "lượt mới nhất")
+    mcp_hub.quen_brain_dang_mo()
+
+
+_phien_moi_nhat("brain")
+root, nguon, _ = mcp_hub.resolve_vault("")
+check("phiên mới nhất ghi 'brain' -> hiểu là Brain Default", root == MAC_DINH and nguon == "phien")
+root, nguon, _ = mcp_hub.resolve_vault(PHU)
+check("header hợp lệ vẫn thắng brain suy ra từ phiên", root == PHU and nguon == "header")
+
+_phien_moi_nhat(".")
+root, nguon, _ = mcp_hub.resolve_vault("")
+check("phiên mới nhất ghi '.' -> KHÔNG thành cwd của tiến trình",
+      root != str(Path.cwd().resolve()))
+check("'.' + nhiều brain -> fail-closed, không đoán", root is None and nguon == "")
+
+_phien_moi_nhat("Brain Phu")
+root, nguon, _ = mcp_hub.resolve_vault("")
+check("đường dẫn tương đối lạ + nhiều brain -> fail-closed", root is None)
+
+_phien_moi_nhat(PHU)
+root, nguon, _ = mcp_hub.resolve_vault("")
+check("đường dẫn tuyệt đối chuẩn -> đúng brain đó", root == PHU and nguon == "phien")
+
+
 # ── 6. BRAINS_DIR chỉ có MỘT brain -> rơi về chính nó, không cần phiên nào ──
 async def chay_mot_brain():
     mot = _TMP / "brains-don"
