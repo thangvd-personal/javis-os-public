@@ -1436,7 +1436,9 @@
       cur = d.path || ""; upTarget = d.parent; homeRel = d.home || homeRel;
       const upBtn = el.querySelector("#fmUp"); if (upBtn) upBtn.style.display = (upTarget === null || upTarget === undefined) ? "none" : "";
       crumb(d.root);
-      const items = d.items || [];
+      // Chỉ lọc ở giao diện Tệp tin: ẩn dotfiles (tệp ẩn Linux) và __pycache__ để danh sách gọn gàng.
+      // Không ảnh hưởng đến việc đọc/ghi file hoặc hoạt động của các công cụ AI.
+      const items = (d.items || []).filter(it => !it.name.startsWith(".") && it.name !== "__pycache__");
       if (!items.length) listEl.innerHTML = `<div class="empty" style="padding:20px;text-align:center;color:var(--text3)">${window.t("cs.fm_empty_dir")}</div>`;
       else { listEl.innerHTML = ""; items.forEach(it => listEl.appendChild(row(it))); }
       // Link trỏ vào chỗ không có gì: nói rõ đã tìm cái gì, đang đứng ở đâu, rồi tự đi tìm theo
@@ -8009,7 +8011,11 @@
     let items = [];
     try {
       const d = await (await fetch(`/files/list?brain=${encodeURIComponent(fbrain())}${qp}`)).json();
-      if (d && !d.error) { items = d.items || []; if (path == null && d.home != null) _vtHome = d.home; }
+      if (d && !d.error) {
+        // Chỉ lọc ở giao diện cây Vault (cột trái): ẩn dotfiles và __pycache__ để cây ghi chú không bị rối.
+        items = (d.items || []).filter(it => !it.name.startsWith(".") && it.name !== "__pycache__");
+        if (path == null && d.home != null) _vtHome = d.home;
+      }
     } catch (e) {}
     _vtCache.set(key, items);
     return items;
@@ -8169,9 +8175,10 @@
       const dir = queue.shift();
       const items = await _vtList(dir);
       for (const it of items) {
+        if (it.name.startsWith(".") || it.name === "__pycache__") continue;
         const rel = dir ? dir + "/" + it.name : it.name;
         if (it.type === "dir") {
-          if (!it.name.startsWith(".") && !SKIP.has(it.name)) {
+          if (!SKIP.has(it.name)) {
             out.push({ name: it.name, type: "dir", ext: "", path: rel, dir: dir });
             queue.push(rel);
           }

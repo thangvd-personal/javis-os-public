@@ -7320,7 +7320,7 @@ def _files_rel(root: Path, p: Path) -> str:
 
 
 @app.get("/files/list")
-async def files_list(brain: str = Query("brain"), path: str = Query(None)):
+async def files_list(brain: str = Query("brain"), path: str = Query(None), all: bool = Query(False)):
     root = _files_root(brain)
     broot = Path(_brain_root(brain)).resolve()
     try:
@@ -7351,7 +7351,16 @@ async def files_list(brain: str = Query("brain"), path: str = Query(None)):
                 leo = broot if broot.is_dir() else root
             d = leo
     items = []
+    # Ẩn hiển thị: các thư mục/tập tin bắt đầu bằng dấu chấm (định dạng tệp ẩn Linux như .agents,
+    # .antigravitycli, .claude, .javis, .javis-learn.lock) và thư mục cache bytecode __pycache__.
+    # LƯU Ý: Đây THUẦN TÚY là lớp lọc hiển thị (presentation layer) cho Vault tree và trang Tệp tin,
+    # TUYỆT ĐỐI KHÔNG ảnh hưởng hay chặn hoạt động đọc/ghi của brain:
+    # - Các API đọc/ghi (/files/read, /files/write, /files/raw) dùng _safe_serve_path / _safe_path trực tiếp.
+    # - Các công cụ AI (javis_read_file, javis_write_file, skill loader, agent runtime) vẫn truy cập file bình thường.
+    # - Cờ `all=True` cho phép client/CLI hoặc luồng kỹ thuật lấy đầy đủ toàn bộ file khi cần.
     for p in sorted(d.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
+        if not all and (p.name.startswith(".") or p.name == "__pycache__"):
+            continue
         try:
             st = p.stat()
             items.append({"name": p.name, "type": "dir" if p.is_dir() else "file",
@@ -7416,6 +7425,9 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                     out.append({"path": rel, "name": dn, "type": "dir", "ext": "",
                                 "snippet": "", "line": 0, "match": "name"})
             for fn in sorted(filenames):
+                # Bỏ qua tệp ẩn (bắt đầu bằng .) và __pycache__ để kết quả tìm kiếm khớp với cây thư mục hiển thị
+                if fn.startswith(".") or fn == "__pycache__":
+                    continue
                 if len(out) >= limit:
                     return out
                 p = Path(dirpath) / fn
@@ -12247,9 +12259,9 @@ def _count_md(root: str, cap: int, deadline: float | None = None) -> int:
                 for entry in it:
                     try:
                         if entry.is_dir(follow_symlinks=False):
-                            if depth < _BROWSE_DEPTH and not entry.name.startswith((".", "$")):
+                            if depth < _BROWSE_DEPTH and not entry.name.startswith((".", "$")) and entry.name != "__pycache__":
                                 stack.append((entry.path, depth + 1))
-                        elif entry.name.endswith(".md"):
+                        elif entry.name.endswith(".md") and not entry.name.startswith("."):
                             n += 1
                             if n >= cap:
                                 return n
@@ -12293,7 +12305,7 @@ def _browse_sync(path: str, dem_md: bool = True) -> dict:
         dirs = []
         het_gio = time.monotonic() + _BROWSE_TOTAL_BUDGET_S
         for name in sorted(os.listdir(path), key=str.lower):
-            if name.startswith(".") or name.startswith("$"):
+            if name.startswith(".") or name.startswith("$") or name == "__pycache__":
                 continue
             full = os.path.join(path, name)
             if os.path.isdir(full):

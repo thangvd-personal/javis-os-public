@@ -79,6 +79,9 @@ def build_graph(roots: List[str], max_files: int = 2000, include_orphans: bool =
                 rel = Path(fpath).relative_to(root).as_posix()
             except ValueError:
                 rel = Path(fpath).name
+            # Đồ thị tri thức trực quan: chỉ dựng node cho note người dùng, bỏ qua note trong thư mục ẩn và cache
+            if any(part.startswith(".") or part == "__pycache__" for part in rel.split("/")):
+                continue
             stem = Path(fpath).stem
             key = stem.lower()
             node_id = key

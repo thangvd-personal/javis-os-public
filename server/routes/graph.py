@@ -58,11 +58,12 @@ def _scan_md_mtimes(roots):
         if not root or not os.path.isdir(root):
             continue
         for dirpath, dirnames, _files in os.walk(root):
-            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            # Bỏ qua thư mục ẩn (.git, .obsidian, .claude...) và __pycache__ khi quét realtime cho đồ thị
+            dirnames[:] = [d for d in dirnames if not d.startswith(".") and d != "__pycache__"]
             try:
                 with os.scandir(dirpath) as it:
                     for entry in it:
-                        if entry.name.endswith(".md") and entry.is_file():
+                        if entry.name.endswith(".md") and not entry.name.startswith(".") and entry.is_file():
                             try:
                                 out[entry.path] = entry.stat().st_mtime
                             except OSError:
