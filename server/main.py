@@ -13705,7 +13705,7 @@ async def tts(
         else:
             return await _edge_streaming()
     except Exception as e:
-        print(f"[TTS {provider}] {type(e).__name__}", file=sys.stderr)
+        print(f"[TTS {provider}] {type(e).__name__}: {e}", file=sys.stderr)
         raise HTTPException(502, localefmt.chu(
             "Giọng đã chọn hiện không phát được. Vui lòng thử lại hoặc chọn giọng khác.",
             "The selected voice cannot play right now. Please try again or choose another voice."))

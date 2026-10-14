@@ -42,7 +42,7 @@ sse-starlette>=1.6.1,<3
 # python-dotenv 1.0.1 có PYSEC-2026-2270, vá ở 1.2.2.
 python-dotenv==1.2.2
 websockets==13.1
-edge-tts>=7.0.0
+edge-tts>=7.3.1
 # python-multipart: nhận file upload (form-data). Giữ SÀN cao vì đây là đường nhận dữ liệu
 # từ ngoài vào: 0.0.18 có CVE-2026-24486 (path traversal, ghi file ra thư mục bất kỳ),
 # 0.0.30 có PYSEC-2026-3040. Vá ở 0.0.31.
