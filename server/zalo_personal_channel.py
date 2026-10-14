@@ -33,7 +33,8 @@ phép (tag/reply, hoặc chế độ Tự đánh giá), xem `channels.zalo_perso
 Chờ khách nhắn xong (0.128.0): tin khách ở chat RIÊNG không giao ngay mà gom theo cuộc chat, đợi
 khách im `CHO_KHACH_IM` giây rồi mới giao MỘT lượt gộp, xem "Chờ khách nhắn xong" ở cuối file.
 
-Chưa có: tải media. Tin ảnh/file ghi loại tin kèm mô tả, không tải về, và bot không trả lời chúng.
+Tin file giữ link tải trong `metadata.attachment`; bot chỉ tải về SAU các rào quyền, xem
+`channels.zalo_personal.Transport.xu_ly`. Tiếng và sticker vẫn không tải.
 """
 from __future__ import annotations
 
@@ -343,6 +344,7 @@ def chuan_hoa_tin(conn: dict, msg: dict, ten: Dict[str, dict]) -> Optional[dict]
     if not sender_name and not nhom:
         sender_name = str(th.get("name") or "")
     loai = _loai_tin(msg)
+    from zalo_attachments import normalize as normalize_attachment
     text = _lay(msg, "text", "content", "msg", "message", mac_dinh="")
     if isinstance(text, dict):
         text = _lay(text, "text", "title", "description", "href", mac_dinh="")
@@ -381,6 +383,7 @@ def chuan_hoa_tin(conn: dict, msg: dict, ten: Dict[str, dict]) -> Optional[dict]
                          **({"chua_ro_loai": True} if _chua_ro_loai(msg, ten) else {}),
                          **({"member_join": vao_nhom} if vao_nhom is not None else {}),
                          **({"join_request": xin_vao} if xin_vao is not None else {}),
+                         **({"attachment": normalize_attachment(msg)} if loai == "file" else {}),
                          **({"image_url": _link_anh(msg)} if loai == "image" and _link_anh(msg) else {})),
     }
 
@@ -484,6 +487,7 @@ def _ghi_lo(conn: dict, tin: list, ten: dict) -> tuple:
             _TAY[(conn["id"], ev["external_chat_id"])] = float(ev.get("created_at") or time.time())
             # Chủ đã vào cuộc: mấy tin khách đang gom chờ là việc của chủ, không phải của bot.
             _GOM.pop((conn["id"], ev["external_chat_id"]), None)
+            bo_cho_chu(conn["id"], ev["external_chat_id"])
         elif _la_tieng_vong(conn["id"], ev["external_chat_id"], ev["text"], TIENG_VONG_TOI_THIEU):
             # Ví dụ trong tài liệu của MCP không có cờ "tin của chính mình", nên câu bot vừa gửi
             # có thể quay về như tin của một KHÁCH. Để lọt thì trong nhóm bot sẽ tự trả lời chính
@@ -568,6 +572,8 @@ async def doc_mot_lan(conn: dict) -> dict:
     tt["so_tin"] = int(tt.get("so_tin") or 0) + moi
     # Chỉ xả sau một lượt đọc THÀNH CÔNG: lượt này vừa xác nhận khách không nhắn thêm gì tới `bat_dau`.
     xa_hang_cho(conn["id"], bat_dau)
+    # Cũng vậy với tin chờ chủ trả lời: lượt đọc vừa xác nhận chủ chưa nhắn gì tới `bat_dau`.
+    xa_cho_chu(conn["id"], bat_dau)
     return {"moi": moi, "trung": trung}
 
 
@@ -669,7 +675,7 @@ def stop() -> None:
 
 def trang_thai() -> dict:
     return {"dang_chay": bool(_task and not _task.done()), "nhip": NHIP, "nhip_nhanh": NHIP_NHANH,
-            "cho_khach_im": CHO_KHACH_IM, "tai_khoan": tai_khoan()}
+            "cho_khach_im": CHO_KHACH_IM, "cho_chu_tra_loi": CHO_CHU_TRA_LOI, "tai_khoan": tai_khoan()}
 
 
 # ============================================================
@@ -762,6 +768,49 @@ def nhan_dien_goi(conn_id: str, ev: dict, ten_khac=()) -> tuple:
             nguoi = _chuan_ten(_lay(rt, "senderName", "dName", "name", "fromName", mac_dinh=""))
             rep = bool(nguoi) and nguoi in ten
     return tag, rep
+
+
+def _link_trong_quote(rt: dict) -> str:
+    """A photo link the quote itself carries, or "". javis-zalo 1.4 gives `replyTo` only {senderId, senderName, text,
+    msgId}; for a quoted photo Zalo may put the photo's serialized payload in `text` ({"href": ..., "thumb": ...}).
+    Plain text is NOT read as a link: a quoted chat line that happens to hold a URL is not a photo."""
+    for k in ("imageUrl", "image_url", "mediaUrl"):
+        v = str(rt.get(k) or "").strip()
+        if v.startswith("https://"):
+            return v
+    cands = [rt.get("attachment"), rt.get("attach"), rt.get("text")]
+    for c in cands:
+        if isinstance(c, str) and c.strip().startswith("{"):
+            try:
+                c = json.loads(c)
+            except ValueError:
+                continue
+        if isinstance(c, dict):
+            for k in ("url", "href", "hdUrl", "normalUrl", "thumb"):
+                v = str(c.get(k) or "").strip()
+                if v.startswith("https://"):
+                    return v
+    return ""
+
+
+def anh_duoc_quote(conn_id: str, thread: str, md: dict) -> str:
+    """Link of the photo a message QUOTES (replies to), or "" (0.141.0).
+
+    Field report 2026-10-14: in a group someone quoted a product photo and tagged the bot to look at it; the bot only
+    got the text and said it could not see the photo, so the owner's workaround was "send the photo, then tag the bot
+    within 3 minutes". The quote carries the photo's message id (`replyTo.msgId`, Zalo's global id, the same id the
+    photo was stored under when Javis read it), so the stored photo message gives the link. A link inside the quote
+    payload is the fallback, for a photo sent before Javis started reading this account."""
+    rt = (md or {}).get("replyTo")
+    if not isinstance(rt, dict):
+        return ""
+    mid = str(_lay(rt, "msgId", "globalMsgId", "id", mac_dinh="") or "").strip()
+    if mid:
+        goc = conversations.tin_theo_id(KENH, str(conn_id), str(thread), mid)
+        url = str((goc.get("metadata") or {}).get("image_url") or "").strip() if goc.get("message_type") == "image" else ""
+        if url.startswith("https://"):
+            return url
+    return _link_trong_quote(rt)
 
 
 def dang_ky_bot(conn_id: str, tb: Any) -> None:
@@ -859,6 +908,10 @@ def _giao_cho_bot(conn: dict, ev: dict) -> None:
     tb = _BOTS.get(cid)
     if not tb or ev.get("sender_type") != "customer":
         return
+    if (CHO_CHU_TRA_LOI > 0 and ev.get("chat_type") == "private"
+            and chu_vua_nhan_tay(cid, str(ev.get("external_chat_id") or ""))):
+        _giu_cho_chu(cid, ev)       # chủ đang nói chuyện: chờ xem chủ có trả lời không (0.136.0)
+        return
     if CHO_KHACH_IM > 0 and ev.get("chat_type") == "private":
         _xep_cho(cid, ev)
         return
@@ -896,6 +949,7 @@ def _chay(tb: Any, ev: dict) -> None:
 # chờ `NHUONG_GIAY` như cũ.
 CHO_KHACH_IM = 5        # giây khách phải im ở chat riêng trước khi bot trả lời; 0 = giao từng tin ngay như trước 0.128.0
 MAX_GOM_TIN = 50        # trần số tin giữ cho một cuộc chat đang gom (người lạ dán cả trăm dòng thì không phình theo)
+MAX_FILE_GOP = 5        # trần số file một lượt gộp mang theo để tải (gửi cả chục file thì lấy mấy file cuối)
 
 
 def _xep_cho(conn_id: str, ev: dict, now: Optional[float] = None) -> None:
@@ -921,15 +975,23 @@ def gop_tin(evs: List[dict]) -> dict:
     Khung là tin CUỐI (mã tin để Hộp thư nhận ra tin đã có, giờ tin cho rào `TUOI_TOI_DA`). Chữ là
     các tin chữ và chú thích ảnh theo đúng thứ tự, nối bằng `bot_gateway.noi_tin` (cùng trần, cùng
     cách nối với tin gom lúc bot bận). Có ảnh thì lượt là tin ảnh, mang link ảnh MỚI NHẤT, nên "gửi
-    ảnh rồi nhắn 'xem giúp em'" tới bot thành một câu hỏi kèm ảnh. Tiếng, file, sticker chỉ tính
-    là khách còn đang nhắn, không góp chữ (bot vốn không trả lời chúng).
+    ảnh rồi nhắn 'xem giúp em'" tới bot thành một câu hỏi kèm ảnh. File đi theo lượt trong
+    `metadata.attachments` (tối đa `MAX_FILE_GOP` file mới nhất), nên "gửi file rồi nhắn 'xem giúp
+    em'" cũng thành một câu hỏi kèm file; lượt chỉ có file là tin file. Tiếng, sticker chỉ tính là
+    khách còn đang nhắn, không góp chữ.
     `metadata.gop` = số tin đã gộp: `xu_ly` lấy chữ nguyên như đã gộp, không bóc chú thích lại."""
     import bot_gateway
     cuoi = evs[-1]
     phan: List[str] = []
     co_anh, link = False, ""
+    files: List[dict] = []
     for e in evs:
         loai = e.get("message_type")
+        if loai == "file":
+            att = (e.get("metadata") or {}).get("attachment")
+            if isinstance(att, dict):
+                files.append(att)
+            continue
         if loai == "text":
             t = str(e.get("text") or "").strip()
         elif loai == "image":
@@ -940,11 +1002,14 @@ def gop_tin(evs: List[dict]) -> dict:
             continue
         if t:
             phan.append(t)
-    md = {k: v for k, v in (cuoi.get("metadata") or {}).items() if k != "image_url"}
+    md = {k: v for k, v in (cuoi.get("metadata") or {}).items() if k not in ("image_url", "attachment")}
     if link:
         md["image_url"] = link
+    if files:
+        md["attachments"] = files[-MAX_FILE_GOP:]
     md["gop"] = len(evs)
-    return dict(cuoi, message_type="image" if co_anh else "text", text=bot_gateway.noi_tin(phan), metadata=md)
+    kieu = "image" if co_anh else ("text" if phan or not files else "file")
+    return dict(cuoi, message_type=kieu, text=bot_gateway.noi_tin(phan), metadata=md)
 
 
 def xa_hang_cho(conn_id: str, luc: Optional[float] = None) -> int:
@@ -966,6 +1031,107 @@ def xa_hang_cho(conn_id: str, luc: Optional[float] = None) -> int:
                if luc - min(float(e.get("created_at") or luc), luc) <= TUOI_TOI_DA]
         if evs:
             _chay(tb, gop_tin(evs))
+            n += 1
+    return n
+
+
+# ============================================================
+# Chủ chưa trả lời thì bot trả lời thay (0.136.0)
+# ============================================================
+# Yêu cầu của chủ nick (14/10/2026): "nếu tôi không rep sau 10 phút thì cứ tự động trả lời sao cho hợp lí nhất".
+# Trước bản này, chủ vừa tự tay nhắn một chat thì bot nhường `TAY_IM` giây, và tin khách tới trong quãng đó bị
+# bỏ hẳn: hết quãng nhường thì tin đã cũ quá `TUOI_TOI_DA` nên không bao giờ được trả lời. Ca thật: chủ nhắn
+# "Mẹ nhắn tin gì vào đây đi" lúc 11:51, khách gửi file và ảnh lúc 11:52, không ai trả lời cả.
+#
+# Giờ tin khách CHAT RIÊNG tới lúc chủ đang nhường được GIỮ theo cuộc chat. Chủ nhắn tay hoặc gửi từ Hộp thư
+# vào chat đó thì bỏ (chủ đã trả lời). Tin khách đầu tiên đã chờ đủ `CHO_CHU_TRA_LOI` giây mà chủ vẫn im thì
+# giao cho bot MỘT lượt gộp, kèm một dòng ghi chú cho Agent biết khách đã chờ và khách gửi kèm gì (file,
+# ảnh không chữ), để bot đáp hợp cảnh thay vì im vì tin không có chữ. Xả sau một lượt đọc thành công, như
+# `xa_hang_cho`: chỉ lượt đọc mới xác nhận được là chủ chưa nhắn gì.
+#
+# NHÓM không áp: ở nhóm chủ nhắn tay là đang nói với cả nhóm, trả lời tin của mười phút trước giữa nhóm là lạc
+# lõng; bộ phán xử của nhóm vẫn chạy như cũ. Hàng chờ chỉ nằm trong RAM: Javis khởi động lại thì mất, tệ nhất
+# là một tin không được trả lời thay, không bao giờ là trả lời hai lần.
+CHO_CHU_TRA_LOI = 600   # giây chờ chủ trả lời tin khách tới lúc chủ đang nhắn tay; 0 = tắt (bỏ tin như trước 0.136.0)
+_CHO_CHU: Dict[tuple, dict] = {}    # (conn_id, thread) -> {"evs": [...], "dau": giờ tin khách đầu tiên chưa ai trả lời}
+
+
+def _giu_cho_chu(conn_id: str, ev: dict, now: Optional[float] = None) -> None:
+    """Giữ một tin khách chat riêng tới lúc chủ đang nhắn tay, chờ xem chủ có trả lời không."""
+    now = time.time() if now is None else now
+    ts = min(float(ev.get("created_at") or now), now)
+    if now - ts > TUOI_TOI_DA:
+        return      # tin cũ của bộ đệm lúc mới bật, như `_xep_cho`
+    o = _CHO_CHU.setdefault((str(conn_id), str(ev.get("external_chat_id") or "")), {"evs": [], "dau": ts})
+    if len(o["evs"]) >= MAX_GOM_TIN:
+        o["evs"][-1] = ev
+    else:
+        o["evs"].append(ev)
+    o["dau"] = min(float(o["dau"]), ts)
+
+
+def bo_cho_chu(conn_id: str, thread: str) -> None:
+    """Chủ (hoặc Hộp thư, kể cả lượt nhờ bot soạn) đã trả lời cuộc chat này: tin đang giữ không còn là việc của bot."""
+    _CHO_CHU.pop((str(conn_id), str(thread)), None)
+
+
+def _ten_kem(e: dict) -> str:
+    """Tả ngắn một tin không phải chữ để Agent biết khách gửi gì."""
+    loai = str(e.get("message_type") or "")
+    md = e.get("metadata") or {}
+    if loai == "image":
+        return "một ảnh"
+    if loai == "file":
+        # Tên file nằm ở `metadata.attachment` (0.133.0, `zalo_attachments.normalize`).
+        ten = str((md.get("attachment") or {}).get("name") or md.get("fileName") or e.get("text") or "").strip()
+        return f"file {ten}" if ten and not ten.startswith("[") else "một file"
+    return {"audio": "một tin thoại", "video": "một video", "sticker": "một sticker"}.get(loai, "một tin không phải chữ")
+
+
+def gop_cho_chu(evs: List[dict], cho: int = 0) -> dict:
+    """Các tin khách đã chờ chủ trả lời -> một lượt cho `Transport.xu_ly` (dựa trên `gop_tin`), thêm một dòng ghi chú:
+    khách nhắn lúc nào, đã chờ bao lâu, gửi kèm gì. `metadata.sau_chu_im` cho `xu_ly` biết lượt này cũ là có chủ ý.
+
+    File đi theo lượt như mọi lượt gộp (`metadata.attachments`): `xu_ly` tải về khi bot có quyền Được ghi và tự ghi
+    kết quả (nội dung file, hay lý do không mở được) vào lượt, nên ghi chú ở đây chỉ kể tên, không đoán bot mở được
+    hay không. Giờ theo múi giờ trong Cài đặt (`localefmt.tz`), không theo đồng hồ máy chủ (VPS thường chạy UTC)."""
+    ev = gop_tin(evs)
+    kem = [_ten_kem(e) for e in evs
+           if e.get("message_type") not in ("text", "image")
+           or (e.get("message_type") == "image" and not conversations.chu_thich_anh(e.get("text")))]
+    dau = min(float(e.get("created_at") or time.time()) for e in evs)
+    phut = max(1, round((cho or CHO_CHU_TRA_LOI) / 60))
+    from datetime import datetime
+    gio = datetime.fromtimestamp(dau, localefmt.tz()).strftime("%H:%M")
+    ghi = (f"[Ghi chú của Javis, không phải lời khách: khách nhắn lúc {gio}, "
+           f"chủ nick chưa trả lời sau {phut} phút nên tới lượt bạn"
+           + (f"; khách gửi kèm {', '.join(kem)}" if kem else "") + ".]")
+    md = dict(ev.get("metadata") or {})
+    md["sau_chu_im"] = True
+    return dict(ev, text=(str(ev.get("text") or "").strip() + "\n" + ghi).strip(), metadata=md)
+
+
+def xa_cho_chu(conn_id: str, luc: Optional[float] = None) -> int:
+    """Giao cho bot các cuộc chat của tài khoản này mà tin khách đầu tiên đã chờ chủ đủ `CHO_CHU_TRA_LOI` giây tính tới
+    `luc`. Trả số lượt đã giao."""
+    cid = str(conn_id)
+    luc = time.time() if luc is None else luc
+    tb = _BOTS.get(cid)
+    n = 0
+    for khoa in [k for k in _CHO_CHU if k[0] == cid]:
+        o = _CHO_CHU.get(khoa) or {}
+        if not tb or CHO_CHU_TRA_LOI <= 0:
+            _CHO_CHU.pop(khoa, None)
+            continue
+        if luc - float(o.get("dau") or luc) < CHO_CHU_TRA_LOI:
+            continue
+        _CHO_CHU.pop(khoa, None)
+        tay = _TAY.get(khoa) or 0
+        # Chủ nhắn sau tin nào thì tin đó đã có người đáp; tin quá cũ (đồng hồ lệch, hàng chờ kẹt) thì thôi.
+        evs = [e for e in o.get("evs") or [] if float(e.get("created_at") or 0) > tay]
+        evs = [e for e in evs if luc - float(e.get("created_at") or luc) <= CHO_CHU_TRA_LOI + TUOI_TOI_DA]
+        if evs:
+            _chay(tb, gop_cho_chu(evs))
             n += 1
     return n
 

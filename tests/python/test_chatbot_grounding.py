@@ -27,6 +27,7 @@ Ba mảnh, mỗi mảnh canh một kiểu hỏng khác nhau:
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
+import re
 import os
 import sys
 import tempfile
@@ -473,7 +474,12 @@ _fn = chatbot_runtime._make_answer_fn(_bid)
 _ra = asyncio.run(_fn("chào Coach", {"chat_id": "77", "chat_type": "private"}))
 
 check("khách chỉ nhận câu xin lỗi chung, không nhận lỗi kỹ thuật",
-      "trục trặc kỹ thuật" in _ra["text"] and "Model" not in _ra["text"])
+      _ra["text"] == chatbot_runtime.CAU_LUOT_HONG and "Model" not in _ra["text"])
+check("câu báo lượt hỏng xin khách chờ, không khai trục trặc kỹ thuật (chủ đổi 14/10/2026)",
+      "đợi em chút xíu" in _ra["text"] and "trục trặc" not in _ra["text"])
+_src_rt = (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8")
+check("CANARY: không còn chỗ nào gửi câu trục trặc cũ cho khách (cả nhánh engine văng lỗi)",
+      not re.search(r'[=:]\s*"Em đang gặp trục trặc', _src_rt) and _src_rt.count("CAU_LUOT_HONG") >= 3)
 # Câu báo lượt GÃY phải khác hẳn câu "chưa có thông tin". Dùng chung một câu thì chủ nhìn màn
 # hình không phân biệt được bot đang hỏng hay đang thiếu tài liệu - đúng ca chủ repo đã dính.
 check("câu báo lượt gãy khác hẳn câu thiếu tài liệu",

@@ -428,7 +428,7 @@ async def chay():
     KHO_TIN.append(nhom_msg("Javis Vũ ơi lỗi cổng 7777 làm sao em", "lt-g", uid="7770299", nguoi="Học viên C"))
     await doc(0.4)
     check("người GỌI bot mà lượt hỏng thì vẫn được báo (câu xin lỗi), không im",
-          len(GUI) == 1 and "trục trặc" in GUI[0].get("message", GUI[0].get("text", str(GUI[0]))), GUI)
+          len(GUI) == 1 and "đợi em chút xíu" in GUI[0].get("message", GUI[0].get("text", str(GUI[0]))), GUI)
     LOI_ENGINE["v"] = None
     GUI.clear()
 

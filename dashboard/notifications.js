@@ -151,6 +151,13 @@
     // với trợ lý trên màn Javis mà không hiểu vì sao, và phiên đang mở trở thành phiên của
     // trợ lý - tin gõ tiếp bay thẳng vào đó (đúng lỗi bản 0.59.15 đã chữa cho đường rời
     // trang, hòm thư mở lại nó bằng một cửa khác).
+    // Thư về một NHÓM chat (kênh "team:<id>", vd. việc nhóm bị chặn) mở đúng nhóm ở trang Nhóm, nơi có nút giải quyết.
+    // Đổ vào khung chat chính thì tin gõ tiếp thành tin không tác giả trong phiên nhóm.
+    var mNhom = /^team:(.+)$/.exec(String(item.channel || ""));
+    if (mNhom && window.JavisTeams && window.JavisTeams.open) {
+      var nhom = mNhom[1];
+      try { window.JavisTeams.open(nhom); return; } catch (e) {}
+    }
     var cs = congSuCuaThu(item);
     if (cs && window.JavisWorkspace && window.JavisWorkspace.openCommand) {
       try {

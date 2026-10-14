@@ -133,6 +133,26 @@ _dung(("chromium_headless_shell-1243", "chrome-linux/headless_shell"),
 check("có cả hai ở bố cục lạ -> vẫn lấy bản đầy đủ",
       ot.duong_dan_chrome().endswith("chrome"), ot.duong_dan_chrome())
 
+# Báo lỗi 14/10/2026 (Javis 0.133.0, Playwright 1.64): bản headless của Chrome for Testing đổi cả
+# thư mục lẫn TÊN file chạy thành `chrome-headless-shell`. Cài đủ, chạy được, mà trang Công cụ báo
+# "thiếu file chạy, bản tải về hỏng dở" vì tên mới không có trong danh sách. Dựng đúng bố cục đó,
+# kèm hai file đánh dấu Playwright để lại.
+_dung(("chromium_headless_shell-1248", "chrome-headless-shell-linux64/chrome-headless-shell"),
+      ("chromium_headless_shell-1248", "INSTALLATION_COMPLETE"),
+      ("chromium_headless_shell-1248", "DEPENDENCIES_VALIDATED"))
+check("Playwright 1.64 (chrome-headless-shell): tìm ra file chạy",
+      ot.duong_dan_chrome().replace(os.sep, "/").endswith("chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell"),
+      ot.duong_dan_chrome())
+check("Playwright 1.64 (chrome-headless-shell): trang Công cụ báo Sẵn sàng, không báo hỏng dở",
+      ot.trang_thai("browser")["trang_thai"] == "san_sang", ot.trang_thai("browser"))
+_dung(("chromium_headless_shell-1250", "chrome-headless-shell-linux-riscv64/chrome-headless-shell"))
+check("tên mới ở thư mục kiến trúc chưa biết: vòng quét vẫn tìm ra",
+      ot.duong_dan_chrome().endswith("chrome-headless-shell"), ot.duong_dan_chrome())
+_dung(("chromium_headless_shell-1248", "chrome-headless-shell-linux64/chrome-headless-shell"),
+      ("chromium-1248", "chrome-linux64/chrome"))
+check("có bản đầy đủ cạnh bản chrome-headless-shell -> vẫn lấy bản đầy đủ",
+      ot.duong_dan_chrome().endswith("chrome"), ot.duong_dan_chrome())
+
 
 # ============================================================
 # 1c) Câu báo lỗi phải nói ĐÃ TÌM Ở ĐÂU, THẤY GÌ

@@ -39,7 +39,9 @@ const sot = [["studio.js", ST], ["workspace.js", WS], ["chatbots.js", CB]]
     let at = src.indexOf("/agents?brain=");
     while (at !== -1) {
       const cauGoi = src.slice(at, at + 160).split("\n")[0];
-      if (cauGoi.indexOf("prompt=0") === -1) ra.push(f + ": " + cauGoi.slice(0, 90));
+      // `/resonance/agents?brain=` (T0 nhóm chat team) là endpoint KHÁC: trạng thái Cộng hưởng, không kèm system prompt.
+      const laResonance = src.slice(Math.max(0, at - 10), at) === "/resonance";
+      if (!laResonance && cauGoi.indexOf("prompt=0") === -1) ra.push(f + ": " + cauGoi.slice(0, 90));
       at = src.indexOf("/agents?brain=", at + 1);
     }
     return ra;

@@ -46,6 +46,11 @@ jobs:
       - name: Lấy commit 0.108.0 cho test quay về A5
         run: git fetch --no-tags --depth=1 origin c4fb614d30b63e592e66a8f943cf2749bb33a412
 
+      # test_team_rollback chạy MÃ 0.139.0 THẬT (bản phát hành cuối trước nhóm chat team, `be1f8aa2` trên main): lập kho
+      # Kanban và kho phiên cũ, nâng lên 0.140.0, rồi khôi phục snapshot.
+      - name: Lấy commit 0.139.0 cho test quay về nhóm chat team
+        run: git fetch --no-tags --depth=1 origin be1f8aa215395471c4640e5e8e109d44e02dc190
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

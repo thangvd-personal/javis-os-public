@@ -107,6 +107,14 @@ CAU_NHOM_CHUA_BAT = ("Em chưa được bật cho nhóm này ạ. Chủ bot mở
                      "ở thẻ của em sẽ thấy nhóm này đang chờ, bấm **Cho phép** một cái là em "
                      "trả lời được ngay.")
 
+# Câu bot gửi người đã gọi nó khi lượt trả lời HỎNG (engine lỗi, hết lượt gói, không trả nội dung).
+#
+# Chủ repo đổi 14/10/2026: câu cũ "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít
+# phút ạ" khai với khách rằng đây là máy và đẩy việc nhắn lại sang khách. Nick Zalo cá nhân mang
+# tên người thật, nên câu này nói như người đang trực: xin khách chờ một chút. Người trực vẫn được
+# báo lỗi thật (`handoff_to`), và lỗi gốc nằm trong nhật ký bot cho chủ.
+CAU_LUOT_HONG = "Anh chị đợi em chút xíu để em kiểm tra lại ạ."
+
 # Bí bao nhiêu lượt liên tiếp thì mới gọi người thật.
 #
 # Bản 0.20.0 báo ngay từ lượt bí ĐẦU TIÊN, và thực tế nó kêu vì một câu hỏi vu vơ ("lý thuyết
@@ -317,12 +325,17 @@ def build_bot_prompt(bot: dict) -> str:
 # Tin kèm ảnh (0.65.13)
 # ============================================================
 _KEM_ANH = "(tin này kèm một ảnh mà bạn không xem được, chỉ có phần chú thích) "
+# 0.141.0: the photo of the turn is the one this message QUOTES, not one the customer just sent.
+_QUOTE_ANH = "(tin này trả lời một ảnh gửi trước đó trong cuộc chat; ảnh đó được gửi kèm để bạn xem) "
+_QUOTE_ANH_MU = "(tin này trả lời một ảnh gửi trước đó trong cuộc chat, nhưng bạn không xem được ảnh đó) "
 
 
 def gan_nhan_anh(text_engine: str, meta: dict) -> str:
     """Tin ảnh có chú thích tới bot chỉ mang CHÚ THÍCH (bot không có ảnh). Nói thẳng cho model biết, kẻo nó trả lời như thể đã nhìn thấy ảnh,
     hoặc ngơ ngác vì câu hỏi nhắc "ảnh này"."""
-    return (_KEM_ANH + text_engine) if (meta or {}).get("co_anh") else text_engine
+    if not (meta or {}).get("co_anh"):
+        return text_engine
+    return ((_QUOTE_ANH_MU if meta.get("anh_quote") else _KEM_ANH) + text_engine)
 
 
 ANH_TOI_DA_GIAY = 90         # a slow photo download must not hold a customer's reply for minutes
@@ -388,6 +401,8 @@ async def anh_cho_bot(text_engine: str, meta: dict, cfg: dict) -> tuple:
         _ghi_ly_do_anh(cfg, "tin ảnh tới mà không kèm link ảnh nào (bản Zalo đang chạy không gửi link)")
     if not paths:
         return (gan_nhan_anh(text, meta) if meta.get("co_anh") else text), []
+    if meta.get("anh_quote"):
+        return _QUOTE_ANH + text, paths[:vision_input.MAX_IMAGES]
     return (text if text.strip() else CHI_CO_ANH), paths[:vision_input.MAX_IMAGES]
 
 
@@ -1449,7 +1464,7 @@ def _make_answer_fn(bot_id: str):
                 _rp_retract(rp_dec, "turn_failed")
                 _ghi_loi_tu_dong(bot_id, cfg, meta, text, f"{type(e).__name__}: {e}")
                 return {"text": "", "files": [], "im_lang": True}
-            xin_loi = "Em đang gặp trục trặc, anh chị nhắn lại giúp em sau ít phút ạ."
+            xin_loi = CAU_LUOT_HONG
             ghi_tin_bot(cfg, meta or {}, xin_loi, loi=f"{type(e).__name__}: {e}")
             return {"text": xin_loi, "files": []}
         run = _RUNNING.get(bot_id)
@@ -1474,8 +1489,7 @@ def _make_answer_fn(bot_id: str):
                 _rp_retract(rp_dec, "turn_failed")
                 _ghi_loi_tu_dong(bot_id, cfg, meta, text, loi_ky_thuat)
                 return {"text": "", "files": [], "im_lang": True}
-            out = {"text": "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít phút ạ.",
-                   "files": []}
+            out = {"text": CAU_LUOT_HONG, "files": []}
 
         dap = (out or {}).get("text") or ""
         # Bot TỰ QUYẾT im lặng (được dạy ở Zalo cá nhân và ở lượt Tự đánh giá, xem _CAU_ZALO_CA_NHAN
@@ -1590,6 +1604,15 @@ def manual_meta(conv: dict, last: dict) -> dict:
     if last.get("message_type") == "image":
         meta["co_anh"] = True
         meta["image_url"] = str((last.get("metadata") or {}).get("image_url") or "")
+    elif conv.get("channel") == "zalo_personal":
+        # 0.141.0: the last message quotes a photo, same as the live bot (channels/zalo_personal.py `xu_ly`).
+        try:
+            import zalo_personal_channel
+            url = zalo_personal_channel.anh_duoc_quote(raw, meta["chat_id"], last.get("metadata") or {})
+        except Exception:      # noqa: BLE001 - a quote we cannot resolve must not cost the owner the draft
+            url = ""
+        if url:
+            meta.update(co_anh=True, image_url=url, anh_quote=True)
     return meta
 
 

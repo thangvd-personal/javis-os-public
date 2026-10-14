@@ -16,6 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
+import team_migration
+
 
 VALID_STATUS = {
     "triage", "todo", "ready", "running", "review", "blocked", "done",
@@ -23,6 +25,33 @@ VALID_STATUS = {
 }
 TERMINAL_STATUS = {"done", "cancelled", "archived"}
 ACTIVE_STATUS = {"triage", "todo", "ready", "running", "review", "blocked"}
+# Trạng thái của làn `team` (nhóm chat). Cố ý KHÔNG nằm trong VALID_STATUS: lệnh kéo thả
+# của bảng Việc (`move`) không thể đặt một việc Kanban vào làn nhóm hay ngược lại.
+TEAM_OPEN_STATUS = ("team_queued", "team_running", "team_blocked")
+_TEAM_COLUMNS = (
+    ("lane", "TEXT NOT NULL DEFAULT ''"),
+    ("team_id", "TEXT NOT NULL DEFAULT ''"),
+    ("team_seq", "INTEGER NOT NULL DEFAULT 0"),
+    ("team_prio", "INTEGER"),
+    ("team_rev", "INTEGER NOT NULL DEFAULT 0"),
+    ("assignee_key", "TEXT NOT NULL DEFAULT ''"),
+    ("coordinator_key", "TEXT NOT NULL DEFAULT ''"),
+    ("source_ref", "TEXT NOT NULL DEFAULT ''"),
+)
+_TEAM_ORDER = "(team_prio IS NULL), team_prio, team_seq"
+
+
+class QueueConflict(Exception):
+    """Lệnh hàng đợi dùng `queue_version` cũ (hai tab cùng đổi, điều phối vừa nhận việc).
+    `queue` là hàng đợi hiện tại để giao diện vẽ lại theo trạng thái thật (HTTP 409)."""
+
+    def __init__(self, queue: dict):
+        super().__init__("queue_version_conflict")
+        self.queue = queue
+
+
+class QueueError(ValueError):
+    """Lệnh hàng đợi không áp được cho việc này (không thuộc làn team, đã kết thúc...)."""
 
 
 def now() -> float:
@@ -57,6 +86,8 @@ class TaskStore:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột làn `team` (khôi phục khi hạ phiên bản).
+        team_migration.snapshot_once(self.path, "tasks", "lane")
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
@@ -171,6 +202,22 @@ class TaskStore:
                 self._db.execute(
                     "ALTER TABLE tasks ADD COLUMN not_before REAL NOT NULL DEFAULT 0"
                 )
+            # Làn `team` (0.140.0, nhóm chat): việc nhóm là dòng `tasks` với lane='team' và trạng
+            # thái riêng `team_*`, nên next_candidate/reclaim_stale của Kanban (kể cả bản cũ khi hạ
+            # phiên bản) không bao giờ nhặt. `team_prio` để null = việc thường.
+            for name, decl in _TEAM_COLUMNS:
+                if name not in cot:
+                    self._db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {decl}")
+            self._db.executescript(
+                """
+                CREATE INDEX IF NOT EXISTS idx_tasks_team_queue
+                    ON tasks(team_id, status, team_prio, team_seq) WHERE lane='team';
+                CREATE TABLE IF NOT EXISTS team_queues (
+                    team_id TEXT PRIMARY KEY,
+                    version INTEGER NOT NULL DEFAULT 0
+                );
+                """
+            )
             self._db.commit()
 
     def _tx(self) -> None:
@@ -264,7 +311,7 @@ class TaskStore:
                 if normalized:
                     row = self._db.execute(
                         f"""SELECT id FROM tasks
-                            WHERE brain_root=? AND normalized_title=?
+                            WHERE brain_root=? AND normalized_title=? AND lane<>'team'
                               AND status IN ({','.join('?' for _ in ACTIVE_STATUS)})
                             ORDER BY created_at LIMIT 1""",
                         (root, normalized, *sorted(ACTIVE_STATUS)),
@@ -327,7 +374,7 @@ class TaskStore:
         include_archived: bool = False,
         limit: int = 500,
     ) -> list[dict]:
-        sql = "SELECT * FROM tasks WHERE brain_root=?"
+        sql = "SELECT * FROM tasks WHERE brain_root=? AND lane<>'team'"
         args: list[Any] = [brain_root]
         if not include_archived:
             sql += " AND status <> 'archived'"
@@ -508,7 +555,7 @@ class TaskStore:
                 rows = self._db.execute(
                     """SELECT id, status FROM tasks
                        WHERE brain_root=? AND status IN ('done','cancelled')
-                         AND updated_at < ?""",
+                         AND updated_at < ? AND lane<>'team'""",
                     (brain_root, cutoff),
                 ).fetchall()
                 for row in rows:
@@ -547,7 +594,7 @@ class TaskStore:
             self._tx()
             try:
                 rows = self._db.execute(
-                    f"SELECT id FROM tasks WHERE brain_root=? AND status IN ({marks})",
+                    f"SELECT id FROM tasks WHERE brain_root=? AND status IN ({marks}) AND lane<>'team'",
                     (brain_root, *allowed),
                 ).fetchall()
                 ids = [str(r["id"]) for r in rows]
@@ -575,7 +622,7 @@ class TaskStore:
             self._tx()
             try:
                 rows = self._db.execute(
-                    "SELECT id FROM tasks WHERE brain_root=? AND status<>'running'",
+                    "SELECT id FROM tasks WHERE brain_root=? AND status<>'running' AND lane<>'team'",
                     (brain_root,),
                 ).fetchall()
                 ids = [str(r["id"]) for r in rows]
@@ -609,7 +656,7 @@ class TaskStore:
             self._tx()
             try:
                 rows = self._db.execute(
-                    f"SELECT id FROM tasks WHERE brain_root=? AND status IN ({marks})",
+                    f"SELECT id FROM tasks WHERE brain_root=? AND status IN ({marks}) AND lane<>'team'",
                     (brain_root, *allowed),
                 ).fetchall()
                 ids = [str(r["id"]) for r in rows]
@@ -644,7 +691,7 @@ class TaskStore:
             self._tx()
             try:
                 row = self._db.execute(
-                    "SELECT status FROM tasks WHERE id=?", (task_id,)
+                    "SELECT status FROM tasks WHERE id=? AND lane<>'team'", (task_id,)
                 ).fetchone()
                 if not row or row["status"] == "running":
                     self._db.rollback()
@@ -949,7 +996,7 @@ class TaskStore:
             self._tx()
             try:
                 row = self._db.execute(
-                    "SELECT status FROM tasks WHERE id=?", (task_id,)
+                    "SELECT status FROM tasks WHERE id=? AND lane<>'team'", (task_id,)
                 ).fetchone()
                 if not row:
                     self._db.rollback()
@@ -1055,8 +1102,371 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
+    # ---- Làn `team` (nhóm chat, spec 2026-10-13-team-chat-design mục 5.4 và 8) ----
+    #
+    # Mỗi thao tác đổi hàng đợi tăng `team_queues.version` trong CÙNG giao dịch với thay đổi,
+    # kể cả bước điều phối nhận việc. Lệnh của chủ mang `expected_version`; sai thì 409 kèm hàng
+    # mới, nên hai tab cùng bấm hay điều phối vừa nhận việc đều không tạo trạng thái lạ.
+
+    def _bump_queue(self, team_id: str) -> None:
+        self._db.execute(
+            """INSERT INTO team_queues(team_id, version) VALUES (?, 1)
+               ON CONFLICT(team_id) DO UPDATE SET version=version+1""",
+            (team_id,),
+        )
+
+    def _queue_version(self, team_id: str) -> int:
+        row = self._db.execute(
+            "SELECT version FROM team_queues WHERE team_id=?", (team_id,)
+        ).fetchone()
+        return int(row["version"]) if row else 0
+
+    def _team_row(self, task_id: str) -> Optional[sqlite3.Row]:
+        return self._db.execute(
+            "SELECT * FROM tasks WHERE id=? AND lane='team'", (task_id,)
+        ).fetchone()
+
+    def enqueue_team(
+        self,
+        brain_root: str,
+        team_id: str,
+        title: str,
+        intent: str,
+        source_ref: str,
+        assignee_key: str = "",
+        coordinator_key: str = "",
+        chat_id: str = "",
+        created_by: str = "owner",
+    ) -> tuple[str, bool]:
+        """Thêm một việc nhóm vào cuối hàng. Trả (task_id, created).
+
+        Khoá idempotency là `source_ref` (tin giao việc): gửi lại cùng tin trả việc cũ. KHÔNG gộp
+        theo tiêu đề như Kanban: hai việc khác nhau cùng tên vẫn là hai việc."""
+        root = str(brain_root)
+        team_id = str(team_id or "").strip()
+        source_ref = str(source_ref or "").strip()
+        if not team_id or not source_ref:
+            raise QueueError("team_id_and_source_ref_required")
+        self.ensure_board(root)
+        title = (title or intent or "Việc nhóm")[:160]
+        key = f"team:{team_id}:{source_ref}"
+        ts = now()
+        with self._lock:
+            self._tx()
+            try:
+                row = self._db.execute(
+                    "SELECT id FROM tasks WHERE brain_root=? AND idempotency_key=? LIMIT 1",
+                    (root, key),
+                ).fetchone()
+                if row:
+                    self._db.commit()
+                    return str(row["id"]), False
+                seq = int(self._db.execute(
+                    "SELECT COALESCE(MAX(team_seq), 0) AS m FROM tasks WHERE lane='team' AND team_id=?",
+                    (team_id,),
+                ).fetchone()["m"]) + 1
+                tid = "t_" + uuid.uuid4().hex[:12]
+                self._db.execute(
+                    """INSERT INTO tasks (
+                        id, brain_root, title, normalized_title, intent, route, capability,
+                        execution_mode, priority, status, created_by, chat_id, idempotency_key,
+                        max_attempts, created_at, updated_at, lane, team_id, team_seq, team_prio,
+                        team_rev, assignee_key, coordinator_key, source_ref
+                    ) VALUES (?, ?, ?, ?, ?, 'team', 'auto', 'auto', 2, 'team_queued', ?, ?, ?, 1,
+                              ?, ?, 'team', ?, ?, NULL, 1, ?, ?, ?)""",
+                    (
+                        tid, root, title, norm_title(title), intent or title, created_by or "owner",
+                        str(chat_id or ""), key, ts, ts, team_id, seq, assignee_key or "",
+                        coordinator_key or "", source_ref,
+                    ),
+                )
+                self._event(tid, "team_queued", f"team {team_id} #{seq}", metadata={"source_ref": source_ref})
+                self._bump_queue(team_id)
+                self._db.commit()
+                return tid, True
+            except Exception:
+                self._db.rollback()
+                raise
+
+    def _team_queue_locked(self, team_id: str) -> dict:
+        rows = self._db.execute(
+            f"""SELECT * FROM tasks WHERE lane='team' AND team_id=?
+                  AND status IN ('team_queued','team_running','team_blocked')
+                ORDER BY {_TEAM_ORDER}""",
+            (team_id,),
+        ).fetchall()
+        out: dict[str, Any] = {"team_id": team_id, "version": self._queue_version(team_id),
+                               "running": [], "waiting": [], "blocked": []}
+        bucket = {"team_running": "running", "team_queued": "waiting", "team_blocked": "blocked"}
+        for row in rows:
+            task = dict(row)
+            task["metadata"] = _loads(task.pop("metadata_json", "{}"), {})
+            task["artifacts"] = _loads(task.pop("artifacts_json", "[]"), [])
+            out[bucket[str(row["status"])]].append(task)
+        return out
+
+    def team_queue(self, team_id: str) -> dict:
+        """Hàng đợi của một nhóm: {version, running, waiting, blocked}; `waiting` theo thứ tự chạy."""
+        with self._lock:
+            return self._team_queue_locked(str(team_id))
+
+    def team_priority(self, task_id: str, prioritize: bool, expected_version: int) -> dict:
+        """Ưu tiên / bỏ ưu tiên một việc đang chờ (hay bị chặn). Trả hàng đợi mới.
+
+        Ưu tiên: `team_prio = max + 1`, nên nhiều việc ưu tiên chạy theo thứ tự được bấm. Bấm lần
+        nữa trên việc đã ưu tiên: không đổi gì (version giữ nguyên). Bỏ ưu tiên: null, việc về chỗ
+        theo `team_seq`. Không ngắt việc đang chạy, không gọi model."""
+        with self._lock:
+            self._tx()
+            try:
+                row = self._team_row(task_id)
+                if not row:
+                    self._db.rollback()
+                    raise QueueError("not_team_task")
+                team_id = str(row["team_id"])
+                if int(expected_version) != self._queue_version(team_id):
+                    queue = self._team_queue_locked(team_id)
+                    self._db.rollback()
+                    raise QueueConflict(queue)
+                if row["status"] not in ("team_queued", "team_blocked"):
+                    self._db.rollback()
+                    raise QueueError("not_waiting")
+                already = row["team_prio"] is not None
+                if bool(prioritize) != already:
+                    if prioritize:
+                        top = self._db.execute(
+                            "SELECT COALESCE(MAX(team_prio), 0) AS m FROM tasks WHERE lane='team' AND team_id=?",
+                            (team_id,),
+                        ).fetchone()["m"]
+                        value: Optional[int] = int(top) + 1
+                    else:
+                        value = None
+                    self._db.execute(
+                        "UPDATE tasks SET team_prio=?, updated_at=? WHERE id=?",
+                        (value, now(), task_id),
+                    )
+                    self._event(task_id, "team_priority" if prioritize else "team_unpriority",
+                                "" if value is None else f"prio {value}")
+                    self._bump_queue(team_id)
+                queue = self._team_queue_locked(team_id)
+                self._db.commit()
+                return queue
+            except (QueueConflict, QueueError):
+                raise
+            except Exception:
+                self._db.rollback()
+                raise
+
+    def claim_team_next(
+        self, team_id: str, worker_id: str, lease_s: int = 90, max_running: int = 1,
+    ) -> Optional[dict]:
+        """Nhận việc đầu hàng của nhóm nếu nhóm còn chỗ chạy (mặc định một việc mỗi nhóm).
+
+        Kiểm chỗ chạy, chọn việc, đặt `team_running`, ghi `task_runs` và tăng version trong MỘT
+        giao dịch `BEGIN IMMEDIATE`: không bao giờ có hai việc cùng chạy trong một nhóm."""
+        team_id = str(team_id)
+        ts = now()
+        run_id = "run_" + uuid.uuid4().hex[:14]
+        with self._lock:
+            self._tx()
+            try:
+                running = self._db.execute(
+                    "SELECT COUNT(*) AS n FROM tasks WHERE lane='team' AND team_id=? AND status='team_running'",
+                    (team_id,),
+                ).fetchone()["n"]
+                if int(running) >= max(1, int(max_running)):
+                    self._db.rollback()
+                    return None
+                row = self._db.execute(
+                    f"""SELECT * FROM tasks WHERE lane='team' AND team_id=? AND status='team_queued'
+                        ORDER BY {_TEAM_ORDER} LIMIT 1""",
+                    (team_id,),
+                ).fetchone()
+                if not row:
+                    self._db.rollback()
+                    return None
+                tid = str(row["id"])
+                self._db.execute(
+                    """UPDATE tasks SET status='team_running', attempts=attempts+1, claimed_by=?,
+                       claim_expires_at=?, last_heartbeat_at=?, current_run_id=?, block_kind='',
+                       block_reason='', updated_at=? WHERE id=? AND status='team_queued'""",
+                    (worker_id, ts + lease_s, ts, run_id, ts, tid),
+                )
+                self._db.execute(
+                    """INSERT INTO task_runs (id, task_id, brain_root, worker_id, engine_provider,
+                       status, started_at, heartbeat_at) VALUES (?, ?, ?, ?, '', 'running', ?, ?)""",
+                    (run_id, tid, str(row["brain_root"]), worker_id, ts, ts),
+                )
+                self._event(tid, "team_claimed", f"claimed by {worker_id}", run_id)
+                self._bump_queue(team_id)
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
+        return self.get_task(tid)
+
+    def team_heartbeat(self, task_id: str, worker_id: str, lease_s: int = 90) -> bool:
+        ts = now()
+        with self._lock:
+            cur = self._db.execute(
+                """UPDATE tasks SET last_heartbeat_at=?, claim_expires_at=?
+                   WHERE id=? AND lane='team' AND status='team_running' AND claimed_by=?""",
+                (ts, ts + lease_s, task_id, worker_id),
+            )
+            self._db.commit()
+            return cur.rowcount == 1
+
+    def _team_move(
+        self, task_id: str, allowed_from: tuple, status: str, event_type: str, message: str = "",
+        *, block_kind: str = "", block_reason: str = "", result: Optional[str] = None,
+        run_status: str = "", expected_rev: Optional[int] = None,
+    ) -> Optional[str]:
+        """Chuyển trạng thái một việc nhóm. Trả trạng thái TRƯỚC khi chuyển, None nếu không áp. `expected_rev`: chỉ áp
+        khi `team_rev` vẫn là bản đó (CAS cùng giao dịch, review T1 R7)."""
+        ts = now()
+        with self._lock:
+            self._tx()
+            try:
+                row = self._team_row(task_id)
+                if not row or row["status"] not in allowed_from or (
+                        expected_rev is not None and int(row["team_rev"] or 1) != int(expected_rev)):
+                    self._db.rollback()
+                    return None
+                prev = str(row["status"])
+                self._db.execute(
+                    """UPDATE tasks SET status=?, block_kind=?, block_reason=?, claimed_by='',
+                       claim_expires_at=0, current_run_id='', result=COALESCE(?, result), updated_at=?
+                       WHERE id=?""",
+                    (status, block_kind, (block_reason or "")[:2000],
+                     None if result is None else str(result)[:20000], ts, task_id),
+                )
+                run_id = str(row["current_run_id"] or "")
+                if run_id and run_status:
+                    self._db.execute(
+                        """UPDATE task_runs SET status=?, finished_at=?, heartbeat_at=?, error=?
+                           WHERE id=? AND status='running'""",
+                        (run_status, ts, ts, (block_reason or "")[:4000], run_id),
+                    )
+                self._event(task_id, event_type, message or block_reason or status, run_id)
+                self._bump_queue(str(row["team_id"]))
+                self._db.commit()
+                return prev
+            except Exception:
+                self._db.rollback()
+                raise
+
+    def team_block(self, task_id: str, kind: str, reason: str = "") -> Optional[str]:
+        """Việc bị chặn RỜI chỗ chạy (hàng đi tiếp). Giữ `team_seq`/`team_prio` để gỡ chặn về chỗ cũ."""
+        return self._team_move(task_id, ("team_running", "team_queued"), "team_blocked", "team_blocked",
+                               block_kind=str(kind or "failed"), block_reason=reason, run_status="blocked")
+
+    def team_unblock(self, task_id: str) -> Optional[str]:
+        return self._team_move(task_id, ("team_blocked",), "team_queued", "team_unblocked")
+
+    def team_requeue(self, task_id: str, reason: str = "") -> Optional[str]:
+        """Việc đang chạy về hàng chờ, giữ chỗ cũ (restart trước mốc gọi engine)."""
+        return self._team_move(task_id, ("team_running",), "team_queued", "team_requeued", reason,
+                               run_status="stale")
+
+    def team_finish(self, task_id: str, result: str = "", expected_rev: Optional[int] = None) -> Optional[str]:
+        """Chốt việc xong. Có `expected_rev` thì chỉ chốt khi yêu cầu chưa bị sửa sang bản khác: kết quả của bản cũ
+        không bao giờ thành kết quả của bản mới (review T1 R7)."""
+        return self._team_move(task_id, ("team_running",), "done", "team_done", "done",
+                               result=result, run_status="completed", expected_rev=expected_rev)
+
+    def team_cancel(self, task_id: str, reason: str = "owner cancel") -> Optional[str]:
+        return self._team_move(task_id, TEAM_OPEN_STATUS, "cancelled", "team_cancelled", reason,
+                               block_kind="cancelled", block_reason=reason, run_status="cancelled")
+
+    def team_amend(self, task_id: str, addition: str) -> Optional[int]:
+        """Chủ sửa yêu cầu của việc chưa kết thúc: nối phần thêm vào `intent`, tăng `team_rev`."""
+        addition = str(addition or "").strip()
+        if not addition:
+            return None
+        with self._lock:
+            self._tx()
+            try:
+                row = self._team_row(task_id)
+                if not row or row["status"] not in TEAM_OPEN_STATUS:
+                    self._db.rollback()
+                    return None
+                rev = int(row["team_rev"] or 1) + 1
+                intent = (str(row["intent"] or "") + f"\n\n[Sửa yêu cầu, bản {rev}] " + addition)[:20000]
+                self._db.execute(
+                    "UPDATE tasks SET intent=?, team_rev=?, updated_at=? WHERE id=?",
+                    (intent, rev, now(), task_id),
+                )
+                self._event(task_id, "team_amended", f"rev {rev}")
+                self._bump_queue(str(row["team_id"]))
+                self._db.commit()
+                return rev
+            except Exception:
+                self._db.rollback()
+                raise
+
+    def team_set_coordinator(self, task_id: str, coordinator_key: str) -> bool:
+        """Đổi trưởng nhóm điều phối của một việc chưa kết thúc (trưởng nhóm đổi giữa chừng, spec 6.3)."""
+        with self._lock:
+            cur = self._db.execute(
+                f"""UPDATE tasks SET coordinator_key=?, updated_at=?
+                    WHERE id=? AND lane='team' AND status IN ({','.join('?' for _ in TEAM_OPEN_STATUS)})""",
+                (str(coordinator_key or ""), now(), task_id, *TEAM_OPEN_STATUS),
+            )
+            if cur.rowcount == 1:
+                self._event(task_id, "coordinator_changed", str(coordinator_key or ""))
+            self._db.commit()
+            return cur.rowcount == 1
+
+    def team_tasks_by_status(self, status: str) -> list[dict]:
+        """Mọi việc nhóm (mọi nhóm) ở một trạng thái `team_*`, cho việc nhắc chặn lâu và phục hồi."""
+        if status not in TEAM_OPEN_STATUS:
+            return []
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM tasks WHERE lane='team' AND status=? ORDER BY updated_at", (status,)
+            ).fetchall()
+        return [self._task_from_row(r) for r in rows]
+
+    def team_running_tasks(self) -> list[dict]:
+        """Mọi việc nhóm đang `team_running` (mọi nhóm), cho bộ chạy nhóm khôi phục sau restart."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM tasks WHERE lane='team' AND status='team_running' ORDER BY updated_at"
+            ).fetchall()
+        return [self._task_from_row(r) for r in rows]
+
+    def team_take_over(self, task_id: str, worker_id: str, lease_s: int = 90) -> bool:
+        """Tiến trình mới nhận lại một việc đang chạy (sau restart), giữ nguyên run hiện tại."""
+        ts = now()
+        with self._lock:
+            cur = self._db.execute(
+                """UPDATE tasks SET claimed_by=?, claim_expires_at=?, last_heartbeat_at=?, updated_at=?
+                   WHERE id=? AND lane='team' AND status='team_running'""",
+                (worker_id, ts + lease_s, ts, ts, task_id),
+            )
+            if cur.rowcount == 1:
+                self._event(task_id, "team_taken_over", f"taken over by {worker_id}")
+            self._db.commit()
+            return cur.rowcount == 1
+
+    def teams_with_waiting(self) -> list[str]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT DISTINCT team_id FROM tasks WHERE lane='team' AND status='team_queued' ORDER BY team_id"
+            ).fetchall()
+        return [str(r["team_id"]) for r in rows]
+
+    def team_history(self, team_id: str, limit: int = 50) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                """SELECT * FROM tasks WHERE lane='team' AND team_id=? AND status IN ('done','cancelled')
+                   ORDER BY updated_at DESC LIMIT ?""",
+                (str(team_id), max(1, min(500, int(limit)))),
+            ).fetchall()
+        return [self._task_from_row(r) for r in rows]
+
     def health(self, brain_root: Optional[str] = None) -> dict:
-        where = " WHERE brain_root=?" if brain_root else ""
+        where = " WHERE lane<>'team'" + (" AND brain_root=?" if brain_root else "")
         args = (brain_root,) if brain_root else ()
         with self._lock:
             rows = self._db.execute(
@@ -1064,7 +1474,7 @@ class TaskStore:
             ).fetchall()
             recent = self._db.execute(
                 f"""SELECT COUNT(*) AS n FROM tasks{where}
-                    {'AND' if where else 'WHERE'} status='done' AND updated_at>=?""",
+                    AND status='done' AND updated_at>=?""",
                 (*args, now() - 86400),
             ).fetchone()
         counts = {s: 0 for s in VALID_STATUS}

@@ -30,6 +30,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import team_migration
+
 # DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/).
 _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
 _DEFAULT_DB = _STATE_DIR / "conversations.db"
@@ -45,6 +47,9 @@ KENH_CONG_SU = ("agent:", "workflow:", "coding:")
 # Hội thoại của bot chuyên trách với khách (kênh `bot:<tên>`). Từ 0.65.0 chúng KHÔNG hiện ở lịch sử
 # trang Trò chuyện nữa: chủ muốn xem chúng trong lịch sử của Agent nối với chatbot (trang Cộng sự).
 KENH_BOT = ("bot:",)
+# Nhóm chat team: phiên chung của nhóm (`team:<id>`) và mạch engine riêng của từng thành viên (`teammate:<id>:<mã>`).
+# Chúng thuộc trang Nhóm, không hiện ở lịch sử trang Trò chuyện.
+KENH_TEAM = ("team:", "teammate:")
 
 
 def loc_brain(brain, cot: str = "s.brain"):
@@ -374,6 +379,8 @@ class SessionStore:
         self._lock = threading.Lock()
         self._fts_enabled = False
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột người gửi (khôi phục khi hạ phiên bản).
+        team_migration.snapshot_once(self.db_path, "messages", "author_kind")
 
         self._conn = sqlite3.connect(
             str(self.db_path),
@@ -460,6 +467,17 @@ class SessionStore:
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_sessions_project "
                 "ON sessions(project_id, updated_at DESC)")
+            # Nhóm chat team (spec 2026-10-13 mục 5.3): tin có người gửi. Mọi cột cho phép null, nên mã cũ và chat thường
+            # không đổi; chỉ phiên kênh `team:` ghi chúng. `client_msg_id` duy nhất trong phiên chống gửi trùng.
+            cols_m = {r[1] for r in self._conn.execute("PRAGMA table_info(messages)").fetchall()}
+            for name, ddl in (("author_kind", "TEXT"), ("author_ref", "TEXT"), ("client_msg_id", "TEXT"),
+                              ("reply_to", "INTEGER"), ("task_id", "TEXT"), ("step_id", "TEXT"),
+                              ("meta_json", "TEXT")):
+                if name not in cols_m:
+                    self._conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {ddl}")
+            self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client "
+                "ON messages(session_id, client_msg_id) WHERE client_msg_id IS NOT NULL")
             # Hướng dẫn riêng của project, ghép vào system prompt mỗi lượt chat trong đó.
             cols_p = {r[1] for r in self._conn.execute(
                 "PRAGMA table_info(projects)").fetchall()}
@@ -571,6 +589,162 @@ class SessionStore:
                 )
             return cur.lastrowid
         return self._write(_do)
+
+    # ───────────── nhóm chat team (spec 2026-10-13 mục 5.3) ─────────────
+
+    def append_team_message(self, session_id: str, role: str, content: str, *, author_kind: str,
+                            author_ref: str = "", client_msg_id: Optional[str] = None, reply_to: Optional[int] = None,
+                            task_id: Optional[str] = None, step_id: Optional[str] = None,
+                            meta: Optional[Dict[str, Any]] = None) -> Tuple[int, bool]:
+        """Ghi MỘT tin của phiên nhóm kèm người gửi. Trả (mã tin, có tạo mới không). Cùng `client_msg_id` trong cùng
+        phiên (gửi lại sau rớt mạng, bấm hai lần) trả đúng tin cũ và không tạo dòng mới: không thêm việc, không thêm lượt."""
+        if author_kind not in ("owner", "agent", "system"):
+            raise ValueError("author_kind không hợp lệ")
+        now = time.time()
+        meta_json = json.dumps(meta, ensure_ascii=False) if meta else None
+
+        def _do(conn):
+            if client_msg_id:
+                row = conn.execute("SELECT id FROM messages WHERE session_id=? AND client_msg_id=?",
+                                   (session_id, client_msg_id)).fetchone()
+                if row is not None:
+                    return int(row[0]), False
+            cur = conn.execute(
+                "INSERT INTO messages (session_id, role, content, ts, author_kind, author_ref, client_msg_id, "
+                "reply_to, task_id, step_id, meta_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, role, content, now, author_kind, author_ref or "", client_msg_id, reply_to, task_id,
+                 step_id, meta_json))
+            conn.execute("UPDATE sessions SET msg_count = msg_count + 1, updated_at = ? WHERE id = ?",
+                         (now, session_id))
+            return int(cur.lastrowid), True
+        return self._write(_do)
+
+    @staticmethod
+    def _team_msg(r: sqlite3.Row) -> Dict[str, Any]:
+        d = dict(r)
+        raw = d.pop("meta_json", None)
+        try:
+            d["meta"] = json.loads(raw) if raw else {}
+        except Exception:
+            d["meta"] = {}
+        return d
+
+    _TEAM_COLS = ("id, role, content, ts, author_kind, author_ref, client_msg_id, reply_to, task_id, step_id, "
+                  "meta_json")
+
+    def get_team_messages_page(self, session_id: str, limit: int = 30,
+                               before: Optional[Tuple[float, int]] = None) -> Dict[str, Any]:
+        """Một khúc tin của phiên nhóm tính từ cuối lên, con trỏ (ts, id) như `get_messages_page`, kèm người gửi."""
+        limit = max(1, min(int(limit), 200))
+        sql = f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ?"
+        params: List[Any] = [session_id]
+        if before is not None:
+            sql += " AND (ts < ? OR (ts = ? AND id < ?))"
+            params += [float(before[0]), float(before[0]), int(before[1])]
+        sql += " ORDER BY ts DESC, id DESC LIMIT ?"
+        params.append(limit + 1)
+        rows = self._read(sql, tuple(params))
+        has_more = len(rows) > limit
+        return {"messages": [self._team_msg(r) for r in reversed(rows[:limit])], "has_more": has_more}
+
+    def team_messages_after(self, session_id: str, after_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+        """Tin của phiên nhóm có id lớn hơn `after_id` (tin mới kể từ lượt trước của một agent), xếp xuôi, tối đa `limit`
+        tin GẦN NHẤT."""
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND id > ? "
+                          "ORDER BY id DESC LIMIT ?", (session_id, int(after_id), max(1, int(limit))))
+        return [self._team_msg(r) for r in reversed(rows)]
+
+    def team_message(self, session_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND id = ?",
+                          (session_id, int(message_id)))
+        return self._team_msg(rows[0]) if rows else None
+
+    def team_message_count(self, session_id: str) -> int:
+        """Số tin của một phiên nhóm (khối tóm tắt phần cũ, T4)."""
+        rows = self._read("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,))
+        return int(rows[0][0] or 0) if rows else 0
+
+    @staticmethod
+    def fold_text(text: str) -> str:
+        """Chữ để so khi tìm: bỏ dấu tiếng Việt (cả đ), không phân biệt hoa thường. "Việt" khớp "viet", "VIỆT"."""
+        import unicodedata
+        s = unicodedata.normalize("NFD", str(text or ""))
+        s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+        return s.replace("đ", "d").replace("Đ", "D").casefold()
+
+    def team_search(self, session_id: str, query: str, limit: int = 50, scan_max: int = 20000,
+                    batch: int = 2000) -> List[Dict[str, Any]]:
+        """Tìm trong MỘT phiên nhóm (T4, spec mục 19): khớp mọi từ của câu tìm, không phân biệt hoa thường và dấu, mới
+        nhất trước, tối đa `limit` kết quả. Lọc ở Python vì LIKE của SQLite chỉ bỏ hoa thường cho chữ ASCII.
+
+        Đọc theo LÔ nhỏ (chỉ id và nội dung) từ mới về cũ, dừng khi đủ kết quả hay đã quét `scan_max` tin: mỗi lần đọc
+        chỉ giữ khoá chung của kho phiên một chút, không chặn các phiên chat khác (review T4). Tin đầy đủ chỉ đọc cho
+        những tin khớp."""
+        words = [w for w in self.fold_text(query).split() if w]
+        if not words:
+            return []
+        want = max(1, min(int(limit), 200))
+        hits: List[int] = []
+        cursor, scanned = None, 0
+        while len(hits) < want and scanned < scan_max:
+            n = max(1, min(int(batch), int(scan_max) - scanned))
+            if cursor is None:
+                rows = self._read("SELECT id, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                                  (session_id, n))
+            else:
+                rows = self._read("SELECT id, content FROM messages WHERE session_id = ? AND id < ? "
+                                  "ORDER BY id DESC LIMIT ?", (session_id, cursor, n))
+            if not rows:
+                break
+            for r in rows:
+                if all(w in self.fold_text(r[1] or "") for w in words):
+                    hits.append(int(r[0]))
+                    if len(hits) >= want:
+                        break
+            scanned += len(rows)
+            cursor = int(rows[-1][0])
+        return [m for m in (self.team_message(session_id, i) for i in hits) if m]
+
+    def last_message_id_by(self, session_id: str, author_ref: str) -> int:
+        """Mã tin mới nhất do `author_ref` (agent_key) viết trong phiên nhóm; 0 nếu chưa có. Khối ngữ cảnh nhóm lấy tin
+        mới kể từ đây (spec 11.2)."""
+        rows = self._read("SELECT MAX(id) FROM messages WHERE session_id = ? AND author_ref = ?",
+                          (session_id, str(author_ref or "")))
+        return int(rows[0][0] or 0) if rows else 0
+
+    def team_messages_of_task(self, session_id: str, task_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+        """Tin của một việc nhóm (lọc khung chat theo việc, chi tiết việc; spec 7.7), cũ trước."""
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND task_id = ? "
+                          "ORDER BY id DESC LIMIT ?", (session_id, str(task_id), max(1, min(int(limit), 500))))
+        return [self._team_msg(r) for r in reversed(rows)]
+
+    def team_decisions(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Tin chủ nhóm ghim làm quyết định ("Sổ quyết định", spec 11.2), cũ trước, tối đa `limit` tin gần nhất."""
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE ? "
+                          "ORDER BY id DESC LIMIT ?", (session_id, '%"decision": true%', max(1, int(limit))))
+        return [m for m in (self._team_msg(r) for r in reversed(rows)) if m["meta"].get("decision") is True]
+
+    def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:
+        """Gộp `patch` vào meta của một tin nhóm (vd. gắn nhãn "Kết quả việc" khi việc xong)."""
+        def _do(conn):
+            row = conn.execute("SELECT meta_json FROM messages WHERE session_id=? AND id=?",
+                               (session_id, int(message_id))).fetchone()
+            if row is None:
+                return False
+            try:
+                meta = json.loads(row[0]) if row[0] else {}
+            except Exception:
+                meta = {}
+            meta.update(patch or {})
+            conn.execute("UPDATE messages SET meta_json=? WHERE session_id=? AND id=?",
+                         (json.dumps(meta, ensure_ascii=False), session_id, int(message_id)))
+            return True
+        return self._write(_do)
+
+    def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND client_msg_id = ?",
+                          (session_id, str(client_msg_id)))
+        return self._team_msg(rows[0]) if rows else None
 
     def report_receipt(self, session_id: str, report_key: str, goal_id: str) -> Optional[Dict[str, Any]]:
         """Tin báo cáo host đã lưu cho đúng khoá và đúng mục tiêu (kèm nội dung để đối chiếu khối thẻ), hoặc None.
@@ -748,7 +922,7 @@ class SessionStore:
                 where.append("s.channel IN (%s)" % ",".join("?" * len(chs)))
             params += chs
         else:
-            for tien_to in KENH_CONG_SU + KENH_BOT:
+            for tien_to in KENH_CONG_SU + KENH_BOT + KENH_TEAM:
                 where.append("s.channel NOT LIKE ?")
                 params.append(tien_to + "%")
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
@@ -1349,6 +1523,11 @@ class SessionStore:
             else:
                 brain_clause += " AND s.channel IN (%s)" % ",".join("?" * len(chs))
             _bparams = list(_bparams) + chs
+        else:
+            # Tìm chung (thanh tìm của khung chat chính) không trả phiên nhóm chat team: mở ra ở khung chat chính là chat
+            # vào phiên nhóm bằng bộ não chính, lẫn với tin của các thành viên.
+            brain_clause += (" AND COALESCE(s.channel, '') NOT LIKE 'team:%'"
+                             " AND COALESCE(s.channel, '') NOT LIKE 'teammate:%'")
         if self._fts_enabled:
             fts_q = self._sanitize_fts(q)
             if fts_q:

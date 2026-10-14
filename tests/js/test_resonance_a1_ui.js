@@ -30,12 +30,12 @@ const off = Object.assign({}, on, { enabled: false });
 
 // ───────────── khối của một trợ lý ─────────────
 let h = RA.panelHtml(off, null, []);
-check("tắt: công tắc chưa chọn, ghi chú trợ lý vẫn trò chuyện như thường",
-      !/rsa-toggle" checked/.test(h) && h.includes(vi["resonance.a1_off_note"]));
+check("tắt: chữ trạng thái Tắt (công tắc ở dòng trợ lý, T0), ghi chú trợ lý vẫn trò chuyện như thường",
+      !h.includes("rsa-toggle") && h.includes(vi["resonance.t0_state_off"]) && h.includes(vi["resonance.a1_off_note"]));
 check("chưa có mục tiêu: nói rõ", h.includes(vi["resonance.a1_no_goals"]));
 h = RA.panelHtml(on, "ready", []);
-check("bật, phiên dùng được: công tắc chọn, không có nút mở phiên mới",
-      /class="rsa-toggle" checked/.test(h) && h.includes(vi["resonance.a1_on_note"]) && !h.includes("rsa-new-session"));
+check("bật, phiên dùng được: chữ trạng thái Bật, không có nút mở phiên mới",
+      h.includes(vi["resonance.t0_state_on"]) && h.includes(vi["resonance.a1_on_note"]) && !h.includes("rsa-new-session"));
 h = RA.panelHtml(on, "needs_new_session", []);
 check("P2: bật trong phiên mở trước lúc cấp mã: nói rõ và có nút Mở cuộc trò chuyện mới",
       h.includes(vi["resonance.a1_needs_new_session"]) && h.includes("rsa-new-session")
@@ -43,8 +43,8 @@ check("P2: bật trong phiên mở trước lúc cấp mã: nói rõ và có nú
 check("P2: phiên cần mở mới nhưng công tắc tắt thì không đưa nút (chưa có gì để dùng)",
       !RA.panelHtml(off, "needs_new_session", []).includes("rsa-new-session"));
 h = RA.panelHtml(Object.assign({}, on, { status: "missing" }), null, []);
-check("file trợ lý mất: công tắc khoá, hai nút xác nhận (đúng trợ lý cũ / trợ lý mới)",
-      /rsa-toggle"[^>]*disabled/.test(h) && h.includes(vi["resonance.a1_missing"])
+check("file trợ lý mất: chữ Cần xác nhận, hai nút xác nhận (đúng trợ lý cũ / trợ lý mới)",
+      h.includes(vi["resonance.t0_state_missing"]) && h.includes(vi["resonance.a1_missing"])
       && /data-same="1"/.test(h) && /data-same="0"/.test(h));
 h = RA.panelHtml(Object.assign({}, on, { support: { goal: false, chat_output: false } }), "ready", []);
 check("engine chưa mang khoá lượt (Grok, Antigravity): cảnh báo rõ", h.includes(vi["resonance.a1_engine_no_goal"]));
@@ -52,7 +52,7 @@ h = RA.panelHtml(Object.assign({}, on, { support: { goal: true, chat_output: fal
 check("engine lập được nhưng chưa nhận bản chat (Codex, API): ghi chú tương ứng",
       h.includes(vi["resonance.a1_engine_no_chat_output"]) && !h.includes(vi["resonance.a1_engine_no_goal"]));
 h = RA.panelHtml(null, null, []);
-check("chưa tải được hay chưa đăng ký: công tắc tắt, không lỗi", !/rsa-toggle" checked/.test(h)
+check("chưa tải được hay chưa đăng ký: chữ Tắt, không lỗi", h.includes(vi["resonance.t0_state_off"])
       && h.includes(vi["resonance.a1_off_note"]));
 h = RA.panelHtml(on, "ready", [{ goal_id: "g_1" }, { goal_id: 'g"><b>x' }, null]);
 check("khung Mục tiêu của trợ lý: mỗi mục tiêu một thẻ (thẻ của chat-resonance), id được thoát ký tự",
@@ -70,12 +70,12 @@ const data = {
 };
 const goals = [{ goal_id: "g_old", revision: 3, understanding: "Mục tiêu <cũ>" }];
 const s = RA.settingsHtml(data, goals);
-check("cài đặt: mỗi trợ lý một công tắc đúng trạng thái",
-      /data-slug="viet-bai" checked/.test(s) && /data-slug="kiem-tra">/.test(s) && /data-slug="moi">/.test(s)
-      && /data-slug="mat"[^>]*disabled/.test(s));
+check("cài đặt (T0): tóm tắt số trợ lý đang bật và nút sang trang Cộng sự, không còn công tắc",
+      !s.includes("rsa-set-toggle") && s.includes(vi["resonance.t0_settings_summary"].replace("{n}", "1"))
+      && s.includes("rsa-goto-ws"));
 check("cài đặt: chống chèn HTML từ tên trợ lý và cách hiểu", !s.includes("<tra>") && !s.includes("<cũ>"));
-check("cài đặt: số mục tiêu đang mở, cảnh báo engine và mất file",
-      s.includes("2 mục tiêu đang mở") && s.includes(vi["resonance.a1_engine_short"]) && s.includes(vi["resonance.a1_missing_short"]));
+check("cài đặt: trợ lý mất file vẫn hiện bằng chữ",
+      s.includes(vi["resonance.a1_missing_short"]) && s.includes("Mất"));
 check("cài đặt: trợ lý mất file vẫn hiện để thấy mục tiêu bị kẹt", s.includes("da-doi-ten"));
 check("Chờ gán: mỗi mục tiêu một ô chọn, chỉ liệt kê trợ lý đang hoạt động có mã, mang đúng revision",
       s.includes(vi["resonance.a1_unassigned_title"]) && /data-goal="g_old" data-rev="3"/.test(s)
@@ -86,8 +86,10 @@ check("cài đặt: không có mục tiêu chờ gán thì không vẽ mục đ�
 check("brain chưa có trợ lý: chỉ đường tạo ở trang Cộng sự", RA.settingsHtml({ agents: [] }, []).includes(vi["resonance.a1_settings_empty"]));
 
 // ───────────── dây nối ─────────────
-check("API công tắc đi đúng route chủ dự án, kèm phiên đang mở",
-      SRC.includes("/resonance/agents/toggle") && /session_id: currentSession()/.test(SRC) && SRC.includes("/goals/\" + q("));
+// T0 nhóm chat team: công tắc trên dòng trợ lý không gửi session_id; trạng thái của phiên đang mở vẫn do bảng bên phải
+// hỏi lại host (GET /resonance/agents kèm session_id), nên P2 của review A1 vẫn được giữ.
+check("API công tắc đi đúng route chủ dự án; bảng bên phải hỏi host trạng thái của phiên đang mở",
+      SRC.includes("/resonance/agents/toggle") && /"&session_id=" \+ q\(sid\)/.test(SRC) && SRC.includes("/goals/\" + q("));
 check("không còn đọc hay ghi công tắc brain cũ ở giao diện", !CR.includes("/resonance/settings") && !SRC.includes("/resonance/settings")
       && !HTML.includes('id="resonanceEnabled"'));
 check("trang Cài đặt có chỗ cho danh sách trợ lý, nạp resonance-agent.js sau chat-resonance.js",

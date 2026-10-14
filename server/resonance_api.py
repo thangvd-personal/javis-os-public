@@ -38,6 +38,18 @@ class ResonanceApiDeps:
     # hay None (slug hợp lệ và file có thật).
     agents_meta: Callable[[str], list] = lambda root: []
     agent_file: Callable[[str, str], Any] = lambda root, slug: None
+    # T0 nhóm chat team: phát một gói tới mọi tab đang mở (ChatRuntime.publish) để tải lại trạng thái Cộng hưởng.
+    broadcast: Optional[Callable[[dict], Any]] = None
+
+
+async def _announce_agents(deps: "ResonanceApiDeps") -> None:
+    """Báo mọi tab rằng trạng thái Cộng hưởng của trợ lý vừa đổi. Gói phụ: lỗi thì bỏ qua, không làm hỏng lệnh của chủ."""
+    if deps.broadcast is None:
+        return
+    try:
+        await deps.broadcast({"type": "resonance_agents"})
+    except Exception:  # noqa: BLE001
+        pass
 
 
 async def _body(request: Request) -> dict:
@@ -358,6 +370,7 @@ def register_agents(app, deps: ResonanceApiDeps):
                 store.agent_mark_missing(root, live["agent_key"])
             return _err(404, "Không có file trợ lý này trong brain", "No such assistant file in this brain")
         if not on and not _store_exists():
+            await _announce_agents(deps)
             return {"ok": True, "agent": None, "session": None}
         store = deps.store()
         try:
@@ -367,6 +380,7 @@ def register_agents(app, deps: ResonanceApiDeps):
                         agent=store.agent(root, slug))
         if on and a is not None:
             store.wake_agent_goals(root, a["agent_key"])
+        await _announce_agents(deps)
         return {"ok": True, "agent": a,
                 "session": _session_state(store, root, slug, str(body.get("session_id") or "")) if on else None}
 
@@ -393,6 +407,7 @@ def register_agents(app, deps: ResonanceApiDeps):
             return _err(409, str(e), str(e), agent=cur)
         if same and a["enabled"]:
             store.wake_agent_goals(root, a["agent_key"], "chủ dự án xác nhận trợ lý")
+        await _announce_agents(deps)
         return {"ok": True, "agent": a}
 
     @app.post("/goals/{goal_id}/assign")

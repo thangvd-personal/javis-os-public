@@ -1120,6 +1120,17 @@ function handleMessage(data) {
     try { if (window.JavisBackground) window.JavisBackground.refresh(); } catch (e) {}
     return;
   }
+  if (data.type === "team_message" || data.type === "team_state") {
+    // Nhóm chat team (T1): tin mới của thành viên, hàng đợi đổi. Trang Nhóm (teams.js) nghe sự kiện này để vẽ lại;
+    // trang khác bỏ qua. Không đụng khung chat chính.
+    try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: data })); } catch (e) {}
+    return;
+  }
+  if (data.type === "resonance_agents") {
+    // T0 nhóm chat team: trợ lý vừa được bật, tắt Cộng hưởng (tab này hay tab khác). Trang Cộng sự, bảng bên phải và trang Cài đặt tự tải lại trạng thái thật.
+    try { window.dispatchEvent(new CustomEvent("javis:resonance-agents-changed")); } catch (e) {}
+    return;
+  }
   if (data.type === "inbox") {
     // Việc nền vừa để lại một mẩu thư → chấm đỏ trên chuông nhảy NGAY, không đợi tải lại
     // trang. Nếu thư thuộc đúng hội thoại đang mở thì coi như đã đọc luôn: người dùng đang

@@ -61,6 +61,7 @@ import borrowed_eyes   # mắt mượn: bộ não khác xem hộ ảnh khi model
 import image_vision
 import openai_oauth
 import claude_update   # tự chạy `claude update` hằng ngày để model mới hiện ra
+import agy_update      # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
 import claude_models   # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
 import winproc         # chạy lệnh con câm lặng trên Windows (không nháy console đen)
 import md_repair       # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
@@ -133,6 +134,7 @@ from telegram_bot import TelegramBot, parse_chat_ids as tg_parse_ids
 import zalo_bot   # kênh Zalo Bot của chủ (API chính thức) - cùng khế ước với TelegramBot
 import owner_channels   # owner's control channels on Slack and WhatsApp (0.71.0)
 import whatsapp_bot     # WhatsApp transport + webhook router (0.71.0)
+import messenger_bot    # Messenger transport + webhook router (0.134.0)
 import channel_context   # metadata kênh + gom file trả về kênh chat (port gateway hermes-agent)
 import lang as lang_mod   # chốt ngôn ngữ trả lời cho một lượt
 import lang_registry      # sổ đăng ký: mọi thứ về một ngôn ngữ nằm đúng một chỗ
@@ -220,7 +222,10 @@ _AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/auth/status", "/auth/login", "/auth
                       # /whatsapp/webhook: Meta calls it with no cookie. GET is the setup
                       # handshake (verify token), POST must carry a valid X-Hub-Signature-256
                       # under a known app secret, checked in the route itself.
-                      "/whatsapp/webhook")
+                      "/whatsapp/webhook",
+                      # /messenger/webhook (0.134.0): same contract as WhatsApp, the signature is
+                      # checked in the route under the app secrets of the Messenger accounts.
+                      "/messenger/webhook")
 # Endpoint CHỈ-LOCALHOST: agent (Claude CLI chạy cùng máy/container) curl được mà không cần
 # cookie đăng nhập; request từ ngoài (qua Traefik/Caddy/LAN) đến từ IP khác loopback → vẫn bị chặn.
 # /reminders/cancel đi cùng nhóm với /reminders (TẠO nhắc): huỷ là thao tác YẾU HƠN tạo, nên
@@ -2326,14 +2331,16 @@ def _resonance_agents_meta(root):
     out = []
     for a in agents_index(root, kem_prompt=False):
         prov = _agent_model_provider(a.get("model") or "", a.get("model_provider") or "") if a.get("model") else main_prov
-        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov})
+        # avatar: trang Nhóm vẽ đúng ảnh trợ lý đang dùng (cùng nhân dạng với trang Cộng sự).
+        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov, "avatar": a.get("avatar")})
     return out
 
 
 _RESONANCE_API_DEPS = resonance_api.ResonanceApiDeps(
     store=lambda: _resonance_store(), brain_key=lambda b: _brain_key(b),
     engine_factory=lambda s, t="resonance": _resonance_engine(s, t), session_store=lambda: get_store(),
-    agents_meta=_resonance_agents_meta, agent_file=lambda root, slug: _agent_md_path(root, slug))
+    agents_meta=_resonance_agents_meta, agent_file=lambda root, slug: _agent_md_path(root, slug),
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev))
 resonance_api.register(app, _RESONANCE_API_DEPS)
 _RESONANCE_TICK_BUSY = [False]
 
@@ -4195,7 +4202,42 @@ def antigravity_status():
     d["cai_lenh"] = antigravity_cli.lenh_cai()
     d["tu_cai"] = cli_autoinstall.state("agy")
     d["huong_dan"] = antigravity_cli.login_huong_dan()
+    d["cap_nhat"] = agy_update.doc_trang_thai()
     return d
+
+
+async def _cap_nhat_agy(ly_do: str) -> dict:
+    """Chạy `agy update` ở worker; bản đổi thì bỏ danh sách model đang nhớ để model mới hiện ngay."""
+    kq = await asyncio.to_thread(agy_update.cap_nhat, ly_do)
+    if kq.get("doi"):
+        _PROV_MODELS_CACHE.pop("antigravity-cli", None)
+        print(f"[agy update] {kq.get('truoc')} -> {kq.get('sau')} ({ly_do})", file=sys.stderr)
+    elif not kq.get("ok"):
+        print(f"[agy update] không cập nhật được ({ly_do}): {kq.get('error')}", file=sys.stderr)
+    return kq
+
+
+@app.on_event("startup")
+async def _tu_cap_nhat_agy():
+    """Mỗi giờ xem đã tới hạn chưa; tới hạn (24 giờ) thì chạy `agy update` một lần (0.137.0).
+
+    Chạy cả trong Docker: container cài `agy` một lần vào thư mục người dùng trên ổ dữ liệu, nên
+    không có vòng này thì nó đứng ở bản lúc cài mãi mãi, và model mới (Gemini 4 Argon, 14/10/2026)
+    không bao giờ hiện trong trình chọn. Chờ 3 phút sau khi khởi động, lệch với vòng của Claude.
+    """
+    if not agy_update.bat():
+        return
+
+    async def _vong():
+        await asyncio.sleep(180)
+        while True:
+            try:
+                if agy_update.den_han() and antigravity_cli.find_antigravity_cli():
+                    await _cap_nhat_agy("tu_dong")
+            except Exception as e:
+                print(f"[agy update] vòng tự cập nhật lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+            await asyncio.sleep(3600)
+    asyncio.create_task(_vong())
 
 
 @app.post("/antigravity/check")
@@ -6767,6 +6809,9 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
                      avatar_eye_size: str = Form(None), tags: str = Form(None)):
     # Trợ lý MỚI đặt tên file không dấu ("Bống Work" -> bong-work.md), đúng quy ước slug của Javis. Trước
     # 0.88.1 tên giữ nguyên dấu; các file đó vẫn đọc, sửa, xoá được nhờ skill_router.valid_file_slug.
+    # TẠO MỚI = form không gửi slug. Nhóm chat team (spec 2026-10-13 mục 5.1): tạo mới mà slug suy từ tên đã có file thì
+    # KHÔNG ghi đè agent cũ (trước đây ghi đè âm thầm tên, vai, lời nhắc của người khác); trả 409 kèm gợi ý slug trống.
+    creating = not (slug or "").strip()
     slug = slug or _ascii_slug(name)
     skills_list = [s.strip() for s in re.split(r"[,\n]", skills) if s.strip()]
     # `model_provider` nói RÕ model thuộc nhà nào - cùng một tên model có thể có ở hai nhà
@@ -6783,6 +6828,14 @@ async def save_agent(name: str = Form(...), role: str = Form(""), skills: str = 
         # và chạy ở worker. Đọc ngoài khoá rồi mới khoá lúc ghi thì một thao tác thêm/bỏ tag chen giữa sẽ
         # bị snapshot cũ của form ghi đè (review PR #617 vòng 1, R4).
         with _AGENT_META_LOCK:
+            if creating and path.is_file():
+                n = 2
+                while (_agents_dir(brain) / f"{slug}-{n}.md").is_file():
+                    n += 1
+                return JSONResponse({"ok": False, "code": "slug_taken", "suggest": f"{slug}-{n}", "error": localefmt.chu(
+                    f"Đã có trợ lý mang tên tệp {slug}. Đổi tên trợ lý mới, hoặc sửa trợ lý đang có.",
+                    f"An assistant with file name {slug} already exists. Rename the new one, or edit the existing one.")},
+                    status_code=409)
             previous = _read_md(path)[0] if path.is_file() else None
             try:
                 avatar = agent_avatar.for_save(previous, slug, avatar_shape, avatar_palette,
@@ -6828,7 +6881,9 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
         # Tìm và xoá file TRONG khoá ghi agent, ở worker (R5): thao tác tag hay form đang giữ khoá thì xoá
         # đợi nó ghi xong rồi mới xoá; thao tác tới sau thấy file đã mất và không tạo lại. Đợi khoá ở
         # worker nên event loop không bị chặn (R4).
-        with _AGENT_META_LOCK:
+        # Nhóm chat team (review T1, R3): xoá trong khoá chấp nhận đầu ra của bộ chạy nhóm, nên một lượt nhóm đang về
+        # không thể ghi bài học vào agent vừa bị xoá.
+        with _TEAM_API.guard(), _AGENT_META_LOCK:
             f = _agent_file(brain, slug)
             if f:
                 f.unlink()
@@ -6837,7 +6892,15 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
         if _RESONANCE_STORE is not None or (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
-            _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            gone = _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            # Nhóm chat team (spec 11.4): mã nghỉ thì thành viên thành `agent_gone` ở mọi nhóm của brain, xử lý như bỏ
+            # thành viên. Chưa có kho nhóm thì không tạo kho.
+            if gone and _TEAM_API.exists():
+                # Cùng khoá chấp nhận, áp dụng đầu ra của bộ chạy nhóm (review T1 R3, R7), ở luồng phụ.
+                def _gone(root=_brain_key(brain), key=gone["agent_key"]):
+                    with _TEAM_API.guard():
+                        _TEAM_API.teams().mark_agent_gone(root, key)
+                await asyncio.to_thread(_gone)
     except Exception as e:  # noqa: BLE001
         print(f"[resonance agent retire] {type(e).__name__}: {e}", file=sys.stderr)
     return {"ok": True}
@@ -21184,6 +21247,79 @@ async def whatsapp_webhook(request: Request):
     return {"ok": True, "messages": n}
 
 
+# ============================================================
+# Messenger (0.134.0): customer bots on a Facebook Page. Meta calls one webhook for every Page;
+# `messenger_bot.handle_webhook` routes by Page id. No owner control channel here.
+# ============================================================
+def _ms_verify_token() -> str:
+    """The handshake string Meta echoes when the Messenger webhook is set up. Generated once."""
+    m = cfgmod.read_settings().get("messenger", {}) or {}
+    tok = str(m.get("verify_token") or "").strip()
+    if not tok:
+        tok = secrets.token_urlsafe(24)
+        cfgmod.update_settings({"messenger": {"verify_token": tok}})
+    return tok
+
+
+def _ms_account_secrets() -> list:
+    """App secrets of the Messenger accounts (one Meta app per account, often one app for all)."""
+    out = []
+    try:
+        for a in channel_accounts.list_accounts(channel="messenger"):
+            cr = messenger_bot.split_credentials(channel_accounts.get_token(a.get("id", "")))
+            if cr.get("app_secret"):
+                out.append(cr["app_secret"])
+    except Exception as e:
+        print(f"[messenger secrets] {type(e).__name__}: {e}", file=sys.stderr)
+    return out
+
+
+@app.get("/channels/webhook-info")
+async def channels_webhook_info(request: Request, channel: str = ""):
+    """Address and verify token to paste into the platform for a channel that receives messages
+    by webhook (Messenger). Shown on the Add account form; the verify token is not a secret."""
+    if str(channel or "").strip().lower() != "messenger":
+        return JSONResponse({"ok": False, "error": localefmt.chu("Kênh này không dùng webhook",
+                                                                 "This channel does not use a webhook")},
+                            status_code=400)
+    base = web_security.external_base(
+        request.url.scheme, request.url.netloc,
+        request.headers.get("x-forwarded-proto", ""), request.headers.get("x-forwarded-host", ""))
+    url = base + "/messenger/webhook"
+    return {"ok": True, "webhook_url": url, "verify_token": _ms_verify_token(),
+            "https": url.startswith("https://")}
+
+
+@app.get("/messenger/webhook")
+async def messenger_webhook_verify(request: Request):
+    """Meta's setup handshake: echo `hub.challenge` only when the verify token matches."""
+    q = request.query_params
+    want = _ms_verify_token()
+    got = str(q.get("hub.verify_token") or "")
+    if q.get("hub.mode") == "subscribe" and got and secrets.compare_digest(got, want):
+        return PlainTextResponse(str(q.get("hub.challenge") or ""))
+    return PlainTextResponse("forbidden", status_code=403)
+
+
+@app.post("/messenger/webhook")
+async def messenger_webhook(request: Request):
+    """Inbound Messenger events. Public URL, so nothing is trusted before the signature check;
+    a request no known app secret signed is dropped with 401 and never parsed further."""
+    raw = await request.body()
+    if len(raw) > 2_000_000:
+        return PlainTextResponse("too large", status_code=413)
+    sig = request.headers.get("x-hub-signature-256", "")
+    if not messenger_bot.verify_signature(raw, sig, _ms_account_secrets()):
+        return PlainTextResponse("bad signature", status_code=401)
+    try:
+        payload = json.loads(raw.decode("utf-8") or "{}")
+    except Exception:
+        return PlainTextResponse("bad json", status_code=400)
+    # Answer 200 right away (Meta wants it within seconds); the events run as tasks.
+    n = await messenger_bot.handle_webhook(payload)
+    return {"ok": True, "events": n}
+
+
 def restart_telegram():
     """Bật lại bot theo cấu hình settings.telegram (tắt bot cũ nếu có)."""
     global _TG_BOT
@@ -22127,6 +22263,141 @@ resonance_api.register_learning(app, _RESONANCE_API_DEPS)
 resonance_api.register_a4(app, _RESONANCE_API_DEPS)
 # A5: chọn người review cho một trợ lý làm (đăng ký cuối, bảng route chỉ thêm ở cuối).
 resonance_api.register_a5(app, _RESONANCE_API_DEPS)
+
+
+# ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
+import team_api  # noqa: E402
+import team_runner  # noqa: E402
+
+
+def _team_agent_info(root, agent_key):
+    """Thành viên theo mã bền: slug hiện tại, tên, lời nhắc hệ thống của agent (vai, bộ nhớ, luật chủ dặn, bài học) và
+    model riêng. None khi mã đã nghỉ, file mất hay chưa có sổ danh tính: bộ chạy coi như thành viên đã rời."""
+    try:
+        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            return None
+        reg = _resonance_store().agent_by_key(root, agent_key)
+    except Exception:  # noqa: BLE001
+        return None
+    if not reg or reg.get("status") != "active" or not _agent_md_path(root, reg["slug"]):
+        return None
+    name, system, model, provider = _workflow_agent_helpers(root, None)[1](reg["slug"])
+    return {"slug": reg["slug"], "name": name, "system": system, "model": model or "", "model_provider": provider or ""}
+
+
+def _team_engine_for(team, agent_key, role):
+    """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
+    cụ. Agent có model Claude riêng (`model` + provider anthropic-cli) thì chạy model đó; còn lại dùng model việc nền như
+    lượt Cộng hưởng, không tự đổi provider.
+
+    Review T1:
+    - R4: engine được DỰNG xong (và báo sẵn sàng) rồi mới gọi `req["engine_started"]`, mốc tính lượt của bộ chạy; dựng
+      hỏng thì ném EngineUnavailable trước mốc, lượt được hoàn.
+    - R1: kết cục đọc theo hợp đồng chỉ chữ (`team_runner.TextOnlyOutcome`): final lỗi, lỗi đăng nhập, lỗi sau final,
+      gọi công cụ, thiếu final, câu trả lời rỗng đều là lượt lỗi, không bao giờ thành sản phẩm.
+    - R3: JAVIS_LESSON / JAVIS_RULE chỉ được BÓC ở đây (không ghi gì). Việc ghi vào bộ nhớ agent là `commit`, bộ chạy chỉ
+      gọi sau khi kiểm đầu ra còn hợp lệ; `commit` kiểm lại danh tính (mã bền còn trỏ đúng slug) ngay trước khi ghi."""
+    root = team["brain_id"]
+    info = _team_agent_info(root, agent_key) or {}
+    model = info.get("model") or ""
+    own_claude = bool(model) and _agent_model_provider(model, info.get("model_provider") or "") == "anthropic-cli"
+
+    def _build(system, tag):
+        if own_claude:
+            eng = _reply_policy_sandbox_engine(system, tag, cwd_name="team_cwd")
+            eng.model = model
+        else:
+            eng, why = _resonance_engine(system, tag)
+            if eng is None:
+                raise team_runner.EngineUnavailable(
+                    f"model việc nền chưa chạy được lượt chỉ chữ: {(why or {}).get('reason') or why}")
+        avail = getattr(eng, "is_available", None)
+        if callable(avail) and not avail():
+            raise team_runner.EngineUnavailable("engine chưa sẵn sàng (kiểm tra trang Models)")
+        return eng
+
+    async def run(req):
+        tag = f"team-{str(req['team_id'])[-8:]}"
+        eng = await asyncio.to_thread(_build, req["system"], tag)
+        await req["engine_started"]()
+        outcome = team_runner.TextOnlyOutcome()
+        async for ev in eng.query(req["prompt"]):
+            outcome.note(ev)
+        res = outcome.result()
+        slug = info.get("slug") or ""
+        # JAVIS_RULE trong lượt nhóm không có chủ nói trực tiếp với agent: hạ thành bài học (như bước workflow).
+        rules, text = agent_rules.extract_rules(res["text"])
+        lessons, clean = _boc_bai_hoc(text)
+        lessons = list(lessons) + list(rules)
+
+        def commit():
+            now = _team_agent_info(root, agent_key) or {}
+            if not slug or now.get("slug") != slug:
+                raise RuntimeError("agent đã đổi danh tính, không ghi bài học")
+            if lessons:
+                _ghi_bai_hoc(root, slug, lessons)
+            _log_agent_run(root, slug, "", clean)
+
+        return {"text": clean, "tokens_in": res["tokens_in"], "tokens_out": res["tokens_out"],
+                "lessons": lessons, "commit": commit}
+
+    run.marks_engine = True
+    return ("anthropic-cli" if own_claude else "aux"), model, run
+
+
+class _TeamAdmin:
+    """Thao tác của host cho lệnh quản trị của trưởng nhóm Toàn quyền (T3, spec 13). Bộ chạy gọi ở pha chấp nhận, ở luồng
+    phụ, trong `accept_lock` (thứ tự khoá: accept_lock rồi _AGENT_META_LOCK, như `delete_agent`)."""
+
+    def exists(self, root, slug):
+        return _agent_md_path(root, slug) is not None
+
+    def register(self, root, slug):
+        return _TEAM_API.register_agent(root, slug)
+
+    def create_agent(self, root, name, role, prompt):
+        """Tạo trợ lý MỚI, không bao giờ ghi đè: slug trùng thì thêm -2, -3. Gắn tag "Nhóm" để không bị trống nhãn."""
+        base = _ascii_slug(name) or "tro-ly"
+        with _AGENT_META_LOCK:
+            d = _agents_dir(root)
+            d.mkdir(parents=True, exist_ok=True)
+            slug, n = base, 2
+            while (d / f"{slug}.md").exists():
+                slug, n = f"{base}-{n}", n + 1
+            meta = {"type": "agent", "name": name, "slug": slug, "role": role, "skills": [], "model": "",
+                    "updated": _today()}
+            agent_tags.write_tags(meta, agent_tags.normalize_tags(["Nhóm"]))
+            _write_md(d / f"{slug}.md", meta, (prompt or "").strip() or role or name)
+        return slug
+
+    def edit_prompt(self, root, slug, prompt):
+        with _AGENT_META_LOCK:
+            path = _agent_md_path(root, slug)
+            if path is None:
+                raise FileNotFoundError(slug)
+            meta, _old = _read_md(path)
+            if not meta:
+                # Frontmatter hỏng hay không có: ghi lại sẽ xoá tên, vai, model, tag của trợ lý (review T3).
+                raise ValueError("file trợ lý không có frontmatter đọc được, không sửa")
+            meta["updated"] = _today()
+            _write_md(path, meta, prompt)
+
+    def set_resonance(self, root, slug, on, by):
+        if on and _agent_md_path(root, slug) is None:
+            raise FileNotFoundError(slug)
+        _resonance_store().agent_set_enabled(resonance_store.Principal("owner", by, _brain_key(root)), slug, bool(on))
+
+
+async def _team_notify(session_id, text):
+    await _bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{session_id}", text, kind="report",
+                          label=localefmt.chu("Nhóm", "Team"), source="team")
+
+
+_TEAM_API = team_api.register(app, team_api.TeamApiDeps(
+    brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
+    task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
+    agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
+    broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin()))
 
 
 if __name__ == "__main__":

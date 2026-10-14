@@ -256,6 +256,8 @@
   var TRANG = 20;
   var S = { loai: "agent", q: "", nhom: "", thu: docThu(), agents: [], workflows: [], chon: { agent: null, workflow: null },
             el: null, tienDo: {}, sessionCuaPhien: {}, tabPhai: "lichsu",
+            // T0 nhóm chat team: trạng thái Cộng hưởng theo slug, và các dòng đang chờ server trả lời.
+            rs: {}, rsSaving: {},
             // Tab cột phải NHỚ RIÊNG theo loại. Trợ lý mở ở Lịch sử (chốt 16/09, xem TAB_PHAI);
             // quy trình mở ở Cài đặt vì nút Chạy nằm ở đó (chủ dự án chốt 17/09). Dùng chung
             // một ô nhớ thì vừa xem xong hội thoại của một trợ lý, sang quy trình là Lịch sử
@@ -299,6 +301,30 @@
   // danh sách của brain đó (rỗng). Brain thật về thì trang dựng lại và tải đúng. Nhưng lượt tải cũ vẫn
   // đang bay, và nếu nó về SAU lượt mới thì nó đè danh sách đúng bằng danh sách rỗng: màn "Chưa có
   // cộng sự nào" dù brain có cả chục trợ lý. Trả lỗi kiểu {"error"} cũng từng bị coi là danh sách rỗng.
+  // T0: GET /resonance/agents -> { slug: mục } để dòng trợ lý vẽ công tắc. Đọc hỏng (mạng, lỗi server) thì GIỮ bản
+  // đồ cũ: xoá hết công tắc chỉ vì một lần đọc lại hỏng là giấu trạng thái người dùng vừa thấy (review cuối T0, Minor 2).
+  function resonanceMap(j, previous) {
+    if (!j || !Array.isArray(j.agents)) return previous || {};
+    var m = {};
+    j.agents.forEach(function (a) { if (a && a.slug) m[a.slug] = a; });
+    return m;
+  }
+  // Đọc trạng thái Cộng hưởng RIÊNG, sau khi danh sách đã hiện: chậm hay lỗi không làm cột trái trống (review cuối T0,
+  // Important 2). Bỏ kết quả của brain cũ hay của lần dựng trang cũ.
+  async function loadResonance() {
+    var round = lanDung, b0 = brain();
+    var j = await api("/resonance/agents?brain=" + encodeURIComponent(b0)).catch(function () { return null; });
+    if (round !== lanDung || b0 !== brain()) return false;
+    S.rs = resonanceMap(j, S.rs);
+    return true;
+  }
+  // Một lượt bật, tắt vừa có kết quả: gỡ cờ "đang lưu" của ĐÚNG trợ lý đó (lượt khác đang chờ vẫn khoá), kể cả khi
+  // người dùng đã rời trang; lỗi thì giữ lý do dưới thanh lọc, thành công thì gỡ câu báo lỗi cũ (review cuối T0).
+  function afterToggle(slug, result) {
+    delete S.rsSaving[slug];
+    S.tagNote = result && result.ok ? null
+      : { loi: true, msg: t("resonance.t0_failed", { error: (result && result.error) || "" }) };
+  }
   async function taiDanhSach() {
     var lan = lanDung, b0 = brain();
     var b = encodeURIComponent(b0);
@@ -311,6 +337,9 @@
     if (!r[0] || !Array.isArray(r[0].agents) || !r[1] || !Array.isArray(r[1].workflows)) {
       throw new Error((r[0] && r[0].error) || (r[1] && r[1].error) || "list");
     }
+    // T0 nhóm chat team: trạng thái Cộng hưởng của MỌI trợ lý trong một request riêng (không gọi theo từng dòng), đọc
+    // SAU khi danh sách đã có: tới đâu vẽ lại tới đó. Chưa về hay lỗi thì dòng không có công tắc (không đoán).
+    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
     S.agents = sapXep(r[0].agents, "last_chat_at");
     S.workflows = sapXep(r[1].workflows.filter(function (w) { return w.status === "active"; }), "last_run_at");
     daTai = true;
@@ -843,6 +872,9 @@
       // Dấu ghim đứng NGOÀI khối chữ: trong đó nó bị ellipsis của cái tên cắt mất.
       (x.pinned ? '<span class="ws-item-pin" title="' + esc(t("ws.pinned")) + '">' + ic("pin") + '</span>' : "") +
       '</button>' +
+      // T0 nhóm chat team: công tắc Cộng hưởng của trợ lý, ngang hàng với hai nút (không lồng trong nút chọn mục).
+      (S.loai === "agent" && window.JavisResonanceAgent
+        ? window.JavisResonanceAgent.rowToggleHtml(S.rs[x.slug], { saving: !!S.rsSaving[x.slug] }) : "") +
       '<button type="button" class="ws-item-more" data-more="' + esc(x.slug) + '" title="' +
         esc(t("ws.manage")) + '" aria-label="' + esc(t("ws.manage")) + '">' + ic("ellipsis-vertical") + '</button>' +
       '</div>';
@@ -874,6 +906,35 @@
     });
     host.querySelectorAll("[data-gmore]").forEach(function (b) {
       b.onclick = function (e) { e.stopPropagation(); moMenuCuaNhom(b.dataset.gmore, b); };
+    });
+    // T0 nhóm chat team: công tắc Cộng hưởng trên dòng. Khoá trong lúc chờ server (bấm hai lần không gửi hai lệnh);
+    // chỉ server xác nhận mới đổi; lỗi thì nói lý do và vẽ lại theo trạng thái thật (toggleAgent luôn phát sự kiện).
+    host.querySelectorAll(".ws-rs-toggle").forEach(function (box) {
+      box.onclick = function (e) { e.stopPropagation(); };
+      box.onchange = function () {
+        var slug = box.dataset.rs, row = S.rs[slug];
+        var RA = window.JavisResonanceAgent;
+        if (!RA || !row || S.rsSaving[slug]) { box.checked = !box.checked; return; }
+        var wantOn = box.checked;
+        var question = wantOn ? "" : RA.offConfirmText(row);
+        if (question && !window.confirm(question)) { box.checked = !wantOn; return; }
+        S.rsSaving[slug] = true; veDanhSach();
+        // toggleAgent luôn phát sự kiện tải lại trạng thái thật; ở đây chỉ gỡ cờ và cập nhật câu báo.
+        RA.toggleAgent(slug, wantOn).then(function (result) {
+          afterToggle(slug, result);
+          if (active) veTrai();
+        });
+      };
+    });
+    // Trợ lý `missing` hay `retired`: mở bảng bên phải của trợ lý đó, nơi có hai nút xác nhận của A1.
+    host.querySelectorAll(".ws-rs-confirm").forEach(function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        S.chon[S.loai] = b.dataset.rsOpen; luuChon(); veDanhSach(); moPhien(dangChon(), false);
+        chonTabPhai("cai");
+        var page = S.el && S.el.querySelector("#wsPage");
+        if (page && window.matchMedia("(max-width: 1060px)").matches) page.classList.add("right-open");
+      };
     });
   }
 
@@ -1551,10 +1612,17 @@
   window.JavisWorkspace = { render: render, roi: roi, openCommand: openCommand, openTab: openTab, onTurnDone: onTurnDone, canSend: function () { return !active || ready; }, dungKhiChuaCoTuDien: function () { return dungKhiChuaCoTuDien; }, onChatState: onChatState, chayQuyTrinh: chayQuyTrinh, onWfEvent: onWfEvent, sapXep: sapXep, loc: loc, tienDoMoi: tienDoMoi, apDung: apDung, phanTram: phanTram,
     dangChay: dangChay, tabPhai: chonTabPhai, gomNhom: gomNhom, nhomHtml: nhomHtml, chonNhom: chonNhom, state: function () { return S; },
     tagsCua: tagsCua, tagCap: tagCap, laKhoa: laKhoa, demTag: demTag, coTag: coTag, khoaTag: khoaTag,
-    dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE };
+    dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE,
+    resonanceMap: resonanceMap, afterToggle: afterToggle };
   // Sidebar lịch sử mở phiên trực tiếp qua JavisSessions.open, ngoài đường moPhien ở trên.
   // Ghi lại sau khi nó mở xong để lần dựng trang sau vẫn ở đúng cuộc đã chọn.
   window.addEventListener("javis:sessions-changed", function () {
     if (active && ready && window.JavisSessions) luuViTri(window.JavisSessions.current());
+  });
+  // T0 nhóm chat team: trạng thái Cộng hưởng vừa đổi (tab này, tab khác qua gói WS resonance_agents, hay trang Cài
+  // đặt): đọc lại trạng thái THẬT của host rồi vẽ lại danh sách. Không giữ trạng thái người dùng vừa bấm.
+  window.addEventListener("javis:resonance-agents-changed", function () {
+    if (!active) return;
+    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
   });
 })();

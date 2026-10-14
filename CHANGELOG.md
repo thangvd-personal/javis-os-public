@@ -6,6 +6,56 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.141.0] - 2026-10-14
+### Cải thiện
+- **Bot Zalo xem được ảnh trong tin được quote.** Quote (trả lời) một ảnh rồi tag bot "xem ảnh này" là bot nhìn đúng ảnh đó. Trước đây bot chỉ nhận chữ và nói không thấy ảnh, phải gửi lại ảnh rồi tag trong 3 phút.
+- Chạy ở cả nhóm lẫn chat riêng, và cả khi bạn bấm "Trả lời giúp" ở Hộp thư. Ảnh phải là ảnh Javis đã đọc được lúc nó được gửi, tức gửi sau khi tài khoản Zalo đã kết nối.
+
+## [0.140.0] - 2026-10-14
+### Thêm mới
+- **Trang Nhóm: nhiều trợ lý trong một khung chat**, như nhóm Zalo. Nhắn chung thì trưởng nhóm trả lời, gõ @ để hỏi riêng một người. Bật **Giao việc** thì trưởng nhóm chia việc cho cả nhóm, tiến độ và kết quả hiện ngay trong chat.
+- **Việc của nhóm có hàng chờ** với Ưu tiên, Sửa yêu cầu, Huỷ. Việc bị chặn có sẵn một nút giải quyết như **Cho thêm lượt** hay **Thử lại**. Bạn chọn trưởng nhóm được tự quyết đến đâu: Hỏi tôi trước, Tự làm báo tôi, hoặc Tự quản cả nhóm.
+- **Thả cảm xúc và góp ý** cho câu trả lời để trợ lý rút kinh nghiệm ở lượt sau. **Tìm tin cũ** trong nhóm không cần gõ dấu. Ảnh nhóm ghép từ ảnh thật của các trợ lý, và có thể **ghim nhóm** lên đầu danh sách (trên điện thoại thì nhấn giữ).
+### Cải thiện
+- **Bật, tắt Cộng hưởng ngay trên danh sách trợ lý** ở trang Cộng sự. Công tắc chỉ đổi khi máy chủ xác nhận.
+
+## [0.139.0] - 2026-10-14
+### Sửa lỗi
+- **Gửi file Excel, PDF, Word qua Zalo không còn treo.** Trước đây Javis gửi file kiểu này phải chờ mãi tới 2 phút rồi báo lỗi, file không tới (ảnh thì vẫn gửi được). Giờ file đi qua đúng kết nối Zalo đang trực Hộp thư nên tới được người nhận.
+- **Zalo không xác nhận trong 1 phút thì Javis báo lỗi rõ và không gửi gì**, gửi lại an toàn. Không còn cảnh chờ mãi không biết file đã đi chưa.
+- Sau khi cập nhật, **bấm "Có bản mới" của gói "Zalo mở rộng"** ở Kho cài đặt để lên bản 1.2.0, và Javis tự chuyển kết nối Zalo sang javis-zalo 1.4.0 (không phải quét QR lại).
+- Cảm ơn @thanhtmfyu-lang đã đóng góp.
+
+## [0.137.0] - 2026-10-14
+### Sửa lỗi
+- **Antigravity CLI tự lên bản mới mỗi ngày, nên model mới (như Gemini 4 Argon) tự hiện trong Javis.** Danh sách model của Antigravity lấy thẳng từ `agy`, mà trước đây `agy` không bao giờ được cập nhật: bản Docker cài nó một lần rồi đứng yên ở đó. Giờ Javis tự chạy `agy update` mỗi ngày, cả trong Docker. `agy` đã mới nhất mà vẫn không thấy model thì tài khoản Google của bạn chưa được cấp model đó.
+- **Bot không còn nói "Em đang gặp trục trặc kỹ thuật, anh chị nhắn lại giúp em sau ít phút ạ"** khi lượt trả lời bị lỗi. Câu đó khai với khách là máy và bắt khách nhắn lại. Giờ bot nói "Anh chị đợi em chút xíu để em kiểm tra lại ạ." Người trực vẫn được báo lỗi thật như trước.
+
+## [0.136.0] - 2026-10-14
+### Cải thiện
+- **Bot Zalo cá nhân trả lời thay khi bạn chưa trả lời sau 10 phút.** Trước đây bạn vừa tự nhắn vào một cuộc chat thì tin khách tới sau đó bị bỏ hẳn, không ai trả lời. Giờ Javis giữ lại; bạn không trả lời trong 10 phút thì bot trả lời một lần cho tất cả, chỉ ở chat riêng.
+- **Khách chỉ gửi file hay ảnh không chữ cũng được đáp hợp cảnh**: bot được báo khách gửi gì (tên file, ảnh), và bot có quyền Được ghi thì mở luôn file đó. Bạn trả lời trên điện thoại hay từ Hộp thư thì bot không xen vào.
+- Cảm ơn @thanhtmfyu-lang đã đóng góp.
+
+## [0.135.0] - 2026-10-14
+### Sửa lỗi
+- **Trang Công cụ báo đúng "Sẵn sàng" cho Trình duyệt (Chromium) cài bằng Playwright mới.** Từ Playwright 1.57, bản trình duyệt chạy ẩn đổi tên file chạy thành `chrome-headless-shell`. Javis không nhận ra tên này nên luôn báo "Có thư mục trình duyệt nhưng thiếu file chạy, bản tải về hỏng dở", dù bản cài đủ và chạy được, gỡ cài lại bao nhiêu lần cũng vậy. Giờ Javis nhận cả tên mới lẫn tên cũ. Không cần tải lại: cập nhật xong mở trang Công cụ là thấy Sẵn sàng.
+
+## [0.134.0] - 2026-10-14
+### Thêm mới
+- **Bot trả lời hộp thư Fanpage Facebook (Messenger).** Thêm kênh Messenger ở trang Chatbot, gắn vào bot đang có là bot trả lời cả Zalo lẫn Messenger bằng cùng một Agent. Tin khách vào Hộp thư như các kênh khác.
+- **Form thêm kênh hiện sẵn địa chỉ webhook và mã xác minh** để dán sang app Meta. Lúc bật bot, Javis tự đăng ký Fanpage với webhook, khỏi làm tay. Token thiếu quyền tự đăng ký thì bot vẫn chạy và nhắc bạn gắn tay một lần.
+- **App secret sai bị chặn ngay lúc lưu**, thay vì bot trông vẫn chạy mà không nghe được tin nào.
+- **Lỗi của Meta nói bằng lời:** quá 24 giờ kể từ tin cuối của khách, app chưa qua xét duyệt quyền nhắn tin, token hết hạn. Hướng dẫn từng bước ở docs/31-messenger.md.
+- Cảm ơn @thanhtmfyu-lang đã đóng góp.
+
+## [0.133.0] - 2026-10-14
+### Thêm mới
+- **Bot Zalo cá nhân đọc được file khách gửi.** Khách gửi file (Excel, PDF, CSV...) ở chat riêng, hoặc gửi file rồi nhắn "xem giúp em", thì bot tải file về thư mục `inbox/khach` trong brain của bot và trả lời kèm file đó. File chữ (txt, md, csv, json...) bot đọc được nội dung luôn; định dạng khác bot nói rõ là chưa đọc, không đoán.
+- Chỉ bot có quyền **Được ghi** trở lên mới tải file. Bot Chỉ đọc vẫn trả lời phần chữ và biết khách có gửi file.
+- Không tải file của người lạ, của cuộc chat đang Tiếp quản, hay file thả vào nhóm mà không ai gọi bot. File quá 20MB hoặc link hết hạn thì bot báo không mở được.
+- Cảm ơn @tuanlong1989florist đã đóng góp.
+
 ## [0.131.0] - 2026-10-14
 ### Thêm mới
 - **Theme riêng cho người vận hành.** Đặt file `theme.css` vào thư mục `branding` trong dữ liệu của Javis (cạnh logo) là dashboard đổi màu, font theo thương hiệu của bạn, và giữ nguyên qua mọi lần cập nhật. Xoá file là về giao diện gốc. Hướng dẫn trong tài liệu Thương hiệu và tên miền.

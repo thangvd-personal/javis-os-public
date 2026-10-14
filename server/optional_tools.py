@@ -126,12 +126,24 @@ _BINARY_TRONG_BUILD = (
     "chrome-linux/headless_shell",
     "chrome-win/headless_shell.exe",
     "chrome-mac/headless_shell",
+    # Playwright 1.57+ tải bản headless của Chrome for Testing: thư mục và file đổi tên hẳn
+    # (`chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell`).
+    "chrome-headless-shell-linux64/chrome-headless-shell",
+    "chrome-headless-shell-linux-arm64/chrome-headless-shell",
+    "chrome-headless-shell-win64/chrome-headless-shell.exe",
+    "chrome-headless-shell-mac-arm64/chrome-headless-shell",
+    "chrome-headless-shell-mac-x64/chrome-headless-shell",
 )
 
 # TÊN file chạy. Đây mới là thứ bền: thư mục bọc ngoài đổi theo bản Playwright và theo kiến
 # trúc máy (`chrome-linux`, `chrome-linux64`, `chrome-linux-arm64`... - đọc thẳng trong
-# playwright-core mới thấy đủ), còn tên file thì không đổi.
-_TEN_FILE_CHAY = ("chrome", "chrome.exe", "headless_shell", "headless_shell.exe", "Chromium")
+# playwright-core mới thấy đủ). Tên file thì bền hơn nhưng KHÔNG bất biến: Playwright 1.57+ đổi
+# `headless_shell` thành `chrome-headless-shell`, và thiếu tên đó trong danh sách là trang Công cụ
+# báo "thiếu file chạy, bản tải về hỏng dở" trên một bản cài đầy đủ chạy được (báo lỗi 14/10/2026,
+# Playwright 1.64, headless shell 1248). Thêm tên mới khi Playwright đổi, đừng thay tên cũ: máy
+# còn bản cài cũ vẫn phải nhận ra.
+_TEN_FILE_CHAY = ("chrome", "chrome.exe", "headless_shell", "headless_shell.exe", "Chromium",
+                  "chrome-headless-shell", "chrome-headless-shell.exe")
 
 # Trần độ sâu khi quét. Bố cục sâu nhất đang biết là bản macOS:
 # chrome-mac/Chromium.app/Contents/MacOS/Chromium = 5 cấp. Có trần để một thư mục rác khổng lồ

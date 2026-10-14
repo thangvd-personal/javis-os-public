@@ -490,6 +490,30 @@ def tin_gan_day(channel: str, account_id: str, external_chat_id: str, limit: int
         return []
 
 
+def tin_theo_id(channel: str, account_id: str, external_chat_id: str, external_message_id: str) -> dict:
+    """ONE stored message of a chat by the channel's own message id, `metadata` already parsed; {} if absent.
+
+    Used to find the message a reply quotes (0.141.0, Zalo `replyTo.msgId`). Scoped to the same chat on purpose: a
+    quote never points across chats, and an id from another chat must not leak that chat's content. Never raises."""
+    mid = str(external_message_id or "").strip()
+    if not mid:
+        return {}
+    try:
+        with _lock:
+            r = _conn().execute(
+                "SELECT m.* FROM messages m JOIN conversations c ON c.id=m.conversation_id"
+                " WHERE c.channel_account_id=? AND c.external_chat_id=? AND m.external_message_id=? LIMIT 1",
+                (_tai_khoan_id(channel, account_id), str(external_chat_id), mid)).fetchone()
+        if r is None:
+            return {}
+        d = dict(r)
+        d["metadata"] = _loads(d.pop("metadata_json", "{}"), {})
+        return d
+    except Exception as ex:      # noqa: BLE001
+        print(f"[conversations] đọc tin theo id lỗi: {type(ex).__name__}: {ex}", file=sys.stderr)
+        return {}
+
+
 # ============================================================
 # Đọc
 # ============================================================

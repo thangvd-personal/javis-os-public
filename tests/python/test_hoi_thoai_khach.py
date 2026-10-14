@@ -159,7 +159,7 @@ _dap = "⚠ Model 'x' không chạy được"
 asyncio.run(fn("hỏi nữa", {**meta, "message_id": 502}))
 tin = conversations.tin_nhan(ds[0]["id"])
 check("lượt gãy: tin khách vẫn vào kho và câu xin lỗi là tin bot kèm lý do kỹ thuật",
-      len(tin) == 4 and tin[3]["sender_type"] == "ai" and "trục trặc" in tin[3]["text"]
+      len(tin) == 4 and tin[3]["sender_type"] == "ai" and "đợi em chút xíu" in tin[3]["text"]
       and "không chạy được" in (tin[3]["metadata"] or {}).get("loi", ""))
 _dap = {"text": "Dạ có ạ.", "files": []}
 

@@ -29,6 +29,9 @@ function dung() {
     sapXep: (ds) => ds,
     api: (url) => new Promise((res) => cho.push({ url, res })),
     cho,
+    // T0 nhóm chat team: taiDanhSach mở lượt đọc trạng thái Cộng hưởng riêng sau khi có danh sách. Test này chỉ soi
+    // thứ tự trả về của danh sách nên lượt đó không làm gì.
+    loadResonance: () => Promise.resolve(false), active: false, veDanhSach() {},
   };
   vm.createContext(ctx);
   vm.runInContext(fn + "\nglobalThis.taiDanhSach = taiDanhSach;", ctx);

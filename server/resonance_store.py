@@ -559,6 +559,22 @@ class GoalStore:
                 return self._agent(r)
             return self._bump_agent(c, r, "enabled" if enabled else "disabled", p.by, now, enabled=1 if enabled else 0)
 
+    def agent_register(self, p: Principal, slug: str) -> dict:
+        """Nhóm chat team (spec 2026-10-13 mục 5.1): cấp mã bền cho agent `slug` mà KHÔNG bật Cộng hưởng, để mọi thành
+        viên nhóm có danh tính do host quản lý. Đã có dòng sống (`active` hay `missing`) thì trả nguyên dòng đó, không
+        đổi `enabled` hay version. Agent đã nghỉ thì cấp mã mới (agent mới cùng tên không thừa hưởng gì). Chỉ chủ dự án
+        (hay host thay chủ) gọi; kiểm file agent có thật là việc của người gọi."""
+        self._owner_only(p)
+        slug = str(slug or "").strip()
+        if not slug:
+            raise AgentStateError("thiếu slug agent")
+        now = time.time()
+        with self._Tx(self) as c:
+            r = self._live_agent_row(c, p.brain_id, slug)
+            if r is not None:
+                return self._agent(r)
+            return self._agent(self._insert_agent(c, p.brain_id, slug, False, p.by, now, {"reason": "team_member"}))
+
     def agent_mark_missing(self, brain_id: str, agent_key: str, by: str = "host") -> Optional[dict]:
         """Host thấy file agent biến mất: dòng `active` chuyển `missing`, version tăng, mọi cổng của mã này đóng.
         Không đụng tới `enabled`: xác nhận lại thì công tắc như cũ. Gọi lặp lại không tăng version."""

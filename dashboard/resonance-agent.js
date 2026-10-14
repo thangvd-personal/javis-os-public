@@ -4,7 +4,10 @@
    - Trang Cộng sự, cột phải của một trợ lý (workspace.js gọi `mount`): công tắc Cộng hưởng, trạng thái của phiên
      đang mở, khả năng theo engine, và khung "Mục tiêu của trợ lý" (mỗi mục tiêu là một thẻ của chat-resonance.js
      nên các nút Đúng ý, Tạm dừng, Huỷ... dùng chung một đường).
-   - Trang Cài đặt (#resonanceBlock): danh sách trợ lý kèm công tắc, mục "Chờ gán" cho mục tiêu có trước A1.
+   - Trang Cài đặt (#resonanceBlock): tóm tắt số trợ lý đang bật, đường sang trang Cộng sự, mục "Chờ gán" cho mục
+     tiêu có trước A1.
+   - T0 nhóm chat team: công tắc từng trợ lý nằm trên DÒNG của trợ lý ở cột trái trang Cộng sự (`rowToggleHtml`,
+     `toggleAgent`), một nơi duy nhất; bảng bên phải và trang Cài đặt chỉ hiện trạng thái.
 
    Công tắc CHỈ đổi qua API của chủ dự án (/resonance/agents/toggle); không tool nào của bộ não chạm tới được.
    Bật trong một phiên mở trước lúc trợ lý được cấp mã (thường gặp: trợ lý tạo lại cùng tên) thì server trả
@@ -56,6 +59,40 @@
     return "";
   }
 
+  /* T0 nhóm chat team (spec 2026-10-13-team-chat-design mục 10): trạng thái Cộng hưởng của MỘT trợ lý bằng chữ, cho
+     dòng ở cột trái trang Cộng sự. Không chỉ dựa vào màu. */
+  function stateKey(row) {
+    var r = row || {};
+    if (r.status === "missing") return "resonance.t0_state_missing";
+    if (r.status === "retired") return "resonance.t0_state_retired";
+    return r.enabled && r.status === "active" ? "resonance.t0_state_on" : "resonance.t0_state_off";
+  }
+
+  /* Công tắc trên dòng trợ lý: nơi DUY NHẤT bật, tắt từng trợ lý. Không có dữ liệu thì không vẽ gì (không đoán trạng
+     thái). `missing` và `retired` không có ô bật mà có nút mở bảng bên phải, nơi có hai nút xác nhận của A1. */
+  function rowToggleHtml(row, opts) {
+    if (!row || !row.slug) return "";
+    var o = opts || {};
+    var label = o.saving ? tw("resonance.t0_saving") : tw(stateKey(row));
+    if (row.status === "missing" || row.status === "retired") {
+      return '<button type="button" class="ws-rs ws-rs-confirm" data-rs-open="' + esc(row.slug) + '">' +
+        '<span class="ws-rs-text">' + esc(label) + "</span></button>";
+    }
+    var on = !!row.enabled && row.status === "active";
+    var aria = tw("resonance.t0_toggle_aria", { name: row.name || row.slug });
+    return '<label class="ws-rs" title="' + esc(aria) + '"><span class="ws-rs-text">' + esc(label) + "</span>" +
+      '<span class="toggle"><input type="checkbox" class="ws-rs-toggle" data-rs="' + esc(row.slug) + '"' +
+      ' aria-label="' + esc(aria) + '"' + (on ? " checked" : "") + (o.saving ? " disabled" : "") +
+      "><span></span></span></label>";
+  }
+
+  /* Hỏi lại trước khi TẮT khi trợ lý còn mục tiêu mở (hợp đồng A1: dừng ở bước kế tiếp). Không có thì không hỏi. */
+  function offConfirmText(row) {
+    var n = Number((row || {}).goals_open || 0);
+    if (!row || !row.enabled || n <= 0) return "";
+    return tw("resonance.t0_off_confirm", { name: row.name || row.slug, n: n });
+  }
+
   /* Khối Cộng hưởng của MỘT trợ lý. `row`: một mục của GET /resonance/agents (hay null khi chưa tải được),
      `session`: ready | needs_new_session | not_this_agent | null, `goals`: GET /resonance/goals?agent_key=. */
   /* A5: ô chọn Người review (thiết kế A5 mục 4.2). Danh sách là các trợ lý ĐÃ BẬT Cộng hưởng trong brain, trừ chính
@@ -86,9 +123,10 @@
   function panelHtml(row, session, goals, all) {
     var r = row || { status: "unregistered", enabled: false };
     var on = !!r.enabled && r.status === "active";
+    // T0: công tắc nằm trên dòng trợ lý ở cột trái (một nơi duy nhất). Ở đây chỉ còn trạng thái bằng chữ.
     var html = '<div class="rsa-head"><span class="rsa-title">' + esc(tw("resonance.a1_title")) + "</span>" +
-      '<label class="toggle"><input type="checkbox" class="rsa-toggle"' + (on ? " checked" : "") +
-      (r.status === "missing" ? " disabled" : "") + "><span></span></label></div>";
+      '<span class="rsa-state">' + esc(tw(stateKey(r))) + "</span></div>" +
+      '<div class="rsa-sub">' + esc(tw("resonance.t0_where")) + "</div>";
     html += '<div class="rsa-sub rsa-note">' + esc(toggleNote(r.status === "unregistered" ? { status: "active",
       enabled: false } : r, session)) + "</div>";
     if (on && session === "needs_new_session") {
@@ -204,20 +242,22 @@
     return html;
   }
 
-  /* Khối trên trang Cài đặt: mỗi trợ lý một công tắc; mã đã mất file; mục tiêu chờ gán kèm ô chọn trợ lý. */
+  /* Khối trên trang Cài đặt (T0): chỉ còn tóm tắt và đường sang trang Cộng sự, nơi bật, tắt từng trợ lý. Trợ lý mất
+     file vẫn được liệt kê bằng chữ để thấy; mã mồ côi; mục tiêu chờ gán kèm ô chọn trợ lý. */
   function settingsHtml(data, unassigned) {
     var d = data || {};
     var agents = d.agents || [];
     var html = '<div class="opt-sub">' + esc(tw("resonance.a1_settings_desc")) + "</div>";
     if (!agents.length) html += '<div class="opt-sub">' + esc(tw("resonance.a1_settings_empty")) + "</div>";
+    else {
+      var nOn = agents.filter(function (a) { return a && a.enabled && a.status === "active"; }).length;
+      html += '<div class="opt-sub rsa-summary">' + esc(tw("resonance.t0_settings_summary", { n: nOn })) + "</div>" +
+        '<button type="button" class="ws-btn rsa-goto-ws">' + esc(tw("resonance.t0_settings_manage")) + "</button>";
+    }
     agents.forEach(function (a) {
-      var on = !!a.enabled && a.status === "active";
-      html += '<label class="loop-row rsa-row" style="padding:6px 0"><span>' + esc(a.name || a.slug) +
-        (a.goals_open ? ' <small class="rsa-sub">' + esc(tw("resonance.a1_goals_open", { n: a.goals_open })) + "</small>" : "") +
-        (a.support && a.support.goal === false ? ' <small class="rsa-warn">' + esc(tw("resonance.a1_engine_short")) + "</small>" : "") +
-        (a.status === "missing" ? ' <small class="rsa-warn">' + esc(tw("resonance.a1_missing_short")) + "</small>" : "") +
-        '</span><label class="toggle"><input type="checkbox" class="rsa-set-toggle" data-slug="' + esc(a.slug) + '"' +
-        (on ? " checked" : "") + (a.status === "missing" ? " disabled" : "") + "><span></span></label></label>";
+      if (!a || a.status !== "missing") return;
+      html += '<div class="opt-sub rsa-warn">' + esc(a.name || a.slug) + " " + esc(tw("resonance.a1_missing_short")) +
+        (a.goals_open ? " · " + esc(tw("resonance.a1_goals_open", { n: a.goals_open })) : "") + "</div>";
     });
     (d.orphans || []).forEach(function (o) {
       html += '<div class="opt-sub rsa-warn">' + esc(tw("resonance.a1_orphan", { slug: o.slug, n: o.goals_open || 0 })) + "</div>";
@@ -323,22 +363,22 @@
     });
   }
 
+  /* T0: bật hay tắt MỘT trợ lý từ dòng ở cột trái (hay danh sách thành viên nhóm). Không gửi session_id: trạng thái
+     của phiên đang mở do bảng bên phải hỏi lại host. Chỉ trả ok khi server xác nhận; luôn phát sự kiện để mọi chỗ tải
+     lại TRẠNG THÁI THẬT, kể cả khi lỗi (409 agent cần xác nhận, rớt mạng). */
+  function toggleAgent(slug, enabled) {
+    function done(out) {
+      try { window.dispatchEvent(new CustomEvent("javis:resonance-agents-changed")); } catch (e) {}
+      return out;
+    }
+    return postJson("/resonance/agents/toggle?brain=" + q(brain()), { slug: slug, enabled: !!enabled })
+      .then(function (res) {
+        if (res.code === 200 && res.j && res.j.ok) return done({ ok: true, error: "" });
+        return done({ ok: false, error: String((res.j && res.j.error) || tw("resonance.failed")) });
+      }, function () { return done({ ok: false, error: tw("resonance.failed") }); });
+  }
+
   function wire(host, row) {
-    var box = host.querySelector(".rsa-toggle");
-    if (box) box.addEventListener("change", function () {
-      box.disabled = true;
-      postJson("/resonance/agents/toggle?brain=" + q(brain()), { slug: S.slug, enabled: box.checked,
-        session_id: currentSession() })
-        .then(function (res) {
-          if (res.code !== 200) {
-            host.insertAdjacentHTML("beforeend", '<div class="rsa-warn">' + esc((res.j && res.j.error) || tw("resonance.failed")) + "</div>");
-            box.checked = !box.checked; box.disabled = false;
-            return;
-          }
-          refresh();
-        })
-        .catch(function () { box.checked = !box.checked; box.disabled = false; });
-    });
     var rs = host.querySelector(".rsa-reviewer");
     if (rs) rs.addEventListener("change", function () {
       // A5: chỉ chủ dự án đổi được (route qua lớp auth của dashboard); đổi cặp chỉ áp cho mục tiêu MỚI.
@@ -385,8 +425,12 @@
         if (!row || !row.agent_key) return;
         var same = b.getAttribute("data-same") === "1";
         if (!same && !window.confirm(tw("resonance.a1_confirm_new_q"))) return;
+        // T0: phát sự kiện trong tab (dòng trợ lý ở cột trái đổi ngay, không chờ gói WS) rồi vẽ lại bảng này.
         postJson("/resonance/agents/confirm?brain=" + q(brain()), { agent_key: row.agent_key, same: same })
-          .then(function () { refresh(); });
+          .then(function () {
+            try { window.dispatchEvent(new CustomEvent("javis:resonance-agents-changed")); } catch (e) {}
+            refresh();
+          }, function () { refresh(); });
       });
     });
   }
@@ -407,14 +451,17 @@
         return p.then(function (gr) { host.innerHTML = settingsHtml(data, (gr.j && gr.j.goals) || []); });
       }).catch(function () {}).then(function () { busy = false; });
     }
-    host.addEventListener("change", function (ev) {
-      var box = ev.target && ev.target.closest && ev.target.closest(".rsa-set-toggle");
-      if (!box) return;
-      box.disabled = true;
-      postJson("/resonance/agents/toggle?brain=" + q(brain()), { slug: box.getAttribute("data-slug"), enabled: box.checked })
-        .then(function () { sync(); }).catch(sync);
-    });
     host.addEventListener("click", function (ev) {
+      // T0: bật, tắt từng trợ lý ở trang Cộng sự; trang Cài đặt chỉ đưa đường sang đó.
+      var go = ev.target && ev.target.closest && ev.target.closest(".rsa-goto-ws");
+      // Mở đúng tab Trợ lý (JavisNav.go thì rơi vào tab đang nhớ dở, có thể là Quy trình).
+      if (go) {
+        try {
+          if (window.JavisWorkspace && window.JavisWorkspace.openTab) window.JavisWorkspace.openTab("agent");
+          else window.JavisNav.go("workspace");
+        } catch (e) {}
+        return;
+      }
       var btn = ev.target && ev.target.closest && ev.target.closest(".rsa-assign");
       if (!btn) return;
       var row = btn.closest(".rsa-wait");
@@ -430,6 +477,8 @@
     });
     block.addEventListener("mouseenter", sync);
     block.addEventListener("focusin", function (ev) { if (!host.contains(ev.target)) sync(); });
+    // Trợ lý vừa được bật, tắt ở tab này hay tab khác (gói WS resonance_agents): tóm tắt đổi theo.
+    window.addEventListener("javis:resonance-agents-changed", sync);
     sync();
   }
 
@@ -446,9 +495,14 @@
     window.addEventListener("javis:resonance-lessons", function () {
       if (S.host && S.host.isConnected) refresh();
     });
+    // T0: công tắc trên dòng trợ lý (hay tab khác) vừa đổi trạng thái: bảng bên phải hỏi lại host.
+    window.addEventListener("javis:resonance-agents-changed", function () {
+      if (S.host && S.host.isConnected) refresh();
+    });
   }
 
   var api = { mount: mount, refresh: refresh, panelHtml: panelHtml, reviewerHtml: reviewerHtml,
+    rowToggleHtml: rowToggleHtml, stateKey: stateKey, offConfirmText: offConfirmText, toggleAgent: toggleAgent,
     settingsHtml: settingsHtml, toggleNote: toggleNote,
     lessonsHtml: lessonsHtml, supportHtml: supportHtml };
   if (typeof window !== "undefined") window.JavisResonanceAgent = api;
