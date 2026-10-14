@@ -31,6 +31,7 @@ server/mcp_servers.json
 server/mcp_servers.v1.bak.json
 server/.mcp_config.json
 server/.mcp_hub_*.json
+server/tg_sid.json
 server/.secret_key
 server/.hub_token
 # Tàn dư từ bản cũ (trước 0.64.47, tính năng đã bỏ; server tự xoá file này lúc boot).

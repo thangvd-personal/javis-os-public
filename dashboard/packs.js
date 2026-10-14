@@ -336,6 +336,7 @@
                 : tw("store.inspect.enable.off_note"))
       + '</span></span>'
       + '<span class="pkm-cong"><span></span></span></button>'
+      + (vt.length ? '<label class="pkm-gat" style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer"><input type="checkbox" id="pkApplyAll" checked style="width:16px;height:16px;cursor:pointer"> <span style="font-size:13px">' + tw("store.inspect.apply_all_brains") + '</span></label>' : "")
       + '</div>'
       + '<div class="pkm-chan"><span class="mp-note" id="pkNote"></span>'
       + '<button class="mp-btn" ' + (tuTep ? 'id="pkKhac"' : 'data-act="close"') + '>'
@@ -355,6 +356,7 @@
     const note = document.getElementById("pkNote");
     document.getElementById("pkCai").onclick = async () => {
       note.textContent = tw("store.installing");
+      const applyAllEl = document.getElementById("pkApplyAll");
       const r = await postJson("/packs/install", {
         staging_id: d.staging_id, consent_sha256: d.sha256,
         enable: gat.getAttribute("aria-pressed") === "true",
@@ -362,6 +364,7 @@
         // Brain ĐANG MỞ. `currentBrainPath` là hàm toàn cục mà app.js phơi ra và cả
         // console.js lẫn chat-render.js đều dùng - đi qua nó thay vì tự đoán chỗ khác.
         brain: (typeof currentBrainPath === "function" ? currentBrainPath() : "") || "brain",
+        apply_all: applyAllEl ? !!applyAllEl.checked : false,
       });
       if (!r || !r.ok) {
         note.textContent = (r && r.error) || tw("store.install_failed");
@@ -514,6 +517,9 @@
                lop: "kho-btn kho-btn-chinh", act: "cai" };
     }
     if (g.installed) {
+      if (g.has_vault && g.installed_in_brain === false) {
+        return { nhan: tw("store.btn.apply_brain"), lop: "kho-btn kho-btn-chinh", act: "apply_brain", tat: false, coGoMay: true };
+      }
       return { nhan: tw("store.btn.uninstall"), lop: "kho-btn kho-btn-go", act: "go", tat: true };
     }
     return { nhan: tw("store.btn.install"), lop: "kho-btn kho-btn-chinh", act: "cai" };
@@ -531,6 +537,14 @@
       return '<div class="kho-daicai moi">' + ic("arrow-up") + ' '
         + tw("store.running_store_has",
              { cai: esc(g.installed_version), kho: esc(g.version) }) + '</div>';
+    }
+    if (g.has_vault && g.installed_in_brain === false) {
+      return '<div class="kho-daicai moi">' + ic("info") + ' '
+        + tw("store.not_in_this_brain") + '</div>';
+    }
+    if (g.has_vault && g.installed_in_brain === true) {
+      return '<div class="kho-daicai">' + ic("check") + ' '
+        + tw("store.installed_in_this_brain", { ver: esc(g.installed_version) }) + '</div>';
     }
     return '<div class="kho-daicai">' + ic("check") + ' '
       + tw("store.installed_latest", { ver: esc(g.installed_version) }) + '</div>';
@@ -569,6 +583,14 @@
           ? '<button class="kho-btn kho-btn-phu" data-kho-act="tat" data-kho-id="' + esc(g.id)
             + '">' + (g.enabled === false ? tw("cb.bat") : tw("cb.tat")) + '</button>'
           : "")
+      + (g.installed && g.has_vault && g.installed_in_brain === true
+          ? '<button class="kho-btn kho-btn-phu" data-kho-act="unapply_brain" data-kho-id="' + esc(g.id)
+            + '" title="' + esc(tw("store.btn.unapply_brain")) + '">' + tw("store.btn.unapply_brain") + '</button>'
+          : "")
+      + (n.coGoMay
+          ? '<button class="kho-btn kho-btn-go" data-kho-act="go" data-kho-id="' + esc(g.id)
+            + '" title="' + esc(tw("store.btn.uninstall")) + '">' + tw("store.btn.uninstall") + '</button>'
+          : "")
       + '<button class="' + n.lop + '" data-kho-act="' + n.act + '" data-kho-id="' + esc(g.id) + '">'
       + n.nhan + '</button></div>'
       + '</div>';
@@ -584,7 +606,11 @@
   async function veKho(el, host, lamMoi, loaiDau, timDau) {
     host.innerHTML = '<div class="mp-empty">' + tw("store.catalog_loading") + '</div>';
     let d;
-    try { d = await (await fetch("/packs/store" + (lamMoi ? "?refresh=1" : ""))).json(); }
+    const curBr = (typeof currentBrainPath === "function" ? currentBrainPath() : "") || "brain";
+    const qParams = new URLSearchParams();
+    if (lamMoi) qParams.set("refresh", "1");
+    if (curBr) qParams.set("brain", curBr);
+    try { d = await (await fetch("/packs/store?" + qParams.toString())).json(); }
     catch (e) { d = { ok: false, error: String(e) }; }
     if (!d || !d.ok) {
       // Kho không tới được thì KHÔNG phải là hỏng cả trang: cài từ tệp vẫn chạy như thường.
@@ -611,7 +637,7 @@
     // bản về sau không đè lên thứ mới hơn.
     const tuoi = d.fetched_at ? (Date.now() / 1000 - Number(d.fetched_at)) : 0;
     if (!lamMoi && tuoi > CU_QUA) {
-      fetch("/packs/store?refresh=1")
+      fetch("/packs/store?" + new URLSearchParams({ refresh: "1", brain: curBr }).toString())
         .then(r => r.json())
         .then(d2 => {
           if (d2 && d2.ok && _kho.dl === d) { _kho.dl = d2; veLuoi(el, host); }
@@ -811,6 +837,31 @@
       if (!g) return;
       const act = b.dataset.khoAct;
       if (act === "cai") return tuUrl(el, g.download.url, g.download.sha256, g);
+      if (act === "apply_brain") {
+        const curBr = (typeof currentBrainPath === "function" ? currentBrainPath() : "") || "brain";
+        b.disabled = true;
+        return postJson("/packs/apply-brain", { id: g.id, brain: curBr }).then(r => {
+          b.disabled = false;
+          if (r && r.ok) {
+            veKho(el, host, false, _kho.loai);
+          } else {
+            alert((r && r.error) || tw("store.install_failed"));
+          }
+        });
+      }
+      if (act === "unapply_brain") {
+        if (!confirm(tw("store.confirm_unapply_brain"))) return;
+        const curBr = (typeof currentBrainPath === "function" ? currentBrainPath() : "") || "brain";
+        b.disabled = true;
+        return postJson("/packs/unapply-brain", { id: g.id, brain: curBr }).then(r => {
+          b.disabled = false;
+          if (r && r.ok) {
+            veKho(el, host, false, _kho.loai);
+          } else {
+            alert((r && r.error) || tw("store.conn.remove_failed"));
+          }
+        });
+      }
       if (act === "go") return hopGo(el, g.id);
       if (act === "tat") {
         return postJson("/packs/toggle", { id: g.id, enabled: g.enabled === false }).then(r => {
@@ -1020,6 +1071,17 @@
     };
     const hostKho = document.getElementById("pkKho");
     if (hostKho) veKho(el, hostKho, false, loaiDau, timDau);
+
+    const gs = document.getElementById("graphSource");
+    if (gs && !gs._pkBound) {
+      gs._pkBound = true;
+      gs.addEventListener("change", () => {
+        const hk = document.getElementById("pkKho");
+        if (hk && hk.offsetParent !== null) {
+          veKho(el, hk, false, _kho.loai);
+        }
+      });
+    }
   }
 
   // Mở kho với một loại đã lọc sẵn. Tab "Kho cài đặt" trên trang Trợ lý / Kỹ năng / Quy

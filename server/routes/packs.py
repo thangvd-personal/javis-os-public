@@ -169,16 +169,67 @@ def _make_router() -> APIRouter:
         ng = d.get("source") if isinstance(d.get("source"), dict) else None
         if ng:
             ng = {"kind": str(ng.get("kind") or "")[:16], "url": str(ng.get("url") or "")[:500]}
-        # Brain ĐANG MỞ lúc bấm Cài. Agent/workflow/skill thuộc về một brain cụ thể (khác
-        # connector và plugin vốn dùng chung mọi brain), nên "cài vào tất cả" là áp đặt: người
-        # dùng có brain việc và brain cá nhân, và họ không muốn mọi thứ ở cả hai nơi.
+        # Brain ĐANG MỞ lúc bấm Cài (hoặc tất cả brain nếu apply_all).
         r = pack_install.cai(str(d.get("staging_id") or ""),
                              str(d.get("consent_sha256") or ""),
                              enable=bool(d.get("enable")), nguon=ng,
-                             brain_root=_DEPS.brain_root(str(d.get("brain") or "brain")))
+                             brain_root=_DEPS.brain_root(str(d.get("brain") or "brain")),
+                             apply_all=bool(d.get("apply_all")))
         if r.get("ok"):
             _DEPS.lam_moi_hub()
         return r if r.get("ok") else JSONResponse(r, status_code=400)
+
+    @router.post("/packs/apply-brain")
+    async def packs_apply_brain(request: Request):
+        """Áp dụng năng lực (skills/agents/workflows) của gói đã có vào brain chỉ định."""
+        if not _DEPS.co_phien(request):
+            return _tu_choi()
+        d = await request.json()
+        pid = str(d.get("id") or "").strip()
+        pack_dir = packs.PACKS_DIR / pid
+        if not pack_dir.is_dir():
+            return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy gói", "Pack not found")}, status_code=404)
+        b_root = _DEPS.brain_root(str(d.get("brain") or "brain"))
+        import pack_vault
+        res = pack_vault.cai(pid, pack_dir, b_root)
+        _DEPS.lam_moi_hub()
+        return {"ok": True, "report": res}
+
+    @router.post("/packs/unapply-brain")
+    async def packs_unapply_brain(request: Request):
+        """Gỡ năng lực (skills/agents/workflows) của gói khỏi brain chỉ định (không gỡ khỏi máy)."""
+        if not _DEPS.co_phien(request):
+            return _tu_choi()
+        d = await request.json()
+        pid = str(d.get("id") or "").strip()
+        b_root = _DEPS.brain_root(str(d.get("brain") or "brain"))
+        import pack_vault
+        res = pack_vault.go(pid, brain_root=b_root)
+        _DEPS.lam_moi_hub()
+        return {"ok": True, "report": res}
+
+    @router.post("/packs/sync-all-brains")
+    async def packs_sync_all_brains(request: Request):
+        """Đồng bộ một hoặc tất cả các gói vào toàn bộ brain."""
+        if not _DEPS.co_phien(request):
+            return _tu_choi()
+        try:
+            d = await request.json()
+        except Exception:
+            d = {}
+        pid = str(d.get("id") or "").strip()
+        import pack_vault
+        if pid:
+            res = pack_vault.sync_pack_all_brains(pid)
+        else:
+            base = pack_vault._brains_dir()
+            res = {"ok": True, "brains": {}}
+            if base.is_dir():
+                for p in sorted(base.iterdir()):
+                    if p.is_dir() and not p.name.startswith("."):
+                        res["brains"][p.name] = pack_vault.sync_brain_packs(str(p))
+        _DEPS.lam_moi_hub()
+        return res
 
     @router.post("/packs/toggle")
     async def packs_toggle(request: Request):
@@ -209,7 +260,7 @@ def _make_router() -> APIRouter:
         return r if r.get("ok") else JSONResponse(r, status_code=409)
 
     @router.get("/packs/store")
-    async def packs_store_list(request: Request, refresh: int = 0):
+    async def packs_store_list(request: Request, refresh: int = 0, brain: str = ""):
         """Danh mục gói trong kho. Fetch ở PHÍA SERVER, không ở trình duyệt.
 
         Ba lý do: chốt SSRF nằm ở server nên đường tải phải đi qua đó mới được gác; trình
@@ -231,6 +282,8 @@ def _make_router() -> APIRouter:
                               & app_dang_cap)]
         # Gói nào đã cài rồi thì đánh dấu, để lưới hiện "Đã cài" thay vì mời cài lại.
         da_cai = pack_install.doc_so()
+        b_root = _DEPS.brain_root(brain) if brain else ""
+        import pack_vault
         for g in d.get("packs") or []:
             hang = da_cai.get(g["id"])
             g["installed"] = bool(hang)
@@ -238,6 +291,22 @@ def _make_router() -> APIRouter:
             # Thẻ cần biết gói đang bật hay tắt để vẽ đúng nút. Gói thả tay vào thư mục (không
             # có hàng trong sổ) mặc định là BẬT - người vận hành đã tự đặt nó vào rồi.
             g["enabled"] = bool(hang.get("enabled", True)) if hang else True
+            g["nguon"] = "kho"
+            g["nhom"] = _nhom(g)
+            # Kiểm tra gói có năng lực brain (skills/agents/workflows) không
+            prov = g.get("provides") or {}
+            has_vault = bool(prov.get("skills") or prov.get("agents") or prov.get("workflows"))
+            pack_local = packs.PACKS_DIR / g["id"]
+            if pack_local.is_dir():
+                has_vault = has_vault or any(pack_vault.liet_ke(pack_local).values())
+            g["has_vault"] = has_vault
+            if g["installed"]:
+                if has_vault and b_root:
+                    g["installed_in_brain"] = pack_vault.da_cai_trong_brain(g["id"], b_root)
+                else:
+                    g["installed_in_brain"] = True
+            else:
+                g["installed_in_brain"] = False
             g["nguon"] = "kho"
             g["nhom"] = _nhom(g)
         # Connector đi kèm app cũng hiện TRONG kho, đánh dấu sẵn là đã cài. Người dùng không

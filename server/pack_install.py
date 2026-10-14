@@ -371,7 +371,7 @@ def _liet_ke_vault(thu_muc):
 
 
 def cai(staging_id: str, consent_sha256: str, *, enable: bool = False,
-        nguon: dict = None, brain_root: str = "") -> dict:
+        nguon: dict = None, brain_root: str = "", apply_all: bool = False) -> dict:
     """Đặt gói đã soi vào kho. Nguyên tử, hỏng ở bước nào cũng trả lại nguyên trạng."""
     sha = str(staging_id or "").strip()
     boc = STAGING / sha
@@ -422,7 +422,14 @@ def cai(staging_id: str, consent_sha256: str, *, enable: bool = False,
     # Ghi agent/workflow/skill vào brain. Làm SAU khi thư mục gói đã yên vị, để nếu bước này
     # hỏng thì gói vẫn ở trạng thái cài được chứ không nửa vời.
     bao_vault = {}
-    if brain_root:
+    if apply_all:
+        try:
+            import pack_vault
+            bao_vault = pack_vault.sync_pack_all_brains(pid)
+        except Exception as e:
+            print(f"[packs] ghi năng lực vào mọi brain: {e}", file=sys.stderr)
+            bao_vault = {"loi": [str(e)]}
+    elif brain_root:
         try:
             import pack_vault
             bao_vault = pack_vault.cai(pid, dich, brain_root)

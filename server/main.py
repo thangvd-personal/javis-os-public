@@ -5808,7 +5808,8 @@ def _default_brain_dir() -> Path:
 def _brain_root(brain: str) -> str:
     if not brain or brain == "brain":
         return str(_default_brain_dir())
-    return brain if os.path.isdir(brain) else str(_default_brain_dir())
+    b = brain[5:] if brain.startswith("path:") else brain
+    return b if os.path.isdir(b) else str(_default_brain_dir())
 
 
 def _cwd_luot_chat(row, brain: str) -> str:
@@ -6214,6 +6215,12 @@ def _ensure_brain_scaffold(root):
     except Exception as e:
         print(f"[system sync] {e}", file=__import__('sys').stderr)
     try:
+        # Gói mở rộng (Packs): tự động đồng bộ kỹ năng, trợ lý, quy trình của các gói đã cài vào brain mới.
+        import pack_vault
+        pack_vault.sync_brain_packs(str(root))
+    except Exception as e:
+        print(f"[pack sync] {e}", file=__import__('sys').stderr)
+    try:
         import meta_tools
         # Bộ khung "compounding wiki" phổ quát: schema doc + điều hướng wiki + HANDOFF - seed 1 LẦN
         # (create-if-missing) vì user + AI cùng tiến hoá các file này, update app KHÔNG ghi đè.
@@ -6238,7 +6245,7 @@ def _ensure_default_brain():
 
 
 def _sync_system_all_brains():
-    """Đồng bộ năng lực HỆ THỐNG vào MỌI brain trong BRAINS_DIR lúc khởi động - đổi brain nào
+    """Đồng bộ năng lực HỆ THỐNG và GÓI MỞ RỘNG vào MỌI brain trong BRAINS_DIR lúc khởi động - đổi brain nào
     cũng có đủ chức năng mặc định, và app lên bản mới thì brain cũ nhận bản skill/loop mới
     (trừ file user đã sửa). Brain ngoài (path:) được sync ở lượt dùng đầu (build_system_prompt).
     KHÔNG scaffold cấu trúc thư mục ở đây - chỉ đụng file hệ thống, dữ liệu user để yên."""
@@ -6249,6 +6256,11 @@ def _sync_system_all_brains():
         for p in sorted(base.iterdir()):
             if p.is_dir() and not p.name.startswith("."):
                 system_sync.ensure_synced(p)
+                try:
+                    import pack_vault
+                    pack_vault.sync_brain_packs(str(p))
+                except Exception as e:
+                    print(f"[pack sync all] {p.name}: {e}", file=__import__('sys').stderr)
     except Exception as e:
         print(f"[system sync all] {e}", file=__import__('sys').stderr)
 
