@@ -21,6 +21,7 @@ import hashlib
 import sys
 import uuid
 from pathlib import Path
+import binascii
 import re
 import urllib.parse
 import secrets
@@ -212,7 +213,7 @@ app.add_middleware(CORSMiddleware,
 _AUTH_PUBLIC_PREFIX = ("/static", "/health", "/s/")
 # /brand-logo: hiện trên màn đăng nhập (trước session). /tls-check: Caddy gọi (không đăng nhập được).
 _AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/auth/status", "/auth/login", "/auth/setup",
-                      "/brand-logo", "/tls-check",
+                      "/brand-logo", "/brand-theme.css", "/tls-check",
                       # /hub/mcp: Claude CLI/Codex gọi bằng Bearer hub_token riêng (không có cookie).
                       # /connect/oauth/callback: browser redirect từ provider OAuth về.
                       "/hub/mcp", "/connect/oauth/callback",
@@ -1286,6 +1287,8 @@ async def root():
     # Nhúng phiên bản + vân tay vào chính trang. index.html luôn tải mới (no-store) nên khối
     # này LUÔN đúng, kể cả khi mọi file JS quanh nó đã cũ - đó chính là điểm tựa để
     # freshness.js phát hiện ra chuyện đó.
+    # Operator theme (STATE_DIR/branding/theme.css): outside the code tree, survives updates.
+    html = _inject_brand_theme(html)
     moc = ('<script id="javis-fresh" type="application/json">'
            + json.dumps({"version": ver, "assets": fps}, ensure_ascii=False)
            + "</script>\n</head>")
@@ -13377,6 +13380,57 @@ def _current_logo_file():
     return None
 
 
+_BRAND_THEME_MAX_BYTES = 512 * 1024
+_BRAND_THEME_MODE_RE = re.compile(r"/\*\s*javis-default-mode:\s*(light|dark|auto)\s*\*/")
+
+
+def _brand_theme_file():
+    """Optional operator stylesheet at STATE_DIR/branding/theme.css, or None.
+
+    Lives next to the custom logo so a white-label theme survives `git pull` and app
+    updates the same way the logo does: the code tree is never edited."""
+    p = cfgmod.BRANDING_DIR / "theme.css"
+    try:
+        if p.is_file() and 0 < p.stat().st_size <= _BRAND_THEME_MAX_BYTES:
+            return p
+    except OSError:
+        pass
+    return None
+
+
+def _inject_brand_theme(html: str) -> str:
+    """Append the operator theme AFTER the bundled stylesheets so it wins the cascade.
+
+    The theme may carry `/* javis-default-mode: light */` to pick the theme for a device
+    that has never chosen one. A manual choice already in localStorage always wins."""
+    p = _brand_theme_file()
+    if p is None:
+        return html
+    try:
+        data = p.read_bytes()
+    except OSError:
+        return html
+    m = _BRAND_THEME_MODE_RE.search(data[:4096].decode("utf-8", "ignore"))
+    if m:
+        # Must run before the inline theme script at the top of <head>, which reads this key.
+        seed = ("<script>try{if(!localStorage.getItem('javis.theme'))"
+                "localStorage.setItem('javis.theme','" + m.group(1) + "')}catch(e){}</script>")
+        html = html.replace("<head>", "<head>\n  " + seed, 1)
+    link = f'<link rel="stylesheet" href="/brand-theme.css?v={binascii.crc32(data):08x}">\n'
+    return html.replace("</head>", link + "</head>", 1)
+
+
+@app.get("/brand-theme.css")
+async def brand_theme_css():
+    p = _brand_theme_file()
+    if p is None:
+        return Response("/* no brand theme */", media_type="text/css",
+                        headers={"Cache-Control": "no-cache"})
+    # The URL carries a content hash, so the browser may keep it until the file changes.
+    return FileResponse(str(p), media_type="text/css",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.get("/brand-logo")
 async def brand_logo():
     p = _current_logo_file() or _DEFAULT_LOGO
@@ -21333,7 +21387,8 @@ async def chatbots_create(name: str = Form(...), agent_slug: str = Form(...),
                           audience: str = Form(""), people: str = Form(""),
                           channel: str = Form(""), xac_nhan_rui_ro: str = Form(""),
                           ngon_ngu: str = Form(""), account_ids: str = Form(""),
-                          account_label: str = Form(""), reply_policy: str = Form("")):
+                          account_label: str = Form(""), reply_policy: str = Form(""),
+                          gio_truc: str = Form("")):
     # Bot sống TRONG một brain: Agent nó dùng và tài liệu nó đọc là cùng một chỗ. Nhận cả hai
     # tên tham số và tự bù cho nhau, nên người gọi chỉ cần gửi một cái.
     br = (brain or agent_brain or "").strip()
@@ -21360,6 +21415,8 @@ async def chatbots_create(name: str = Form(...), agent_slug: str = Form(...),
         "ngon_ngu": ngon_ngu,
         # Bộ phán xử hội thoại nhóm (0.65.0): JSON, giá trị lạ rơi về phía hẹp nhất (xem merge_config).
         "reply_policy": reply_policy,
+        # Giờ trực (0.130.0): JSON {"tu","den"} HH:MM theo múi giờ cài đặt; rỗng = cả ngày.
+        "gio_truc": gio_truc,
     })
     if err:
         return JSONResponse({"ok": False, "error": err}, status_code=400)
