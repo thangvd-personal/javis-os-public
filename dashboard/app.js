@@ -3310,7 +3310,9 @@ function renderChips() {
     const _nutTaiLai = (a.loi && a.file && !a.uploading)
       ? `<button class="chip-retry" data-i="${i}" title="${escapeHtml(window.t("app.att_retry"))}" aria-label="${escapeHtml(window.t("app.att_retry"))}">${ic("rotate-cw")}</button>`
       : "";
-    chip.innerHTML = `${thumb}<div class="chip-info"><span class="chip-name">${escapeHtml(a.name)}</span><span class="chip-meta">${meta}</span></div>${_nutTaiLai}<button class="chip-x" data-i="${i}">${ic("x")}</button>`;
+    const _chipTip = (a.path && a.path !== a.name) ? `${a.name}\n${a.path}` : (a.name || "");
+    chip.title = _chipTip;
+    chip.innerHTML = `${thumb}<div class="chip-info"><span class="chip-name" title="${escapeHtml(_chipTip)}">${escapeHtml(a.name)}</span><span class="chip-meta">${meta}</span></div>${_nutTaiLai}<button class="chip-x" data-i="${i}">${ic("x")}</button>`;
     attachBar.appendChild(chip);
   });
   if (attachNote) {

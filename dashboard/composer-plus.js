@@ -33,7 +33,7 @@
     function next() {
       if (i >= list.length) return Promise.resolve();
       var x = list[i++];
-      return Promise.resolve().then(function () { return work(x); }).catch(function () {}).then(next);
+      return Promise.resolve().then(function () { return work(x); }).catch(function () { }).then(next);
     }
     var lanes = [];
     for (var k = 0; k < Math.min(parallel || UPLOAD_PARALLEL, list.length); k++) lanes.push(next());
@@ -72,8 +72,10 @@
     return a;
   }
 
-  var pure = { createRegistry: createRegistry, pickFolderFiles: pickFolderFiles, runQueue: runQueue, MAX_FOLDER_FILES: MAX_FOLDER_FILES,
-    handleFolder: handleFolder, shouldGoBack: shouldGoBack, brainAttachment: brainAttachment };
+  var pure = {
+    createRegistry: createRegistry, pickFolderFiles: pickFolderFiles, runQueue: runQueue, MAX_FOLDER_FILES: MAX_FOLDER_FILES,
+    handleFolder: handleFolder, shouldGoBack: shouldGoBack, brainAttachment: brainAttachment
+  };
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
   if (typeof document === "undefined") return;
 
@@ -107,8 +109,8 @@
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
   function closeOthers() {
-    try { var mb = $("mbPop"); if (mb) mb.hidden = true; } catch (e) {}
-    try { var ep = $("effPop"); if (ep && !ep.hidden) { var eb = $("effBtn"); if (eb) eb.click(); } } catch (e) {}
+    try { var mb = $("mbPop"); if (mb) mb.hidden = true; } catch (e) { }
+    try { var ep = $("effPop"); if (ep && !ep.hidden) { var eb = $("effBtn"); if (eb) eb.click(); } } catch (e) { }
   }
   function render(rows, title) {
     view = rows; active = 0;
@@ -163,14 +165,21 @@
   };
   var badConn = 0;
 
-  reg.register({ id: "attach", order: 10, icon: ICON.clip, label: "cp.attach", hint: function () { return /Mac/.test(navigator.platform) ? "Cmd+U" : "Ctrl+U"; },
-    run: function () { if (window.JavisAttach) window.JavisAttach.pick(); } });
+  reg.register({
+    id: "attach", order: 10, icon: ICON.clip, label: "cp.attach", hint: function () { return /Mac/.test(navigator.platform) ? "Cmd+U" : "Ctrl+U"; },
+    run: function () { if (window.JavisAttach) window.JavisAttach.pick(); }
+  });
   reg.register({ id: "folder", order: 20, icon: ICON.folder, label: "cp.folder", run: function () { var f = $("folderInput"); if (f) f.click(); } });
-  reg.register({ id: "brain_file", order: 30, icon: ICON.file, label: "cp.brain_file", emptyKey: "cp.brain_empty",
-    submenu: function () { return Promise.resolve(brainSearchRows("")); } });
-  reg.register({ id: "commands", order: 40, icon: ICON.slash, label: "cp.commands", hint: function () { return "/"; },
-    run: function () { insertToken("/"); } });
-  reg.register({ id: "connections", order: 50, icon: ICON.plug, label: "cp.connections", emptyKey: "cp.conn_none",
+  reg.register({
+    id: "brain_file", order: 30, icon: ICON.file, label: "cp.brain_file", emptyKey: "cp.brain_empty",
+    submenu: function () { return Promise.resolve(brainSearchRows("")); }
+  });
+  reg.register({
+    id: "commands", order: 40, icon: ICON.slash, label: "cp.commands", hint: function () { return "/"; },
+    run: function () { insertToken("/"); }
+  });
+  reg.register({
+    id: "connections", order: 50, icon: ICON.plug, label: "cp.connections", emptyKey: "cp.conn_none",
     hint: function () { return badConn ? tw("cp.conn_bad", { n: badConn }) : ""; },
     submenu: function () {
       return Promise.all([getJson("/connect/catalog"), getJson("/connect/health")]).then(function (res) {
@@ -179,16 +188,20 @@
         var names = {}; cat.forEach(function (c) { names[c.id] = c.name; });
         var rows = conns.map(function (c) {
           var h = health[c.id];
-          return { label: c.label || names[c.connector_id] || c.name || c.id,
+          return {
+            label: c.label || names[c.connector_id] || c.name || c.id,
             dot: !h ? "unknown" : (h.ok ? "ok" : "bad"), hint: h && !h.ok ? (h.message || "") : "",
-            run: function () { goPage("mcp"); } };
+            run: function () { goPage("mcp"); }
+          };
         });
         if (rows.length) rows.push({ sep: true });
         rows.push({ label: tw("cp.conn_open"), run: function () { goPage("mcp"); } });
         return rows;
       });
-    } });
-  reg.register({ id: "partners", order: 60, icon: ICON.users, label: "cp.partners", emptyKey: "cp.partners_none",
+    }
+  });
+  reg.register({
+    id: "partners", order: 60, icon: ICON.users, label: "cp.partners", emptyKey: "cp.partners_none",
     submenu: function () {
       var b = encodeURIComponent(brain());
       return Promise.all([getJson("/agents?prompt=0&brain=" + b), getJson("/workflows?brain=" + b)]).then(function (res) {
@@ -198,7 +211,8 @@
         (Array.isArray(wf) ? wf : []).forEach(function (w) { if (w && w.slug && w.status === "active") rows.push({ label: w.name || w.slug, hint: tw("cp.workflow"), run: function () { insertToken("/workflow-" + w.slug + " "); } }); });
         return rows;
       });
-    } });
+    }
+  });
 
   function goPage(id) { try { window.Alpine.store("nav").go(id); } catch (e) { location.hash = "#" + id; } }
 
@@ -225,8 +239,12 @@
         if (seq !== brainSeq || !isOpen()) return;
         var items = (d && d.items) || [];
         out.innerHTML = items.length ? items.map(function (it, i) {
-          return '<button type="button" class="cp-mi" data-file="' + i + '">' + ICON.file + '<span class="cp-mi-lbl">' + esc(it.name || it.path) +
-            '</span><span class="cp-mi-hint">' + esc(it.path || "") + "</span></button>";
+          var name = it.name || it.path || "";
+          var path = it.path || "";
+          var tip = (path && path !== name) ? (name + "\n" + path) : (path || name);
+          return '<button type="button" class="cp-mi" data-file="' + i + '" title="' + esc(tip) + '">' + ICON.file +
+            '<span class="cp-mi-lbl" title="' + esc(tip) + '">' + esc(name) + '</span>' +
+            '<span class="cp-mi-hint"' + (path ? ' title="' + esc(tip) + '"' : '') + '>' + esc(path) + '</span></button>';
         }).join("") : '<div class="cp-empty">' + esc(tw("cp.brain_empty")) + "</div>";
         Array.prototype.forEach.call(out.querySelectorAll("[data-file]"), function (el) {
           el.addEventListener("click", function () {

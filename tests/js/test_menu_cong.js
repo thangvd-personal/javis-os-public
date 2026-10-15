@@ -68,6 +68,8 @@ check("thư mục toàn file ẩn: không còn file nào", r.files.length === 0 
   check("uploadFile giải lời hứa chờ của chip đã xếp hàng", app.indexOf("att._cho") !== -1);
   check("uploadFile không xoá ghi chú của chip xếp hàng từ thư mục", /if \(!att\._hangDoi\) attachNote = ""/.test(app));
   check("tìm file trong brain hỏng thì báo, không đóng lặng lẽ", src.indexOf('tw("cp.brain_failed")') !== -1);
+  check("chọn file trong brain: dòng kết quả có tooltip hiển thị tên đầy đủ và đường dẫn",
+    src.indexOf('title="\' + esc(tip)') !== -1 && src.indexOf('class="cp-mi-lbl" title="\' + esc(tip)') !== -1);
 
   ["attach", "folder", "brain_file", "commands", "connections", "partners"].forEach(id =>
     check("mục mặc định có id " + id, src.indexOf('id: "' + id + '"') !== -1));
