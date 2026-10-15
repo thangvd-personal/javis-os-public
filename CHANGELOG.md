@@ -6,6 +6,37 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 
 Định dạng: mỗi phiên bản là một khối `## [x.y.z] - ngày`, bên dưới nhóm thay đổi theo `### Thêm mới / Sửa lỗi / Cải thiện / Bảo mật`.
 
+## [0.153.0] - 2026-10-15
+### Cải thiện
+- **Khung gõ chat làm lại theo kiểu Claude:** một thẻ bo tròn chứa file đính kèm, ô gõ và một hàng nút duy nhất ở dưới (nút **+**, chip model, chip Effort, tia sét Fast mode, mic nhỏ và nút gửi tròn).
+- **Nút + mở menu:** đính kèm file hoặc ảnh (Ctrl+U), đính kèm cả thư mục (bỏ qua file ẩn, .git, node_modules, tối đa 50 file), chọn file có sẵn trong brain, lệnh và skill "/", **Kết nối** kèm tình trạng từng cái, và **Trợ lý và quy trình** để gọi nhanh.
+- **Effort tách thành chip riêng** cạnh chip model, bấm mở thanh trượt sáu nấc Off, Light, Medium, High, Extra, Ultra với hiệu ứng hạt cam.
+- **Tia sét Fast mode:** bấm để bật (sóng cam chuyển động), bấm lần nữa để tắt; rê chuột xem ghi chú chi phí theo bộ não. Bản này mới lưu lựa chọn, nối vào từng engine ở bản sau.
+
+## [0.151.0] - 2026-10-15
+### Cải thiện
+- **Kéo đổi bề rộng khung:** ở trang đồ thị (cột thư mục và khung hội thoại) và trang Trò chuyện (cột Hội thoại), rê chuột vào đường biên rồi kéo; nhấp đúp để về mặc định. Bề rộng được nhớ cho lần sau.
+- **Trang Chatbot hiện số tin của từng cuộc hội thoại** (viên xám, vd. "12 tin"), nằm cạnh số đỏ là số tin chưa đọc.
+
+## [0.147.0] - 2026-10-14
+### Cải thiện
+- **Việc chạy ngầm chỉ còn một dòng gọn trên khung chat.** Trước đây khối "việc đang chạy ngầm" chiếm ba dòng, kèm nút và hàng chip, tên việc còn bị cắt giữa chừng. Giờ chỉ còn một viên nhỏ: chấm xanh, tên việc quan trọng nhất (ưu tiên việc bạn vừa giao ở hội thoại này) và "+2" nếu còn việc khác.
+- **Bấm vào viên đó để xem chi tiết:** từng việc với trạng thái, đã chạy bao lâu, việc nào giao từ hội thoại này, và nút mở trang Việc. Bấm ra ngoài hoặc nhấn Esc là đóng.
+- Việc đã giao mà chưa tự chạy (điều phối đang tắt) vẫn hiện màu vàng và nói rõ ngay trên viên, kèm cách bật ở khung chi tiết.
+
+## [0.146.0] - 2026-10-14
+### Sửa lỗi
+- **Chat nhóm hết im lặng.** Trợ lý trả lời bằng model riêng của nó, chưa đặt thì bằng model chính, kể cả ChatGPT (Codex). Mỗi tin hiện rõ ai đang chờ, đang trả lời hay chưa trả lời được, kèm lý do và nút xử lý (**Thử lại**, đổi model, chọn điều phối); mất mạng hay tải lại trang vẫn còn.
+### Thêm mới
+- **Tạo và thêm thành viên như Zalo:** tìm không cần gõ dấu, lọc tag, ảnh nhóm ghép sẵn, người đã ở nhóm hiện "Đã tham gia", chọn điều phối ngay trên người đã chọn; nhóm ghi "Bạn + N trợ lý". Gõ @ chọn bằng phím, người được gọi hiện thành thẻ riêng, trùng tên vẫn đúng người.
+- **Tab Công việc ở trang Cộng sự** (thay tab Thư mục): mọi việc của một trợ lý từ nhóm, chat riêng và Auto, lọc theo nguồn, có bước tiếp theo. **Giao việc** có tiêu chí xong, chọn nơi nhận kết quả và xem lại trước khi tạo; giao được cả việc **kiểm chứng** cho trợ lý khác.
+### Cải thiện
+- **Trang Cộng sự gọn hơn:** Cộng hưởng đổi tên thành **Auto**, công tắc nằm cùng hàng với tag và trong menu ba chấm; thẻ có giờ nhắn gần nhất; cột phải mặc định ẩn để chữ rộng ra, hai cột kéo được bề rộng ở đường biên. Bỏ người review cố định: mục tiêu cũ đang chờ review được tạm dừng để bạn xem, không tự coi là đạt.
+
+## [0.145.0] - 2026-10-14
+### Sửa lỗi
+- **Việc nền làm xong không còn bị chặn oan vì nhắc tới [[NEEDS_INPUT]].** Trước đây chỉ cần dấu này xuất hiện ở đâu đó trong kết quả, kể cả trong câu "không cần ghi [[NEEDS_INPUT]]", là việc bị chuyển sang chờ bạn dù đã đạt điều kiện hoàn thành. Giờ việc chỉ dừng chờ khi worker mở đầu một dòng bằng dấu đó, đúng như nó được dặn. Lý do chặn hiện trên chuông cũng chỉ lấy từ dòng như vậy.
+
 ## [0.141.0] - 2026-10-14
 ### Cải thiện
 - **Bot Zalo xem được ảnh trong tin được quote.** Quote (trả lời) một ảnh rồi tag bot "xem ảnh này" là bot nhìn đúng ảnh đó. Trước đây bot chỉ nhận chữ và nói không thấy ảnh, phải gửi lại ảnh rồi tag trong 3 phút.

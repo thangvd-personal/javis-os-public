@@ -1012,6 +1012,9 @@ function handleMessage(data) {
     // Socket NỐI LẠI (không phải lần chào đầu): tin tới trong lúc đứt có thể đã rơi mất, ví dụ
     // câu trả lời của một lượt chạy xong khi điện thoại đang tắt màn hình. Đồng bộ nhẹ.
     if (_daChao) setTimeout(_dongBoNeuLech, 300);
+    // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
+    // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
+    if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }
     _daChao = true;
     adaptiveCapable = (data.capabilities || []).includes("adaptive_voice_v1");
     stopTag = data.stop_tag || null;
@@ -1120,7 +1123,7 @@ function handleMessage(data) {
     try { if (window.JavisBackground) window.JavisBackground.refresh(); } catch (e) {}
     return;
   }
-  if (data.type === "team_message" || data.type === "team_state") {
+  if (data.type === "team_message" || data.type === "team_state" || data.type === "team_replies") {
     // Nhóm chat team (T1): tin mới của thành viên, hàng đợi đổi. Trang Nhóm (teams.js) nghe sự kiện này để vẽ lại;
     // trang khác bỏ qua. Không đụng khung chat chính.
     try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: data })); } catch (e) {}
@@ -1598,7 +1601,7 @@ function sendMessage(text, opts) {
   let outMsg = _isSkill ? _slash.message : _than;
   if (atts.length) {
     const lines = atts.map(a => `- ${a.path}`).join("\n");
-    const src = atts[0].sources || "", attDir = atts[0].attachments || "";
+    const src = (atts.find(a => a.sources) || {}).sources || "", attDir = (atts.find(a => a.attachments) || {}).attachments || "";
     if (_isSkill) {
       // Với lệnh skill (vd /notes): đưa path như dữ liệu, để chính skill quyết định lưu.
       outMsg = `[File đính kèm (đường dẫn), Sources="${src}", Attachments="${attDir}":\n${lines}]\n\n${_slash.message}`;
@@ -3455,6 +3458,7 @@ async function uploadFile(file, att) {
     att.uploading = false; att.loi = true; att.statusText = window.t("app.att_empty");
     att.xong = Promise.resolve();
     if (moi) pendingAttachments.push(att);
+    if (att._cho) { att._cho(); att._cho = null; }
     renderChips();
     return;
   }
@@ -3462,7 +3466,9 @@ async function uploadFile(file, att) {
   // Lời hứa "tải xong" (thành hay hỏng đều xong) để sendMessage đợi được thay vì gửi thiếu.
   att.xong = new Promise(r => { _xong = r; });
   if (moi) pendingAttachments.push(att);
-  attachNote = "";
+  // Chip xếp hàng từ thư mục mang theo ghi chú (bỏ file ẩn, quá 50 file): lần tải đầu không xoá nó.
+  if (!att._hangDoi) attachNote = "";
+  att._hangDoi = false;
   renderChips();
   try {
     await _taiLen(file, att);
@@ -3470,6 +3476,8 @@ async function uploadFile(file, att) {
     att.uploading = false;
     renderChips();
     if (_xong) _xong();
+    // Lời hứa chờ của chip xếp hàng: sendMessage có thể đã bắt nó trước khi file này bắt đầu tải.
+    if (att._cho) { att._cho(); att._cho = null; }
   }
 }
 function _mb(b) { return (b / 1048576).toFixed(1).replace(/\.0$/, ""); }
@@ -3541,11 +3549,44 @@ function taiLaiDinhKem(i) {
   uploadFile(a.file, a);
 }
 
-document.getElementById("attachBtn").addEventListener("click", () => fileInput.click());
+const attachBtn = document.getElementById("attachBtn");
+if (attachBtn) attachBtn.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => {
   [...fileInput.files].forEach(f => uploadFile(f));
   fileInput.value = "";
 });
+
+// Menu "+" của khung gõ (composer-plus.js, 0.153.0) dùng chung đường tải lên và danh sách đính kèm.
+window.JavisAttach = {
+  pick: () => fileInput.click(),
+  // Thư mục: đưa MỌI file vào danh sách ngay (đang tải, có lời hứa chờ) để gửi tin đợi đủ,
+  // rồi composer-plus tải dần 4 file một lúc bằng upload(f, att).
+  queue: (files, note) => {
+    const atts = files.map(f => {
+      const isImg = (f.type || "").startsWith("image/");
+      const att = { name: f.name || "file", kind: isImg ? "image" : "file", preview: isImg ? URL.createObjectURL(f) : null,
+        path: null, size: f.size, sources: null, attachments: null, uploading: true, loi: false,
+        statusText: window.t("app.att_uploading"), _hangDoi: true };
+      att.xong = new Promise(r => { att._cho = r; });
+      return att;
+    });
+    pendingAttachments.push(...atts);
+    attachNote = String(note || "");
+    renderChips();
+    return atts;
+  },
+  upload: (f, att) => {
+    if (att && !pendingAttachments.includes(att)) { if (att._cho) att._cho(); return Promise.resolve(); }
+    return uploadFile(f, att);
+  },
+  addBrainFile: (it) => {
+    if (!it || !it.path || pendingAttachments.some(a => a.path === it.path)) return;
+    pendingAttachments.push({ name: it.name, kind: it.kind || "file", preview: null, url: it.url || null, path: it.path,
+      size: it.size || 0, sources: null, attachments: null, uploading: false, loi: false, xong: Promise.resolve() });
+    renderChips();
+  },
+  note: (s) => { attachNote = String(s || ""); renderChips(); },
+};
 
 // Dán ảnh (Ctrl+V) + dán VĂN BẢN SIÊU DÀI thành file .txt đính kèm (kiểu Claude):
 // bài dài nhồi thẳng vào ô chat vừa khó đọc vừa nặng khung hội thoại - biến thành
