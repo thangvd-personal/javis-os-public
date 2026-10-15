@@ -14,6 +14,7 @@ import asyncio
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -270,6 +271,7 @@ eng = Script({})
 r, tm, ts, ss, t, ev = world("restart", eng)
 sub = r.submit(t["team_id"], "Chào", mentions=["agent-one", "agent-two"], client_msg_id="r1")
 tm.claim_reply(t["team_id"], sub["message_id"], "agent-one")
+time.sleep(0.02)
 r2 = TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=eng, agent_info=ident)
 r2.recover()
 rp = replies(tm, t, sub["message_id"])

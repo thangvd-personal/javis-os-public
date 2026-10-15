@@ -73,6 +73,15 @@ try:
 except TS.TeamError:
     check("trạng thái lạ bị từ chối", True)
 
+check("active_member_slugs lay dung slug cua tro ly dang hoat dong trong nhom",
+      st.active_member_slugs(B) == {"minh"})
+st.add_member(t2["team_id"], "ag_hoa", "hoa")
+check("them thanh vien vao nhom thi xuat hien trong active_member_slugs",
+      st.active_member_slugs(B) == {"minh", "hoa"})
+st.update(t2["team_id"], status="archived")
+check("nhom bi archived thi khong tinh vao active_member_slugs",
+      st.active_member_slugs(B) == {"minh"})
+
 # ───────────── bước nội bộ ─────────────
 s1 = st.add_step("task_1", t1["team_id"], "plan", "ag_minh", 1, "Lập kế hoạch", [])
 s2 = st.add_step("task_1", t1["team_id"], "work", "ag_minh", 1, "Viết", ["msg:1"], parent_step=None)

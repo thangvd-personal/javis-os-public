@@ -1149,23 +1149,27 @@
     m.style.left = Math.max(8, x) + "px";
     m.style.top = y + "px";
   }
-  function nutMenu(icon, chu, cls) {
-    return '<button type="button" role="menuitem" class="ws-menu-it' + (cls ? " " + cls : "") +
-      '" data-act="' + cls + '">' + ic(icon) + '<span>' + esc(chu) + '</span></button>';
+  function nutMenu(icon, chu, cls, dis, title) {
+    return '<button type="button" role="menuitem" class="ws-menu-it' + (cls ? " " + cls : "") + (dis ? " disabled" : "") +
+      '" data-act="' + cls + '"' + (dis ? ' disabled aria-disabled="true"' : "") +
+      (title ? ' title="' + esc(title) + '"' : "") + '>' + ic(icon) + '<span>' + esc(chu) + '</span></button>';
   }
   function veMenuGoc(item, m) {
     var ghim = !!item.pinned, laTag = S.loai === "agent";
     var an = !!item.hidden;
+    var inTeam = !!item.in_team;
     // Mục Auto (0.142.0): cùng trạng thái với công tắc trên thẻ. Chỉ trợ lý đang hoạt động mới bật, tắt được ở đây.
     var rsRow = laTag ? S.rs[item.slug] : null;
     var coAuto = !!(rsRow && rsRow.status !== "missing" && rsRow.status !== "retired");
     var autoOn = !!(rsRow && rsRow.enabled && rsRow.status === "active");
+    var disAn = laTag && !an && inTeam;
+    var titleAn = disAn ? t("ws.cant_hide_in_team") : "";
     m.innerHTML =
       '<div class="ws-menu-head">' + esc(item.name) + '</div>' +
       (coAuto ? nutMenu("zap", t(autoOn ? "resonance.auto_menu_on" : "resonance.auto_menu_off") +
         (S.rsSaving[item.slug] ? " · " + t("resonance.t0_saving") : ""), "auto") : "") +
       nutMenu("pin", ghim ? t("ws.unpin") : t("ws.pin"), "ghim") +
-      (laTag ? nutMenu(an ? "eye" : "eye-off", t(an ? "ws.show_agent" : "ws.hide_agent"), "an") : "") +
+      (laTag ? nutMenu(an ? "eye" : "eye-off", t(an ? "ws.show_agent" : "ws.hide_agent"), "an", disAn, titleAn) : "") +
       (laTag ? nutMenu("tag", t("ws.tag_menu"), "nhom") : nutMenu("folder", t("ws.move_group"), "nhom")) +
       nutMenu("pencil", t("ws.edit"), "sua") +
       nutMenu("download", t("ws.export"), "xuat") +
@@ -1176,6 +1180,7 @@
     var ma_an = m.querySelector('[data-act="an"]');
     if (ma_an) {
       ma_an.onclick = function () {
+        if (ma_an.disabled) return;
         dongMenu(); datMeta(item, { hidden: an ? "0" : "1" });
       };
     }
@@ -1356,7 +1361,8 @@
     var hopLe = function (x) {
       if (!x) return false;
       if (S.loai === "agent") {
-        return S.nhom === TAG_HIDDEN ? !!x.hidden : !x.hidden;
+        var hidTag = typeof TAG_HIDDEN !== "undefined" ? TAG_HIDDEN : " hidden";
+        return S.nhom === hidTag ? !!x.hidden : !x.hidden;
       }
       return true;
     };

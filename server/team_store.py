@@ -445,6 +445,28 @@ class TeamStore:
             return [r["team_id"] for r in c.execute(
                 "SELECT team_id FROM team_members WHERE agent_key=? AND status='active'", (agent_key,)).fetchall()]
 
+    def active_member_slugs(self, brain_id: str) -> set[str]:
+        """Tập các slug trợ lý đang là thành viên hoạt động của ít nhất một nhóm chưa lưu trữ trong brain."""
+        with closing(self._conn()) as c:
+            rows = c.execute(
+                "SELECT DISTINCT tm.slug_at_join, tm.identity_json FROM team_members tm "
+                "JOIN teams t ON t.team_id = tm.team_id "
+                "WHERE t.brain_id=? AND t.status != 'archived' AND tm.status = 'active'",
+                (brain_id,)
+            ).fetchall()
+            slugs = set()
+            for r in rows:
+                if r["slug_at_join"]:
+                    slugs.add(r["slug_at_join"])
+                elif r["identity_json"]:
+                    try:
+                        iden = json.loads(r["identity_json"])
+                        if iden and iden.get("slug"):
+                            slugs.add(iden["slug"])
+                    except Exception:
+                        pass
+            return slugs
+
     def events(self, team_id: str, limit: int = 200) -> list:
         with closing(self._conn()) as c:
             return [{"id": r["id"], "kind": r["kind"], "by": r["by"], "before": json.loads(r["before_json"]),

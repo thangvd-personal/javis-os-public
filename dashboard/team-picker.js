@@ -46,10 +46,19 @@
     return (roster || []).filter(function (a) { return a && a.slug && a.status !== "retired" && a.status !== "missing"; });
   }
 
+  function pool(roster, st) {
+    return live(roster).filter(function (a) {
+      if (!st || !st.includeHidden) {
+        if (a.hidden) return false;
+      }
+      return true;
+    });
+  }
+
   // Tag của trang Cộng sự, theo khoá host cấp (`tag_keys`) để "Bán hàng" và "bán hàng" là một chip. Đếm số trợ lý.
-  function tagsOf(roster) {
+  function tagsOf(roster, st) {
     var by = {}, order = [];
-    live(roster).forEach(function (a) {
+    pool(roster, st).forEach(function (a) {
       (a.tags || []).forEach(function (t, i) {
         var key = (a.tag_keys || [])[i] || fold(t);
         if (!by[key]) { by[key] = { key: key, label: t, count: 0 }; order.push(key); }
@@ -71,7 +80,7 @@
   // gia") nhưng xếp sau người chưa ở nhóm.
   function visible(roster, st) {
     var q = fold(st.query);
-    var rows = live(roster).filter(function (a) {
+    var rows = pool(roster, st).filter(function (a) {
       if (st.tag && !hasTag(a, st.tag)) return false;
       if (!q) return true;
       return [a.name, a.role, a.slug].concat(a.tags || []).some(function (x) { return fold(x).indexOf(q) >= 0; });
@@ -152,9 +161,9 @@
   }
 
   function tagsHtml(roster, st) {
-    var tags = tagsOf(roster);
+    var tags = tagsOf(roster, st);
     if (!tags.length) return "";
-    var untagged = live(roster).filter(function (a) { return !(a.tags || []).length; }).length;
+    var untagged = pool(roster, st).filter(function (a) { return !(a.tags || []).length; }).length;
     var chip = function (key, label, n) {
       var on = (st.tag || "") === key;
       return '<button type="button" class="tmp-chip' + (on ? " is-on" : "") + '" data-pick-tag="' + esc(key) + '" aria-pressed="' +
@@ -206,9 +215,10 @@
       var already = joined(st, a.slug);
       var on = already || sel.indexOf(a.slug) >= 0;
       var sub = a.role || (a.tags || []).join(" · ");
-      return '<label class="tmp-row' + (on ? " is-on" : "") + (already ? " is-joined" : "") + '"><input type="checkbox" class="tmp-check" data-pick-slug="' +
+      var hiddenBadge = a.hidden ? ' <span class="tmp-tag-hidden">' + esc(tw("ws.tag_hidden")) + "</span>" : "";
+      return '<label class="tmp-row' + (on ? " is-on" : "") + (already ? " is-joined" : "") + (a.hidden ? " is-hidden" : "") + '"><input type="checkbox" class="tmp-check" data-pick-slug="' +
         esc(a.slug) + '"' + (on ? " checked" : "") + (already ? " disabled" : "") + ">" + face(a, 40) +
-        '<span class="tmp-text"><span class="tmp-name">' + esc(a.name || a.slug) + "</span>" +
+        '<span class="tmp-text"><span class="tmp-name">' + esc(a.name || a.slug) + hiddenBadge + "</span>" +
         (already ? '<span class="tmp-role tmp-joined">' + esc(tw("teams.pick.joined")) + "</span>" :
           sub ? '<span class="tmp-role">' + esc(sub) + "</span>" : "") +
         '</span><span class="tmp-tick" aria-hidden="true">' + (on ? ic("check") : "") + "</span></label>";
@@ -254,11 +264,15 @@
       esc(st.desc || "") + '" placeholder="' + esc(tw("teams.pick.desc_ph")) + '" aria-label="' + esc(tw("teams.description")) +
       '"></details></div></div>' : "";
     var err = st.error ? '<div class="tmp-error" role="alert">' + esc(st.error) + "</div>" : "";
+    var hiddenBox = '<div class="tmp-hidden-filter"><label class="tmp-hidden-label">' +
+      '<input type="checkbox" class="tmp-hidden-check"' + (st.includeHidden ? " checked" : "") + ">" +
+      "<span>" + esc(tw("teams.pick.include_hidden")) + "</span></label></div>";
     return '<div class="tmp-layer"><div class="tmp-scrim tmp-cancel"></div><div class="tmp-dialog" role="dialog" aria-modal="true" ' +
       'aria-labelledby="tmp-title">' + head + '<div class="tmp-body">' + name +
       '<div class="tmp-search"><span class="tmp-search-ico" aria-hidden="true">' + ic("search") + "</span>" +
       '<input class="tmp-search-input" type="search" value="' + esc(st.query || "") + '" placeholder="' +
       esc(tw("teams.pick.search_ph")) + '" aria-label="' + esc(tw("teams.pick.search_ph")) + '"></div>' +
+      hiddenBox +
       '<div class="tmp-tags-box">' + tagsHtml(roster, st) + "</div>" +
       '<div class="tmp-selected-box">' + selectedHtml(roster, st) + "</div>" +
       '<div class="tmp-list" role="list">' + listHtml(roster, st) + "</div>" + err + "</div>" +
@@ -268,6 +282,7 @@
   var api = { fold: fold, tagsOf: tagsOf, visible: visible, toggle: toggle, normalize: normalize, autoName: autoName,
     canSubmit: canSubmit, html: html, listHtml: listHtml, selectedHtml: selectedHtml, tagsHtml: tagsHtml,
     leaderHtml: leaderHtml, footerHtml: footerHtml, previewHtml: previewHtml, setLeader: setLeader, NO_TAG: NO_TAG,
+    pool: pool,
     setStrings: function (o) { FALLBACK = o || {}; } };
   if (typeof window !== "undefined") window.JavisTeamPicker = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

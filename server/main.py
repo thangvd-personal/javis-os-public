@@ -6751,6 +6751,12 @@ def agents_index(brain: str, *, kem_prompt: bool = True) -> list:
     localhost thì 366 KB không thấy gì, qua mạng nhà là cả giây trắng cột trái.
     """
     out = []
+    in_teams = set()
+    try:
+        if _TEAM_API and _TEAM_API.exists():
+            in_teams = _TEAM_API.teams().active_member_slugs(_brain_key(brain))
+    except Exception:
+        in_teams = set()
     for f in sorted(_agents_dir(brain).glob("*.md")):
         meta, body = _read_md(f)
         out.append({"slug": f.stem, "name": meta.get("name", f.stem),
@@ -6759,6 +6765,7 @@ def agents_index(brain: str, *, kem_prompt: bool = True) -> list:
                     "model_provider": meta.get("model_provider", ""),
                     "pinned": bool(meta.get("pinned")),
                     "hidden": bool(meta.get("hidden")),
+                    "in_team": bool(f.stem in in_teams),
                     "avatar": agent_avatar.for_agent(meta, f.stem)})
         if kem_prompt:
             out[-1]["prompt"] = body
@@ -6799,11 +6806,18 @@ def agent_get(slug: str = Query(...), brain: str = Query("brain")):
     if not path:
         return JSONResponse({"error": localefmt.chu("Không tìm thấy trợ lý", "Assistant not found")}, status_code=404)
     meta, body = _read_md(path)
+    in_team = False
+    try:
+        if _TEAM_API and _TEAM_API.exists():
+            in_team = slug in _TEAM_API.teams().active_member_slugs(_brain_key(brain))
+    except Exception:
+        in_team = False
     return {"slug": slug, "name": meta.get("name", slug), "role": meta.get("role", ""),
             "skills": meta.get("skills", []) or [], "model": meta.get("model", ""),
             **_agent_tag_fields(meta), "model_provider": meta.get("model_provider", ""),
             "prompt": body, "pinned": bool(meta.get("pinned")),
             "hidden": bool(meta.get("hidden")),
+            "in_team": in_team,
             "avatar": agent_avatar.for_agent(meta, slug)}
 
 @app.post("/agents")
@@ -8677,6 +8691,15 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
         if hidden is not None:
             an = str(hidden).strip().lower() in ("1", "true", "yes", "on")
             if an:
+                if la_agent and _TEAM_API and _TEAM_API.exists():
+                    try:
+                        active_slugs = _TEAM_API.teams().active_member_slugs(_brain_key(brain))
+                        if slug in active_slugs:
+                            raise ValueError("cannot_hide_team_member")
+                    except ValueError:
+                        raise
+                    except Exception:
+                        pass
                 meta["hidden"] = True
             else:
                 meta.pop("hidden", None)      # bỏ ẩn thì XOÁ khoá, không để lại `hidden: false`
@@ -8708,6 +8731,11 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
     except agent_tags.TagError as e:
         return _loi_tag(str(e), 409 if str(e) == "stale_client" else 400)
     except ValueError as e:
+        if str(e) == "cannot_hide_team_member":
+            return JSONResponse({"ok": False, "code": "cannot_hide_team_member",
+                                 "error": localefmt.chu("Trợ lý đang tham gia nhóm, không thể tạm ẩn.",
+                                                        "Assistant is in a team and cannot be hidden.")},
+                                status_code=400)
         return JSONResponse({"ok": False, "code": str(e), "error": localefmt.chu(
             "Phần đầu file (frontmatter) đang hỏng, chưa ghi gì. Sửa file trước rồi thử lại.",
             "The file header (frontmatter) is broken; nothing was saved. Fix the file and try again.")},
@@ -22455,12 +22483,31 @@ async def _team_notify(session_id, text):
                           label=localefmt.chu("Nhóm", "Team"), source="team")
 
 
+def _unhide_agent(brain, slug):
+    f = _agents_dir(brain) / f"{slug}.md"
+    if not f.is_file():
+        return False
+    changed = {}
+
+    def _sua(meta):
+        if "hidden" in meta:
+            meta.pop("hidden", None)
+            meta["updated"] = _today()
+            changed["ok"] = True
+    try:
+        _sua_meta_agent(f, _sua, chi_ghi_khi=lambda: changed.get("ok"))
+        return bool(changed.get("ok"))
+    except Exception:
+        return False
+
+
 _TEAM_API = team_api.register(app, team_api.TeamApiDeps(
     brain_key=lambda b: _brain_key(b), session_store=lambda: get_store(),
     task_store=lambda: tasks_feature.store, resonance_store=lambda: _resonance_store(),
     agents_meta=_resonance_agents_meta, agent_info=_team_agent_info, engine_for=_team_engine_for,
     broadcast=lambda ev: _CHAT_RUNTIME.publish(ev), notify=_team_notify, admin=_TeamAdmin(),
-    owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or "")))
+    owner_name=lambda: ((cfgmod.read_settings().get("auth") or {}).get("username") or ""),
+    unhide_agent=_unhide_agent))
 
 
 

@@ -117,6 +117,19 @@ check("hộp là dialog có nhãn, đóng được bằng nút có nhãn", /role
 check("điện thoại: hộp thành màn đầy đủ, footer chừa vùng an toàn", /@media \(max-width: 640px\) \{[\s\S]*\.tmp-dialog \{[^}]*height: 100dvh/.test(css)
   && /\.tmp-foot \{ padding-bottom: calc\(12px \+ env\(safe-area-inset-bottom/.test(css));
 check("chữ hộp chọn 16px, vùng chạm 44px", /\.tmp-dialog \{[^}]*font-size: 16px/.test(css) && /\.tmp-foot \.ws-btn \{ min-height: 44px/.test(css));
+const rosterWithHidden = roster.concat([
+  { slug: "an-hidden", name: "Trợ lý Ẩn", role: "Ẩn", tags: ["TagẨn"], tag_keys: ["tagan"], hidden: true }
+]);
+check("hộp chọn có checkbox bao gồm trợ lý tạm ẩn, mặc định uncheck",
+  html.includes('class="tmp-hidden-check"') && html.includes(vi["teams.pick.include_hidden"]) && !html.includes('class="tmp-hidden-check" checked'));
+check("mặc định không bao gồm trợ lý tạm ẩn trong danh sách",
+  TP.visible(rosterWithHidden, { mode: "create", query: "", tag: "", includeHidden: false }).map(function (a) { return a.slug; }).indexOf("an-hidden") < 0);
+check("bật includeHidden: hiển thị cả trợ lý tạm ẩn và có nhãn Tạm ẩn",
+  TP.visible(rosterWithHidden, { mode: "create", query: "", tag: "", includeHidden: true }).map(function (a) { return a.slug; }).indexOf("an-hidden") >= 0
+  && TP.listHtml(rosterWithHidden, { mode: "create", query: "", tag: "", includeHidden: true }).includes("tmp-tag-hidden"));
+check("bật includeHidden: tính cả tag của trợ lý tạm ẩn",
+  TP.tagsOf(rosterWithHidden, { includeHidden: true }).some(function (t) { return t.key === "tagan"; })
+  && !TP.tagsOf(rosterWithHidden, { includeHidden: false }).some(function (t) { return t.key === "tagan"; }));
 const indexHtml = fs.readFileSync(path.join(ROOT, "dashboard", "index.html"), "utf8");
 check("team-picker.js nạp trước teams.js", indexHtml.indexOf("team-picker.js") > 0
   && indexHtml.indexOf("team-picker.js") < indexHtml.indexOf("/static/teams.js"));

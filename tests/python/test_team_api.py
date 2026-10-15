@@ -99,6 +99,22 @@ check("danh sách nhóm kèm số việc", [t["team_id"] for t in lst] == [TID] 
 check("brain khác không thấy nhóm", c.get(f"/teams?brain={BR2}").json()["teams"] == []
       and c.get(f"/teams/{TID}?brain={BR2}").status_code == 404)
 
+# Kiểm tra trợ lý trong nhóm: có in_team=True và không được ẩn
+ags = {a["slug"]: a for a in c.get(f"/agents{Q}").json()["agents"]}
+check("trợ lý trong nhóm có in_team=True", ags["lan"].get("in_team") is True and ags["minh"].get("in_team") is True and ags["hoa"].get("in_team") is False)
+r_block = c.post("/capability/meta", data={"slug": "lan", "kind": "agent", "hidden": "1", "brain": str(BR)})
+check("chặn ẩn trợ lý đang trong nhóm", r_block.status_code == 400 and "cannot_hide_team_member" in r_block.text)
+
+# Ẩn Hoa trước khi vào nhóm
+r_hide_hoa = c.post("/capability/meta", data={"slug": "hoa", "kind": "agent", "hidden": "1", "brain": str(BR)})
+check("ẩn Hoa thành công khi chưa vào nhóm", r_hide_hoa.status_code == 200 and r_hide_hoa.json()["hidden"] is True)
+
+# Tạo nhóm mới với Hoa (đang tạm ẩn) -> Hoa tự động bỏ tạm ẩn
+r_t2 = c.post(f"/teams{Q}", json={"name": "Nhóm Hoa", "description": "", "members": ["hoa"], "leader_slug": "hoa"})
+check("tạo nhóm với trợ lý đang ẩn: 200", r_t2.status_code == 200 and r_t2.json()["ok"])
+ags_after = {a["slug"]: a for a in c.get(f"/agents{Q}").json()["agents"]}
+check("trợ lý tham gia nhóm tự động được bỏ ẩn", ags_after["hoa"].get("hidden") is False and ags_after["hoa"].get("in_team") is True)
+
 # Tin trò chuyện
 r = c.post(f"/teams/{TID}/messages{Q}", json={"text": "Chào nhóm"})
 check("thiếu client_msg_id: 400", r.status_code == 400)

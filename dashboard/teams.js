@@ -1731,6 +1731,7 @@
     // `reqId`: một mã cho mỗi lần mở hộp Tạo nhóm. Bấm Tạo hai lần hay mạng chậm gửi lại thì server trả lại nhóm đã tạo.
     S.pickSt = { mode: mode, query: "", tag: "", selected: [], leader: "", leaderTouched: false, leaderDropped: false, name: "",
       desc: "", descOpen: false, exclude: exclude, saving: false, error: "", rosterState: (S.roster || []).length ? "ok" : "loading",
+      includeHidden: false,
       reqId: newClientId() };
     S.pickOpener = opener || null;
     document.removeEventListener("keydown", pickEsc, true);
@@ -1786,6 +1787,8 @@
     put(".tmp-foot-box", P.footerHtml(st));
     var err = host.querySelector(".tmp-error");
     if (err && !st.error) err.remove();
+    var dlg = host.querySelector(".tmp-dialog");
+    if (dlg && dlg.scrollTop) dlg.scrollTop = 0;
   }
 
   function pickToggle(slug) {
@@ -1799,7 +1802,11 @@
     var host = S.pickHost;
     var back = host && (fromChip ? host.querySelector(".tmp-search-input")
       : host.querySelector('.tmp-check[data-pick-slug="' + (window.CSS && CSS.escape ? CSS.escape(slug) : slug) + '"]'));
-    if (back) { try { back.focus(); } catch (e) {} }
+    if (back) {
+      try { back.focus({ preventScroll: true }); } catch (e) { back.focus(); }
+    }
+    var dlg = host && host.querySelector(".tmp-dialog");
+    if (dlg && dlg.scrollTop) dlg.scrollTop = 0;
   }
 
   function pickFail(msg) {
@@ -1820,6 +1827,9 @@
         client_req_id: st.reqId })
         .then(function (r) {
           if (r.code !== 200) return pickFail((r.j && r.j.error) || tw("teams.err", { e: r.code }));
+          (S.roster || []).forEach(function (a) {
+            if (st.selected.indexOf(a.slug) >= 0) a.hidden = false;
+          });
           // Tạo xong: vào thẳng khung chat của nhóm mới, con trỏ đặt sẵn ở khung soạn.
           closePicker();
           S.focusComposer = true;
@@ -1836,7 +1846,10 @@
     st.selected.slice().reduce(function (p, slug) {
       return p.then(function () {
         return call("POST", "/teams/" + q(forTeam) + "/members", { slug: slug }).then(function (r) {
-          if (r.code === 200) done.push(slug); else { failed.push(slug); lastErr = (r.j && r.j.error) || ""; }
+          if (r.code === 200) {
+            done.push(slug);
+            (S.roster || []).forEach(function (a) { if (a.slug === slug) a.hidden = false; });
+          } else { failed.push(slug); lastErr = (r.j && r.j.error) || ""; }
         }, function () { failed.push(slug); lastErr = tw("teams.err_network"); });
       });
     }, Promise.resolve()).then(function () {
@@ -2099,6 +2112,11 @@
   }
 
   function onChange(e) {
+    if (S.pickSt && e.target.classList && e.target.classList.contains("tmp-hidden-check")) {
+      S.pickSt.includeHidden = !!e.target.checked;
+      drawPicker("filter");
+      return;
+    }
     if (S.pickSt && e.target.classList && e.target.classList.contains("tmp-check")) {
       pickToggle(e.target.getAttribute("data-pick-slug"));
       return;

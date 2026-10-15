@@ -49,6 +49,7 @@ class TeamApiDeps:
     store_path: Optional[Path] = None                  # mặc định STATE_DIR/team.sqlite3
     admin: Any = None                                  # thao tác host cho lệnh quản trị Toàn quyền (T3)
     owner_name: Optional[Callable[[], str]] = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
+    unhide_agent: Optional[Callable[[str, str], bool]] = None  # (root, slug) -> bỏ ẩn trợ lý khi vào nhóm
 
 
 async def _body(request: Request) -> dict:
@@ -395,6 +396,12 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 except Exception:  # noqa: BLE001
                     pass
                 return {"ok": True, "team": api.view(team), "duplicate": True}
+            if deps.unhide_agent:
+                for slug in dict.fromkeys(members):
+                    try:
+                        deps.unhide_agent(root, slug)
+                    except Exception:  # noqa: BLE001
+                        pass
             return {"ok": True, "team": api.view(team)}
         return await api.io(_do)
 
@@ -446,6 +453,11 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 return _err(400, f"Không có trợ lý: {slug}", f"No such assistant: {slug}")
             reg = api.register_agent(team["brain_id"], slug)
             api.teams().add_member(team_id, reg["agent_key"], slug)
+            if deps.unhide_agent:
+                try:
+                    deps.unhide_agent(team["brain_id"], slug)
+                except Exception:  # noqa: BLE001
+                    pass
             api.runner()._state(team_id)
             return {"ok": True, "team": api.view(api.teams().get(team_id))}
         return await api.io(_do)
