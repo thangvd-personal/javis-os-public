@@ -7253,9 +7253,10 @@ _TEXT_EXTS = {".md", ".txt", ".json", ".yaml", ".yml", ".csv", ".js", ".ts", ".p
 
 def _files_ceiling(brain: str) -> Path:
     """Ranh giới trên của File Manager (không cho 'Lên' quá đây). Brain LUÔN nằm trong trần.
-    JAVIS_FILES_ROOT: `brain`/`vault` = khoá trong brain | `drive`/`root` = ổ đĩa chứa brain |
-    <đường dẫn tuyệt đối> = trần tuỳ ý (phải chứa brain). KHÔNG đặt: localhost → ổ đĩa (chủ máy
-    tin cậy), bind public → khoá brain (fail-closed, tránh hở cả ổ đĩa qua web)."""
+    Vì lý do an toàn và bảo mật, user chỉ thao tác trong phần brain tương ứng (mặc định luôn khoá
+    trong brain).
+    JAVIS_FILES_ROOT: `brain`/`vault` = khoá trong brain (mặc định) | `drive`/`root` = ổ đĩa chứa brain |
+    <đường dẫn tuyệt đối> = trần tuỳ ý (phải chứa brain)."""
     broot = Path(_brain_root(brain)).resolve()
     env = os.getenv("JAVIS_FILES_ROOT", "").strip()
     ceil = None
@@ -7269,10 +7270,8 @@ def _files_ceiling(brain: str) -> Path:
             cand = Path(env).expanduser()
             if cand.is_dir():
                 ceil = cand.resolve()
-    elif not cfgmod.require_login():
-        ceil = Path(broot.anchor or broot)      # localhost = chủ máy → tới ổ đĩa
     if ceil is None:
-        ceil = broot                            # public / cấu hình lạ → khoá brain
+        ceil = broot                            # Mặc định an toàn: luôn khoá trong brain
     try:
         broot.relative_to(ceil)                 # brain phải trong trần, else fallback brain
     except ValueError:

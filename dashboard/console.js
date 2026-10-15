@@ -1434,6 +1434,13 @@
         return null;
       }
       cur = d.path || ""; upTarget = d.parent; homeRel = d.home || homeRel;
+      // Vì lý do an toàn và bảo mật, user chỉ thao tác trong phần brain tương ứng:
+      // Không cho phép nút 'Lên' leo ra ngoài phạm vi thư mục brain
+      if (homeRel && (cur === homeRel || !cur)) {
+        upTarget = null;
+      } else if (homeRel && upTarget !== null && upTarget !== undefined) {
+        if (upTarget !== homeRel && upTarget.indexOf(homeRel + "/") !== 0) upTarget = null;
+      }
       const upBtn = el.querySelector("#fmUp"); if (upBtn) upBtn.style.display = (upTarget === null || upTarget === undefined) ? "none" : "";
       crumb(d.root);
       // Chỉ lọc ở giao diện Tệp tin: ẩn dotfiles (tệp ẩn Linux) và __pycache__ để danh sách gọn gàng.
@@ -1534,9 +1541,20 @@
       };
     }
     function crumb(rootName) {
-      const parts = cur ? cur.split("/") : []; let acc = "";
-      let html = `<a data-p="">${ic("house")} ${esc(rootName || "brain")}</a>`;
-      parts.forEach(p => { acc = acc ? acc + "/" + p : p; html += ` / <a data-p="${esc(acc)}">${esc(p)}</a>`; });
+      // Phần điều hướng chỉ hiển thị bắt đầu từ thư mục hiện hành của brain
+      const brainName = (homeRel ? homeRel.split("/").pop() : rootName) || rootName || "brain";
+      let inner = cur || "";
+      if (homeRel) {
+        if (inner === homeRel) inner = "";
+        else if (inner.indexOf(homeRel + "/") === 0) inner = inner.slice(homeRel.length + 1);
+      }
+      const parts = inner ? inner.split("/") : []; let acc = "";
+      let html = `<a data-p="${esc(homeRel || "")}">${ic("house")} ${esc(brainName)}</a>`;
+      parts.forEach(p => {
+        acc = acc ? acc + "/" + p : p;
+        const target = homeRel ? homeRel + "/" + acc : acc;
+        html += ` / <a data-p="${esc(target)}">${esc(p)}</a>`;
+      });
       crumbEl.innerHTML = html;
       crumbEl.querySelectorAll("a").forEach(a => a.onclick = () => load(a.dataset.p));
     }

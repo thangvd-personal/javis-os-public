@@ -56,15 +56,17 @@ def _set_env(host=None, files_root=None):
 
 
 try:
-    # ---- 1. Localhost (mặc định): trần = ổ đĩa, out được ra root ----
+    # ---- 1. Mặc định (localhost lẫn public): trần = brain, khoá an toàn trong brain ----
     _set_env(host="127.0.0.1")
     check("localhost: require_login False", cfgmod.require_login() is False)
-    check("localhost: trần = ổ đĩa chứa brain", main._files_ceiling("brain") == _ANCHOR)
-    rel_ngoai = main._files_rel(_ANCHOR, _TMP / "ngoai-vault.txt")   # tương đối so với TRẦN (ổ đĩa)
-    p = main._safe_path("brain", rel_ngoai)
-    check("localhost: đọc được file NGOÀI brain (trong ổ đĩa)", p == _TMP / "ngoai-vault.txt")
+    check("localhost mặc định: trần = brain", main._files_ceiling("brain") == BRAIN)
+    try:
+        main._safe_path("brain", "../ngoai-vault.txt")
+        check("localhost: chặn ../ ra ngoài brain", False)
+    except ValueError:
+        check("localhost: chặn ../ ra ngoài brain", True)
 
-    # ---- 2. Public bind: khoá trong brain (fail-closed) ----
+    # ---- 2. Public bind: cũng khoá trong brain (fail-closed) ----
     _set_env(host="0.0.0.0")
     check("public: require_login True", cfgmod.require_login() is True)
     check("public: trần = brain", main._files_ceiling("brain") == BRAIN)
@@ -75,32 +77,44 @@ try:
         check("public: chặn ../ ra ngoài brain", True)
 
     # ---- 3. JAVIS_FILES_ROOT override ----
-    _set_env(host="0.0.0.0", files_root="drive")   # public NHƯNG ép mở ổ đĩa
-    check("env=drive: trần = ổ đĩa dù public", main._files_ceiling("brain") == _ANCHOR)
-    _set_env(host="127.0.0.1", files_root="brain")  # localhost NHƯNG ép khoá brain
-    check("env=brain: khoá brain dù localhost", main._files_ceiling("brain") == BRAIN)
+    _set_env(host="127.0.0.1", files_root="drive")   # ép mở ổ đĩa qua cấu hình tường minh
+    check("env=drive: trần = ổ đĩa khi cấu hình", main._files_ceiling("brain") == _ANCHOR)
+    rel_ngoai = main._files_rel(_ANCHOR, _TMP / "ngoai-vault.txt")
+    p = main._safe_path("brain", rel_ngoai)
+    check("env=drive: đọc được file ngoài brain khi có env", p == _TMP / "ngoai-vault.txt")
+    _set_env(host="127.0.0.1", files_root="brain")  # ép khoá brain
+    check("env=brain: khoá brain", main._files_ceiling("brain") == BRAIN)
     _set_env(host="127.0.0.1", files_root=str(_TMP))  # đường dẫn cụ thể chứa brain
     check("env=path cụ thể: trần = path đó", main._files_ceiling("brain") == _TMP)
     _set_env(host="127.0.0.1", files_root=str(_TMP / "khong-ton-tai"))  # path sai → fallback
     check("env=path sai: fallback về brain", main._files_ceiling("brain") == BRAIN)
 
-    # ---- 4. files_list: điểm vào mặc định = brain, parent/home đúng ----
-    _set_env(host="127.0.0.1")   # trần = ổ đĩa
+    # ---- 4. files_list mặc định (khoá trong brain): root=tên brain, parent=None ở gốc ----
+    _set_env(host="127.0.0.1")   # mặc định: trần = brain
 
     async def _list(path_arg):
         return await main.files_list(brain="brain", path=path_arg)
 
-    d0 = asyncio.run(_list(None))   # None = mặc định
-    check("list(None) = BRAIN (không phải ổ đĩa)", d0["path"] == main._files_rel(_ANCHOR, BRAIN)
-          and any(i["name"] == "note.md" for i in d0["items"]))
-    check("list: home trỏ brain", d0["home"] == main._files_rel(_ANCHOR, BRAIN))
-    check("list: parent brain = thư mục cha (Lên được)", d0["parent"] == main._files_rel(_ANCHOR, BRAIN.parent))
+    d0 = asyncio.run(_list(None))   # None = mặc định (gốc brain)
+    check("list mặc định: path = ''", d0["path"] == "")
+    check("list mặc định: root = tên brain", d0["root"] == "My Vault")
+    check("list mặc định: home = ''", d0["home"] == "")
+    check("list mặc định: parent = None ở gốc brain (ẩn nút Lên)", d0["parent"] is None)
+    check("list mặc định: có note.md", any(i["name"] == "note.md" for i in d0["items"]))
 
-    d_up = asyncio.run(_list(d0["parent"]))   # Lên 1 cấp
-    check("list: lên 1 cấp thấy folder brain", any(i["name"] == "My Vault" for i in d_up["items"]))
+    # Test trong thư mục con của brain: Lên được thư mục cha
+    d_sub = asyncio.run(_list("01 - Daily"))
+    check("list subfolder: path đúng", d_sub["path"] == "01 - Daily")
+    check("list subfolder: parent = '' (lên gốc brain)", d_sub["parent"] == "")
 
-    d_ceil = asyncio.run(_list(""))   # "" = trần (ổ đĩa)
-    check("list(''): ở trần → parent=None (ẩn nút Lên)", d_ceil["parent"] is None)
+    # Khi có env=drive: parent của brain trỏ thư mục cha (Lên được)
+    _set_env(host="127.0.0.1", files_root="drive")
+    d_drive = asyncio.run(_list(None))
+    check("env=drive: list home trỏ brain", d_drive["home"] == main._files_rel(_ANCHOR, BRAIN))
+    check("env=drive: parent brain = thư mục cha", d_drive["parent"] == main._files_rel(_ANCHOR, BRAIN.parent))
+    d_up = asyncio.run(_list(d_drive["parent"]))
+    check("env=drive: lên 1 cấp thấy folder brain", any(i["name"] == "My Vault" for i in d_up["items"]))
+    _set_env()  # trả về mặc định
 
     # ---- 5. Tìm file: tách rõ chế độ tên / nội dung, vẫn hỗ trợ tiếng Việt không dấu ----
     (BRAIN / "Thư mục trống").mkdir()
@@ -161,7 +175,7 @@ try:
     (BRAIN / "01 - Daily" / "2026-07-30.md").write_text("nhật ký hôm nay", encoding="utf-8")
     (BRAIN / "attachments").mkdir(exist_ok=True)
     (BRAIN / "attachments" / "anh.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
-    brain_rel = main._files_rel(_ANCHOR, BRAIN)
+    brain_rel = main._files_rel(main._files_ceiling("brain"), BRAIN)
 
     probe = asyncio.run(main.files_zip(brain="brain", path=brain_rel, probe=1))
     check("zip probe: đếm đủ file (kể cả trong thư mục con)",
@@ -218,8 +232,11 @@ try:
     async def _del(path_arg):
         return await main.files_delete(brain="brain", path=path_arg)
 
-    r = asyncio.run(_del(main._files_rel(_ANCHOR, BRAIN)))
+    r = asyncio.run(_del(main._files_rel(main._files_ceiling("brain"), BRAIN)))
     check("không xoá được brain root", hasattr(r, "status_code") and r.status_code == 400)
+    _set_env(files_root="drive")
+    r2 = asyncio.run(_del(main._files_rel(_ANCHOR, BRAIN)))
+    check("không xoá được brain root (trần=drive)", hasattr(r2, "status_code") and r2.status_code == 400)
 finally:
     main._brain_root = _orig_brain_root
     main.BRAINS_DIR = _orig_brains_dir

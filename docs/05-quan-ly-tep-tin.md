@@ -18,17 +18,15 @@ Mỗi brain của Javis thực chất là một thư mục trên máy/VPS chứa
 
 ## Phạm vi duyệt: tới đâu là hết
 
-Điểm vào mặc định luôn là thư mục gốc của brain đang chọn. Nhưng **trần duyệt** (chỗ nút "↑ Lên" không đi lên được nữa) thì tuỳ cách bạn chạy Javis:
+Điểm vào mặc định luôn là thư mục gốc của brain đang chọn. Vì lý do an toàn và bảo mật, **trần duyệt** và thanh điều hướng (breadcrumb) mặc định chỉ hiển thị và cho phép thao tác bắt đầu từ thư mục của brain tương ứng:
 
 | Cách chạy | Trần duyệt | Ý nghĩa |
 |---|---|---|
-| Chạy cục bộ, không bắt đăng nhập (localhost) | **Ổ đĩa chứa brain** | Bạn duyệt và sửa được cả file ngoài brain, vì máy là của chính bạn |
-| Nghe public / bắt buộc đăng nhập (Docker, VPS) | Thư mục brain | Khoá cứng trong brain, không hở ổ đĩa ra web |
-| Đặt `JAVIS_FILES_ROOT=brain` (hoặc `vault`) | Thư mục brain | Khoá trong brain kể cả khi chạy cục bộ |
-| Đặt `JAVIS_FILES_ROOT=drive` (hoặc `root`) | Ổ đĩa chứa brain | Ép mở rộng tới ổ đĩa |
+| Mặc định (cục bộ lẫn public/VPS) | **Thư mục brain** | An toàn và bảo mật: chỉ duyệt, thao tác trong brain tương ứng |
+| Đặt `JAVIS_FILES_ROOT=drive` (hoặc `root`) | Ổ đĩa chứa brain | Ép mở rộng tới ổ đĩa khi thật sự cần thiết |
 | Đặt `JAVIS_FILES_ROOT=<đường dẫn>` | Đúng thư mục đó | Trần tuỳ ý, phải là thư mục có chứa brain |
 
-Vì thế trên máy cá nhân, bấm **↑ Lên** nhiều lần có thể đưa bạn ra ngoài brain tới tận gốc ổ đĩa. Nút **⌂ Brain** đưa bạn về nhà ngay lập tức. Khi đã đứng ở trần, nút **↑ Lên** tự ẩn đi. Javis luôn chặn các đường dẫn cố vượt quá trần (kiểu `../../`), và brain luôn nằm trong trần.
+Phần điều hướng (breadcrumb) bắt đầu từ chính thư mục brain. Nút **⌂ Brain** đưa bạn về gốc brain ngay lập tức. Khi đã đứng ở gốc brain, nút **↑ Lên** tự ẩn đi để tránh vô tình thao tác ra ngoài. Javis luôn chặn các đường dẫn cố vượt quá trần (kiểu `../../`).
 
 Cách chỉnh biến môi trường xem [Cấu hình .env](16-cau-hinh-env.md).
 
@@ -308,7 +306,7 @@ Kết luận thực dụng: tài liệu bạn muốn giữ lâu dài thì chuy�
 
 **Bấm ↑ Lên mà không thấy nút đâu.** Bạn đã ở trần duyệt rồi, nút tự ẩn. Bấm **⌂ Brain** để về gốc brain.
 
-**Duyệt lạc ra ngoài brain, không biết đường về.** Bấm **⌂ Brain**. Đây đúng là hành vi thiết kế khi chạy cục bộ: trần duyệt là ổ đĩa chứ không phải thư mục brain. Muốn khoá cứng trong brain thì đặt `JAVIS_FILES_ROOT=brain` rồi khởi động lại server.
+**Duyệt lạc ra ngoài brain, không biết đường về.** Bấm **⌂ Brain**. Mặc định hệ thống luôn khoá trần trong thư mục brain để đảm bảo an toàn và bảo mật. Nếu bạn có đặt `JAVIS_FILES_ROOT=drive` thì nút **⌂ Brain** sẽ đưa bạn quay lại ngay gốc brain.
 
 **Tìm kiếm không ra file mà bạn biết chắc là có.** Ba nguyên nhân hay gặp: file nằm ngoài gốc brain (tìm kiếm chỉ quét trong brain); file nằm trong thư mục bị bỏ qua như `.git`, `node_modules`, `.trash`; hoặc bạn đang ở chip **Nội dung** mà file đó không phải dạng chữ hay nặng hơn 1MB. Thử đổi sang chip **Tên**.
 
