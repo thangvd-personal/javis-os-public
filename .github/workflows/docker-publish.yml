@@ -1,7 +1,7 @@
 name: Build & Publish Docker image (GHCR)
 
 # Mỗi lần push lên main → build image Docker và đẩy lên GitHub Container Registry
-# (ghcr.io/blogminhquy/javis-os). Hostinger Docker Manager / VPS chỉ cần PULL image này.
+# (ghcr.io/thangvd-personal/javis-os-public). Hostinger Docker Manager / VPS chỉ cần PULL image này.
 on:
   push:
     branches: [main]

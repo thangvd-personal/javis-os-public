@@ -12,7 +12,7 @@
 1. hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL**.
 2. 다음 URL을 붙여 넣습니다.
    ```
-   https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+   https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
    ```
 3. (선택, HTTPS + 도메인을 쓰려면) **Environment** 상자에 다음을 설정합니다.
    ```

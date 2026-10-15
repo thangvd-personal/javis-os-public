@@ -18,7 +18,7 @@ def check(name, condition):
 
 message = updater.chan_doan_pull("Already up to date.")
 check("đã mới nhất: nêu đúng nguồn phát hành chính thức",
-      "github.com/blogminhquy/javis-os.git/main" in message)
+      "github.com/thangvd-personal/javis-os-public.git/main" in message)
 check("đã mới nhất: hướng dẫn Docker nếu cần", "Docker" in message)
 check("không khuyên bỏ nhánh riêng", "checkout main" not in message and "reset --hard" not in message)
 
@@ -52,7 +52,7 @@ check("lỗi lạ không bịa nguyên nhân",
 os.environ["JAVIS_UPDATE_REMOTE"] = "some-fork"
 os.environ["JAVIS_UPDATE_BRANCH"] = "stable"
 check("nút cập nhật luôn dùng cùng nguồn với /version",
-      updater.release_source() == ("https://github.com/blogminhquy/javis-os.git", "main"))
+      updater.release_source() == ("https://github.com/thangvd-personal/javis-os-public.git", "main"))
 os.environ.pop("JAVIS_UPDATE_REMOTE", None)
 os.environ.pop("JAVIS_UPDATE_BRANCH", None)
 

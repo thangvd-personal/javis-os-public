@@ -290,7 +290,7 @@ def update_connection(cid, patch):
     # Đổi ô đăng nhập (email Google, Client ID/Secret) trên connector TỰ giữ token thì token
     # đang cache thuộc về tài khoản/app CŨ - giữ lại là mọi tool vẫn chạy bằng tài khoản cũ.
     # Vụ thật: user xoá đi đăng nhập lại bằng hi@minhquy.vn mà tool vẫn trả về
-    # blogminhquy@gmail.com, vì credential cũ nằm nguyên trên đĩa và không ai dọn.
+    # ducthang128@gmail.com, vì credential cũ nằm nguyên trên đĩa và không ai dọn.
     if doi_dang_nhap:
         forget_cred_dir(c)
     _save(d)

@@ -18,7 +18,7 @@
 > Dùng cả ba cùng lúc cũng được, chúng không đụng nhau.
 
 Javis kết nối Zalo cá nhân bằng MCP của
-[`javis-zalo`](https://github.com/blogminhquy/javis-zalo), bản CLI Zalo riêng của Javis. Chỉ có
+[`javis-zalo`](https://github.com/thangvd-personal/javis-zalo-public), bản CLI Zalo riêng của Javis. Chỉ có
 một tiến trình MCP: đăng nhập QR, đọc hoặc tìm hội thoại và gửi tin qua các tool của nó.
 
 > `javis-zalo` dùng API Zalo không chính thức qua `zca-js`. Zalo không hỗ trợ cách
@@ -47,7 +47,7 @@ kết nối đã đăng nhập từ trước tự chuyển sang mà không phả
 
 Nút **Hướng dẫn trên GitHub** trong thẻ Zalo luôn mở trang tài liệu này:
 
-<https://github.com/blogminhquy/javis-os/blob/main/docs/12-zalo.md>
+<https://github.com/thangvd-personal/javis-os-public/blob/main/docs/12-zalo.md>
 
 ## Các tool MCP
 
@@ -269,6 +269,6 @@ hỏi Javis; MCP có thể dùng `zalo_get_messages` cho tin đang đệm hoặc
 
 ## Tham khảo
 
-- [Repository `javis-zalo`](https://github.com/blogminhquy/javis-zalo)
+- [Repository `javis-zalo`](https://github.com/thangvd-personal/javis-zalo-public)
 - [zca-js](https://github.com/RFS-ADRENO/zca-js), thư viện nói chuyện với Zalo bên dưới
 - [Kết nối và phân quyền MCP trong Javis](09-mcp-va-so-lieu.md)

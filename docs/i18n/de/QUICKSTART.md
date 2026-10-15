@@ -12,7 +12,7 @@ Bring Javis OS in wenigen Minuten zum Laufen. Vollständige Anleitungen: [docs/e
 1. hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL**.
 2. Füge diese URL ein:
    ```
-   https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+   https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
    ```
 3. (Optional, für HTTPS + eine Domain) trage dies im Feld **Environment** ein:
    ```

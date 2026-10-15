@@ -17,7 +17,7 @@
 - `config.STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", <server dir>))`. Test set `JAVIS_STATE_DIR` sang temp TRƯỚC khi import module.
 - App trong Docker KHÔNG có docker socket - không tự đổi/lùi image (giữ nguyên).
 - Không làm auto-update nền, không viết updater sidecar Docker.
-- Repo: `blogminhquy/javis-os`. Image GHCR: `ghcr.io/blogminhquy/javis-os`.
+- Repo: `thangvd-personal/javis-os-public`. Image GHCR: `ghcr.io/thangvd-personal/javis-os-public`.
 - Xong toàn bộ + test xanh mới bump VERSION + CHANGELOG + commit + push origin/main.
 
 ---
@@ -960,7 +960,7 @@ Thay khối `if (verUpd) verUpd.onclick = async () => { ... };` (dòng 1411-1444
               rb.style.display = "";
               rb.innerHTML = "<b>Cách lùi về bản cũ (Docker):</b><br>Pin tag phiên bản cũ rồi kéo lại:"
                 + "<br><code>docker compose pull && docker compose up -d</code>"
-                + (prev ? "<br>Hoặc sửa image thành <code>ghcr.io/blogminhquy/javis-os:" + esc(prev) + "</code> rồi Redeploy." : "");
+                + (prev ? "<br>Hoặc sửa image thành <code>ghcr.io/thangvd-personal/javis-os-public:" + esc(prev) + "</code> rồi Redeploy." : "");
             }
             verUpd.disabled = false; return;
           }

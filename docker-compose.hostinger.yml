@@ -7,7 +7,7 @@
 #
 # CÁCH DÙNG:
 #   1) Docker Manager > Compose > URL > dán:
-#      https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+#      https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
 #   2) Ô Environment chỉ còn 4 trường hữu ích:
 #        DOMAIN_NAME, JAVIS_ADMIN_USER, JAVIS_ADMIN_PASSWORD, JAVIS_AUTO_UPDATE.
 #      (JAVIS_AUTO_UPDATE=true thì Javis TỰ cập nhật mỗi ngày, khỏi bấm nút. Bỏ trống thì
@@ -32,7 +32,7 @@
 # ============================================================================
 services:
   javis:
-    image: ghcr.io/blogminhquy/javis-os:latest
+    image: ghcr.io/thangvd-personal/javis-os-public:latest
     # Tên container + tên router/service Traefik đều lấy từ JAVIS_NAME. Bỏ trống = "javis" như cũ.
     # Cài bản THỨ HAI trên cùng VPS thì đặt tên khác (vd javis-shop), nếu không Docker báo tên đã
     # dùng và Traefik có hai router trùng tên nên chỉ lái được về một bản.
@@ -41,7 +41,7 @@ services:
     pull_policy: always
     # Gắn target Hostinger bên trong lệnh chạy để KHÔNG biến nó thành một trường rác
     # trong ô Environment của Docker Manager.
-    command: ["sh", "-c", "JAVIS_DEPLOY_TARGET=hostinger exec python -m uvicorn main:app --app-dir server --host 0.0.0.0 --port 7777"]
+    command: [ "sh", "-c", "JAVIS_DEPLOY_TARGET=hostinger exec python -m uvicorn main:app --app-dir server --host 0.0.0.0 --port 7777" ]
     environment:
       # Chỉ giữ các trường người cài thực sự cần. Cổng/đường dẫn/state/brain đã có
       # mặc định đúng trong Docker image, không cần hiện thành một loạt ô kỹ thuật.
@@ -60,10 +60,10 @@ services:
       - "${JAVIS_HOST_PORT:-7777}:7777"
     labels:
       # Guide (Documentation / Quick start) trong Docker Manager - trỏ docs GitHub.
-      - org.opencontainers.image.documentation=https://github.com/blogminhquy/javis-os/blob/main/docs/README.md
-      - org.opencontainers.image.source=https://github.com/blogminhquy/javis-os
-      - com.hostinger.documentation=https://github.com/blogminhquy/javis-os/blob/main/docs/README.md
-      - com.hostinger.quickstart=https://github.com/blogminhquy/javis-os/blob/main/QUICKSTART.md
+      - org.opencontainers.image.documentation=https://github.com/thangvd-personal/javis-os-public/blob/main/docs/README.md
+      - org.opencontainers.image.source=https://github.com/thangvd-personal/javis-os-public
+      - com.hostinger.documentation=https://github.com/thangvd-personal/javis-os-public/blob/main/docs/README.md
+      - com.hostinger.quickstart=https://github.com/thangvd-personal/javis-os-public/blob/main/QUICKSTART.md
       # Router/service mang TÊN CỦA BẢN (JAVIS_NAME) chứ không đóng cứng "javis": Traefik đặt tên
       # router theo phạm vi toàn máy, hai bản cùng tên router là bản sau đè bản trước và một
       # trong hai tên miền chết. Bỏ trống JAVIS_NAME thì vẫn ra "javis" y như trước.
@@ -80,7 +80,7 @@ services:
       - claude-auth:/home/javis/.claude
       - codex-auth:/home/javis/.codex
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,os,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.getenv('JAVIS_PORT','7777')+'/health',timeout=4).status==200 else 1)"]
+      test: [ "CMD", "python", "-c", "import urllib.request,os,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.getenv('JAVIS_PORT','7777')+'/health',timeout=4).status==200 else 1)" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -113,15 +113,15 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      WATCHTOWER_HTTP_API_ENDPOINTS: update                 # nhận lệnh cập nhật từ nút bấm
-      WATCHTOWER_HTTP_API_TOKEN: javis-update               # khớp WATCHTOWER_TOKEN của app ở trên
+      WATCHTOWER_HTTP_API_ENDPOINTS: update # nhận lệnh cập nhật từ nút bấm
+      WATCHTOWER_HTTP_API_TOKEN: javis-update # khớp WATCHTOWER_TOKEN của app ở trên
       # TỰ tìm bản mới rồi dựng lại, KHÔNG chờ ai bấm nút. Đây là ô Environment thứ TƯ, và là
       # `${...}` duy nhất được thêm vào file này - vì nó là một LỰA CHỌN của người cài, không
       # phải mặc định kỹ thuật: bật lên là Javis tự khởi động lại bất cứ lúc nào có bản mới,
       # cắt ngang việc nền và phiên chat đang chạy. Bỏ trống = tắt, cập nhật bằng nút bấm.
       WATCHTOWER_HTTP_API_PERIODIC_POLLS: ${JAVIS_AUTO_UPDATE:-false}
-      WATCHTOWER_POLL_INTERVAL: 86400                       # 24h, chỉ có tác dụng khi bật ở trên
-      WATCHTOWER_CLEANUP: "true"                            # dọn image cũ sau khi update
+      WATCHTOWER_POLL_INTERVAL: 86400 # 24h, chỉ có tác dụng khi bật ở trên
+      WATCHTOWER_CLEANUP: "true" # dọn image cũ sau khi update
     # KHÔNG gắn nhãn traefik.*: đây là container nội bộ, không có gì để mở ra Internet.
     labels:
       - traefik.enable=false

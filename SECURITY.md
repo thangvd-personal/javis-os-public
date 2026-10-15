@@ -6,7 +6,7 @@ Javis runs an AI brain with full rights on the machine it is installed on, so se
 
 **Please do not open a public issue for a security problem.** Report it privately instead:
 
-1. Open a private report at **[Security → Report a vulnerability](https://github.com/blogminhquy/javis-os/security/advisories/new)** on this repository. Only you and the maintainers can see it.
+1. Open a private report at **[Security → Report a vulnerability](https://github.com/thangvd-personal/javis-os-public/security/advisories/new)** on this repository. Only you and the maintainers can see it.
 2. If that page is not available, open a normal issue that says only "I have a security report, please give me a private contact", with no details, and the maintainer will reply with one.
 
 Useful things to include: the version (shown under **Settings → Updates**, or in the `VERSION` file), how Javis is deployed (Docker, VPS, local), the steps to reproduce, and what an attacker could do.

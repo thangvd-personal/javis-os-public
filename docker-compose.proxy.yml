@@ -10,7 +10,7 @@
 #
 # CÀI (làm một lần cho cả VPS):
 #   docker network create javis-web
-#   curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.proxy.yml
+#   curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.proxy.yml
 #   docker compose -f docker-compose.proxy.yml -p javis-proxy up -d
 #
 # SAU ĐÓ mỗi bản Javis chạy ở THƯ MỤC RIÊNG với .env riêng (xem docker-compose.multi.yml):
@@ -33,7 +33,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"        # HTTP/3
+      - "443:443/udp" # HTTP/3
     environment:
       # Chỉ nhìn các container nằm trên mạng này -> không vô tình phơi container khác của VPS ra Internet.
       CADDY_INGRESS_NETWORKS: javis-web
@@ -42,7 +42,7 @@ services:
       # rồi trỏ CADDY_DOCKER_CADDYFILE_PATH vào nó. Không đặt cũng chạy và vẫn tự gia hạn.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - proxy-data:/data       # chứng chỉ đã cấp - giữ qua restart, không xin lại (tránh cạn rate-limit)
+      - proxy-data:/data # chứng chỉ đã cấp - giữ qua restart, không xin lại (tránh cạn rate-limit)
       - proxy-config:/config
     networks:
       - javis-web

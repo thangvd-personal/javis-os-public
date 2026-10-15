@@ -19,7 +19,7 @@ Phạm vi đã chốt với chủ dự án:
 
 Đã có sẵn (không làm lại từ đầu):
 - `GET /version` (server/main.py ~3688): đọc `VERSION` local, so với
-  `raw.githubusercontent.com/blogminhquy/javis-os/main/VERSION`, so kiểu semver,
+  `raw.githubusercontent.com/thangvd-personal/javis-os-public/main/VERSION`, so kiểu semver,
   trả `{current, latest, update_available, mode, can_self_update, error}`.
 - `POST /update` (~3712): theo mode. Docker gọi Watchtower `http://watchtower:8080/v1/update`
   (chỉ khi Watchtower đang chạy); Windows ghi `_selfupdate.bat` (git pull + relaunch)

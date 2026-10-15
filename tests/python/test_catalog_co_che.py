@@ -17,7 +17,7 @@ không bao giờ bị dọn đi, không phụ thuộc vào việc app còn ship 
 ra cơ chế đang được kiểm là gì - đọc test là hiểu luật, không phải đi tra một connector.
 
 Phần dữ liệu (khuôn `n8n` có đúng url_template không, 330 tool của Hostinger xếp đúng nhóm
-chưa) đi theo dữ liệu sang repo kho `blogminhquy/javis-store`, nơi `tools/kiem-tra.py` chạy
+chưa) đi theo dữ liệu sang repo kho `thangvd-personal/javis-store-public`, nơi `tools/kiem-tra.py` chạy
 trên mọi Pull Request. Giữ bản chụp của chúng ở đây chỉ là tự trấn an: kho đổi được mà không
 cần bản Javis mới, nên test ở repo này không canh nổi thứ người dùng thật sự cài.
 """

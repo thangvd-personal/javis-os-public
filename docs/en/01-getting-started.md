@@ -188,7 +188,7 @@ This lives under **System → Settings → Updates**. The Javis OS panel at the 
 **Why one machine has the button and another does not.** Before 0.55.56 Watchtower sat inside `profiles: ["update"]`, so the habitual `docker compose up -d` **did not start it**, and the Hostinger stack shipped without it. A machine still missing the button is running from one of those older files. Fetch the new one and bring it up again, in the folder holding the compose file:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml
 docker compose up -d --pull always
 ```
 
@@ -213,7 +213,7 @@ The running step shows ⏳, finished steps show ✅. During the run the status l
 Javis keeps a way back and will not strand you on a broken build:
 
 - **Automatic rollback:** if the new build fails the health check, Javis returns to the old one. The progress bar shows "↩ New build failed, rolling back…", then "↩ New build failed, **rolled back automatically**."
-- **Manual rollback on Docker:** if the version still has not changed after a while, Javis reports "⚠ The new build has not come up - it may have failed." and shows a **How to roll back on Docker** block with `docker compose pull && docker compose up -d`, plus a hint to pin `ghcr.io/blogminhquy/javis-os:<old-version>` and Redeploy.
+- **Manual rollback on Docker:** if the version still has not changed after a while, Javis reports "⚠ The new build has not come up - it may have failed." and shows a **How to roll back on Docker** block with `docker compose pull && docker compose up -d`, plus a hint to pin `ghcr.io/thangvd-personal/javis-os-public:<old-version>` and Redeploy.
 - **Other errors:** the panel names the specific error and points at `update.log`. If the server does not come back within roughly 3 minutes, the panel says "The server has not come back after about 3 minutes - try reloading the page."
 
 Below the update panel is the version changelog: what each release added, paginated, with the installed version marked.

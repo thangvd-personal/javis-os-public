@@ -10,7 +10,7 @@ Tham gia là đồng ý theo [Quy tắc ứng xử](../../../CODE_OF_CONDUCT.md)
 
 ## Góp sức theo cách nào
 
-- **Báo lỗi** hoặc **đề xuất tính năng**: mở [Issue](https://github.com/blogminhquy/javis-os/issues/new/choose) theo mẫu có sẵn.
+- **Báo lỗi** hoặc **đề xuất tính năng**: mở [Issue](https://github.com/thangvd-personal/javis-os-public/issues/new/choose) theo mẫu có sẵn.
 - **Dịch** giao diện, tài liệu hoặc kho Kết nối sang thứ tiếng của bạn (xem mục [Dịch thuật](#dịch-thuật)).
 - **Thêm kết nối** vào kho Kết nối, một **plugin** (tool Python mọi bộ não gọi được) hay một **skill** (bí quyết viết trong file markdown).
 - **Sửa code.** Đọc [ARCHITECTURE.md](../../../ARCHITECTURE.md) trước (tiếng Anh). Người nước ngoài dùng [docs/dev/GLOSSARY.md](../../dev/GLOSSARY.md) để đọc tên hàm tiếng Việt.
@@ -47,7 +47,7 @@ in ra dòng `ok`/`FAIL`; chạy thẳng `python tests/python/test_<tên>.py` đ�
 
 1. **Fork** repo, tạo nhánh đặt tên theo việc đang làm (`fix-mobile-zoom`, `add-spanish-ui`).
 2. Code rồi tự chạy test. PR chưa chạy test dễ vướng lỗi vặt mà CI mới bắt được.
-3. Mở PR nhắm vào `main` của `blogminhquy/javis-os`. Mẫu PR hỏi **vì sao** cần thay đổi, không
+3. Mở PR nhắm vào `main` của `thangvd-personal/javis-os-public`. Mẫu PR hỏi **vì sao** cần thay đổi, không
    chỉ **cái gì** đã đổi: cái gì thì đọc diff là thấy.
 4. CI phải xanh. Người giữ repo tự xem từng PR; PR từ bên ngoài không có merge tự động.
 

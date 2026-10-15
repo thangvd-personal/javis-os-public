@@ -2,7 +2,7 @@
 
 Mốc A2 của lộ trình [agent scope](../superpowers/specs/2026-10-08-resonance-agent-scope-roadmap.md): trợ lý thức vì lý do cụ thể, ngủ khi chờ, không gọi model vô ích.
 
-**Trạng thái: đã phát hành 0.88.0 (09/10/2026). Hiệu năng VPS CHƯA ĐO.** PR #593 squash vào `main` thành `c101d108e398121315423fb73bff412c6e178392` (cây trùng head đã kiểm `12d349f4`). CI và build Docker xanh; image `ghcr.io/blogminhquy/javis-os:0.88.0` (`sha256:50eb0a2208d6...`). Không kết luận VPS hết chậm khi chưa đo trên máy thật.
+**Trạng thái: đã phát hành 0.88.0 (09/10/2026). Hiệu năng VPS CHƯA ĐO.** PR #593 squash vào `main` thành `c101d108e398121315423fb73bff412c6e178392` (cây trùng head đã kiểm `12d349f4`). CI và build Docker xanh; image `ghcr.io/thangvd-personal/javis-os-public:0.88.0` (`sha256:50eb0a2208d6...`). Không kết luận VPS hết chậm khi chưa đo trên máy thật.
 
 ## Mã và commit
 

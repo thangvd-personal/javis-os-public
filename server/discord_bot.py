@@ -137,7 +137,7 @@ class DiscordBot(HangLuot):
     # ---- HTTP -------------------------------------------------------------------------
     def _headers(self) -> dict:
         return {"Authorization": f"Bot {self.token}",
-                "User-Agent": "DiscordBot (https://github.com/blogminhquy/javis-os, 1.0)"}
+                "User-Agent": "DiscordBot (https://github.com/thangvd-personal/javis-os-public, 1.0)"}
 
     async def _api(self, client, method, path, **kw):
         """One REST call. Returns (status, json-or-{}). A 429 waits the time Discord asks for

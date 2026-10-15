@@ -33,7 +33,7 @@ prompt = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
 check("catalog chạy bản CLI riêng javis-zalo ghim theo tag phát hành, dùng cache trước",
       zalo["command"] == "npx"
       and zalo["args"] == ["-y", "--prefer-offline", "--allow-remote=all", zalo_cli.CLI_PACKAGE, "mcp", "start"]
-      and zalo_cli.CLI_PACKAGE.startswith("https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v"))
+      and zalo_cli.CLI_PACKAGE.startswith("https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v"))
 check("kết nối Zalo đã đăng nhập bằng bản 1.6.2 tự sang bản mới (lenh_cu)",
       {"command": "npx", "args": ["-y", "zalo-agent-cli@1.6.2", "mcp", "start"]} in zalo["lenh_cu"])
 
@@ -66,11 +66,11 @@ check("hai plugin Zalo cũ đã được gỡ",
       and not (ROOT / "system/plugins/zalo-send/plugin.py").exists()
       and not (ROOT / "system/plugins/zalo-send/plugin.yaml").exists())
 
-guide_url = "https://github.com/blogminhquy/javis-os/blob/main/docs/12-zalo.md"
+guide_url = "https://github.com/thangvd-personal/javis-os-public/blob/main/docs/12-zalo.md"
 check("catalog trỏ nút hướng dẫn đến doc GitHub", zalo["auth"]["guide_url"] == guide_url)
 check("doc nêu đủ mười một tool và link repo javis-zalo",
       all(name in doc for name in expected_read | {"zalo_mark_read", "zalo_send_message", "zalo_review_join_requests"})
-      and "https://github.com/blogminhquy/javis-zalo" in doc)
+      and "https://github.com/thangvd-personal/javis-zalo-public" in doc)
 check("prompt cho gửi trực tiếp, không phụ thuộc listener/tool cũ",
       "do NOT demand a listener be" in prompt
       and 'do NOT check any "currently listening"' in prompt

@@ -80,10 +80,10 @@ Các file tài liệu ở checkout chính hiện là bản làm việc cục b�
 
 ## Nguồn phát hành và nghiệm thu
 
-- [PR #587](https://github.com/blogminhquy/javis-os/pull/587)
-- [CI sau merge](https://github.com/blogminhquy/javis-os/actions/runs/37726542811)
-- [Build/push 0.86.0](https://github.com/blogminhquy/javis-os/actions/runs/37726542815)
-- [Hồ sơ pilot 5 tại commit bằng chứng](https://github.com/blogminhquy/javis-os/blob/450dd095/docs/dev/resonance-mvp-e2e-pilot-5.json)
+- [PR #587](https://github.com/thangvd-personal/javis-os-public/pull/587)
+- [CI sau merge](https://github.com/thangvd-personal/javis-os-public/actions/runs/37726542811)
+- [Build/push 0.86.0](https://github.com/thangvd-personal/javis-os-public/actions/runs/37726542815)
+- [Hồ sơ pilot 5 tại commit bằng chứng](https://github.com/thangvd-personal/javis-os-public/blob/450dd095/docs/dev/resonance-mvp-e2e-pilot-5.json)
 - Review nội dung độc lập (`exports/reviews/PR-579-pilot5-content-review.md`, ngoài git, chỉ có trên máy chủ dự án)
 - Review sau phát hành (`exports/reviews/Resonance-0860-post-release-review.md`, ngoài git, chỉ có trên máy chủ dự án)
 - Trang theo dõi mới (`exports/javis-resonance-tien-do.html`, ngoài git, chỉ có trên máy chủ dự án)

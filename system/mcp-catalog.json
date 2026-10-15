@@ -25,25 +25,192 @@
         "guide_url": "https://docs.composio.dev/docs/composio-connect"
       },
       "tool_meta": {
-        "read": ["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_WAIT_FOR_CONNECTIONS"],
-        "write": ["COMPOSIO_MANAGE_CONNECTIONS"],
-        "danger": ["COMPOSIO_MULTI_EXECUTE_TOOL", "COMPOSIO_REMOTE_BASH_TOOL", "COMPOSIO_REMOTE_WORKBENCH"]
+        "read": [
+          "COMPOSIO_SEARCH_TOOLS",
+          "COMPOSIO_GET_TOOL_SCHEMAS",
+          "COMPOSIO_WAIT_FOR_CONNECTIONS"
+        ],
+        "write": [
+          "COMPOSIO_MANAGE_CONNECTIONS"
+        ],
+        "danger": [
+          "COMPOSIO_MULTI_EXECUTE_TOOL",
+          "COMPOSIO_REMOTE_BASH_TOOL",
+          "COMPOSIO_REMOTE_WORKBENCH"
+        ]
       },
       "call_rules": {
         "COMPOSIO_MULTI_EXECUTE_TOOL": {
-          "items": "tools", "key": "tool_slug", "else": "danger",
-          "read_tokens": ["LIST", "LISTS", "GET", "FETCH", "SEARCH", "FIND", "READ", "QUERY", "RETRIEVE", "DESCRIBE", "VIEW", "COUNT", "LOOKUP", "DOWNLOAD", "EXPORT"],
-          "write_tokens": ["CREATE", "UPDATE", "PATCH", "DELETE", "REMOVE", "SEND", "POST", "ADD", "INSERT", "UPLOAD", "MOVE", "TRASH", "UNTRASH", "REPLY", "FORWARD", "SET", "SHARE", "ARCHIVE", "PUBLISH", "EXECUTE", "CANCEL", "APPROVE", "MODIFY", "EDIT", "WRITE", "PUT", "MARK", "SUBSCRIBE", "UNSUBSCRIBE", "INVITE", "ACCEPT", "DECLINE", "IMPORT", "DUPLICATE", "COPY", "RENAME", "CLEAR", "EMPTY", "STAR", "UNSTAR", "WATCH", "RESTORE", "PIN", "UNPIN", "LIKE", "UNLIKE", "FOLLOW", "UNFOLLOW", "BLOCK", "UNBLOCK", "CLOSE", "REOPEN", "ASSIGN", "TRANSFER", "PAY", "CHARGE", "REFUND", "GENERATE", "TOGGLE", "ENABLE", "DISABLE", "RESET", "REVOKE", "GRANT", "SAVE", "SUBMIT", "REACT", "HIDE", "UNHIDE", "INVOKE", "DEPLOY", "PUSH", "COMMIT", "APPLY", "REPLACE", "UPSERT", "CLAIM", "RESPOND", "JOIN", "LEAVE", "KICK", "BAN", "MUTE", "UNMUTE", "RSVP", "TERMINATE", "KILL", "DESTROY", "PURGE", "WIPE", "REBOOT", "RESTART", "SUSPEND", "RESUME", "ACTIVATE", "DEACTIVATE", "LOCK", "UNLOCK", "VOTE", "DISMISS", "RESOLVE", "COMPLETE", "CHECKOUT", "PURCHASE", "BUY", "SELL", "WITHDRAW", "DEPOSIT", "NOTIFY", "BROADCAST", "ANNOUNCE", "RELEASE", "PROMOTE", "DEMOTE", "CONFIRM", "ATTACH", "DETACH", "LINK", "UNLINK", "CONNECT", "DISCONNECT", "REGISTER", "UNREGISTER", "SIGN", "UNDO", "REVERT", "ROLLBACK", "EXTEND", "RENEW", "ENROLL", "UNENROLL", "PREPEND", "APPEND"]
+          "items": "tools",
+          "key": "tool_slug",
+          "else": "danger",
+          "read_tokens": [
+            "LIST",
+            "LISTS",
+            "GET",
+            "FETCH",
+            "SEARCH",
+            "FIND",
+            "READ",
+            "QUERY",
+            "RETRIEVE",
+            "DESCRIBE",
+            "VIEW",
+            "COUNT",
+            "LOOKUP",
+            "DOWNLOAD",
+            "EXPORT"
+          ],
+          "write_tokens": [
+            "CREATE",
+            "UPDATE",
+            "PATCH",
+            "DELETE",
+            "REMOVE",
+            "SEND",
+            "POST",
+            "ADD",
+            "INSERT",
+            "UPLOAD",
+            "MOVE",
+            "TRASH",
+            "UNTRASH",
+            "REPLY",
+            "FORWARD",
+            "SET",
+            "SHARE",
+            "ARCHIVE",
+            "PUBLISH",
+            "EXECUTE",
+            "CANCEL",
+            "APPROVE",
+            "MODIFY",
+            "EDIT",
+            "WRITE",
+            "PUT",
+            "MARK",
+            "SUBSCRIBE",
+            "UNSUBSCRIBE",
+            "INVITE",
+            "ACCEPT",
+            "DECLINE",
+            "IMPORT",
+            "DUPLICATE",
+            "COPY",
+            "RENAME",
+            "CLEAR",
+            "EMPTY",
+            "STAR",
+            "UNSTAR",
+            "WATCH",
+            "RESTORE",
+            "PIN",
+            "UNPIN",
+            "LIKE",
+            "UNLIKE",
+            "FOLLOW",
+            "UNFOLLOW",
+            "BLOCK",
+            "UNBLOCK",
+            "CLOSE",
+            "REOPEN",
+            "ASSIGN",
+            "TRANSFER",
+            "PAY",
+            "CHARGE",
+            "REFUND",
+            "GENERATE",
+            "TOGGLE",
+            "ENABLE",
+            "DISABLE",
+            "RESET",
+            "REVOKE",
+            "GRANT",
+            "SAVE",
+            "SUBMIT",
+            "REACT",
+            "HIDE",
+            "UNHIDE",
+            "INVOKE",
+            "DEPLOY",
+            "PUSH",
+            "COMMIT",
+            "APPLY",
+            "REPLACE",
+            "UPSERT",
+            "CLAIM",
+            "RESPOND",
+            "JOIN",
+            "LEAVE",
+            "KICK",
+            "BAN",
+            "MUTE",
+            "UNMUTE",
+            "RSVP",
+            "TERMINATE",
+            "KILL",
+            "DESTROY",
+            "PURGE",
+            "WIPE",
+            "REBOOT",
+            "RESTART",
+            "SUSPEND",
+            "RESUME",
+            "ACTIVATE",
+            "DEACTIVATE",
+            "LOCK",
+            "UNLOCK",
+            "VOTE",
+            "DISMISS",
+            "RESOLVE",
+            "COMPLETE",
+            "CHECKOUT",
+            "PURCHASE",
+            "BUY",
+            "SELL",
+            "WITHDRAW",
+            "DEPOSIT",
+            "NOTIFY",
+            "BROADCAST",
+            "ANNOUNCE",
+            "RELEASE",
+            "PROMOTE",
+            "DEMOTE",
+            "CONFIRM",
+            "ATTACH",
+            "DETACH",
+            "LINK",
+            "UNLINK",
+            "CONNECT",
+            "DISCONNECT",
+            "REGISTER",
+            "UNREGISTER",
+            "SIGN",
+            "UNDO",
+            "REVERT",
+            "ROLLBACK",
+            "EXTEND",
+            "RENEW",
+            "ENROLL",
+            "UNENROLL",
+            "PREPEND",
+            "APPEND"
+          ]
         },
         "COMPOSIO_MANAGE_CONNECTIONS": {
-          "items": "toolkits", "key": "action", "default": "add", "else": "write",
-          "read_values": ["list"]
+          "items": "toolkits",
+          "key": "action",
+          "default": "add",
+          "else": "write",
+          "read_values": [
+            "list"
+          ]
         }
       },
       "default_perm": "readonly",
       "risk": "Composio là cổng đa ứng dụng: mọi hành động lên app thật (đọc mail, gửi mail, sửa sheet, tạo issue...) đều chạy qua MỘT tool chung.\nJavis soi TỪNG lệnh bên trong theo tên lệnh: có động từ đọc (LIST, GET, FETCH, SEARCH...) là đọc, còn lại coi là ghi.\n\nMức Chỉ đọc: đọc dữ liệu các app đã nối (xem lịch, đọc mail, liệt kê file) và xem tài khoản đã nối. Lệnh nào không chắc là đọc thì bị chặn.\n\nMức Ghi nháp: thêm quyền nối app mới (Composio đưa link đăng nhập, bạn tự đăng nhập, Javis không thấy mật khẩu).\n\nMức Toàn quyền: Javis chạy được MỌI hành động của các app bạn đã nối qua Composio, kể cả gửi tin, sửa và xoá dữ liệu thật.\nChỉ nâng khi thật sự cần; phạm vi đúng bằng quyền bạn đã cấp cho từng app bên Composio."
     },
-            {
+    {
       "id": "zalo",
       "name": "Zalo Agent MCP",
       "icon": "/static/logos/zalo.png",
@@ -52,23 +219,84 @@
       "status": "beta",
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "--prefer-offline", "--allow-remote=all", "https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v1.4.0", "mcp", "start"],
-      "lenh_cu": [
-        { "command": "npx", "args": ["-y", "zalo-agent-cli", "mcp", "start"] },
-        { "command": "npx", "args": ["-y", "zalo-agent-cli@1.6.2", "mcp", "start"] },
-        { "command": "npx", "args": ["-y", "--prefer-offline", "https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v1.0.0", "mcp", "start"] },
-        { "command": "npx", "args": ["-y", "--prefer-offline", "https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v1.1.0", "mcp", "start"] },
-        { "command": "npx", "args": ["-y", "--prefer-offline", "https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v1.2.0", "mcp", "start"] },
-        { "command": "npx", "args": ["-y", "--prefer-offline", "https://codeload.github.com/blogminhquy/javis-zalo/tar.gz/refs/tags/v1.3.0", "mcp", "start"] }
+      "args": [
+        "-y",
+        "--prefer-offline",
+        "--allow-remote=all",
+        "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v1.4.0",
+        "mcp",
+        "start"
       ],
-      "ngoai_le_ban_chinh_thuc": "Zalo KHÔNG đi theo bản gốc nữa (chủ repo chốt 2026-10-05): Javis chạy bản CLI riêng javis-zalo (github.com/blogminhquy/javis-zalo), cài từ tarball của tag phát hành, chỉ thư viện zca-js bên dưới đi theo bản chính thức trên npm. Ghim theo tag vì đăng nhập QR (zalo_login.py), gửi ảnh/tag/ghi chú nhóm (zalo_cli.py) và gói javis.zalo đọc thẳng định dạng của đúng bản đó. Ba chỗ ghim (ở đây, zalo_cli.py, zalo_login.py) phải luôn trùng nhau; --prefer-offline vì tag không đổi nên khỏi hỏi lại GitHub mỗi lần khởi động.",
-      "requires": { "node": ">=20" },
+      "lenh_cu": [
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "zalo-agent-cli",
+            "mcp",
+            "start"
+          ]
+        },
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "zalo-agent-cli@1.6.2",
+            "mcp",
+            "start"
+          ]
+        },
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "--prefer-offline",
+            "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v1.0.0",
+            "mcp",
+            "start"
+          ]
+        },
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "--prefer-offline",
+            "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v1.1.0",
+            "mcp",
+            "start"
+          ]
+        },
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "--prefer-offline",
+            "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v1.2.0",
+            "mcp",
+            "start"
+          ]
+        },
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "--prefer-offline",
+            "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/refs/tags/v1.3.0",
+            "mcp",
+            "start"
+          ]
+        }
+      ],
+      "ngoai_le_ban_chinh_thuc": "Zalo KHÔNG đi theo bản gốc nữa (chủ repo chốt 2026-10-05): Javis chạy bản CLI riêng javis-zalo (github.com/thangvd-personal/javis-zalo-public), cài từ tarball của tag phát hành, chỉ thư viện zca-js bên dưới đi theo bản chính thức trên npm. Ghim theo tag vì đăng nhập QR (zalo_login.py), gửi ảnh/tag/ghi chú nhóm (zalo_cli.py) và gói javis.zalo đọc thẳng định dạng của đúng bản đó. Ba chỗ ghim (ở đây, zalo_cli.py, zalo_login.py) phải luôn trùng nhau; --prefer-offline vì tag không đổi nên khỏi hỏi lại GitHub mỗi lần khởi động.",
+      "requires": {
+        "node": ">=20"
+      },
       "isolate_home": true,
       "auth": {
         "type": "qr",
         "fields": [],
         "guide": "Cần Node.js 20+. Bấm Kết nối, quét QR bằng app Zalo rồi dùng trực tiếp 12 tool MCP của javis-zalo. Không còn listener/webhook/luật Zalo riêng của Javis.",
-        "guide_url": "https://github.com/blogminhquy/javis-os/blob/main/docs/12-zalo.md"
+        "guide_url": "https://github.com/thangvd-personal/javis-os-public/blob/main/docs/12-zalo.md"
       },
       "tool_meta": {
         "read": [
@@ -81,16 +309,24 @@
           "zalo_search_threads",
           "zalo_view_media"
         ],
-        "write": ["zalo_mark_read"],
-        "danger": ["zalo_send_message", "zalo_send_file", "zalo_review_join_requests"]
+        "write": [
+          "zalo_mark_read"
+        ],
+        "danger": [
+          "zalo_send_message",
+          "zalo_send_file",
+          "zalo_review_join_requests"
+        ]
       },
       "default_perm": "full",
       "companion_pack": "javis.zalo",
       "purge_warning": "Xoá kết nối này là mất luôn phiên đăng nhập QR. Muốn dùng lại phải mở app Zalo trên điện thoại quét mã một lần nữa.",
       "risk": "Connector này MẶC ĐỊNH ở mức TOÀN QUYỀN, tức tool gửi tin đang bật. Muốn chặn gửi, hãy hạ xuống Ghi nháp hoặc Chỉ đọc.\n\njavis-zalo dùng API Zalo không chính thức qua zca-js. Tài khoản CÓ THỂ bị hạn chế hoặc KHOÁ; khuyến nghị dùng tài khoản phụ và không tự động gửi hàng loạt.",
-      "rate_limit": { "calls_per_min": 20 }
+      "rate_limit": {
+        "calls_per_min": 20
+      }
     },
-            {
+    {
       "id": "botcake",
       "name": "Botcake",
       "icon": "/static/logos/botcake.png",
@@ -119,11 +355,26 @@
       "validate": {
         "tool": "botcake_tags",
         "args": {},
-        "label_paths": ["page.name", "data.page_name", "page_name", "name"]
+        "label_paths": [
+          "page.name",
+          "data.page_name",
+          "page_name",
+          "name"
+        ]
       },
       "tool_meta": {
-        "write": ["botcake_send_flow", "botcake_send_content", "botcake_keyword_create", "botcake_keyword_update", "botcake_customer_fields_set", "botcake_upload_media"],
-        "danger": ["botcake_send_flow", "botcake_send_content"]
+        "write": [
+          "botcake_send_flow",
+          "botcake_send_content",
+          "botcake_keyword_create",
+          "botcake_keyword_update",
+          "botcake_customer_fields_set",
+          "botcake_upload_media"
+        ],
+        "danger": [
+          "botcake_send_flow",
+          "botcake_send_content"
+        ]
       },
       "risk": "Mức Chỉ đọc (mặc định) chỉ xem khách hàng, tag và flow.\n\nMức Toàn quyền cho phép Javis GỬI TIN THẬT tới khách hàng qua chatbot, bằng flow có sẵn hoặc nội dung tự soạn. Tin đã gửi không rút lại được.\n\nChỉ cần xem dữ liệu thì giữ mức Chỉ đọc.",
       "default_perm": "readonly"
@@ -140,9 +391,18 @@
       "transport": "stdio",
       "command": "uvx",
       "_args_doc": "Ghim mcp<2 vì mcp-google-sheets khai `mcp>=1.8.0` KHÔNG chặn trần, mà mcp 2.0 đã bỏ đường dẫn mcp.server.fastmcp → uvx giải phụ thuộc tươi mỗi lần chạy nên luôn kéo mcp 2.x và gói chết ngay dòng import đầu tiên (ModuleNotFoundError), trước cả khi nói gì qua stdout. Đã tái hiện và xác nhận fix 2026-08-16.",
-      "args": ["--with", "mcp<2", "mcp-google-sheets@latest"],
+      "args": [
+        "--with",
+        "mcp<2",
+        "mcp-google-sheets@latest"
+      ],
       "lenh_cu": [
-        { "command": "uvx", "args": ["mcp-google-sheets@latest"] }
+        {
+          "command": "uvx",
+          "args": [
+            "mcp-google-sheets@latest"
+          ]
+        }
       ],
       "auth": {
         "type": "apikey",
@@ -190,11 +450,22 @@
       "status": "beta",
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-server-gsc@latest"],
-      "lenh_cu": [
-        { "command": "npx", "args": ["-y", "mcp-server-gsc"] }
+      "args": [
+        "-y",
+        "mcp-server-gsc@latest"
       ],
-      "requires": { "node": ">=18" },
+      "lenh_cu": [
+        {
+          "command": "npx",
+          "args": [
+            "-y",
+            "mcp-server-gsc"
+          ]
+        }
+      ],
+      "requires": {
+        "node": ">=18"
+      },
       "auth": {
         "type": "apikey",
         "fields": [
@@ -223,16 +494,31 @@
       "status": "beta",
       "transport": "stdio",
       "command": "uvx",
-      "args": ["workspace-mcp@latest", "--tool-tier", "core"],
+      "args": [
+        "workspace-mcp@latest",
+        "--tool-tier",
+        "core"
+      ],
       "lenh_cu": [
-        { "command": "uvx", "args": ["workspace-mcp", "--tool-tier", "core"] }
+        {
+          "command": "uvx",
+          "args": [
+            "workspace-mcp",
+            "--tool-tier",
+            "core"
+          ]
+        }
       ],
       "_env_doc": "workspace-mcp nhận Client ID + Secret nên chạy luồng OAuth 'confidential', mà chỗ nó hứng kết quả đăng nhập là http://localhost:8000/oauth2callback - HTTP trần. Thư viện oauthlib mặc định NÉM InsecureTransportError với http, nên thiếu biến này là bấm đồng ý xong quay về vẫn lỗi, không tài nào đăng nhập xong - đúng kiểu bế tắc mà hướng dẫn không nói ra được. README upstream khai biến này 'required'; đây là hằng số kỹ thuật của package, không phải thứ bắt user gõ. An toàn vì callback chỉ chạy trên loopback của chính máy đó.",
-      "env": { "OAUTHLIB_INSECURE_TRANSPORT": "1" },
+      "env": {
+        "OAUTHLIB_INSECURE_TRANSPORT": "1"
+      },
       "_needs_local_browser_doc": "workspace-mcp tự chạy OAuth với callback CỨNG http://localhost:8000/oauth2callback - chỉ sống khi trình duyệt và server Javis là CÙNG MỘT MÁY. Truy cập Javis qua domain public là Google redirect về localhost CỦA NGƯỜI DÙNG rồi chết ERR_CONNECTION_REFUSED (issue #112). Cờ này cho /connect/add chặn kèm lời giải thích (can_force) thay vì để user đâm vào ngõ cụt; VPS thì chỉ sang thẻ Lịch và Gmail riêng - hai thẻ đó đi qua OAuth của chính Javis nên chạy được sau proxy.",
       "needs_local_browser": true,
       "_cred_dir_doc": "workspace-mcp tự chạy luồng OAuth của nó và cache token ra đĩa, mặc định ~/.google_workspace_mcp/credentials - NGOÀI tầm với của Javis. Để mặc định thì mọi tài khoản dùng chung một kho và xoá kết nối trong Javis không dọn được gì: token thiếu quyền là thiếu vĩnh viễn, cài lại chục lần cũng đọc lại đúng file cũ. Trỏ mỗi connection vào một thư mục riêng để xoá kết nối là token đi theo, lần gọi tool sau server tự mở lại màn đăng nhập Google với đúng bộ quyền hiện hành.",
-      "cred_dir": { "env": "WORKSPACE_MCP_CREDENTIALS_DIR" },
+      "cred_dir": {
+        "env": "WORKSPACE_MCP_CREDENTIALS_DIR"
+      },
       "auth": {
         "type": "apikey",
         "fields": [
@@ -259,22 +545,63 @@
         "guide": "Kết nối này chạy TRÊN MÁY CÀI JAVIS: lần đầu gọi tool Google, trình duyệt của chính máy đó\nmở ra để bạn bấm đồng ý. Máy không có màn hình (VPS) thì dùng hai thẻ Lịch và Gmail riêng,\nhai thẻ đó đăng nhập gọn trong dashboard.\n\nLàm 1 lần, khoảng 10 phút:\n1. Vào console.cloud.google.com tạo project mới, hoặc dùng lại project đã tạo cho thẻ Lịch/Gmail.\n2. Bật API cho từng dịch vụ muốn dùng. Bốn cái cơ bản: Gmail API, Google Calendar API,\nGoogle Drive API, Google Docs API.\nMuốn Javis đụng tới Sheets, Slides, Forms, Danh bạ, Việc cần làm thì bật thêm Google Sheets API,\nGoogle Slides API, Google Forms API, People API, Google Tasks API.\nQuên bật cái nào thì đúng nhóm tool đó báo lỗi, phần còn lại vẫn chạy bình thường.\n3. Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users.\nBỏ bước này là Google chặn ngay lúc đăng nhập.\n4. Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app).\nLoại này KHÔNG phải khai URI chuyển hướng nào cả - khác thẻ Lịch/Gmail, thấy trống là đúng.\n5. Tải file JSON của client rồi kéo thả vào ô bên dưới (tự điền Client ID + Secret),\nhoặc copy tay hai giá trị đó.\n6. Điền luôn ô email Google rồi bấm Kết nối.\n\nLần đầu Javis gọi tool Google, trình duyệt trên máy chạy Javis mở ra. Gặp cảnh báo 'ứng dụng chưa\nđược xác minh' thì bấm Nâng cao rồi Tiếp tục, vì đây là app của chính bạn. Nhớ TICK HẾT các ô\nquyền: bỏ ô nào là đúng nhóm tool đó chết.",
         "guide_url": "https://github.com/taylorwilsdon/google_workspace_mcp",
         "steps": [
-          { "text": "TRƯỚC KHI LÀM: kết nối chạy trên chính máy cài Javis, lần đầu gọi tool nó mở trình duyệt CỦA MÁY ĐÓ để bạn bấm đồng ý. Javis trên VPS không màn hình thì bỏ thẻ này, dùng hai thẻ Google Calendar và Gmail riêng, hai thẻ đó đăng nhập gọn trong dashboard." },
-          { "text": "Vào Google Cloud tạo một project mới, hoặc dùng lại project bạn đã tạo cho thẻ Lịch/Gmail.", "link": "https://console.cloud.google.com/projectcreate", "link_label": "Tạo project" },
-          { "text": "Bật API cho từng dịch vụ bạn muốn dùng. Bốn cái cơ bản: Gmail API, Google Calendar API, Google Drive API, Google Docs API. Muốn Javis đụng tới Sheets, Slides, Forms, Danh bạ hay Việc cần làm thì bật thêm Google Sheets API, Google Slides API, Google Forms API, People API, Google Tasks API. Quên bật cái nào thì đúng nhóm tool đó báo lỗi, phần còn lại vẫn chạy.", "link": "https://console.cloud.google.com/apis/library", "link_label": "Mở thư viện API" },
-          { "text": "Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users. Bỏ bước này là Google chặn ngay lúc đăng nhập.", "link": "https://console.cloud.google.com/auth/audience", "link_label": "Mở màn hình đồng ý" },
-          { "text": "Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app). Loại này KHÔNG phải khai URI chuyển hướng nào cả - khác thẻ Lịch/Gmail, nên thấy phần đó trống là đúng, đừng đi tìm.", "link": "https://console.cloud.google.com/apis/credentials/oauthclient", "link_label": "Tạo OAuth client" },
-          { "text": "Tải file JSON của client rồi kéo thả vào ô bên dưới, Javis tự điền Client ID + Secret. Hoặc copy tay hai giá trị đó vào hai ô." },
-          { "text": "Điền luôn ô email Google rồi bấm Kết nối. Bỏ trống ô email thì mỗi lần gọi tool, server lại hỏi ngược xem dùng tài khoản nào." },
-          { "text": "Lần đầu Javis gọi tool Google, trình duyệt trên máy chạy Javis mở ra. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục, vì đây là app của chính bạn. Nhớ TICK HẾT các ô quyền, bỏ ô nào là đúng nhóm tool đó chết." }
+          {
+            "text": "TRƯỚC KHI LÀM: kết nối chạy trên chính máy cài Javis, lần đầu gọi tool nó mở trình duyệt CỦA MÁY ĐÓ để bạn bấm đồng ý. Javis trên VPS không màn hình thì bỏ thẻ này, dùng hai thẻ Google Calendar và Gmail riêng, hai thẻ đó đăng nhập gọn trong dashboard."
+          },
+          {
+            "text": "Vào Google Cloud tạo một project mới, hoặc dùng lại project bạn đã tạo cho thẻ Lịch/Gmail.",
+            "link": "https://console.cloud.google.com/projectcreate",
+            "link_label": "Tạo project"
+          },
+          {
+            "text": "Bật API cho từng dịch vụ bạn muốn dùng. Bốn cái cơ bản: Gmail API, Google Calendar API, Google Drive API, Google Docs API. Muốn Javis đụng tới Sheets, Slides, Forms, Danh bạ hay Việc cần làm thì bật thêm Google Sheets API, Google Slides API, Google Forms API, People API, Google Tasks API. Quên bật cái nào thì đúng nhóm tool đó báo lỗi, phần còn lại vẫn chạy.",
+            "link": "https://console.cloud.google.com/apis/library",
+            "link_label": "Mở thư viện API"
+          },
+          {
+            "text": "Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users. Bỏ bước này là Google chặn ngay lúc đăng nhập.",
+            "link": "https://console.cloud.google.com/auth/audience",
+            "link_label": "Mở màn hình đồng ý"
+          },
+          {
+            "text": "Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app). Loại này KHÔNG phải khai URI chuyển hướng nào cả - khác thẻ Lịch/Gmail, nên thấy phần đó trống là đúng, đừng đi tìm.",
+            "link": "https://console.cloud.google.com/apis/credentials/oauthclient",
+            "link_label": "Tạo OAuth client"
+          },
+          {
+            "text": "Tải file JSON của client rồi kéo thả vào ô bên dưới, Javis tự điền Client ID + Secret. Hoặc copy tay hai giá trị đó vào hai ô."
+          },
+          {
+            "text": "Điền luôn ô email Google rồi bấm Kết nối. Bỏ trống ô email thì mỗi lần gọi tool, server lại hỏi ngược xem dùng tài khoản nào."
+          },
+          {
+            "text": "Lần đầu Javis gọi tool Google, trình duyệt trên máy chạy Javis mở ra. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục, vì đây là app của chính bạn. Nhớ TICK HẾT các ô quyền, bỏ ô nào là đúng nhóm tool đó chết."
+          }
         ]
       },
       "tool_meta": {
-        "write": ["*create*", "*update*", "*upload*", "*draft*", "*modify*", "*move*", "*add*", "*set*", "*manage*", "import_*"],
-        "danger": ["*send*", "*delete*", "run_*"]
+        "write": [
+          "*create*",
+          "*update*",
+          "*upload*",
+          "*draft*",
+          "*modify*",
+          "*move*",
+          "*add*",
+          "*set*",
+          "*manage*",
+          "import_*"
+        ],
+        "danger": [
+          "*send*",
+          "*delete*",
+          "run_*"
+        ]
       },
       "_tool_meta_doc": "workspace-mcp 2.x thêm run_script_function (CHẠY một hàm Apps Script, tức làm được mọi thứ script đó làm) và import_to_google_*. Tên không chứa từ gợi ý ghi nào nên trước đây classify xếp cả hai vào nhóm ĐỌC. generate_trigger_code chỉ sinh đoạn code, không tạo trigger.",
-      "ghi_da_can_nhac": ["generate_trigger_code"],
+      "ghi_da_can_nhac": [
+        "generate_trigger_code"
+      ],
       "default_perm": "safe",
       "risk": "Mức Ghi nháp (mặc định) cho phép Javis soạn nháp thư, tạo lịch, tạo tài liệu, và cả SỬA tài liệu có sẵn lẫn DI CHUYỂN file trong Drive.\nCác tool gộp (manage_event, manage_task...) cũng thuộc mức này, nên Javis sửa và xoá được từng sự kiện lịch hay việc cần làm lẻ.\n\nMức Toàn quyền thêm quyền GỬI EMAIL THẬT, XOÁ file, thư, và CHẠY hàm Apps Script bằng tài khoản Google của bạn.\n\nChỉ cần đọc thì hạ xuống Chỉ đọc."
     },
@@ -290,16 +617,35 @@
       "transport": "stdio",
       "command": "uvx",
       "_args_doc": "Chạy chung server workspace-mcp với connector google-workspace nhưng chỉ nạp service tasks. Tier complete vì list_task_lists nằm ở tier complete - thiếu nó thì không biết ID danh sách để đọc việc.",
-      "args": ["workspace-mcp@latest", "--tools", "tasks", "--tool-tier", "complete"],
+      "args": [
+        "workspace-mcp@latest",
+        "--tools",
+        "tasks",
+        "--tool-tier",
+        "complete"
+      ],
       "lenh_cu": [
-        { "command": "uvx", "args": ["workspace-mcp", "--tools", "tasks", "--tool-tier", "complete"] }
+        {
+          "command": "uvx",
+          "args": [
+            "workspace-mcp",
+            "--tools",
+            "tasks",
+            "--tool-tier",
+            "complete"
+          ]
+        }
       ],
       "_env_doc": "Cùng server workspace-mcp với connector google-workspace nên dính y hệt: thiếu biến này là oauthlib chặn callback http://localhost, bấm đồng ý xong vẫn không đăng nhập được. Xem _env_doc của google-workspace.",
-      "env": { "OAUTHLIB_INSECURE_TRANSPORT": "1" },
+      "env": {
+        "OAUTHLIB_INSECURE_TRANSPORT": "1"
+      },
       "_needs_local_browser_doc": "workspace-mcp tự chạy OAuth với callback CỨNG http://localhost:8000/oauth2callback - chỉ sống khi trình duyệt và server Javis là CÙNG MỘT MÁY. Truy cập Javis qua domain public là Google redirect về localhost CỦA NGƯỜI DÙNG rồi chết ERR_CONNECTION_REFUSED (issue #112). Cờ này cho /connect/add chặn kèm lời giải thích (can_force) thay vì để user đâm vào ngõ cụt; VPS thì chỉ sang thẻ Lịch và Gmail riêng - hai thẻ đó đi qua OAuth của chính Javis nên chạy được sau proxy.",
       "needs_local_browser": true,
       "_cred_dir_doc": "workspace-mcp tự chạy luồng OAuth của nó và cache token ra đĩa, mặc định ~/.google_workspace_mcp/credentials - NGOÀI tầm với của Javis. Để mặc định thì mọi tài khoản dùng chung một kho và xoá kết nối trong Javis không dọn được gì: token thiếu quyền là thiếu vĩnh viễn, cài lại chục lần cũng đọc lại đúng file cũ. Trỏ mỗi connection vào một thư mục riêng để xoá kết nối là token đi theo, lần gọi tool sau server tự mở lại màn đăng nhập Google với đúng bộ quyền hiện hành.",
-      "cred_dir": { "env": "WORKSPACE_MCP_CREDENTIALS_DIR" },
+      "cred_dir": {
+        "env": "WORKSPACE_MCP_CREDENTIALS_DIR"
+      },
       "auth": {
         "type": "apikey",
         "fields": [
@@ -326,25 +672,54 @@
         "guide": "Kết nối này chạy TRÊN MÁY CÀI JAVIS: lần đầu gọi tool Google Tasks, trình duyệt của chính\nmáy đó mở ra để bạn bấm đồng ý. Máy không có màn hình (VPS) thì đường này không đi được.\n\nLàm 1 lần, khoảng 10 phút. Đã đấu Google Workspace rồi thì dùng lại đúng Client ID + Secret cũ,\nchỉ cần làm thêm bước 2:\n1. Vào console.cloud.google.com tạo project, hoặc dùng project sẵn có.\n2. Bật Google Tasks API cho project đó.\n3. Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users.\nBỏ bước này là Google chặn ngay lúc đăng nhập.\n4. Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app).\nLoại này KHÔNG phải khai URI chuyển hướng nào cả, thấy phần đó trống là đúng.\n5. Tải file JSON của client rồi kéo thả vào ô bên dưới, hoặc copy tay Client ID + Secret.\n6. Điền luôn ô email Google rồi bấm Kết nối.\n\nLần đầu gọi tool, gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục,\nvì đây là app của chính bạn. Nhớ TICK HẾT các ô quyền.",
         "guide_url": "https://github.com/taylorwilsdon/google_workspace_mcp",
         "steps": [
-          { "text": "TRƯỚC KHI LÀM, đọc dòng này: kết nối này chạy trên chính máy cài Javis, và lần đầu gọi tool nó mở trình duyệt CỦA MÁY ĐÓ để bạn bấm đồng ý. Javis chạy trên VPS không màn hình thì đường này không đi được." },
-          { "text": "Đã đấu Google Workspace hoặc dịch vụ Google khác rồi thì DÙNG LẠI key của nó (nút bên dưới ô nhập), chỉ cần làm thêm bước bật API." },
-          { "text": "Vào Google Cloud tạo project (hoặc dùng project sẵn có), bật Google Tasks API.", "link": "https://console.cloud.google.com/apis/library/tasks.googleapis.com", "link_label": "Bật Tasks API" },
-          { "text": "Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users. Bỏ bước này là Google chặn ngay lúc đăng nhập.", "link": "https://console.cloud.google.com/auth/audience", "link_label": "Mở màn hình đồng ý" },
-          { "text": "Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app). Loại này KHÔNG phải khai URI chuyển hướng nào cả, thấy phần đó trống là đúng.", "link": "https://console.cloud.google.com/apis/credentials/oauthclient", "link_label": "Tạo OAuth client" },
-          { "text": "Tải file JSON của client rồi kéo thả vào ô bên dưới, Javis tự điền Client ID + Secret. Hoặc copy tay hai giá trị đó vào hai ô." },
-          { "text": "Điền luôn ô email Google rồi bấm Kết nối. Bỏ trống ô email thì mỗi lần gọi tool, server lại hỏi ngược xem dùng tài khoản nào." },
-          { "text": "Lần đầu Javis gọi tool Google Tasks, trình duyệt trên máy chạy Javis mở ra. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục, vì đây là app của chính bạn. Nhớ TICK HẾT các ô quyền." }
+          {
+            "text": "TRƯỚC KHI LÀM, đọc dòng này: kết nối này chạy trên chính máy cài Javis, và lần đầu gọi tool nó mở trình duyệt CỦA MÁY ĐÓ để bạn bấm đồng ý. Javis chạy trên VPS không màn hình thì đường này không đi được."
+          },
+          {
+            "text": "Đã đấu Google Workspace hoặc dịch vụ Google khác rồi thì DÙNG LẠI key của nó (nút bên dưới ô nhập), chỉ cần làm thêm bước bật API."
+          },
+          {
+            "text": "Vào Google Cloud tạo project (hoặc dùng project sẵn có), bật Google Tasks API.",
+            "link": "https://console.cloud.google.com/apis/library/tasks.googleapis.com",
+            "link_label": "Bật Tasks API"
+          },
+          {
+            "text": "Màn hình đồng ý OAuth: chọn External rồi thêm email Google của bạn vào Test users. Bỏ bước này là Google chặn ngay lúc đăng nhập.",
+            "link": "https://console.cloud.google.com/auth/audience",
+            "link_label": "Mở màn hình đồng ý"
+          },
+          {
+            "text": "Tạo OAuth client, chọn loại 'Ứng dụng dành cho máy tính' (Desktop app). Loại này KHÔNG phải khai URI chuyển hướng nào cả, thấy phần đó trống là đúng.",
+            "link": "https://console.cloud.google.com/apis/credentials/oauthclient",
+            "link_label": "Tạo OAuth client"
+          },
+          {
+            "text": "Tải file JSON của client rồi kéo thả vào ô bên dưới, Javis tự điền Client ID + Secret. Hoặc copy tay hai giá trị đó vào hai ô."
+          },
+          {
+            "text": "Điền luôn ô email Google rồi bấm Kết nối. Bỏ trống ô email thì mỗi lần gọi tool, server lại hỏi ngược xem dùng tài khoản nào."
+          },
+          {
+            "text": "Lần đầu Javis gọi tool Google Tasks, trình duyệt trên máy chạy Javis mở ra. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục, vì đây là app của chính bạn. Nhớ TICK HẾT các ô quyền."
+          }
         ]
       },
       "tool_meta": {
-        "read": ["list_*", "get_*"],
-        "write": ["manage_task"],
-        "danger": ["manage_task_list"]
+        "read": [
+          "list_*",
+          "get_*"
+        ],
+        "write": [
+          "manage_task"
+        ],
+        "danger": [
+          "manage_task_list"
+        ]
       },
       "default_perm": "safe",
       "risk": "Mức Ghi nháp (mặc định) cho phép Javis TẠO và SỬA việc thật trong Google Tasks: thêm việc, đổi hạn, đánh dấu xong, kể cả xoá một việc lẻ (tool gộp manage_task có hành động delete).\n\nMức Toàn quyền thêm quyền TẠO, ĐỔI TÊN và XOÁ cả DANH SÁCH việc. Xoá danh sách là mất toàn bộ việc bên trong, không hoàn tác được.\n\nKết nối này chỉ xin quyền Google Tasks, không đọc được Gmail, Drive hay Lịch."
     },
-                    {
+    {
       "id": "google-ads",
       "name": "Google Ads",
       "icon": "/static/logos/google-ads.webp",
@@ -353,9 +728,18 @@
       "status": "beta",
       "transport": "stdio",
       "command": "uvx",
-      "args": ["google-ads-mcp@latest"],
+      "args": [
+        "google-ads-mcp@latest"
+      ],
       "lenh_cu": [
-        { "command": "uvx", "args": ["--from", "git+https://github.com/googleads/google-ads-mcp.git", "google-ads-mcp"] }
+        {
+          "command": "uvx",
+          "args": [
+            "--from",
+            "git+https://github.com/googleads/google-ads-mcp.git",
+            "google-ads-mcp"
+          ]
+        }
       ],
       "auth": {
         "type": "oauth",
@@ -413,13 +797,21 @@
         "tool": "customers_list_accessible_customers",
         "args": {}
       },
-      "oauth_file": { "format": "google_adc", "env": "GOOGLE_APPLICATION_CREDENTIALS", "ext": ".json" },
+      "oauth_file": {
+        "format": "google_adc",
+        "env": "GOOGLE_APPLICATION_CREDENTIALS",
+        "ext": ".json"
+      },
       "tool_meta": {
-        "read": ["customers_*", "metadata_*", "search_*"]
+        "read": [
+          "customers_*",
+          "metadata_*",
+          "search_*"
+        ]
       },
       "default_perm": "readonly"
     },
-        {
+    {
       "id": "google-calendar",
       "name": "Google Calendar",
       "icon": "/static/logos/google-calendar.png",
@@ -445,41 +837,113 @@
           "https://www.googleapis.com/auth/calendar.events.readonly",
           "https://www.googleapis.com/auth/calendar.events.freebusy"
         ],
-        "authorize_params": { "access_type": "offline", "prompt": "consent", "include_granted_scopes": "true" },
+        "authorize_params": {
+          "access_type": "offline",
+          "prompt": "consent",
+          "include_granted_scopes": "true"
+        },
         "fields": [
-          { "key": "client_id", "label": "OAuth Client ID", "placeholder": "Ví dụ: xxxx.apps.googleusercontent.com" },
-          { "key": "client_secret", "label": "OAuth Client Secret", "placeholder": "Ví dụ: GOCSPX-..." }
+          {
+            "key": "client_id",
+            "label": "OAuth Client ID",
+            "placeholder": "Ví dụ: xxxx.apps.googleusercontent.com"
+          },
+          {
+            "key": "client_secret",
+            "label": "OAuth Client Secret",
+            "placeholder": "Ví dụ: GOCSPX-..."
+          }
         ],
         "guide": "Server MCP Lịch của Google đang ở giai đoạn Developer Preview: phải ghi danh chương trình (miễn phí) và bật thêm API MCP riêng, thiếu là bị chặn 403 dù đăng nhập thành công.\nLàm 1 lần, khoảng 10 phút:\n1. Ghi danh Google Workspace Developer Preview Program bằng đúng tài khoản Google sẽ đăng nhập (nút bên dưới).\n2. Vào console.cloud.google.com, tạo project, bật CẢ BA API: Google Calendar API, Google Calendar MCP API\n(tìm 'Calendar MCP' trong thư viện API, có nút bên dưới) và People API - dùng khi tìm giờ trống có người tham dự.\n3. Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.\n4. Quyền dữ liệu (Data Access) > Thêm hoặc bớt phạm vi: dán đủ 5 phạm vi Lịch dưới đây rồi Cập nhật và Lưu.\nhttps://www.googleapis.com/auth/calendar\nhttps://www.googleapis.com/auth/calendar.events\nhttps://www.googleapis.com/auth/calendar.calendarlist.readonly\nhttps://www.googleapis.com/auth/calendar.events.readonly\nhttps://www.googleapis.com/auth/calendar.events.freebusy\n5. Thông tin xác thực > Tạo OAuth client ID loại 'Ứng dụng web'.\n6. Ở phần 'URI chuyển hướng được ủy quyền', thêm đúng địa chỉ này:\nhttp://localhost:7777/connect/oauth/callback\nNếu chạy trên VPS thì thêm cả https://<tên-miền>/connect/oauth/callback\n7. Copy Client ID + Client Secret dán vào đây rồi bấm Kết nối.\n\nTrình duyệt sẽ mở để bạn đăng nhập Google và bấm đồng ý. Gặp cảnh báo 'ứng dụng chưa được xác minh'\nthì bấm Nâng cao > Tiếp tục, vì đây là app của chính bạn.\nMàn hình đồng ý có ô tick cho từng nhóm quyền: TICK HẾT, bỏ ô nào là tool tương ứng chết ngay.\n\nVÌ SAO PHẢI ĐỦ 5 PHẠM VI: server MCP của Google không nhận mỗi phạm vi gộp 'calendar'.\nRiêng việc tìm giờ trống (suggest_time) đòi đúng 'calendar.events.freebusy'. Thiếu nó thì đăng nhập\nvẫn xanh, list_calendars vẫn chạy, nhưng hễ kiểm tra rảnh bận là Google trả\nACCESS_TOKEN_SCOPE_INSUFFICIENT - xoá đi cài lại bao nhiêu lần cũng vậy.\n\nĐăng nhập xong mà Test vẫn báo thiếu quyền thì soát lại bước 1, 2 và 4, ba bước hay bị bỏ sót nhất.",
         "guide_url": "https://console.cloud.google.com/apis/credentials",
         "steps": [
-          { "text": "Ghi danh Google Workspace Developer Preview (miễn phí) bằng ĐÚNG tài khoản Google sẽ đăng nhập. Bỏ bước này là bị chặn 403 dù đăng nhập thành công.", "link": "https://developers.google.com/workspace/preview", "link_label": "Mở trang ghi danh" },
-          { "text": "Vào Google Cloud tạo project, rồi bật Google Calendar API và Google Calendar MCP API.", "link": "https://console.cloud.google.com/apis/library/calendarmcp.googleapis.com", "link_label": "Bật Calendar MCP API" },
-          { "text": "Bật nốt People API trong cùng project đó. Nó dùng khi tìm giờ trống có người tham dự; thiếu nó thì mọi thứ khác vẫn chạy, riêng suggest_time báo thiếu quyền.", "link": "https://console.cloud.google.com/apis/library/people.googleapis.com", "link_label": "Bật People API" },
-          { "text": "Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.", "link": "https://console.cloud.google.com/auth/audience", "link_label": "Mở màn hình đồng ý" },
-          { "text": "Quyền dữ liệu > Thêm hoặc bớt phạm vi: dán đủ 5 phạm vi Lịch (calendar, calendar.events, calendar.calendarlist.readonly, calendar.events.readonly, calendar.events.freebusy). Thiếu freebusy là tìm giờ trống báo thiếu quyền dù đăng nhập thành công.", "link": "https://console.cloud.google.com/auth/scopes", "link_label": "Mở trang Quyền dữ liệu" },
-          { "text": "Tạo OAuth client loại 'Ứng dụng web', thêm địa chỉ dưới đây vào ô 'URI chuyển hướng được ủy quyền'.", "link": "https://console.cloud.google.com/apis/credentials/oauthclient", "link_label": "Tạo OAuth client", "copy": "redirect" },
-          { "text": "Tải file JSON của client (hoặc copy Client ID + Secret), kéo thả file vào ô bên dưới rồi bấm Kết nối. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục." },
-          { "text": "ĐĂNG NHẬP LẠI MÀ GOOGLE KHÔNG HIỆN LẠI CÁC Ô TICK QUYỀN? Đó là cách Google hoạt động: quyền nào đã cấp rồi thì lần sau nó cho qua thẳng, không hỏi lại. Muốn thấy lại đầy đủ ô tick thì vào trang quyền của tài khoản Google, gỡ Javis ra khỏi danh sách ứng dụng, rồi quay lại bấm Kết nối - lần đó Google hỏi lại từ đầu.", "link": "https://myaccount.google.com/permissions", "link_label": "Gỡ quyền cũ ở Google" }
+          {
+            "text": "Ghi danh Google Workspace Developer Preview (miễn phí) bằng ĐÚNG tài khoản Google sẽ đăng nhập. Bỏ bước này là bị chặn 403 dù đăng nhập thành công.",
+            "link": "https://developers.google.com/workspace/preview",
+            "link_label": "Mở trang ghi danh"
+          },
+          {
+            "text": "Vào Google Cloud tạo project, rồi bật Google Calendar API và Google Calendar MCP API.",
+            "link": "https://console.cloud.google.com/apis/library/calendarmcp.googleapis.com",
+            "link_label": "Bật Calendar MCP API"
+          },
+          {
+            "text": "Bật nốt People API trong cùng project đó. Nó dùng khi tìm giờ trống có người tham dự; thiếu nó thì mọi thứ khác vẫn chạy, riêng suggest_time báo thiếu quyền.",
+            "link": "https://console.cloud.google.com/apis/library/people.googleapis.com",
+            "link_label": "Bật People API"
+          },
+          {
+            "text": "Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.",
+            "link": "https://console.cloud.google.com/auth/audience",
+            "link_label": "Mở màn hình đồng ý"
+          },
+          {
+            "text": "Quyền dữ liệu > Thêm hoặc bớt phạm vi: dán đủ 5 phạm vi Lịch (calendar, calendar.events, calendar.calendarlist.readonly, calendar.events.readonly, calendar.events.freebusy). Thiếu freebusy là tìm giờ trống báo thiếu quyền dù đăng nhập thành công.",
+            "link": "https://console.cloud.google.com/auth/scopes",
+            "link_label": "Mở trang Quyền dữ liệu"
+          },
+          {
+            "text": "Tạo OAuth client loại 'Ứng dụng web', thêm địa chỉ dưới đây vào ô 'URI chuyển hướng được ủy quyền'.",
+            "link": "https://console.cloud.google.com/apis/credentials/oauthclient",
+            "link_label": "Tạo OAuth client",
+            "copy": "redirect"
+          },
+          {
+            "text": "Tải file JSON của client (hoặc copy Client ID + Secret), kéo thả file vào ô bên dưới rồi bấm Kết nối. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục."
+          },
+          {
+            "text": "ĐĂNG NHẬP LẠI MÀ GOOGLE KHÔNG HIỆN LẠI CÁC Ô TICK QUYỀN? Đó là cách Google hoạt động: quyền nào đã cấp rồi thì lần sau nó cho qua thẳng, không hỏi lại. Muốn thấy lại đầy đủ ô tick thì vào trang quyền của tài khoản Google, gỡ Javis ra khỏi danh sách ứng dụng, rồi quay lại bấm Kết nối - lần đó Google hỏi lại từ đầu.",
+            "link": "https://myaccount.google.com/permissions",
+            "link_label": "Gỡ quyền cũ ở Google"
+          }
         ],
         "setup": {
           "links": [
-            { "label": "Ghi danh Developer Preview", "url": "https://developers.google.com/workspace/preview" },
-            { "label": "Bật Google Calendar MCP API", "url": "https://console.cloud.google.com/apis/library/calendarmcp.googleapis.com" },
-            { "label": "Bật People API", "url": "https://console.cloud.google.com/apis/library/people.googleapis.com" },
-            { "label": "Khai phạm vi quyền (Data Access)", "url": "https://console.cloud.google.com/auth/scopes" }
+            {
+              "label": "Ghi danh Developer Preview",
+              "url": "https://developers.google.com/workspace/preview"
+            },
+            {
+              "label": "Bật Google Calendar MCP API",
+              "url": "https://console.cloud.google.com/apis/library/calendarmcp.googleapis.com"
+            },
+            {
+              "label": "Bật People API",
+              "url": "https://console.cloud.google.com/apis/library/people.googleapis.com"
+            },
+            {
+              "label": "Khai phạm vi quyền (Data Access)",
+              "url": "https://console.cloud.google.com/auth/scopes"
+            }
           ]
         }
       },
       "validate": {
         "tool": "list_calendars",
         "args": {},
-        "label_paths": ["calendars.0.id", "items.0.id", "data.0.id", "0.id", "primary.id"]
+        "label_paths": [
+          "calendars.0.id",
+          "items.0.id",
+          "data.0.id",
+          "0.id",
+          "primary.id"
+        ]
       },
       "tool_meta": {
-        "read": ["list_events", "get_event", "list_calendars", "suggest_time"],
-        "write": ["create_event", "update_event", "respond_to_event"],
-        "danger": ["delete_event"]
+        "read": [
+          "list_events",
+          "get_event",
+          "list_calendars",
+          "suggest_time"
+        ],
+        "write": [
+          "create_event",
+          "update_event",
+          "respond_to_event"
+        ],
+        "danger": [
+          "delete_event"
+        ]
       },
       "default_perm": "readonly",
       "risk": "Mức Ghi nháp cho phép Javis TẠO và SỬA sự kiện thật trên lịch của bạn (tiện để nhờ \"nhắc tôi gọi nhà cung cấp thứ 5\").\n\nMức Toàn quyền thêm quyền XOÁ sự kiện.\n\nChỉ cần xem lịch thì giữ mức Chỉ đọc."
@@ -509,27 +973,76 @@
           "https://www.googleapis.com/auth/gmail.compose",
           "https://www.googleapis.com/auth/gmail.labels"
         ],
-        "authorize_params": { "access_type": "offline", "prompt": "consent", "include_granted_scopes": "true" },
+        "authorize_params": {
+          "access_type": "offline",
+          "prompt": "consent",
+          "include_granted_scopes": "true"
+        },
         "fields": [
-          { "key": "client_id", "label": "OAuth Client ID", "placeholder": "Ví dụ: xxxx.apps.googleusercontent.com" },
-          { "key": "client_secret", "label": "OAuth Client Secret", "placeholder": "Ví dụ: GOCSPX-..." }
+          {
+            "key": "client_id",
+            "label": "OAuth Client ID",
+            "placeholder": "Ví dụ: xxxx.apps.googleusercontent.com"
+          },
+          {
+            "key": "client_secret",
+            "label": "OAuth Client Secret",
+            "placeholder": "Ví dụ: GOCSPX-..."
+          }
         ],
         "guide": "Server MCP Gmail của Google đang ở giai đoạn Developer Preview: phải ghi danh chương trình (miễn phí) và bật thêm API MCP riêng, thiếu là bị chặn 403 dù đăng nhập thành công.\nLàm 1 lần, khoảng 10 phút:\n1. Ghi danh Google Workspace Developer Preview Program bằng đúng tài khoản Google sẽ đăng nhập (nút bên dưới).\n2. Vào console.cloud.google.com, tạo project, bật CẢ HAI API: Gmail API và Gmail MCP API (tìm 'Gmail MCP' trong thư viện API, có nút bên dưới).\n3. Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.\n4. Thông tin xác thực > Tạo OAuth client ID loại 'Ứng dụng web'.\n5. Ở phần 'URI chuyển hướng được ủy quyền', thêm đúng địa chỉ này:\nhttp://localhost:7777/connect/oauth/callback\nNếu chạy trên VPS thì thêm cả https://<tên-miền>/connect/oauth/callback\n6. Copy Client ID + Client Secret dán vào đây rồi bấm Kết nối.\n\nTrình duyệt sẽ mở để bạn đăng nhập Google và bấm đồng ý. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao > Tiếp tục, vì đây là app của chính bạn.\n\nCó thể dùng CHUNG một OAuth client với Google Calendar, chỉ cần bật thêm Gmail API + Gmail MCP API và khai thêm phạm vi Gmail ở trang Quyền dữ liệu.\nMàn hình đồng ý có ô tick cho từng nhóm quyền: TICK HẾT, bỏ ô nào là tool tương ứng chết ngay.\nĐăng nhập xong mà Test vẫn báo thiếu quyền thì soát lại bước ghi danh, bước bật API và bước khai phạm vi - ba bước hay bị bỏ sót nhất.",
         "guide_url": "https://console.cloud.google.com/apis/credentials",
         "steps": [
-          { "text": "Đã đấu Google Calendar rồi thì DÙNG LẠI key của nó (nút bên dưới ô nhập), chỉ cần làm thêm bước 2 cho Gmail.", "link": "", "link_label": "" },
-          { "text": "Ghi danh Google Workspace Developer Preview (miễn phí) bằng ĐÚNG tài khoản Google sẽ đăng nhập. Bỏ bước này là bị chặn 403 dù đăng nhập thành công.", "link": "https://developers.google.com/workspace/preview", "link_label": "Mở trang ghi danh" },
-          { "text": "Vào Google Cloud tạo project (hoặc dùng project sẵn có), bật CẢ HAI API: Gmail API và Gmail MCP API.", "link": "https://console.cloud.google.com/apis/library/gmailmcp.googleapis.com", "link_label": "Bật Gmail MCP API" },
-          { "text": "Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.", "link": "https://console.cloud.google.com/auth/audience", "link_label": "Mở màn hình đồng ý" },
-          { "text": "Quyền dữ liệu > Thêm hoặc bớt phạm vi: dán đủ 4 phạm vi Gmail (gmail.modify, gmail.readonly, gmail.compose, gmail.labels). Ba cái sau nằm trong gmail.modify nên không nới quyền, chỉ để khớp danh sách từng tool của Google chấp nhận.", "link": "https://console.cloud.google.com/auth/scopes", "link_label": "Mở trang Quyền dữ liệu" },
-          { "text": "Tạo OAuth client loại 'Ứng dụng web', thêm địa chỉ dưới đây vào ô 'URI chuyển hướng được ủy quyền'.", "link": "https://console.cloud.google.com/apis/credentials/oauthclient", "link_label": "Tạo OAuth client", "copy": "redirect" },
-          { "text": "Tải file JSON của client (hoặc copy Client ID + Secret), kéo thả file vào ô bên dưới rồi bấm Kết nối. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục." },
-          { "text": "ĐĂNG NHẬP LẠI MÀ GOOGLE KHÔNG HIỆN LẠI CÁC Ô TICK QUYỀN? Đó là cách Google hoạt động: quyền nào đã cấp rồi thì lần sau nó cho qua thẳng, không hỏi lại. Muốn thấy lại đầy đủ ô tick thì vào trang quyền của tài khoản Google, gỡ Javis ra khỏi danh sách ứng dụng, rồi quay lại bấm Kết nối - lần đó Google hỏi lại từ đầu.", "link": "https://myaccount.google.com/permissions", "link_label": "Gỡ quyền cũ ở Google" }
+          {
+            "text": "Đã đấu Google Calendar rồi thì DÙNG LẠI key của nó (nút bên dưới ô nhập), chỉ cần làm thêm bước 2 cho Gmail.",
+            "link": "",
+            "link_label": ""
+          },
+          {
+            "text": "Ghi danh Google Workspace Developer Preview (miễn phí) bằng ĐÚNG tài khoản Google sẽ đăng nhập. Bỏ bước này là bị chặn 403 dù đăng nhập thành công.",
+            "link": "https://developers.google.com/workspace/preview",
+            "link_label": "Mở trang ghi danh"
+          },
+          {
+            "text": "Vào Google Cloud tạo project (hoặc dùng project sẵn có), bật CẢ HAI API: Gmail API và Gmail MCP API.",
+            "link": "https://console.cloud.google.com/apis/library/gmailmcp.googleapis.com",
+            "link_label": "Bật Gmail MCP API"
+          },
+          {
+            "text": "Màn hình đồng ý OAuth: chọn External, thêm email của bạn vào Test users.",
+            "link": "https://console.cloud.google.com/auth/audience",
+            "link_label": "Mở màn hình đồng ý"
+          },
+          {
+            "text": "Quyền dữ liệu > Thêm hoặc bớt phạm vi: dán đủ 4 phạm vi Gmail (gmail.modify, gmail.readonly, gmail.compose, gmail.labels). Ba cái sau nằm trong gmail.modify nên không nới quyền, chỉ để khớp danh sách từng tool của Google chấp nhận.",
+            "link": "https://console.cloud.google.com/auth/scopes",
+            "link_label": "Mở trang Quyền dữ liệu"
+          },
+          {
+            "text": "Tạo OAuth client loại 'Ứng dụng web', thêm địa chỉ dưới đây vào ô 'URI chuyển hướng được ủy quyền'.",
+            "link": "https://console.cloud.google.com/apis/credentials/oauthclient",
+            "link_label": "Tạo OAuth client",
+            "copy": "redirect"
+          },
+          {
+            "text": "Tải file JSON của client (hoặc copy Client ID + Secret), kéo thả file vào ô bên dưới rồi bấm Kết nối. Gặp cảnh báo 'ứng dụng chưa được xác minh' thì bấm Nâng cao rồi Tiếp tục."
+          },
+          {
+            "text": "ĐĂNG NHẬP LẠI MÀ GOOGLE KHÔNG HIỆN LẠI CÁC Ô TICK QUYỀN? Đó là cách Google hoạt động: quyền nào đã cấp rồi thì lần sau nó cho qua thẳng, không hỏi lại. Muốn thấy lại đầy đủ ô tick thì vào trang quyền của tài khoản Google, gỡ Javis ra khỏi danh sách ứng dụng, rồi quay lại bấm Kết nối - lần đó Google hỏi lại từ đầu.",
+            "link": "https://myaccount.google.com/permissions",
+            "link_label": "Gỡ quyền cũ ở Google"
+          }
         ],
         "setup": {
           "links": [
-            { "label": "Ghi danh Developer Preview", "url": "https://developers.google.com/workspace/preview" },
-            { "label": "Bật Gmail MCP API", "url": "https://console.cloud.google.com/apis/library/gmailmcp.googleapis.com" }
+            {
+              "label": "Ghi danh Developer Preview",
+              "url": "https://developers.google.com/workspace/preview"
+            },
+            {
+              "label": "Bật Gmail MCP API",
+              "url": "https://console.cloud.google.com/apis/library/gmailmcp.googleapis.com"
+            }
           ]
         }
       },
@@ -538,14 +1051,23 @@
         "args": {}
       },
       "tool_meta": {
-        "read": ["list_drafts", "get_thread", "search_threads", "list_labels"],
-        "write": ["create_draft", "create_label", "*label*"],
+        "read": [
+          "list_drafts",
+          "get_thread",
+          "search_threads",
+          "list_labels"
+        ],
+        "write": [
+          "create_draft",
+          "create_label",
+          "*label*"
+        ],
         "danger": []
       },
       "default_perm": "readonly",
       "risk": "Mức Ghi nháp cho phép Javis SOẠN NHÁP thư và gắn, gỡ nhãn trong hộp thư của bạn.\n\nServer Gmail chính chủ không có tool gửi thẳng nên Javis không tự gửi được, luôn dừng ở bản nháp để bạn tự bấm gửi.\n\nChỉ cần đọc và tìm thư thì giữ mức Chỉ đọc."
     },
-                        {
+    {
       "id": "substack",
       "name": "Substack",
       "icon": "/static/logos/substack.svg",
@@ -578,12 +1100,20 @@
       },
       "validate": {
         "tool": "substack_list_drafts",
-        "args": { "limit": 1 }
+        "args": {
+          "limit": 1
+        }
       },
       "tool_meta": {
-        "read": ["substack_list_drafts"],
-        "write": ["substack_create_draft"],
-        "danger": ["substack_publish"]
+        "read": [
+          "substack_list_drafts"
+        ],
+        "write": [
+          "substack_create_draft"
+        ],
+        "danger": [
+          "substack_publish"
+        ]
       },
       "default_perm": "safe",
       "risk": "Mức Ghi nháp (mặc định) cho phép Javis TẠO NHÁP bài viết trên Substack của bạn. Chưa đăng, chưa gửi ai.\n\nMuốn Javis ĐĂNG BÀI THẬT thì phải nâng kết nối này lên Toàn quyền. Khi đó Javis vẫn chỉ đăng khi bạn yêu cầu trực tiếp trong chat, loop chạy nền không bao giờ tự đăng.\n\nĐăng mặc định chỉ lên web, KHÔNG gửi email. Chỉ khi bạn nói rõ \"gửi email cho người đăng ký\" thì Javis mới bật cờ gửi mail, và việc đã gửi mail KHÔNG hoàn tác được.\n\nSession token cho toàn quyền tài khoản Substack nên giữ kín như mật khẩu. Hết hạn khi đăng xuất thì kết nối lại."
@@ -600,11 +1130,28 @@
       "transport": "stdio",
       "command": "uvx",
       "_args_doc": "KHÔNG dùng `uvx keep-mcp`: package keep-mcp khai console script tên `mcp` (server.cli:main), trùng tên với CLI của MCP SDK (mcp.cli:app) vốn là dependency của nó, nên chạy nhầm sang CLI của SDK. Module `server/__main__.py` là đường duy nhất không mơ hồ.",
-      "args": ["--from", "keep-mcp@latest", "python", "-m", "server"],
-      "lenh_cu": [
-        { "command": "uvx", "args": ["--from", "keep-mcp", "python", "-m", "server"] }
+      "args": [
+        "--from",
+        "keep-mcp@latest",
+        "python",
+        "-m",
+        "server"
       ],
-      "requires": { "uv": true },
+      "lenh_cu": [
+        {
+          "command": "uvx",
+          "args": [
+            "--from",
+            "keep-mcp",
+            "python",
+            "-m",
+            "server"
+          ]
+        }
+      ],
+      "requires": {
+        "uv": true
+      },
       "auth": {
         "type": "apikey",
         "fields": [
@@ -642,15 +1189,54 @@
           }
         ],
         "guide": "Google Keep không có API chính chủ cho gmail thường, nên Javis phải đăng nhập bằng App Password rồi tự đổi thành token.\n\nCẢNH BÁO: token đổi ra có TOÀN QUYỀN tài khoản Google của bạn (Gmail, Drive, Photos...), tương đương mật khẩu.\n\nLàm 1 lần:\n1. Bật xác minh 2 bước cho tài khoản Google.\n2. Bấm nút bên dưới, tạo App Password rồi copy chuỗi 16 ký tự.\n3. Dán email + chuỗi đó vào ô dưới, bấm Kết nối.\n\nJavis đổi lấy token, lưu token, và KHÔNG lưu lại App Password. Copy cả dấu cách cũng được.\n\nNếu Google từ chối (hay gặp khi Javis chạy trên VPS), hãy tự lấy master token ở máy cá nhân rồi dán vào ô Master token.\n\nÔ unsafe_mode để trống thì Javis chỉ sửa được note do chính nó tạo. Gõ true thì Javis sửa được mọi note, kể cả note bạn viết tay.\n\nNếu báo 'Google từ chối đăng nhập' dù chuỗi đúng: Google đang siết dần đường App Password. Đường lui oauth_token:\n1. Bấm nút 'Mở trang lấy oauth_token' bên dưới trong TAB ẨN DANH, đăng nhập đúng tài khoản, bấm Tôi đồng ý.\n2. Ngay tab đó bấm F12 > Application > Cookies > accounts.google.com, tìm cookie tên oauth_token (giá trị bắt đầu oauth2_4/).\n3. Copy giá trị đó dán vào ô oauth_token rồi bấm Kết nối NGAY (cookie dùng một lần, hết hạn nhanh). Javis đổi lấy master token và không lưu cookie.",
-        "exchange": { "handler": "google_master_token", "inputs": ["google_email", "app_password", "oauth_token"], "output": "master_token", "drop": ["app_password", "oauth_token"] },
-        "setup": { "links": [{ "label": "Tạo App Password", "url": "https://myaccount.google.com/apppasswords" }, { "label": "Mở trang lấy oauth_token", "url": "https://accounts.google.com/EmbeddedSetup" }] },
+        "exchange": {
+          "handler": "google_master_token",
+          "inputs": [
+            "google_email",
+            "app_password",
+            "oauth_token"
+          ],
+          "output": "master_token",
+          "drop": [
+            "app_password",
+            "oauth_token"
+          ]
+        },
+        "setup": {
+          "links": [
+            {
+              "label": "Tạo App Password",
+              "url": "https://myaccount.google.com/apppasswords"
+            },
+            {
+              "label": "Mở trang lấy oauth_token",
+              "url": "https://accounts.google.com/EmbeddedSetup"
+            }
+          ]
+        },
         "guide_url": "https://github.com/feuerdev/keep-mcp",
         "steps": [
-          { "text": "CẢNH BÁO: Keep không có API chính chủ, phải dùng token TOÀN QUYỀN tài khoản Google (tương đương mật khẩu). Cân nhắc trước khi đấu." },
-          { "text": "Bật xác minh 2 bước cho tài khoản Google (điều kiện để tạo App Password).", "link": "https://myaccount.google.com/security", "link_label": "Mở phần Bảo mật" },
-          { "text": "Tạo App Password, copy chuỗi 16 ký tự (copy cả dấu cách cũng được).", "link": "https://myaccount.google.com/apppasswords", "link_label": "Tạo App Password" },
-          { "text": "Dán Email + App Password vào ô bên dưới rồi bấm Kết nối. Javis tự đổi thành token và KHÔNG lưu lại App Password." },
-          { "text": "Nếu Google từ chối App Password: mở trang EmbeddedSetup trong tab ẩn danh, đăng nhập, bấm Tôi đồng ý, rồi lấy cookie oauth_token (F12 > Application > Cookies, giá trị bắt đầu oauth2_4/) dán vào ô oauth_token và bấm Kết nối NGAY - cookie chỉ dùng một lần.", "link": "https://accounts.google.com/EmbeddedSetup", "link_label": "Mở EmbeddedSetup" }
+          {
+            "text": "CẢNH BÁO: Keep không có API chính chủ, phải dùng token TOÀN QUYỀN tài khoản Google (tương đương mật khẩu). Cân nhắc trước khi đấu."
+          },
+          {
+            "text": "Bật xác minh 2 bước cho tài khoản Google (điều kiện để tạo App Password).",
+            "link": "https://myaccount.google.com/security",
+            "link_label": "Mở phần Bảo mật"
+          },
+          {
+            "text": "Tạo App Password, copy chuỗi 16 ký tự (copy cả dấu cách cũng được).",
+            "link": "https://myaccount.google.com/apppasswords",
+            "link_label": "Tạo App Password"
+          },
+          {
+            "text": "Dán Email + App Password vào ô bên dưới rồi bấm Kết nối. Javis tự đổi thành token và KHÔNG lưu lại App Password."
+          },
+          {
+            "text": "Nếu Google từ chối App Password: mở trang EmbeddedSetup trong tab ẩn danh, đăng nhập, bấm Tôi đồng ý, rồi lấy cookie oauth_token (F12 > Application > Cookies, giá trị bắt đầu oauth2_4/) dán vào ô oauth_token và bấm Kết nối NGAY - cookie chỉ dùng một lần.",
+            "link": "https://accounts.google.com/EmbeddedSetup",
+            "link_label": "Mở EmbeddedSetup"
+          }
         ]
       },
       "validate": {
@@ -658,12 +1244,35 @@
         "args": {}
       },
       "tool_meta": {
-        "read": ["find", "get_note", "list_labels", "list_note_collaborators", "list_note_media"],
-        "write": ["create_note", "create_list", "update_note", "add_list_item", "update_list_item",
-                  "delete_list_item", "set_note_color", "pin_note", "archive_note", "restore_note",
-                  "create_label", "add_label_to_note", "remove_label_from_note"],
-        "danger": ["trash_note", "delete_note", "delete_label",
-                   "add_note_collaborator", "remove_note_collaborator"]
+        "read": [
+          "find",
+          "get_note",
+          "list_labels",
+          "list_note_collaborators",
+          "list_note_media"
+        ],
+        "write": [
+          "create_note",
+          "create_list",
+          "update_note",
+          "add_list_item",
+          "update_list_item",
+          "delete_list_item",
+          "set_note_color",
+          "pin_note",
+          "archive_note",
+          "restore_note",
+          "create_label",
+          "add_label_to_note",
+          "remove_label_from_note"
+        ],
+        "danger": [
+          "trash_note",
+          "delete_note",
+          "delete_label",
+          "add_note_collaborator",
+          "remove_note_collaborator"
+        ]
       },
       "default_perm": "readonly",
       "risk": "Kết nối này dùng Google MASTER TOKEN, loại token có TOÀN QUYỀN tài khoản Google (Gmail, Drive, Photos), không phải OAuth giới hạn phạm vi như Gmail hay Lịch.\n\nMức Ghi nháp cho Javis tạo và sửa note, ghim, lưu trữ, gắn nhãn thật trong Keep.\n\nMức Toàn quyền thêm quyền VỨT, XOÁ note và CHIA SẺ note cho người khác.\n\nNếu đã gõ true vào ô UNSAFE_MODE thì Javis đụng được cả note bạn viết tay, không riêng note nó tạo."
@@ -679,53 +1288,120 @@
       "transport": "stdio",
       "command": "uvx",
       "_args_doc": "Tên package (notebooklm-py) KHÁC tên lệnh (notebooklm-mcp) nên bắt buộc `--from`, và phải kèm extra [mcp] vì fastmcp không nằm trong dependency lõi - thiếu nó thì lệnh chạy được nhưng chết ngay ở import. Đúng loại bẫy đã ghi ở connector google-keep. Server MCP là của CHÍNH thư viện (console script notebooklm-mcp, transport stdio), Javis không viết wrapper.",
-      "args": ["--from", "notebooklm-py[mcp]@latest", "notebooklm-mcp"],
-      "lenh_cu": [
-        { "command": "uvx", "args": ["--from", "notebooklm-py[mcp]", "notebooklm-mcp"] }
+      "args": [
+        "--from",
+        "notebooklm-py[mcp]@latest",
+        "notebooklm-mcp"
       ],
-      "requires": { "uv": true },
+      "lenh_cu": [
+        {
+          "command": "uvx",
+          "args": [
+            "--from",
+            "notebooklm-py[mcp]",
+            "notebooklm-mcp"
+          ]
+        }
+      ],
+      "requires": {
+        "uv": true
+      },
       "isolate_home": true,
       "auth": {
         "type": "apikey",
         "_fields_doc": "KHÔNG có ô hồ sơ (NOTEBOOKLM_PROFILE) và ĐỪNG thêm lại: thư viện hễ thấy biến đó là BỎ QUA NOTEBOOKLM_AUTH_JSON, đi tìm file storage_state.json của hồ sơ trong HOME cô lập (trống trơn vì isolate_home) rồi chết FileNotFoundError, user chỉ thấy 'process đóng stdout'. Tái hiện cả hai chiều 14/08/2026. Đa tài khoản đã phân biệt sẵn bằng isolate_home: mỗi kết nối một HOME riêng theo slug.",
         "fields": [
-          { "key": "auth_json", "label": "Phiên đăng nhập (dán toàn bộ nội dung storage_state.json)",
+          {
+            "key": "auth_json",
+            "label": "Phiên đăng nhập (dán toàn bộ nội dung storage_state.json)",
             "placeholder": "Ví dụ: {\"cookies\":[{\"name\":\"SID\",\"value\":\"...\"}],\"origins\":[]}",
-            "env": "NOTEBOOKLM_AUTH_JSON" }
+            "env": "NOTEBOOKLM_AUTH_JSON"
+          }
         ],
         "guide": "NotebookLM chưa có API chính thức, nên Javis phải mượn PHIÊN ĐĂNG NHẬP trình duyệt của bạn.\n\nCẢNH BÁO: chuỗi dán vào đây là cookie phiên Google, tương đương đang đăng nhập tài khoản Google, KHÔNG phải OAuth giới hạn phạm vi. Chỉ làm trên máy bạn tin tưởng.\n\nLàm 1 lần, TRÊN MÁY CÁ NHÂN có trình duyệt (không làm được trên VPS):\n1. Cài uv nếu chưa có.\n2. Chạy: uvx --from \"notebooklm-py[browser]\" notebooklm login\n   Trình duyệt mở ra, đăng nhập Google rồi vào notebooklm.google.com một lần.\n3. Mở file vừa sinh ra: ~/.notebooklm/profiles/default/storage_state.json (Windows: %USERPROFILE%\\.notebooklm\\profiles\\default\\storage_state.json). Copy TOÀN BỘ nội dung.\n4. Dán vào ô trên rồi bấm Kết nối.\n\nPhiên Google hết hạn thì chạy lại bước 2 và dán chuỗi mới. Muốn đấu nhiều tài khoản thì thêm kết nối nữa rồi dán phiên của tài khoản đó - mỗi kết nối tự có chỗ chứa phiên riêng.",
         "guide_url": "https://github.com/teng-lin/notebooklm-py#readme",
         "setup": {
           "links": [
-            { "label": "Mở NotebookLM", "url": "https://notebooklm.google.com/" },
-            { "label": "Cài uv", "url": "https://docs.astral.sh/uv/getting-started/installation/" }
+            {
+              "label": "Mở NotebookLM",
+              "url": "https://notebooklm.google.com/"
+            },
+            {
+              "label": "Cài uv",
+              "url": "https://docs.astral.sh/uv/getting-started/installation/"
+            }
           ]
         },
         "steps": [
-          { "text": "CẢNH BÁO: đây là cookie phiên Google (tương đương đang đăng nhập), không phải OAuth giới hạn phạm vi. Cân nhắc trước khi đấu." },
-          { "text": "Cài uv trên máy chạy Javis - Javis dùng uvx để chạy server MCP của notebooklm-py.",
-            "link": "https://docs.astral.sh/uv/getting-started/installation/", "link_label": "Cài uv" },
-          { "text": "Trên MÁY CÁ NHÂN có trình duyệt, chạy: uvx --from \"notebooklm-py[browser]\" notebooklm login rồi đăng nhập Google và mở NotebookLM một lần.",
-            "link": "https://notebooklm.google.com/", "link_label": "Mở NotebookLM" },
-          { "text": "Mở ~/.notebooklm/profiles/default/storage_state.json, copy toàn bộ nội dung dán vào ô bên dưới rồi bấm Kết nối." }
+          {
+            "text": "CẢNH BÁO: đây là cookie phiên Google (tương đương đang đăng nhập), không phải OAuth giới hạn phạm vi. Cân nhắc trước khi đấu."
+          },
+          {
+            "text": "Cài uv trên máy chạy Javis - Javis dùng uvx để chạy server MCP của notebooklm-py.",
+            "link": "https://docs.astral.sh/uv/getting-started/installation/",
+            "link_label": "Cài uv"
+          },
+          {
+            "text": "Trên MÁY CÁ NHÂN có trình duyệt, chạy: uvx --from \"notebooklm-py[browser]\" notebooklm login rồi đăng nhập Google và mở NotebookLM một lần.",
+            "link": "https://notebooklm.google.com/",
+            "link_label": "Mở NotebookLM"
+          },
+          {
+            "text": "Mở ~/.notebooklm/profiles/default/storage_state.json, copy toàn bộ nội dung dán vào ô bên dưới rồi bấm Kết nối."
+          }
         ]
       },
-      "validate": { "tool": "notebook_list", "args": {} },
+      "validate": {
+        "tool": "notebook_list",
+        "args": {}
+      },
       "tool_meta": {
-        "read": ["notebook_list", "notebook_describe", "source_list", "source_read", "source_wait",
-                 "await_upload", "studio_list", "studio_status", "research_status", "share_status",
-                 "suggest_prompts", "server_info"],
-        "write": ["notebook_create", "notebook_rename", "source_add", "source_add_drive_file",
-                  "source_rename", "note_save", "chat_ask", "chat_configure", "studio_generate",
-                  "studio_rename", "studio_retry", "studio_download", "research_start",
-                  "research_import", "research_cancel"],
-        "danger": ["notebook_delete", "source_delete", "studio_delete",
-                   "share_set_access", "share_set_user", "share_remove_user"]
+        "read": [
+          "notebook_list",
+          "notebook_describe",
+          "source_list",
+          "source_read",
+          "source_wait",
+          "await_upload",
+          "studio_list",
+          "studio_status",
+          "research_status",
+          "share_status",
+          "suggest_prompts",
+          "server_info"
+        ],
+        "write": [
+          "notebook_create",
+          "notebook_rename",
+          "source_add",
+          "source_add_drive_file",
+          "source_rename",
+          "note_save",
+          "chat_ask",
+          "chat_configure",
+          "studio_generate",
+          "studio_rename",
+          "studio_retry",
+          "studio_download",
+          "research_start",
+          "research_import",
+          "research_cancel"
+        ],
+        "danger": [
+          "notebook_delete",
+          "source_delete",
+          "studio_delete",
+          "share_set_access",
+          "share_set_user",
+          "share_remove_user"
+        ]
       },
       "default_perm": "readonly",
       "purge_warning": "Xoá kết nối này là mất phiên Google đã dán. Muốn dùng lại phải lấy lại cookie từ trình duyệt một lần nữa.",
       "risk": "Kết nối này dùng COOKIE PHIÊN Google, credential tương đương đang đăng nhập tài khoản Google của bạn, không phải OAuth giới hạn phạm vi như Gmail hay Lịch.\n\nMức Chỉ đọc: liệt kê notebook, đọc nguồn, xem trạng thái. Không đụng gì.\n\nMức Ghi nháp: thêm quyền tạo notebook, thêm nguồn, lưu ghi chú, hỏi đáp trong notebook và tạo tóm tắt/audio ở Studio - những thứ này tiêu quota NotebookLM của bạn.\n\nMức Toàn quyền: thêm quyền XOÁ notebook, xoá nguồn, và CHIA SẺ notebook cho người khác. Chia sẻ nhầm thì gỡ lại được nhưng người ta đã đọc rồi, nên nó nằm ở mức cao nhất.\n\nnotebooklm-py là thư viện KHÔNG chính thức, chạy trên giao thức nội bộ của NotebookLM. Google đổi giao thức lúc nào cũng có thể làm kết nối này gãy.",
-      "rate_limit": { "calls_per_min": 20 }
+      "rate_limit": {
+        "calls_per_min": 20
+      }
     }
   ]
 }

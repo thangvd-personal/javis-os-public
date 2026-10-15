@@ -9,11 +9,11 @@
 
 ノート PC でも小さな VPS でも動きます。声で話しかけられます。Claude、ChatGPT、Grok、Gemini など 12 のプロバイダーから好きなものをつなぎ、切り替えてもツールはすべてそのまま。あなたが寝ている間もバックグラウンドで働き続けます。
 
-[![GitHub stars](https://img.shields.io/github/stars/blogminhquy/javis-os?style=flat&logo=github&label=stars)](https://github.com/blogminhquy/javis-os/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/thangvd-personal/javis-store-public?style=flat&logo=github&label=stars)](https://github.com/thangvd-personal/javis-os-public/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](../../../LICENSE)
-[![Last commit](https://img.shields.io/github/last-commit/blogminhquy/javis-os?color=f97316)](https://github.com/blogminhquy/javis-os/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/thangvd-personal/javis-store-public?color=f97316)](https://github.com/thangvd-personal/javis-os-public/commits/main)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?logo=python&logoColor=white)](../../../requirements.txt)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ed?logo=docker&logoColor=white)](https://github.com/blogminhquy/javis-os/pkgs/container/javis-os)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ed?logo=docker&logoColor=white)](https://github.com/thangvd-personal/javis-os-public/pkgs/container/javis-os)
 [![MCP](https://img.shields.io/badge/tools-Model%20Context%20Protocol-8b5cf6)](https://modelcontextprotocol.io)
 
 <!-- flags:start -->
@@ -54,9 +54,9 @@
 
 | マシン | コマンドひとつで全部インストール |
 |---|---|
-| **Linux / macOS** | `git clone https://github.com/blogminhquy/javis-os.git javis && cd javis && chmod +x install.sh && ./install.sh` |
-| **Windows** | `git clone https://github.com/blogminhquy/javis-os.git javis; cd javis; powershell -ExecutionPolicy Bypass -File install.ps1` |
-| **Docker** | `curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml && docker compose up -d` |
+| **Linux / macOS** | `git clone https://github.com/thangvd-personal/javis-os-public.git javis && cd javis && chmod +x install.sh && ./install.sh` |
+| **Windows** | `git clone https://github.com/thangvd-personal/javis-os-public.git javis; cd javis; powershell -ExecutionPolicy Bypass -File install.ps1` |
+| **Docker** | `curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml && docker compose up -d` |
 
 あとは **http://localhost:7777** を開くだけです。インストーラーは Python、サブスクリプションで動く 4 つの CLI 頭脳（`claude`、`codex`、`agy`、`grok`）と `.env` をセットアップし、サーバーを起動します。各頭脳へのサインインは **ダッシュボードの Models ページ** で行えるので、もうコマンドを打つ必要はありません。
 
@@ -250,7 +250,7 @@ flowchart LR
 Hostinger VPS → **Docker Manager → Compose → URL** → Hostinger 用のファイルを貼り付けて **Deploy** を押します。
 
 ```
-https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
 ```
 
 **Environment** 欄に必要なのは `DOMAIN_NAME`、`JAVIS_ADMIN_USER`、`JAVIS_ADMIN_PASSWORD` の 3 項目だけです。任意で `JAVIS_AUTO_UPDATE` も指定できます（`true` にすると Javis が毎日自動でアップデートします）。
@@ -276,7 +276,7 @@ Hostinger の Traefik が HTTPS 証明書を発行できるよう、`DOMAIN_NAME
 ```bash
 # Docker required (don't have it?  curl -fsSL https://get.docker.com | sh)
 mkdir javis && cd javis
-curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml
 
 docker compose run --rm javis claude auth login --claudeai   # sign in to Claude once (optional)
 docker compose up -d                                          # pull the image and run
@@ -292,7 +292,7 @@ docker compose up -d                                          # pull the image a
 <summary><b>方法 3：Linux または macOS、Docker なし</b></summary>
 
 ```bash
-git clone https://github.com/blogminhquy/javis-os.git javis && cd javis
+git clone https://github.com/thangvd-personal/javis-os-public.git javis && cd javis
 chmod +x install.sh && ./install.sh
 ```
 
@@ -306,7 +306,7 @@ chmod +x install.sh && ./install.sh
 <summary><b>方法 4：Windows（個人のマシン）</b></summary>
 
 ```powershell
-git clone https://github.com/blogminhquy/javis-os.git javis; cd javis
+git clone https://github.com/thangvd-personal/javis-os-public.git javis; cd javis
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
@@ -469,13 +469,13 @@ javis-os/
 | [ARCHITECTURE.md](../../../ARCHITECTURE.md) | 各部品の組み合わさり方と、サーバーモジュールの地図 |
 | [docs/dev/GLOSSARY.md](../../../docs/dev/GLOSSARY.md) | コードベースはベトナム語で書かれています。`nhac_hen`（リマインダー）のような名前をここで読み解けます |
 | [docs/dev/adding-a-language.md](../../../docs/dev/adding-a-language.md) | Javis をあなたの言語に翻訳する手順を、一歩ずつ解説 |
-| [Issue テンプレート](https://github.com/blogminhquy/javis-os/issues/new/choose) | バグ報告、機能リクエスト、翻訳の申し出 |
+| [Issue テンプレート](https://github.com/thangvd-personal/javis-os-public/issues/new/choose) | バグ報告、機能リクエスト、翻訳の申し出 |
 
 [行動規範](../../../CODE_OF_CONDUCT.md) を守ってください。また、セキュリティ上の問題は [SECURITY.md](../../../SECURITY.md) の説明に従って非公開で報告してください。
 
 Javis が役に立ったら、リポジトリに ⭐ を付けていただけると、ほかの人が見つけやすくなります。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=blogminhquy/javis-os&type=Date)](https://star-history.com/#blogminhquy/javis-os&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=thangvd-personal/javis-os-public&type=Date)](https://star-history.com/#thangvd-personal/javis-os-public&Date)
 
 ---
 

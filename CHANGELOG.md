@@ -2188,7 +2188,7 @@ Cảm ơn người dùng đã gửi báo lỗi kèm bản vá chạy thử trên
 
 ## [0.55.30] - 2026-09-05
 ### Thêm mới
-- **Kho cài đặt chuyển sang kho riêng: [javis-store](https://github.com/blogminhquy/javis-store).** Từ giờ thêm một món vào kho là mọi máy đang chạy Javis **thấy ngay**, không phải chờ bản cập nhật nào cả.
+- **Kho cài đặt chuyển sang kho riêng: [javis-store](https://github.com/thangvd-personal/javis-store-public).** Từ giờ thêm một món vào kho là mọi máy đang chạy Javis **thấy ngay**, không phải chờ bản cập nhật nào cả.
 - **Ai cũng góp được món vào kho.** Repo kho công khai, kèm hướng dẫn gửi bài và danh sách những gì sẽ bị soi khi duyệt. Mọi món đều được đọc mã trước khi vào kho.
 - Mã nguồn từng món nằm ngay cạnh tệp tải về, nên bạn đọc được nó **trước khi** cài chứ không phải tải rồi mới xem.
 
@@ -4452,7 +4452,7 @@ Lỗi của dịch vụ trả về giữa lúc gọi tool nay được Javis ch�
 ## [0.9.275] - 2026-07-30
 Đổi tài khoản Google mà Javis vẫn chạy bằng tài khoản cũ: đổi ô đăng nhập giờ vứt luôn token cũ.
 ### Sửa lỗi
-- **Đăng nhập lại bằng email khác mà mọi tool vẫn trả về tài khoản cũ (báo từ người dùng thật).** Người dùng xoá kết nối rồi đăng nhập lại bằng `hi@minhquy.vn`, nhưng tool Google vẫn báo tài khoản `blogminhquy@gmail.com`. Nguyên nhân nối tiếp đúng vụ 0.9.274: `workspace-mcp` cache token theo email, còn ô "Email Google của bạn" chỉ CHỌN dùng credential nào chứ không ép đăng nhập lại. Token cũ nằm nguyên trên đĩa nên nó cứ chọn đúng cái cũ. Nay đổi bất kỳ ô đăng nhập nào (email, Client ID, Client Secret) trên nguồn tự giữ token là Javis vứt luôn kho token của tài khoản cũ, lần gọi tool sau bắt buộc đăng nhập lại. Nhập lại y hệt giá trị cũ, hoặc chỉ đổi tên gợi nhớ, thì KHÔNG đụng gì - không bắt ai đăng nhập lại vô cớ.
+- **Đăng nhập lại bằng email khác mà mọi tool vẫn trả về tài khoản cũ (báo từ người dùng thật).** Người dùng xoá kết nối rồi đăng nhập lại bằng `hi@minhquy.vn`, nhưng tool Google vẫn báo tài khoản `ducthang128@gmail.com`. Nguyên nhân nối tiếp đúng vụ 0.9.274: `workspace-mcp` cache token theo email, còn ô "Email Google của bạn" chỉ CHỌN dùng credential nào chứ không ép đăng nhập lại. Token cũ nằm nguyên trên đĩa nên nó cứ chọn đúng cái cũ. Nay đổi bất kỳ ô đăng nhập nào (email, Client ID, Client Secret) trên nguồn tự giữ token là Javis vứt luôn kho token của tài khoản cũ, lần gọi tool sau bắt buộc đăng nhập lại. Nhập lại y hệt giá trị cũ, hoặc chỉ đổi tên gợi nhớ, thì KHÔNG đụng gì - không bắt ai đăng nhập lại vô cớ.
 ### Cải thiện
 - `test_cred_dir_rieng.py` thêm 7 phép thử, trong đó 4 phép chạy THẬT `update_connection` trên kho giả rồi soi thư mục token trên đĩa: nhập lại y hệt thì giữ, đổi tên thì giữ, đổi email thì vứt, đổi Client ID thì vứt. Đây là loại lỗi soi mã nguồn không thấy, phải chạy mới lộ.
 
@@ -6812,7 +6812,7 @@ Bản 0.9.70 ship tool `javis_schedule` ra ngoài trong tình trạng KHÔNG dù
 
 ## [0.5.1] - 2026-07-01
 ### Thay đổi
-- Đổi tên repo/image GitHub sang javis-os (image ghcr.io/blogminhquy/javis-os, GITHUB_REPO, link cài đặt trong README/DEPLOY).
+- Đổi tên repo/image GitHub sang javis-os (image ghcr.io/thangvd-personal/javis-os-public, GITHUB_REPO, link cài đặt trong README/DEPLOY).
 
 ## [0.5.0] - 2026-07-01
 ### Thay đổi

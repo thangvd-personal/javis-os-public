@@ -7,8 +7,8 @@
 # CÁCH DÙNG - mỗi bản một THƯ MỤC RIÊNG:
 #
 #   mkdir -p ~/javis-shop && cd ~/javis-shop
-#   curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml
-#   curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.multi.yml
+#   curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml
+#   curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.multi.yml
 #   cat > .env <<'EOF'
 #   JAVIS_NAME=javis-shop
 #   JAVIS_HOST_PORT=7777
@@ -42,7 +42,7 @@ services:
     # thay thế, nên khai lại là ra hai binding cùng một cổng và Docker báo "port is already
     # allocated". Việc thu cổng về loopback làm bằng JAVIS_BIND=127.0.0.1 trong .env (xem đầu file).
     networks:
-      - default        # phải liệt kê lại: khai networks ở service là THAY danh sách, không cộng thêm
+      - default # phải liệt kê lại: khai networks ở service là THAY danh sách, không cộng thêm
       - javis-web
     labels:
       # Proxy dùng chung đọc đúng hai nhãn này rồi tự dựng site + xin chứng chỉ.

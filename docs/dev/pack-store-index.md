@@ -7,7 +7,7 @@ cơ sở dữ liệu, không có tài khoản. Sửa file đó là kho đổi.
 gói, kiểm, hỏi, cài, gỡ sạch) nằm ở `server/pack_install.py` và nó không quan tâm gói đến từ
 đâu. Cài từ kho đi qua **đúng** màn hình xác nhận như kéo một tệp `.zip` vào.
 
-Kho nằm ở **REPO RIÊNG**: [blogminhquy/javis-store](https://github.com/blogminhquy/javis-store),
+Kho nằm ở **REPO RIÊNG**: [thangvd-personal/javis-store-public](https://github.com/thangvd-personal/javis-store-public),
 Javis đọc `index.json` ở đó qua `raw.githubusercontent.com`. Người dùng đổi sang kho khác được ở
 `settings.json` khoá `packs.store_url`.
 

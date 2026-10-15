@@ -13,7 +13,7 @@ loại năng lực có vòng đời khác nhau, và chính chỗ khác nhau đó
     thứ họ viết thì không.
 
 Gói dựng ngay trong test chứ không đọc từ đĩa. Trước 0.55.30 nó đọc `examples/packs/`, nhưng
-gói thật đã dọn sang repo kho riêng (`blogminhquy/javis-store`) - và một test của Javis OS thì
+gói thật đã dọn sang repo kho riêng (`thangvd-personal/javis-store-public`) - và một test của Javis OS thì
 không được phụ thuộc vào nội dung một repo khác, càng không phụ thuộc vào mạng.
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401

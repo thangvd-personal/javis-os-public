@@ -2,7 +2,7 @@
 # Javis OS - docker compose (PRODUCTION: pull image dựng sẵn từ GHCR)
 #
 # CÀI TRÊN HOSTINGER: dùng file RIÊNG cho Hostinger (1 container, deploy là chạy, không kén hạ tầng):
-#   https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+#   https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
 #   (Docker Manager → Compose → URL. Cách gắn TÊN MIỀN + HTTPS ghi trong chú thích cuối file đó / DEPLOY.md.)
 #   File NÀY cũng chạy trên Hostinger được, nhưng file kia gọn hơn và có sẵn nhãn Traefik.
 #
@@ -21,7 +21,7 @@
 # ============================================================================
 services:
   javis:
-    image: ghcr.io/blogminhquy/javis-os:latest
+    image: ghcr.io/thangvd-personal/javis-os-public:latest
     # Tên container LẤY TỪ BIẾN, không đóng cứng: hai bản Javis trên cùng một VPS mà cùng tên
     # container là con thứ hai chết ngay lúc `up` ("name is already in use"), kể cả khi đã chạy ở
     # thư mục khác - Docker đặt tên container theo phạm vi TOÀN MÁY chứ không theo project.
@@ -31,7 +31,7 @@ services:
     environment:
       # Các mặc định cổng/state/brain đã nằm trong Docker image; compose chỉ giữ
       # token thật sự cần chia sẻ giữa app và Watchtower.
-      WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-javis-update}   # để nút "Cập nhật" gọi được Watchtower
+      WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-javis-update} # để nút "Cập nhật" gọi được Watchtower
       # Tài khoản quản trị đặt SẴN lúc deploy. Điền hai dòng này vào file `.env` nằm cạnh
       # compose là xong: server boot lên đã có admin, không còn khoảng trống nào.
       # Bỏ trống thì lần đầu mở app sẽ ra màn tạo tài khoản, và trên server public ai mở link
@@ -51,16 +51,16 @@ services:
       # cùng một cổng và Docker báo "port is already allocated".
       - "${JAVIS_BIND:-0.0.0.0}:${JAVIS_HOST_PORT:-7777}:7777"
     volumes:
-      - javis-data:/data                       # state: settings/mật khẩu/sessions/loop (có secret → KHÔNG git)
-      - javis-brains:/brains                   # MỌI second brain (kiến thức của bạn) - bền qua mọi update
+      - javis-data:/data # state: settings/mật khẩu/sessions/loop (có secret → KHÔNG git)
+      - javis-brains:/brains # MỌI second brain (kiến thức của bạn) - bền qua mọi update
       # ↑ Muốn BACKUP brain lên GitHub: đổi dòng trên thành bind-mount thư mục thật trên VPS, vd:
       #     - ./brains:/brains
       #   rồi 1 lần cấp quyền cho user non-root của container:  sudo chown -R 10001:10001 ./brains
       #   Sau đó: cd brains && git init && git add -A && git commit -m backup && git push
-      - claude-auth:/home/javis/.claude        # token đăng nhập Claude (giữ qua mọi update!)
-      - codex-auth:/home/javis/.codex          # token đăng nhập ChatGPT/Codex (codex login - giữ qua update)
+      - claude-auth:/home/javis/.claude # token đăng nhập Claude (giữ qua mọi update!)
+      - codex-auth:/home/javis/.codex # token đăng nhập ChatGPT/Codex (codex login - giữ qua update)
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,os,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.getenv('JAVIS_PORT','7777')+'/health',timeout=4).status==200 else 1)"]
+      test: [ "CMD", "python", "-c", "import urllib.request,os,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+os.getenv('JAVIS_PORT','7777')+'/health',timeout=4).status==200 else 1)" ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -72,7 +72,7 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: ${JAVIS_NAME:-javis}-tunnel
     restart: unless-stopped
-    profiles: ["tunnel"]
+    profiles: [ "tunnel" ]
     depends_on:
       - javis
     # `javis` ở đây là TÊN SERVICE trong compose, không phải tên container - mỗi project có mạng
@@ -81,22 +81,22 @@ services:
     # URL cố định: tạo named tunnel ở Cloudflare Zero Trust → TUNNEL_TOKEN env → đổi command thành:
     #   command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
 
-  # Cập nhật 1-CLICK từ UI (nút "Cập nhật ngay"). BẬT SẴN từ 0.55.56.
-  #
-  # Trước đó nó nằm trong `profiles: ["update"]`, tức `docker compose up -d` quen tay KHÔNG bật
-  # nó. Hệ quả đo được qua hai lần chủ repo báo (2026-08-12 rồi 2026-09-08): máy này có nút cập
-  # nhật, máy kia không, không ai đoán ra vì sao - và một cái nút chỉ hiện trên số ít máy thì
-  # coi như không có. Nay mặc định BẬT: cài mới là cập nhật được ngay, khỏi nhớ thêm lệnh nào.
-  #
-  # Đổi lại, Watchtower cần quyền Docker (socket). Host nào không cho là nó khởi động lại liên
-  # tục và Docker Manager báo stack "Partially running" - CONTAINER JAVIS VẪN CHẠY BÌNH THƯỜNG,
-  # chỉ mất cái nút, và trang Cập nhật sẽ nói thẳng là phải cập nhật tay. Không muốn có nó:
-  #   docker compose up -d --scale watchtower=0
-  #
-  # Image là bản fork còn bảo trì, KHÔNG phải `containrrr/watchtower`: bản đó đã archive và mặc
-  # định nói Docker API 1.25, Docker Engine mới từ chối ("client version 1.25 is too old") nên
-  # nó Restarting mãi - lý do thật của cảnh "máy mới không cập nhật được" (2026-10-01). Bản fork
-  # tự thương lượng phiên bản API. Ghim major `:1`, xem giải thích trong docker-compose.hostinger.yml.
+    # Cập nhật 1-CLICK từ UI (nút "Cập nhật ngay"). BẬT SẴN từ 0.55.56.
+    #
+    # Trước đó nó nằm trong `profiles: ["update"]`, tức `docker compose up -d` quen tay KHÔNG bật
+    # nó. Hệ quả đo được qua hai lần chủ repo báo (2026-08-12 rồi 2026-09-08): máy này có nút cập
+    # nhật, máy kia không, không ai đoán ra vì sao - và một cái nút chỉ hiện trên số ít máy thì
+    # coi như không có. Nay mặc định BẬT: cài mới là cập nhật được ngay, khỏi nhớ thêm lệnh nào.
+    #
+    # Đổi lại, Watchtower cần quyền Docker (socket). Host nào không cho là nó khởi động lại liên
+    # tục và Docker Manager báo stack "Partially running" - CONTAINER JAVIS VẪN CHẠY BÌNH THƯỜNG,
+    # chỉ mất cái nút, và trang Cập nhật sẽ nói thẳng là phải cập nhật tay. Không muốn có nó:
+    #   docker compose up -d --scale watchtower=0
+    #
+    # Image là bản fork còn bảo trì, KHÔNG phải `containrrr/watchtower`: bản đó đã archive và mặc
+    # định nói Docker API 1.25, Docker Engine mới từ chối ("client version 1.25 is too old") nên
+    # nó Restarting mãi - lý do thật của cảnh "máy mới không cập nhật được" (2026-10-01). Bản fork
+    # tự thương lượng phiên bản API. Ghim major `:1`, xem giải thích trong docker-compose.hostinger.yml.
   watchtower:
     image: ghcr.io/nicholas-fedor/watchtower:1
     container_name: ${JAVIS_NAME:-javis}-watchtower
@@ -104,7 +104,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      WATCHTOWER_HTTP_API_ENDPOINTS: update                 # nhận lệnh cập nhật từ nút bấm
+      WATCHTOWER_HTTP_API_ENDPOINTS: update # nhận lệnh cập nhật từ nút bấm
       WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-javis-update}
       # TỰ đi tìm bản mới theo chu kỳ, KHÔNG chờ ai bấm nút. Mặc định TẮT có chủ ý: bật lên là
       # Javis tự khởi động lại bất cứ lúc nào có image mới, cắt ngang việc nền và phiên chat
@@ -112,7 +112,7 @@ services:
       # (chu kỳ mặc định 24h, đổi bằng JAVIS_AUTO_UPDATE_INTERVAL tính bằng GIÂY).
       WATCHTOWER_HTTP_API_PERIODIC_POLLS: ${JAVIS_AUTO_UPDATE:-false}
       WATCHTOWER_POLL_INTERVAL: ${JAVIS_AUTO_UPDATE_INTERVAL:-86400}
-      WATCHTOWER_CLEANUP: "true"                            # dọn image cũ sau khi update
+      WATCHTOWER_CLEANUP: "true" # dọn image cũ sau khi update
     # Theo dõi ĐÚNG container của bản này. Để trống hay ghi cứng "javis" thì trên VPS nhiều bản,
     # Watchtower của bản này sẽ đi cập nhật (và restart) container của bản khác.
     command: ${JAVIS_NAME:-javis}

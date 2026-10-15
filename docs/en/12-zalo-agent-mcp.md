@@ -18,7 +18,7 @@
 > Running all three at once is fine, they do not collide.
 
 Javis connects a personal Zalo account through the MCP of
-[`javis-zalo`](https://github.com/blogminhquy/javis-zalo), Javis's own Zalo CLI. There is a single
+[`javis-zalo`](https://github.com/thangvd-personal/javis-zalo-public), Javis's own Zalo CLI. There is a single
 MCP process: sign in by QR, read or search conversations and send messages through its tools.
 
 > `javis-zalo` uses the unofficial Zalo API via `zca-js`. Zalo does not support this way
@@ -47,7 +47,7 @@ follows its official npm releases. Since 0.83.0 Javis runs this build instead of
 
 The **Guide on GitHub** button in the Zalo card always opens this documentation page:
 
-<https://github.com/blogminhquy/javis-os/blob/main/docs/en/12-zalo-agent-mcp.md>
+<https://github.com/thangvd-personal/javis-os-public/blob/main/docs/en/12-zalo-agent-mcp.md>
 
 ## The MCP tools
 
@@ -270,6 +270,6 @@ want to check messages, ask Javis; MCP can use `zalo_get_messages` for buffered 
 
 ## References
 
-- [The `javis-zalo` repository](https://github.com/blogminhquy/javis-zalo)
+- [The `javis-zalo` repository](https://github.com/thangvd-personal/javis-zalo-public)
 - [zca-js](https://github.com/RFS-ADRENO/zca-js), the library that talks to Zalo underneath
 - [Connections and MCP permissions in Javis](09-connections-and-business-data.md)

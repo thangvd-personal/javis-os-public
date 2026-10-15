@@ -9,11 +9,11 @@
 
 Lancez-le sur votre ordinateur portable ou sur un petit VPS. Parlez-lui à voix haute. Branchez Claude, ChatGPT, Grok, Gemini ou n'importe lequel de 12 fournisseurs, gardez tous vos outils quand vous en changez, et laissez-le travailler en arrière-plan pendant que vous dormez.
 
-[![GitHub stars](https://img.shields.io/github/stars/blogminhquy/javis-os?style=flat&logo=github&label=stars)](https://github.com/blogminhquy/javis-os/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/thangvd-personal/javis-store-public?style=flat&logo=github&label=stars)](https://github.com/thangvd-personal/javis-os-public/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](../../../LICENSE)
-[![Last commit](https://img.shields.io/github/last-commit/blogminhquy/javis-os?color=f97316)](https://github.com/blogminhquy/javis-os/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/thangvd-personal/javis-store-public?color=f97316)](https://github.com/thangvd-personal/javis-os-public/commits/main)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776ab?logo=python&logoColor=white)](../../../requirements.txt)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ed?logo=docker&logoColor=white)](https://github.com/blogminhquy/javis-os/pkgs/container/javis-os)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-2496ed?logo=docker&logoColor=white)](https://github.com/thangvd-personal/javis-os-public/pkgs/container/javis-os)
 [![MCP](https://img.shields.io/badge/tools-Model%20Context%20Protocol-8b5cf6)](https://modelcontextprotocol.io)
 
 <!-- flags:start -->
@@ -54,9 +54,9 @@ Lancez-le sur votre ordinateur portable ou sur un petit VPS. Parlez-lui à voix 
 
 | Machine | Une seule commande installe tout |
 |---|---|
-| **Linux / macOS** | `git clone https://github.com/blogminhquy/javis-os.git javis && cd javis && chmod +x install.sh && ./install.sh` |
-| **Windows** | `git clone https://github.com/blogminhquy/javis-os.git javis; cd javis; powershell -ExecutionPolicy Bypass -File install.ps1` |
-| **Docker** | `curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml && docker compose up -d` |
+| **Linux / macOS** | `git clone https://github.com/thangvd-personal/javis-os-public.git javis && cd javis && chmod +x install.sh && ./install.sh` |
+| **Windows** | `git clone https://github.com/thangvd-personal/javis-os-public.git javis; cd javis; powershell -ExecutionPolicy Bypass -File install.ps1` |
+| **Docker** | `curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml && docker compose up -d` |
 
 Ouvrez ensuite **http://localhost:7777**. L'installateur met en place Python, les quatre cerveaux CLI par abonnement (`claude`, `codex`, `agy`, `grok`) et un `.env`, puis démarre le serveur. Vous vous connectez à chaque cerveau **depuis la page Models du tableau de bord**, sans plus taper de commandes.
 
@@ -250,7 +250,7 @@ flowchart LR
 VPS Hostinger → **Docker Manager → Compose → URL** → collez le fichier Hostinger et cliquez sur **Deploy** :
 
 ```
-https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.hostinger.yml
+https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.hostinger.yml
 ```
 
 Le champ **Environment** n'a besoin que de trois valeurs : `DOMAIN_NAME`, `JAVIS_ADMIN_USER`, `JAVIS_ADMIN_PASSWORD`, plus un `JAVIS_AUTO_UPDATE` facultatif (mettez-le à `true` et Javis se met à jour tout seul chaque jour).
@@ -276,7 +276,7 @@ Détails et dépannage : [DEPLOY.en.md](../../../DEPLOY.en.md).
 ```bash
 # Docker required (don't have it?  curl -fsSL https://get.docker.com | sh)
 mkdir javis && cd javis
-curl -fsSLO https://raw.githubusercontent.com/blogminhquy/javis-os/main/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/docker-compose.yml
 
 docker compose run --rm javis claude auth login --claudeai   # sign in to Claude once (optional)
 docker compose up -d                                          # pull the image and run
@@ -292,7 +292,7 @@ Accès à distance sans domaine : `docker compose --profile tunnel up -d`, puis 
 <summary><b>Option 3 : Linux ou macOS, sans Docker</b></summary>
 
 ```bash
-git clone https://github.com/blogminhquy/javis-os.git javis && cd javis
+git clone https://github.com/thangvd-personal/javis-os-public.git javis && cd javis
 chmod +x install.sh && ./install.sh
 ```
 
@@ -306,7 +306,7 @@ Le script installe Python, Node et les cerveaux CLI, crée un venv, enregistre u
 <summary><b>Option 4 : Windows (machine personnelle)</b></summary>
 
 ```powershell
-git clone https://github.com/blogminhquy/javis-os.git javis; cd javis
+git clone https://github.com/thangvd-personal/javis-os-public.git javis; cd javis
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
@@ -469,13 +469,13 @@ Rapports de bugs, idées, traductions et pull requests sont tous les bienvenus, 
 | [ARCHITECTURE.md](../../../ARCHITECTURE.md) | Comment les éléments s'articulent, et une carte des modules du serveur |
 | [docs/dev/GLOSSARY.md](../../../docs/dev/GLOSSARY.md) | La base de code a été écrite en vietnamien : ce glossaire décode des noms comme `nhac_hen` (rappel) |
 | [docs/dev/adding-a-language.md](../../../docs/dev/adding-a-language.md) | Traduire Javis dans votre langue, étape par étape |
-| [Modèles d'issues](https://github.com/blogminhquy/javis-os/issues/new/choose) | Rapport de bug, demande de fonctionnalité, proposition de traduction |
+| [Modèles d'issues](https://github.com/thangvd-personal/javis-os-public/issues/new/choose) | Rapport de bug, demande de fonctionnalité, proposition de traduction |
 
 Merci de respecter le [Code de conduite](../../../CODE_OF_CONDUCT.md) et de signaler les problèmes de sécurité en privé, comme décrit dans [SECURITY.md](../../../SECURITY.md).
 
 Si Javis vous est utile, une ⭐ sur le dépôt aide d'autres personnes à le découvrir.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=blogminhquy/javis-os&type=Date)](https://star-history.com/#blogminhquy/javis-os&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=thangvd-personal/javis-os-public&type=Date)](https://star-history.com/#thangvd-personal/javis-os-public&Date)
 
 ---
 

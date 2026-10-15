@@ -51,7 +51,7 @@ FORMAT_VERSION = 1
 #
 # Tách repo còn mở được đường đóng góp: người lạ gửi Pull Request vào kho, chủ kho đọc mã rồi mới
 # trộn - mà không ai phải có quyền ghi vào mã nguồn Javis.
-STORE_MAC_DINH = ("https://raw.githubusercontent.com/blogminhquy/javis-store/"
+STORE_MAC_DINH = ("https://raw.githubusercontent.com/thangvd-personal/javis-store-public/"
                   "main/index.json")
 
 # Loại năng lực một mục trong kho mang lại. Đây là thứ chia lưới thành các tab "Trợ lý /

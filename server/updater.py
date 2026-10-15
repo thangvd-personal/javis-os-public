@@ -251,7 +251,7 @@ def drop_update_stash(stash_oid, restored):
 
 def release_source():
     """The same official release branch that /version checks in main.py."""
-    return "https://github.com/blogminhquy/javis-os.git", "main"
+    return "https://github.com/thangvd-personal/javis-os-public.git", "main"
 
 
 def _clean_tracked_tree():

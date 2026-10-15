@@ -1,6 +1,6 @@
 # Nhóm chat team: tích hợp T0 tới T5 vào main, phát hành 0.140.0
 
-Ngày 14/10/2026. Nhánh tích hợp `claude/team-chat-release`, PR [#649](https://github.com/blogminhquy/javis-os/pull/649).
+Ngày 14/10/2026. Nhánh tích hợp `claude/team-chat-release`, PR [#649](https://github.com/thangvd-personal/javis-os-public/pull/649).
 Spec: [2026-10-13-team-chat-design.md](../superpowers/specs/2026-10-13-team-chat-design.md). Biên bản từng mốc:
 `team-chat-t1.md` tới `team-chat-t5.md` (số phiên bản ghi trong các biên bản đó là số GIỮ CHỖ lúc làm, chưa từng phát hành).
 
