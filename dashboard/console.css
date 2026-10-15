@@ -1935,6 +1935,8 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 @media (max-width: 600px){ .ws-rs{min-height:44px;margin-left:58px} }
 /* Cả hàng ghim mang một vạch màu bên trái - dấu ghim nhỏ, vạch mới là thứ đọc được khi liếc. */
 .ws-item-wrap.ghim > .ws-item { border-left: 3px solid var(--accent); border-radius: 9px; }
+.ws-item-wrap.an > .ws-item { opacity: 0.65; }
+.ws-item-wrap.an:hover > .ws-item, .ws-item-wrap.an > .ws-item.on { opacity: 1; }
 /* Nhãn nhóm "Đã ghim" / "Còn lại", cùng bộ mặt với nhãn nhóm ngày của cột lịch sử. */
 .ws-glabel { font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text3); padding: 8px 4px 2px; }

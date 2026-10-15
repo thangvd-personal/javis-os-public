@@ -57,14 +57,14 @@ _WF.write_text(
     encoding="utf-8")
 
 
-def meta(kind, slug, pinned=None, group=None):
+def meta(kind, slug, pinned=None, group=None, hidden=None):
     """Gọi endpoint như FastAPI gọi nó: khoá không gửi là None, KHÔNG phải object Form(...).
 
     Gọi thẳng một hàm FastAPI trong test thì tham số mặc định vẫn là `Form(...)` (truthy) nên
     nhánh "không gửi thì không đụng" sẽ hiểu sai - endpoint đã quy về None, đây là vế còn lại
     của cùng một bài học."""
     return asyncio.run(main.capability_meta(kind=kind, slug=slug, brain=BRAIN,
-                                            pinned=pinned, group=group))
+                                            pinned=pinned, group=group, hidden=hidden))
 
 
 def doc(f):
@@ -85,6 +85,13 @@ check("ghim KHÔNG đổi nhóm", doc(_AG)[0].get("group") == "Marketing")
 r = meta("agent", "nguoi-viet", pinned="0")
 check("bỏ ghim: XOÁ khoá chứ không để lại pinned: false",
       r.get("pinned") is False and "pinned" not in doc(_AG)[0])
+
+r = meta("agent", "nguoi-viet", hidden="1")
+check("ẩn agent: trả ok kèm trạng thái", r.get("ok") and r.get("hidden") is True)
+check("ẩn ghi vào frontmatter", doc(_AG)[0].get("hidden") is True)
+r = meta("agent", "nguoi-viet", hidden="0")
+check("bỏ ẩn: XOÁ khoá chứ không để lại hidden: false",
+      r.get("hidden") is False and "hidden" not in doc(_AG)[0])
 
 check("ghim workflow cũng được", meta("workflow", "viet-bai", pinned="true").get("pinned") is True)
 check("ghim workflow không đụng steps",
@@ -124,6 +131,7 @@ ags = main.agents_index(BRAIN)
 wfs = main.workflows_index(BRAIN)
 check("agents_index trả pinned (danh sách mới xếp được)",
       ags and ags[0]["slug"] == "nguoi-viet" and ags[0]["pinned"] is True)
+check("agents_index trả hidden", ags and "hidden" in ags[0])
 check("workflows_index trả pinned",
       wfs and wfs[0]["slug"] == "viet-bai" and wfs[0]["pinned"] is True)
 

@@ -6758,6 +6758,7 @@ def agents_index(brain: str, *, kem_prompt: bool = True) -> list:
                     "model": meta.get("model", ""), **_agent_tag_fields(meta),
                     "model_provider": meta.get("model_provider", ""),
                     "pinned": bool(meta.get("pinned")),
+                    "hidden": bool(meta.get("hidden")),
                     "avatar": agent_avatar.for_agent(meta, f.stem)})
         if kem_prompt:
             out[-1]["prompt"] = body
@@ -6802,6 +6803,7 @@ def agent_get(slug: str = Query(...), brain: str = Query("brain")):
             "skills": meta.get("skills", []) or [], "model": meta.get("model", ""),
             **_agent_tag_fields(meta), "model_provider": meta.get("model_provider", ""),
             "prompt": body, "pinned": bool(meta.get("pinned")),
+            "hidden": bool(meta.get("hidden")),
             "avatar": agent_avatar.for_agent(meta, slug)}
 
 @app.post("/agents")
@@ -8626,10 +8628,12 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
                           brain: str = Form("brain"),
                           pinned: str = Form(None), group: str = Form(None),
                           tags: str = Form(None), add_tags: str = Form(None),
-                          remove_tags: str = Form(None)):
-    """Ghim / bỏ ghim và chuyển nhóm cho một agent hoặc workflow; gắn và bỏ tag cho agent.
+                          remove_tags: str = Form(None),
+                          hidden: str = Form(None)):
+    """Ghim / bỏ ghim, ẩn / hiện và chuyển nhóm cho một agent hoặc workflow; gắn và bỏ tag cho agent.
 
     `pinned`: "1"/"true" = ghim, "0"/"false" = bỏ ghim, không gửi = không đụng.
+    `hidden`: "1"/"true" = ẩn, "0"/"false" = hiện, không gửi = không đụng.
     `group` (workflow): tên nhóm mới, rỗng = về nhóm mặc định. Không gửi = không đụng.
     Agent (0.100.0, docs/dev/agent-tags.md): `add_tags`/`remove_tags` (JSON danh sách) thêm hay bỏ đúng
     các tag đó trên tập hiện có; `tags` thay cả tập (`[]` = bỏ hết). `group` của client cũ theo luật
@@ -8647,6 +8651,7 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
     # `Form(...)` chứ không phải None - truthy, nên nhánh "không gửi thì không đụng" bên dưới
     # sẽ hiểu sai. Quy về None ngay: chỉ CHUỖI mới là giá trị người dùng gửi.
     pinned = pinned if isinstance(pinned, str) else None
+    hidden = hidden if isinstance(hidden, str) else None
     group = group if isinstance(group, str) else None
     tags, add_tags, remove_tags = (x if isinstance(x, str) else None for x in (tags, add_tags, remove_tags))
     la_agent = (kind or "").strip() == "agent"
@@ -8669,6 +8674,12 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
                 meta["pinned"] = True
             else:
                 meta.pop("pinned", None)      # bỏ ghim thì XOÁ khoá, không để lại `pinned: false`
+        if hidden is not None:
+            an = str(hidden).strip().lower() in ("1", "true", "yes", "on")
+            if an:
+                meta["hidden"] = True
+            else:
+                meta.pop("hidden", None)      # bỏ ẩn thì XOÁ khoá, không để lại `hidden: false`
         if la_agent:
             # Đọc tag NGAY TRONG khoá ghi: hai tab thêm/bỏ khác tag cùng lúc đều được giữ. Mọi thao
             # tác chạm agent (kể cả ghim) ghi dạng chuẩn, nên file cũ chỉ có `group` chuyển đúng một lần.
@@ -8701,7 +8712,7 @@ async def capability_meta(kind: str = Form(...), slug: str = Form(...),
             "Phần đầu file (frontmatter) đang hỏng, chưa ghi gì. Sửa file trước rồi thử lại.",
             "The file header (frontmatter) is broken; nothing was saved. Fix the file and try again.")},
             status_code=422)
-    out = {"ok": True, "slug": slug, "pinned": bool(meta.get("pinned"))}
+    out = {"ok": True, "slug": slug, "pinned": bool(meta.get("pinned")), "hidden": bool(meta.get("hidden"))}
     out.update(_agent_tag_fields(meta) if la_agent else {"group": _nhom_cua(meta)})
     return out
 

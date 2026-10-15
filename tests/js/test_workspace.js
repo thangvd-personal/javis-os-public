@@ -199,7 +199,7 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
     nhomCua: (x) => (String((x && x.group) || "").trim()) || "Chung", NHOM_MD: "Chung", brain: () => "brain",
     // Tag của agent (0.100.0) cũng khai ở đầu module: mượn bản thật qua W.
     tagsCua: W.tagsCua, tagCap: W.tagCap, laKhoa: W.laKhoa, demTag: W.demTag, coTag: W.coTag,
-    khoaTag: W.khoaTag, dongChonTag: W.dongChonTag, TAG_NONE: W.TAG_NONE,
+    khoaTag: W.khoaTag, dongChonTag: W.dongChonTag, TAG_NONE: W.TAG_NONE, TAG_HIDDEN: W.TAG_HIDDEN,
     TAB_PHAI: ["cai", "lichsu", "viec"],
     luuChon() {}, moPhien() {}, heptLai: () => false, chatReady() {}, active: true, opening: 0,
     esc: (s) => String(s == null ? "" : s), t: (k) => k, ic: () => "<svg></svg>", avatar: () => "<i></i>",
@@ -290,6 +290,21 @@ check("phan tram", W.phanTram(W.tienDoMoi(4)) === 0 && W.phanTram(st) === 100);
   const chip = W.chipTagHtml({ tags: ['<img src=x onerror="a()">', "B", "C", "D", "E"] });
   check("chip tag escape ten do nguoi dung go (khong XSS)", chip.includes("&lt;img") && !chip.includes("<img"));
   check("chip tag toi da 3, phan con lai gop +n", (chip.match(/class="ws-tag"/g) || []).length === 3 && chip.includes("ws-tag-more"));
+  // ---- Ẩn trợ lý (TAG_HIDDEN, ws.hide_agent, ws.show_agent) ----
+  const dsAn = [
+    { slug: "a1", name: "Agent hiện 1" },
+    { slug: "a2", name: "Agent hiện 2", tags: ["Hỗ trợ"] },
+    { slug: "a3", name: "Agent ẩn", hidden: true, tags: ["Hỗ trợ"] }
+  ];
+  check("loc danh sach mac dinh bo qua tro ly an",
+    W.loc(dsAn, "", "", true).map(x => x.slug).join() === "a1,a2");
+  check("loc theo tag cung bo qua tro ly an",
+    W.loc(dsAn, "", "Hỗ trợ", true).map(x => x.slug).join() === "a2");
+  check("loc TAG_HIDDEN chi lay tro ly da an",
+    W.loc(dsAn, "", W.TAG_HIDDEN, true).map(x => x.slug).join() === "a3");
+  const demAn = W.demTag(dsAn);
+  check("demTag dem rieng daAn", demAn.daAn === 1 && demAn.tags[0].n === 1);
+
   delete ds[0].tags; delete ds[1].tags; delete ds[2].tags;
   ctx.S.nhom = ""; ctx.veTrai();
 
@@ -666,6 +681,7 @@ check("studio.js editAgent nhan host + onSaved", /function editAgent\(a, opts\)/
     && ws.indexOf('class="ws-item-more"') > ws.indexOf("</button>"));
   check("menu co du bon dong tac", /t\("ws.pin"\)/.test(ws) && /t\("ws.move_group"\)/.test(ws)
     && /t\("ws.edit"\)/.test(ws) && /data-act="xoa"/.test(ws));
+  check("menu co nut an/hien tro ly", /data-act="an"/.test(ws) && /t\(an \? "ws\.show_agent" : "ws\.hide_agent"\)/.test(ws));
   check("doi nhom/ghim di duong /capability/meta, KHONG POST /agents (endpoint do nhan ca prompt)",
     /api\("\/capability\/meta"/.test(ws) && !/api\("\/agents",/.test(ws));
   check("xoa co hoi lai truoc", /confirm\(hoi\)/.test(ws));
@@ -674,8 +690,8 @@ check("studio.js editAgent nhan host + onSaved", /function editAgent\(a, opts\)/
   check("roi trang thi dong menu (menu song o body)", /function roi\(\)[\s\S]{0,240}dongMenu\(\);/.test(ws));
   check("man cam ung van thay nut quan ly (hover: none)",
     /@media \(hover: none\) \{ \.ws-item-more/.test(css));
-  ["ws.manage", "ws.pin", "ws.unpin", "ws.pinned", "ws.move_group", "ws.group_new",
-   "ws.group_ask", "ws.edit", "ws.err_meta"].forEach(k => {
+  ["ws.manage", "ws.pin", "ws.unpin", "ws.pinned", "ws.hide_agent", "ws.show_agent", "ws.tag_hidden",
+   "ws.move_group", "ws.group_new", "ws.group_ask", "ws.edit", "ws.err_meta"].forEach(k => {
     check("i18n co khoa " + k, !!vi[k] && !!en[k]);
   });
 }
