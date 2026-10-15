@@ -2352,6 +2352,21 @@ a.jv-fcode { text-decoration: none; }
 a.jv-fcode code { cursor: pointer; transition: color .12s; }
 a.jv-fcode:hover code { color: var(--accent); text-decoration: underline; }
 
+/* Link điều hướng trang nội bộ trong chat (chat-render.js) */
+a.jv-nav-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: color .15s, text-decoration-color .15s, filter .15s;
+}
+a.jv-nav-link:hover {
+  text-decoration-style: solid;
+  filter: brightness(1.15);
+}
+
 /* The artifact trong luong chat */
 .jv-art { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 10px 12px;
   max-width: 420px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer;

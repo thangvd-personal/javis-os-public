@@ -460,7 +460,7 @@
     // nhát này thì mở xong vẫn không biết file nằm đâu, lần sau lại phải đi tìm lại từ đầu.
     // Đặt ở wrapper chứ không trong openNote: openNote còn được chính cây gọi khi bấm node,
     // ở đó cây đã đúng chỗ rồi, dựng lại là thừa.
-    try { _vtRevealInTree(ceilingRel); } catch (e) { }
+    try { _vtRevealInTree(ceilingRel); } catch (e) {}
   };
   // Mở lại một file bằng đường dẫn THEO TRẦN DUYỆT (đã có sẵn tiền tố nhà brain). Người gọi:
   // chip "file đang mở" dưới khung chat (app.js) - ghim giữ đúng dạng path mà openNote nhận,
@@ -9238,6 +9238,11 @@
         if (m) openVaultPath(decodeURIComponent(m[1]));
         const c = /^#cs=(.+)$/.exec(location.hash || "");
         if (c) moCongSu(decodeURIComponent(c[1]));
+        const nv = /^#nav=([a-zA-Z0-9_-]+)$/.exec(location.hash || "");
+        if (nv) {
+          if (window.JavisNav && typeof window.JavisNav.go === "function") window.JavisNav.go(nv[1]);
+          else if (window.Alpine && window.Alpine.store && window.Alpine.store("nav")) window.Alpine.store("nav").go(nv[1]);
+        }
       } catch (e) { }
     });
   }

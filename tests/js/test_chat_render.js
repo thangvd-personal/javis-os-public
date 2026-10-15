@@ -221,6 +221,38 @@ check("copy giữa stream bỏ metadata đã đóng",
 check("copy giữa stream bỏ metadata chưa đóng",
   visibleMarkdown("Nội dung\n<!-- JAVIS_METRICS: {") === "Nội dung\n");
 
+// ---- 29. Điều hướng nội bộ (NAV_PAGE_MAP: auto-link và link markdown) ----
+h = mdToHtml("Bạn vào trang Việc và bật AI tự vận hành.");
+check("auto-link: 'trang Việc' tạo thành the a.jv-nav-link", has(h, 'class="jv-nav-link"'));
+check("auto-link: đúng data-nav=kanban", has(h, 'data-nav="kanban"'));
+check("auto-link: đúng href=#nav=kanban", has(h, 'href="#nav=kanban"'));
+check("auto-link: giữ nguyên chữ hoa/thường", has(h, ">trang Việc</a>"));
+
+h = mdToHtml("Xem tiến độ ở trang Việc và bảng Kanban.");
+check("auto-link: hai từ khóa cùng trang đều link đúng",
+  (h.match(/data-nav="kanban"/g) || []).length === 2);
+check("auto-link: có bảng Kanban", has(h, ">bảng Kanban</a>"));
+
+h = mdToHtml("Vào trang Việc định kỳ để xem loop.");
+check("auto-link: ưu tiên cụm dài (selfimprove trước kanban)",
+  has(h, 'data-nav="selfimprove"') && !has(h, 'data-nav="kanban"'));
+
+h = mdToHtml("Đây là công việc bình thường, không phải trang.");
+check("auto-link: từ 'công việc' KHÔNG bị nhận nhầm", !has(h, "jv-nav-link"));
+
+h = mdToHtml("Gõ `trang Việc` trong terminal");
+check("auto-link: trong inline code KHÔNG bị linkify", !has(h, "jv-nav-link"));
+
+h = mdToHtml("```\ntrang Việc\n```");
+check("auto-link: trong code block KHÔNG bị linkify", !has(h, "jv-nav-link"));
+
+h = mdToHtml("Xem [Tại đây](#nav=kanban) hoặc [Mở](#kanban)");
+check("md link nội bộ: #nav=kanban thành jv-nav-link", has(h, 'data-nav="kanban"'));
+check("md link nội bộ: #kanban ngắn cũng nhận diện đúng", (h.match(/data-nav="kanban"/g) || []).length === 2);
+
+h = mdToHtml("Xem https://example.com/trang-viec nhe");
+check("auto-link: URL ngoài không bị cắt nhầm", has(h, 'href="https://example.com/trang-viec"'));
+
 if (fails.length) {
   console.log("\nFAIL - " + fails.length + " test: " + fails.join(", "));
   process.exit(1);

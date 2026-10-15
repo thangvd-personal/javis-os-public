@@ -266,6 +266,206 @@
       (label !== target ? ' data-wiki-alias="' + esc(label) + '"' : "") +
       ' class="jv-wikilink" title="' + esc(tw("crender.open_note", { ten: label }) + "\n" + target) + '">' + esc(label) + "</a>";
   }
+
+  /* ==========================================================================
+   * BẢNG MAPPING ĐIỀU HƯỚNG NỘI BỘ (NAV_PAGE_MAP)
+   *
+   * Tách riêng phần khai báo từ khóa và trang đích để dễ theo dõi và bảo trì:
+   * - id: mã trang (khớp với window.JavisNav.go(id), ví dụ: "kanban", "files", "settings"...)
+   * - title: tiêu đề hiển thị tooltip khi rê chuột vào liên kết
+   * - aliases: danh sách từ khóa/cụm từ (không phân biệt hoa thường) sẽ tự động
+   *            được nhận diện trong câu trả lời để tạo liên kết chuyển trang.
+   *
+   * Ví dụ: các từ khóa "trang Việc", "bảng Kanban", "trang Task" đều dẫn tới trang Việc (kanban).
+   * ========================================================================== */
+  var NAV_PAGE_MAP = [
+    {
+      id: "kanban",
+      title: "Trang Việc (Kanban)",
+      aliases: [
+        "trang việc", "bảng kanban", "trang kanban", "trang task", "trang tasks",
+        "kanban board", "tasks page", "work page"
+      ]
+    },
+    {
+      id: "selfimprove",
+      title: "Việc định kỳ (Loops & Nhắc hẹn)",
+      aliases: [
+        "trang việc định kỳ", "việc định kỳ", "periodic tasks page"
+      ]
+    },
+    {
+      id: "files",
+      title: "Trang Tệp tin",
+      aliases: [
+        "trang tệp tin", "trang tập tin", "quản lý tệp", "files page"
+      ]
+    },
+    {
+      id: "learn",
+      title: "Trang Tự học",
+      aliases: [
+        "trang tự học", "learn page"
+      ]
+    },
+    {
+      id: "coding",
+      title: "Trang Code",
+      aliases: [
+        "trang code", "trang coding", "coding page"
+      ]
+    },
+    {
+      id: "terminal",
+      title: "Trang Terminal",
+      aliases: [
+        "trang terminal", "terminal page"
+      ]
+    },
+    {
+      id: "skills",
+      title: "Trang Năng lực",
+      aliases: [
+        "trang năng lực", "trang kỹ năng", "skills page"
+      ]
+    },
+    {
+      id: "models",
+      title: "Trang Mô hình",
+      aliases: [
+        "trang mô hình", "models page"
+      ]
+    },
+    {
+      id: "channels",
+      title: "Trang Kênh kết nối",
+      aliases: [
+        "trang kênh kết nối", "trang kênh", "channels page"
+      ]
+    },
+    {
+      id: "mcp",
+      title: "Trang MCP Hub",
+      aliases: [
+        "trang mcp", "mcp hub", "mcp page"
+      ]
+    },
+    {
+      id: "plugins",
+      title: "Trang Tiện ích mở rộng (Plugins)",
+      aliases: [
+        "trang plugin", "trang plugins", "trang tiện ích", "plugins page"
+      ]
+    },
+    {
+      id: "workspace",
+      title: "Trang Trợ lý & Quy trình",
+      aliases: [
+        "trang trợ lý", "trang quy trình", "trang cộng sự", "workspace page"
+      ]
+    },
+    {
+      id: "teams",
+      title: "Trang Đội ngũ (Teams)",
+      aliases: [
+        "trang nhóm", "trang đội ngũ", "teams page"
+      ]
+    },
+    {
+      id: "settings",
+      title: "Trang Hệ thống / Cài đặt",
+      aliases: [
+        "trang hệ thống", "trang cài đặt", "settings page"
+      ]
+    },
+    {
+      id: "home",
+      title: "Trang Bộ não (Home)",
+      aliases: [
+        "trang bộ não", "home page"
+      ]
+    },
+    {
+      id: "chat",
+      title: "Trang Trò chuyện",
+      aliases: [
+        "trang trò chuyện", "chat page"
+      ]
+    }
+  ];
+
+  function navPageInfo(pageId) {
+    if (!pageId) return null;
+    var pid = String(pageId).toLowerCase();
+    for (var i = 0; i < NAV_PAGE_MAP.length; i++) {
+      if (NAV_PAGE_MAP[i].id.toLowerCase() === pid) return NAV_PAGE_MAP[i];
+    }
+    return null;
+  }
+
+  function navPageIdFromHref(href) {
+    if (!href) return "";
+    href = String(href).trim();
+    var m = href.match(/^#(?:nav|page)=([a-zA-Z0-9_-]+)$/i) || href.match(/^javis:\/\/(?:nav|page)\/([a-zA-Z0-9_-]+)$/i);
+    if (m) return m[1].toLowerCase();
+    var mHash = href.match(/^#([a-zA-Z0-9_-]+)$/);
+    if (mHash) {
+      var candidate = mHash[1].toLowerCase();
+      if (navPageInfo(candidate)) return candidate;
+    }
+    return "";
+  }
+
+  function navLinkHtml(pageId, label, titleOverride) {
+    var info = navPageInfo(pageId);
+    var tit = titleOverride || (info ? ("Chuyển đến " + info.title) : ("Chuyển đến " + pageId));
+    return '<a class="jv-nav-link" href="#nav=' + esc(encodeURIComponent(pageId)) + '" data-nav="' + esc(pageId) +
+      '" title="' + esc(tit) + '">' + esc(label) + '</a>';
+  }
+
+  function moTrangNoiBo(trang) {
+    trang = String(trang || "").trim();
+    if (!trang) return;
+    try {
+      if (typeof window !== "undefined" && window.JavisNav && typeof window.JavisNav.go === "function") {
+        window.JavisNav.go(trang);
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof window !== "undefined" && window.Alpine && window.Alpine.store && window.Alpine.store("nav")) {
+        window.Alpine.store("nav").go(trang);
+        return;
+      }
+    } catch (e) {}
+    if (typeof location !== "undefined") {
+      location.hash = "#nav=" + encodeURIComponent(trang);
+    }
+  }
+
+  var _navAliasesRegex = null;
+  var _navAliasesMap = {};
+  function _getNavAliasesRegex() {
+    if (_navAliasesRegex) return _navAliasesRegex;
+    var list = [];
+    _navAliasesMap = {};
+    for (var i = 0; i < NAV_PAGE_MAP.length; i++) {
+      var entry = NAV_PAGE_MAP[i];
+      var aliases = entry.aliases || [];
+      for (var j = 0; j < aliases.length; j++) {
+        var a = aliases[j].trim();
+        if (a) {
+          list.push(a);
+          _navAliasesMap[a.toLowerCase()] = entry.id;
+        }
+      }
+    }
+    list.sort(function (a, b) { return b.length - a.length; });
+    var escaped = list.map(function (s) { return s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"); });
+    _navAliasesRegex = new RegExp("(^|[^\\p{L}\\p{N}_])(" + escaped.join("|") + ")(?=[^\\p{L}\\p{N}_]|$)", "giu");
+    return _navAliasesRegex;
+  }
+
   // FNV-1a -> id ngan on dinh cho artifact (cung noi dung -> cung id qua cac lan re-render khi stream)
   function hashId(s) {
     var h = 0x811c9dc5;
@@ -652,6 +852,9 @@
       // "khong thay file" (co goi y ten gan dung), thay vi mo tab moi 404 hay khong lam gi ca.
       var fu = fileUriPath(href);
       if (fu != null) return put('<a ' + vaultLink(fu.replace(/^\/+/, "")) + ">" + esc(t) + "</a>");
+      // Link điều hướng trang nội bộ: "#nav=<pageId>", "#page=<pageId>", hoặc "#<pageId>" (thuộc NAV_PAGE_MAP)
+      var navPage = navPageIdFromHref(href);
+      if (navPage) return put(navLinkHtml(navPage, t));
       // Link tro toi mot cong su: "#cs=<agent|workflow>:<slug>[:<ma phien>]". Server dat link
       // nay khi mot quy trinh / tro ly chay xong tu khung Tro chuyen, de nguoi doc nhay thang
       // toi dung cuoc hoi thoai da lam viec do. KHONG phai URL ngoai, khong mo tab moi.
@@ -677,6 +880,17 @@
       if (tm) { trail = tm[0]; url = url.slice(0, url.length - trail.length); }
       return pre + put('<a href="' + esc(url) + '" title="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + "</a>") + trail;
     });
+    // 4c) Tự động nhận diện cụm từ trang nội bộ (Auto-link) như "trang Việc", "bảng Kanban"...
+    //     Chạy SAU khi code, ảnh, wikilink, link markdown và URL trần đã được đưa vào placeholder (an toàn).
+    var navRe = _getNavAliasesRegex();
+    if (navRe) {
+      navRe.lastIndex = 0;
+      raw = raw.replace(navRe, function (_m, pre, matched) {
+        var pid = _navAliasesMap[matched.toLowerCase()];
+        if (pid) return pre + put(navLinkHtml(pid, matched));
+        return _m;
+      });
+    }
     // 5) bang markdown
     raw = raw.replace(/(^\|.+\|[ \t]*\n\|[ \t:|-]+\|[ \t]*\n(?:\|.*\|[ \t]*\n?)*)/gm, function (tbl) {
       return "\n" + put(tableHtml(tbl)) + "\n";
@@ -1341,6 +1555,14 @@
         if (typeof window.JavisOpenCongSu === "function") window.JavisOpenCongSu(cs.getAttribute("data-cs"));
         return;
       }
+      // Link điều hướng trang nội bộ (a.jv-nav-link): chuyển trang tức thì qua JavisNav.go().
+      var nav = e.target.closest ? e.target.closest("a.jv-nav-link") : null;
+      if (nav && nav.getAttribute("data-nav")) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button > 0) return;
+        e.preventDefault();
+        moTrangNoiBo(nav.getAttribute("data-nav"));
+        return;
+      }
       // Wikilink [[..]]: bam la DI CHUYEN toi note dich - chay CA trong ban render dang sua (ne-wys/.jvfe-modal),
       // vi y nghia cua wikilink la dieu huong; muon sua chu cua link thi dung che do Nguon.
       var wl = e.target.closest ? e.target.closest("a.jv-wikilink") : null;
@@ -1424,6 +1646,8 @@
     // console.js goi lai khi mot duong dan file:// lot toi openVaultPath/JavisOpenNote (deep-link,
     // chip file dang mo...) - mot luat go giao thuc, nam o mot cho.
     window.JavisFileRef = appFileRef;
+    window.JavisNavMap = NAV_PAGE_MAP;
+    window.JavisNavPageId = navPageIdFromHref;
   }
   if (typeof module !== "undefined" && module.exports) {
     module.exports = { mdToHtml: mdToHtml, visibleMarkdown: visibleMarkdown,
@@ -1433,6 +1657,10 @@
       laLinkTaiFile: laLinkTaiFile, laIOS: laIOS,
       // Xuat them de test chay THAT chuoi du phong cua anh (xem ungVienAnh / imgGone).
       ungVienAnh: ungVienAnh, ghepDuong: ghepDuong, imgGone: imgGone,
-      lightboxPinchStep: lightboxPinchStep, lightboxClampPan: lightboxClampPan };
+      lightboxPinchStep: lightboxPinchStep, lightboxClampPan: lightboxClampPan,
+      NAV_PAGE_MAP: NAV_PAGE_MAP,
+      navPageIdFromHref: navPageIdFromHref,
+      navLinkHtml: navLinkHtml,
+      navPageInfo: navPageInfo };
   }
 })();
