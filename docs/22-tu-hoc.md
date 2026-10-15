@@ -242,11 +242,11 @@ Khối này liệt kê tối đa 12 commit học gần nhất của brain, mỗi
 
 Tiêu đề commit có dạng `learn: +2 fact +1 wiki +0 skill (2026-07-29)` với mẻ học, và `curator: reindex memory (2026-07-29)` với vòng bảo trì. Chỉ hai loại tiền tố này được coi là "commit học", nên commit nền do Javis tạo lúc khởi tạo repo sẽ không lọt vào đây và cũng không bị nút Hoàn tác đụng tới.
 
-Chưa có gì thì khối hiện "Chưa có commit học nào.". Nếu brain chưa phải kho git, khối hiện dòng cam "Brain chưa phải git repo - bật Tự học để git-init (mới xem/undo được commit)."
+Chưa có gì thì khối hiện "Chưa có commit học nào.". Nếu brain chưa khởi tạo kho git cục bộ, khối hiện thông báo giải thích: kho Git này là kho cục bộ riêng của brain (độc lập với repo sao lưu GitHub ở khối bên trên). Bạn có thể bấm nút **⚡ Khởi tạo Git cho Brain này ngay** hoặc nếu nút "Bật tự học" đang bật, tắt đi rồi bật lại để hệ thống tự chạy `git init`.
 
 **Hoàn tác:** bấm **↶ Hoàn tác lần học gần nhất**, xác nhận, Javis chạy `git revert` trên commit học cuối. Thành công thì hiện hộp thoại "Đã hoàn tác:" kèm tiêu đề commit. Ba lý do thất bại thường gặp:
 
-- "Brain chưa phải git repo"
+- "Brain chưa khởi tạo Git cục bộ"
 - "Không có commit học nào để undo"
 - "Các file học đang bị sửa dở, hãy tự xử lý trước: ..." (bạn đang sửa dở đúng file nằm trong commit đó. Lưu hoặc hoàn lại chỉnh sửa của bạn rồi thử lại. File dở dang **không liên quan** thì không chặn undo)
 

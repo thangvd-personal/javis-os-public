@@ -2670,6 +2670,7 @@
         enBtn.textContent = window.t("cs.ln_gitinit");
         let r = {}; try { r = await (await fetch("/learn/enable", { method: "POST", body: (()=>{const f=new FormData();f.append("brain",fbrain());return f;})() })).json(); } catch (e) {}
         cur.enabled = true; el.querySelector("#lnEnableNote").textContent = r.note || window.t("cs.ln_enabled_ok");
+        loadReview();
       } else {
         cur.enabled = false;
         const f = new FormData(); f.append("enabled", "0"); f.append("brain", fbrain());
@@ -2724,7 +2725,31 @@
     async function loadReview() {
       let d = { commits: [] }; try { d = await (await fetch(`/learn/review?brain=${encodeURIComponent(fbrain())}&limit=60`)).json(); } catch (e) { }
       const box = el.querySelector("#lnReview");
-      if (!d.git_repo) { box.innerHTML = `<div class="dim" style="color:var(--warn-ink)">${esc(window.t("cs.ln_no_git"))}</div>`; return; }
+      if (!d.git_repo) {
+        box.innerHTML = `<div style="padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-1);line-height:1.6">
+          <div style="color:var(--warn-ink);font-weight:600;margin-bottom:4px">${esc(window.t("cs.ln_no_git"))}</div>
+          <div class="dim" style="font-size:13px;color:var(--text3);margin-bottom:10px">${esc(window.t("cs.ln_no_git_desc"))}</div>
+          <button class="s-btn-ghost" id="lnInitGitBtn" style="font-size:12.5px;padding:4px 10px">⚡ ${esc(window.t("cs.ln_init_git_btn"))}</button>
+        </div>`;
+        const btn = box.querySelector("#lnInitGitBtn");
+        if (btn) {
+          btn.onclick = async () => {
+            btn.disabled = true;
+            btn.textContent = window.t("cs.ln_gitinit");
+            let r = {};
+            try {
+              const f = new FormData(); f.append("brain", fbrain());
+              r = await (await fetch("/learn/enable", { method: "POST", body: f })).json();
+            } catch (e) {}
+            cur.enabled = true;
+            enBtn.classList.add("sel");
+            enBtn.textContent = "● " + window.t("cs.ln_on");
+            el.querySelector("#lnEnableNote").textContent = (r && r.note) || window.t("cs.ln_enabled_ok");
+            loadAll();
+          };
+        }
+        return;
+      }
       pager(box, d.commits || [], 6, (rows) => rows.map(c => {
         const when = c.ts ? new Date(c.ts * 1000).toLocaleString() : "";
         const files = (c.files || []).slice(0, 6).map(f => `<code style="font-size:11px">${esc(f)}</code>`).join(" ");

@@ -233,11 +233,11 @@ This block lists at most the 12 most recent learning commits of the brain, each 
 
 The commit title is shaped `learn: +2 fact +1 wiki +0 skill (2026-07-29)` for a learning batch, and `curator: reindex memory (2026-07-29)` for a maintenance round. Only those two prefixes count as a "learning commit", so the base commit Javis creates when initialising the repo never appears here and is never touched by the Undo button.
 
-With nothing yet, the block reads "No learning commits yet." If the brain is not a git repository, it shows an orange line saying the brain is not a git repo and to turn Self-learning on to git-init it (only then can commits be reviewed and undone).
+With nothing yet, the block reads "No learning commits yet." If the brain has not initialized its own local Git repository, it displays an explanatory notice that this local repository is separate from the GitHub backup repository above. You can click the **⚡ Initialize Git for this Brain now** button, or if "Turn on self-learning" is already on, switch it Off then On again to run `git init`.
 
 **Undoing:** click **↶ Undo the latest learning run**, confirm, and Javis runs `git revert` on the last learning commit. On success it shows a dialog reading "Undone:" with the commit title. Three common failure reasons:
 
-- "The brain is not a git repo"
+- "This brain does not have its own local Git repo yet"
 - "There is no learning commit to undo"
 - "Learning files have uncommitted edits, please handle them first: ..." (you are mid-edit on a file inside that commit. Save or revert your edits then try again. An unrelated dirty file does **not** block the undo)
 
