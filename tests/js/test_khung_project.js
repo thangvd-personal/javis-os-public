@@ -163,6 +163,9 @@ check("CANARY: không còn đoán tên thư mục ở frontend",
 check("đăng ký vào project đúng đường SERVER trả về",
   /themFile\(up\.path, up\.name, null\)/.test(taiLen));
 check("tìm file trong brain dùng /files/search mode=name", /\/files\/search\?brain=[\s\S]{0,80}mode=name/.test(SU));
+check("kết quả tìm file trong brain có tooltip hiển thị tên và đường dẫn tương đối",
+  /var tip = \(path && path !== name\) \? \(name \+ "\\n" \+ path\) : \(path \|\| name\);/.test(SU)
+  && /class="pd-res"[\s\S]*?title="'.*?esc\(tip\)/.test(SU));
 // 03/09: nút của file đã thêm trước đây là chữ "Đã thêm" tắt cứng, nên lỡ thêm nhầm là phải
 // đóng form, lần tìm nó trong danh sách trên rồi mới gỡ được. Nay nó đổi thành "Gỡ" ngay tại
 // hàng kết quả - thêm và bỏ cùng một chỗ, cùng một cú bấm.

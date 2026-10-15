@@ -866,6 +866,7 @@
   function hangMuc(o) {
     // Hàng TỰ DÒ (chỉ có ở chế độ cuộc): Javis suy ra từ tin nhắn chứ không phải một bản ghi,
     // nên không có id để gỡ hay ghim. Vẫn mở ra đọc được - đó mới là việc chính của nó.
+    var rowTip = (o.sub && o.sub !== o.ten) ? (o.ten + "\n" + o.sub) : (o.ten || o.sub || "");
     if (o.tuDong) {
       return '<div class="pd-row' + (o.mat ? " mat" : "") + '" data-path="' + esc(o.duong || "") + '">' +
         '<span class="pd-row-ico">' + ic(o.icon) + "</span>" +
@@ -873,8 +874,8 @@
           ? '<button class="pd-row-body mo-duoc" type="button" title="' +
               esc(pdT("proj.open_file")) + '">'
           : '<span class="pd-row-body">') +
-          '<span class="pd-row-name">' + (o.tenHtml || esc(o.ten)) + "</span>" +
-          '<span class="pd-row-sub">' + (o.subHtml || esc(o.sub || "")) + "</span>" +
+          '<span class="pd-row-name"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + (o.tenHtml || esc(o.ten)) + "</span>" +
+          '<span class="pd-row-sub"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + (o.subHtml || esc(o.sub || "")) + "</span>" +
         (o.moDuoc ? "</button>" : "</span>") +
         nutSao(o) +
       "</div>";
@@ -889,8 +890,8 @@
           ? '<button class="pd-row-body mo-duoc" type="button" title="' +
               esc(pdT("proj.open_file")) + '">'
           : '<span class="pd-row-body">') +
-          '<span class="pd-row-name">' + esc(o.ten) + "</span>" +
-          '<span class="pd-row-sub">' + (o.subHtml || esc(o.sub || "")) + "</span>" +
+          '<span class="pd-row-name"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + esc(o.ten) + "</span>" +
+          '<span class="pd-row-sub"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + (o.subHtml || esc(o.sub || "")) + "</span>" +
         (o.moDuoc ? "</button>" : "</span>") +
         nutSao(o) +
         '<button class="pd-row-act pd-ghim' + (o.pinned ? " on" : "") + '" type="button" title="' +
@@ -1100,9 +1101,12 @@
     } catch (e) {}
     if (!items.length) { box.innerHTML = '<div class="pd-empty">' + esc(pdT("proj.search_none")) + "</div>"; return; }
     box.innerHTML = items.map(function (it) {
-      return '<div class="pd-res" data-path="' + esc(it.path) + '" data-name="' + esc(it.name) + '">' +
+      var name = it.name || it.path || "";
+      var path = it.path || "";
+      var tip = (path && path !== name) ? (name + "\n" + path) : (path || name);
+      return '<div class="pd-res" data-path="' + esc(it.path) + '" data-name="' + esc(it.name) + '" title="' + esc(tip) + '">' +
         '<span class="pd-res-ico">' + ic(icoFile(it.name)) + "</span>" +
-        '<span class="pd-res-n"><b>' + esc(it.name) + "</b><i>" + esc(it.path) + "</i></span>" +
+        '<span class="pd-res-n" title="' + esc(tip) + '"><b title="' + esc(tip) + '">' + esc(name) + "</b><i" + (path ? ' title="' + esc(tip) + '"' : '') + ">" + esc(path) + "</i></span>" +
         '<button class="pd-res-add" type="button"></button></div>';
     }).join("");
     veNutKetQua();
