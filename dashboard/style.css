@@ -1984,6 +1984,12 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 /* Nút "Vị trí" ở kết quả tìm kiếm: xổ cây tới đúng thư mục đang chứa file. Nằm bên phải tên
    file, chỉ hiện rõ khi rê chuột để không tranh chỗ với chính cái tên. */
 .vr-name { display: flex; align-items: center; gap: 6px; }
+.vr-attach { margin-left: auto; flex: none; padding: 2px 6px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text3);
+  font-size: 11px; opacity: .55; transition: opacity .15s; }
+.vr-attach + .vr-loc { margin-left: 0; }
+.vr-item:hover .vr-attach { opacity: 1; }
+.vr-attach:hover { border-color: var(--accent-line); color: var(--accent); }
 .vr-loc { margin-left: auto; flex: none; padding: 2px 7px; border-radius: 6px; cursor: pointer;
   border: 1px solid var(--border); background: transparent; color: var(--text3);
   font-size: 11px; opacity: .55; transition: opacity .15s; }

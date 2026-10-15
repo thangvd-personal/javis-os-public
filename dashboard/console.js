@@ -8216,6 +8216,48 @@
     await _vtRebuildReExpand(null);   // giữ nguyên các thư mục đang mở
   }
 
+  async function _vtAttachFile(rel, name) {
+    const br = fbrain();
+    try {
+      const resp = await fetch(`/files/resolve?brain=${encodeURIComponent(br)}&path=${encodeURIComponent(rel)}`, { credentials: "same-origin" });
+      const r = resp.ok ? await resp.json() : null;
+      if (r && r.ok) {
+        const att = {
+          path: r.path,
+          name: r.name || name || rel.split("/").pop(),
+          size: r.size || 0,
+          kind: r.kind || "file",
+        };
+        if (att.kind === "image") {
+          att.url = `/files/raw?brain=${encodeURIComponent(br)}&path=${encodeURIComponent(rel)}`;
+        }
+        if (window.JavisAttach && typeof window.JavisAttach.addBrainFile === "function") {
+          window.JavisAttach.addBrainFile(att);
+        }
+        const ci = document.getElementById("chatInput");
+        const act = (window.JavisNav && typeof window.JavisNav.active === "function") ? window.JavisNav.active() : "";
+        const coKhungChat = act === "chat" || TRANG_GIU_CHAT.includes(act) || (window.JavisNav && typeof window.JavisNav.giuKhungChat === "function" && window.JavisNav.giuKhungChat());
+        const chatHien = coKhungChat || !!(ci && (ci.offsetWidth > 0 || ci.offsetHeight > 0));
+        if (!chatHien && window.JavisNav && typeof window.JavisNav.go === "function") {
+          window.JavisNav.go("chat");
+        }
+        if (ci) {
+          try { ci.focus(); } catch (e) { }
+        }
+        if (window.innerWidth < 860) {
+          const page = document.getElementById("chatPage");
+          if (page) page.classList.remove("side-open");
+        }
+      } else {
+        if (window.JavisAttach && typeof window.JavisAttach.note === "function") {
+          window.JavisAttach.note(window.t("cp.brain_failed"));
+        }
+      }
+    } catch (e) {
+      console.error("[vault] attach error", e);
+    }
+  }
+
   function _vtRowEl(it, parentPath, depth) {
     const rel = parentPath ? parentPath + "/" + it.name : it.name;
     const isDir = it.type === "dir";
@@ -8227,6 +8269,7 @@
       + `<span class="vt-ico">${isDir ? ic("folder") : _fileIcon(it.ext)}</span>`
       + `<span class="vt-name">${esc(it.name)}</span>`
       + `<span class="vt-act"><button data-a="add" title="${esc(window.t(isDir ? "cs.vt_add_in" : "cs.vt_add_same"))}">＋</button>`
+      + (!isDir ? `<button data-a="attach" title="${esc(window.t("cs.vt_attach_chat"))}">${ic("paperclip")}</button>` : "")
       + `<button data-a="dl" title="${esc(window.t(isDir ? "cs.fm_zipfolder_title" : "cs.fm_dl_title"))}">⤓</button>`
       + `<button data-a="ren" title="${esc(window.t("cs.fm_rename"))}">${ic("pencil")}</button><button data-a="del" title="${esc(window.t("common.delete"))}">${ic("trash-2")}</button></span>`;
     if (!isDir && rel === _vtActivePath) node.classList.add("active");
@@ -8234,6 +8277,13 @@
       e.stopPropagation();
       const a = b.dataset.a;
       if (a === "add") _vtCreateMenu(b, rel, isDir);
+      else if (a === "attach") {
+        _vtAttachFile(rel, it.name);
+        const old = b.innerHTML;
+        b.innerHTML = ic("check");
+        b.style.color = "var(--green, #10b981)";
+        setTimeout(() => { b.innerHTML = old; b.style.color = ""; }, 1000);
+      }
       else if (a === "dl") { if (isDir) _dlFolder(rel, it.name); else _dlFile(rel); }
       else if (a === "ren") _vtRename(rel, it.name);
       else _vtDelete(rel, it.name, isDir);
@@ -8324,10 +8374,22 @@
       const isDir = it.type === "dir";
       const sub = withSnippet ? (it.snippet || "") : _vtRelHome(it.dir);
       el.innerHTML = `<div class="vr-name"><span class="vt-ico">${isDir ? ic("folder") : _fileIcon(it.ext)}</span><span class="vr-label" title="${esc(it.name)}">${esc(it.name)}</span>`
+        + (!isDir ? `<button class="vr-attach" type="button" title="${esc(window.t("cs.vt_attach_chat"))}">${ic("paperclip")}</button>` : "")
         + `<button class="vr-loc" type="button" title="${esc(window.t("cs.vt_loc_title"))}">${esc(window.t("cs.fm_loc"))}</button></div>`
         + (sub ? `<div class="vr-snip">${esc(sub)}</div>` : "");
       el.onclick = () => isDir ? _vtRevealInTree(it.path, true) : openNote(it.path, { name: it.name, ext: it.ext, type: "file" });
       el.querySelector(".vr-loc").onclick = (e) => { e.stopPropagation(); _vtRevealInTree(it.path, isDir); };
+      const attBtn = el.querySelector(".vr-attach");
+      if (attBtn) {
+        attBtn.onclick = (e) => {
+          e.stopPropagation();
+          _vtAttachFile(it.path, it.name);
+          const old = attBtn.innerHTML;
+          attBtn.innerHTML = ic("check");
+          attBtn.style.color = "var(--green, #10b981)";
+          setTimeout(() => { attBtn.innerHTML = old; attBtn.style.color = ""; }, 1000);
+        };
+      }
       box.appendChild(el);
     });
   }
