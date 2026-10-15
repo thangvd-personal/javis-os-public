@@ -682,6 +682,12 @@ check("studio.js editAgent nhan host + onSaved", /function editAgent\(a, opts\)/
   check("menu co du bon dong tac", /t\("ws.pin"\)/.test(ws) && /t\("ws.move_group"\)/.test(ws)
     && /t\("ws.edit"\)/.test(ws) && /data-act="xoa"/.test(ws));
   check("menu co nut an/hien tro ly", /data-act="an"/.test(ws) && /t\(an \? "ws\.show_agent" : "ws\.hide_agent"\)/.test(ws));
+  check("menu co nut xuat tro ly", /data-act="xuat"/.test(ws) && /t\("ws\.export"\)/.test(ws) && /xuatMuc\(item\)/.test(ws));
+  // Test xuatMuc qua Studio.exportItem
+  let exported = null;
+  global.window.JavisStudio = { exportItem: (k, sl) => { exported = { kind: k, slug: sl }; } };
+  W.xuatMuc({ slug: "tro-ly-test" });
+  check("xuatMuc goi dung Studio.exportItem", exported && exported.kind === "agent" && exported.slug === "tro-ly-test");
   check("doi nhom/ghim di duong /capability/meta, KHONG POST /agents (endpoint do nhan ca prompt)",
     /api\("\/capability\/meta"/.test(ws) && !/api\("\/agents",/.test(ws));
   check("xoa co hoi lai truoc", /confirm\(hoi\)/.test(ws));
@@ -691,7 +697,7 @@ check("studio.js editAgent nhan host + onSaved", /function editAgent\(a, opts\)/
   check("man cam ung van thay nut quan ly (hover: none)",
     /@media \(hover: none\) \{ \.ws-item-more/.test(css));
   ["ws.manage", "ws.pin", "ws.unpin", "ws.pinned", "ws.hide_agent", "ws.show_agent", "ws.tag_hidden",
-   "ws.move_group", "ws.group_new", "ws.group_ask", "ws.edit", "ws.err_meta"].forEach(k => {
+   "ws.move_group", "ws.group_new", "ws.group_ask", "ws.edit", "ws.export", "ws.err_meta"].forEach(k => {
     check("i18n co khoa " + k, !!vi[k] && !!en[k]);
   });
 }

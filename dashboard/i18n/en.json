@@ -3180,6 +3180,7 @@
   "ws.tag_more": "+{n}",
   "ws.tags_aria": "Agent tags",
   "ws.edit": "Edit",
+  "ws.export": "Export",
   "ws.err_meta": "Could not save the change.",
   "ws.run_default": "Run this workflow with its current configuration.",
   "ws.input_label": "input",

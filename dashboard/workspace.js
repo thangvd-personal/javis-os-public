@@ -1168,6 +1168,7 @@
       (laTag ? nutMenu(an ? "eye" : "eye-off", t(an ? "ws.show_agent" : "ws.hide_agent"), "an") : "") +
       (laTag ? nutMenu("tag", t("ws.tag_menu"), "nhom") : nutMenu("folder", t("ws.move_group"), "nhom")) +
       nutMenu("pencil", t("ws.edit"), "sua") +
+      nutMenu("download", t("ws.export"), "xuat") +
       nutMenu("trash-2", t("common.delete"), "xoa");
     m.querySelector('[data-act="ghim"]').onclick = function () {
       dongMenu(); datMeta(item, { pinned: ghim ? "0" : "1" });
@@ -1187,6 +1188,8 @@
     }
     m.querySelector('[data-act="nhom"]').onclick = function () { if (laTag) veMenuTag(item, m); else veMenuNhom(item, m); };
     m.querySelector('[data-act="sua"]').onclick = function () { dongMenu(); suaMuc(item); };
+    var ma_xuat = m.querySelector('[data-act="xuat"]');
+    if (ma_xuat) ma_xuat.onclick = function () { dongMenu(); xuatMuc(item); };
     m.querySelector('[data-act="xoa"]').onclick = function () { dongMenu(); xoaMuc(item); };
   }
   // Chọn nhóm NGAY TRONG menu (hai tầng tại chỗ) thay vì menu con nổi ra cạnh: menu con phải
@@ -1320,6 +1323,17 @@
     var xong = { onSaved: async function () { await sauLuu(item, S.loai); } };
     if (S.loai === "agent") window.JavisStudio.editAgent(item, xong);
     else window.JavisStudio.editWorkflow(item, xong);
+  }
+  // Xuất = tải file .zip chứa cấu hình và thiết lập của trợ lý / quy trình
+  // để lưu trữ hoặc chia sẻ qua nút "Tải lên trợ lý" (importItems).
+  function xuatMuc(item) {
+    if (!item) return;
+    if (window.JavisStudio && window.JavisStudio.exportItem) {
+      window.JavisStudio.exportItem(S.loai, item.slug);
+    } else {
+      var b = encodeURIComponent(brain());
+      window.open("/export?kind=" + encodeURIComponent(S.loai) + "&slug=" + encodeURIComponent(item.slug) + "&brain=" + b + "&deps=1", "_blank");
+    }
   }
   async function xoaMuc(item) {
     var hoi = S.loai === "agent" ? t("studio.del_ag", { ten: item.name })
@@ -1876,7 +1890,7 @@
     dangChay: dangChay, tabPhai: chonTabPhai, gomNhom: gomNhom, nhomHtml: nhomHtml, chonNhom: chonNhom, state: function () { return S; },
     tagsCua: tagsCua, tagCap: tagCap, laKhoa: laKhoa, demTag: demTag, coTag: coTag, khoaTag: khoaTag,
     dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE, TAG_HIDDEN: TAG_HIDDEN,
-    resonanceMap: resonanceMap, afterToggle: afterToggle };
+    resonanceMap: resonanceMap, afterToggle: afterToggle, xuatMuc: xuatMuc };
   // Sidebar lịch sử mở phiên trực tiếp qua JavisSessions.open, ngoài đường moPhien ở trên.
   // Ghi lại sau khi nó mở xong để lần dựng trang sau vẫn ở đúng cuộc đã chọn.
   window.addEventListener("javis:sessions-changed", function () {

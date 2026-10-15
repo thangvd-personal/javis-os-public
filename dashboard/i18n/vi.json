@@ -3180,6 +3180,7 @@
   "ws.tag_more": "+{n}",
   "ws.tags_aria": "Tag của agent",
   "ws.edit": "Sửa",
+  "ws.export": "Xuất",
   "ws.err_meta": "Không lưu được thay đổi.",
   "ws.run_default": "Chạy quy trình theo cấu hình hiện tại.",
   "ws.input_label": "đầu vào",
