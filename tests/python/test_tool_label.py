@@ -51,11 +51,15 @@ check("không có tham số: chuỗi rỗng", ct({"name": "Bash"}) == "")
 check("payload rác: chuỗi rỗng", ct(None) == "" and ct("x") == "" and ct({"input": 5}) == "")
 check("tham số chỉ có số: chuỗi rỗng", ct({"input": {"limit": 10}}) == "")
 
-# Một dòng, có trần
+# Lệnh chạy máy: giữ nguyên đầy đủ (không cắt trần) để tooltip xem trọn vẹn
 nhieu = ct({"input": {"command": "a\n\n   b\tc"}})
 check("nhiều dòng gộp thành một", nhieu == "a b c", nhieu)
-qua = ct({"input": {"command": "x" * 500}})
-check("dài quá thì cắt theo trần", len(qua) == tool_label.TRAN and qua.endswith("…"), str(len(qua)))
+qua_lenh = ct({"input": {"command": "x" * 500}})
+check("lệnh chạy dài: giữ nguyên đầy đủ không bị cắt", qua_lenh == "x" * 500, str(len(qua_lenh)))
+
+# Tham số phụ khác: vẫn cắt theo trần TRAN
+qua_khac = ct({"input": {"query": "x" * 500}})
+check("tham số khác dài quá thì cắt theo trần", len(qua_khac) == tool_label.TRAN and qua_khac.endswith("…"), str(len(qua_khac)))
 
 # main.py gửi `detail` ở mọi chỗ đẩy tool_call xuống khung chat từ engine có tham số
 MAIN = (SERVER / "main.py").read_text(encoding="utf-8")

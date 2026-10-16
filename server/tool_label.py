@@ -12,7 +12,7 @@ Chỉ đọc, không ném lỗi: payload lạ kiểu gì cũng chỉ ra chuỗi 
 """
 import json
 
-TRAN = 160   # một dòng trong khung chat; dài hơn thì cắt, bản đầy đủ không cần cho mắt người
+TRAN = 160   # một dòng trong khung chat cho tham số phụ; lệnh máy không áp dụng trần này
 
 # Thứ tự ưu tiên: khoá nói "việc gì" (description của Bash, do model tự viết cho người đọc)
 # đứng trước khoá chi tiết kỹ thuật (command). Đường dẫn, URL, câu tìm đứng sau.
@@ -20,8 +20,11 @@ _KHOA = ("description", "command", "cmd", "file_path", "notebook_path", "path", 
          "pattern", "query", "q", "prompt", "skill", "name", "title", "text")
 
 
-def _mot_dong(s: str) -> str:
+def _mot_dong(s: str, la_lenh: bool = False) -> str:
     s = " ".join(str(s).split())
+    if la_lenh:
+        # Lệnh chạy máy: người dùng xem tooltip cần thấy đầy đủ lệnh đang chạy, không cắt trần
+        return s
     return s if len(s) <= TRAN else s[:TRAN - 1].rstrip() + "…"
 
 
@@ -34,9 +37,9 @@ def _rut_gon_duong(s: str) -> str:
     return s
 
 
-def _tu_dict(d: dict, sau: int = 0) -> str:
+def _tu_dict(d: dict, sau: int = 0):
     if sau > 3 or not isinstance(d, dict):
-        return ""
+        return "", False
     for k in _KHOA:
         v = d.get(k)
         if isinstance(v, list) and v and all(isinstance(x, str) for x in v):
@@ -49,16 +52,17 @@ def _tu_dict(d: dict, sau: int = 0) -> str:
                     if v.startswith(dau):
                         v = v[len(dau):].strip().strip("'\"")
                         break
-            return _rut_gon_duong(v)
+                return v, True
+            return _rut_gon_duong(v), False
     # Codex apply_patch: changes = [{path: ...}, ...] hoặc {path: {...}}
     ch = d.get("changes")
     if isinstance(ch, list):
         ds = [c.get("path") for c in ch if isinstance(c, dict) and c.get("path")]
         if ds:
-            return ", ".join(_rut_gon_duong(p) for p in ds[:3]) + (" …" if len(ds) > 3 else "")
+            return ", ".join(_rut_gon_duong(p) for p in ds[:3]) + (" …" if len(ds) > 3 else ""), False
     if isinstance(ch, dict) and ch:
         ds = list(ch.keys())
-        return ", ".join(_rut_gon_duong(p) for p in ds[:3]) + (" …" if len(ds) > 3 else "")
+        return ", ".join(_rut_gon_duong(p) for p in ds[:3]) + (" …" if len(ds) > 3 else ""), False
     # `arguments` là chuỗi JSON (function_call của Codex, MCP) hoặc dict lồng.
     for k in ("arguments", "input", "parameters", "args"):
         v = d.get(k)
@@ -68,10 +72,10 @@ def _tu_dict(d: dict, sau: int = 0) -> str:
             except Exception:
                 v = None
         if isinstance(v, dict):
-            r = _tu_dict(v, sau + 1)
+            r, la_lenh = _tu_dict(v, sau + 1)
             if r:
-                return r
-    return ""
+                return r, la_lenh
+    return "", False
 
 
 def chi_tiet(ev) -> str:
@@ -79,10 +83,12 @@ def chi_tiet(ev) -> str:
     try:
         if not isinstance(ev, dict):
             return ""
+        ten_tool = str(ev.get("name") or ev.get("tool") or "").lower()
+        la_tool_lenh = any(x in ten_tool for x in ("bash", "shell", "exec", "command", "terminal"))
         for k in ("input", "item"):
-            r = _tu_dict(ev.get(k))
+            r, la_lenh = _tu_dict(ev.get(k))
             if r:
-                return _mot_dong(r)
+                return _mot_dong(r, la_lenh=la_lenh or la_tool_lenh)
     except Exception:
         pass
     return ""

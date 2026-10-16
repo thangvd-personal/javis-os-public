@@ -163,7 +163,9 @@
     var now = el.querySelector(".steps-sum-now");
     if (now) {
       var cuoi = cu.ds.length ? cu.ds[cu.ds.length - 1] : null;
-      now.textContent = (dangChay && cuoi) ? cuoi.label : "";
+      var lbl = (dangChay && cuoi) ? cuoi.label : "";
+      now.textContent = lbl;
+      now.title = lbl;
     }
     var ds = el.querySelector(".steps-list");
     if (ds) {
