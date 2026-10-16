@@ -173,6 +173,29 @@ class JavisGraph {
     this._catFilter = null;
     window.__javisGraph = this;
     try { window.dispatchEvent(new Event("javis-graph-created")); } catch (e) {}
+    this._caiResizeObserver();
+  }
+
+  _caiResizeObserver() {
+    if (typeof ResizeObserver === "undefined" || !this.container) return;
+    const target = this.container.parentElement || this.container;
+    this._ro = new ResizeObserver((entries) => {
+      if (!this.graph) return;
+      for (const entry of entries) {
+        const cr = entry.contentRect;
+        const w = Math.round(cr.width);
+        const h = Math.round(cr.height);
+        if (w > 0 && h > 0 && (this.graph.width() !== w || this.graph.height() !== h)) {
+          const lanDau = !this._daFitKichThuocThat;
+          this.resize();
+          if (lanDau || !this._fitted) {
+            this._daFitKichThuocThat = true;
+            this.refit(300);
+          }
+        }
+      }
+    });
+    this._ro.observe(target);
   }
 
   _prep(nodes) {
@@ -385,7 +408,14 @@ class JavisGraph {
     const p = this.container.parentElement;
     const w = this.container.clientWidth || (p ? p.clientWidth : 800);
     const h = this.container.clientHeight || (p ? p.clientHeight : 600);
-    if (w && h) this.graph.width(w).height(h);
+    if (w && h) {
+      const doi = (this.graph.width() !== w || this.graph.height() !== h);
+      if (doi) {
+        this.graph.width(w).height(h);
+        this._dongLuc = (typeof performance !== "undefined" ? performance.now() : Date.now());
+        this._nhipVe();
+      }
+    }
   }
 
   // --- Nhịp vẽ: chỉ vẽ liên tục khi THẬT SỰ có gì đang động ---

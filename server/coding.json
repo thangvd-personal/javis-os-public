@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "thu_muc": [
+    {
+      "id": "2a8a19c3e832",
+      "ten": "sme_btos",
+      "duong_dan": "D:\\SoftwareDev\\sme_btos",
+      "brain": "D:\\PrivateProject\\javisos\\brains\\SME-BTOS",
+      "them_luc": 1792135686.0210788
+    }
+  ],
+  "phien": {
+    "ce11686492c64f2d8e20f2772475bb8d": {
+      "thu_muc": "2a8a19c3e832",
+      "thu_mucs": [
+        "2a8a19c3e832"
+      ],
+      "worktree": "",
+      "nhanh": "",
+      "muc_quyen": "auto",
+      "sua_luc": 1792135686.0477686
+    }
+  }
+}

@@ -8622,6 +8622,7 @@
     const datVaultThu = (thu) => {
       document.body.classList.toggle("vault-thu", thu);
       try { localStorage.setItem("javis_vault_thu", thu ? "1" : "0"); } catch (e) { }
+      if (window.__javisGraph) window.__javisGraph.resize();
     };
     if (vc) vc.onclick = () => datVaultThu(true);
     if (ve) ve.onclick = () => datVaultThu(false);
@@ -9342,6 +9343,7 @@
     const datChatColThu = (thu) => {
       document.body.classList.toggle("chatcol-thu", thu);
       try { localStorage.setItem("javis_chatcol_thu", thu ? "1" : "0"); } catch (e) { }
+      if (window.__javisGraph) window.__javisGraph.resize();
     };
     if (cct) cct.onclick = () => datChatColThu(true);
     if (ccm) ccm.onclick = () => datChatColThu(false);

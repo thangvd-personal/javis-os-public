@@ -2674,6 +2674,8 @@ async function initGraph() {
   if (!window.ForceGraph) { graphStats.innerHTML = ic("triangle-alert", { cls: "ic-warn" }) + " " + window.t("app.graph_lib_err"); return; }
   javisGraph = new JavisGraph(c2d);   // resize() gọi bên trong load()
   await reloadGraph();
+  requestAnimationFrame(() => { if (javisGraph) javisGraph.resize(); });
+  setTimeout(() => { if (javisGraph) javisGraph.resize(); }, 150);
 }
 
 // Click node trong graph → Javis mở & thao tác note đó trong vault
@@ -2809,7 +2811,7 @@ function capNhatManChinh() {
   checkVault();     // kiểm tra cấu trúc vault mới chọn
 }
 // console.js gọi mỗi lần đổi trang: về tới màn chính thì trả nợ lần đổi brain đang hoãn.
-window.JavisCockpit = { veManChinh() { if (_cockpitCho) capNhatManChinh(); },
+window.JavisCockpit = { veManChinh() { if (_cockpitCho) capNhatManChinh(); if (window.__javisGraph) window.__javisGraph.resize(); },
                         dangCho: () => _cockpitCho };
 
 // Trang đang mở có MƯỢN khung chat và tự mở phiên của nó không (Cộng sự: phiên agent:<slug>

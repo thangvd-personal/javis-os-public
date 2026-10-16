@@ -93,9 +93,11 @@
     var wOf = function (el) { return el ? el.getBoundingClientRect().width : 0; };
     var base = { host: root, total: function () { return body.clientWidth; }, keep: 360 };
     var oL = Object.assign({}, base, { varName: "--hud-left-w", key: "javis_hud_left_w", min: 200, max: 560, edge: "right",
-      label: "common.resize_vault", other: function () { return wOf(right); } });
+      label: "common.resize_vault", other: function () { return wOf(right); },
+      onChange: function () { if (window.__javisGraph) window.__javisGraph.resize(); } });
     var oR = Object.assign({}, base, { varName: "--hud-right-w", key: "javis_hud_right_w", min: 280, max: 820, edge: "left",
-      label: "common.resize_chatcol", other: function () { return wOf(left); } });
+      label: "common.resize_chatcol", other: function () { return wOf(left); },
+      onChange: function () { if (window.__javisGraph) window.__javisGraph.resize(); } });
     apply(oL); apply(oR);
     attach(left, oL);
     attach(right, oR);
