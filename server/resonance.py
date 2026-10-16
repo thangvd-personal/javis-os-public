@@ -32,6 +32,7 @@ from dataclasses import asdict, dataclass, field, replace as dataclasses_replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+import fastyaml
 import resonance_heartbeat as HB
 import resonance_learning as L
 
@@ -2057,8 +2058,8 @@ def _reviewer_role_text(deps: "GoalDeps", slug: str) -> str:
     except OSError:
         return ""
     if raw.startswith("---"):
-        parts = raw.split("---", 2)
-        raw = parts[2] if len(parts) >= 3 else ""
+        parts = fastyaml.split_frontmatter(raw)
+        raw = parts[1] if parts else ""
     return raw.strip()[:REVIEW_ROLE_MAX_CHARS]
 
 
@@ -2586,7 +2587,8 @@ def _reconcile(goal: GoalRecord, deps: GoalDeps, now: float) -> None:
                     "error_detail": "lượt bị ngắt trước khi có đầu ra; model có thể đã được gọi nên lượt vẫn tính vào hạn mức"})
                 # A2: lần thức đã mở lượt này chết trước khi ghi sổ. Ghi thay nó một dòng lượt lỗi `interrupted`, để chuỗi
                 # lỗi tính đúng (lượt bị ngắt là một lượt lỗi, mục 4). Mở bởi tin mới hay bước đầu thì bắt đầu chuỗi mới.
-                served = [r for r in store.reasons(p, goal.id, state="served") if r.get("settled_by") == a["id"]]
+                served = [r for r in store.reasons(p, goal.id, state="served")
+                          if r.get("settled_by") in (a["id"], "reaction_changed:" + a["id"])]
                 store.log_wake(p, goal.id, {
                     "revision": a["revision"], "wake_kind": "work", "decision": "work", "action_id": a["id"],
                     "model_calls": 1, "met_count": None, "error_code": "interrupted", "served": [r["id"] for r in served],
@@ -2837,6 +2839,12 @@ def _settle(goal: GoalRecord, a: Assessment, deps: GoalDeps, now: float, worked:
             store.supersede_timers(p, goal.id, ("retry", "check"), now, revision=rev)
             store.set_run_state(p, goal.id, "blocked", "budget", notify="goal.blocked", payload={"code": "budget"},
                                 idem=f"blocked:budget:{rev}", expect_revision=rev)
+            if a.verdict == "not_met":
+                # T3 (6.1): revision đóng lại vì hết hạn mức mà kiểm khách quan cuối là KHÔNG ĐẠT: đó là kết luận cuối
+                # (không còn lượt thử). Đánh giá trung gian trong vòng làm việc không bao giờ thành tín hiệu.
+                fn = getattr(store, "pulse_objective", None)
+                if fn is not None:
+                    fn(goal.id, rev, False)
             return a
         else:
             # Bế tắc (hay chỉ còn lượt dự phòng): DỪNG thử tự động và chờ, không kết luận thất bại. Góp ý hay revision

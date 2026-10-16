@@ -1,6 +1,12 @@
 import json
+import os
 import sys
 from pathlib import Path
+
+# Chốt chung của bộ test (review T3 J P2-2): file này nạp server/ mà không qua _paths.py, nên tự đặt chốt không dựng engine
+# phán xử hay lượt học thật trước mọi import của máy chủ.
+os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
+os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
 
 import pytest
 

@@ -129,6 +129,12 @@ updated: <YYYY-MM-DD>
 ```
 Nếu workflow tham chiếu agent chưa tồn tại -> TẠO agent đó trước.
 
+### Nhóm chat -> tool `javis_team` (KHÔNG ghi file tay, KHÔNG điều khiển trình duyệt)
+Người dùng muốn một nhóm chat gồm vài trợ lý: gọi `javis_team` op=create một lần, `members` là slug trợ lý có sẵn, `new_agents`
+là trợ lý cần tạo mới (`name`, `role`, `prompt`, `model`, `model_provider` nếu muốn model riêng), `leader` là slug hay tên trưởng
+nhóm. Sửa: op=update, add_member, remove_member, set_leader, set_agent_model. Xoá: op=archive trước, op=delete kèm confirm=true chỉ
+khi người dùng nói rõ là xoá. Xem trước trợ lý đang có bằng op=list_agents để khỏi tạo trùng.
+
 ### Loop -> `Javis/loops/<slug>.md`
 
 **Việc LẶP MỚI: ưu tiên GỌI TOOL `javis_schedule`** (op=create, name/prompt/schedule - vd
@@ -197,6 +203,7 @@ ctx có `ctx.vault_root`, `ctx.data_dir` (state riêng plugin, không đụng va
   phân biệt được với skill khác (mô tả mơ hồ làm Javis chọn skill sai). Đừng tạo skill trùng
   chức năng skill đã có.
 - Plugin user (toàn cục lẫn vault) chạy CODE PYTHON THẬT trong tiến trình server -> tạo `enabled: false`,
-  `min_mode: readonly`, và NÓI RÕ với user: plugin chỉ chạy khi họ đặt env `JAVIS_ENABLE_USER_PLUGINS=true`
-  rồi khởi động lại (rào chống chạy code lạ). Plugin làm hành động ra ngoài thì khai `min_mode: full` cho đúng, hub xét theo mức quyền của chỗ gọi.
+  `min_mode: readonly`, và NÓI RÕ với user: plugin nằm tắt cho tới khi họ bật nó trong app. Từ 15/10/2026
+  Javis cho tải plugin người dùng mặc định; máy nào muốn chặn hẳn thì đặt env `JAVIS_ENABLE_USER_PLUGINS=false`
+  rồi khởi động lại. Plugin làm hành động ra ngoài thì khai `min_mode: full` cho đúng, hub xét theo mức quyền của chỗ gọi.
 - Sau khi tạo, KHÔNG tự chạy thứ có side-effect; để user xem trước.

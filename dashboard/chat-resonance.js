@@ -234,6 +234,8 @@
   }
 
   /* Chỉ tin báo do host ghi (khối thẻ mang khoá báo cáo `outbox:`) mới có hàng phản hồi; server vẫn kiểm biên nhận. */
+  var A3_REACT_ROW = false;   // xem ghi chú trong ve(): tin báo goal chỉ còn sáu cảm xúc chung
+
   function isNotice(card) {
     return /^outbox:[0-9]+$/.test(String((card || {}).report || ""));
   }
@@ -593,7 +595,10 @@
     var bubble = msgEl.querySelector(".bubble");
     (bubble || msgEl).appendChild(el);
     load(el);
-    veReact(msgEl, card);
+    // Quyết định của chủ (0.168.0): tin báo goal chỉ dùng sáu cảm xúc chung (reactions.js, có lý do và "nên nói / nên im"),
+    // cảm xúc trên tin báo goal đánh thức goal xem lại phản hồi (lý do `feedback` của A2). Hàng "Hữu ích / Chưa ổn" của A3
+    // không vẽ nữa để khỏi hai hàng phản hồi trên cùng một tin; API và kho của A3 giữ nguyên (dữ liệu cũ vẫn đọc được).
+    if (A3_REACT_ROW) veReact(msgEl, card);
     return el;
   }
 
@@ -685,7 +690,7 @@
   /* Công tắc theo BRAIN cũ đã bỏ (A1): công tắc nay theo từng trợ lý, ở resonance-agent.js. */
 
   var api = { tach: tach, viewHtml: viewHtml, compactHtml: compactHtml, requestFor: requestFor, stateKey: stateKey, wakeLabel: wakeLabel,
-    ve: ve, render: render, reactHtml: reactHtml, reactBody: reactBody, learnHtml: learnHtml, isNotice: isNotice,
+    ve: ve, render: render, A3_REACT_ROW: A3_REACT_ROW, reactHtml: reactHtml, reactBody: reactBody, learnHtml: learnHtml, isNotice: isNotice,
     scopeHtml: scopeHtml, teamHtml: teamHtml, noteFor: noteFor, _send: send };
   if (typeof window !== "undefined") window.JavisResonance = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

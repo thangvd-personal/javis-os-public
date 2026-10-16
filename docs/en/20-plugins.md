@@ -16,7 +16,7 @@ A plugin is **one folder** with 2 files:
 A plugin gives Javis two things:
 
 - **A tool**: something an engine can call, for example `javis_now` (asking what time it is in Vietnam) or `javis_generate_image` (creating an image). Plugin tools go through the MCP Hub, so **every engine can use them**, not only Claude Code.
-- **A hook**: code that runs **around each tool call**. The current build supports two events: `pre_tool_call` (before the tool runs) and `post_tool_call` (after it finishes). When no plugin registers a hook, Javis wraps nothing at all, so it costs nothing.
+- **A hook**: code that runs **around each tool call**. The current build supports two events around tools: `pre_tool_call` (before the tool runs) and `post_tool_call` (after it finishes). When no plugin registers a hook, Javis wraps nothing at all, so it costs nothing. A third event, `chatbot_turn_context`, runs once per dedicated-bot turn and lets a plugin add one line of context (see [below](#chatbot-turn-context-hook-chatbot_turn_context)).
 
 Plugin tools **respect Javis's 3 permission levels** exactly like any other tool, so a loop running read-only cannot call a plugin's write tool.
 
@@ -39,7 +39,7 @@ Open the dashboard (default port 7777), look at the left navigation rail, click 
 Right under the heading are three introductory blocks:
 
 1. A description line: "Plugins add native **tools** (callable by engines) and **hooks** to Javis without touching the core, usable on EVERY engine (Claude Code, Codex, API) through the hub, respecting the 3 permission levels like any other tool."
-2. An orange warning box (shown only while it is still locked): "**⚠ Plugins you installed are blocked.** Global and brain plugins run real Python code in the server, so they are OFF by default. To turn them on: set the environment variable `JAVIS_ENABLE_USER_PLUGINS=true` and restart Javis. Bundled plugins keep working normally."
+2. An orange warning box (shown only when this machine turns user plugins off): "**⚠ Plugins you installed are turned off on this machine.** This machine sets the environment variable `JAVIS_ENABLE_USER_PLUGINS=false` so global and brain plugins do not run. Remove it (or set it to true) and restart Javis. Bundled plugins keep running normally."
 3. A grey signpost line: "Drop a GLOBAL plugin (used by EVERY brain) into `<the real path on your machine>` · each plugin is `plugin.yaml` + `plugin.py`. Or tell Javis in the chat box: 'create a plugin ...'."
 
 The path on the third line is the **real** path on the machine running Javis, so copy it from the screen rather than typing it from the documentation.
@@ -90,7 +90,7 @@ For **Global** and **This brain** plugins, Javis writes `enabled: true/false` st
 
 Enabling and disabling takes effect immediately with no restart: Javis refreshes the hub's cache so the tool appears or disappears on the next chat turn, and the brain's capability index `Javis/index.md` is rebuilt too.
 
-The one exception: if you enable a **Global/This brain** plugin while the environment variable is still locked, Javis shows a dialog saying it was enabled in the manifest BUT user-installed plugins only run once `JAVIS_ENABLE_USER_PLUGINS=true` is set and Javis is restarted (protection against running unknown code). The card then switches to **⚠ waiting for env**.
+The one exception: if you enable a **Global/This brain** plugin on a machine that sets `JAVIS_ENABLE_USER_PLUGINS=false`, Javis shows a dialog saying it was enabled in the manifest BUT this machine turns user-installed plugins off, and to remove that variable (or set it to true) and restart. The card then switches to **⚠ off by env**.
 
 ### Step 3: Check that the tool reached the engine
 
@@ -140,7 +140,7 @@ Since 0.55.23, a **Package** installed on the **Capabilities > Install store** p
 They differ from the other three sources in three ways:
 
 - **Enabling, disabling and removing all happen in the Install store**, not here. A plugin travels with its whole package, so toggling it separately only causes confusion. The card on this page has a button that takes you straight there.
-- **No `JAVIS_ENABLE_USER_PLUGINS` environment variable needed.** A package goes through the installer, meaning you saw the screen listing every code file before clicking agree. That is the same kind of assurance the environment variable provides, only per package rather than an all-or-nothing switch.
+- **`JAVIS_ENABLE_USER_PLUGINS` does not apply to packages.** A package goes through the installer, meaning you saw the screen listing every code file before clicking agree, and its code signature is checked on every load.
 - **The code in the package is locked to its content.** At install time, Javis records a fingerprint of all the code in the package. On every load it recomputes and compares: one byte off and the plugin **does not run**, with the card stating that the code in the package changed since you agreed to install it. To keep using it, reinstall from the Install store to review and confirm again.
 
 A note when editing by hand: opening a package's `plugin.py` in a Windows editor and saving is enough to shift the fingerprint, because many editors change the line endings. That is not a bug, the file content genuinely differs. To modify a plugin, edit it in your own plugin folder rather than inside a package.
@@ -222,24 +222,25 @@ A few things to remember while writing:
 - To make a tool refuse itself when prerequisites are missing (not signed in, no key), pass `check_fn=`, a function returning `None` when ready or an explanatory sentence when not.
 - A broken plugin **does not bring Javis down**: every load step, tool call and hook is wrapped, and the error appears only on that plugin's card.
 
-### Step 4: Unlock with the environment variable
+### Step 4: Enable the plugin
 
-Plugins you install are **blocked by default**, even with `enabled: true`. To unlock them:
+Since 0.162.0, Javis **loads the plugins you install by default**: a plugin with `enabled: true` (you clicked **Enable** on its card) runs, no environment variable needed.
+
+To block user plugins on a machine altogether (for example a shared server):
 
 1. Open the `.env` file in the project root (create it if absent, see [.env configuration](16-env-configuration.md)).
-2. Add one line: `JAVIS_ENABLE_USER_PLUGINS=true`
+2. Add one line: `JAVIS_ENABLE_USER_PLUGINS=false`
 3. Save the file and **restart Javis**.
-4. Return to the **Plugins** page: the orange warning box disappears and enabled plugins switch to **● running**.
 
-Accepted values are `1`, `true`, `yes` or `on` (case insensitive). The old name `JAVIS_ENABLE_VAULT_PLUGINS` still works for compatibility, but prefer the new one.
+Off accepts `0`, `false`, `no` or `off` (case insensitive). The old name `JAVIS_ENABLE_VAULT_PLUGINS` still works, but when both are set the new name wins.
 
 ## Safety rails (read before installing an unfamiliar plugin)
 
 This is the most important part of this page.
 
-- **Plugins you install run real Python code, inside Javis's own server process.** They have that process's rights: reading and writing files, calling the network, reading environment variables. That is why Javis **hard-blocks them by default** and only runs them once you set `JAVIS_ENABLE_USER_PLUGINS=true` yourself and restart. This is the rail against someone who can write a folder into the brain being able to run code on your machine.
-- **Only unlock once you have read the code** of every plugin in those two folders. The environment variable unlocks **all** user plugins, not one at a time.
-- **Bundled plugins (the "Bundled" label) are not subject to this rail** because they ship with the Javis release. They keep working while the environment variable is off.
+- **Plugins you install run real Python code, inside Javis's own server process.** They have that process's rights: reading and writing files, calling the network, reading environment variables. Since 0.162.0 the project owner chose to **load them by default**; the remaining guard is each plugin's own **Enable** switch (`enabled: true` in `plugin.yaml`).
+- **Only enable a plugin once you have read its code.** Note: anyone who can write into a `plugins/` folder (including the model, since it can write into the brain) can also write `enabled: true`. On a shared server, or one that runs bots for strangers, set `JAVIS_ENABLE_USER_PLUGINS=false`.
+- **Bundled plugins (the "Bundled" label) are not subject to this switch** because they ship with the Javis release. They keep working even when the machine sets `false`.
 - **A plugin Javis creates from chat is always disabled** (`enabled: false`) and at the `readonly` level. Javis never enables it for you; you must read the code then click **Enable** yourself.
 - **Do not write plugins that perform money, order, messaging or publishing actions.** Those should go through MCP connections and the permission system, where the blocks and logs already exist. A plugin should be `min_mode: readonly` unless you deliberately need otherwise.
 - **Do not clone bundled plugins into a brain.** They travel with the app and update themselves; a copy in the brain shadows the original and stops being updated.
@@ -265,6 +266,46 @@ Besides tools, a plugin can register hooks. The current build has two events:
 
 A hook wraps **every** tool call, MCP tools and core tools included, not only that plugin's tools. Use it for logging, counting, alerting. When no plugin registers a hook, Javis wraps nothing, so there is no performance cost. The `tool-audit` plugin is a working example: enable it and every tool call is counted into a file private to the plugin.
 
+## Chatbot turn context hook (`chatbot_turn_context`)
+
+The third event does not wrap tool calls. It runs **once per dedicated-bot turn**, just before the engine writes the reply. It solves something the model cannot do on its own: know **which account** is writing. The model only sees a display name, and anyone can type a name ("I'm An's mum"). The channel layer knows the real account id, and this hook hands that id to a plugin, not to the model.
+
+The callback receives these keys (always declare `**kwargs`, new keys may be added later):
+
+| Key | Meaning |
+|---|---|
+| `channel` | Channel of the turn: `zalo_personal`, `telegram`, `zalo`, `messenger`... |
+| `account_id` | The channel account the bot answers through, empty when the bot has none |
+| `bot_id` | The dedicated bot's id |
+| `chat_type` | `private` or `group` |
+| `chat_id` | The conversation (the group id in a group) |
+| `sender_id` | The platform-assigned account id of whoever sent this message, never a display name. In a group it is still the sender. Empty for a member-join event |
+| `vault_root` | Path of the bot's brain |
+| `trial` | `true` on the **Try bot** turn |
+
+The callback returns **one short line** or `None`. Javis puts that line in the system prompt of that turn only, inside a labelled block fenced with `<operator_context>`, which says this is information from the bot owner's system, not something the person claimed.
+
+```python
+def register(ctx):
+    def _context(sender_id="", chat_type="", **kwargs):
+        if chat_type != "private":
+            return None                      # groups: say nothing
+        return "Returning customer" if sender_id in REGULARS else None
+    ctx.register_hook("chatbot_turn_context", _context)
+```
+
+Rails Javis enforces, which a plugin cannot loosen:
+
+- **No plugin listening means the prompt is byte-for-byte** what it was before this hook existed.
+- The core **never writes the sender id into the prompt itself**. Only the line a plugin returns goes in, so a plugin should return a verdict ("verified") rather than echo the id.
+- Each line is forced to **one line**: newlines, control, bidi and zero-width characters become a space, and it is cut at **300 characters**. Several plugins give one line each, **900 characters** in total. The text `<operator_context>` is stripped from a line so nobody can close the block.
+- A callback that raises or takes longer than **2 seconds** is skipped and logged, and the reply goes on. A synchronous callback runs in a worker thread so it cannot stall other chats.
+- Each callback gets **its own copy** of the keys: whatever one plugin edits, the next one does not see.
+
+All three kinds of turn fire the hook: the live turn, the Inbox **Reply for me / Suggest a reply** turn (the sender is whoever wrote the last message of that chat), and the **Try bot** turn. A try turn carries `trial: true` and the try page's synthetic sender (`javis-try-user`, chat `javis-try`), the same stand-in a try turn already uses for every per-person check. That id matches nobody real, so a roster-style plugin shows its "stranger" path. A plugin that wants to treat try turns differently reads `trial`.
+
+A plugin using this hook sits behind the usual rails: a user-installed plugin only runs with `JAVIS_ENABLE_USER_PLUGINS=true`, a Package plugin goes through the installer, and it should declare `min_mode: readonly` when it only reads.
+
 ## Own page and HTTP routes (since 0.64.26)
 
 A plugin can open web routes of its own, under `/ext/<slug>/`. Use it for a settings page, or for an outside service to call in (webhook, OAuth door). The "Javis in ChatGPT" package in the store is a working example.
@@ -289,13 +330,13 @@ def register(ctx):
 | What you see | Meaning / action |
 |---|---|
 | **● running** (green) | The plugin is loaded and its tools are available to the engine |
-| **⚠ waiting for env** (orange) | You enabled the plugin but `JAVIS_ENABLE_USER_PLUGINS=true` is not set, or is set but Javis has not been restarted |
+| **⚠ off by env** (orange) | You enabled the plugin but this machine sets `JAVIS_ENABLE_USER_PLUGINS=false` |
 | **⚠ error** (red) | The manifest is broken or the code failed to load; the reason appears under the chip row |
 | **○ off** (grey) | The plugin is present but disabled, exposing no tools |
 | **● enabled (not loaded)** (orange) | A rare state: enabled but not loaded for some other reason. Reload the page, and if it persists check the server log |
 | The **Bundled** / **Global** / **This brain** label | The plugin's source (app / the folder shared by every brain / one brain) |
 | A **🔧 name** chip | A tool the plugin provides; this is the name the engine will call |
-| A **🪝 name** chip | A hook the plugin registers (`pre_tool_call` or `post_tool_call`) |
+| A **🪝 name** chip | A hook the plugin registers (`pre_tool_call`, `post_tool_call` or `chatbot_turn_context`) |
 | "minimum level: read only / write (safe) / full power" | The minimum permission level for the plugin's tools to be allowed to run |
 | The **Enable** button | Enables the plugin (the card is off) |
 | The **Disable** button | Disables the plugin (the card is on) |
@@ -313,7 +354,7 @@ def register(ctx):
 
 ## Common problems
 
-- **The card reads "⚠ waiting for env":** you have not set `JAVIS_ENABLE_USER_PLUGINS=true`, or set it but have not restarted Javis. The variable is only read at startup.
+- **The card reads "⚠ off by env":** this machine sets `JAVIS_ENABLE_USER_PLUGINS=false`. Remove that line from `.env` (or set `true`) and restart Javis. The variable is only read at startup.
 - **The environment variable is set and it is still blocked:** check that the `.env` file is in the project root, that the line has no leading `#`, and that the value is `true` (or `1`/`yes`/`on`). On Docker, set the variable in the container's Environment section rather than in a file on the host.
 - **A newly dropped plugin does not appear on the page:** the folder must be **directly** inside the plugins folder (no extra nesting) and must contain `plugin.py` (or `__init__.py`). Without that, Javis does not consider it a plugin. The folder name must also be a valid slug (lowercase, no diacritics).
 - **The card reads "⚠ error" with "plugin.py missing":** the folder has only `plugin.yaml`. Add the code file.

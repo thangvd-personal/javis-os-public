@@ -79,15 +79,17 @@ ALLOW = {
     ("task-suggest.js", "\U0001F53C"),   # ưu tiên vừa
     ("task-suggest.js", "\U0001F53D"),   # ưu tiên thấp
     # Lý do thứ hai, cùng tinh thần "dữ liệu chứ không phải icon": sáu reaction của nhóm chat team (spec
-    # 2026-10-13-team-chat-design mục 14). Chủ dự án chốt đúng sáu emoji này là GIÁ TRỊ người dùng chọn, lưu nguyên loại;
-    # đổi sang icon là đổi sản phẩm. Chỉ trong teams.js, và mục 5b dưới kiểm cả sáu luôn còn.
-    ("teams.js", "\U0001F44D"),   # like
-    ("teams.js", "❤"),       # love
-    ("teams.js", "️"),       # bộ chọn biến thể đi kèm ❤ (❤️)
-    ("teams.js", "\U0001F602"),   # haha
-    ("teams.js", "\U0001F62E"),   # wow
-    ("teams.js", "\U0001F622"),   # sad
-    ("teams.js", "\U0001F621"),   # angry
+    # 2026-10-13-team-chat-design mục 14, mở sang chat riêng ở T2 0.154.0). Chủ dự án chốt đúng sáu emoji này là GIÁ TRỊ
+    # người dùng chọn, lưu nguyên loại; đổi sang icon là đổi sản phẩm. Chỉ sáu ký tự chức năng này, chỉ trong bảng EMOJI
+    # của reactions.js (module dùng chung của chat nhóm và chat riêng, hợp đồng docs/dev/team-chat-t2-contract.md mục 6);
+    # mục 5b dưới kiểm cả sáu luôn còn và không lọt ra ngoài bảng. Mọi file khác (kể cả teams.js) vẫn sạch emoji.
+    ("reactions.js", "\U0001F44D"),   # like
+    ("reactions.js", "❤"),       # love
+    ("reactions.js", "️"),       # bộ chọn biến thể đi kèm ❤ (❤️)
+    ("reactions.js", "\U0001F602"),   # haha
+    ("reactions.js", "\U0001F62E"),   # wow
+    ("reactions.js", "\U0001F622"),   # sad
+    ("reactions.js", "\U0001F621"),   # angry
 }
 REACTION_EMOJI = ["\U0001F44D", "❤️", "\U0001F602", "\U0001F62E", "\U0001F622", "\U0001F621"]
 
@@ -427,16 +429,21 @@ pos_style = INDEX.find("static/style.css")
 check("biến CSS nạp TRƯỚC style.css (style.css tham chiếu chúng)",
       0 < pos_vencss < pos_style)
 
-# --- 5b. Sáu reaction của nhóm chat team còn đủ, và chỉ nằm trong bảng REACTIONS ---
-TEAMS_JS = (DASH / "teams.js").read_text(encoding="utf-8")
-_tbl = re.search(r"var REACTIONS = \[(.*?)\];", TEAMS_JS, re.S)
-check("teams.js giữ đủ sáu reaction chức năng 👍 ❤️ 😂 😮 😢 😡 (luật cấm emoji không được làm mất chúng)",
+# --- 5b. Sáu reaction (chat nhóm và chat riêng) còn đủ, và chỉ nằm trong bảng EMOJI của reactions.js ---
+REACT_JS = (DASH / "reactions.js").read_text(encoding="utf-8")
+_tbl = re.search(r"var EMOJI = \[(.*?)\];", REACT_JS, re.S)
+check("reactions.js giữ đủ sáu reaction chức năng 👍 ❤️ 😂 😮 😢 😡 (luật cấm emoji không được làm mất chúng)",
       bool(_tbl) and all(e in _tbl.group(1) for e in REACTION_EMOJI))
-_outside = [ln for ln in (TEAMS_JS.replace(_tbl.group(0), "") if _tbl else TEAMS_JS).splitlines()
+_outside = [ln for ln in (REACT_JS.replace(_tbl.group(0), "") if _tbl else REACT_JS).splitlines()
             if any(e.rstrip("️") in ln for e in REACTION_EMOJI)]
-check("emoji reaction chỉ xuất hiện trong bảng REACTIONS, không dùng làm trang trí chỗ khác", not _outside)
+check("emoji reaction chỉ xuất hiện trong bảng EMOJI, không dùng làm trang trí chỗ khác", not _outside)
 for _ln in _outside:
     print("      " + _ln.strip()[:90])
+_khac = sorted({f for f, g in ALLOW if g in "".join(REACTION_EMOJI)} - {"reactions.js"})
+check("ngoại lệ sáu reaction chỉ cấp cho reactions.js (teams.js, app.js, mobile-chat.js dùng module, không tự chứa emoji)",
+      not _khac)
+for _f in _khac:
+    print("      " + _f)
 
 # --- 6. Emoji không được bò trở lại -----------------------------------------
 hits = scan_emoji()

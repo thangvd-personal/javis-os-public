@@ -21,6 +21,14 @@ function check(name, cond, extra) {
   if (!cond) fails++;
 }
 
+// ── quyết định của chủ (0.168.0): tin báo goal chỉ còn sáu cảm xúc chung ──
+{
+  const guarded = "if (A3_REACT_ROW) veReact(msgEl, card);";
+  const bare = SRC.split(guarded).join("").split("\n").some((l) => l.trim() === "veReact(msgEl, card);");
+  check("tin báo goal không vẽ hàng Hữu ích / Chưa ổn nữa (cờ A3_REACT_ROW tắt, ve() chỉ gọi khi cờ bật)",
+    RS.A3_REACT_ROW === false && SRC.includes(guarded) && !bare);
+}
+
 // ── hàng phản hồi ──
 check("chỉ tin báo có khoá outbox:<số> mới có hàng phản hồi",
   RS.isNotice({ report: "outbox:12" }) && !RS.isNotice({ report: "" }) && !RS.isNotice({ report: "outbox:x" })

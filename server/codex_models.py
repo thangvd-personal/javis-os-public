@@ -37,6 +37,20 @@ def efforts_for(model: str) -> list:
     return list(_EFFORTS.get(str(model or "").strip()) or [])
 
 
+_TIERS: dict = {}
+
+
+def tiers_for(model: str) -> list:
+    """Service tier ids this Codex model declares (e.g. ["priority"] for Fast). [] = unknown/none."""
+    return list(_TIERS.get(str(model or "").strip()) or [])
+
+
+def _nho_tiers(items) -> None:
+    for x in items or []:
+        if x.get("id"):
+            _TIERS[x["id"]] = list(x.get("service_tiers") or [])
+
+
 def _nho_efforts(items) -> None:
     for x in items or []:
         muc = [m for m in (x.get("supported_reasoning_efforts") or []) if m]
@@ -100,6 +114,12 @@ def _normalize_items(items: Any) -> list[dict]:
                 if isinstance(x, dict) and x.get("reasoningEffort")
             ],
             "upgrade": raw.get("upgrade"),
+            # 0.164.0, Fast mode: the tier ids the model declares ("priority" is Fast).
+            "service_tiers": [
+                str(t.get("id")) for t in (raw.get("serviceTiers") or [])
+                if isinstance(t, dict) and t.get("id")
+            ],
+            "default_service_tier": raw.get("defaultServiceTier"),
         })
     # Codex thường đã xếp default đầu tiên. Bảo đảm điều đó để fallback của
     # Javis cũng dùng đúng default hiện hành nếu upstream đổi thứ tự.
@@ -205,6 +225,7 @@ def list_models(timeout: float = 20.0, cli_path: Optional[str] = None,
         if not models:
             return None
         _nho_efforts(models)
+        _nho_tiers(models)
         default = next((x["id"] for x in models if x["is_default"]), models[0]["id"])
         return {
             "models": [x["id"] for x in models],

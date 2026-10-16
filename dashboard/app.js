@@ -32,7 +32,8 @@ function updateStopBtn() {
 function syncActiveUI() {
   const t = savedSessionId ? turns[savedSessionId] : null;
   isProcessing = !!(t && t.running);
-  sendBtn.disabled = isProcessing;
+  // Workspace may lock send while its session is not ready (dataset.wsLock); both reasons count.
+  sendBtn.disabled = isProcessing || sendBtn.dataset.wsLock === "1";
   // Đang trả lời thì khoá nút gửi lại của mọi tin (CSS .transcript.busy) cho khỏi chồng lượt.
   try { chatArea.classList.toggle("busy", isProcessing); } catch (e) {}
   updateStopBtn();
@@ -1015,6 +1016,8 @@ function handleMessage(data) {
     // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
     // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
     if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }
+    // T2: gói chat_reaction (trạng thái host đổi) lỡ trong lúc mất kết nối: hỏi lại reaction của phiên đang mở.
+    if (_daChao) { try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId); } catch (e) {} }
     _daChao = true;
     adaptiveCapable = (data.capabilities || []).includes("adaptive_voice_v1");
     stopTag = data.stop_tag || null;
@@ -1094,6 +1097,13 @@ function handleMessage(data) {
   if (sid && _luotDaDung[sid] != null && data.type !== "turn_done" && KHUNG_LUOT.includes(data.type)
       && t && t.id && t.id !== _luotDaDung[sid]) delete _luotDaDung[sid];
 
+  if (data.type === "turn_saved" || data.type === "chat_reaction") {
+    // T2 (0.154.0): turn_saved mang mã tin của câu trả lời vừa lưu (bong bóng vừa chốt nhận data-mid, hiện nút thả cảm xúc);
+    // chat_reaction vẽ lại reaction của tin đó ở mọi bong bóng đang mở, kể cả khi đổi ở tab khác. Không đụng lượt đang chạy
+    // (cả hai gói nằm ngoài KHUNG_LUOT nên không dựng lại turns[sid]).
+    try { if (window.JavisChatReactions) window.JavisChatReactions.onFrame(data, { bubble: t && t.bubble }); } catch (e) {}
+    return;
+  }
   if (data.type === "push") {
     // Tin do việc chạy NỀN đẩy vào (việc Kanban / loop / nhắc hẹn xong), không thuộc lượt
     // hỏi-đáp nào. KHÔNG đụng turns[sid]: lượt đang chạy (nếu có) vẫn stream bình thường,
@@ -1101,6 +1111,11 @@ function handleMessage(data) {
     if (isActive) {
       const el = appendJavisMessage(data.content || "");
       recordTurn("javis", data.content || "", null, null);
+      // Tin đẩy về có mã tin (0.168.0): gắn hàng sáu cảm xúc ngay, kể cả tin báo goal (không còn hàng A3 riêng).
+      if (el && data.message_id != null && window.JavisChatReactions && window.JavisChatReactions.attach) {
+        window.JavisChatReactions.attach(el, { sid: data.session_id, mid: data.message_id, sha: data.content_sha || "",
+          reaction: null, entry: null });
+      }
       scrollBottom();
       // Đọc tin nền chỉ khi người dùng KHÔNG đang nói hay đang nghe Javis nói dở (Voice V1):
       // chen một bản tin vào giữa câu người dùng là cắt ngang họ. Hoãn tới lúc rảnh.
@@ -1230,6 +1245,10 @@ function handleMessage(data) {
         _ghi = finalText + "\n\n<!-- JAVIS_VIEC: " + JSON.stringify(_v) + " -->";
       }
       if (finalText.trim()) recordTurn("javis", _ghi, null, ask, t && t.buoc);
+      // T2: bong bóng vừa chốt chờ gói turn_saved mang mã tin; có mã mới hiện nút thả cảm xúc.
+      try {
+        if (window.JavisChatReactions) window.JavisChatReactions.expect(sid, msgEl, finalText.trim() ? convo[convo.length - 1] : null);
+      } catch (e) {}
       // Có câu trả lời thật thì linh vật vui một nhịp. Đang đọc thành tiếng thì nó tự đợi đọc
       // xong mới nhảy (pet.js giữ cờ choXong), nên gọi ngay ở đây là đủ.
       if (finalText.trim()) petReact("xong");
@@ -1304,6 +1323,8 @@ function handleMessage(data) {
     // `response` nào, nên trước đây chip đứng lại đếm giờ mãi dù kết quả đã in xong. Gọi thêm
     // một lần ở đây vô hại với lượt thường - hideActivity() là thao tác không cộng dồn.
     if (isActive) { hideActivity(); veKhoiBuoc(t, false); syncActiveUI(); runActions(turn.turnDone()); cum.reset(); }
+    // T2: bong bóng hay mã tin còn chờ ghép của lượt này chỉ sống thêm một quãng ngắn (xem chat-reactions.js).
+    try { if (window.JavisChatReactions) window.JavisChatReactions.turnDone(sid); } catch (e) {}
     if (sid) delete turns[sid];
     if (isActive && _tinChoLuot) guiTinCho();   // câu người dùng chen ngang: lượt cũ dừng hẳn rồi thì gửi
     if (isActive) guiCauChoLuot();               // câu nói lúc đang trả lời (cuộc gọi): gửi nếu loa đã im
@@ -1322,6 +1343,8 @@ function handleMessage(data) {
 // Lượt Enter đang ĐỢI file tải lên xong. Chỉ giữ một lượt: bấm Enter hai lần trong lúc chờ
 // không được thành hai tin.
 let _choTaiLen = null;
+// A working-folder pin held on the empty chat: the first turn is sent once its /pin request settles.
+let _pinWait = null;
 let _sendEpoch = 0;   // callbacks queued in an old voice/chat context may not send in a new one
 
 // ---- Tin đang đợi lượt cũ dừng HẲN rồi mới gửi ----
@@ -1458,7 +1481,7 @@ const _gocCongSu = {};
 // dù câu trong ô nhập có nghe như đang nói về chính quy trình.
 function sendMessage(text, opts) {
   if (window.JavisWorkspace && !window.JavisWorkspace.canSend()) return;
-  const msg = (text || chatInput.value).trim();
+  let msg = (text || chatInput.value).trim();
   // Lệnh / : session-command chạy tại chỗ; skill-command bung thành lời gọi skill.
   // `opts.prefix` = tin do lệnh /plan, /goal (hoặc vòng tự động của /goal) gửi: khối chỉ dẫn đã
   // dựng sẵn, và nội dung `msg` là câu người dùng nên KHÔNG được route lại (câu có thể tình cờ
@@ -1524,6 +1547,13 @@ function sendMessage(text, opts) {
   }
   const atts = pendingAttachments.filter(a => a.path);
   if (!msg && atts.length === 0) return;
+  // Trích dẫn (0.171.0): đoạn trích đứng ở đầu tin dạng "> ...", là một phần chữ của tin. Chỉ gắn vào
+  // tin thường, không gắn vào lệnh "/" và lượt tự động, rồi xoá chip để tin sau không mang theo nữa.
+  if (_quote && window.JavisQuote && _slash.type === "passthrough" && !(opts && opts.adaptive)) {
+    msg = window.JavisQuote.ghep(_quote.text, msg);
+    _quote = null;
+    renderChips();
+  }
   if (!savedSessionId) {
     savedSessionId = newSid();                           // hội thoại mới → mint id để định tuyến
     // Đang mở một project ở cột Lịch sử thì hội thoại mới rơi thẳng vào project đó, khỏi phải
@@ -1531,6 +1561,8 @@ function sendMessage(text, opts) {
     try { if (window.JavisProjects) window.JavisProjects.claim(savedSessionId); } catch (e) {}
     // Model đã chọn khi khung chat còn trống -> ghim luôn cho phiên vừa sinh (model-picker.js).
     try { if (window.JavisModelBar) window.JavisModelBar.claimPending(savedSessionId); } catch (e) {}
+    // A working folder pinned on the empty chat follows the session that was just minted (0.158.0).
+    try { if (window.JavisPinnedFolder) _pinWait = window.JavisPinnedFolder.claimPending(savedSessionId); } catch (e) {}
   }
   const sid = savedSessionId;
   // Phiên đang trả lời thì không gửi chồng lượt. NHƯNG tin từ MIC (hay gõ trong lúc rảnh tay)
@@ -1661,7 +1693,20 @@ function sendMessage(text, opts) {
                           voice_input: _tuGiong, voice_turn_id: String(turns[sid].id),
                           wf_run: !!(opts && opts.wfRun), ...(adaptiveMeta || {}) };
   if(adaptiveMeta) { adaptiveCurrent.set(sid,adaptiveMeta.utterance_id);adaptiveOutbox.set(adaptiveMeta.utterance_id,{payload,element:userElement,since:performance.now()}); }
-  ws.send(JSON.stringify(payload));
+  const _send = () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // The socket dropped while the first turn waited for the folder pin: nothing was sent,
+      // so end the turn here and give the text back instead of losing it silently.
+      if (turns[sid]) turns[sid].running = false;
+      setSessionRunning(sid, false); hideActivity(); syncActiveUI();
+      chatInput.value = msg;
+      ghiChuThoang(window.t("app.ws_mat_ket_noi"));
+      return;
+    }
+    try { ws.send(JSON.stringify(payload)); } catch (e) {}
+  };
+  const _w = _pinWait; _pinWait = null;
+  if (_w) _w.then(_send, _send); else _send();
   _tuGiong = false;
 }
 // Trang đang mở và đoạn đang bôi đen, cho khối NGỮ CẢNH GIAO DIỆN. Chọn trong ô nhập chat thì
@@ -1786,6 +1831,7 @@ function restoreSession() {
   // khôi phục để handler không xoá trắng khung chat và ghi đè localStorage bằng phiên rỗng.
   if (savedSessionId && s.brain) _lastBrain = s.brain;
   // Dựng lại bong bóng hội thoại
+  const _traLoi = [];   // T2: các câu trả lời vừa dựng lại, để refresh() sửa reaction và gắn mã còn thiếu
   convo.forEach((t, i) => {
     // t.ts vắng mặt ở tin lưu từ trước bản này -> truyền 0 để ẩn giờ thay vì hiện giờ F5.
     if (t.role === "user") { appendUserMessage(t.text, t.atts || [], t.ts || 0); return; }
@@ -1794,9 +1840,17 @@ function restoreSession() {
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
       chatAppend(window.JavisSteps.ve(null, t.buoc, false));
     const el = appendJavisMessage(t.text, t.ts || 0, t.brain || s.brain);
+    _traLoi.push({ el, entry: t });
+    // T2: tin đã có mã (lịch sử hay gói turn_saved) mang lại hàng reaction; tin lưu trước bản này không có mã thì không có nút.
+    try {
+      if (t.mid != null && window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
+        sha: t.sha || "", brain: t.brain || s.brain, reaction: t.reaction || null, entry: t });
+    } catch (e) {}
     // Chip chỉ sống lại ở tin CUỐI: có tin sau nó nghĩa là câu hỏi đã được trả lời rồi.
     if (t.ask) window.JavisAsk.render(el, t.ask, i === convo.length - 1);
   });
+  // Bản lưu cục bộ có thể giữ reaction cũ (đổi ở máy khác) hay thiếu mã tin: hỏi lại đủ số tin vừa dựng (tối đa 200).
+  try { if (window.JavisChatReactions && savedSessionId) window.JavisChatReactions.refresh(savedSessionId, _traLoi); } catch (e) {}
   if (convo.length) { scrollBottom(true); ghimDay(sessionOpenSeq); }
   // Con trỏ tin cũ sống sót qua F5 → vẫn cuộn lên đọc tiếp được, không phải bấm lại vào
   // hội thoại trong danh sách mới có.
@@ -1820,7 +1874,7 @@ let _moiTinCu = null, _quanSatMoi = null;
 
 // Dựng lại MỘT tin đã lưu thành bong bóng, trả về mục tương ứng cho convo (null nếu bỏ qua).
 // Dùng chung cho lượt mở hội thoại và lượt chèn ngược, để hai đường không trôi lệch nhau.
-function veTinDaLuu(m, brainCua) {
+function veTinDaLuu(m, brainCua, sidCua) {
   const ts = m.ts ? Math.round(m.ts * 1000) : 0;   // server lưu epoch giây (sessions.py)
   // convo là thứ được ghi xuống localStorage rồi dựng lại ở lần F5 sau. Nhét bản CÒN khối
   // vào đây là lỗi sống dai qua mọi lần tải lại, dù bong bóng lượt này đã sạch.
@@ -1838,8 +1892,15 @@ function veTinDaLuu(m, brainCua) {
   // vứt đi nên ảnh trong hội thoại cũ luôn ghép với brain đang chọn - mở hội thoại của
   // brain khác là ảnh hỏng hết. Giữ luôn vào convo để lần khôi phục sau còn dùng.
   if (m.role === "assistant") {
-    appendJavisMessage(m.content || "", ts, brainCua);
-    return { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua };
+    const el = appendJavisMessage(m.content || "", ts, brainCua);
+    // T2 (0.154.0): mã tin, content_sha và reaction đi theo bong bóng lẫn convo, để thả cảm xúc được và F5 vẫn còn.
+    const entry = { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua,
+                    mid: m.id, sha: m.content_sha || "", reaction: m.reaction || null };
+    try {
+      if (window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: sidCua, mid: m.id, sha: m.content_sha || "",
+        brain: brainCua, reaction: m.reaction || null, entry });
+    } catch (e) {}
+    return entry;
   }
   return null;
 }
@@ -1922,7 +1983,7 @@ async function taiTinCu() {
     _dangChenCu = true;
     _neoChenCu = _moiTinCu ? _moiTinCu.nextSibling : dauKhungChat();
     const them = [];
-    ds.forEach(m => { const t = veTinDaLuu(m, st.brain); if (t) them.push(t); });
+    ds.forEach(m => { const t = veTinDaLuu(m, st.brain, st.sid); if (t) them.push(t); });
     _neoChenCu = null; _dangChenCu = false;
     convo = them.concat(convo);
     st.ts = ds[0].ts; st.id = ds[0].id; st.con = !!d.has_more;
@@ -1954,7 +2015,7 @@ async function openStoredSession(id, stillCurrent) {
     goMoiTinCu();
     chatArea.innerHTML = "";
     const ds = sess.messages || [];
-    ds.forEach(m => { const t = veTinDaLuu(m, sess.brain); if (t) convo.push(t); });
+    ds.forEach(m => { const t = veTinDaLuu(m, sess.brain, id); if (t) convo.push(t); });
     _tinCu = ds.length
       ? { sid: id, brain: sess.brain, ts: ds[0].ts, id: ds[0].id, con: !!sess.has_more, dangTai: false }
       : null;
@@ -2149,7 +2210,7 @@ function appendUserMessage(text, attachments, ts) {
   // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở
   const isLong = text && (text.split("\n").length > 10 || text.length > 900);
   const textHtml = text
-    ? `<div class="utext${isLong ? " clamped" : ""}">${escapeHtml(text)}</div>` +
+    ? `<div class="utext${isLong ? " clamped" : ""}">${window.JavisQuote ? window.JavisQuote.utextHtml(text, escapeHtml) : escapeHtml(text)}</div>` +
       (isLong ? `<button class="clamp-more" type="button">${window.t("app.show_more")}</button>` : "")
     : "";
   div.innerHTML = `<div class="bubble">${textHtml}${attHtml}</div>` +
@@ -2314,7 +2375,9 @@ function hideActivity() {
   if (activityEl && activityEl.parentNode) activityEl.parentNode.removeChild(activityEl);
   activityEl = null;
 }
-function setProcessing(s) { isProcessing = s; sendBtn.disabled = s; }
+function setProcessing(s) { isProcessing = s; sendBtn.disabled = s || sendBtn.dataset.wsLock === "1"; }
+// workspace.js calls this after changing its lock, so send ends up disabled for the right reason.
+window.JavisSyncActiveUI = syncActiveUI;
 
 // ============================================
 // Cuộn thông minh: chỉ tự cuộn khi user đang ở đáy; đang đọc lại phía trên thì
@@ -2410,6 +2473,28 @@ function runMsgAct(btn) {
   const msgEl = btn.closest(".msg");
   if (!msgEl) return;
   const act = btn.dataset.act;
+  if (act === "quote") {
+    // Bôi đen một đoạn TRONG tin này thì trích đúng đoạn đó; không thì trích cả tin. Tin Javis lấy
+    // markdown gốc (dataset.md), không lấy chữ đã vẽ, để đoạn trích còn nguyên đậm, danh sách, link.
+    let chon = "";
+    try {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && !sel.isCollapsed && sel.rangeCount && msgEl.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        chon = String(sel.toString() || "").trim();
+      }
+    } catch (e) {}
+    const b = msgEl.querySelector(".bubble");
+    const ca = msgEl.classList.contains("msg-javis")
+      ? window.JavisVisibleMarkdown(msgEl.dataset.md || (b ? b.innerText : ""))
+      : (window.JavisQuote ? window.JavisQuote.tach(msgEl.dataset.text || (b ? b.innerText : "")).rest
+                           : (msgEl.dataset.text || ""));
+    const text = (chon || ca || "").trim();
+    if (!text) return;
+    _quote = { text };
+    renderChips();
+    try { chatInput.focus(); } catch (e) {}
+    return;
+  }
   if (act === "copy") {
     const b = msgEl.querySelector(".bubble");
     // Tin Javis giữ markdown gốc trong dataset.md: copy bản đó để bài viết dán sang
@@ -2456,10 +2541,16 @@ chatArea.addEventListener("click", (e) => {
   try { if (!window.matchMedia("(hover: none)").matches) return; } catch (err) { return; }
   if (!e.target.closest) return;
   if (e.target.closest(".msg-acts")) return;   // bấm chính nút thì đừng đóng hàng nút
+  if (e.target.closest(".jr-chat")) return;    // hàng reaction (T2) tự lo nút của nó
   const msgEl = e.target.closest(".msg");
   chatArea.querySelectorAll(".msg.acts-on").forEach(m => { if (m !== msgEl) m.classList.remove("acts-on"); });
   if (msgEl) msgEl.classList.toggle("acts-on");
 });
+// Sáu reaction trên câu trả lời (T2 0.154.0, chat-reactions.js): bấm, đổi, bỏ, nhấn giữ trên điện thoại. Đổi reaction thì
+// lưu lại convo để F5 còn đúng.
+try {
+  if (window.JavisChatReactions) window.JavisChatReactions.init({ root: chatArea, brain: currentBrainPath, onChange: persistSession });
+} catch (e) {}
 function compactToolLabel(toolName) {
   const raw = String(toolName || "").trim();
   let label = raw || "Tool", cat = "Tool";
@@ -3234,6 +3325,8 @@ function maybeAutoLearn() {
 // File đính kèm → lưu vào Sources
 // ============================================
 let pendingAttachments = [];
+// Đoạn đang trích dẫn (0.171.0, chat-quote.js): {text}. Gửi tin kế tiếp thì nó đi kèm ở đầu tin rồi tự xoá.
+let _quote = null;
 const attachBar = document.getElementById("attachBar");
 const fileInput = document.getElementById("fileInput");
 const dropOverlay = document.getElementById("dropOverlay");
@@ -3264,8 +3357,19 @@ function _pinRestore() {
 // tải file mới kế tiếp.
 let attachNote = "";
 function renderChips() {
-  attachBar.classList.toggle("has-items", pendingAttachments.length > 0 || !!pinnedNote || !!attachNote);
+  attachBar.classList.toggle("has-items", pendingAttachments.length > 0 || !!pinnedNote || !!attachNote || !!_quote);
   attachBar.innerHTML = "";
+  if (_quote && window.JavisQuote) {
+    const chip = document.createElement("div");
+    chip.className = "attach-chip quote-chip";
+    chip.title = _quote.text.slice(0, 600);
+    chip.innerHTML = `<div class="chip-ico">${ic("quote")}</div>`
+      + `<div class="chip-info"><span class="chip-name">${escapeHtml(window.JavisQuote.xemTruoc(_quote.text))}</span>`
+      + `<span class="chip-meta">${escapeHtml(window.t("app.quote_meta"))}</span></div>`
+      + `<button class="chip-x" data-unquote="1" title="${escapeHtml(window.t("app.quote_remove"))}"`
+      + ` aria-label="${escapeHtml(window.t("app.quote_remove"))}">${ic("x")}</button>`;
+    attachBar.appendChild(chip);
+  }
   if (pinnedNote) {
     const chip = document.createElement("div");
     chip.className = "attach-chip pinned";
@@ -3325,7 +3429,8 @@ function renderChips() {
     b.addEventListener("click", () => taiLaiDinhKem(+b.dataset.i)));
   attachBar.querySelectorAll(".chip-x").forEach(b =>
     b.addEventListener("click", () => {
-      if (b.dataset.unpin) JavisPin.clear();
+      if (b.dataset.unquote) { _quote = null; renderChips(); }
+      else if (b.dataset.unpin) JavisPin.clear();
       else removeAttachment(+b.dataset.i);
     }));
 }
@@ -3460,7 +3565,6 @@ async function uploadFile(file, att) {
     att.uploading = false; att.loi = true; att.statusText = window.t("app.att_empty");
     att.xong = Promise.resolve();
     if (moi) pendingAttachments.push(att);
-    if (att._cho) { att._cho(); att._cho = null; }
     renderChips();
     return;
   }
@@ -3468,9 +3572,7 @@ async function uploadFile(file, att) {
   // Lời hứa "tải xong" (thành hay hỏng đều xong) để sendMessage đợi được thay vì gửi thiếu.
   att.xong = new Promise(r => { _xong = r; });
   if (moi) pendingAttachments.push(att);
-  // Chip xếp hàng từ thư mục mang theo ghi chú (bỏ file ẩn, quá 50 file): lần tải đầu không xoá nó.
-  if (!att._hangDoi) attachNote = "";
-  att._hangDoi = false;
+  attachNote = "";
   renderChips();
   try {
     await _taiLen(file, att);
@@ -3478,8 +3580,6 @@ async function uploadFile(file, att) {
     att.uploading = false;
     renderChips();
     if (_xong) _xong();
-    // Lời hứa chờ của chip xếp hàng: sendMessage có thể đã bắt nó trước khi file này bắt đầu tải.
-    if (att._cho) { att._cho(); att._cho = null; }
   }
 }
 function _mb(b) { return (b / 1048576).toFixed(1).replace(/\.0$/, ""); }
@@ -3558,29 +3658,10 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 
-// Menu "+" của khung gõ (composer-plus.js, 0.153.0) dùng chung đường tải lên và danh sách đính kèm.
+// The composer "+" menu (composer-plus.js, 0.153.0) shares the upload path and the attachment list.
 window.JavisAttach = {
   pick: () => fileInput.click(),
-  // Thư mục: đưa MỌI file vào danh sách ngay (đang tải, có lời hứa chờ) để gửi tin đợi đủ,
-  // rồi composer-plus tải dần 4 file một lúc bằng upload(f, att).
-  queue: (files, note) => {
-    const atts = files.map(f => {
-      const isImg = (f.type || "").startsWith("image/");
-      const att = { name: f.name || "file", kind: isImg ? "image" : "file", preview: isImg ? URL.createObjectURL(f) : null,
-        path: null, size: f.size, sources: null, attachments: null, uploading: true, loi: false,
-        statusText: window.t("app.att_uploading"), _hangDoi: true };
-      att.xong = new Promise(r => { att._cho = r; });
-      return att;
-    });
-    pendingAttachments.push(...atts);
-    attachNote = String(note || "");
-    renderChips();
-    return atts;
-  },
-  upload: (f, att) => {
-    if (att && !pendingAttachments.includes(att)) { if (att._cho) att._cho(); return Promise.resolve(); }
-    return uploadFile(f, att);
-  },
+  upload: (f) => uploadFile(f),
   addBrainFile: (it) => {
     if (!it || !it.path || pendingAttachments.some(a => a.path === it.path)) return;
     pendingAttachments.push({ name: it.name, kind: it.kind || "file", preview: null, url: it.url || null, path: it.path,

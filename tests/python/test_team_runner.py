@@ -570,13 +570,16 @@ check("TC17 restart sau mốc engine: lượt interrupted tính một lần, vi�
 ss, ts, tm, fake, r, pub, inbox, gone = world("badops")
 T = make_team(tm, ss, "Khối sai")
 fake.say("ag_lan", "plan", "Chia.\n<!-- JAVIS_TEAM: {hỏng -->" + directive(op="fly") + directive(
+    op="peter_feedback_placeholder_removed", message_id=1, note="x") + directive(
     op="assign", agent="ag_nguoi_ngoai", brief="x") + directive(op="assign", agent="ag_minh", brief="ok"))
 j = r.submit(T["team_id"], "Việc", as_job=True, client_msg_id="z1")
 run(r.dispatch_once(wait=True))
 plan = [m for m in msgs(ss, T) if m["meta"].get("role") == "plan"][0]
 notes = " ".join(plan["meta"].get("notes", []))
+# Pilot 2026-10-16 (0.171.3): tên lệnh model tự bịa không chép vào ghi chú cho chủ đọc; hai lệnh lạ chỉ một dòng.
 check("khối hỏng, op lạ, giao người ngoài nhóm: bỏ op, ghi chú; op đúng vẫn chạy",
-      "JSON" in notes and "fly" in notes and "ag_nguoi_ngoai" in notes
+      "JSON" in notes and "ag_nguoi_ngoai" in notes and "fly" not in notes and "peter_feedback" not in notes
+      and plan["meta"].get("notes", []).count(TR.UNKNOWN_OP_NOTE) == 1
       and [(c["agent_key"], c["role"]) for c in fake.calls] == [("ag_lan", "plan"), ("ag_minh", "work")]
       and "JAVIS_TEAM" not in plan["content"])
 fake.calls.clear()

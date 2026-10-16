@@ -14,6 +14,7 @@ Quy tắc chính:
 from __future__ import annotations
 
 import json
+import math
 import os
 import secrets
 import sqlite3
@@ -50,13 +51,34 @@ def call_ceiling() -> Optional[int]:
         return 0
 
 
-def _under_ceiling(c, n: int) -> bool:
+# Dự trữ nghĩa vụ trong trần chung (thiết kế 2026-10-15 mục 9, 9.1): lượt tự phát (obligation = 0: phán xử theo lô, chủ
+# động, quét, xem xét, xem xét reaction, gỡ chờ) chỉ giữ chỗ tới floor(trần * 0.8); lượt nghĩa vụ dùng được cả trần.
+OBLIGATION_RESERVE = 0.2
+
+
+def _ceiling_used(c) -> int:
+    """Số lượt đã tính vào trần chung, MỘT phép đếm dùng chung cho mọi đường (thiết kế 9.1):
+    SUM(goals.calls_used) + COUNT(call_ledger used) + COUNT(agent_calls counted = 1 và chưa hoàn). Dòng `reserved`,
+    `running`, `ok`, `error`, `interrupted` đều tính (lượt đã hoặc có thể đã tới model); chỉ `refunded` được trả lại.
+    Bản phản chiếu lượt goal có `counted = 0` nên không đếm hai lần."""
+    used = int(c.execute("SELECT COALESCE(SUM(calls_used),0) FROM goals").fetchone()[0])
+    used += int(c.execute("SELECT COUNT(*) FROM call_ledger WHERE status='used'").fetchone()[0])
+    used += int(c.execute("SELECT COUNT(*) FROM agent_calls WHERE counted=1 AND status<>'refunded'").fetchone()[0])
+    return used
+
+
+def ceiling_limit(cap: int, obligation: bool) -> int:
+    """Phần trần một lượt được dùng: nghĩa vụ dùng cả trần, lượt tự phát chỉ tới floor(trần * 0.8)."""
+    return int(cap) if obligation else int(math.floor(int(cap) * (1.0 - OBLIGATION_RESERVE) + 1e-9))
+
+
+def _under_ceiling(c, n: int, obligation: bool = True) -> bool:
+    """Còn chỗ cho `n` lượt nữa không. Gọi TRONG giao dịch BEGIN IMMEDIATE của lần giữ chỗ (kiểm và ghi nguyên tử).
+    Mọi đường cũ (goal A2, phép thử, bộ lập mục tiêu) là nghĩa vụ: không đổi hành vi khi chưa có dòng `agent_calls`."""
     cap = call_ceiling()
     if cap is None:
         return True
-    used = int(c.execute("SELECT COALESCE(SUM(calls_used),0) FROM goals").fetchone()[0])
-    used += int(c.execute("SELECT COUNT(*) FROM call_ledger WHERE status='used'").fetchone()[0])
-    return used + int(n) <= cap
+    return _ceiling_used(c) + int(n) <= ceiling_limit(cap, obligation)
 
 
 _SCHEMA = """
@@ -202,6 +224,48 @@ CREATE TABLE IF NOT EXISTS call_holds(
 CREATE INDEX IF NOT EXISTS call_holds_goal ON call_holds(goal_id, status);
 CREATE INDEX IF NOT EXISTS assessments_goal_rev ON assessments(goal_id, revision, id);
 CREATE INDEX IF NOT EXISTS actions_goal_kind ON actions(goal_id, kind, revision, created_at);
+"""
+
+# T2 (0.154.0, thiết kế 2026-10-15 mục 3.1-3.2, 5.4, 9.1): sổ lượt chung theo agent, lý do thức theo agent và trạng thái
+# nhịp theo agent x ngữ cảnh. Chỉ thêm bảng (bản 0.153.x bỏ qua chúng). Mọi cột có mặc định.
+T2_BACKUP_SUFFIX = ".pre-0.154.0"
+T2_TABLES = ("agent_calls", "agent_wake_reasons", "agent_wake_sources", "agent_pulse", "ceiling_state")
+_T2_SCHEMA = """
+CREATE TABLE IF NOT EXISTS agent_calls(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_key TEXT NOT NULL DEFAULT '', brain_id TEXT NOT NULL DEFAULT '',
+  context_ref TEXT NOT NULL DEFAULT '', purpose TEXT NOT NULL, reason_ref TEXT NOT NULL, attempt INTEGER NOT NULL DEFAULT 1,
+  engine TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'reserved',
+  counted INTEGER NOT NULL DEFAULT 1, obligation INTEGER NOT NULL DEFAULT 0, tokens_in INTEGER, tokens_out INTEGER,
+  cost_usd REAL, mirror_ref TEXT NOT NULL DEFAULT '', engine_at REAL, created_at REAL NOT NULL, settled_at REAL,
+  CHECK (status IN ('reserved','running','ok','error','refunded','interrupted')),
+  CHECK (counted IN (0,1)), CHECK (obligation IN (0,1)));
+CREATE UNIQUE INDEX IF NOT EXISTS agent_calls_reason_live ON agent_calls(reason_ref)
+  WHERE status IN ('reserved','running','ok');
+CREATE INDEX IF NOT EXISTS agent_calls_mirror ON agent_calls(mirror_ref);
+CREATE INDEX IF NOT EXISTS agent_calls_open ON agent_calls(status, created_at);
+CREATE INDEX IF NOT EXISTS agent_calls_agent ON agent_calls(agent_key, created_at);
+CREATE TABLE IF NOT EXISTS agent_wake_reasons(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_key TEXT NOT NULL, context_ref TEXT NOT NULL, code TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', attempt INTEGER NOT NULL DEFAULT 0, ledger_ref TEXT NOT NULL DEFAULT '',
+  created_at REAL NOT NULL, updated_at REAL NOT NULL,
+  CHECK (status IN ('pending','claimed','served','superseded','failed')));
+CREATE UNIQUE INDEX IF NOT EXISTS agent_wake_reasons_pending ON agent_wake_reasons(agent_key, context_ref, code)
+  WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS agent_wake_reasons_agent ON agent_wake_reasons(agent_key, context_ref, status);
+CREATE TABLE IF NOT EXISTS agent_wake_sources(
+  reason_id INTEGER NOT NULL, source_ref TEXT NOT NULL UNIQUE, group_ref TEXT NOT NULL DEFAULT '',
+  added_at REAL NOT NULL, removed_at REAL, consumed_at REAL);
+CREATE INDEX IF NOT EXISTS agent_wake_sources_reason ON agent_wake_sources(reason_id);
+CREATE INDEX IF NOT EXISTS agent_wake_sources_group ON agent_wake_sources(group_ref);
+CREATE TABLE IF NOT EXISTS agent_pulse(
+  agent_key TEXT NOT NULL, context_ref TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'awake',
+  tier INTEGER NOT NULL DEFAULT 3, next_due_at REAL, estimate REAL NOT NULL DEFAULT 0,
+  confidence REAL NOT NULL DEFAULT 0, n_eff REAL NOT NULL DEFAULT 0, last_eval_at REAL,
+  last_change_dir INTEGER NOT NULL DEFAULT 0, last_change_at REAL, resumed_at REAL, max_tier INTEGER NOT NULL DEFAULT 1,
+  scan_counter INTEGER NOT NULL DEFAULT 0, policy_version TEXT NOT NULL DEFAULT 'pulse.v1', updated_at REAL NOT NULL,
+  PRIMARY KEY(agent_key, context_ref));
+CREATE TABLE IF NOT EXISTS ceiling_state(name TEXT PRIMARY KEY, value REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS ceiling_cursor(name TEXT PRIMARY KEY, at REAL NOT NULL, turn_id TEXT NOT NULL DEFAULT '');
 """
 
 # Bảng và cột có từ trước A1 (0.86.x), đúng thứ tự. A1 không được đổi (review PR #590, P1-2); test so với đây.
@@ -400,6 +464,7 @@ class GoalStore:
         self._backup_before("grants", A4_BACKUP_SUFFIX)
         self._backup_before("team_pairs", A5_BACKUP_SUFFIX)
         self._backup_before("review_migrations", REVIEW_REMOVED_BACKUP_SUFFIX)
+        self._backup_before("agent_calls", T2_BACKUP_SUFFIX)
         with closing(self._conn()) as c:
             had_goals = c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='goals'").fetchone()
             had_a2 = c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='wake_reasons'").fetchone()
@@ -410,6 +475,15 @@ class GoalStore:
                 if col not in have:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
             c.executescript(_POST_MIGRATION)
+            c.executescript(_T2_SCHEMA)
+            # Mốc nâng lên T2 (review T2 P1, quyết định của chủ): đối soát sổ chung KHÔNG dựng lại lượt nhóm đã chốt trước
+            # mốc này, nên lịch sử nhóm không bao giờ bị tính vào trần chung. Ghi một lần, không ghi đè.
+            c.execute("INSERT OR IGNORE INTO ceiling_state(name, value) VALUES('t2_migrated_at', ?)", (time.time(),))
+        self._t2_init_pulse()
+        # T3 (0.156.0, thiết kế mục 12): bảng của nhịp thích nghi và bước nâng cấp một lần (mọi dòng nhịp về B3,
+        # `resumed_at = lúc nâng cấp`) chạy NGAY lúc mở kho, trước mọi reaction mới, không lười ở lần ghi tín hiệu đầu.
+        import agent_pulse
+        agent_pulse.ensure(self, force=True)
         if had_goals and not had_a2:
             self._a2_migrate()
         self._a4_migrate(freeze=bool(had_goals) and not had_a4)
@@ -497,6 +571,54 @@ class GoalStore:
                 src.backup(dst)
             os.replace(tmp, bak)
 
+    def _t2_init_pulse(self) -> None:
+        """T2 (thiết kế mục 2, 12): mỗi agent đã đăng ký có một dòng `agent_pulse` tổng hợp (`context_ref = '*'`). Agent
+        đang bật Cộng hưởng lúc nâng cấp nhận `resumed_at = lúc nâng cấp` (reaction cũ không được tính lại), agent tắt ở
+        trạng thái `off`. Chỉ chèn dòng còn thiếu, không đụng dòng đã có, nên chạy lại mỗi lần mở kho vô hại."""
+        now = time.time()
+        with self._Tx(self) as c:
+            for r in c.execute("SELECT agent_key, enabled, status FROM resonance_agents").fetchall():
+                on = bool(r["enabled"]) and r["status"] == "active"
+                c.execute("INSERT OR IGNORE INTO agent_pulse(agent_key, context_ref, state, resumed_at, updated_at) "
+                          "VALUES(?,?,?,?,?)", (r["agent_key"], "*", "awake" if on else "off", now if on else None, now))
+
+    @staticmethod
+    def _mark_resumed(c, agent_key: str, now: float) -> None:
+        """Cộng hưởng (bật lại): ghi `resumed_at = now` vào MỌI dòng `agent_pulse` của agent (thiết kế mục 2). Bộ đếm kích
+        hoạt chỉ tính sự kiện sau mốc này: bật lại không phát lại phản hồi cũ."""
+        c.execute("INSERT INTO agent_pulse(agent_key, context_ref, state, resumed_at, updated_at) VALUES(?,?,?,?,?) "
+                  "ON CONFLICT(agent_key, context_ref) DO UPDATE SET resumed_at=excluded.resumed_at, "
+                  "state=CASE WHEN agent_pulse.state='off' THEN 'awake' ELSE agent_pulse.state END, "
+                  "updated_at=excluded.updated_at", (agent_key, "*", "awake", now, now))
+        # T3 (thiết kế 5.2): từ `off` bật lại thì về B3 (giữ ước lượng cũ) và có lịch chủ động lại sau một ngày.
+        c.execute("UPDATE agent_pulse SET resumed_at=?, "
+                  "tier=CASE WHEN state='off' THEN 3 ELSE tier END, "
+                  "last_change_at=CASE WHEN state='off' THEN ? ELSE last_change_at END, "
+                  "last_change_dir=CASE WHEN state='off' THEN 0 ELSE last_change_dir END, "
+                  "next_due_at=CASE WHEN state='off' AND context_ref<>'*' THEN ? ELSE next_due_at END, "
+                  "state=CASE WHEN state='off' THEN 'awake' ELSE state END, "
+                  "updated_at=? WHERE agent_key=?", (now, now, now + 86400.0, now, agent_key))
+
+    @staticmethod
+    def _mark_off(c, agent_key: str, now: float) -> None:
+        c.execute("INSERT INTO agent_pulse(agent_key, context_ref, state, updated_at) VALUES(?,?,?,?) "
+                  "ON CONFLICT(agent_key, context_ref) DO UPDATE SET state='off', updated_at=excluded.updated_at",
+                  (agent_key, "*", "off", now))
+        c.execute("UPDATE agent_pulse SET state='off', updated_at=? WHERE agent_key=?", (now, agent_key))
+
+    def resumed_at(self, agent_key: str, context_ref: str = "*") -> Optional[float]:
+        """Mốc bật lại Cộng hưởng gần nhất của agent cho ngữ cảnh (mốc muộn nhất của dòng ngữ cảnh và dòng '*').
+        None: chưa có mốc nào."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT MAX(resumed_at) FROM agent_pulse WHERE agent_key=? AND context_ref IN (?, '*')",
+                          (str(agent_key or ""), str(context_ref or "*"))).fetchone()
+            return float(r[0]) if r and r[0] is not None else None
+
+    def pulse_rows(self, agent_key: str) -> list:
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute("SELECT * FROM agent_pulse WHERE agent_key=? ORDER BY context_ref",
+                                               (str(agent_key or ""),)).fetchall()]
+
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
         c.row_factory = sqlite3.Row
@@ -583,6 +705,12 @@ class GoalStore:
                           (str(agent_key or ""), brain_id)).fetchone()
             return self._agent(r) if r else None
 
+    def agent_any(self, agent_key: str) -> Optional[dict]:
+        """Dòng sổ đăng ký theo mã, không lọc brain (host dùng khi chỉ có mã do chính host ghi, vd. reaction chat riêng)."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=?", (str(agent_key or ""),)).fetchone()
+            return self._agent(r) if r else None
+
     def agents(self, brain_id: str, include_retired: bool = False) -> list:
         with closing(self._conn()) as c:
             q = "SELECT * FROM resonance_agents WHERE brain_id=?"
@@ -613,13 +741,21 @@ class GoalStore:
             if r is None:
                 if not enabled:
                     return None
-                return self._agent(self._insert_agent(c, p.brain_id, slug, True, p.by, now))
+                row = self._insert_agent(c, p.brain_id, slug, True, p.by, now)
+                self._mark_resumed(c, row["agent_key"], now)
+                return self._agent(row)
             # Kiểm trạng thái TRƯỚC nhánh "không đổi" (review PR #590, P2-1): agent missing vẫn giữ cờ bật cũ, nên
             # đặt cờ bật lần nữa không được báo thành công.
             if enabled and r["status"] != "active":
                 raise AgentStateError(f"agent đang {r['status']}, cần chủ dự án xác nhận trước khi bật")
             if bool(r["enabled"]) == bool(enabled):
                 return self._agent(r)
+            # T2: mốc bật lại (`resumed_at`) ghi CÙNG giao dịch với công tắc, nên mọi đường bật (route của chủ, lệnh
+            # `set_resonance` của trưởng nhóm Toàn quyền) đều có mốc; tắt thì nhịp về `off`.
+            if enabled:
+                self._mark_resumed(c, r["agent_key"], now)
+            else:
+                self._mark_off(c, r["agent_key"], now)
             return self._bump_agent(c, r, "enabled" if enabled else "disabled", p.by, now, enabled=1 if enabled else 0)
 
     def agent_register(self, p: Principal, slug: str) -> dict:
@@ -677,6 +813,8 @@ class GoalStore:
             if r["status"] != "missing":
                 raise AgentStateError(f"agent đang {r['status']}, không cần xác nhận")
             if same:
+                if r["enabled"]:
+                    self._mark_resumed(c, r["agent_key"], now)
                 return self._bump_agent(c, r, "confirmed_same", p.by, now, status="active")
             self._bump_agent(c, r, "retired", p.by, now, {"reason": "replaced"}, status="retired", enabled=0)
             new = self._insert_agent(c, p.brain_id, r["slug"], False, p.by, now, {"replaces": r["agent_key"]})
@@ -1232,6 +1370,40 @@ class GoalStore:
                 return False
             return self._reason_event(c, goal_id, p.brain_id, code, ref,
                                       int(row["revision"] if revision is None else revision), due_at)
+
+    def supersede_reason_events(self, goal_id: str, code: str, refs) -> int:
+        """T2 (thiết kế 4.3): reaction trên tin gắn goal bị đổi hay bỏ thì nguồn cũ trong lý do `feedback` còn CHỜ của
+        goal đó chốt `superseded` (lý do đã phục vụ giữ nguyên làm bằng chứng). Trả số dòng đã chốt."""
+        refs = [str(x) for x in (refs or []) if x]
+        if not refs:
+            return 0
+        now = time.time()
+        with self._Tx(self) as c:
+            n = c.execute(f"UPDATE wake_reasons SET state='superseded', settled_at=?, settled_by='reaction_changed' "
+                          f"WHERE goal_id=? AND code=? AND state='pending' AND origin='event' AND source_ref IN "
+                          f"({','.join('?' * len(refs))})", [now, str(goal_id), str(code)] + refs).rowcount
+            # Nguồn cũ đang thuộc một lượt goal CHƯA chốt (`served` bởi lượt đang chạy): đánh dấu để lượt đó bị huỷ thì
+            # nguồn cũ KHÔNG trở về `pending` cạnh nguồn mới (review T2 vòng 2, cùng lỗi với P2-1 ở lớp 3). Giữ `served`
+            # làm bằng chứng lượt đã đọc nó.
+            c.execute(f"UPDATE wake_reasons SET settled_by='reaction_changed:' || settled_by WHERE goal_id=? AND code=? "
+                      f"AND state='served' AND origin='event' AND settled_by NOT LIKE 'reaction_changed%' AND source_ref IN "
+                      f"({','.join('?' * len(refs))})", [str(goal_id), str(code)] + refs)
+            if n:
+                self._recompute_wake(c, str(goal_id))
+            return n
+
+    def reason_event_state(self, goal_id: str, code: str, ref: str) -> Optional[str]:
+        """Trạng thái lý do sự kiện `(goal, code, ref)` của A2 (pending, served, superseded...), None khi không có."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT state FROM wake_reasons WHERE goal_id=? AND code=? AND source_ref=? AND origin='event'",
+                          (str(goal_id), str(code), str(ref))).fetchone()
+            return r["state"] if r else None
+
+    def goal_brain(self, goal_id: str) -> Optional[dict]:
+        """{brain_id, status, revision} của một goal (host dùng để định tuyến reaction trên tin gắn goal)."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT brain_id, status, revision FROM goals WHERE id=?", (str(goal_id),)).fetchone()
+            return dict(r) if r else None
 
     def add_timer(self, p: Principal, goal_id: str, code: str, due_at: float, now: Optional[float] = None,
                   expect_revision: Optional[int] = None) -> int:
@@ -2560,6 +2732,7 @@ class GoalStore:
         if status not in ("succeeded", "failed"):
             raise ValueError("status kết thúc phải là succeeded hoặc failed")
         now = time.time()
+        closed = False
         with self._Tx(self) as c:
             team = self._team_row(c, goal_id)
             if status == "succeeded" and team is not None:
@@ -2572,6 +2745,7 @@ class GoalStore:
                             (status, now, goal_id, p.brain_id, int(expected_revision)))
             if cur.rowcount != 1:
                 return False
+            closed = True
             self._close_goal_holds(c, goal_id, "goal_closed", now)
             c.execute("DELETE FROM wakeups WHERE goal_id=? AND kind!='settle'", (goal_id,))
             # Mục tiêu kết thúc không nhận sự kiện nữa: bỏ lý do thức (A2 mục 6). Sổ thức giữ để xem lại.
@@ -2582,7 +2756,28 @@ class GoalStore:
             c.execute("INSERT OR IGNORE INTO outbox(goal_id,kind,payload_json,created_at,idem) VALUES(?,?,?,?,?)",
                       (goal_id, f"goal.{status}", _j({"revision": int(expected_revision), **(payload or {})}), now,
                        f"{status}:{int(expected_revision)}"))
-            return True
+        if closed:
+            # T3 (6.1): kết luận CUỐI của kiểm khách quan cho revision này (succeeded = đạt mọi tiêu chí host kiểm, guard
+            # clear, review A5 nếu có đội; failed = đóng là không đạt). Ngoài giao dịch: kho nhịp mở giao dịch riêng.
+            self.pulse_objective(goal_id, int(expected_revision), status == "succeeded")
+        return True
+
+    def pulse_objective(self, goal_id: str, revision: int, passed: bool) -> Optional[str]:
+        """Tín hiệu kiểm khách quan (6.1) cho agent của mục tiêu ở ngữ cảnh chat riêng `dm:<agent_key>` (mục tiêu A2 có
+        một tác giả sản phẩm, không có bước tổng hợp nên luật 6.5 thu về tác giả). Chỉ khi agent bật Cộng hưởng. Lỗi kho
+        nhịp không bao giờ làm hỏng việc kết thúc mục tiêu (nuốt, ghi log)."""
+        try:
+            with closing(self._conn()) as c:
+                r = c.execute("SELECT a.agent_key, g.enabled, g.status FROM goal_agents a JOIN resonance_agents g ON "
+                              "g.agent_key=a.agent_key WHERE a.goal_id=?", (str(goal_id),)).fetchone()
+            if r is None or not r["enabled"] or r["status"] != "active":
+                return None
+            import agent_pulse
+            return agent_pulse.record_objective(self, goal_id=str(goal_id), revision=int(revision), passed=bool(passed),
+                                                agents={r["agent_key"]: 1.0}, context_ref=f"dm:{r['agent_key']}")
+        except Exception as ex:  # noqa: BLE001
+            print(f"[pulse objective] {goal_id}: {type(ex).__name__}: {ex}", file=__import__("sys").stderr)
+            return None
 
     def notice(self, p: Principal, goal_id: str, kind: str, payload: dict, idem: Optional[str] = None) -> None:
         """Ghi một tin báo vào outbox (idem chống báo lặp). drain_outbox gửi cho người dùng."""
@@ -4597,6 +4792,8 @@ class GoalStore:
                 raise ConflictError("reviewer_" + (r["status"] if r is not None else "missing"))
             if bool(r["enabled"]):
                 return self._agent(r)
+            # T2 (review P2-3): mọi đường bật Cộng hưởng ghi mốc bật lại, kể cả đường bật người review của A5.
+            self._mark_resumed(c, r["agent_key"], now)
             return self._bump_agent(c, r, "enabled", p.by, now, {"via": "team_reviewer_enable", "goal_id": goal_id},
                                     enabled=1)
 

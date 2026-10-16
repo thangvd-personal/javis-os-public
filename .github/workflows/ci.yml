@@ -51,6 +51,11 @@ jobs:
       - name: Lấy commit 0.139.0 cho test quay về nhóm chat team
         run: git fetch --no-tags --depth=1 origin be1f8aa215395471c4640e5e8e109d44e02dc190
 
+      # test_team_adaptive_restore chạy MÃ 0.151.0 THẬT (bản cuối trước chuỗi team-adaptive, `1d1b52fa` trên main): lập ba
+      # kho cũ, nâng lên T2, rồi khôi phục snapshot `.pre-0.154.0`.
+      - name: Lấy commit 0.151.0 cho test khôi phục team-adaptive
+        run: git fetch --no-tags --depth=1 origin 1d1b52faed35a79aa5597f1fbde85b63da2bc3ea
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

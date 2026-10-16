@@ -16,6 +16,7 @@ cùng một giao dịch. Kho này giữ phần còn lại.
 from __future__ import annotations
 
 import json
+import math
 import secrets
 import sqlite3
 import time
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import config as cfgmod
+import team_migration
 
 # Trần mặc định ở chế độ Quyền giới hạn (spec 12.3, D7). Toàn quyền (T3) đọc và ghi đè theo nhóm.
 DEFAULT_CAPS = {
@@ -35,10 +37,28 @@ DEFAULT_CAPS = {
     "daily_turns": 100,        # lượt mỗi nhóm mỗi ngày
     "running_jobs": 1,         # việc chạy cùng lúc mỗi nhóm
     "busy_wait_s": 1800,       # chờ khoá bận trước khi báo chặn
+    # T3 phần J (0.156.0, thiết kế mục 9): lượt phán xử theo lô mỗi nhóm mỗi ngày (tách khỏi daily_turns), số người tự lên
+    # tiếng mỗi tin (`K`, 0 = tắt), chế độ phán xử khi Cộng hưởng của agent tắt (1 = lọc code + lô, 0 = chỉ lọc code).
+    "judge_daily": 40,
+    "volunteer_k": 1,
+    "judge_off_batch": 1,
 }
+# Trần chủ nhóm đổi được (POST /teams/{id}/caps). GOAL T1 mục 9 (bảng giới hạn): `running_jobs` và `no_progress` vẫn nằm
+# trong DEFAULT_CAPS để hiện và để đọc dòng cũ, nhưng do MÁY CHỦ cố định:
+# - running_jobs: bộ điều phối giữ đúng một việc chạy mỗi nhóm (pool chung bỏ qua nhóm đã có việc chạy, review T1 R8), nên
+#   số > 1 trước đây nhận được mà không bao giờ có tác dụng. Chọn thay đổi nhỏ và an toàn: bỏ khỏi trần chỉnh được, hiện là
+#   giới hạn kỹ thuật, thay vì mở song song trong một nhóm (đụng khoá bận theo agent, thứ tự hàng đợi, ngữ cảnh chung).
+# - no_progress: bộ chạy dừng ở hai kết quả GIỐNG HỆT liên tiếp (so sha), con số không được đọc ở đâu.
+OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
+              "volunteer_k", "judge_off_batch")
+# Trần có lựa chọn "Không giới hạn" (lưu `None`, không thay bằng số lớn). Bộ chạy đọc `None` là không chặn.
+UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily")
+# Giá trị lớn nhất của các ô không phải trần lượt (T3 J): K tối đa 5 người, chế độ phán xử là 0 hay 1.
+CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1}
+FIXED_CAPS = {"running_jobs": 1, "no_progress": 2}
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
-TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize")
+TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize", "member_volunteer")
 # Kết cục của một lượt trả lời trò chuyện (0.142.0), lưu bền để tải lại trang hay khởi động lại máy chủ không mất dấu:
 # queued (đang chờ) -> running (đang trả lời) -> done (xong) | error (lỗi, kèm lý do, có Thử lại).
 REPLY_STATUS = ("queued", "running", "done", "error")
@@ -75,6 +95,9 @@ CREATE TABLE IF NOT EXISTS team_turns(
   created_at REAL NOT NULL, settled_at REAL);
 CREATE INDEX IF NOT EXISTS team_turns_team ON team_turns(team_id, created_at);
 CREATE INDEX IF NOT EXISTS team_turns_task ON team_turns(task_id);
+CREATE INDEX IF NOT EXISTS team_turns_created ON team_turns(created_at, turn_id);
+CREATE INDEX IF NOT EXISTS team_turns_settled ON team_turns(settled_at);
+CREATE INDEX IF NOT EXISTS team_turns_status ON team_turns(status);
 CREATE TABLE IF NOT EXISTS agent_busy(
   agent_key TEXT PRIMARY KEY, team_id TEXT NOT NULL, turn_id TEXT NOT NULL, lease_until REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS team_reactions(
@@ -101,16 +124,39 @@ CREATE TABLE IF NOT EXISTS team_reaction_log(
   content_sha TEXT NOT NULL DEFAULT '', nonce TEXT NOT NULL UNIQUE, created_at REAL NOT NULL);
 """
 
-# Sáu reaction (spec mục 14.1): lưu NGUYÊN giá trị, không gộp, không suy ra đánh giá. "none" là bỏ emoji.
-REACTIONS = ("like", "love", "haha", "wow", "sad", "angry")
-REACTION_EMOJI = {"like": "👍", "love": "❤️", "haha": "😂", "wow": "😮", "sad": "😢", "angry": "😡"}
-# Lý do chất lượng (chọn được nhiều): tín hiệu ĐÁNH GIÁ, khác emoji.
-REACTION_REASONS = ("on_point", "wrong_facts", "missing", "too_long", "unclear", "off_topic")
-COMMENT_MAX = 500
+# Sáu reaction (spec mục 14.1): lưu NGUYÊN giá trị, không gộp, không suy ra đánh giá. "none" là bỏ emoji. Lý do chất lượng
+# (chọn được nhiều) là tín hiệu ĐÁNH GIÁ, khác emoji. T2 (0.154.0, thiết kế 2026-10-15 mục 4.1): trục nói/im (chọn một
+# hoặc không), nguồn do host gán, trạng thái do host ghi. Một bảng giá trị chung cho chat riêng và chat nhóm.
+from reaction_values import (AXES as REACTION_AXES, COMMENT_MAX, REACTION_EMOJI, REACTIONS,  # noqa: E402
+                             REASONS as REACTION_REASONS, SOURCE_KINDS, STATUSES as REACTION_STATUSES)
+T2_SNAPSHOT_SUFFIX = ".pre-0.154.0"
+# Cột thêm cho kho đã có (ALTER, idempotent). Mọi cột có mặc định: bản 0.153.x vẫn đọc ghi được kho đã nâng. Dòng nhật ký
+# cũ coi như đã chiếu xong (`effect_state` mặc định 'done', không backfill tác động).
+_T2_REACTION_COLS = (
+    ("team_reactions", "source_kind", "TEXT NOT NULL DEFAULT 'owner'"),
+    ("team_reactions", "axis", "TEXT NOT NULL DEFAULT ''"),
+    ("team_reactions", "status", "TEXT NOT NULL DEFAULT 'received'"),
+    ("team_reactions", "status_reason", "TEXT NOT NULL DEFAULT ''"),
+    ("team_reactions", "seen_sha", "TEXT"),
+    ("team_reactions", "stale", "INTEGER NOT NULL DEFAULT 0"),
+    ("team_reactions", "revision", "INTEGER NOT NULL DEFAULT 0"),
+    ("team_reactions", "log_id", "INTEGER"),
+    ("team_reaction_log", "agent_key", "TEXT"),
+    ("team_reaction_log", "task_id", "TEXT"),
+    ("team_reaction_log", "source_kind", "TEXT NOT NULL DEFAULT 'owner'"),
+    ("team_reaction_log", "axis", "TEXT NOT NULL DEFAULT ''"),
+    ("team_reaction_log", "prev_json", "TEXT"),
+    ("team_reaction_log", "effect_state", "TEXT NOT NULL DEFAULT 'done'"),
+    ("team_reaction_log", "effect_refs_json", "TEXT"),
+)
 
 
 class TeamError(Exception):
     """Thao tác không hợp lệ với trạng thái hiện tại của nhóm (route trả 409 hay 400)."""
+
+
+class NonceConflict(TeamError):
+    """`nonce` đã dùng cho một tin khác (route trả 409, không báo "đã lưu" cho một tin không đổi)."""
 
 
 class TurnCapReached(TeamError):
@@ -133,12 +179,26 @@ class TeamStore:
     def __init__(self, path: Optional[Path] = None):
         self.path = Path(path) if path else Path(cfgmod.STATE_DIR) / "team.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # T2: kho có từ trước thì chụp một bản trước khi thêm cột reaction (khôi phục khi hạ phiên bản).
+        team_migration.snapshot_once(self.path, "team_reactions", "axis", suffix=T2_SNAPSHOT_SUFFIX)
         with closing(self._conn()) as c:
             c.executescript(_SCHEMA)
+            for table, col, decl in _T2_REACTION_COLS:
+                if col not in {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+            c.execute("CREATE INDEX IF NOT EXISTS team_reaction_log_effect ON team_reaction_log(effect_state)")
+            # T4 (0.170.0): phản hồi chưa xem xét của một nhóm cho khối lịch sử dài. Chỉ thêm chỉ mục, bản cũ bỏ qua.
+            c.execute("CREATE INDEX IF NOT EXISTS team_reactions_status ON team_reactions(team_id, status, updated_at)")
+            c.execute("CREATE INDEX IF NOT EXISTS team_reaction_log_pair ON team_reaction_log(session_id, message_id, "
+                      "reactor, id)")
             cols = {r[1] for r in c.execute("PRAGMA table_info(team_turns)").fetchall()}
             if "committed_at" not in cols:
                 # Mốc ghi bài học của lượt vào bộ nhớ agent (chỉ một lần, chỉ khi đầu ra được chấp nhận).
                 c.execute("ALTER TABLE team_turns ADD COLUMN committed_at REAL")
+            if "authority_id" not in {r[1] for r in c.execute("PRAGMA table_info(team_turns)").fetchall()}:
+                # Dòng Toàn quyền đang hiệu lực LÚC GIỮ CHỖ lượt (GOAL T1 mục 9, "lượt cũ không hưởng quyền cấp lại"):
+                # lệnh quản trị của lượt chỉ áp dưới đúng dòng này. NULL: lượt bắt đầu ở Quyền giới hạn.
+                c.execute("ALTER TABLE team_turns ADD COLUMN authority_id INTEGER")
             if "identity_json" not in {r[1] for r in c.execute("PRAGMA table_info(team_members)").fetchall()}:
                 # Ảnh chụp nhân dạng (tên, ảnh) của thành viên lúc còn xác nhận được theo agent_key, để tin cũ giữ đúng
                 # người viết sau khi trợ lý bị xoá và slug được dùng lại cho trợ lý khác (review 4f6268bd #1).
@@ -186,6 +246,7 @@ class TeamStore:
     def _team(r) -> dict:
         caps = dict(DEFAULT_CAPS)
         caps.update(json.loads(r["caps_json"] or "{}"))
+        caps.update(FIXED_CAPS)   # dòng cũ từng lưu số khác vẫn hiện đúng giá trị đang áp
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
                 "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
@@ -299,19 +360,59 @@ class TeamStore:
             self._event(c, team_id, "updated", by, before, fields)
         return self.get(team_id)
 
+    # Bảng gắn với một nhóm, xoá khi chủ xoá hẳn nhóm (0.173.0). `team_events` cũng xoá: nhóm đã mất thì không còn chỗ xem.
+    # Sổ lượt chung, quyết định phán xử và bài học nằm ở kho khác, giữ lại làm bằng chứng (không còn nhóm nào trỏ tới).
+    _TEAM_TABLES = ("team_members", "team_events", "team_steps", "team_turns", "team_reactions", "team_authority",
+                    "team_replies", "team_reaction_log", "agent_busy")
+
+    def delete_team(self, team_id: str) -> dict:
+        """Xoá hẳn MỘT nhóm ĐÃ LƯU TRỮ (lưu trữ đã huỷ việc đang chờ và dừng hoạt động). Nhóm chưa lưu trữ: TeamError.
+        Một giao dịch: hoặc xoá hết dòng của nhóm, hoặc không xoá gì. Trả dòng `teams` vừa xoá (để xoá tiếp phiên chat)."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            if r["status"] != "archived":
+                raise TeamError("chỉ xoá được nhóm đã lưu trữ, hãy lưu trữ nhóm trước")
+            if c.execute("SELECT 1 FROM agent_busy WHERE team_id=? AND lease_until>?", (team_id, time.time())).fetchone():
+                raise TeamError("nhóm còn lượt đang chạy, đợi lượt xong rồi xoá")
+            for table in self._TEAM_TABLES:
+                c.execute(f"DELETE FROM {table} WHERE team_id=?", (team_id,))
+            c.execute("DELETE FROM teams WHERE team_id=?", (team_id,))
+        return dict(r)
+
     def set_caps(self, team_id: str, caps: dict, by: str = "owner") -> dict:
-        """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá có trong DEFAULT_CAPS, giá trị số không âm."""
+        """Chủ nhóm đổi trần (spec 12.3). Chỉ nhận khoá trong OWNER_CAPS, giá trị số không âm; trần trong UNLIMITED_CAPS
+        nhận thêm `None` hay {"unlimited": true} là "Không giới hạn" (GOAL T1 mục 9). Trần máy chủ cố định bị từ chối."""
+        if caps is not None and not isinstance(caps, dict):
+            raise TeamError("trần phải là một bảng tên trần và giá trị")
         bad = set(caps or {}) - set(DEFAULT_CAPS)
         if bad:
             raise TeamError(f"trần không có: {sorted(bad)}")
+        fixed = sorted(set(caps or {}) & set(FIXED_CAPS))
+        if fixed:
+            raise TeamError(f"trần do máy chủ cố định, không đổi được: {fixed}")
         clean = {}
         for k, v in (caps or {}).items():
+            if v is None or (isinstance(v, dict) and v.get("unlimited") is True):
+                if k not in UNLIMITED_CAPS:
+                    raise TeamError(f"trần {k} không có lựa chọn Không giới hạn")
+                clean[k] = None
+                continue
+            if isinstance(v, (bool, dict, list)):
+                raise TeamError(f"trần {k} phải là số")
             try:
                 num = float(v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 raise TeamError(f"trần {k} phải là số")
+            # NaN và vô cực (JSON của trình duyệt có thể gửi) bị từ chối TRƯỚC khi ghi: int() của chúng là lỗi 500, còn
+            # busy_wait_s giữ nguyên float sẽ làm hỏng caps_json và JSON trả về (review T1 #7).
+            if not math.isfinite(num):
+                raise TeamError(f"trần {k} phải là số hữu hạn")
             if num < 0:
                 raise TeamError(f"trần {k} không được âm")
+            if k in CAP_MAX and num > CAP_MAX[k]:
+                raise TeamError(f"trần {k} tối đa là {CAP_MAX[k]}")
             clean[k] = num if k == "busy_wait_s" else int(num)
         with self._Tx(self) as c:
             r = c.execute("SELECT caps_json FROM teams WHERE team_id=?", (team_id,)).fetchone()
@@ -581,8 +682,14 @@ class TeamStore:
                     "SELECT COUNT(*) FROM team_turns WHERE task_id=? AND status != 'refunded'",
                     (task_id,)).fetchone()[0]) >= int(task_cap):
                 raise TurnCapReached("task_turns")
-            c.execute("INSERT INTO team_turns(turn_id,team_id,task_id,step_id,agent_key,role,created_at) "
-                      "VALUES(?,?,?,?,?,?,?)", (tid, team_id, task_id, step_id, agent_key, role, time.time()))
+            # Ghim quyền của lượt trong CÙNG giao dịch giữ chỗ (GOAL T1 mục 9): chỉ lượt của chính trưởng nhóm đang được
+            # cấp mới mang id dòng Toàn quyền. Cấp, cấp lại hay thu hồi sau mốc này không đổi được quyền của lượt.
+            auth = self._active_authority_row(c, team_id)
+            t = c.execute("SELECT leader_key FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            pin = (int(auth["id"]) if auth is not None and t is not None and t["leader_key"] == auth["leader_key"]
+                   and auth["leader_key"] == agent_key else None)
+            c.execute("INSERT INTO team_turns(turn_id,team_id,task_id,step_id,agent_key,role,created_at,authority_id) "
+                      "VALUES(?,?,?,?,?,?,?,?)", (tid, team_id, task_id, step_id, agent_key, role, time.time(), pin))
         return tid
 
     def mark_engine(self, turn_id: str, engine: str, model: str) -> None:
@@ -636,6 +743,30 @@ class TeamStore:
             return [dict(r) for r in c.execute(
                 "SELECT * FROM team_turns WHERE team_id=? AND created_at >= ? ORDER BY created_at DESC LIMIT ?",
                 (team_id, float(since), int(limit))).fetchall()]
+
+    def turns_since(self, since: float) -> list:
+        """Mọi lượt ghi từ mốc `since` (đối soát sổ lượt chung, T2)."""
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute("SELECT * FROM team_turns WHERE created_at >= ? ORDER BY created_at",
+                                               (float(since),)).fetchall()]
+
+    def turns_for_reconcile(self, after_at: float, after_id: str, until: float, floor: float, settled_since: float,
+                            limit: int = 2000) -> tuple:
+        """Lượt cho đối soát sổ chung (T2, review T2 P1/P3). Trả (cửa sổ, nhóm đặc biệt):
+        - cửa sổ: lượt tạo SAU con trỏ `(after_at, after_id)` theo thứ tự `(created_at, turn_id)`, không mới hơn `until`, tối
+          đa `limit` dòng (con trỏ tiến tới dòng cuối, nhiều lượt cùng thời điểm vẫn tiến được);
+        - nhóm đặc biệt (không giới hạn, luôn nhỏ): lượt còn mở, lượt tạo trước mốc nâng `floor` mà chốt sau mốc (mở lúc nâng),
+          và lượt chốt từ `settled_since` (lượt đã bị con trỏ vượt qua lúc chưa tới mốc engine rồi mới chạy và chốt)."""
+        with closing(self._conn()) as c:
+            window = [dict(r) for r in c.execute(
+                "SELECT * FROM team_turns WHERE (created_at > ? OR (created_at = ? AND turn_id > ?)) AND created_at <= ? "
+                "ORDER BY created_at, turn_id LIMIT ?",
+                (float(after_at), float(after_at), str(after_id), float(until), int(limit))).fetchall()]
+            special = [dict(r) for r in c.execute(
+                "SELECT * FROM team_turns WHERE status IN ('reserved','running') "
+                "OR (created_at < ? AND settled_at >= ?) OR settled_at >= ?",
+                (float(floor), float(floor), float(settled_since))).fetchall()]
+        return window, special
 
     def open_turns(self) -> list:
         """Lượt còn `reserved` hay `running` (dùng khi khởi động lại để chốt `interrupted` hay hoàn)."""
@@ -743,57 +874,201 @@ class TeamStore:
 
     @staticmethod
     def _reaction(r) -> dict:
+        keys = r.keys()
         return {"session_id": r["session_id"], "message_id": int(r["message_id"]), "reactor": r["reactor"],
                 "team_id": r["team_id"], "agent_key": r["agent_key"], "task_id": r["task_id"], "value": r["value"],
                 "reasons": json.loads(r["reasons_json"] or "[]"), "comment": r["comment"],
-                "content_sha": r["content_sha"], "created_at": r["created_at"], "updated_at": r["updated_at"]}
+                "content_sha": r["content_sha"], "created_at": r["created_at"], "updated_at": r["updated_at"],
+                "axis": r["axis"] if "axis" in keys else "",
+                "source_kind": r["source_kind"] if "source_kind" in keys else "owner",
+                "status": r["status"] if "status" in keys else "received",
+                "status_reason": r["status_reason"] if "status_reason" in keys else "",
+                "seen_sha": r["seen_sha"] if "seen_sha" in keys else None,
+                "stale": bool(r["stale"]) if "stale" in keys else False,
+                "revision": int(r["revision"] or 0) if "revision" in keys else 0,
+                "log_id": r["log_id"] if "log_id" in keys else None}
 
-    def set_reaction(self, *, team_id: str, session_id: str, message_id: int, agent_key: str, task_id: Optional[str],
-                     content_sha: str, value: Optional[str], reasons: Optional[list] = None, comment: str = "",
-                     nonce: str, reactor: str = "owner") -> Optional[dict]:
-        """Đặt trọn trạng thái phản hồi của `reactor` trên một tin: emoji (hay "none"), lý do, góp ý. Trả trạng thái
-        hiện tại (None khi đã bỏ hết). `nonce` trùng thì không đổi gì (gửi lại sau rớt mạng). Mọi lần đổi ghi nối tiếp
-        vào `team_reaction_log`."""
+    @staticmethod
+    def _state_json(r) -> Optional[dict]:
+        """Ảnh chụp trạng thái cho nhật ký trước/sau (prev_json/next_json)."""
+        if r is None:
+            return None
+        return {"value": r["value"], "reasons": json.loads(r["reasons_json"] or "[]"), "axis": r["axis"],
+                "comment": r["comment"], "content_sha": r["content_sha"], "source_kind": r["source_kind"]}
+
+    def set_reaction(self, **kw) -> Optional[dict]:
+        """Đặt trọn trạng thái phản hồi của `reactor` trên một tin (xem `set_reaction_ex`). Trả trạng thái hiện tại."""
+        return self.set_reaction_ex(**kw)["state"]
+
+    def set_reaction_ex(self, *, team_id: str, session_id: str, message_id: int, agent_key: str,
+                        task_id: Optional[str], content_sha: str, value: Optional[str], reasons: Optional[list] = None,
+                        comment: str = "", nonce: str, reactor: str = "owner", axis: str = "",
+                        seen_sha: Optional[str] = None, source_kind: str = "owner") -> dict:
+        """Đặt trọn trạng thái phản hồi của `reactor` trên một tin: emoji (hay "none"), lý do, trục nói/im, góp ý. Trả
+        {"state": trạng thái hiện tại (None khi đã bỏ hết), "log_id": dòng nhật ký của lần này, "replayed": gửi lại}.
+
+        - `nonce` trùng cho CÙNG tin và người phản hồi thì không đổi gì, trả trạng thái hiện tại (gửi lại sau rớt mạng);
+          trùng cho tin khác thì `NonceConflict`.
+        - Mọi lần đổi ghi nối tiếp vào `team_reaction_log` kèm trạng thái trước (`prev_json`), agent, việc, nguồn và
+          `effect_state = 'pending'` (outbox: bộ chiếu phản hồi áp tác động sau, thiết kế 3.5).
+        - `seen_sha` (hash nội dung giao diện đã thấy) lệch `content_sha` thì `stale = 1`, vẫn nhận."""
         val = None if value in (None, "", "none") else str(value)
         if val is not None and val not in REACTIONS:
             raise TeamError("reaction không hợp lệ")
         reasons = list(dict.fromkeys(str(x) for x in (reasons or [])))
         if any(x not in REACTION_REASONS for x in reasons):
             raise TeamError("lý do không hợp lệ")
+        axis = str(axis or "").strip()
+        if axis not in REACTION_AXES:
+            raise TeamError("trục nói/im không hợp lệ")
         comment = str(comment or "").strip()
         if len(comment) > COMMENT_MAX:
             raise TeamError(f"góp ý tối đa {COMMENT_MAX} ký tự")
         nonce = str(nonce or "").strip()
         if not nonce or len(nonce) > 100:
             raise TeamError("nonce không hợp lệ")
+        if source_kind not in SOURCE_KINDS:
+            raise TeamError("nguồn phản hồi không hợp lệ")
+        seen_sha = str(seen_sha).strip()[:128] if seen_sha else None
+        stale = 1 if seen_sha and seen_sha != content_sha else 0
         now = time.time()
+        key = (session_id, int(message_id), reactor)
         with self._Tx(self) as c:
-            seen = c.execute("SELECT session_id, message_id, reactor FROM team_reaction_log WHERE nonce=?",
+            seen = c.execute("SELECT id, session_id, message_id, reactor FROM team_reaction_log WHERE nonce=?",
                              (nonce,)).fetchone()
-            if seen is not None and (seen["session_id"], int(seen["message_id"]), seen["reactor"]) != (
-                    session_id, int(message_id), reactor):
+            if seen is not None and (seen["session_id"], int(seen["message_id"]), seen["reactor"]) != key:
                 # Nonce của lần gửi khác: không được trả 200 "đã lưu" cho một tin không hề đổi.
-                raise TeamError("nonce đã dùng cho một tin khác")
+                raise NonceConflict("nonce đã dùng cho một tin khác")
+            log_id = int(seen["id"]) if seen is not None else None
             if seen is None:
-                c.execute("INSERT INTO team_reaction_log(session_id,message_id,reactor,team_id,value,reasons_json,"
-                          "comment,content_sha,nonce,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                          (session_id, int(message_id), reactor, team_id, val, _j(reasons), comment, content_sha,
-                           nonce, now))
-                if val is None and not reasons and not comment:
-                    c.execute("DELETE FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
-                              (session_id, int(message_id), reactor))
+                old = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
+                                key).fetchone()
+                cur = c.execute(
+                    "INSERT INTO team_reaction_log(session_id,message_id,reactor,team_id,value,reasons_json,comment,"
+                    "content_sha,nonce,created_at,agent_key,task_id,source_kind,axis,prev_json,effect_state) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (session_id, int(message_id), reactor, team_id, val, _j(reasons), comment, content_sha, nonce, now,
+                     agent_key, task_id, source_kind, axis, _j(self._state_json(old)) if old is not None else None,
+                     "pending"))
+                log_id = int(cur.lastrowid)
+                rev = int(c.execute("SELECT COUNT(*) FROM team_reaction_log WHERE session_id=? AND message_id=? "
+                                    "AND reactor=?", key).fetchone()[0])
+                if val is None and not reasons and not comment and not axis:
+                    c.execute("DELETE FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?", key)
                 else:
                     c.execute(
                         "INSERT INTO team_reactions(session_id,message_id,reactor,team_id,agent_key,task_id,value,"
-                        "reasons_json,comment,content_sha,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+                        "reasons_json,comment,content_sha,created_at,updated_at,source_kind,axis,status,status_reason,"
+                        "seen_sha,stale,revision,log_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
                         "ON CONFLICT(session_id,message_id,reactor) DO UPDATE SET value=excluded.value, "
                         "reasons_json=excluded.reasons_json, comment=excluded.comment, "
-                        "content_sha=excluded.content_sha, updated_at=excluded.updated_at",
+                        "content_sha=excluded.content_sha, updated_at=excluded.updated_at, "
+                        "source_kind=excluded.source_kind, axis=excluded.axis, status=excluded.status, "
+                        "status_reason=excluded.status_reason, seen_sha=excluded.seen_sha, stale=excluded.stale, "
+                        "revision=excluded.revision, log_id=excluded.log_id",
                         (session_id, int(message_id), reactor, team_id, agent_key, task_id, val, _j(reasons), comment,
-                         content_sha, now, now))
+                         content_sha, now, now, source_kind, axis, "received", "", seen_sha, stale, rev, log_id))
+            r = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
+                          key).fetchone()
+            return {"state": self._reaction(r) if r else None, "log_id": log_id, "replayed": seen is not None}
+
+    # ───────────── outbox của reaction (bộ chiếu phản hồi, T2) ─────────────
+
+    @staticmethod
+    def _log(r) -> dict:
+        d = dict(r)
+        d["reasons"] = json.loads(d.pop("reasons_json", None) or "[]")
+        d["prev"] = json.loads(d["prev_json"]) if d.get("prev_json") else None
+        d["effect_refs"] = json.loads(d["effect_refs_json"]) if d.get("effect_refs_json") else {}
+        return d
+
+    def reaction_log_row(self, log_id: int) -> Optional[dict]:
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM team_reaction_log WHERE id=?", (int(log_id),)).fetchone()
+            return self._log(r) if r else None
+
+    def pending_reaction_logs(self, limit: int = 200) -> list:
+        """Dòng nhật ký còn `effect_state = 'pending'` (bộ chiếu chưa áp tác động), cũ trước."""
+        with closing(self._conn()) as c:
+            return [self._log(r) for r in c.execute("SELECT * FROM team_reaction_log WHERE effect_state='pending' "
+                                                    "ORDER BY id LIMIT ?", (int(limit),)).fetchall()]
+
+    def pair_logs(self, session_id: str, message_id: int, reactor: str) -> list:
+        """Mọi dòng nhật ký của một cặp (tin, người phản hồi), theo đúng thứ tự mã nhật ký."""
+        with closing(self._conn()) as c:
+            return [self._log(r) for r in c.execute(
+                "SELECT * FROM team_reaction_log WHERE session_id=? AND message_id=? AND reactor=? ORDER BY id",
+                (session_id, int(message_id), reactor)).fetchall()]
+
+    def mark_reaction_effects(self, log_ids: list, state: str, refs: Optional[dict] = None) -> None:
+        ids = [int(x) for x in log_ids or []]
+        if not ids:
+            return
+        with self._Tx(self) as c:
+            c.execute(f"UPDATE team_reaction_log SET effect_state=?, effect_refs_json=COALESCE(?, effect_refs_json) "
+                      f"WHERE id IN ({','.join('?' * len(ids))})", [state, _j(refs) if refs is not None else None] + ids)
+
+    def set_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: Optional[int], status: str,
+                            reason: str = "") -> Optional[dict]:
+        """Host ghi trạng thái hiển thị của một reaction (bộ chiếu, lượt xem xét). Chỉ ghi khi reaction vẫn ở đúng lần
+        đổi `log_id` (lần đổi mới hơn có trạng thái của nó). Trả trạng thái mới, None khi không ghi."""
+        if status not in REACTION_STATUSES:
+            raise TeamError("trạng thái reaction không hợp lệ")
+        with self._Tx(self) as c:
+            q = ("UPDATE team_reactions SET status=?, status_reason=? WHERE session_id=? AND message_id=? AND reactor=?")
+            args = [status, str(reason or "")[:300], session_id, int(message_id), reactor]
+            if log_id is not None:
+                q += " AND log_id=?"
+                args.append(int(log_id))
+            if c.execute(q, args).rowcount != 1:
+                return None
             r = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
                           (session_id, int(message_id), reactor)).fetchone()
             return self._reaction(r) if r else None
+
+    def open_reaction_logs(self, statuses, limit: int = 200) -> list:
+        """Mã lần đổi (`log_id`) của các reaction đang ở một trong `statuses` (bộ chiếu ghi ngược trạng thái)."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        with closing(self._conn()) as c:
+            return [int(r[0]) for r in c.execute(
+                f"SELECT log_id FROM team_reactions WHERE log_id IS NOT NULL AND status IN ({','.join('?' * len(st))}) "
+                f"ORDER BY updated_at LIMIT ?", st + [int(limit)]).fetchall()]
+
+    def open_reaction_rows(self, statuses, limit: int = 200) -> list:
+        """Như `open_reaction_logs` nhưng trả cả reaction (một câu đọc): nhịp của bộ chiếu đối soát trạng thái theo lô
+        (T3 hiệu năng) thay vì đọc lại từng reaction."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        with closing(self._conn()) as c:
+            return [self._reaction(r) for r in c.execute(
+                f"SELECT * FROM team_reactions WHERE log_id IS NOT NULL AND status IN ({','.join('?' * len(st))}) "
+                f"ORDER BY updated_at LIMIT ?", st + [int(limit)]).fetchall()]
+
+    def reaction_log_rows(self, log_ids: list) -> dict:
+        """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
+        ids = sorted({int(x) for x in log_ids or []})
+        if not ids:
+            return {}
+        with closing(self._conn()) as c:
+            return {int(r["id"]): self._log(r) for r in c.execute(
+                f"SELECT * FROM team_reaction_log WHERE id IN ({','.join('?' * len(ids))})", ids).fetchall()}
+
+    def agent_reactions_for(self, session_id: str, message_ids: list) -> dict:
+        """{message_id: [reaction của agent]} (reactor `agent:<mã>`, nguồn leader/member) cho một trang tin."""
+        ids = [int(x) for x in message_ids or []]
+        if not ids:
+            return {}
+        out: dict = {}
+        with closing(self._conn()) as c:
+            rows = c.execute(f"SELECT * FROM team_reactions WHERE session_id=? AND reactor LIKE 'agent:%' AND "
+                             f"message_id IN ({','.join('?' * len(ids))}) ORDER BY updated_at",
+                             [session_id] + ids).fetchall()
+        for r in rows:
+            out.setdefault(int(r["message_id"]), []).append(self._reaction(r))
+        return out
 
     def reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[dict]:
         with closing(self._conn()) as c:
@@ -816,13 +1091,30 @@ class TeamStore:
             return [dict(r) for r in c.execute("SELECT * FROM team_reaction_log WHERE session_id=? AND message_id=? "
                                                "ORDER BY id", (session_id, int(message_id))).fetchall()]
 
-    def recent_feedback(self, team_id: str, agent_key: str, since: float, limit: int = 5) -> list:
-        """Phản hồi còn hiệu lực trên tin của `agent_key` trong ĐÚNG nhóm `team_id`, mới nhất trước (spec 14.4 mục 3)."""
+    def recent_feedback(self, team_id: str, agent_key: str, since: float, limit: int = 5,
+                        reactor: Optional[str] = "owner") -> list:
+        """Phản hồi còn hiệu lực trên tin của `agent_key` trong ĐÚNG nhóm `team_id`, mới nhất trước (spec 14.4 mục 3).
+        Mặc định chỉ của chủ nhóm; `reactor=None` lấy mọi người phản hồi, `reactor="agent:%"` (LIKE) chỉ của agent."""
+        q = "SELECT * FROM team_reactions WHERE team_id=? AND agent_key=? AND updated_at >= ?"
+        args: list = [team_id, agent_key, float(since)]
+        if reactor is not None:
+            q += " AND reactor LIKE ?" if "%" in reactor else " AND reactor=?"
+            args.append(reactor)
+        with closing(self._conn()) as c:
+            return [self._reaction(r) for r in c.execute(q + " ORDER BY updated_at DESC, message_id DESC LIMIT ?",
+                                                         args + [int(limit)]).fetchall()]
+
+    def unconsumed_feedback(self, team_id: str, statuses, limit: int = 12) -> list:
+        """Phản hồi của CHỦ trong nhóm `team_id` còn ở một trạng thái chưa xem xét xong (T4, 0.170.0), mới nhất trước.
+        Một truy vấn theo chỉ mục `team_reactions_status`, có trần dòng."""
+        st = [str(s) for s in statuses or ()]
+        if not st:
+            return []
         with closing(self._conn()) as c:
             return [self._reaction(r) for r in c.execute(
-                "SELECT * FROM team_reactions WHERE team_id=? AND agent_key=? AND updated_at >= ? "
-                "ORDER BY updated_at DESC, message_id DESC LIMIT ?",
-                (team_id, agent_key, float(since), int(limit))).fetchall()]
+                f"SELECT * FROM team_reactions WHERE team_id=? AND status IN ({','.join('?' * len(st))}) "
+                "AND reactor='owner' ORDER BY updated_at DESC LIMIT ?",
+                [str(team_id), *st, max(1, min(200, int(limit)))]).fetchall()]
 
     def _set_reaction_time(self, session_id: str, message_id: int, ts: float) -> None:
         """Chỉ cho test: đặt lùi mốc cập nhật của một phản hồi."""
@@ -844,6 +1136,21 @@ class TeamStore:
                       "lease_until=excluded.lease_until", (agent_key, team_id, turn_id, t + float(lease_s)))
             return True
 
+    def renew_busy(self, agent_key: str, turn_id: str, lease_s: float, now: Optional[float] = None) -> bool:
+        """Gia hạn khoá bận của ĐÚNG lượt `turn_id` trong lúc lượt còn chạy (GOAL T1, lượt dài tới STEP_TIMEOUT_S). Chỉ
+        UPDATE: dòng đã nhả (lượt xong) hay đã thuộc lượt khác thì không làm gì, không bao giờ giành lại. Trả True khi đã
+        gia hạn."""
+        t = time.time() if now is None else float(now)
+        with self._Tx(self) as c:
+            return c.execute("UPDATE agent_busy SET lease_until=? WHERE agent_key=? AND turn_id=?",
+                             (t + float(lease_s), agent_key, turn_id)).rowcount == 1
+
+    def busy_turn(self, agent_key: str) -> Optional[str]:
+        """Lượt đang ghi trên dòng khoá bận của agent (kể cả dòng đã hết hạn mà chưa ai lấy), None khi không có dòng."""
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT turn_id FROM agent_busy WHERE agent_key=?", (agent_key,)).fetchone()
+            return str(r["turn_id"]) if r else None
+
     def release_busy(self, agent_key: str, turn_id: str) -> None:
         with self._Tx(self) as c:
             c.execute("DELETE FROM agent_busy WHERE agent_key=? AND turn_id=?", (agent_key, turn_id))
@@ -853,6 +1160,13 @@ class TeamStore:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM agent_busy WHERE agent_key=? AND lease_until > ?", (agent_key, t)).fetchone()
             return dict(r) if r else None
+
+    def busy_keys(self, now: Optional[float] = None) -> set:
+        """Mọi agent đang giữ khoá bận còn hạn (một câu đọc cho cả nhịp lớp 3)."""
+        t = time.time() if now is None else float(now)
+        with closing(self._conn()) as c:
+            return {str(r[0]) for r in c.execute("SELECT agent_key FROM agent_busy WHERE lease_until > ?",
+                                                 (t,)).fetchall()}
 
     # ───────────── kết cục lượt trả lời trò chuyện (0.142.0) ─────────────
 

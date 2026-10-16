@@ -10,11 +10,16 @@ later the rule was gone. These tests pin the three fixes:
 (The learn-engine side, op=update only adding rules, is in test_learn_agent_workflow.py.)
 """
 from _paths import ROOT, SERVER  # noqa: E402,F401
+import os
 import tempfile
 from pathlib import Path
 
-import agent_rules
-import main
+# T3 phần L: bài học chat riêng nay vào kho resonance tạm (không bao giờ đụng dữ liệu thật của máy).
+os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agent-rules-")
+
+import agent_lessons  # noqa: E402
+import agent_rules  # noqa: E402
+import main  # noqa: E402
 
 ZALO_RULE = "Nhắn Zalo thì không dùng markdown."
 
@@ -92,7 +97,12 @@ def test_owner_rule_survives_many_lessons():
                                  f"xong {i}\nJAVIS_LESSON: Bài học số {i}\n")
         text = _mem(brain).read_text(encoding="utf-8")
         assert f"- {ZALO_RULE}" in text, text
-        assert "Bài học số 29" in text and "Bài học số 0\n" not in text, "lessons still rotate"
+        # T3 phần L (thiết kế 8.1): JAVIS_LESSON của chat riêng nay vào kho bài học phạm vi `dm:<agent_key>`, không vào
+        # MEMORY.md (bài học riêng không rò vào lượt nhóm). Luật chủ dặn vẫn ở MEMORY.md như trước.
+        assert "Bài học số" not in text, "dm lessons no longer go to MEMORY.md"
+        key = main._dm_agent_key(brain, "cham-khach")
+        got = [r["text"] for r in agent_lessons.lessons(main._resonance_store(), key, scope=f"dm:{key}")]
+        assert "Bài học số 29" in got and len(got) == 30, got
         # And it reaches the agent's prompt on the next run.
         _mk, sysprompt, _log, _learn = main._workflow_agent_helpers(brain, tools=None)
         assert ZALO_RULE in sysprompt("cham-khach")[1]

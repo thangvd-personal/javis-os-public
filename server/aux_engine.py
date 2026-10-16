@@ -601,6 +601,10 @@ def _build_codex(spec, claude_cli_obj, mode, tag, codex_profile=None):
             mcp_hub.dat_codex_tat_app(cc.extra_config)
     except Exception as e:
         print(f"[aux codex hub] {e}", file=sys.stderr)
+    # Fast mode (0.164.0): background runs never get the bolt. Force the normal tier, or a
+    # config.toml with service_tier = "priority" would make every scheduled run fast.
+    cc.extra_config[:] = [x for x in cc.extra_config if not str(x).startswith("service_tier=")]
+    cc.extra_config.append('service_tier="default"')
     return cc
 
 

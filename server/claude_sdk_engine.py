@@ -297,7 +297,16 @@ def map_message(msg):
                                   TextBlock, ToolUseBlock, ToolResultBlock)
     events = []
     if isinstance(msg, SystemMessage):
-        return events, (msg.data or {}).get("session_id")
+        data = msg.data or {}
+        # Claude Code reports the real Fast mode state (off, cooldown, on): keep it for the bolt tooltip.
+        if data.get("fast_mode_state"):
+            try:
+                import fast_mode
+                fast_mode.remember("anthropic-cli", str(data.get("fast_mode_state")),
+                                   str(data.get("fast_mode_disabled_reason") or ""))
+            except Exception:  # noqa: BLE001
+                pass
+        return events, data.get("session_id")
     if isinstance(msg, AssistantMessage):
         for b in msg.content:
             if isinstance(b, TextBlock):
@@ -814,6 +823,11 @@ class ClaudeSDK:
         # là nó thoát ngay với "unknown option", tức hỏng trọn lượt chat.
         if self.effort and "effort" in fields:
             kw["effort"] = self.effort
+        # Fast mode (0.164.0): main._cli_fast sets this for a chat turn. Every other run (loops,
+        # reminders, bots) says fastMode false explicitly, so a /fast persisted in the user's
+        # ~/.claude/settings.json cannot make background work run (and bill) fast.
+        if "settings" in fields:
+            kw["settings"] = getattr(self, "fast_settings", None) or '{"fastMode": false}'
         if self.session_id:
             kw["resume"] = self.session_id
         servers, strict = self._mcp_servers()

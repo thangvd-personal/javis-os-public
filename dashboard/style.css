@@ -1081,6 +1081,58 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 /* Đang chạy một lượt thì không cho bấm gửi lại (app.js gắn .busy vào #chatArea) */
 .transcript.busy .msg-act[data-act="retry"] { opacity: 0.35; pointer-events: none; }
 
+/* T2 0.154.0: sáu reaction dưới câu trả lời (chat-reactions.js + reactions.js). Máy tính: nút mặt cười hiện khi rê chuột,
+   chip đã chọn luôn hiện; máy chạm: nút luôn hiện, vùng chạm 44px. Chữ 16px, lọt bề ngang 375px không cuộn ngang. */
+.jr-chat { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; max-width: min(72ch, 100%); min-width: 0; }
+.jr-chat[hidden] { display: none; }
+.jr-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.jr-row[hidden] { display: none; }
+.jr-react-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px;
+  border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text3); cursor: pointer; padding: 4px;
+  opacity: 0; transition: opacity 0.15s; }
+.msg-javis:hover .jr-react-btn, .jr-react-btn:focus-visible, .jr-react-btn[aria-expanded="true"] { opacity: 1; }
+.jr-react-btn:hover { color: var(--text-hi); border-color: var(--border); }
+.jr-react-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 2px 12px; font: inherit; font-size: 16px;
+  line-height: 1.4; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.jr-react-emoji { font-size: 18px; margin-right: 4px; }
+.jr-react-status, .jr-react-busy { font-size: 16px; line-height: 1.4; color: var(--text3); overflow-wrap: anywhere; }
+.jr-react-why { margin-left: 6px; }
+.jr-react-why::before { content: "\00B7"; margin-right: 6px; }
+.jr-react-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--bg); min-width: 0; box-sizing: border-box; max-width: 100%; }
+.jr-react-panel[hidden] { display: none; }
+.jr-react-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.jr-react-pick { min-width: 44px; min-height: 44px; font-size: 24px; line-height: 1; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--surface-1); cursor: pointer; }
+.jr-react-pick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); }
+.jr-react-sub { font-size: 16px; color: var(--text2); }
+.jr-react-reasons { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 16px; color: var(--text); }
+.jr-react-reasons[hidden] { display: none; }
+.jr-react-reason { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; }
+.jr-react-comment { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; font-size: 16px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-1); color: var(--text); }
+.jr-react-note { font-size: 16px; color: var(--text3); }
+.jr-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.jr-actions[hidden] { display: none; }
+.jr-actions .ws-btn, .jr-react-err .ws-btn { font-size: 16px; }
+.jr-react-err { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 16px; color: var(--danger, var(--text2)); }
+.jr-react-err[hidden] { display: none; }
+.jr-react-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; }
+@media (hover: none) {
+  .jr-react-btn { opacity: 1; min-width: 44px; min-height: 44px; }
+  /* Nhấn giữ bong bóng trả lời mở bộ chọn: tắt menu chạm giữ mặc định của iOS cho bong bóng đã có mã tin. */
+  .msg-javis[data-mid] { -webkit-touch-callout: none; }
+  .jr-react-chip, .jr-react-reason, .jr-actions .ws-btn, .jr-react-err .ws-btn { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  /* 375px: sáu nút 44px và năm khe phải lọt bề ngang bong bóng. */
+  .jr-react-panel { padding: 8px 6px; }
+  .jr-react-row { flex-wrap: nowrap; justify-content: space-between; gap: 4px; }
+  .jr-react-pick { flex: 1 1 0; min-width: 44px; min-height: 48px; padding: 0; }
+}
+
 /* Copy code block (nút nổi góc phải khối code) */
 .code-wrap { position: relative; }
 .code-copy { position: absolute; top: 6px; right: 6px; z-index: 2;
@@ -1092,6 +1144,13 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 
 /* Tin user nhiều dòng: giữ xuống dòng + thu gọn khi quá dài */
 .msg-user .bubble .utext { white-space: pre-wrap; word-break: break-word; }
+/* Trích dẫn (0.171.0, chat-quote.js): đoạn trích ở đầu tin người dùng, hiện thành khối có vạch
+   bên trái. Giới hạn chiều cao để một đoạn trích dài không đẩy câu hỏi khuất xuống dưới. */
+.msg-user .bubble .uquote { display: block; margin: 0 0 8px; padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--accent); color: var(--text2); font-size: .94em;
+  max-height: 7.6em; overflow: hidden; }
+.attach-chip.quote-chip { max-width: min(520px, 100%); }
+.attach-chip.quote-chip .chip-ico { color: var(--accent); }
 .msg-user .bubble .utext.clamped { display: -webkit-box; -webkit-line-clamp: 10;
   -webkit-box-orient: vertical; overflow: hidden; }
 .clamp-more { display: block; margin-top: 5px; background: none; border: none;
@@ -1353,9 +1412,9 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .voice-focus-resume[hidden] { display: none; }
 .hud-voice {
   position: relative;
-  /* Một khung bo tròn kiểu Claude (0.153.0): ảnh đính kèm, ô gõ, hàng nút xếp dọc. Từng con tự
-     giãn hết bề ngang (align-self: stretch bên dưới); flex-end giữ các con không co về giữa khi
-     khung cao lên. */
+  /* One rounded card in the style of Claude (0.153.0): attachments, text box and button row stacked.
+     Each child stretches to full width (align-self: stretch below); flex-end keeps children from
+     drifting to the middle when the card grows. */
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
   margin: 4px 16px 16px; padding: 10px 12px 8px;
   border: 1px solid var(--border); border-radius: 24px; background: var(--bg2);
@@ -1363,8 +1422,8 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 }
 .hud-voice > * { align-self: stretch; }
 .hud-voice:focus-within { border-color: var(--accent-line); }
-/* Dải đính kèm nằm trong khung: bỏ lề ngang 20px của bản dải full-width. Viết .has-items.attach-bar
-   (không phải .attach-bar.has-items) để khối gốc bên dưới vẫn là khối đầu tiên mang tên đó. */
+/* The attachment strip sits inside the card: drop the 20px side margin of the full-width strip. Written as
+   .has-items.attach-bar (not .attach-bar.has-items) so the base block below stays the first with that name. */
 .hud-voice .attach-bar { padding: 0 2px; }
 .hud-voice .has-items.attach-bar { padding: 2px 2px 6px; }
 .model-bar:empty { display: none; }
@@ -1386,7 +1445,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   color: var(--accent-ink); font-family: var(--font); font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .cp-eff:hover, .cp-eff[aria-expanded="true"] { border-color: var(--accent); }
-/* Tia sét Fast mode: tắt thì đứng yên, bật thì nền cam có dải sáng chạy ngang và tia sét đập nhẹ. */
+/* Fast mode bolt: still when off; when on, an orange background with a moving shine and a gently pulsing bolt. */
 .cp-fast[aria-pressed="true"] {
   color: var(--on-accent); border-color: var(--accent);
   background: linear-gradient(110deg, var(--accent) 0%, var(--accent-ink) 25%, var(--accent) 50%, var(--accent-solid) 75%, var(--accent) 100%);
@@ -1399,6 +1458,20 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 @media (prefers-reduced-motion: reduce) {
   .cp-fast[aria-pressed="true"], .cp-fast[aria-pressed="true"] svg { animation: none; }
 }
+/* Pinned working folder chip, right after the bolt (composer-folder.js, 0.158.0). */
+.cp-pin { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 190px; padding: 0 10px;
+  border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text2);
+  font: inherit; font-size: 12.5px; cursor: pointer; flex: 0 1 auto; min-width: 0; }
+.cp-pin:hover, .cp-pin:focus-visible { border-color: var(--accent); color: var(--text); }
+.cp-pin .cp-ic { width: 14px; height: 14px; flex: none; }
+.cp-pin span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-pin-gone span { text-decoration: line-through; opacity: .7; }
+.cp-pin-err { color: var(--warn-ink); font-size: 12.5px; padding: 4px 10px; }
+.cp-pin-more { flex: none; font-size: 11.5px; color: var(--text3); }
+.cp-pin-current { cursor: default; color: var(--text); }
+.cp-pin-current:hover { background: transparent; }
+.cp-pin-err:empty { display: none; }
+@media (max-width: 860px) { .cp-pin { max-width: 120px; padding: 0 8px; } }
 .mic-big {
   background: transparent; border: 1px solid transparent; color: var(--text2);
   width: 34px; height: 34px; border-radius: 50%; cursor: pointer; flex-shrink: 0;
@@ -1440,7 +1513,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .send-btn:hover { opacity: 0.85; }
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ===== Mobile: cùng khung, chỉ thu khoảng đệm; chip model lên đầu trang (mobile-chat.js) ===== */
+/* ===== Mobile: same card with tighter padding; the model chip moves to the page header (mobile-chat.js) ===== */
 @media (max-width: 860px) {
   .hud-voice {
     margin: 6px 10px 8px; padding: 8px 8px 6px; gap: 2px;
@@ -2146,8 +2219,6 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   flex: 0 1 auto; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; }
 .mb-chip:hover { color: var(--text); border-color: var(--accent); }
 .mb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
-.mb-sep { opacity: .4; }
-.mb-eff { color: var(--accent2); }
 .mb-caret { opacity: .6; font-size: 10px; }
 .mb-pop { position: absolute; bottom: calc(100% + 6px); left: 8px; z-index: 60; width: 340px;
   max-height: 62vh; overflow: auto; background: var(--bg2); border: 1px solid var(--border);
@@ -2207,13 +2278,6 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .mb-empty { font-size: 12px; color: var(--text3); padding: 4px 10px 8px; }
 .mb-link { font-size: 12px; color: var(--accent2); padding: 4px 10px 8px; cursor: pointer; }
 .mb-link:hover { text-decoration: underline; }
-.mb-eff-row { display: flex; gap: 6px; border-top: 1px solid var(--border); margin-top: 6px; padding: 8px 4px 4px; }
-.mb-eff-row .lbl { font-size: 11px; color: var(--text3); align-self: center; margin-right: 2px; }
-.mb-eff-btn { flex: 1; font-size: 12px; color: var(--text2); background: var(--bg3);
-  border: 1px solid var(--border); border-radius: 8px; padding: 5px; cursor: pointer; text-align: center;
-  font-family: var(--font); }
-.mb-eff-btn:hover { color: var(--text); }
-.mb-eff-btn.cur { background: var(--accent2-wash-2); color: var(--accent2); border-color: var(--accent2); }
 
 /* ============================================================
    Chat render (chat-render.js): markdown day du + code highlight + ARTIFACT
@@ -3750,3 +3814,25 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .rsa-pv-label { font-size: 12px; color: var(--text3); }
 .rsa-pv-text { font-size: 13px; color: var(--text); padding: 6px 8px; border-radius: 8px; background: var(--surface-2);
   overflow-wrap: anywhere; }
+
+/* Khung chia sẻ hội thoại (0.171.0, sessions-ui.js moChiaSeHoiThoai). Màn rộng: đứng dưới nút;
+   màn hẹp: tấm trượt từ đáy, chữ tối thiểu 16px cho dễ đọc trên điện thoại. */
+.cts-share-pop { position: fixed; z-index: 1200; width: 360px; max-width: calc(100vw - 24px);
+  background: var(--panel, var(--bg)); color: var(--text); border: 1px solid var(--border);
+  border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.28); font-size: 15px; }
+.cts-share-pop .csp-head { display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 4px; }
+.cts-share-pop .csp-x { background: none; border: 0; color: var(--text3); cursor: pointer; padding: 4px; }
+.cts-share-pop .csp-body { padding: 4px 14px 14px; }
+.cts-share-pop .csp-note { margin: 0 0 10px; color: var(--text2); font-size: 14px; line-height: 1.5; }
+.cts-share-pop .csp-url { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; }
+.cts-share-pop .csp-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.cts-share-pop .csp-acts .gcard-btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.cts-share-pop .csp-danger { color: var(--red); }
+.cts-share-pop .csp-manage { display: inline-block; margin-top: 12px; color: var(--accent); font-size: 14px; }
+@media (max-width: 640px) {
+  .cts-share-pop { top: auto !important; left: 0 !important; right: 0; bottom: 0; width: auto;
+    max-width: none; border-radius: 16px 16px 0 0; font-size: 16px; padding-bottom: env(safe-area-inset-bottom); }
+  .cts-share-pop .csp-note, .cts-share-pop .csp-url, .cts-share-pop .csp-manage { font-size: 16px; }
+}

@@ -88,8 +88,23 @@ def world(label, engine_for=None, agents=("agent-one", "agent-two")):
     return r, tm, ts, ss, tm.get(tid), d
 
 
-def memory_text(d):
+def memory_files_text(d):
     return "\n".join(p.read_text(encoding="utf-8") for p in d.glob("memory/agents/**/*") if p.is_file())
+
+
+def scoped_lessons(prefix="team:"):
+    """T3 phần L (0.156.0): bài học của lượt nhóm vào kho bài học phạm vi nhóm (`agent_lessons`), không vào MEMORY.md."""
+    import agent_lessons
+    from contextlib import closing as _closing
+    st = main._resonance_store()
+    agent_lessons.ensure(st)
+    with _closing(st._conn()) as c:
+        return [dict(r) for r in c.execute("SELECT * FROM agent_lessons WHERE scope LIKE ?", (prefix + "%",))]
+
+
+def memory_text(d):
+    """Mọi bộ nhớ bền của agent: file MEMORY.md và kho bài học có phạm vi (mã đánh dấu của từng ca là duy nhất)."""
+    return memory_files_text(d) + "\n" + "\n".join(r["text"] for r in scoped_lessons(""))
 
 
 
@@ -272,6 +287,10 @@ def section_r3():
     check("R3 đối chứng: đầu ra hợp lệ ghi bài học vào bộ nhớ agent, tin sạch marker",
           "GOOD_LESSON_101" in memory_text(w["d"]) and w["task"]["status"] == "done"
           and "JAVIS_LESSON" not in w["msgs"][0]["content"])
+    good = [x for x in scoped_lessons() if x["text"] == "GOOD_LESSON_101"]
+    check("R3 + T3: bài học của lượt nhóm vào phạm vi team:<id> (nguồn self, gắn lượt), không vào MEMORY.md",
+          len(good) == 1 and good[0]["scope"] == f"team:{w['t']['team_id']}" and good[0]["source"] == "self"
+          and '"turn:' in good[0]["source_refs_json"] and "GOOD_LESSON_101" not in memory_files_text(w["d"]), good)
     w = job_via_factory("r3-rule", [{"type": "final", "content": "Kết quả\nJAVIS_RULE: RULE_202 luôn viết ngắn"}])
     check("R3 JAVIS_RULE trong lượt nhóm hạ thành bài học (không có chủ nói trực tiếp), ghi khi hợp lệ",
           "RULE_202" in memory_text(w["d"]) and "JAVIS_RULE" not in w["msgs"][0]["content"])

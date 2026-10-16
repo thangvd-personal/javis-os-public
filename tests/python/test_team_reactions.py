@@ -181,5 +181,142 @@ tm._set_reaction_time(A["session_id"], old, time.time() - 31 * 86400)
 run(r.run_replies(r.submit(A["team_id"], "Lần bốn", client_msg_id="s4")))
 check("chỉ 30 ngày gần nhất", "OLD_31_DAYS" not in rec.reqs[-1]["prompt"])
 
+# ═════ T2 (0.154.0): trường mới, nonce dùng lại, lệnh react của agent (thiết kế 4.1, hợp đồng mục 5) ═════
+import json  # noqa: E402
+
+import resonance_store as RS  # noqa: E402
+import agent_ledger as AL  # noqa: E402
+import feedback_projector as FP  # noqa: E402
+
+r, tm, ts, ss, rec, pub, (A, B) = world("t2-fields")
+m = agent_msg(ss, A, "lan", "Nội dung gốc")
+sha = hashlib.sha256("Nội dung gốc".encode("utf-8")).hexdigest()
+st = r.react(A["team_id"], m, "love", reasons=["on_point"], axis="should_speak", nonce="f1", seen_sha=sha)
+check("R mang trường mới: axis, stale, status, status_reason, source_kind, revision",
+      st["axis"] == "should_speak" and st["stale"] is False and st["status"] == "received"
+      and st["status_reason"] == "" and st["source_kind"] == "owner" and st["revision"] == 1, st)
+st = r.react(A["team_id"], m, "sad", nonce="f2", seen_sha="sha-cu")
+check("seen_sha lệch content_sha: stale = 1, vẫn nhận", st["stale"] is True and st["value"] == "sad"
+      and st["revision"] == 2, st)
+again = r.react(A["team_id"], m, "like", nonce="f2")
+check("gửi lại cùng nonce: trả trạng thái hiện tại, không ghi thêm dòng", again["value"] == "sad"
+      and len(tm.reaction_log(A["session_id"], m)) == 2)
+m_other = agent_msg(ss, A, "minh", "Tin khác")
+try:
+    r.react(A["team_id"], m_other, "like", nonce="f2")
+    nonce_err = None
+except team_store.TeamError as ex:
+    nonce_err = ex
+check("nonce đã dùng cho tin khác: NonceConflict (route 409)", isinstance(nonce_err, team_store.NonceConflict))
+try:
+    r.react(A["team_id"], m, "like", axis="loud", nonce="f-bad")
+    axis_bad = False
+except team_store.TeamError:
+    axis_bad = True
+check("trục nói/im lạ bị từ chối", axis_bad)
+log = tm.reaction_log(A["session_id"], m)
+check("nhật ký có trạng thái trước (prev_json), agent, việc, nguồn, effect_state",
+      log[0]["prev_json"] is None and json.loads(log[1]["prev_json"])["value"] == "love"
+      and log[1]["agent_key"] == "lan" and log[1]["source_kind"] == "owner"
+      and log[1]["effect_state"] == "pending", log[1])
+page_msg = ss.team_message(A["session_id"], m)
+check("tin nhóm mang content_sha của nội dung đã lưu", page_msg["content_sha"] == sha)
+check("gói team_message mang reaction mới, agent_reactions và content_sha", any(
+    e.get("type") == "team_message" and (e.get("message") or {}).get("id") == m
+    and e["message"]["reaction"]["value"] == "sad" and e["message"]["agent_reactions"] == []
+    and e["message"]["content_sha"] == sha for e in pub))
+r.react(A["team_id"], m, "none", reasons=[], comment="", axis="", nonce="f-clear")
+check("bỏ hết (gồm trục): R null", tm.reaction_of(A["session_id"], m) is None)
+
+
+class Scripted:
+    def __init__(self):
+        self.reqs, self.say = [], {}
+
+    def engine_for(self, team, key, role):
+        async def run_(req):
+            self.reqs.append(req)
+            q = self.say.get(key) or []
+            return {"text": q.pop(0) if q else f"{key} nói"}
+        return "fake", "fake", run_
+
+
+def directive(**op):
+    return f"\n<!-- JAVIS_TEAM: {json.dumps(op, ensure_ascii=False)} -->"
+
+
+d = TEMP / "t2-agent-react"
+d.mkdir()
+ss = sessions.SessionStore(db_path=d / "chat.db")
+ts = task_store.TaskStore(d / "kanban.sqlite3")
+tm = team_store.TeamStore(d / "team.sqlite3")
+gs = RS.GoalStore(d / "resonance.sqlite3")
+owner = RS.Principal("owner", "owner", str(d))
+lan = gs.agent_set_enabled(owner, "lan", True)
+minh = gs.agent_set_enabled(owner, "minh", True)
+sc = Scripted()
+pub = []
+pj = FP.FeedbackProjector(resonance=lambda: gs, sessions=lambda: ss, teams=lambda: tm)
+r = TR.TeamRunner(teams=tm, tasks=ts, sessions=ss, engine_for=sc.engine_for, publish=pub.append, projector=pj,
+                  agent_info=lambda root, key: {"slug": key, "name": "Lan" if key == lan["agent_key"] else "Minh",
+                                                "system": ""})
+tid = team_store.new_team_id()
+sid = ss.create_session(brain=str(d), channel=f"team:{tid}")
+tm.create_team(str(d), "Đội", "", sid, team_id=tid)
+for a in (lan, minh):
+    tm.add_member(tid, a["agent_key"], a["slug"])
+tm.set_leader(tid, lan["agent_key"])
+T = tm.get(tid)
+mm = agent_msg(ss, T, minh["agent_key"], "Bản nháp của Minh")
+ml = agent_msg(ss, T, lan["agent_key"], "Tin của Lan")
+sc.say[lan["agent_key"]] = ["Đã xem bản nháp." + directive(op="react", message_id=mm, value="love", reasons=["on_point"],
+                                                           comment="Rõ ràng")
+                            + directive(op="react", message_id=ml, value="like")]
+run(r.run_replies(r.submit(tid, "Lan xem giúp", client_msg_id="ar1")))
+peer = tm.reaction_of(sid, mm, f"agent:{lan['agent_key']}")
+check("lệnh react của trưởng nhóm: lưu với source_kind leader do host gán", peer and peer["source_kind"] == "leader"
+      and peer["value"] == "love" and peer["reasons"] == ["on_point"] and peer["comment"] == "Rõ ràng", peer)
+check("agent không thả lên tin của chính mình", tm.reaction_of(sid, ml, f"agent:{lan['agent_key']}") is None)
+reply = [x for x in ss.get_team_messages_page(sid, 50)["messages"] if x["author_ref"] == lan["agent_key"]][-1]
+check("thả lên tin của chính mình: ghi chú trên tin, không lọt khối JAVIS_TEAM",
+      any("chính mình" in n for n in reply["meta"].get("notes") or []) and "JAVIS_TEAM" not in reply["content"],
+      reply["meta"])
+check("reaction của agent không làm mất reaction của chủ (người phản hồi khác nhau)",
+      tm.reaction_of(sid, mm) is None)
+check("trang tin: agent_reactions có tên agent, nguồn, giá trị", r.message_view(T, ss.team_message(sid, mm))
+      ["agent_reactions"] == [{"agent_key": lan["agent_key"], "name": "Lan", "source_kind": "leader",
+                               "value": "love", "reasons": ["on_point"], "comment": "Rõ ràng"}])
+check("gói team_message của tin được agent thả có agent_reactions", any(
+    e.get("type") == "team_message" and e["message"]["id"] == mm and e["message"].get("agent_reactions") for e in pub))
+check("reaction của agent: không tạo lý do thức, không vào ước lượng hữu ích", AL.WakeReasons(gs).reasons() == [])
+sc.say[minh["agent_key"]] = ["Cảm ơn." + directive(op="react", message_id=ml, value="haha")]
+run(r.run_replies(r.submit(tid, "@minh nhé", mentions=[minh["agent_key"]], client_msg_id="ar2")))
+mem = tm.reaction_of(sid, ml, f"agent:{minh['agent_key']}")
+check("thành viên thả reaction: source_kind member", mem and mem["source_kind"] == "member" and mem["value"] == "haha",
+      mem)
+n_log = len(tm.reaction_log(sid, mm))
+turn = [t for t in tm.turns(tid) if t["agent_key"] == lan["agent_key"]][0]
+r._agent_react(tid, lan["agent_key"], {"op": "react", "message_id": mm, "value": "love"}, [], f"{turn['turn_id']}#rx0")
+check("xử lý lặp cùng lượt (nonce theo lượt): không ghi lần hai", len(tm.reaction_log(sid, mm)) == n_log)
+notes = []
+r._agent_react(tid, lan["agent_key"], {"op": "react", "message_id": "abc", "value": "love"}, notes, "x#rx9")
+check("lệnh react thiếu message_id hợp lệ: bỏ kèm ghi chú", notes and "message_id" in notes[0])
+sc.say[lan["agent_key"]] = ["Gợi ý." + directive(op="react", message_id=mm, value="love")]
+run(r.run_replies(r.submit(tid, "Tiếp", client_msg_id="ar3")))
+p = sc.reqs[-1]["prompt"] if sc.reqs else ""
+sc.say[minh["agent_key"]] = ["Ok"]
+run(r.run_replies(r.submit(tid, "@minh tiếp", mentions=[minh["agent_key"]], client_msg_id="ar4")))
+pm = sc.reqs[-1]["prompt"]
+check("lượt kế của Minh thấy góp ý của đồng đội, tách khỏi phản hồi của chủ",
+      "Góp ý của đồng đội" in pm and "(love)" in pm and "từ: Lan" in pm
+      and "Phản hồi gần đây của chủ nhóm" not in pm, pm[-800:])
+r.react(tid, mm, "sad", reasons=["missing"], axis="should_speak", comment="Thiếu số liệu", nonce="own1")
+run(r.run_replies(r.submit(tid, "@minh lần nữa", mentions=[minh["agent_key"]], client_msg_id="ar5")))
+pm = sc.reqs[-1]["prompt"]
+check("khối phản hồi của chủ có trục nói/im", "nói/im: Đáng lẽ nên nói" in pm and "Thiếu số liệu" in pm, pm[-900:])
+check("reaction của chủ (Minh bật Cộng hưởng): một lý do xem xét ở ngữ cảnh nhóm",
+      len(AL.WakeReasons(gs).reasons(agent_key=minh["agent_key"])) == 1
+      and tm.reaction_of(sid, mm)["status"] == "pending_review")
+
 print(f"\n{'FAIL' if fails else 'PASS'} - test_team_reactions: {len(fails)} lỗi")
 raise SystemExit(1 if fails else 0)

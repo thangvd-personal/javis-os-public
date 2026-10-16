@@ -17,8 +17,9 @@ khi có plugin đăng ký (0 overhead khi không plugin nào dùng hook).
 
 AN TOÀN (lớp CỨNG - plugin chạy code Python THẬT trong tiến trình server):
     - Bundled: tự nạp khi effective-enabled (mặc định theo manifest `enabled:`).
-    - Vault:  CHỈ nạp khi env  JAVIS_ENABLE_VAULT_PLUGINS=true  (giống Hermes
-      HERMES_ENABLE_PROJECT_PLUGINS - chống RCE khi ai đó ghi được vào vault) VÀ enabled:true.
+    - Vault:  loaded when the manifest says enabled:true. Since 0.162.0 (owner decision) user and vault
+      plugins load by default; JAVIS_ENABLE_USER_PLUGINS=false opts out (it used to be opt-in, like
+      Hermes HERMES_ENABLE_PROJECT_PLUGINS).
     - Enable-state: bundled ở STATE_DIR/plugins.json (override, KHÔNG mutate file app);
       vault ở frontmatter plugin.yaml.
     - 1 plugin lỗi KHÔNG làm sập hub: mọi load/tool/hook đều bọc try/except.
@@ -105,14 +106,22 @@ def valid_slug(s: Any) -> bool:
     return bool(_SLUG_RE.match(str(s or "")))
 
 
+_OFF_VALUES = ("0", "false", "no", "off")
+
+
 def _env_user_enabled() -> bool:
-    """Cho phép chạy plugin do NGƯỜI DÙNG cài (global STATE_DIR/plugins + vault/plugins). Chúng chạy
-    code Python THẬT trong tiến trình server nên mặc định TẮT - bật bằng JAVIS_ENABLE_USER_PLUGINS=true
-    (hoặc alias cũ JAVIS_ENABLE_VAULT_PLUGINS=true) rồi khởi động lại. Plugin BUNDLED không chịu gate này."""
+    """May user-installed plugins run (global STATE_DIR/plugins + vault/plugins)?
+
+    0.162.0, owner decision: YES BY DEFAULT. Each plugin still runs only when its own manifest says
+    `enabled: true` (a plugin created from chat starts at `enabled: false`), and the permission level
+    of the caller still decides every tool call. Opt out with JAVIS_ENABLE_USER_PLUGINS=false (or
+    the old alias JAVIS_ENABLE_VAULT_PLUGINS=false) and a restart. The new name wins when both are
+    set; an empty value counts as not set. Bundled plugins never go through this gate."""
     for k in ("JAVIS_ENABLE_USER_PLUGINS", "JAVIS_ENABLE_VAULT_PLUGINS"):
-        if str(os.getenv(k, "")).strip().lower() in ("1", "true", "yes", "on"):
-            return True
-    return False
+        v = str(os.getenv(k, "") or "").strip().lower()
+        if v:
+            return v not in _OFF_VALUES
+    return True
 
 
 # Alias tương thích: main.py + code cũ còn gọi _env_vault_enabled().
@@ -452,6 +461,10 @@ class PluginContext:
         `{"kenh", "sender_id", "chat_type", "chat_id", "la_chu"}` - chi tiết ở `turn_context`.
         `None` = không xác định được (việc nền, engine chưa mang được khoá lượt): hook cần danh
         tính thì coi None là "không ai", KHÔNG phải "chủ máy".
+
+        **`chatbot_turn_context`**: fired once per chatbot turn, right before the engine runs. It
+        receives `channel, account_id, bot_id, chat_type, chat_id, sender_id, vault_root, trial` and
+        may return ONE short line for that turn's system prompt. See `chatbot_turn_context` below.
         """
         self._hooks.setdefault(str(event), []).append(callback)
 
@@ -663,7 +676,7 @@ def _load_all(vault_root: Optional[str], scope_vault: bool = True) -> dict:
                 continue
             if source in ("user", "vault"):
                 if not env_ok:
-                    continue   # gate CỨNG: plugin user (global+vault) cần JAVIS_ENABLE_USER_PLUGINS=true
+                    continue   # opted out on this machine: JAVIS_ENABLE_USER_PLUGINS=false
                 if not valid_slug(slug):
                     errors[slug] = "slug không hợp lệ"
                     continue
@@ -1068,6 +1081,93 @@ def wrap_with_hooks(fn: str, base_call: Callable, mode: str, vault_root: Optiona
     return _wrapped
 
 
+# ============================================================
+# chatbot_turn_context - one line of operator context per chatbot turn
+# ============================================================
+# Why this hook exists: a chatbot turn only shows the model "[Display name] text", and a display name
+# is something anyone can type. The channel layer does know which platform account sent the message,
+# but no plugin could see it, so any rule of the form "this account gets X" had to be baked into the
+# core (PR #659, closed: one tutoring centre's roster). This is the generic seam instead: a plugin
+# hears who sent the turn and may hand back ONE short line of context for the bot's system prompt.
+#
+# Contract (callback(**kwargs), always declare **kwargs):
+#     channel, account_id, bot_id, chat_type ("private" | "group"), chat_id, sender_id,
+#     vault_root (the bot's brain), trial (True on the "Try bot" turn)
+#   returns a str (one line) or None. Anything else is ignored.
+#
+# What the core guarantees, so a careless plugin cannot hurt a reply:
+#   - no plugin registered -> nothing runs and the prompt is byte-for-byte the same as before;
+#   - a raising or slow callback (CHATBOT_CONTEXT_TIMEOUT_S) is logged and skipped, the turn goes on;
+#   - each line is flattened to one line without control characters and cut at CHATBOT_CONTEXT_LINE_MAX,
+#     all lines together at CHATBOT_CONTEXT_TOTAL_MAX;
+#   - the core never writes the sender id into the prompt itself: only what a plugin chose to return.
+CHATBOT_TURN_CONTEXT = "chatbot_turn_context"
+CHATBOT_CONTEXT_LINE_MAX = 300
+CHATBOT_CONTEXT_TOTAL_MAX = 900
+CHATBOT_CONTEXT_TIMEOUT_S = 2.0
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]+")
+
+
+def clean_context_line(value: Any, limit: int = CHATBOT_CONTEXT_LINE_MAX) -> str:
+    """A hook's return value as one safe prompt line, or "" (not a string, or nothing left).
+    Newlines and every control / bidi / zero-width character become one space, so a line can never
+    start a new block of the prompt; the result is cut at `limit` characters."""
+    if not isinstance(value, str):
+        return ""
+    s = re.sub(r"\s+", " ", _CTRL_RE.sub(" ", value)).strip()
+    return s[:max(0, int(limit))].rstrip()
+
+
+def has_chatbot_context_hooks(vault_root: Optional[str] = None) -> bool:
+    return bool(_load_all(vault_root)["hooks"].get(CHATBOT_TURN_CONTEXT))
+
+
+async def _call_with_timeout(cb: Callable, payload: dict, timeout: float):
+    """Run one callback within `timeout` seconds. A sync callback runs in a worker thread so it cannot
+    block the event loop that serves every other chat; past the deadline its thread is abandoned (Python
+    cannot kill it) and its answer, if it ever comes, is dropped."""
+    if inspect.iscoroutinefunction(cb):
+        return await asyncio.wait_for(cb(**payload), timeout)
+    loop = asyncio.get_running_loop()
+    t0 = loop.time()
+    out = await asyncio.wait_for(asyncio.to_thread(cb, **payload), timeout)
+    if inspect.isawaitable(out):
+        out = await asyncio.wait_for(out, max(0.01, timeout - (loop.time() - t0)))
+    return out
+
+
+async def chatbot_turn_context(vault_root: Optional[str], payload: dict,
+                               timeout: Optional[float] = None) -> List[str]:
+    """Fire `chatbot_turn_context` and return the cleaned lines, in plugin load order. [] when no plugin
+    listens, which is the common case. Never raises. `timeout` per callback, default
+    CHATBOT_CONTEXT_TIMEOUT_S (read at call time)."""
+    timeout = CHATBOT_CONTEXT_TIMEOUT_S if timeout is None else float(timeout)
+    try:
+        cbs = list(_load_all(vault_root)["hooks"].get(CHATBOT_TURN_CONTEXT) or [])
+    except Exception as e:      # noqa: BLE001 - a broken plugin host must not cost a reply
+        print(f"[plugins] hook {CHATBOT_TURN_CONTEXT}: load failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return []
+    lines: List[str] = []
+    used = 0
+    for cb in cbs:
+        if used >= CHATBOT_CONTEXT_TOTAL_MAX:
+            break
+        try:
+            out = await _call_with_timeout(cb, dict(payload), timeout)   # a fresh copy: one hook cannot edit the next one's view
+        except asyncio.TimeoutError:
+            print(f"[plugins] hook {CHATBOT_TURN_CONTEXT}: {getattr(cb, '__qualname__', cb)} "
+                  f"timed out after {timeout}s, skipped", file=sys.stderr)
+            continue
+        except Exception as e:      # noqa: BLE001
+            print(f"[plugins] hook {CHATBOT_TURN_CONTEXT} failed: {type(e).__name__}: {e}", file=sys.stderr)
+            continue
+        line = clean_context_line(out, min(CHATBOT_CONTEXT_LINE_MAX, CHATBOT_CONTEXT_TOTAL_MAX - used))
+        if line:
+            lines.append(line)
+            used += len(line)
+    return lines
+
+
 def fire_hook(event: str, vault_root: Optional[str] = None, **payload) -> None:
     """Bắn 1 hook đồng bộ từ code không-async (tasks/loops sau này). Best-effort."""
     try:
@@ -1138,9 +1238,8 @@ def set_enabled(slug: str, enabled: bool, vault_root: Optional[str] = None) -> d
     invalidate()
     gated = bool(enabled and not _env_user_enabled())
     note = localefmt.chu(
-        "Đã bật trong manifest NHƯNG plugin do người dùng cài chỉ chạy khi đặt biến môi trường "
-        "JAVIS_ENABLE_USER_PLUGINS=true rồi khởi động lại (bảo vệ chống chạy code lạ).",
-        "Enabled in the manifest, BUT user-installed plugins only run once the environment variable "
-        "JAVIS_ENABLE_USER_PLUGINS=true is set and Javis is restarted (protection against running "
-        "unknown code).") if gated else ""
+        "Đã bật trong manifest NHƯNG máy này đang tắt plugin do người dùng cài bằng "
+        "JAVIS_ENABLE_USER_PLUGINS=false. Bỏ biến đó (hoặc đặt true) rồi khởi động lại để chạy.",
+        "Enabled in the manifest, BUT this machine turns user-installed plugins off with "
+        "JAVIS_ENABLE_USER_PLUGINS=false. Remove it (or set it to true) and restart to run it.") if gated else ""
     return {"ok": True, "source": source, "gated": gated, "note": note}

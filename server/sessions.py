@@ -30,6 +30,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import hashlib
+
+import reaction_values as RV
 import team_migration
 
 # DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/).
@@ -50,6 +53,54 @@ KENH_BOT = ("bot:",)
 # Nhóm chat team: phiên chung của nhóm (`team:<id>`) và mạch engine riêng của từng thành viên (`teammate:<id>:<mã>`).
 # Chúng thuộc trang Nhóm, không hiện ở lịch sử trang Trò chuyện.
 KENH_TEAM = ("team:", "teammate:")
+
+# T2 (0.154.0, thiết kế 2026-10-15 mục 4.1): reaction trên câu trả lời của chat riêng. Kho có từ trước được chụp một bản
+# `conversations.db.pre-0.154.0` trước khi tạo bảng (khôi phục khi hạ phiên bản; bản cũ bỏ qua hai bảng mới).
+DM_REACTION_SNAPSHOT_SUFFIX = ".pre-0.154.0"
+# Tin nhóm được ghim làm quyết định: `meta_json` do json.dumps mặc định ghi `"decision": true` (T4, 0.170.0).
+TEAM_DECISION_LIKE = '%"decision": true%'
+_DM_REACTION_SQL = """
+CREATE TABLE IF NOT EXISTS dm_reactions (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    message_id INTEGER NOT NULL, reactor TEXT NOT NULL, source_kind TEXT NOT NULL DEFAULT 'owner',
+    agent_key TEXT NOT NULL DEFAULT '', agent_config_version INTEGER NOT NULL DEFAULT 0, value TEXT,
+    reasons_json TEXT NOT NULL DEFAULT '[]', axis TEXT NOT NULL DEFAULT '', comment TEXT NOT NULL DEFAULT '',
+    content_sha TEXT NOT NULL DEFAULT '', seen_sha TEXT, stale INTEGER NOT NULL DEFAULT 0,
+    goal_id TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0, log_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'received', status_reason TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL, updated_at REAL NOT NULL,
+    PRIMARY KEY(session_id, message_id, reactor)
+);
+CREATE INDEX IF NOT EXISTS dm_reactions_agent ON dm_reactions(agent_key, updated_at);
+CREATE TABLE IF NOT EXISTS dm_reaction_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    message_id INTEGER NOT NULL, reactor TEXT NOT NULL, agent_key TEXT NOT NULL DEFAULT '',
+    goal_id TEXT NOT NULL DEFAULT '', source_kind TEXT NOT NULL DEFAULT 'owner',
+    prev_json TEXT, next_json TEXT, nonce TEXT NOT NULL UNIQUE,
+    effect_state TEXT NOT NULL DEFAULT 'pending', effect_refs_json TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dm_reaction_log_effect ON dm_reaction_log(effect_state);
+CREATE INDEX IF NOT EXISTS dm_reaction_log_pair ON dm_reaction_log(session_id, message_id, reactor, id);
+"""
+
+
+def content_sha(text: Any) -> str:
+    """Hash nội dung ĐÃ LƯU của một tin (đã bóc khối điều khiển trước khi lưu), dùng chung cho chat riêng và nhóm."""
+    raw = text if isinstance(text, str) else ("" if text is None else json.dumps(text, ensure_ascii=False))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class DmReactionError(Exception):
+    """Lỗi của thao tác reaction chat riêng kèm mã HTTP (400 thân sai, 404 không có tin, 409 xung đột). `en`: bản tiếng
+    Anh của câu lỗi (route hiện theo ngôn ngữ giao diện)."""
+
+    def __init__(self, code: int, message: str, en: str = ""):
+        super().__init__(message)
+        self.code = int(code)
+        self.vi = message
+        self.en = en or message
 
 
 def loc_brain(brain, cot: str = "s.brain"):
@@ -381,6 +432,7 @@ class SessionStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # 0.140.0: kho có từ trước thì chụp một bản trước khi thêm cột người gửi (khôi phục khi hạ phiên bản).
         team_migration.snapshot_once(self.db_path, "messages", "author_kind")
+        team_migration.snapshot_before_table(self.db_path, "messages", "dm_reactions", DM_REACTION_SNAPSHOT_SUFFIX)
 
         self._conn = sqlite3.connect(
             str(self.db_path),
@@ -478,6 +530,15 @@ class SessionStore:
             self._conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client "
                 "ON messages(session_id, client_msg_id) WHERE client_msg_id IS NOT NULL")
+            # Lịch sử dài của nhóm (T4, 0.170.0): sổ quyết định ghim và "tin mới nhất của agent X" là truy vấn theo chỉ
+            # mục, không quét cả phiên nhóm hàng nghìn tin mỗi lượt. Chỉ mục từng phần: chat thường (author_ref NULL,
+            # không có quyết định ghim) không vào chỉ mục. Chỉ thêm chỉ mục, bản cũ bỏ qua.
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_messages_team_author "
+                "ON messages(session_id, author_ref, id) WHERE author_ref IS NOT NULL")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_messages_team_decision "
+                f"ON messages(session_id, id) WHERE meta_json LIKE '{TEAM_DECISION_LIKE}'")
             # Hướng dẫn riêng của project, ghép vào system prompt mỗi lượt chat trong đó.
             cols_p = {r[1] for r in self._conn.execute(
                 "PRAGMA table_info(projects)").fetchall()}
@@ -486,6 +547,7 @@ class SessionStore:
                 if name not in cols_p:
                     self._conn.execute(
                         f"ALTER TABLE projects ADD COLUMN {name} {ddl}")
+            self._conn.executescript(_DM_REACTION_SQL)
             if self._probe_fts5():
                 try:
                     self._conn.executescript(_FTS_SQL)
@@ -627,6 +689,8 @@ class SessionStore:
             d["meta"] = json.loads(raw) if raw else {}
         except Exception:
             d["meta"] = {}
+        # T2: hash nội dung đã lưu (sau khi bỏ khối điều khiển) để giao diện gửi lại `seen_sha` khi thả reaction.
+        d["content_sha"] = content_sha(d.get("content"))
         return d
 
     _TEAM_COLS = ("id, role, content, ts, author_kind, author_ref, client_msg_id, reply_to, task_id, step_id, "
@@ -720,8 +784,9 @@ class SessionStore:
 
     def team_decisions(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Tin chủ nhóm ghim làm quyết định ("Sổ quyết định", spec 11.2), cũ trước, tối đa `limit` tin gần nhất."""
-        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE ? "
-                          "ORDER BY id DESC LIMIT ?", (session_id, '%"decision": true%', max(1, int(limit))))
+        # Mẫu LIKE viết thẳng (không qua tham số) để SQLite dùng được chỉ mục từng phần `idx_messages_team_decision`.
+        rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE "
+                          f"'{TEAM_DECISION_LIKE}' ORDER BY id DESC LIMIT ?", (session_id, max(1, int(limit))))
         return [m for m in (self._team_msg(r) for r in reversed(rows)) if m["meta"].get("decision") is True]
 
     def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:
@@ -739,6 +804,13 @@ class SessionStore:
             conn.execute("UPDATE messages SET meta_json=? WHERE session_id=? AND id=?",
                          (json.dumps(meta, ensure_ascii=False), session_id, int(message_id)))
             return True
+        return self._write(_do)
+
+    def set_message_reply(self, session_id: str, message_id: int, reply_to: Optional[int]) -> bool:
+        """Gắn `reply_to` cho một tin (vd. bản sửa của lượt xem xét reaction ở chat riêng trả lời tin bị phản hồi)."""
+        def _do(conn):
+            return conn.execute("UPDATE messages SET reply_to=? WHERE session_id=? AND id=?",
+                                (None if reply_to is None else int(reply_to), session_id, int(message_id))).rowcount == 1
         return self._write(_do)
 
     def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
@@ -821,8 +893,11 @@ class SessionStore:
 
     @staticmethod
     def _tin(r: sqlite3.Row) -> Dict[str, Any]:
-        """Một dòng bảng messages -> dict trả ra ngoài (mở gói tool_calls_json)."""
+        """Một dòng bảng messages -> dict trả ra ngoài (mở gói tool_calls_json). T2: kèm `content_sha` của nội dung đã
+        lưu, để giao diện gửi lại (`seen_sha`) khi thả reaction."""
         d = dict(r)
+        if "content" in d:
+            d["content_sha"] = content_sha(d.get("content"))
         if d.get("tool_calls_json"):
             try:
                 d["tool_calls"] = json.loads(d["tool_calls_json"])
@@ -833,6 +908,250 @@ class SessionStore:
         if metadata:
             d["voice_metadata"] = json.loads(metadata)
         return d
+
+    # ───────────── reaction chat riêng (T2, thiết kế mục 4.1, hợp đồng mục 4) ─────────────
+
+    def message_row(self, session_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+        """Một tin của phiên (id, role, content, ts), None khi không có trong ĐÚNG phiên này."""
+        rows = self._read("SELECT id, session_id, role, content, ts FROM messages WHERE id = ? AND session_id = ?",
+                          (int(message_id), session_id))
+        return dict(rows[0]) if rows else None
+
+    def messages_by_ids(self, ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        ids = [int(x) for x in ids or []]
+        if not ids:
+            return {}
+        rows = self._read(f"SELECT id, session_id, role, content, ts FROM messages WHERE id IN "
+                          f"({','.join('?' * len(ids))})", tuple(ids))
+        return {int(r["id"]): dict(r) for r in rows}
+
+    @staticmethod
+    def _dm_reaction(r: sqlite3.Row) -> Dict[str, Any]:
+        d = dict(r)
+        d["reasons"] = json.loads(d.pop("reasons_json", None) or "[]")
+        d["stale"] = bool(d.get("stale"))
+        d["message_id"] = int(d["message_id"])
+        return d
+
+    @staticmethod
+    def _dm_state_json(r: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
+        if r is None:
+            return None
+        return {"value": r["value"], "reasons": json.loads(r["reasons_json"] or "[]"), "axis": r["axis"],
+                "comment": r["comment"], "content_sha": r["content_sha"], "source_kind": r["source_kind"]}
+
+    def set_dm_reaction(self, session_id: str, message_id: int, *, value: Any, reasons: Any = None, axis: Any = "",
+                        comment: Any = "", nonce: Any = "", seen_sha: Optional[str] = None, agent_key: str = "",
+                        agent_config_version: int = 0, goal_id: str = "", reactor: str = "owner",
+                        source_kind: str = "owner", effect_state: str = "pending",
+                        status: str = "received", status_reason: str = "") -> Dict[str, Any]:
+        """Đặt trọn trạng thái phản hồi của `reactor` trên một câu trả lời của chat riêng. Trả
+        {"state": dòng reaction (None khi đã bỏ hết), "log_id", "replayed"}.
+
+        - Chỉ tin `role = assistant` của ĐÚNG phiên nhận reaction (404 không có, 409 không phải câu trả lời).
+        - `content_sha` tính trên nội dung đã lưu; `seen_sha` lệch thì `stale = 1`, vẫn nhận.
+        - `nonce` trùng cho cùng tin và người phản hồi: không ghi thêm, trả trạng thái hiện tại; trùng cho tin khác: 409.
+        - Mỗi lần đổi ghi một dòng `dm_reaction_log` (trước/sau, `effect_state = 'pending'` cho bộ chiếu phản hồi)."""
+        try:
+            n = RV.normalize(value, reasons, axis, comment, nonce)
+        except RV.ReactionInputError as ex:
+            raise DmReactionError(400, ex.vi, ex.en)
+        if source_kind not in RV.SOURCE_KINDS:
+            raise DmReactionError(400, "nguồn phản hồi không hợp lệ")
+        mid = int(message_id)
+        seen = str(seen_sha).strip()[:128] if seen_sha else None
+        key = (session_id, mid, reactor)
+
+        def _do(conn):
+            msg = conn.execute("SELECT role, content FROM messages WHERE id = ? AND session_id = ?",
+                               (mid, session_id)).fetchone()
+            if msg is None:
+                raise DmReactionError(404, "không có tin này trong phiên", "no such message in this session")
+            if msg["role"] != "assistant":
+                raise DmReactionError(409, "chỉ câu trả lời mới nhận reaction", "only replies take reactions")
+            sha = content_sha(msg["content"])
+            hit = conn.execute("SELECT id, session_id, message_id, reactor FROM dm_reaction_log WHERE nonce = ?",
+                               (n["nonce"],)).fetchone()
+            if hit is not None and (hit["session_id"], int(hit["message_id"]), hit["reactor"]) != key:
+                raise DmReactionError(409, "nonce đã dùng cho một tin khác", "this nonce was used for another message")
+            log_id = int(hit["id"]) if hit is not None else None
+            if hit is None:
+                now = time.time()
+                old = conn.execute("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? "
+                                   "AND reactor = ?", key).fetchone()
+                nxt = None if RV.is_empty(n) else {"value": n["value"], "reasons": n["reasons"], "axis": n["axis"],
+                                                   "comment": n["comment"], "content_sha": sha,
+                                                   "source_kind": source_kind}
+                cur = conn.execute(
+                    "INSERT INTO dm_reaction_log (session_id, message_id, reactor, agent_key, goal_id, source_kind, "
+                    "prev_json, next_json, nonce, effect_state, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (session_id, mid, reactor, agent_key or "", goal_id or "", source_kind,
+                     json.dumps(self._dm_state_json(old), ensure_ascii=False) if old is not None else None,
+                     json.dumps(nxt, ensure_ascii=False) if nxt is not None else None, n["nonce"], effect_state, now))
+                log_id = int(cur.lastrowid)
+                rev = int(conn.execute("SELECT COUNT(*) FROM dm_reaction_log WHERE session_id = ? AND message_id = ? "
+                                       "AND reactor = ?", key).fetchone()[0])
+                if nxt is None:
+                    conn.execute("DELETE FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
+                                 key)
+                else:
+                    conn.execute(
+                        "INSERT INTO dm_reactions (session_id, message_id, reactor, source_kind, agent_key, "
+                        "agent_config_version, value, reasons_json, axis, comment, content_sha, seen_sha, stale, "
+                        "goal_id, revision, log_id, status, status_reason, created_at, updated_at) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+                        "ON CONFLICT(session_id, message_id, reactor) DO UPDATE SET source_kind=excluded.source_kind, "
+                        "agent_key=excluded.agent_key, agent_config_version=excluded.agent_config_version, "
+                        "value=excluded.value, reasons_json=excluded.reasons_json, axis=excluded.axis, "
+                        "comment=excluded.comment, content_sha=excluded.content_sha, seen_sha=excluded.seen_sha, "
+                        "stale=excluded.stale, goal_id=excluded.goal_id, revision=excluded.revision, "
+                        "log_id=excluded.log_id, status=excluded.status, status_reason=excluded.status_reason, "
+                        "updated_at=excluded.updated_at",
+                        (session_id, mid, reactor, source_kind, agent_key or "", int(agent_config_version or 0),
+                         n["value"], json.dumps(n["reasons"], ensure_ascii=False), n["axis"], n["comment"], sha, seen,
+                         1 if seen and seen != sha else 0, goal_id or "", rev, log_id, status, status_reason, now,
+                         now))
+            r = conn.execute("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
+                             key).fetchone()
+            return {"state": self._dm_reaction(r) if r else None, "log_id": log_id, "replayed": hit is not None}
+        return self._write(_do)
+
+    def dm_nonce_owner(self, nonce: str) -> Optional[Tuple[str, int, str]]:
+        """(session_id, message_id, reactor) đã dùng `nonce`, None khi chưa dùng (route kiểm gửi lại TRƯỚC khi tra tác giả)."""
+        rows = self._read("SELECT session_id, message_id, reactor FROM dm_reaction_log WHERE nonce = ?",
+                          (str(nonce or "").strip(),))
+        return (rows[0]["session_id"], int(rows[0]["message_id"]), rows[0]["reactor"]) if rows else None
+
+    def pending_author_dm_logs(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Dòng nhật ký chờ tra tác giả (`effect_state = 'pending_author'`: kho resonance lỗi lúc thả reaction)."""
+        return [self._dm_log(r) for r in self._read(
+            "SELECT * FROM dm_reaction_log WHERE effect_state = 'pending_author' ORDER BY id LIMIT ?", (int(limit),))]
+
+    def set_dm_reaction_author(self, log_id: int, agent_key: str, agent_config_version: int = 0) -> None:
+        """Gắn tác giả đã tra được cho một dòng `pending_author` (và reaction nếu còn ở đúng lần đổi đó), rồi đưa dòng về
+        `pending` để bộ chiếu áp tác động."""
+        def _do(conn):
+            r = conn.execute("SELECT * FROM dm_reaction_log WHERE id = ? AND effect_state = 'pending_author'",
+                             (int(log_id),)).fetchone()
+            if r is None:
+                return
+            conn.execute("UPDATE dm_reaction_log SET agent_key = ?, effect_state = 'pending' WHERE id = ?",
+                         (agent_key or "", int(log_id)))
+            conn.execute("UPDATE dm_reactions SET agent_key = ?, agent_config_version = ? WHERE session_id = ? "
+                         "AND message_id = ? AND reactor = ? AND log_id = ?",
+                         (agent_key or "", int(agent_config_version or 0), r["session_id"], int(r["message_id"]),
+                          r["reactor"], int(log_id)))
+        self._write(_do)
+
+    def dm_reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[Dict[str, Any]]:
+        rows = self._read("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
+                          (session_id, int(message_id), reactor))
+        return self._dm_reaction(rows[0]) if rows else None
+
+    def dm_reactions_for(self, session_id: str, message_ids: List[int], reactor: str = "owner") -> Dict[int, Dict]:
+        """{message_id: reaction} của `reactor` cho một khúc tin (một lần đọc)."""
+        ids = [int(x) for x in message_ids or []]
+        if not ids:
+            return {}
+        rows = self._read(f"SELECT * FROM dm_reactions WHERE session_id = ? AND reactor = ? AND message_id IN "
+                          f"({','.join('?' * len(ids))})", tuple([session_id, reactor] + ids))
+        return {int(r["message_id"]): self._dm_reaction(r) for r in rows}
+
+    @staticmethod
+    def _dm_log(r: sqlite3.Row) -> Dict[str, Any]:
+        d = dict(r)
+        d["prev"] = json.loads(d["prev_json"]) if d.get("prev_json") else None
+        d["next"] = json.loads(d["next_json"]) if d.get("next_json") else None
+        d["effect_refs"] = json.loads(d.get("effect_refs_json") or "{}")
+        return d
+
+    def dm_reaction_log(self, session_id: str, message_id: int) -> List[Dict[str, Any]]:
+        return [self._dm_log(r) for r in self._read(
+            "SELECT * FROM dm_reaction_log WHERE session_id = ? AND message_id = ? ORDER BY id",
+            (session_id, int(message_id)))]
+
+    def dm_reaction_log_row(self, log_id: int) -> Optional[Dict[str, Any]]:
+        rows = self._read("SELECT * FROM dm_reaction_log WHERE id = ?", (int(log_id),))
+        return self._dm_log(rows[0]) if rows else None
+
+    def pending_dm_reaction_logs(self, limit: int = 200) -> List[Dict[str, Any]]:
+        return [self._dm_log(r) for r in self._read(
+            "SELECT * FROM dm_reaction_log WHERE effect_state = 'pending' ORDER BY id LIMIT ?", (int(limit),))]
+
+    def dm_pair_logs(self, session_id: str, message_id: int, reactor: str) -> List[Dict[str, Any]]:
+        return [self._dm_log(r) for r in self._read(
+            "SELECT * FROM dm_reaction_log WHERE session_id = ? AND message_id = ? AND reactor = ? ORDER BY id",
+            (session_id, int(message_id), reactor))]
+
+    def mark_dm_reaction_effects(self, log_ids: List[int], state: str, refs: Optional[Dict[str, Any]] = None) -> None:
+        ids = [int(x) for x in log_ids or []]
+        if not ids:
+            return
+        payload = json.dumps(refs, ensure_ascii=False, sort_keys=True) if refs is not None else None
+        self._write(lambda c: c.execute(
+            f"UPDATE dm_reaction_log SET effect_state = ?, effect_refs_json = COALESCE(?, effect_refs_json) "
+            f"WHERE id IN ({','.join('?' * len(ids))})", tuple([state, payload] + ids)))
+
+    def set_dm_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: Optional[int],
+                               status: str, reason: str = "") -> Optional[Dict[str, Any]]:
+        """Host ghi trạng thái hiển thị (bộ chiếu, lượt xem xét), chỉ khi reaction còn ở đúng lần đổi `log_id`."""
+        if status not in RV.STATUSES:
+            raise DmReactionError(400, "trạng thái reaction không hợp lệ")
+
+        def _do(conn):
+            q = ("UPDATE dm_reactions SET status = ?, status_reason = ? WHERE session_id = ? AND message_id = ? "
+                 "AND reactor = ?")
+            args = [status, str(reason or "")[:300], session_id, int(message_id), reactor]
+            if log_id is not None:
+                q += " AND log_id = ?"
+                args.append(int(log_id))
+            if conn.execute(q, tuple(args)).rowcount != 1:
+                return None
+            r = conn.execute("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
+                             (session_id, int(message_id), reactor)).fetchone()
+            return self._dm_reaction(r) if r else None
+        return self._write(_do)
+
+    def dm_open_reaction_logs(self, statuses, limit: int = 200) -> List[int]:
+        """Mã lần đổi (`log_id`) của các reaction đang ở một trong `statuses` (bộ chiếu ghi ngược trạng thái)."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        rows = self._read(f"SELECT log_id FROM dm_reactions WHERE log_id IS NOT NULL AND status IN "
+                          f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
+        return [int(r["log_id"]) for r in rows]
+
+    def dm_open_reaction_rows(self, statuses, limit: int = 200) -> List[Dict[str, Any]]:
+        """Như `dm_open_reaction_logs` nhưng trả cả reaction (một câu đọc) cho đối soát theo lô của bộ chiếu."""
+        st = [str(x) for x in statuses or []]
+        if not st:
+            return []
+        rows = self._read(f"SELECT * FROM dm_reactions WHERE log_id IS NOT NULL AND status IN "
+                          f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
+        return [self._dm_reaction(r) for r in rows]
+
+    def dm_reaction_log_rows(self, log_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
+        ids = sorted({int(x) for x in log_ids or []})
+        if not ids:
+            return {}
+        rows = self._read(f"SELECT * FROM dm_reaction_log WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))
+        return {int(r["id"]): self._dm_log(r) for r in rows}
+
+    def recent_dm_feedback(self, agent_key: str, since: float, limit: int = 15,
+                           reactor: str = "owner") -> List[Dict[str, Any]]:
+        """Phản hồi còn hiệu lực của `reactor` trên câu trả lời của ĐÚNG agent `agent_key` ở chat riêng (mọi phiên
+        `agent:<slug>` của agent đó gộp chung, ngữ cảnh `dm:<agent_key>`), mới nhất trước."""
+        if not agent_key:
+            return []
+        return [self._dm_reaction(r) for r in self._read(
+            "SELECT * FROM dm_reactions WHERE agent_key = ? AND reactor = ? AND updated_at >= ? "
+            "ORDER BY updated_at DESC, message_id DESC LIMIT ?", (agent_key, reactor, float(since), int(limit)))]
+
+    def _set_dm_reaction_time(self, session_id: str, message_id: int, ts: float) -> None:
+        """Chỉ cho test: đặt lùi mốc cập nhật của một phản hồi."""
+        self._write(lambda c: c.execute("UPDATE dm_reactions SET updated_at = ? WHERE session_id = ? AND message_id = ?",
+                                        (float(ts), session_id, int(message_id))))
 
     def get_messages(self, session_id: str) -> List[Dict[str, Any]]:
         rows = self._read(
@@ -937,7 +1256,9 @@ class SessionStore:
                     ORDER BY ts, id LIMIT 1) AS preview
             FROM sessions s
             {where_sql}
-            ORDER BY s.pinned DESC, s.updated_at DESC
+            -- rowid breaks a tie on updated_at (two writes in one time.time() tick): the
+            -- row created later counts as newer, never left to SQLite's scan order.
+            ORDER BY s.pinned DESC, s.updated_at DESC, s.rowid DESC
             LIMIT ?
             """,
             tuple(params),
@@ -1052,7 +1373,7 @@ class SessionStore:
                        AS has_instructions
             FROM projects p
             {where_sql}
-            ORDER BY p.pinned DESC, p.updated_at DESC
+            ORDER BY p.pinned DESC, p.updated_at DESC, p.rowid DESC
             """,
             params,
         )
@@ -1083,12 +1404,15 @@ class SessionStore:
         p = self.get_project(project_id)
         if not p:
             return None
+        # `rowid DESC` breaks added_at ties by insertion order: two adds in the same clock
+        # tick (common on a fast Windows box) otherwise came back in whatever order SQLite
+        # chose. Same tie-break in list_session_files / list_session_links.
         p["files"] = [dict(r) for r in self._read(
             "SELECT id, path, name, pinned, added_at FROM project_files "
-            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC", (project_id,))]
+            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (project_id,))]
         p["links"] = [dict(r) for r in self._read(
             "SELECT id, url, label, pinned, added_at FROM project_links "
-            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC", (project_id,))]
+            "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (project_id,))]
         return p
 
     def update_project(self, project_id: str, *, name: Optional[str] = None,
@@ -1218,12 +1542,12 @@ class SessionStore:
     def list_session_files(self, session_id: str) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, path, name, pinned, added_at FROM session_files "
-            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC", (session_id,))]
+            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
     def list_session_links(self, session_id: str) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, url, label, pinned, added_at FROM session_links "
-            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC", (session_id,))]
+            "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
     def add_session_file(self, session_id: str, path: str, name: str = "") -> Optional[str]:
         """Gắn một file có sẵn trong brain vào cuộc trò chuyện. Trùng đường dẫn thì trả id cũ.

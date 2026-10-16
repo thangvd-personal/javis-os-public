@@ -32,8 +32,8 @@
   <!-- Biến --ic-* cho icon dùng trong content: của CSS. Phải đứng TRƯỚC style.css
        vì style.css tham chiếu các biến này. -->
   <link rel="stylesheet" href="/static/vendor/lucide-icons.css?v=1">
-  <link rel="stylesheet" href="/static/style.css?v=109">
-  <link rel="stylesheet" href="/static/console.css?v=79">
+  <link rel="stylesheet" href="/static/style.css?v=113">
+  <link rel="stylesheet" href="/static/console.css?v=84">
   <!-- Áp tông đã lưu TRƯỚC khi vẽ để không nháy tối rồi mới đổi sang sáng.
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
        Chế độ "auto" (0.74.0, mặc định khi chưa chọn gì từ 0.75.1) tính theo khung giờ "HH:MM-HH:MM", cùng quy tắc với lightAt() trong
@@ -486,18 +486,17 @@
          là nó đi theo, không bị bỏ lại như thanh #toolBar cũ. -->
     <div class="bg-strip" id="bgStrip" hidden></div>
 
-    <!-- Hàng chip riêng của trang Coding (trang đó chèn chip vào đây trên máy tính). Ở trang chủ rỗng
-         nên ẩn (.model-bar:empty). Chip model đã dời vào khung gõ từ 0.153.0. -->
+    <!-- The Coding page's own chip row (that page inserts its chips here on desktop). Empty on the home
+         page, so hidden (.model-bar:empty). The model chip moved into the composer in 0.153.0. -->
     <div class="model-bar" id="modelBar"></div>
 
-    <!-- ===== Khung gõ: MỘT khung bo tròn kiểu Claude (0.153.0) =====
-         Trên: ảnh và file đính kèm. Giữa: ô gõ. Dưới: nút "+", chip model, chip mức suy nghĩ,
-         tia sét Fast mode, rồi mic và gửi. Popover mở lên trên khung. -->
+    <!-- ===== Composer: ONE rounded card in the style of Claude (0.153.0) =====
+         Top: attached images and files. Middle: text box. Bottom: "+", model chip, effort chip,
+         Fast mode bolt, pinned folder chip, then mic and send. Popovers open above the card. -->
     <div class="hud-voice" id="hudVoice">
       <button id="voiceFocusResume" class="voice-focus-resume" hidden></button>
       <div class="attach-bar" id="attachBar"></div>
       <input type="file" id="fileInput" multiple style="display:none">
-      <input type="file" id="folderInput" webkitdirectory multiple style="display:none">
       <textarea id="chatInput" class="voice-input" placeholder="Bạn muốn tôi làm điều gì?" data-i18n-ph="bar.input_ph" rows="1"></textarea>
       <div class="cp-row" id="cpRow">
         <button type="button" class="cp-plus" id="plusBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="plusMenu"
@@ -870,7 +869,11 @@
   <!-- Lệnh "/" hệ thống (/status /model /compact /plan /goal ...): chạy lệnh mà chat-slash.js vừa nhận
        diện. Phải nạp TRƯỚC app.js (sendMessage gọi window.JavisLenh) và SAU chat-slash.js (đọc menu). -->
   <script src="/static/chat-lenh.js?v=1"></script>
-  <script src="/static/chat-acts.js?v=2"></script>
+  <script src="/static/chat-acts.js?v=4"></script>
+  <script src="/static/chat-quote.js?v=2"></script>
+  <!-- Sáu reaction dùng chung (T2 0.154.0): nạp TRƯỚC chat-reactions.js, app.js, teams.js và mobile-chat.js. -->
+  <script src="/static/reactions.js?v=1"></script>
+  <script src="/static/chat-reactions.js?v=1"></script>
   <script src="/static/chat-marks.js?v=3"></script>
   <!-- Khối tiến trình từng bước trong khung chat: phải đứng TRƯỚC app.js vì app.js gọi
        window.JavisSteps ngay khi khung tool_call đầu tiên về. -->
@@ -887,15 +890,16 @@
   <script src="/static/voice-live.js?v=6"></script>
   <script src="/static/screen-awake.js?v=1"></script>
   <script src="/static/call-bar.js?v=1"></script>
-  <script src="/static/app.js?v=131"></script>
+  <script src="/static/app.js?v=133"></script>
   <!-- Sau app.js: dải việc nền đọc window.JavisSessions (app.js dựng) để biết phiên + brain. -->
   <script src="/static/background-strip.js?v=3"></script>
   <!-- Thân bảng chọn model dùng chung: phải đứng TRƯỚC model-picker.js (thanh chat) và
        studio.js (ô Model của trợ lý) vì cả hai gọi window.JavisModelList lúc vẽ. -->
   <script src="/static/model-list.js?v=3"></script>
-  <script src="/static/effort-slider.js?v=1"></script>
-  <script src="/static/model-picker.js?v=11"></script>
+  <script src="/static/effort-slider.js?v=2"></script>
+  <script src="/static/model-picker.js?v=13"></script>
   <script src="/static/composer-plus.js?v=3"></script>
+  <script src="/static/composer-folder.js?v=2"></script>
   <script src="/static/branding.js?v=7"></script>
   <script src="/static/quick-settings.js?v=11"></script>
   <script src="/static/chat-zoom.js?v=6"></script>
@@ -905,18 +909,25 @@
   <!-- Trang Cộng sự: nạp SAU studio.js (mượn trình sửa agent/workflow của Studio) và TRƯỚC
        console.js (renderWorkspace ủy quyền cho window.JavisWorkspace). -->
   <!-- Tab Công việc của trợ lý (0.142.0): nạp TRƯỚC workspace.js, workspace.js gọi window.JavisAgentJobs. -->
-  <script src="/static/agent-jobs.js?v=1"></script>
-  <script src="/static/workspace.js?v=18"></script>
+  <script src="/static/agent-jobs.js?v=2"></script>
+  <script src="/static/agent-pulse.js?v=1"></script>
+  <script src="/static/pulse-seen.js?v=1"></script>
+  <script src="/static/agent-lessons-ui.js?v=1"></script>
+  <script src="/static/workspace.js?v=20"></script>
   <script src="/static/packs.js?v=1"></script>
   <!-- Hộp chọn thành viên kiểu Zalo (0.142.0): nạp TRƯỚC teams.js, teams.js gọi window.JavisTeamPicker. -->
   <script src="/static/team-picker.js?v=1"></script>
-  <script src="/static/teams.js?v=1"></script>
+  <!-- Bộ phán xử nói / chờ / im của từng trợ lý (T3 phần J 0.156.0): lịch sử quyết định và nút sửa. Nạp TRƯỚC teams.js
+       (ngăn Nhóm gọi window.JavisAgentJudge.hydrate); góp phần "judge" vào khung nhịp qua window.JavisPulseParts. -->
+  <script src="/static/agent-judge-ui.js?v=1"></script>
+  <script src="/static/teams.js?v=2"></script>
   <script src="/static/chatbots-reply-policy.js?v=1"></script>
   <script src="/static/chatbots-try.js?v=1"></script>
   <script src="/static/chatbots.js?v=17"></script>
   <!-- Trang Hội thoại (hộp thư khách): nạp TRƯỚC console.js để renderConversations uỷ quyền được. -->
   <script src="/static/conversations-filters.js?v=1"></script>
-  <script src="/static/conversations.js?v=6"></script>
+  <script src="/static/ht-media.js?v=2"></script>
+  <script src="/static/conversations.js?v=8"></script>
   <!-- Dashboard Token (trang Mức dùng nâng cấp): nạp TRƯỚC console.js để renderUsage ủy quyền được. -->
   <script src="/static/usage.js?v=1"></script>
   <!-- Trang Code (terminal): nạp TRƯỚC console.js để renderCode ủy quyền được. File này CHỈ có
@@ -926,12 +937,12 @@
   <script src="/static/folder-picker.js?v=2"></script>
   <!-- Trang Coding (nhóm Code): mượn khung chat của app, nên nạp TRƯỚC console.js y như
        workspace.js để renderCoding uỷ quyền được. -->
-  <script src="/static/coding.js?v=7"></script>
+  <script src="/static/coding.js?v=9"></script>
   <!-- Console layer: console.js đăng ký store TRƯỚC khi Alpine khởi động (defer) -->
   <!-- Phần đọc cấu hình của form "Tự thêm MCP" (thuần, có test node). Nạp TRƯỚC console.js. -->
   <script src="/static/mcp-form-parse.js?v=1"></script>
   <script src="/static/console.js?v=171"></script>
-  <script src="/static/mobile-chat.js?v=12"></script>
+  <script src="/static/mobile-chat.js?v=13"></script>
   <script src="/static/brain-view.js?v=1"></script>
   <script src="/static/push.js?v=2"></script>
   <script src="/static/install-nudge.js?v=1"></script>

@@ -1,11 +1,10 @@
-/* composer-plus.js - menu "+" của khung gõ (0.153.0).
- * Một sổ đăng ký: tính năng mới chỉ cần JavisComposerMenu.register({...}), không sửa khung gõ.
- * Phần thuần (sổ, lọc thư mục, hàng đợi) test bằng node.
+/* composer-plus.js - the composer's "+" menu (0.153.0).
+ * One registry: a new feature only calls JavisComposerMenu.register({...}), the composer is not touched.
+ * Items are `run` (click and close), `submenu` (returns rows) or `panel` (draws its own body, 0.158.0).
+ * Pure parts are exported for node tests.
  */
 (function () {
   "use strict";
-  var MAX_FOLDER_FILES = 50, UPLOAD_PARALLEL = 4;
-  var SKIP_DIR = /(^|\/)(\.git|node_modules|__pycache__|\.venv|\.obsidian|\.trash)(\/|$)/;
 
   function createRegistry() {
     var items = [];
@@ -18,64 +17,20 @@
       list: function () { return items.slice(); },
     };
   }
-  function pickFolderFiles(files) {
-    var keep = [], skipped = 0;
-    Array.prototype.forEach.call(files || [], function (f) {
-      var rel = String(f.webkitRelativePath || f.name || "");
-      var base = rel.split("/").pop();
-      if (SKIP_DIR.test(rel) || base.charAt(0) === ".") { skipped++; return; }
-      keep.push(f);
-    });
-    return { files: keep.slice(0, MAX_FOLDER_FILES), skipped: skipped, over: Math.max(0, keep.length - MAX_FOLDER_FILES) };
-  }
-  function runQueue(list, work, parallel) {
-    var i = 0;
-    function next() {
-      if (i >= list.length) return Promise.resolve();
-      var x = list[i++];
-      return Promise.resolve().then(function () { return work(x); }).catch(function () { }).then(next);
-    }
-    var lanes = [];
-    for (var k = 0; k < Math.min(parallel || UPLOAD_PARALLEL, list.length); k++) lanes.push(next());
-    return Promise.all(lanes);
-  }
-
-  // Thư mục: xếp hàng MỌI file vào danh sách đính kèm trước khi tải file đầu. Gửi tin chỉ đợi
-  // các chip đã có trong danh sách, nên chip nào chưa xếp hàng sẽ bị gửi thiếu. Ghi chú đi cùng
-  // lần xếp hàng, để lần tải đầu không xoá nó trước khi người dùng kịp đọc.
-  function handleFolder(fileList, attach, tw) {
-    var r = pickFolderFiles(fileList);
-    var notes = [];
-    if (r.skipped) notes.push(tw("cp.folder_skipped", { n: r.skipped }));
-    if (r.over) notes.push(tw("cp.folder_over", { max: MAX_FOLDER_FILES }));
-    if (!r.files.length) {
-      notes.push(tw("cp.folder_empty"));
-      if (attach) attach.note(notes.join(" "));
-      return Promise.resolve();
-    }
-    notes.push(tw("cp.folder_flat"));
-    if (!attach) return Promise.resolve();
-    var atts = attach.queue(r.files, notes.join(" "));
-    var pairs = r.files.map(function (f, i) { return [f, atts[i]]; });
-    return runQueue(pairs, function (p) { return attach.upload(p[0], p[1]); }, UPLOAD_PARALLEL);
-  }
-  // Mũi tên trái quay về menu gốc, trừ khi đang gõ trong ô tìm (lúc đó nó chỉ dời con trỏ).
+  // Left arrow goes back to the top menu, except while typing in a search box (it moves the cursor there).
   function shouldGoBack(e, hasBack) {
     var tag = e && e.target && e.target.tagName;
     return !!(e && e.key === "ArrowLeft" && hasBack && tag !== "INPUT" && tag !== "TEXTAREA");
   }
-  // File chọn từ brain: ảnh cần url /files/raw (đường tính theo trần như /files/search trả về),
-  // thiếu nó thì bong bóng vẽ thành "ảnh đã hết hạn".
+  // A file picked from the brain: images need a /files/raw url (path relative to the browse ceiling,
+  // as /files/search returns it), otherwise the bubble renders them as "image expired".
   function brainAttachment(r, rel, brainPath) {
     var a = { path: r.path, name: r.name, size: r.size || 0, kind: r.kind || "file" };
     if (a.kind === "image") a.url = "/files/raw?brain=" + encodeURIComponent(brainPath) + "&path=" + encodeURIComponent(rel);
     return a;
   }
 
-  var pure = {
-    createRegistry: createRegistry, pickFolderFiles: pickFolderFiles, runQueue: runQueue, MAX_FOLDER_FILES: MAX_FOLDER_FILES,
-    handleFolder: handleFolder, shouldGoBack: shouldGoBack, brainAttachment: brainAttachment
-  };
+  var pure = { createRegistry: createRegistry, shouldGoBack: shouldGoBack, brainAttachment: brainAttachment };
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
   if (typeof document === "undefined") return;
 
@@ -100,7 +55,7 @@
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  // ---- khung menu ----
+  // ---- menu frame ----
   var menu = null, btn = null, view = [], active = 0;
   function isOpen() { return !!menu && !menu.hidden; }
   function close() {
@@ -128,7 +83,7 @@
   function focusRow(i) { var els = rowsEls(); if (!els.length) return; active = (i + els.length) % els.length; els[active].focus(); }
   function topRows() {
     return reg.list().map(function (it) {
-      return { icon: it.icon, label: tw(it.label), hint: it.hint ? it.hint() : "", warn: !!it.warn, sub: !!it.submenu, item: it };
+      return { icon: it.icon, label: tw(it.label), hint: it.hint ? it.hint() : "", warn: !!it.warn, sub: !!(it.submenu || it.panel), item: it };
     });
   }
   function open() {
@@ -136,9 +91,37 @@
     closeOthers();
     menu.hidden = false; btn.setAttribute("aria-expanded", "true");
     render(topRows());
+    refreshConnHealth();
+  }
+  // The "Connections" row hint counts connections that need reconnecting. Re-read it each time
+  // the menu opens (cheap, cached on the server) and redraw the top rows if it changed.
+  function refreshConnHealth() {
+    getJson("/connect/health").then(function (d) {
+      var h = (d && d.health) || {};
+      var n = Object.keys(h).filter(function (k) { return h[k] && h[k].ok === false; }).length;
+      if (n === badConn) return;
+      badConn = n;
+      if (isOpen() && !menu.querySelector("[data-back]")) render(topRows());
+    });
+  }
+  // Panel items draw their own body (search box, custom rows) under a back row.
+  function openPanel(it) {
+    view = []; active = 0;
+    menu.innerHTML = '<button type="button" class="cp-mi cp-back" data-back="1">' + ICON.back + "<span>" + esc(tw(it.label)) + "</span></button>" +
+      '<div class="cp-sep"></div><div class="cp-panel"></div>';
+    it.panel(menu.querySelector(".cp-panel"), { close: close, back: function () { render(topRows()); }, brain: brain });
+  }
+  // Open the menu straight on one item (the pinned-folder chip opens its panel this way).
+  function openItem(id) {
+    var it = reg.list().filter(function (x) { return x.id === id; })[0];
+    if (!it || !menu) return;
+    closeOthers();
+    menu.hidden = false; if (btn) btn.setAttribute("aria-expanded", "true");
+    if (it.panel) openPanel(it); else render(topRows());
   }
   function choose(r) {
     if (!r) return;
+    if (r.item && r.item.panel) { openPanel(r.item); return; }
     if (r.item && r.item.submenu) {
       var it = r.item;
       render([{ label: tw("cp.loading") }], tw(it.label));
@@ -152,7 +135,7 @@
     if (run) { close(); run(); }
   }
 
-  // ---- mục mặc định ----
+  // ---- default items ----
   var ICON = {
     clip: '<svg class="cp-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
     folder: '<svg class="cp-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
@@ -165,21 +148,14 @@
   };
   var badConn = 0;
 
-  reg.register({
-    id: "attach", order: 10, icon: ICON.clip, label: "cp.attach", hint: function () { return /Mac/.test(navigator.platform) ? "Cmd+U" : "Ctrl+U"; },
-    run: function () { if (window.JavisAttach) window.JavisAttach.pick(); }
-  });
-  reg.register({ id: "folder", order: 20, icon: ICON.folder, label: "cp.folder", run: function () { var f = $("folderInput"); if (f) f.click(); } });
-  reg.register({
-    id: "brain_file", order: 30, icon: ICON.file, label: "cp.brain_file", emptyKey: "cp.brain_empty",
-    submenu: function () { return Promise.resolve(brainSearchRows("")); }
-  });
-  reg.register({
-    id: "commands", order: 40, icon: ICON.slash, label: "cp.commands", hint: function () { return "/"; },
-    run: function () { insertToken("/"); }
-  });
-  reg.register({
-    id: "connections", order: 50, icon: ICON.plug, label: "cp.connections", emptyKey: "cp.conn_none",
+  reg.register({ id: "attach", order: 10, icon: ICON.clip, label: "cp.attach", hint: function () { return /Mac/.test(navigator.platform) ? "Cmd+U" : "Ctrl+U"; },
+    run: function () { if (window.JavisAttach) window.JavisAttach.pick(); } });
+  // order 20 ("folder") is registered by composer-folder.js: pin a working folder.
+  reg.register({ id: "brain_file", order: 30, icon: ICON.file, label: "cp.brain_file", emptyKey: "cp.brain_empty",
+    submenu: function () { return Promise.resolve(brainSearchRows("")); } });
+  reg.register({ id: "commands", order: 40, icon: ICON.slash, label: "cp.commands", hint: function () { return "/"; },
+    run: function () { insertToken("/"); } });
+  reg.register({ id: "connections", order: 50, icon: ICON.plug, label: "cp.connections", emptyKey: "cp.conn_none",
     hint: function () { return badConn ? tw("cp.conn_bad", { n: badConn }) : ""; },
     submenu: function () {
       return Promise.all([getJson("/connect/catalog"), getJson("/connect/health")]).then(function (res) {
@@ -216,7 +192,7 @@
 
   function goPage(id) { try { window.Alpine.store("nav").go(id); } catch (e) { location.hash = "#" + id; } }
 
-  // ---- chọn file trong brain: ô tìm ngay trong menu ----
+  // ---- pick a file from the brain: a search box inside the menu ----
   var brainSeq = 0;
   function brainSearchRows(q) {
     setTimeout(function () { mountBrainSearch(q); }, 0);
@@ -263,14 +239,7 @@
     if (q) search();
   }
 
-  // ---- thư mục ----
-  function onFolder(e) {
-    var list = Array.prototype.slice.call(e.target.files || []);   // chép ra trước khi xoá value
-    e.target.value = "";
-    handleFolder(list, window.JavisAttach, tw);
-  }
-
-  // ---- gắn sự kiện ----
+  // ---- wiring ----
   function init() {
     menu = $("plusMenu"); btn = $("plusBtn");
     if (!menu || !btn) return;
@@ -288,10 +257,13 @@
       else if (shouldGoBack(e, !!menu.querySelector("[data-back]"))) { e.preventDefault(); render(topRows()); }
     });
     document.addEventListener("click", function (e) { if (isOpen() && !menu.contains(e.target)) close(); });
-    var fi = $("folderInput"); if (fi) fi.addEventListener("change", onFolder);
     document.addEventListener("keydown", function (e) {
       var key = String(e.key || "").toLowerCase();
       if (key === "u" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+        // Only when the composer is usable: on a page without it, or while Workspace has
+        // disabled the + button, a file would land in a composer nobody can see.
+        var pb = $("plusBtn"), card = $("hudVoice");
+        if (!pb || pb.disabled || !card || card.offsetParent === null) return;
         var a = document.activeElement;
         var other = a && a !== input() && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
         if (other) return;
@@ -299,13 +271,10 @@
         if (window.JavisAttach) window.JavisAttach.pick();
       }
     });
-    // Đếm kết nối cần làm lại cho dòng "Kết nối" (đọc lúc mở trang, không quấy máy chủ).
-    getJson("/connect/health").then(function (d) {
-      var h = (d && d.health) || {};
-      badConn = Object.keys(h).filter(function (k) { return h[k] && h[k].ok === false; }).length;
-    });
+    // First count at page load; refreshed again each time the menu opens.
+    refreshConnHealth();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 
-  window.JavisComposerMenu = { register: reg.register, list: reg.list, open: open, close: close, isOpen: isOpen };
+  window.JavisComposerMenu = { register: reg.register, list: reg.list, open: open, close: close, isOpen: isOpen, openItem: openItem, icon: ICON };
 })();

@@ -143,6 +143,33 @@ check("nhưng note wiki THẬT của người dùng vẫn dùng được",
       any("ky-luat-ban-than" in h["path"]
           for h in chatbot_grounding.tim(BRAIN, "kỷ luật bản thân là gì", 8)))
 
+# 0.172.0: bản sao cũ và file vai của Javis không phải tài liệu trả khách. Một bot Zalo thật có
+# `.backup/agents/` (bản agent cũ) và `agents/` (chính file luật của nó) ngay trong brain.
+_CU = "# Bảng giá cũ\n\nNước mắm cốt nhĩ 500ml giá 99.000 đồng một chai, giá khuyến mãi tháng trước.\n"
+for _d in (".backup/agents", "backup", "Backups/2026-09"):
+    (BRAIN / _d).mkdir(parents=True, exist_ok=True)
+    (BRAIN / _d / "bang-gia-cu.md").write_text(_CU, encoding="utf-8")
+(BRAIN / "agents").mkdir(exist_ok=True)
+(BRAIN / "agents" / "tro-ly-zalo.md").write_text(
+    "---\ntype: agent\n---\nLuật nội bộ: giá khuyến mãi nước mắm 500ml chỉ báo khi khách hỏi lần hai.\n",
+    encoding="utf-8")
+(BRAIN / "workflows").mkdir(exist_ok=True)
+(BRAIN / "workflows" / "cham-khach.md").write_text("# Chăm khách\n\nBước 1: hỏi giá nước mắm.\n", encoding="utf-8")
+(BRAIN / "san-pham" / "agents").mkdir(parents=True, exist_ok=True)
+(BRAIN / "san-pham" / "agents" / "dai-ly.md").write_text(
+    "# Đại lý\n\nĐại lý cấp một nhận nước mắm 500ml giá đại lý 140.000 đồng.\n", encoding="utf-8")
+_ds = chatbot_grounding.ds_tai_lieu(BRAIN)
+check(".backup KHÔNG phải tài liệu (bản agent cũ)", not any(p.startswith(".backup/") for p in _ds))
+check("thư mục backup/backups (không dấu chấm) cũng bị loại",
+      not any(p.split("/")[0].lower() in ("backup", "backups") for p in _ds))
+check("agents/ và workflows/ ở gốc brain (luật nội bộ của bot) KHÔNG lọt vào tài liệu",
+      not any(p.startswith(("agents/", "workflows/")) for p in _ds))
+check("nhưng thư mục 'agents' của người dùng nằm sâu bên trong vẫn là tài liệu",
+      "san-pham/agents/dai-ly.md" in _ds)
+_gia = chatbot_grounding.tim(BRAIN, "nước mắm 500ml giá khuyến mãi bao nhiêu", 8)
+check("tra giá không ra bảng giá cũ hay luật nội bộ",
+      all("bang-gia-cu" not in h["path"] and not h["path"].startswith("agents/") for h in _gia))
+
 
 # ============================================================
 # 3. Khối nhét vào prompt
@@ -463,27 +490,39 @@ async def _loi_gia(text, meta=None, progress=None, channel="telegram", bot=None)
     return "⚠ Model 'x' không chạy được qua engine này."
 
 
+_CHUONG = []
+
+
+async def _chuong(text):
+    _CHUONG.append(text)
+
+
 chatbot_runtime.wire(answer=_loi_gia, brain_root=lambda b: str(BRAIN),
-                     read_agent=lambda b, s: ({"name": "Hoa"}, ""))
+                     read_agent=lambda b, s: ({"name": "Hoa"}, ""), notify=_chuong)
 BID2 = "bot_loi"
 import chatbot_store  # noqa: E402
 
 _bid, _ = chatbot_store.create_bot({"name": "Bot lỗi", "agent_slug": "cskh", "brain": "b",
                                     "token": "1:x", "handoff_to": "999"})
 _fn = chatbot_runtime._make_answer_fn(_bid)
-_ra = asyncio.run(_fn("chào Coach", {"chat_id": "77", "chat_type": "private"}))
+async def _chay_va_cho(text, meta):
+    r = await _fn(text, meta)
+    await asyncio.sleep(0)      # mẩu thư chuông chạy bằng ensure_future
+    return r
 
-check("khách chỉ nhận câu xin lỗi chung, không nhận lỗi kỹ thuật",
-      _ra["text"] == chatbot_runtime.CAU_LUOT_HONG and "Model" not in _ra["text"])
-check("câu báo lượt hỏng xin khách chờ, không khai trục trặc kỹ thuật (chủ đổi 14/10/2026)",
-      "đợi em chút xíu" in _ra["text"] and "trục trặc" not in _ra["text"])
+
+_ra = asyncio.run(_chay_va_cho("chào Coach", {"chat_id": "77", "chat_type": "private", "user_name": "Lan"}))
+
+# Chủ repo 15/10/2026: trục trặc kỹ thuật không gửi gì cho khách (trước đó là "đợi em chút xíu để em
+# kiểm tra lại ạ", và trước nữa là câu "trục trặc kỹ thuật"). Chủ nghe ở chuông thông báo của Javis.
+check("lượt hỏng: khách KHÔNG nhận gì, kể cả câu xin lỗi", _ra.get("im_lang") is True and not _ra.get("text"))
 _src_rt = (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8")
-check("CANARY: không còn chỗ nào gửi câu trục trặc cũ cho khách (cả nhánh engine văng lỗi)",
-      not re.search(r'[=:]\s*"Em đang gặp trục trặc', _src_rt) and _src_rt.count("CAU_LUOT_HONG") >= 3)
-# Câu báo lượt GÃY phải khác hẳn câu "chưa có thông tin". Dùng chung một câu thì chủ nhìn màn
-# hình không phân biệt được bot đang hỏng hay đang thiếu tài liệu - đúng ca chủ repo đã dính.
-check("câu báo lượt gãy khác hẳn câu thiếu tài liệu",
-      "chưa có thông tin" not in _ra["text"])
+check("CANARY: không còn đường nào gửi câu xin lỗi lượt hỏng cho khách (cả nhánh engine văng lỗi)",
+      not re.search(r'[=:]\s*"Em đang gặp trục trặc', _src_rt)
+      and not re.search(r'"text":\s*CAU_LUOT_HONG|=\s*CAU_LUOT_HONG', _src_rt))
+check("chủ được báo MỘT mẩu thư ở chuông thông báo, nói bot nào, khách nào, lỗi gì",
+      len(_CHUONG) == 1 and "Bot lỗi" in _CHUONG[0] and "Lan" in _CHUONG[0]
+      and "không chạy được qua engine" in _CHUONG[0])
 _luot = chatbot_log.doc(_bid)
 check("CANARY: nhật ký GIỮ LẠI lý do kỹ thuật cho chủ đọc",
       _luot and "không chạy được qua engine" in (_luot[0].get("loi") or ""))
@@ -491,11 +530,51 @@ check("lượt gãy tính là bí (bot đúng là không trả lời được)",
 # ...nhưng KHÔNG được lẫn vào danh sách "thiếu tài liệu": một bên sửa bằng cách đổi engine,
 # một bên sửa bằng cách viết thêm tài liệu vào brain.
 check("CANARY: lượt gãy KHÔNG lọt vào tab Bot bí", chatbot_log.lo_hong(_bid) == [])
-check("lượt gãy báo nhân viên NGAY, không chờ đủ hai câu", _luot[0]["chuyen_nguoi"] is True)
+# 0.171.2 (chủ repo 16/10/2026): bỏ đường nhắn "người trực" (`handoff_to`). Lượt gãy chỉ báo chuông,
+# và không tính là "gọi người": chủ cần sửa engine, không cần trả lời thay một câu hỏi.
+check("lượt gãy KHÔNG còn tính là gọi người trực", _luot[0]["chuyen_nguoi"] is False)
+_src_rt_moi = (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8")
+check("CANARY: runtime không còn đọc handoff_to để gửi tin cho ai",
+      'cfg.get("handoff_to")' not in _src_rt_moi and 'bot_cfg.get("handoff_to")' not in _src_rt_moi
+      and "_gui_nhan_vien" not in _src_rt_moi)
 
-# Engine hỏng thì MỌI lượt sau đều gãy. Báo hết là biến hộp thư nhân viên thành log lỗi.
-asyncio.run(_fn("câu nữa", {"chat_id": "77", "chat_type": "private"}))
+# Engine hỏng thì MỌI lượt sau đều gãy. Báo hết là biến chuông thành log lỗi.
+asyncio.run(_chay_va_cho("câu nữa", {"chat_id": "77", "chat_type": "private"}))
 check("lượt gãy thứ hai KHÔNG báo lại", chatbot_log.doc(_bid)[0]["chuyen_nguoi"] is False)
+check("lượt gãy thứ hai KHÔNG thêm mẩu thư chuông", len(_CHUONG) == 1)
+
+# Khách xin gặp người thật: chủ nghe ở chuông, khách được nói thật là đã báo và vẫn hỏi tiếp được.
+_CHUONG.clear()
+async def _xin_nguoi():
+    c = chatbot_runtime._bao_nhan_vien({"id": _bid, "name": "Bot lỗi"}, "Lan", "Người hỏi chủ động xin gặp người thật.")
+    await asyncio.sleep(0)      # lệnh /nhanvien chạy trong vòng sự kiện của poller, mẩu thư đi bằng ensure_future
+    return c
+
+
+_cau = asyncio.run(_xin_nguoi())
+check("xin gặp người: chuông nhận một mẩu thư nói bot nào, ai",
+      len(_CHUONG) == 1 and "Bot lỗi" in _CHUONG[0] and "Lan" in _CHUONG[0])
+check("xin gặp người: khách được nói đã báo, và vẫn mời hỏi tiếp", "đã báo" in _cau and "hỏi tiếp" in _cau)
+chatbot_runtime.wire(answer=_loi_gia, brain_root=lambda b: str(BRAIN),
+                     read_agent=lambda b, s: ({"name": "Hoa"}, ""), notify=None)
+_cau = chatbot_runtime._bao_nhan_vien({"id": _bid, "name": "Bot lỗi"}, "Lan", "x")
+check("không có chuông thì nói thật là chưa nối được người", "chưa nối máy" in _cau)
+_CHUONG.clear()
+
+
+# Engine VĂNG lỗi (không trả chuỗi) cũng đi đúng đường đó: khách im, chủ nghe chuông, nhật ký có lỗi gốc.
+async def _no(text, meta=None, progress=None, channel="telegram", bot=None):
+    raise RuntimeError("hết token")
+
+
+chatbot_runtime.wire(answer=_no, brain_root=lambda b: str(BRAIN),
+                     read_agent=lambda b, s: ({"name": "Hoa"}, ""), notify=_chuong)
+_bid3, _ = chatbot_store.create_bot({"name": "Bot văng", "agent_slug": "cskh", "brain": "b", "token": "1:y"})
+_fn = chatbot_runtime._make_answer_fn(_bid3)
+_ra3 = asyncio.run(_chay_va_cho("alo", {"chat_id": "78", "chat_type": "private", "user_name": "Minh"}))
+check("engine văng lỗi: khách KHÔNG nhận gì", _ra3.get("im_lang") is True and not _ra3.get("text"))
+check("engine văng lỗi: chủ nghe chuông, có lỗi gốc", len(_CHUONG) == 1 and "hết token" in _CHUONG[0])
+check("engine văng lỗi: nhật ký bot giữ lỗi gốc", "hết token" in (chatbot_log.doc(_bid3)[0].get("loi") or ""))
 
 print()
 if _fails:

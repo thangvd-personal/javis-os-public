@@ -41,6 +41,7 @@ const RAO = {
   "background-strip.js": "tw", "chat-acts.js": "tw", "chat-ask.js": "tw",
   "chat-render.js": "tw", "chat-slash.js": "tw", "dataview.js": "tw",
   "file-editor.js": "tw", "task-suggest.js": "tw", "ui-actions.js": "tw",
+  "reactions.js": "tw", "chat-reactions.js": "tw",
   "editor-cmds.js": "dich", "graph.js": "graphTw",
 };
 

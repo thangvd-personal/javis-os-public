@@ -64,7 +64,37 @@ check("bỏ ghim thì về đúng thứ tự thời gian",
       [s["id"] for s in st.list_sessions(brain="brain")] == [moi, cu])
 
 # ============================================================
-# 2. Hội thoại KHÔNG có icon riêng - icon là chuyện của Project
+# 1b. Rows sharing one timestamp still come back newest first
+# ============================================================
+# On a fast machine two writes in a row can read the same time.time() value. Ordering only
+# by pinned and updated_at then leaves the tie to SQLite, which returned the older row first
+# in about two runs out of three. Freeze the clock so every row gets the SAME timestamp.
+from unittest import mock  # noqa: E402
+
+with mock.patch.object(sessions.time, "time", return_value=1_700_000_000.0):
+    tie = store()
+    older = tie.create_session(brain="brain", title="Older")
+    tie.append_message(older, "user", "older message")
+    newer = tie.create_session(brain="brain", title="Newer")
+    tie.append_message(newer, "user", "newer message")
+    check("tied timestamps: rows really share one updated_at",
+          tie.get_session(older)["updated_at"] == tie.get_session(newer)["updated_at"])
+    check("tied timestamps: newest conversation first",
+          [s["id"] for s in tie.list_sessions(brain="brain")] == [newer, older])
+    tie.set_pinned(older, True)
+    check("tied timestamps: pinned conversation still on top",
+          [s["id"] for s in tie.list_sessions(brain="brain")] == [older, newer])
+    tie.set_pinned(older, False)
+    check("tied timestamps: unpin goes back to newest first",
+          [s["id"] for s in tie.list_sessions(brain="brain")] == [newer, older])
+
+    p_older = tie.create_project("Older project", brain="brain")
+    p_newer = tie.create_project("Newer project", brain="brain")
+    check("tied timestamps: newest project first",
+          [p["id"] for p in tie.list_projects(brain="brain")] == [p_newer, p_older])
+
+# ============================================================
+# 2.Hội thoại KHÔNG có icon riêng - icon là chuyện của Project
 # ============================================================
 # Hàng nào trong danh sách cũng là một cuộc trò chuyện nên icon ở đó không phân loại được gì,
 # chỉ thêm một nút phải bấm và một hàng nút chật thêm. Icon để PHÂN LOẠI thuộc về Project,

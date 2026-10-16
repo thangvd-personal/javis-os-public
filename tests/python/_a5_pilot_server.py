@@ -33,6 +33,12 @@ if MODE not in ("dry", "real") or not LEDGER or not Path(LEDGER).is_file():
     print("[a5-pilot] từ chối khởi động: thiếu JAVIS_A5_PILOT_MODE hay sổ lượt", file=sys.stderr)
     sys.exit(3)
 CAPS = json.loads(os.environ.get("JAVIS_A5_PILOT_CAPS") or "{}")
+if MODE == "dry":
+    # Dry không bao giờ chạm model thật (review T3 J P2-2): chặn cả engine phán xử theo agent và lượt học của T3, vốn không
+    # đi qua bẫy của pilot. Đặt TRƯỚC khi nạp main.
+    os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+    os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "server"))

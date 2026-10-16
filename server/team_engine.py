@@ -90,6 +90,8 @@ def codex_text_only(cc: Any) -> Any:
     cfg.append("mcp_servers={}")
     cfg.append('web_search="disabled"')
     cfg += [f"features.{f}=false" for f in CODEX_OFF_FEATURES]
+    # Fast mode (0.164.0): team turns run at the normal tier whatever config.toml says.
+    cfg = [c for c in cfg if not str(c).startswith("service_tier=")] + ['service_tier="default"']
     cc.extra_config = cfg
     cc.text_only = True
     return cc

@@ -36,7 +36,9 @@ def run(c):
 
 VAULT = tempfile.mkdtemp(prefix="javis-rp-vault-")
 OWN = mcp_hub.OWNER_ONLY_TOOLS
-check("both judge tools are owner-only", OWN == {"javis_reply_policy", "javis_reply_policy_tune"})
+check("both judge tools are owner-only", {"javis_reply_policy", "javis_reply_policy_tune"} <= OWN)
+# 0.173.0: the team-chat tool (creates/deletes teams, writes assistant files) is owner-only too.
+check("javis_team is owner-only", "javis_team" in OWN)
 
 
 def names(tools):

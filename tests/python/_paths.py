@@ -26,6 +26,15 @@ SYSTEM = ROOT / "system"
 if str(SERVER) not in sys.path:
     sys.path.insert(0, str(SERVER))
 
+# Chốt chung cho MỌI test Python (T3 phần J, 0.156.0): máy chủ không bao giờ dựng engine phán xử thật trong lúc test.
+# Từ 0.156.0 mỗi tin nhóm có thể mở một lô phán xử chạy model việc nền; harness đi qua main.py chỉ thay engine của lượt
+# nhóm, nên thiếu chốt này thì lô phán xử sẽ dựng model thật. Test cần phán xử tự tiêm engine giả.
+import os as _os  # noqa: E402
+_os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
+_os.environ["JAVIS_NO_REAL_REVIEW_ENGINE"] = "1"
+# Lượt nhóm, lượt quét, lượt học (`main._team_engine_for`): test quên thay `team_engine.build` thì dừng, không dựng CLI thật.
+_os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
+
 
 def moi_route(app):
     """Mọi route của app, ĐI ĐỆ QUY qua các router con. Trả danh sách đối tượng route.

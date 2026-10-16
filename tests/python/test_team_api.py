@@ -325,7 +325,7 @@ det = c.get(f"/teams/{TID}/tasks/{tm_['task_id']}{Q}").json()["messages"]
 check("chi tiết việc kèm phản hồi của từng tin (khung lọc theo việc không mất lý do, góp ý)",
       [(m.get("reaction") or {}).get("comment") for m in det if m["id"] == tm_["id"]] == ["Thêm số liệu"], det[:2])
 r = c.post(f"/teams/{TID}/messages/{am['id']}/reaction{Q}", json={"value": "like", "nonce": "rx-task"})
-check("nonce đã dùng cho tin khác: 400, không báo đã lưu", r.status_code == 400, r.text)
+check("nonce đã dùng cho tin khác: 409 (hợp đồng T2), không báo đã lưu", r.status_code == 409, r.text)
 kinds = [getattr(getattr(x, "cr_code", None), "co_name", "") for x in spawned]
 check("route reaction: không mở lượt nào, chỉ đẩy gói WS", len(c.get(f"/teams/{TID}/turns{Q}").json()["turns"])
       == turns0 and not ({"run_replies", "dispatch_once"} & set(kinds)) and "fake_publish" in kinds, kinds)

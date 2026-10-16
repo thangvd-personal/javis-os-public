@@ -34,7 +34,7 @@ Rail điều hướng bên trái, nhóm **Trợ lý** → mục **Javis**. Đây
 | VAULT | Cột trái | Cây thư mục của brain đang chọn, ô **Tìm note...**, hai chế độ lọc **Tên** / **Nội dung**, ba nút **＋** (tạo file), **📁** (tạo thư mục), **⟳** (làm mới cây) |
 | Đồ thị tri thức + trạng thái | Chính giữa | Mạng ghi chú, dòng chữ trạng thái (SẴN SÀNG, ĐANG NGHE...), dải số **AGENTS** / **SKILLS** / **WORKFLOWS** ở đáy |
 | HỘI THOẠI | Cột phải | Lịch sử chat, badge engine, nút **⛶** sang trang Trò chuyện |
-| Khung nhập | Dưới cùng | Một thẻ bo tròn: file đính kèm, ô gõ chữ, rồi hàng nút **＋**, chip model, chip Effort, tia sét Fast mode, mic và nút gửi (đang chạy thì thành nút dừng) |
+| Khung nhập | Dưới cùng | Một thẻ bo tròn: file đính kèm, ô gõ chữ, rồi hàng nút **＋**, chip model, chip Effort, tia sét Fast mode, chip thư mục đang ghim (nếu có), mic và nút gửi (đang chạy thì thành nút dừng) |
 
 Cột trái **không còn** bảng thẻ số liệu kinh doanh; đó là Vault explorer, bấm một note là mở ra sửa ngay trên màn hình (xem [Quản lý tệp tin](05-quan-ly-tep-tin.md)). Bấm vào số AGENTS / SKILLS / WORKFLOWS thì nhảy thẳng sang trang tương ứng trong nhóm **Năng lực**.
 
@@ -337,11 +337,31 @@ Hàng nút dưới ô gõ có ba thứ đứng cạnh nhau:
 
 - **Chip model**: hiện tên rút gọn của nhà cung cấp và model đang dùng. Bấm chip mở bảng chọn: ô **Tìm model...**, danh sách nhà cung cấp, mỗi cái bung ra danh sách model. Nhà cung cấp chưa cấu hình hiện ổ khoá 🔒 kèm dòng "+ Thêm API key ở trang Models để mở khoá".
 - **Chip Effort** (độ sâu suy nghĩ): tách riêng khỏi chip model vì đổi thường xuyên hơn. Bấm mở một thanh trượt sáu nấc **Off / Light / Medium / High / Extra / Ultra** (để tiếng Anh cho gọn), đầu trái ghi "Faster", đầu phải "Smarter", "Recommended" nằm dưới Medium. Kéo chuột hoặc dùng phím mũi tên, Home, End. Model Antigravity đã ghi sẵn mức trong tên (vd. `-high`) thì thanh trượt bị khoá.
-- **Tia sét Fast mode**: bấm để bật, tia sét chuyển sóng cam; bấm lần nữa để tắt. Không có chữ bật/tắt, rê chuột vào sẽ thấy "Fast mode" kèm ghi chú chi phí của bộ não đang chọn. Bộ não hoặc model không hỗ trợ thì tia sét mờ đi. Bản này mới **lưu lựa chọn**; nối Fast mode vào từng engine làm ở bản sau.
+- **Tia sét Fast mode**: bấm để bật, tia sét chuyển sóng cam; bấm lần nữa để tắt. Không có chữ bật/tắt, rê chuột vào sẽ thấy "Fast mode" kèm ghi chú chi phí của bộ não đang chọn. Bộ não hoặc model không hỗ trợ thì tia sét mờ đi.
+
+  | Bộ não | Fast mode làm gì | Lưu ý |
+  |---|---|---|
+  | Claude Code | Bật chế độ nhanh của Claude Code | Chỉ Opus 5.5, Opus 5, Opus 4.8; tính vào usage credits, giá gấp đôi |
+  | Anthropic API | Gửi `speed: "fast"` | Chỉ Opus 5.5, Opus 5, Opus 4.8 |
+  | ChatGPT (Codex) | Chạy tier Fast (`priority`) | Tắt tia sét là ép về tốc độ thường, kể cả khi model hay cấu hình Codex mặc định đang để Fast |
+  | OpenAI API | `service_tier: "fast"` | |
+  | OpenRouter, Gemini | `service_tier: "priority"` | Gemini chỉ tài khoản Tier 2/3 |
+  | Grok, Antigravity, Groq, DeepSeek, Ollama | Không có | Tia sét mờ |
+
+  Nhà cung cấp từ chối Fast mode (tài khoản không đủ điều kiện, vượt giới hạn) thì Javis tự gửi lại ở tốc độ thường, lượt chat không hỏng; rê chuột vào tia sét sẽ thấy dòng báo lý do. Việc chạy nền (loop, nhắc hẹn, Kanban, nhóm) luôn chạy tốc độ thường.
 
 Badge cạnh chữ **HỘI THOẠI** (và ở góc phải trang Trò chuyện) hiện engine + model **thật** của lượt vừa chạy, lấy từ server chứ không phải model tự khai. Nếu badge khác cái bạn tưởng, tin badge.
 
 Trên điện thoại, chip model dời lên header và bảng chọn mở ra giữa màn hình.
+
+### Ghim thư mục làm việc
+
+Mục **Ghim thư mục làm việc** trong menu **＋** cho một hội thoại làm việc ngay trong một thư mục, ví dụ thư mục dự án code. Danh sách mở ra là các thư mục trong brain, có ô tìm; dòng cuối **Duyệt thư mục khác...** để chọn thư mục ngoài brain.
+
+- Ghim xong, cạnh tia sét hiện chip 📁 kèm tên thư mục. Rê chuột thấy đường dẫn đầy đủ; bấm vào để đổi hoặc **Bỏ ghim**.
+- Ghim theo **từng hội thoại**: hội thoại mới bắt đầu trong brain như thường. Ghim khi khung chat còn trống thì thư mục đi theo hội thoại ngay từ tin đầu.
+- Bộ não CLI (Claude Code, ChatGPT qua Codex, Grok Build, Antigravity) chạy lệnh ngay trong thư mục đó. Bộ não API đọc sửa file qua công cụ của brain, nên làm được với thư mục **trong** brain; thư mục ngoài brain thì chỉ bộ não CLI làm được.
+- Trang Coding dùng chung chip này thay cho nút chọn thư mục riêng. Các chip nhánh, worktree, điểm hồi và mức quyền vẫn ở trang Coding.
 
 ## Javis trình bày câu trả lời thế nào
 
@@ -496,7 +516,7 @@ Nút quanh khung chat:
 
 | Nút | Ở đâu | Làm gì |
 |---|---|---|
-| ＋ | Đầu hàng nút | Mở menu: đính kèm file hoặc ảnh, đính kèm cả thư mục, chọn file trong brain, lệnh và skill "/", **Kết nối** (kèm tình trạng), **Trợ lý và quy trình** |
+| ＋ | Đầu hàng nút | Mở menu: đính kèm file hoặc ảnh, **ghim thư mục làm việc**, chọn file trong brain, lệnh và skill "/", **Kết nối** (kèm tình trạng), **Trợ lý và quy trình** |
 | Mic | Cạnh nút gửi | Gọi Javis; trong cuộc gọi nút thành **Cúp máy** |
 | Mũi tên | Cuối hàng nút | Gửi tin nhắn |
 | Ô vuông | Thay nút gửi khi đang chạy | Dừng lượt đang trả lời + dừng đọc |
@@ -506,6 +526,7 @@ Nút quanh khung chat:
 | Chip model | Hàng nút dưới ô gõ | Đổi nhà cung cấp và model |
 | Chip Effort | Cạnh chip model | Thanh trượt độ sâu suy nghĩ |
 | Tia sét | Cạnh chip Effort | Bật/tắt Fast mode |
+| 📁 Chip thư mục | Cạnh tia sét, chỉ hiện khi đã ghim | Thư mục hội thoại này đang làm việc bên trong. Bấm để đổi thư mục hoặc bỏ ghim |
 
 Phím tắt:
 

@@ -1505,6 +1505,29 @@ class TaskStore:
             ).fetchall()
         return [self._task_from_row(r) for r in rows]
 
+    def team_open_brief(self, team_id: str, limit: int = 8) -> list[dict]:
+        """Việc đang mở của một nhóm cho khối lịch sử dài (T4, 0.170.0): chỉ các cột cần, một truy vấn theo chỉ mục
+        `idx_tasks_team_queue`, có trần dòng. Đang làm trước, rồi ưu tiên, rồi thứ tự xếp hàng."""
+        with self._lock:
+            rows = self._db.execute(
+                f"""SELECT id, title, intent, status, team_rev, team_prio, team_seq, block_kind, block_reason, updated_at
+                    FROM tasks WHERE lane='team' AND team_id=? AND status IN ({','.join('?' for _ in TEAM_OPEN_STATUS)})
+                    ORDER BY CASE status WHEN 'team_running' THEN 0 WHEN 'team_queued' THEN 1 ELSE 2 END,
+                             team_prio IS NULL, team_prio DESC, team_seq LIMIT ?""",
+                (str(team_id), *TEAM_OPEN_STATUS, max(1, min(100, int(limit)))),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def team_last_done(self, team_id: str) -> Optional[dict]:
+        """Việc xong gần nhất của một nhóm (nguồn đóng góp của kết quả gần nhất, T4 0.170.0). Không đọc phụ thuộc."""
+        with self._lock:
+            row = self._db.execute(
+                """SELECT id, title, status, result, updated_at FROM tasks
+                   WHERE lane='team' AND team_id=? AND status='done' ORDER BY updated_at DESC LIMIT 1""",
+                (str(team_id),),
+            ).fetchone()
+        return dict(row) if row else None
+
     def health(self, brain_root: Optional[str] = None) -> dict:
         where = " WHERE lane<>'team'" + (" AND brain_root=?" if brain_root else "")
         args = (brain_root,) if brain_root else ()

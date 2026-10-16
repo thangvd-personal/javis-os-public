@@ -12,15 +12,16 @@
   // chọn xong server lọc về "off" mà giao diện vẫn khoe đang bật.
   const EFFORT = [["off", "models.r_off"], ["low", "models.r_low"], ["medium", "models.r_med"],
                   ["high", "models.r_high"], ["xhigh", "models.r_xhigh"], ["ultra", "models.r_ultra"]];
-  // Nhãn chip mức suy nghĩ (0.153.0, tiếng Anh theo ý chủ repo): khoá đầy đủ để test i18n đọc được.
+  // Effort chip labels (0.153.0, English as the owner asked): full keys so the i18n test can read them.
   const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
   // FAST_NOTE_BEGIN
-  // Fast mode theo bộ não (nghiên cứu 15/10/2026, xem docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
-  // Claude chỉ Opus 5.5, Opus 5, Opus 4.8; model rỗng = mặc định của Claude Code (Opus) nên coi là có.
+  // Fast mode per brain (researched 2026-10-15, see docs/superpowers/specs/2026-10-15-composer-plus-fast-mode-design.md).
+  // Claude only on Opus 5.5, Opus 5 and Opus 4.8; an empty model means Claude Code's default (Opus), so it counts.
   function fastNote(provider, model) {
     const m = String(model || "").toLowerCase();
-    // Bí danh "opus" của Claude Code trỏ tới Opus 5.5 (đứng đầu danh mục, cũng là mặc định dự phòng).
-    const opusOk = !m || m === "opus" || /opus-(5-5|5|4-8)(?![0-9])/.test(m);
+    // The Claude Code alias "opus" points at Opus 5.5 (first in the catalog and the fallback default).
+    // Same rule as server/fast_mode.py: the version ends the id or is followed by a date (-YYYYMMDD).
+    const opusOk = !m || m === "opus" || /opus-(?:5-5|4-8|5)(?=$|-\d{8}(?!\d)|[^-\d.])/.test(m);
     if (provider === "anthropic-cli") return opusOk ? { supported: true, note: "fast.claude" } : { supported: false, note: "fast.model_none" };
     if (provider === "anthropic-api") return opusOk ? { supported: true, note: "fast.api" } : { supported: false, note: "fast.model_none" };
     if (provider === "openai-oauth") return { supported: true, note: "fast.codex" };
@@ -103,7 +104,13 @@
           : window.t("mpick.follow_default");
     }
     const eb = $("effTxt");
-    if (eb) eb.textContent = window.t(EFF_KEY[(EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[0]]);
+    if (eb) {
+      // A locked Antigravity model runs at the level in its name, so the chip shows that level.
+      const effM = effective();
+      const own = window.JavisEffortSlider && window.JavisEffortSlider.isLocked(effM.provider, effM.model)
+        ? window.JavisEffortSlider.lockedLevel(effM.model) : "";
+      eb.textContent = window.t(EFF_KEY[own || (EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[0]]);
+    }
     renderFast();
   }
 
@@ -114,8 +121,31 @@
     const n = fastNote(eff.provider, eff.model);
     fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
     fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
-    // Bản này chỉ lưu lựa chọn, nối vào engine ở bản sau; spec bắt tooltip nói rõ (bỏ khi nối xong).
-    fb.title = "Fast mode\n" + window.t(n.note) + (n.supported ? "\n" + window.t("fast.pending") : "");
+    // 0.164.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
+    const st = fastStates[eff.provider];
+    const key = n.supported && state.fast ? fastStateKey(st) : "";
+    fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key, { reason: (st && st.reason) || "" }) : "");
+  }
+  // FAST_STATE_BEGIN
+  // Tooltip line for the last Fast mode state a brain reported (server: fast_mode.states()).
+  function fastStateKey(st) {
+    const s = st && st.state;
+    if (s === "cooldown") return "fast.state_cooldown";
+    if (s === "fallback") return "fast.state_fallback";
+    // Claude Code reports off with a reason (e.g. out_of_credits when usage credits are not enabled).
+    if (s === "off" && st.reason) return st.reason === "out_of_credits" ? "fast.state_credits" : "fast.state_off";
+    return "";
+  }
+  // FAST_STATE_END
+  let fastStates = {};
+  // Read on hover/focus: cheap, and always fresh after the last turn.
+  async function refreshFastState() {
+    try {
+      const r = await fetch("/model/fast-state");
+      const d = r.ok ? await r.json() : null;
+      fastStates = (d && d.states) || {};
+    } catch (e) {}
+    renderFast();
   }
 
   // Màn cảm ứng (điện thoại, máy tính bảng): focus một ô nhập là bật bàn phím ảo.
@@ -131,7 +161,7 @@
     // (o.cho). Trước đây popup mở ra trống trơn trong lúc chờ (Codex mất vài giây).
     const o = {
     // Thân bảng (ô tìm + nhà + model + hàng khoá) dựng bởi model-list.js, dùng CHUNG với ô
-    // Model của trợ lý bên Studio. Mức suy nghĩ có chip và khung riêng từ 0.153.0.
+    // The assistant's model on the Studio side. The thinking level has its own chip and popover since 0.153.0.
       providers: state.providers,
       expanded, filter,
       selected: effective(),
@@ -172,7 +202,7 @@
   function close() { const pop = $("mbPop"); if (pop) pop.hidden = true; }
   function isOpen() { const pop = $("mbPop"); return pop && !pop.hidden; }
 
-  // Chip mức suy nghĩ (0.153.0): tách khỏi bảng chọn model, mở một khung nhỏ có thanh trượt.
+  // Effort chip (0.153.0): split from the model picker, opens a small popover with a slider.
   let effSlider = null;
   function effOpen() {
     const pop = $("effPop"), btn = $("effBtn");
@@ -180,13 +210,19 @@
     close(); closePlus();
     const eff = effective();
     pop.hidden = false;
-    pop.style.left = btn ? (btn.offsetLeft) + "px" : "8px";
+    const locked = window.JavisEffortSlider.isLocked(eff.provider, eff.model);
     if (btn) btn.setAttribute("aria-expanded", "true");
     effSlider = window.JavisEffortSlider.mount(pop, {
       value: state.reasoning,
-      locked: window.JavisEffortSlider.isLocked(eff.provider, eff.model),
+      locked: locked,
+      lockedValue: locked ? window.JavisEffortSlider.lockedLevel(eff.model) : "",
       onChange: async (v) => { state.reasoning = v; renderBar(); await saveModel({ reasoning: v }); },
     });
+    // Keep the popover inside the card: on a narrow phone the chip sits far enough right that a
+    // popover opened at its left edge would spill past the screen.
+    const card = pop.offsetParent;
+    const maxLeft = card ? Math.max(8, card.clientWidth - pop.offsetWidth - 8) : 8;
+    pop.style.left = (btn ? Math.min(btn.offsetLeft, maxLeft) : 8) + "px";
     if (effSlider.focus) effSlider.focus();
   }
   function effClose() {
@@ -216,7 +252,7 @@
       sessionPin = null;
     }
     await loadState(); renderBar();
-    if (effIsOpen()) { effClose(); effOpen(); }   // model mới có thể khoá hoặc mở khoá thanh trượt
+    if (effIsOpen()) { effClose(); effOpen(); }   // the new model may lock or unlock the slider
   }
 
   // `/model <tên>`: tìm trong model của các nhà ĐÃ KẾT NỐI. Khớp NGUYÊN id thì thắng ngay; nếu
@@ -243,6 +279,11 @@
     if (kq.length > 1) return { kind: "many", ds: kq.slice(0, 6).map((x) => (provShort(x.label) + " " + x.model)) };
     return { kind: "none" };
   }
+
+  // Hovering or focusing the bolt refreshes its tooltip with the brain's last real Fast mode state.
+  ["mouseover", "focusin"].forEach((t) => document.addEventListener(t, (e) => {
+    if (e.target && e.target.closest && e.target.closest("#fastBtn") && state.fast) refreshFastState();
+  }));
 
   document.addEventListener("click", async (e) => {
     if (e.target.closest("#mbOpen")) { isOpen() ? close() : open(); return; }
@@ -310,7 +351,6 @@
       return r;
     },
     fastNote: fastNote,
-    effortLabel: function () { return window.t(EFF_KEY[state.reasoning] || "eff.off"); },
     hienTai: function () {
       const eff = effective();
       const p = state.providers.find((x) => x.id === eff.provider);

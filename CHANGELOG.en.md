@@ -8,6 +8,126 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.173.0] - 2026-10-16
+### Added
+- **Javis creates and manages team chats from the chat box.** Ask for "a test team of three assistants" and Javis creates any missing assistant, sets up the team and picks the leader; renaming, adding or removing members, archiving or deleting a team works the same way.
+- Each assistant created this way can run its own model, so a mixed-model test team takes one request.
+- An archived team can now be deleted for good. If the team you have open is deleted, the Teams page closes it and tells you.
+
+## [0.172.0] - 2026-10-16
+### Added
+- **Personal Zalo: set how many minutes the bot steps aside after you type by hand** (0 means never). The clock starts at your last hand-typed message, so in private chats the bot answers for you sooner than before. Once a number is set, a direct tag in a group is still answered right away.
+- **Per-chat exceptions:** one trusted person (a family member, say) gets their own permission level and wait, without raising the bot that answers strangers. Accept Zalo friend requests automatically (off by default) and hand the introduction to the bot. Plugins can add one line of context to each bot turn.
+### Fixes
+- **Personal Zalo understands customers better:** a photo sent without text in a private chat reaches the bot and stays attached for 10 minutes. If the customer keeps typing while the bot composes, the stale reply is dropped and one answer covers everything. The role instructions you write always win over Javis's default. The bot no longer quotes old backups or agent and workflow files as documents.
+- **Small fixes:** a reminder answering `[SILENT]` sends nothing. What you write under the self-learning history heading is no longer wiped. A `---` inside a sentence no longer turns a 16-step workflow into 14.
+
+## [0.171.4] - 2026-10-16
+### Fixed
+- **Calling an assistant by name in a team, without @, is now noticed.** An assistant named Minh never noticed its own name before, because without accents the name matched a common Vietnamese word and was ignored. Javis now compares names with their accents, so an everyday word that only looks like the name is still not a call.
+
+## [0.171.3] - 2026-10-16
+### Fixed
+- **Team chat no longer shows made-up command names.** When an assistant's reply contains a command Javis does not support, the team now notes "the reply had an unsupported Javis command, dropped" instead of printing the raw code in the bubble.
+
+## [0.171.2] - 2026-10-16
+### Fixes
+- **A dropped connection no longer kills the whole turn:** when the connection to the model provider is cut (errors like `ReadError ... WinError 1236` on Windows), Javis resends up to 3 times, even in the middle of a turn that uses tools. If it still fails, the message names the usual causes (network, VPN, antivirus) instead of just pasting the error chain.
+- **Long Zalo replies are split into several messages:** a long reply on personal Zalo is cut at the end of a paragraph or sentence and sent in order, instead of Zalo refusing it and the customer getting nothing. In groups, the person being answered is tagged only in the first message.
+### Improved
+- **Bot alerts go to the notification bell only:** the Telegram message to an "on-duty person" is gone (its field had long been hidden from the form). A customer asking for a human, or the bot getting stuck twice in a row, now lands in the Javis bell with the customer's name. Technical failures still ring the bell as before.
+
+## [0.171.0] - 2026-10-15
+### Added
+- **Quote to ask a follow-up:** every chat message has a Quote button. It puts that passage above the input box so you just type the next question, no retyping. Select part of a message first to quote only that part.
+- **Share a conversation by link:** the Share button next to the paperclip at the top of the chat makes a link anyone can read without signing in, and copies it for you. Readers see only the questions and answers, never attachments, tools or hidden notes.
+- **The bot inbox shows the photos and files customers send:** photos appear right in the chat (click for full size) and files become a card with a Download button, instead of a long link or a server path. Works for personal Zalo and the Telegram, Zalo Bot, Slack, WhatsApp, Messenger, Discord and Lark bot channels.
+- **The link is a snapshot up to when you shared:** later messages do not show up on their own. Press "Update to the latest message" to include them; the link stays the same. Conversation links live on the Share links page next to file links, and can be renamed or revoked the same way.
+- (in progress)
+## [0.170.0] - 2026-10-15
+### Improved
+- **Teams with thousands of messages still remember what matters:** every assistant turn still sees pinned decisions, the original request and status of open jobs, who contributed to the latest result, and your feedback still waiting for review, however far back they are in the history.
+- **Long teams do not slow each turn:** each of those items is read once with a limit, so a 5,000 message team costs as much to read as a team with a few dozen.
+
+## [0.169.0] - 2026-10-15
+### Added
+- **Assistants pace themselves:** an assistant with Auto on reviews its own work on a rhythm from 15 minutes to 1 month. Praise and used results make it faster (up to 1 hour by default, only you can raise it); little demand makes it slower until it sleeps; a direct call wakes it at once. Assigned jobs, deadlines and goals are never slowed down.
+- **Assistants judge when to speak:** when nobody calls them, each assistant weighs speaking, waiting or staying quiet; at most one volunteers per message. @ calls and assigned jobs are always answered. You can correct each decision ("Should have spoken", "Should stay quiet") and the assistant learns for that team only.
+- **Learning from feedback and teammates:** an assistant reviews the reactions you leave and keeps its approach, asks back, sends a revision or records a lesson. Lessons are scoped to a team or a private chat and never leak elsewhere; teammates can give each other feedback. Revoke a lesson right on the assistant card.
+- **Pulse panel on assistant cards and team member rows:** state per place, last and next review, why the pace changed, speak/wait/quiet decisions, lessons, work proposals (accept or reject) and autonomous turns per day.
+
+## [0.168.0] - 2026-10-15
+### Added
+- **React to replies in private chat:** the same six emoji as team chat, on the Chat and Partners pages, available as soon as a reply is saved, kept after a reload and shown in other tabs. Goal reports use the same six emoji instead of the Helpful / Not quite row.
+- **Clearer feedback:** besides reasons, pick "Should have spoken" or "Should stay quiet (interrupted)" and add an optional comment. A status such as Received, Waiting for review or Adjusted shows under the reaction; in teams you also see the coordinator's and members' reactions.
+- **Assistants with Auto on get your feedback for review:** many taps fold into one review; with Auto off it is only stored, and turning it back on does not replay old feedback.
+### Fixed
+- **The server's shared turn ceiling now covers team turns:** when it is reached, a team turn stops before calling a model and says why.
+
+## [0.167.0] - 2026-10-15
+### Fixed
+- **Taking back the right to decide alone covers a turn already running:** if you take it back, give it again or give it for the first time, the admin commands of the coordinator's unfinished turn are dropped with a note; only the next turn uses the new permission.
+- **Long jobs are not cut in on:** an assistant working on a long step keeps its slot until done. A turn that loses its slot midway only shows its result for you to read and changes nothing in the team.
+- When the coordinator turns Auto back on for an assistant the team manages, its goals resume right away; limit fields reject invalid numbers instead of returning a server error.
+### Improved
+- **Limits table under the team's Advanced section:** every limit, grouped by what you can change, what the coordinator can change, what the server fixes and what the provider decides. Replies, steps and nested help can be set to **Unlimited**.
+
+## [0.166.4] - 2026-10-15
+### Fixed
+- **Saving a setting can no longer wipe the admin account, models and admin channels.** If `settings.json` was locked for a split second while Javis read it (common on Windows when antivirus scans a freshly written file), Javis took it for a fresh install, showed the setup wizard again, and the next save (saving the Lark channel, for example) wrote an empty setup over the real one. Javis now retries the read until it works, and never writes an empty setup over a machine that is already set up.
+
+## [0.166.3] - 2026-10-15
+### Fixed
+- **The bot no longer sends customers the "please wait a moment while I check" line when something technical breaks** (out of tokens, plan limit reached, model error). The customer receives nothing at all, on personal Zalo, Zalo OA, Telegram and WhatsApp.
+- **The owner hears about it in the Javis notification bell:** which bot failed, which customer wrote without an answer, and the error. One notice per failure streak; the next one comes only after the bot has worked again. The on-duty person (if set) is still alerted as before.
+
+## [0.166.2] - 2026-10-15
+### Fixed
+- **Creating images on the ChatGPT plan no longer gets stuck on "The 'gpt-5.5' model is not supported".** When your plan lacks that model, Javis switches to another model from your own account's ChatGPT model list and makes the image, with nothing to configure.
+- Next time Javis goes straight to the model that worked, so no extra failed round. Letting ChatGPT look at images for you is fixed the same way.
+
+## [0.165.1] - 2026-10-15
+### Fixed
+- **Files and links in a Project (and in each conversation) stay newest first** even when two were added in the same instant. Before, two items with the same timestamp could swap places at random between visits.
+
+## [0.164.1] - 2026-10-15
+### Fixed
+- **Conversations and projects created in the same instant now keep their order**, newest on top. On a fast machine two of them written in the same tick could swap places at random in the sidebar.
+
+## [0.164.0] - 2026-10-15
+### Added
+- **The Fast mode bolt now really switches each brain:** Claude Code and the Anthropic API (Opus 5.5, Opus 5, Opus 4.8), ChatGPT through Codex, the OpenAI API, OpenRouter and Gemini. Brains without Fast mode (Grok, Antigravity, Groq, DeepSeek, Ollama) keep a dimmed bolt.
+- **Bolt off means normal speed:** for Codex, Javis forces the normal tier even when the model or the Codex config defaults to Fast. Background runs (loops, reminders, Kanban, workflows, teams) and customer chatbots always run at normal speed, even if you once turned on `/fast` in Claude Code.
+- **When a provider refuses Fast mode** (account not eligible, limit reached), Javis resends at normal speed and the turn does not fail; hover the bolt to see why (e.g. usage credits need turning on).
+
+## [0.162.0] - 2026-10-15
+### Security
+- **Plugins you install load by default**, no environment variable needed. Each plugin still runs only after you click **Enable** on its card (a plugin Javis creates from chat always starts disabled), and the permission level still decides every tool call.
+- To block user plugins on a machine altogether (a shared server, bots for strangers), set `JAVIS_ENABLE_USER_PLUGINS=false` and restart.
+
+## [0.160.0] - 2026-10-15
+### Improved
+- **The Effort chip reads the real level of Antigravity models** that carry it in their name (e.g. `-high`), on the chip and in the slider popover.
+- **The slider popover stays on screen** on narrow phones, the orange particle effect is lighter (nothing is re-measured every frame), and an interrupted swipe no longer makes the slider jump.
+- **Ctrl+U opens the file picker only when a usable chat box is there**, not on other pages or while the chat box is locked.
+- **The connections-to-fix count in the + menu** is refreshed each time the menu opens.
+- **Leaving the Partners page mid-turn** no longer re-enables the Send button by mistake.
+
+## [0.159.0] - 2026-10-15
+### Improved
+- **Sturdier folder pinning:** switching brain no longer binds a pending pin in the new brain; a folder inside the brain picked with the browser is no longer labelled "outside the brain"; the folder search returns folders only, so files cannot crowd them out.
+- **The folder chip shows "+N"** when the conversation still has extra folders bound from before, with their names on hover. Unpinning removes a folder nobody else uses from the registry (nothing on disk is touched).
+- **The pin panel shows the pinned folder and the Unpin button as separate rows.**
+- **The Coding page shows errors in their own slot**, so a chip redraw no longer wipes them; leftovers of the old folder picker are cleaned up.
+- **If the connection drops while the first message waits for the folder pin**, the text goes back to the input with a notice instead of being lost.
+
+## [0.158.0] - 2026-10-15
+### Improved
+- **Pin a working folder straight from the chat box.** The **+** menu has **Pin working folder**: pick a folder in the brain (with search) or browse to another one. Once pinned, a 📁 chip with the folder name sits next to the bolt and that conversation works right inside the folder, handy for code projects. The pin is per conversation.
+- **Adding a folder no longer uploads its files** as attachments: a folder is a place to work in.
+- **The Coding page uses the same folder chip** instead of its own folder button; the branch, worktree, restore point and permission chips stay.
+- **A tidier assistant Work tab:** the two sideways-scrolling chip rows are now two dropdowns, **Source** and **Status** (with counts and an amber dot when something needs you), and the text is smaller to fit the narrow column.
+
 ## [0.153.0] - 2026-10-15
 ### Improved
 - **The chat composer is redesigned in the style of Claude:** one rounded card holding attachments, the text box and a single button row underneath (the **+** button, model chip, Effort chip, Fast mode bolt, a small mic and a round send button).

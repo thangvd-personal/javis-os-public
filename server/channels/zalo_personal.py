@@ -74,6 +74,12 @@ def trang_thai() -> dict:
 TAG_TIMEOUT = 40            # giây: gửi một dòng chữ mà quá thế là bất thường; gồm cả lần đầu npx nạp package
 TAG_FAIL_LIMIT = 3          # từng đó lần tag hỏng LIÊN TIẾP thì nghỉ, khỏi lần nào cũng trả thêm vài giây cho một thứ đang hỏng
 TAG_PAUSE = 600             # giây nghỉ tag sau khi hỏng liên tiếp; tin vẫn đi bằng MCP như cũ
+# Trần một tin (0.171.2). Zalo từ chối cả tin quá dài (quanh 2000 ký tự) và khách không nhận được gì: chủ repo
+# 16/10/2026 gặp lần thứ ba, hai lần trước ở khách Khang Duy Dao. 1500 chừa chỗ cho "@Tên" khi tag trong nhóm.
+TIN_TOI_DA = 1500
+NGHI_GIUA_DOAN = 1.2        # giây nghỉ giữa hai đoạn của một câu trả lời dài, cho giống người gõ và giữ thứ tự
+# Chỗ cắt tốt theo thứ tự ưu tiên: hết đoạn văn, hết dòng, hết câu, rồi mới tới khoảng trắng.
+_CHO_CAT = (re.compile(r"\n\s*\n"), re.compile(r"\n"), re.compile(r"[.!?…:;](?=\s)"), re.compile(r"\s"))
 _TAG_STATE: dict = {}       # conn_id -> {"fails": số lần hỏng liên tiếp, "until": giờ hết nghỉ}
 _UID_RE = re.compile(r"\d{3,25}")
 
@@ -220,6 +226,35 @@ async def _send_tagged(conn: dict, chat_id: str, text: str, mention) -> Optional
     return None
 
 
+def cat_tin(text: str, toi_da: int = TIN_TOI_DA) -> list:
+    """Cắt một câu trả lời dài thành các đoạn không quá `toi_da` ký tự (0.171.2).
+
+    Cắt ở chỗ hết đoạn văn trước, rồi hết dòng, hết câu, cuối cùng là khoảng trắng: không cắt giữa chữ,
+    và không cắt giữa một link (link không có khoảng trắng). Chỉ khi cả cửa sổ không có khoảng trắng nào
+    (một chuỗi dài liền) mới cắt cứng. Chỗ cắt nằm ở nửa sau cửa sổ, kẻo đoạn đầu cụt lủn."""
+    con = str(text or "").strip()
+    if len(con) <= toi_da:
+        return [con] if con else []
+    ra = []
+    while len(con) > toi_da:
+        cua_so = con[:toi_da + 1]
+        cat = 0
+        for mau in _CHO_CAT:
+            vt = [m.end() for m in mau.finditer(cua_so) if toi_da // 2 <= m.end() <= toi_da]
+            if vt:
+                cat = vt[-1]
+                break
+        if not cat:
+            cat = toi_da
+        doan = con[:cat].strip()
+        if doan:
+            ra.append(doan)
+        con = con[cat:].strip()
+    if con:
+        ra.append(con)
+    return ra
+
+
 async def gui(tk: dict, chat_id: str, text: str, chat_type: str = "private", mention=None):
     """Gửi qua MCP: `threadId`, `text` và kiểu cuộc chat (0 = chat riêng, 1 = nhóm).
 
@@ -236,6 +271,30 @@ async def gui(tk: dict, chat_id: str, text: str, chat_type: str = "private", men
     if not conn:
         return False, localefmt.chu("tài khoản Zalo này không còn ở trang Kết nối (hoặc đang tắt)",
                                      "this Zalo account is no longer on the Connections page (or is turned off)")
+    doan = cat_tin(str(text or "")) or [str(text or "")]
+    if len(doan) == 1:
+        return await _gui_mot(conn, chat_id, doan[0], chat_type, mention)
+    # Tin dài: gửi lần lượt từng đoạn. Mỗi đoạn về vòng đọc như một tin riêng, nên phải nhớ TỪNG đoạn là
+    # tiếng vọng (người gọi chỉ nhớ cả câu). Thiếu bước này thì đoạn hai trở đi bị coi là chủ nhắn tay: Hộp thư
+    # hiện đôi và bot im TAY_IM giây.
+    cid = str(conn.get("id") or "")
+    for i, phan in enumerate(doan):
+        if i:
+            await asyncio.sleep(NGHI_GIUA_DOAN)
+        try:
+            zalo_personal_channel.ghi_da_gui(cid, str(chat_id), phan)
+        except Exception:      # noqa: BLE001 - không nhớ được tiếng vọng thì vẫn gửi, tệ nhất là một dòng trùng
+            pass
+        # Trong nhóm chỉ tag người được trả lời ở đoạn ĐẦU, kẻo một người bị tag mấy lần cho một câu trả lời.
+        ok, loi = await _gui_mot(conn, chat_id, phan, chat_type, mention if i == 0 else None)
+        if not ok:
+            return False, localefmt.chu(f"đoạn {i + 1}/{len(doan)}: {loi}", f"part {i + 1}/{len(doan)}: {loi}")[:300]
+    return True, ""
+
+
+async def _gui_mot(conn: dict, chat_id: str, text: str, chat_type: str, mention=None):
+    """Gửi MỘT tin (đã vừa trần `TIN_TOI_DA`). `(ok, lỗi)`."""
+    import zalo_personal_channel
     loai = 1 if str(chat_type or "") == "group" else 0
     if loai == 1 and (mention or "@" in str(text or "")):
         r = await _send_tagged(conn, str(chat_id), str(text or ""), mention)
@@ -296,6 +355,30 @@ class Transport:
         self.last_error = ""
         self._task = None
         self._khoa = {}         # thread -> Lock: một cuộc chat một lượt, khỏi trả lời chồng nhau
+
+    def _nhuong_phut(self):
+        """The bot's saved `nhuong_tay_phut` as an int, or None when the owner never set it (old records, blank)."""
+        v = ((self.cfg_fn() if self.cfg_fn else {}) or {}).get("nhuong_tay_phut")
+        if v is None or str(v).strip() == "":
+            return None
+        return max(0, int(v))
+
+    def tay_im(self) -> int:
+        """Giây bot nhường sau khi chủ nhắn tay (0.172.0): cài đặt `nhuong_tay_phut` của bot, 0 = không nhường. Không
+        khai thì mặc định của kênh (`zalo_personal_channel.TAY_IM`, 10 phút)."""
+        import zalo_personal_channel as zc
+        n = self._nhuong_phut()
+        return zc.TAY_IM if n is None else n * 60
+
+    def yield_explicit(self) -> bool:
+        """True when the owner saved a yield time on this bot. Only then do groups get the 0.172.0 logic (tags answered
+        during the window, held messages released afterwards); otherwise groups stay silent as before."""
+        return self._nhuong_phut() is not None
+
+    def nhan_ket_ban(self) -> bool:
+        """Bot này tự nhận lời mời kết bạn và đọc lời giới thiệu kèm theo (0.172.0, `zalo_friend_intake`)."""
+        v = ((self.cfg_fn() if self.cfg_fn else {}) or {}).get("nhan_ket_ban")
+        return v is True or str(v).strip().lower() in ("1", "true", "yes", "on")
 
     # ---- vòng đời ------------------------------------------------------------------
     def start(self):
@@ -385,13 +468,19 @@ class Transport:
         import zalo_attachments
         import zalo_personal_channel as zc
         from pathlib import Path
-        cfg = (self.cfg_fn() if self.cfg_fn else {}) or {}
+        import chatbot_store
+        # Per-chat exception (0.172.0): a chat raised to "Can write" may send files even when the bot is read only.
+        cfg = chatbot_store.ap_ngoai_le((self.cfg_fn() if self.cfg_fn else {}) or {}, meta)
         if cfg.get("muc_quyen") not in ("auto", "full"):
             if chi_file:
                 return text, [], False
             return text + "\n[Khách có gửi kèm file; bot này không có quyền lưu file nên không mở được.]", [], True
+        # A group message that tags the account or replies to it is answered during the owner's yield when the
+        # bot's yield time was set explicitly (0.172.0, see `xu_ly`), so its file must be downloaded too.
+        goi_trong_nhuong = (meta.get("chat_type") == "group" and (meta.get("mentioned") or meta.get("reply_to_bot"))
+                            and zc.yield_explicit(self.conn_id))
         if (zc._BOTS.get(self.conn_id) is not self or not zc.ket_noi_theo_id(self.conn_id)
-                or zc.chu_vua_nhan_tay(self.conn_id, thread)
+                or (zc.chu_vua_nhan_tay(self.conn_id, thread) and not goi_trong_nhuong)
                 or conversations.che_do("zalo_personal", self.conn_id, thread) == "human"):
             return text, [], False
         r = self.precheck_fn(text, meta)
@@ -488,7 +577,12 @@ class Transport:
             # nhịp đọc thì ảnh đã được nhớ trước khi lượt của câu tag cần tới nó.
             if co_anh and loai == "group" and self.policy is not None:
                 self._nho_anh_tron(ev, thread)
-            return
+                return
+            # Chat riêng: ảnh không kèm chữ vẫn là người ta đang nhờ xem ảnh (gửi đề, gửi bài làm). Trước đây bị bỏ hẳn
+            # ở đây, nên bot không bao giờ thấy ảnh gửi trơn (15/10/2026). Đưa cho bot kèm ảnh, Agent tự quyết hỏi gì.
+            if not (co_anh and loai == "private" and (ev.get("metadata") or {}).get("image_url")):
+                return
+            text = "[Khách gửi một ảnh, không kèm lời nhắn]"
         # Không biết cuộc chat là nhóm hay chat riêng (đã hỏi lại bảng mà vẫn không thấy): KHÔNG trả
         # lời. Đoán là chat riêng nghĩa là trả lời từng tin của một nhóm, dưới tên người thật.
         if (ev.get("metadata") or {}).get("chua_ro_loai"):
@@ -500,11 +594,22 @@ class Transport:
             return
         if nhom:
             await self._bao_nhom(thread, ev)
-        # Lượt "chủ chưa trả lời" (0.136.0, `zc.xa_cho_chu`) cũ là có chủ ý: nó đã chờ chủ đủ `CHO_CHU_TRA_LOI` giây.
-        sau_chu_im = not nhom and bool((ev.get("metadata") or {}).get("sau_chu_im"))
+        # Lượt "chủ chưa trả lời" (0.136.0, `zc.xa_cho_chu`) cũ là có chủ ý. Since 0.172.0 it is released once the
+        # bot's yield time (`zc.tay_im_cua`, default `CHO_CHU_TRA_LOI`) has passed since the owner's LAST hand-typed
+        # message; in groups this happens only when the bot's yield time was saved explicitly (`zc.yield_explicit`).
+        sau_chu_im = bool((ev.get("metadata") or {}).get("sau_chu_im"))
         if time.time() - float(ev.get("created_at") or 0) > zc.TUOI_TOI_DA and not sau_chu_im:
             return
-        if zc.chu_vua_nhan_tay(self.conn_id, thread):
+        # With a 0-minute yield the bot does not go quiet, but a private message the owner has already answered by
+        # hand is not answered again under the owner's name (held turns are filtered the same way in `xa_cho_chu`).
+        if not nhom and zc.owner_typed_after(self.conn_id, thread, float(ev.get("created_at") or 0)):
+            return
+        # Chủ vừa nhắn tay thì bot nhường (`nhuong_tay_phut` của bot). Riêng NHÓM của bot ĐÃ ĐẶT số phút nhường, tin
+        # TAG thẳng nick hoặc trả lời tin của nick vẫn được trả lời ngay (0.172.0, chủ nick MTM chốt 14/10/2026):
+        # người ta gọi đích danh thì im 3 phút là bỏ rơi họ. Xét sau khi biết tin có gọi hay không, ở nhánh nhóm bên
+        # dưới. A bot without the setting keeps the old group rule: silent for the whole window.
+        chu_nhuong = zc.chu_vua_nhan_tay(self.conn_id, thread)
+        if chu_nhuong and (not nhom or not zc.yield_explicit(self.conn_id)):
             return
         meta = {
             "chat_id": thread, "chat_type": "group" if nhom else "private",
@@ -519,11 +624,24 @@ class Transport:
             meta["co_anh"] = True
             # 0.74.1: the photo's link, so the bot can actually look at it (see `chatbot_runtime.anh_cho_bot`).
             meta["image_url"] = str((ev.get("metadata") or {}).get("image_url") or "")
+            if not nhom:
+                zc.nho_anh_rieng(self.conn_id, thread, meta["image_url"])
         elif not vao_nhom:
             # 0.141.0: a message that QUOTES a photo ("@bot xem ảnh này" as a reply to it) shows the bot that photo.
+            # Checked BEFORE the remembered private photo (0.172.0): a quoted photo is the one the person means, the
+            # latest photo is only a guess.
             url_quote = zc.anh_duoc_quote(self.conn_id, thread, md0)
             if url_quote:
                 meta.update(co_anh=True, image_url=url_quote, anh_quote=True)
+            elif not nhom and zc.anh_rieng_gan_day(self.conn_id, thread):
+                # Lượt chữ ngay sau một ảnh ở chat riêng ("check xem đúng chưa", trả lời câu hỏi danh tính rồi nhờ
+                # tiếp): kèm lại ảnh đó để bot vẫn thấy, kèm một dòng nói rõ ảnh từ tin trước. Giờ theo múi giờ trong
+                # Cài đặt, không theo giờ máy: VPS thường chạy UTC.
+                from datetime import datetime
+                gio, url = zc.anh_rieng_gan_day(self.conn_id, thread)
+                meta.update(co_anh=True, image_url=url, anh_truoc=True)
+                text = (text + "\n[Kèm ảnh khách gửi lúc " + datetime.fromtimestamp(gio, localefmt.tz()).strftime("%H:%M")
+                        + " trong cuộc chat này, có thể liên quan tới tin trên]")
         duoc_goi = False
         pol = None
         if vao_nhom:
@@ -531,11 +649,15 @@ class Transport:
             # (see `chatbot_runtime._ly_do_im`), and skips the reply-policy judge, which scores chat.
             meta["member_join"] = True
             duoc_goi = True
+            if chu_nhuong:
+                return
         elif nhom:
             conn = zc.ket_noi_theo_id(self.conn_id) or {}
             tag, rep = zc.nhan_dien_goi(self.conn_id, ev, (conn.get("label") or "",))
             meta["mentioned"], meta["reply_to_bot"] = tag, rep
             duoc_goi = tag or rep
+            if chu_nhuong and not duoc_goi:
+                return      # chủ đang nói chuyện trong nhóm và tin này không gọi ai: nhường như cũ
             if self.policy is not None:
                 # Tên gọi tự suy của nick (nhãn kết nối, tên hiển thị học được) để nhận ra gọi tên trơn
                 # ("nhi mai ơi"); tin nào gọi chắc chắn thì `prepare` đặt `meta["mentioned"]`.
@@ -576,18 +698,39 @@ class Transport:
             khoa = self._khoa.setdefault(thread, asyncio.Lock())
             async with khoa:
                 da_tai = []
+                chu_khach = text        # chữ của khách trong lượt này, trước khi gắn kết quả đọc file
                 if files:
                     text, da_tai, dung = await self._tai_file(files, text, meta, thread, chi_file)
                     if not dung:
                         return
+                # Câu trả lời đã cũ (0.172.0, `zc.bo_do_gui`): lượt chat riêng này tới sau một lượt bị bỏ vì khách nhắn thêm.
+                cu = {}
+                if not nhom and md0.get("seq_cuoi") is not None:
+                    meta["seq_cuoi"] = int(md0["seq_cuoi"])
+                    cu = zc.lay_bo_do(self.conn_id, thread)
+                    meta["bo_do_n"] = int(cu.get("n") or 0)
+                    if cu:
+                        meta["ghi_chu_dau"] = ("[Ghi chú của Javis, không phải lời khách: câu trả lời trước của bạn CHƯA được gửi "
+                                               "vì khách nhắn thêm trong lúc bạn soạn. Các tin khách chưa được đáp, theo thứ tự: "
+                                               + " / ".join(cu["texts"]) + ". Hãy trả lời MỘT lần cho các tin này cùng tin mới "
+                                               "bên dưới, đừng hỏi lại điều khách đã nói. Việc lượt trước đã làm bằng công cụ (ghi file, gửi tin, "
+                                               "đặt lịch) là ĐÃ xong, đừng làm lại.]")
                 try:
                     out = await self.answer_fn(text, meta, None)
                 except BaseException:
                     for f in da_tai:
                         f.unlink(missing_ok=True)
+                    if cu:
+                        zc.bo_do_gui(self.conn_id, thread, cu["texts"], int(cu.get("n") or 0))
                     raise
                 anh = []
                 if isinstance(out, dict):
+                    if out.get("khach_nhan_them"):
+                        # Soạn xong mà khách đã nhắn thêm: không gửi câu cũ, giữ chữ khách cho lượt kế tiếp (đang chờ khoá).
+                        for f in da_tai:
+                            f.unlink(missing_ok=True)
+                        zc.bo_do_gui(self.conn_id, thread, list(cu.get("texts") or []) + [chu_khach], int(cu.get("n") or 0) + 1)
+                        return
                     if out.get("im_lang"):
                         return
                     cau = str(out.get("text") or "").strip()

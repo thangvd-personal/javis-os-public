@@ -51,8 +51,11 @@ except FileNotFoundError:
 
 sach = main._ket_luot_agent("brain", "nguoi-viet", "viết giúp", "Bài đây.\nJAVIS_LESSON: chủ thích câu ngắn")
 check("ket luot boc JAVIS_LESSON", sach.strip() == "Bài đây.")
-mem = (main._brain_memory_dir("brain") / "agents" / "nguoi-viet" / "MEMORY.md")
-check("bai hoc vao bo nho agent", mem.exists() and "chủ thích câu ngắn" in mem.read_text(encoding="utf-8"))
+# T3 phần L (thiết kế 8.1): bài học chat riêng vào kho bài học phạm vi dm:<agent_key>, không còn vào MEMORY.md.
+import agent_lessons  # noqa: E402
+_key = main._dm_agent_key("brain", "nguoi-viet")
+check("bai hoc vao kho bai hoc pham vi chat rieng cua tro ly", bool(_key) and "chủ thích câu ngắn" in [
+    r["text"] for r in agent_lessons.lessons(main._resonance_store(), _key, scope=f"dm:{_key}")])
 runs = list((main._brain_memory_dir("brain") / "agents" / "nguoi-viet" / "runs").glob("*.md"))
 check("nhat ky run cua agent co dong", runs and "viết giúp" in runs[0].read_text(encoding="utf-8"))
 
@@ -64,14 +67,14 @@ check("_legacy_system_prompt dung prompt tro ly", "_agent_chat_prompt(brain, _pe
 check("_subscription_system_prompt bo qua nen ngu canh khi co persona",
       re.search(r"def _subscription_system_prompt\(.*?\):\s*\"\"\".*?\"\"\"\s*if _persona:\s*return _legacy_system_prompt\(\), None", than, re.S) is not None)
 check("nhanh phase8 API khong dung plan khi co persona", 'action == "use" and not _persona' in than)
-check("cuoi luot goi _ket_luot_agent", "_ket_luot_agent(brain, _persona[1], user_message, final_text)" in than)
+check("cuoi luot goi _ket_luot_agent", "_ket_luot_agent(brain, _persona[1], user_message, final_text, conv_sid=conv_sid)" in than)
 
 # Fix round 1 - issue 1: bong bóng chat KHÔNG được để lộ dòng JAVIS_LESSON. Mọi nhánh engine
 # đã gửi khung "response" RAW trước khi tới _ket_luot_agent, nên sau khi bóc sạch phải gửi
 # lại một khung "response" nữa để ép trình duyệt vẽ lại đúng chữ (xem app.js: data.type ===
 # "response" thay hẳn nội dung bong bóng bằng data.content).
 _m_resend = re.search(
-    r"_ket_luot_agent\(brain, _persona\[1\], user_message, final_text\)(.{0,1600}?)\"type\": \"response\"(.{0,200}?)\}\)\)",
+    r"_ket_luot_agent\(brain, _persona\[1\], user_message, final_text, conv_sid=conv_sid\)(.{0,1600}?)\"type\": \"response\"(.{0,200}?)\}\)\)",
     than, re.S)
 check("sau _ket_luot_agent co gui lai khung response de xoa JAVIS_LESSON tren bong bong",
       _m_resend is not None)
