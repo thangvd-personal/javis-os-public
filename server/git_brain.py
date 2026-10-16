@@ -210,7 +210,13 @@ _GITIGNORE_BODY = (
        "Attachments/",
        "*attachments/",
        "*Attachments/",
-       "inbox/"]
+       "inbox/",
+       "# Thư mục tạm (temporary/) trong brain: lưu văn bản dài dán từ clipboard (van-ban-dan-*.txt)",
+       "# và tệp đính kèm khung chat trong quá trình xử lý yêu cầu. Phải chặn tường minh ở bước 3",
+       "# vì bước 2 đã mở lại mọi đuôi chữ (!*.txt, !*.md), nếu không chặn lại thì các file văn bản",
+       "# dán tạm sẽ bị commit vào lịch sử git của brain.",
+       "temporary/",
+       "Temporary/"]
 )
 
 _GITIGNORE = "\n".join([_GI_MO] + _GITIGNORE_BODY + [_GI_DONG]) + "\n"
@@ -299,7 +305,7 @@ def untrack_media(root: str) -> int:
             if not os.path.isdir(os.path.join(root, name)):
                 continue
             ten = name.strip()
-            if ten.lower() != "inbox" and not re.match(_ATTACH_RE, ten, re.IGNORECASE):
+            if ten.lower() not in ("inbox", "temporary") and not re.match(_ATTACH_RE, ten, re.IGNORECASE):
                 continue
             # Hỏi trước bằng ls-files: không có gì được theo dõi thì khỏi gọi git rm, và
             # quan trọng hơn là khỏi đếm nhầm thư mục vốn đã sạch (giữ tính idempotent).

@@ -159,20 +159,48 @@ def sweep(brain_root, max_age_days=30, max_mb=300, now=None, attachments=True, g
     return _xoa(can_xoa, {t[0]: t[1] for t in entries})
 
 
-def sweep_staging(staging_root, max_age_days=3, now=None):
-    """Dọn thư mục stage tạm (STATE_DIR/.staging, xem main.py:1779): nơi file user dán hoặc
-    tải lên khung chat rơi xuống trước khi engine đọc.
+def temp_dirs(brain_root):
+    """Thư mục tạm `temporary/` nằm trong brain (<brain_root>/temporary).
 
-    Đây là đường phình thứ tư, và trên máy phát triển nó còn to hơn attachments (114MB / 62
-    tệp, file cũ nhất 27 ngày, lúc đo 2026-07-29). Nó không nằm trong vault nên không dính
-    git, nhưng vẫn ăn đĩa VPS y như mọi thứ khác.
+    Vì sao tách khỏi `media_dirs`:
+      - `media_dirs` (attachments/ + inbox/) đi qua `sweep()` với `keep_md=True` (không bao giờ
+        xoá `.md` và `.txt` vì sợ xoá nhầm bài viết/ghi chú của người dùng) và hạn 30 ngày.
+      - Ngược lại, `temporary/` chứa các tệp đính kèm / văn bản dài dán từ clipboard vào ô chat
+        (ví dụ `van-ban-dan-HHMMSS.txt`). Bản chất của chúng là tệp trung chuyển tạm thời phục vụ
+        quá trình xử lý yêu cầu trong brain hiện tại, và phần lớn lại mang đuôi `.txt`. Nếu đưa
+        vào `media_dirs` (`keep_md=True`), các tệp `van-ban-dan-*.txt` sẽ KHÔNG BAO GIỜ được dọn.
+      - Vì vậy `temporary/` được quét riêng qua `sweep_staging` (`keep_md=False`, hạn mặc định
+        `staging_days` = 3 ngày, nhưng vẫn tôn trọng `giu_path` nếu tệp được ghim vào Project/Session).
+    """
+    ra = []
+    try:
+        with os.scandir(brain_root) as it:
+            for d in it:
+                try:
+                    if not d.is_dir(follow_symlinks=False):
+                        continue
+                except OSError:
+                    continue
+                if d.name.strip().lower() == "temporary":
+                    ra.append(d.path)
+    except OSError:
+        pass
+    return ra
 
-    Khác sweep vùng cache brain ở hai điểm, cả hai đều vì staging là chỗ TRUNG CHUYỂN thuần:
-      - KHÔNG chừa .md. Không ai cuộn lại lịch sử để mở file staging (chat không nhúng đường
-        dẫn staging bao giờ), nên .md ở đây là rác chứ không phải tri thức.
-      - Chỉ có luật tuổi, không trần dung lượng: hạn mặc định 3 ngày đã đủ chặt.
+
+def sweep_staging(staging_root, max_age_days=3, now=None, giu_path=None):
+    """Dọn thư mục trung chuyển tạm (`<brain>/temporary/` và `STATE_DIR/.staging`): nơi file
+    user dán từ clipboard hoặc tải lên khung chat rơi xuống để engine đọc trong lượt xử lý.
+
+    Khác `sweep` vùng cache brain ở hai điểm, cả hai đều vì đây là chỗ TRUNG CHUYỂN thuần:
+      - `keep_md=False`: xoá cả `.txt` (`van-ban-dan-HHMMSS.txt`) và `.md` khi quá hạn, vì tệp
+        trong `temporary/` / `.staging` là dữ liệu dán tạm lúc trò chuyện chứ không phải note tri thức.
+      - Chỉ có luật tuổi (`staging_days`, mặc định 3 ngày), không cần trần dung lượng riêng.
+      - Vẫn nhận `giu_path` để nếu người dùng chủ động ghim một tệp từ `temporary/` vào Project
+        hoặc Cuộc trò chuyện thì không xoá mất tệp đang được tham chiếu.
     """
     entries = scan([staging_root])
     can_xoa = plan_deletions(entries, float(now if now is not None else time.time()),
-                             max_age_days, 0, keep_md=False)
+                             max_age_days, 0, keep_md=False, giu_path=giu_path)
     return _xoa(can_xoa, {t[0]: t[1] for t in entries})
+

@@ -6047,22 +6047,79 @@ async def _save_upload_stream(upload: UploadFile, dest: str, chunk: int = 1024 *
             f.write(part)
 
 
+# ── Thư mục tạm trong brain (`<brain_root>/temporary`) cho file đính kèm & văn bản dán khung chat ──
+# Bối cảnh & lý do kiến trúc (2026-10-16):
+#   Khi người dùng dán đoạn văn bản dài (> 1500 ký tự hoặc > 25 dòng) vào ô chat, `pasteAsTxt`
+#   (dashboard/app.js) tự động chuyển thành tệp `van-ban-dan-HHMMSS.txt` và tải lên qua `POST /upload`
+#   kèm tham số `brain` hiện tại.
+#   Trước đây `POST /upload` bỏ qua `brain` lúc chọn thư mục đích và luôn ghi vào `STATE_DIR/.staging`
+#   (`server/.staging`, nằm ngoài thư mục brain). Việc đặt tệp ngoài brain gây ra 3 hệ quả:
+#     1. Khi model trả lời có dẫn link tới tệp vừa đọc (vd `[van-ban-dan-165823.txt](D:/.../server/.staging/...)`),
+#        bộ chuẩn hoá link `_chuan_hoa_link_file` và bộ kiểm tra link `_link_file_khong_thay` kiểm tra
+#        `cand.relative_to(broot)` đều thất bại vì tệp nằm ngoài brain -> hệ thống phát cảnh báo giả:
+#        "⚠ Câu trả lời có dẫn link tới file mà mình không tìm thấy trong brain...".
+#     2. Người dùng bấm vào link trong chat hoặc mở trang Tệp tin của brain không thể xem/mở tệp đó.
+#     3. Các tác nhân / công cụ bị khoá phạm vi trong thư mục brain (`_safe_path`) không thể truy cập.
+#   Giải pháp:
+#     - Khi `POST /upload` nhận được `brain` (dashboard luôn gửi `currentBrainPath()`), lưu tệp vào
+#       `<brain_root>/temporary/` (tự tạo nếu chưa có) để tệp nằm trọn trong ranh giới của brain hiện tại.
+#     - Nếu không truyền `brain` (tương thích ngược với caller/test cũ) hoặc thư mục brain không ghi được,
+#       fallback về `STAGING` (`STATE_DIR/.staging`).
+#     - `GET /upload/raw` tìm tệp trong `<brain_root>/temporary/` trước rồi fallback về `STAGING`.
+TEMP_DIR_NAME = "temporary"
+_RECENT_UPLOAD_DIRS: list[Path] = []
+
+
+def _ghi_nhan_thu_muc_upload(d: Path) -> None:
+    """Nhớ các thư mục `temporary/` vừa nhận upload gần nhất (tối đa 32) để `/upload/raw?name=...`
+    tra cứu tức thì kể cả khi người dùng mở một brain ngoài (`path:`) chưa có phiên trong DB."""
+    try:
+        r = d.resolve()
+    except OSError:
+        return
+    if r in _RECENT_UPLOAD_DIRS:
+        _RECENT_UPLOAD_DIRS.remove(r)
+    _RECENT_UPLOAD_DIRS.insert(0, r)
+    if len(_RECENT_UPLOAD_DIRS) > 32:
+        del _RECENT_UPLOAD_DIRS[32:]
+
+
+def _brain_temp_dir(brain: str = "") -> Path:
+    """Trả về thư mục tạm `<brain_root>/temporary` khi có `brain`, hoặc `STAGING` khi không truyền `brain`
+    hoặc khi không tạo được thư mục trong brain."""
+    if not str(brain or "").strip():
+        os.makedirs(STAGING, exist_ok=True)
+        return Path(STAGING)
+    root = Path(_brain_root(brain))
+    cand = root / TEMP_DIR_NAME
+    try:
+        cand.mkdir(parents=True, exist_ok=True)
+        _ghi_nhan_thu_muc_upload(cand)
+        return cand
+    except OSError:
+        os.makedirs(STAGING, exist_ok=True)
+        return Path(STAGING)
+
+
 @app.post("/upload")
 async def upload(file: UploadFile = File(...), brain: str = Form("")):
-    """Nhận file → stage tạm (chưa vào Sources). Bước /ingest-upload sẽ chuyển thành .md.
+    """Nhận file đính kèm / văn bản dài dán vào khung chat → lưu vào `<brain_root>/temporary`
+    (hoặc fallback `STATE_DIR/.staging` nếu không truyền `brain`). Bước `/ingest-upload` sẽ chuyển
+    thành `.md` vào `Sources` nếu người dùng yêu cầu lưu tri thức.
 
-    Bọc TOÀN BỘ trong try/except: mọi lỗi (không tạo được thư mục staging, đĩa đầy,
+    Bọc TOÀN BỘ trong try/except: mọi lỗi (không tạo được thư mục tạm, đĩa đầy,
     brain không ghi được...) trả JSON {ok:false, error} + in traceback ra log, KHÔNG để
     rơi thành HTTP 500 khó chẩn đoán. Frontend hiển thị "lỗi: <lý do>" thay vì "lỗi máy chủ (500)".
     """
     try:
         os.makedirs(STAGING, exist_ok=True)
+        dest_dir = _brain_temp_dir(brain)
         raw = file.filename or ""
         if not raw or raw in ("blob", "image.png"):
             ext = os.path.splitext(raw)[1] or ".png"
             raw = f"paste-{int(time.time())}{ext}"
         name = _sanitize_filename(raw)
-        staged = _unique_path(str(STAGING), name)
+        staged = _unique_path(str(dest_dir), name)
         await _save_upload_stream(file, staged)
         ext = os.path.splitext(staged)[1].lower()
         kind = "image" if ext in IMG_EXTS else "file"
@@ -6079,25 +6136,67 @@ async def upload(file: UploadFile = File(...), brain: str = Form("")):
         return {"ok": False, "error": localefmt.chu(f"Không lưu được file tạm: {e}", f"Could not save the temporary file: {e}")}
 
 
-def _duong_staging(name: str) -> Path:
-    """Tên file trong staging -> đường tuyệt đối. ValueError nếu tên không hợp lệ.
+def _duong_staging(name: str, thu_muc=None) -> Path:
+    """Tên file trong thư mục tạm (`thu_muc` hoặc mặc định `STAGING`) -> đường tuyệt đối.
+    Ném `ValueError` nếu tên không hợp lệ.
 
     Chỉ nhận TÊN, không nhận đường dẫn: mọi dấu phân cách đều bị chặn thẳng, rồi vẫn resolve
-    và kiểm lại là còn nằm trong STAGING. Hai lớp vì lớp đầu là luật chuỗi (dễ sót một cách
-    viết lạ) còn lớp sau là sự thật của hệ thống tệp (symlink, "..", tên Windows)."""
+    và kiểm lại là còn nằm trong thư mục gốc (`goc`). Hai lớp vì lớp đầu là luật chuỗi (dễ sót
+    một cách viết lạ) còn lớp sau là sự thật của hệ thống tệp (symlink, "..", tên Windows)."""
     ten = str(name or "").strip()
     if not ten or ten in (".", "..") or "/" in ten or "\\" in ten or "\x00" in ten:
         raise ValueError(localefmt.chu("Tên file không hợp lệ", "Invalid file name"))
-    goc = Path(STAGING).resolve()
+    goc = Path(thu_muc if thu_muc is not None else STAGING).resolve()
     f = (goc / ten).resolve()
     if f.parent != goc:      # symlink trỏ ra ngoài cũng rơi vào đây (resolve đã đi theo nó)
         raise ValueError(localefmt.chu("Tên file không hợp lệ", "Invalid file name"))
     return f
 
 
+def _tim_file_upload_tam(name: str, brain: str = "") -> Path:
+    """Tìm tệp tạm theo tên `name` trên các thư mục `<brain>/temporary/` và fallback về `STAGING`.
+
+    Luôn chạy `_duong_staging(name)` trước tiên để mọi tên nguy hiểm (`../`, `a/b`, `.`, `..`)
+    bị chặn ngay bằng `ValueError` (HTTP 400). Sau đó lần lượt kiểm tra:
+      1. `<brain_root>/temporary` nếu request truyền `brain`.
+      2. Các thư mục `temporary/` vừa nhận upload gần nhất (`_RECENT_UPLOAD_DIRS`).
+      3. `temporary/` của brain mặc định và các brain trong `BRAINS_DIR`.
+      4. `STAGING` (`STATE_DIR/.staging`) để tương thích ngược với các phiên chat cũ.
+    """
+    mac_dinh = _duong_staging(name)
+    ung_vien: list[Path] = []
+    if str(brain or "").strip():
+        ung_vien.append(Path(_brain_root(brain)) / TEMP_DIR_NAME)
+    ung_vien.extend(_RECENT_UPLOAD_DIRS)
+    ung_vien.append(_default_brain_dir() / TEMP_DIR_NAME)
+    try:
+        base = Path(BRAINS_DIR)
+        if base.is_dir():
+            for p in base.iterdir():
+                if p.is_dir() and not p.name.startswith("."):
+                    ung_vien.append(p / TEMP_DIR_NAME)
+    except OSError:
+        pass
+    da_xet: set[str] = set()
+    for d in ung_vien:
+        try:
+            if not d.is_dir():
+                continue
+            khoa = os.path.normcase(str(d.resolve()))
+            if khoa in da_xet:
+                continue
+            da_xet.add(khoa)
+            f = _duong_staging(name, d)
+            if f.is_file():
+                return f
+        except (ValueError, OSError):
+            continue
+    return mac_dinh
+
+
 @app.get("/upload/raw")
-async def upload_raw(name: str = Query(...), dl: int = Query(0)):
-    """Phục vụ lại file VỪA DÁN / TẢI LÊN khung chat, đọc thẳng từ thư mục stage tạm.
+async def upload_raw(name: str = Query(...), dl: int = Query(0), brain: str = Query("")):
+    """Phục vụ lại file VỪA DÁN / TẢI LÊN khung chat, đọc từ `<brain>/temporary/` hoặc `STAGING`.
 
     Vì sao cần (chủ repo báo 01/09): bong bóng tin của người dùng hiện ảnh bằng
     `URL.createObjectURL` - một URL chỉ sống trong tab đang mở và bị thu hồi ngay sau khi
@@ -6105,12 +6204,12 @@ async def upload_raw(name: str = Query(...), dl: int = Query(0)):
     không bấm phóng to được. Có đường này thì bong bóng trỏ vào chính file trên máy chủ:
     xem lại được, phóng to được như mọi ảnh khác trong chat.
 
-    Staging là chỗ TRUNG CHUYỂN, không phải kho: `media_gc.sweep_staging` dọn sau
+    `temporary/` và `.staging` là chỗ TRUNG CHUYỂN, không phải kho: `media_gc.sweep_staging` dọn sau
     `staging_days` (mặc định 3 ngày). Lúc đó đường này trả 404 - đúng ý đồ, và dashboard vẽ
     khung "ảnh không còn xem lại được" thay cho một ô ảnh vỡ không ai hiểu.
     """
     try:
-        f = _duong_staging(name)
+        f = _tim_file_upload_tam(name, brain=brain)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     if not f.is_file():
@@ -7425,7 +7524,7 @@ async def files_list(brain: str = Query("brain"), path: str = Query(None), all: 
     # - Các công cụ AI (javis_read_file, javis_write_file, skill loader, agent runtime) vẫn truy cập file bình thường.
     # - Cờ `all=True` cho phép client/CLI hoặc luồng kỹ thuật lấy đầy đủ toàn bộ file khi cần.
     for p in sorted(d.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
-        if not all and (p.name.startswith(".") or p.name == "__pycache__"):
+        if not all and (p.name.startswith(".") or p.name == "__pycache__" or p.name.upper() == "TEMPORARY"):
             continue
         try:
             st = p.stat()
@@ -12376,6 +12475,7 @@ async def _start_scheduler():
                                              | get_store().all_session_file_paths())
                             except Exception:
                                 _rel_proj = set()
+                            _han_staging = int(mcfg.get("staging_days", 3))
                             for _mb in loop_feature.scheduler_brains():
                                 _giu_file = set()
                                 for _r in _rel_proj:
@@ -12386,10 +12486,18 @@ async def _start_scheduler():
                                 if kq.get("files"):
                                     print(f"[media gc] {_mb}: dọn {kq['files']} tệp, "
                                           f"{kq['bytes'] // (1024 * 1024)}MB")
-                            # Staging KHÔNG theo brain: nó là một thư mục dùng chung trong
-                            # STATE_DIR, nên quét đúng một lần ngoài vòng lặp brain.
+                                # Dọn thư mục tạm `<brain>/temporary/` theo hạn `staging_days` (mặc định 3 ngày),
+                                # dùng `sweep_staging` (`keep_md=False`) để xoá cả tệp `.txt` (`van-ban-dan-*.txt`)
+                                # và `.md` dán tạm quá hạn, nhưng vẫn chừa các tệp đang ghim (`_giu_file`).
+                                for _td in media_gc.temp_dirs(_mb):
+                                    kqt = await asyncio.to_thread(media_gc.sweep_staging, _td,
+                                                                  _han_staging, None, _giu_file)
+                                    if kqt.get("files"):
+                                        print(f"[media gc] {_mb}/temporary: dọn {kqt['files']} tệp, "
+                                              f"{kqt['bytes'] // (1024 * 1024)}MB")
+                            # Staging dự phòng trong STATE_DIR: quét một lần ngoài vòng lặp brain.
                             kqs = await asyncio.to_thread(media_gc.sweep_staging, str(STAGING),
-                                                          int(mcfg.get("staging_days", 3)))
+                                                          _han_staging)
                             if kqs.get("files"):
                                 print(f"[media gc] staging: dọn {kqs['files']} tệp, "
                                       f"{kqs['bytes'] // (1024 * 1024)}MB")
@@ -12520,7 +12628,9 @@ def _count_md(root: str, cap: int, deadline: float | None = None) -> int:
                 for entry in it:
                     try:
                         if entry.is_dir(follow_symlinks=False):
-                            if depth < _BROWSE_DEPTH and not entry.name.startswith((".", "$")) and entry.name != "__pycache__":
+                            # Bỏ qua thư mục ẩn, __pycache__ và thư mục tạm `temporary/` (chứa file dán tạm khung chat)
+                            if (depth < _BROWSE_DEPTH and not entry.name.startswith((".", "$"))
+                                    and entry.name not in ("__pycache__", "temporary", "Temporary")):
                                 stack.append((entry.path, depth + 1))
                         elif entry.name.endswith(".md") and not entry.name.startswith("."):
                             n += 1
