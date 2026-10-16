@@ -1006,6 +1006,63 @@ async function _dongBoNeuLech() {
   } catch (e) {}
 }
 
+// Tu dong lam moi cay Vault sau khi Javis hoan tat cau tra loi de cap nhat tep moi tao.
+let _vtAutoRefreshTimer = null;
+let _vtAutoPendingDirs = new Set();
+
+function _trichXuatThuMucTuLuot(t, text) {
+  const dirs = new Set();
+  const chunks = [];
+  if (text && typeof text === "string") chunks.push(text);
+  if (t && t.buoc && Array.isArray(t.buoc.ds)) {
+    for (const b of t.buoc.ds) {
+      if (b.label) chunks.push(b.label);
+      if (b.tool) chunks.push(b.tool);
+    }
+  }
+  if (!chunks.length) return [];
+  const combined = chunks.join("\n");
+  const pathRegex = /(?:^|[\s"'`(\[<>=:;,])([a-zA-Z0-9_\-\.\u00C0-\u024F\u1EA0-\u1EF9]+(?:[\\\/][a-zA-Z0-9_\-\.\u00C0-\u024F\u1EA0-\u1EF9]+)+)/g;
+  let m;
+  while ((m = pathRegex.exec(combined)) !== null) {
+    let p = m[1].replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    if (/^https?:\/\//i.test(p)) continue;
+    if (/^[a-zA-Z]:/i.test(p)) continue;
+    if (/^(node_modules|\.git|venv|\.venv|windows|system32|program files|usr|bin|etc)\b/i.test(p)) continue;
+    if (p.includes("/")) {
+      const parts = p.split("/");
+      const last = parts[parts.length - 1];
+      if (last.includes(".")) {
+        parts.pop();
+        p = parts.join("/");
+      }
+    }
+    if (p && !p.includes(".")) {
+      dirs.add(p);
+    }
+  }
+  return Array.from(dirs).slice(0, 5);
+}
+
+function lamMoiCayVault(t, text) {
+  const found = _trichXuatThuMucTuLuot(t, text);
+  if (found && found.length) {
+    found.forEach(d => _vtAutoPendingDirs.add(d));
+  }
+  clearTimeout(_vtAutoRefreshTimer);
+  _vtAutoRefreshTimer = setTimeout(() => {
+    const list = Array.from(_vtAutoPendingDirs);
+    _vtAutoPendingDirs.clear();
+    try {
+      if (window.JavisVaultPanel && typeof window.JavisVaultPanel.refresh === "function") {
+        window.JavisVaultPanel.refresh(list);
+      } else {
+        window.dispatchEvent(new CustomEvent("javis:vault-refresh", { detail: { revealDir: list } }));
+      }
+    } catch (e) { }
+  }, 120);
+}
+
 function handleMessage(data) {
   // Server chào khi kết nối: đồng bộ các job vẫn đang chạy. Job thuộc server,
   // không thuộc WebSocket nên đóng/F5 tab rồi mở lại vẫn xem và Stop được.
@@ -1136,6 +1193,7 @@ function handleMessage(data) {
     // Một việc nền vừa báo xong = hàng đợi vừa đổi. Hỏi lại ngay thay vì đợi hết nhịp 6 giây,
     // để dải trạng thái không còn khoe một việc vừa kết thúc.
     try { if (window.JavisBackground) window.JavisBackground.refresh(); } catch (e) {}
+    lamMoiCayVault(null, data.content || "");
     return;
   }
   if (data.type === "team_message" || data.type === "team_state" || data.type === "team_replies") {
@@ -1264,6 +1322,7 @@ function handleMessage(data) {
       maybeAutoLearn();
     }
     refreshUsage();     // cập nhật panel Mức dùng sau mỗi lượt
+    lamMoiCayVault(t, finalText);
   } else if (data.type === "error") {
     if (t && data.limit) t.limit = data.limit;
     if (t) t.errored = true;   // khung response rỗng theo sau không vẽ thêm "(không có nội dung)"
@@ -1334,6 +1393,7 @@ function handleMessage(data) {
     try { if (window.JavisBackground) window.JavisBackground.refresh(); } catch (e) {}
     // /goal: lượt vừa đóng, đây là lúc duy nhất quyết định có tự gửi vòng tiếp không.
     try { if (isActive && window.JavisLenh) window.JavisLenh.hetLuot(sid); } catch (e) {}
+    lamMoiCayVault(t, t ? t.text : "");
   }
 }
 

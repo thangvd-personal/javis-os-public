@@ -7883,7 +7883,15 @@
     _vaultSlot = null;
   }
   if (typeof window !== "undefined") {
-    window.JavisVaultPanel = { borrow: _borrowVaultPanel, giveBack: _returnVaultPanel };
+    window.JavisVaultPanel = {
+      borrow: _borrowVaultPanel,
+      giveBack: _returnVaultPanel,
+      refresh: (revealDir) => _vtRebuildReExpand(revealDir != null ? revealDir : null),
+    };
+    window.addEventListener("javis:vault-refresh", (e) => {
+      const revealDir = e && e.detail && e.detail.revealDir;
+      _vtRebuildReExpand(revealDir != null ? revealDir : null);
+    });
     // Cửa chuyển trang cho module ngoài (vd nút "Tạo Agent" ở trang Chatbot). Phơi navigateTo
     // chứ không để module tự đặt store.active: navigateTo còn dọn trang cũ, cất #quickSet và
     // vẽ lại đồ thị - bỏ qua mấy bước đó là để lại rác của trang trước trên trang sau.
@@ -8119,38 +8127,142 @@
     return items;
   }
 
+  // Lưu và khôi phục trạng thái thư mục đã chọn / các thư mục mở theo từng brain (localStorage).
+  function _vtKhoaSel() { return "javis_vault_sel_dir_" + (fbrain() || "brain"); }
+  function _vtKhoaOpen() { return "javis_vault_open_dirs_" + (fbrain() || "brain"); }
+
+  function _vtChuanHoaRel(rel) {
+    if (!rel) return "";
+    rel = rel.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    if (_vtHome && rel.indexOf(_vtHome + "/") === 0) return rel.slice(_vtHome.length + 1);
+    if (_vtHome && rel === _vtHome) return "";
+    return rel;
+  }
+
+  function _vtDayDuRel(innerRel) {
+    if (!innerRel) return _vtHome || "";
+    if (_vtHome && (innerRel === _vtHome || innerRel.indexOf(_vtHome + "/") === 0)) return innerRel;
+    return _vtHome ? _vtHome + "/" + innerRel : innerRel;
+  }
+
+  function _vtLuuThuMucDaChon(rel) {
+    try {
+      const clean = _vtChuanHoaRel(rel);
+      if (clean) localStorage.setItem(_vtKhoaSel(), clean);
+      else localStorage.removeItem(_vtKhoaSel());
+    } catch (e) { }
+  }
+
+  function _vtDocThuMucDaChon() {
+    try {
+      const clean = localStorage.getItem(_vtKhoaSel()) || "";
+      return clean ? _vtDayDuRel(clean) : "";
+    } catch (e) { return ""; }
+  }
+
+  function _vtLuuTrangThaiCacThuMucMo() {
+    try {
+      const tree = document.getElementById("vaultTree");
+      if (!tree) return;
+      const opened = [];
+      tree.querySelectorAll(".vt-branch > .vt-children:not(.vt-hidden)").forEach(box => {
+        const node = box.previousElementSibling;
+        if (node && node.dataset && node.dataset.rel) {
+          const clean = _vtChuanHoaRel(node.dataset.rel);
+          if (clean && !opened.includes(clean)) opened.push(clean);
+        }
+      });
+      localStorage.setItem(_vtKhoaOpen(), JSON.stringify(opened));
+    } catch (e) { }
+  }
+
+  function _vtDocCacThuMucMo() {
+    try {
+      const s = localStorage.getItem(_vtKhoaOpen());
+      const arr = s ? JSON.parse(s) : [];
+      return Array.isArray(arr) ? arr.map(_vtDayDuRel) : [];
+    } catch (e) { return []; }
+  }
+
+  function _themChuoiThuMucCha(r, wanted) {
+    if (!r || typeof r !== "string") return;
+    const inner = _vtChuanHoaRel(r);
+    const segs = inner ? inner.split("/").filter(Boolean) : [];
+    if (segs.length > 0 && segs[segs.length - 1].includes(".")) segs.pop();
+    let acc = _vtHome || "";
+    for (const seg of segs) {
+      acc = acc ? acc + "/" + seg : seg;
+      wanted.add(acc);
+    }
+  }
+
   // Dựng lại cây nhưng GIỮ NGUYÊN các thư mục đang mở (thêm/sửa/xoá không làm sập cây).
-  // revealDir (tuỳ chọn) = thư mục cần mở thêm để thấy file vừa tạo.
+  // revealDir (tuỳ chọn) = thư mục/tệp hoặc mảng các đường dẫn cần mở thêm để thấy file vừa tạo.
+  let _vtRebuilding = false;
+  let _vtPendingReExpandDirs = null;
+
   async function _vtRebuildReExpand(revealDir) {
     const tree = document.getElementById("vaultTree"); if (!tree) return;
-    const escSel = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"');
-    // 1. Ghi lại các thư mục đang mở (childBox không ẩn).
-    const wanted = new Set();
-    tree.querySelectorAll(".vt-branch > .vt-children:not(.vt-hidden)").forEach(box => {
-      const node = box.previousElementSibling;
-      if (node && node.dataset && node.dataset.rel) wanted.add(node.dataset.rel);
-    });
-    // 2. Thêm chuỗi thư mục cha của revealDir (để thấy file mới dù thư mục đó đang đóng).
-    if (revealDir != null && revealDir !== "") {
-      let inner;
-      if (_vtHome && revealDir.indexOf(_vtHome + "/") === 0) inner = revealDir.slice(_vtHome.length + 1);
-      else if (!_vtHome) inner = revealDir;
-      else inner = (revealDir === _vtHome ? "" : revealDir);
-      const segs = inner ? inner.split("/") : [];
-      let acc = _vtHome || "";
-      for (const seg of segs) { acc = acc ? acc + "/" + seg : seg; wanted.add(acc); }
+    const searchInp = document.getElementById("vaultSearch");
+    if (searchInp && searchInp.value && searchInp.value.trim() !== "") return;
+    if (_vtRebuilding) {
+      if (!_vtPendingReExpandDirs) _vtPendingReExpandDirs = new Set();
+      const rDirs = Array.isArray(revealDir) ? revealDir : (revealDir != null && revealDir !== "" ? [revealDir] : []);
+      rDirs.forEach(d => _vtPendingReExpandDirs.add(d));
+      return;
     }
-    // 3. Dựng lại (tươi) rồi mở lại từ NÔNG tới SÂU (cha trước con).
-    _vtCache.clear(); _vtIndex = null;
-    await renderVaultTree();
-    const list = [...wanted].sort((a, b) => a.split("/").length - b.split("/").length);
-    for (const rel of list) {
-      const node = tree.querySelector(`.vt-node[data-rel="${escSel(rel)}"]`);
-      if (!node) continue;
-      const box = node.parentElement && node.parentElement.querySelector(":scope > .vt-children");
-      if (box && box.classList.contains("vt-hidden")) {
-        node.click();
-        for (let i = 0; i < 25 && (box.classList.contains("vt-hidden") || !box.children.length); i++) await new Promise(r => setTimeout(r, 30));
+    _vtRebuilding = true;
+    try {
+      const escSel = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"');
+      // 1. Ghi lại các thư mục đang mở (từ DOM hiện tại).
+      const wanted = new Set();
+      tree.querySelectorAll(".vt-branch > .vt-children:not(.vt-hidden)").forEach(box => {
+        const node = box.previousElementSibling;
+        if (node && node.dataset && node.dataset.rel) wanted.add(node.dataset.rel);
+      });
+
+      // 1b. Khôi phục các thư mục đã mở từ localStorage của brain này
+      const savedOpen = _vtDocCacThuMucMo();
+      if (Array.isArray(savedOpen)) {
+        savedOpen.forEach(d => { if (d) wanted.add(d); });
+      }
+
+      // 1c. Khôi phục thư mục đã chọn từ localStorage của brain này
+      const savedSel = _vtDocThuMucDaChon();
+      if (savedSel) {
+        _themChuoiThuMucCha(savedSel, wanted);
+      }
+
+      // 2. Thêm chuỗi thư mục cha của revealDir (để thấy file mới dù thư mục đó đang đóng).
+      const rList = Array.isArray(revealDir) ? revealDir : (revealDir != null && revealDir !== "" ? [revealDir] : []);
+      for (const r of rList) {
+        _themChuoiThuMucCha(r, wanted);
+      }
+
+      // 3. Dựng lại gốc rồi mở lại từ NÔNG tới SÂU (cha trước con).
+      _vtCache.clear(); _vtIndex = null;
+      await _renderVaultTreeRoot();
+      const list = [...wanted].sort((a, b) => a.split("/").length - b.split("/").length);
+      for (const rel of list) {
+        const node = tree.querySelector(`.vt-node[data-rel="${escSel(rel)}"]`);
+        if (!node) continue;
+        const box = node.parentElement && node.parentElement.querySelector(":scope > .vt-children");
+        if (box && box.classList.contains("vt-hidden")) {
+          node.click();
+          for (let i = 0; i < 25 && (box.classList.contains("vt-hidden") || !box.children.length); i++) await new Promise(r => setTimeout(r, 30));
+        }
+      }
+
+      // 4. Khôi phục vị trí tô sáng thư mục hoặc file đã chọn
+      const activeRel = _vtActivePath || savedSel;
+      if (activeRel) _vtMarkActive(activeRel);
+      _vtLuuTrangThaiCacThuMucMo();
+    } finally {
+      _vtRebuilding = false;
+      if (_vtPendingReExpandDirs && _vtPendingReExpandDirs.size > 0) {
+        const nextDirs = Array.from(_vtPendingReExpandDirs);
+        _vtPendingReExpandDirs = null;
+        setTimeout(() => _vtRebuildReExpand(nextDirs), 50);
       }
     }
   }
@@ -8272,7 +8384,8 @@
       + (!isDir ? `<button data-a="attach" title="${esc(window.t("cs.vt_attach_chat"))}">${ic("paperclip")}</button>` : "")
       + `<button data-a="dl" title="${esc(window.t(isDir ? "cs.fm_zipfolder_title" : "cs.fm_dl_title"))}">⤓</button>`
       + `<button data-a="ren" title="${esc(window.t("cs.fm_rename"))}">${ic("pencil")}</button><button data-a="del" title="${esc(window.t("common.delete"))}">${ic("trash-2")}</button></span>`;
-    if (!isDir && rel === _vtActivePath) node.classList.add("active");
+    const selDir = _vtDocThuMucDaChon();
+    if (rel === _vtActivePath || (isDir && selDir && rel === selDir)) node.classList.add("active");
     node.querySelectorAll(".vt-act button").forEach(b => b.onclick = (e) => {
       e.stopPropagation();
       const a = b.dataset.a;
@@ -8293,20 +8406,39 @@
       const childBox = document.createElement("div"); childBox.className = "vt-children vt-hidden";
       wrap.appendChild(childBox);
       let loaded = false;
-      node.onclick = async () => {
+      node.onclick = async (e) => {
         const chev = node.querySelector(".vt-chev");
         const willOpen = childBox.classList.contains("vt-hidden");
         childBox.classList.toggle("vt-hidden", !willOpen);
         chev.classList.toggle("open", willOpen);
+        if (e && e.isTrusted) {
+          if (willOpen) {
+            _vtMarkActive(rel);
+            _vtLuuThuMucDaChon(rel);
+          } else {
+            const curSel = _vtDocThuMucDaChon();
+            if (curSel === rel || (curSel && curSel.startsWith(rel + "/"))) {
+              _vtLuuThuMucDaChon("");
+              _vtMarkActive(null);
+            }
+          }
+        }
         if (willOpen && !loaded) {
           loaded = true;
           const kids = await _vtList(rel);
           if (!kids.length) childBox.innerHTML = `<div class="vt-info" style="padding-left:${18 + depth * 13}px">${esc(window.t("cs.vt_empty_dir"))}</div>`;
           else kids.forEach(k => childBox.appendChild(_vtRowEl(k, rel, depth + 1)));
         }
+        if (e && e.isTrusted) {
+          _vtLuuTrangThaiCacThuMucMo();
+        }
       };
     } else {
-      node.onclick = () => openNote(rel, it);
+      node.onclick = () => {
+        const parentDir = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+        if (parentDir) _vtLuuThuMucDaChon(parentDir);
+        openNote(rel, it);
+      };
     }
     return wrap;
   }
@@ -8360,6 +8492,7 @@
     const results = document.getElementById("vaultResults"); if (results) results.hidden = true;
     const clearBtn = document.getElementById("vaultSearchClear"); if (clearBtn) clearBtn.hidden = true;
     const tree = document.getElementById("vaultTree"); if (tree) tree.hidden = false;
+    _vtLuuThuMucDaChon(dir);
     await _vtRebuildReExpand(dir);
     _vtMarkActive(p);
     const sel = (window.CSS && CSS.escape) ? CSS.escape(p) : p.replace(/"/g, '\\"');
@@ -8494,7 +8627,7 @@
     if (ve) ve.onclick = () => datVaultThu(false);
   }
 
-  async function renderVaultTree() {
+  async function _renderVaultTreeRoot() {
     const tree = document.getElementById("vaultTree"); if (!tree) return;
     _vtWire();
     tree.hidden = false;
@@ -8504,6 +8637,10 @@
     tree.innerHTML = "";
     if (!items.length) { tree.innerHTML = `<div class="vt-info">${esc(window.t("cs.vt_vault_empty"))}</div>`; return; }
     items.forEach(it => tree.appendChild(_vtRowEl(it, _vtHome || "", 0)));
+  }
+
+  async function renderVaultTree() {
+    await _vtRebuildReExpand(null);
   }
 
   function _vtMarkActive(rel) {
