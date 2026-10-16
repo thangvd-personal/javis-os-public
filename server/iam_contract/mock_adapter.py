@@ -655,6 +655,8 @@ class InMemoryMockIamPdpAdapter:
             }
 
     def check_revocation(self, req: Mapping[str, Any]) -> dict[str, Any]:
+        if self.unavailable_mode:
+            raise RuntimeError("PDP_UNAVAILABLE_FAIL_CLOSED")
         ctx = req["execution_context"]
         tid = str(ctx["tenant_id"])
         principal_id = ctx["principal_id"]

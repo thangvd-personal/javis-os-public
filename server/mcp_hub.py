@@ -1330,6 +1330,8 @@ def resolve_vault(raw_vault):
             except Exception:
                 pass
         header_hong = raw
+    if os.getenv("JAVIS_WORKSPACE_TIER", "").strip().upper() == "CORPORATE":
+        return None, "corporate_blocked", header_hong
     root, nguon = _brain_dang_mo()
     return (root or None), (nguon if root else ""), header_hong
 
