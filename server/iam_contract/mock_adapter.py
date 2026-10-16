@@ -407,22 +407,20 @@ class InMemoryMockIamPdpAdapter:
                 return self._build_decision(effect="DENY", reason_code="DENY_DATA_SCOPE_ORG_UNIT_MISMATCH", **common)
 
         if (resource_id, operation) in principal["requires_approval"] or ("*", operation) in principal["requires_approval"]:
-            approval_id = action_ctx.get("approval_id")
             payload_hash = action_ctx.get("payload_hash")
-            if not approval_id:
-                return self._build_decision(
-                    effect="APPROVAL_REQUIRED",
-                    reason_code="APPROVAL_REQUIRED_BY_POLICY",
-                    approval_requirement={
-                        "approval_id": None,
-                        "required_tiers": ["PRIMARY"],
-                        "separation_of_duties": True,
-                        "bound_payload_hash": payload_hash
-                        or "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-                        "expires_in_seconds": 1800,
-                    },
-                    **common,
-                )
+            return self._build_decision(
+                effect="APPROVAL_REQUIRED",
+                reason_code="APPROVAL_REQUIRED_BY_POLICY",
+                approval_requirement={
+                    "approval_id": action_ctx.get("approval_id"),
+                    "required_tiers": ["PRIMARY"],
+                    "separation_of_duties": True,
+                    "bound_payload_hash": payload_hash
+                    or "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                    "expires_in_seconds": 1800,
+                },
+                **common,
+            )
 
         obligations = list(self.custom_obligations.get((resource_id, operation), []))
         return self._build_decision(
