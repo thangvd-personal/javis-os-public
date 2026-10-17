@@ -222,7 +222,7 @@ app.add_middleware(CORSMiddleware,
 # canh đúng một ký tự này.
 _AUTH_PUBLIC_PREFIX = ("/static", "/health", "/s/")
 # /brand-logo: hiện trên màn đăng nhập (trước session). /tls-check: Caddy gọi (không đăng nhập được).
-_AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/auth/status", "/auth/login", "/auth/setup",
+_AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout",
                       "/brand-logo", "/brand-theme.css", "/tls-check",
                       "/auth/sme-sso/start", "/auth/sme-callback",
                       # /hub/mcp: Claude CLI/Codex gọi bằng Bearer hub_token riêng (không có cookie).
