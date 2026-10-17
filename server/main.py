@@ -19,6 +19,7 @@ import hashlib
 # chúng chỉ nổ đúng lúc đã có sự cố khác, biến một lỗi lẽ ra chỉ cần ghi log thành NameError
 # phá cả luồng. Import một lần ở đây thì mọi chỗ dùng đều an toàn.
 import sys
+from typing import Any
 import uuid
 from pathlib import Path
 import binascii
@@ -223,6 +224,7 @@ _AUTH_PUBLIC_PREFIX = ("/static", "/health", "/s/")
 # /brand-logo: hiện trên màn đăng nhập (trước session). /tls-check: Caddy gọi (không đăng nhập được).
 _AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/auth/status", "/auth/login", "/auth/setup",
                       "/brand-logo", "/brand-theme.css", "/tls-check",
+                      "/auth/sme-sso/start", "/auth/sme-callback",
                       # /hub/mcp: Claude CLI/Codex gọi bằng Bearer hub_token riêng (không có cookie).
                       # /connect/oauth/callback: browser redirect từ provider OAuth về.
                       "/hub/mcp", "/connect/oauth/callback",
@@ -1705,6 +1707,124 @@ async def auth_disable():
     cfgmod.write_settings(cfg)
     cfgmod.clear_sessions()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# SME_BTOS SSO Authorization Code Broker & Contract Exchange (`G1-013`, Task 3)
+# ---------------------------------------------------------------------------
+_SSO_STATES: dict[str, float] = {}
+_SME_SESSIONS: dict[str, dict] = {}
+
+JAVIS_SSO_CLIENT_ID = os.getenv("JAVIS_SSO_CLIENT_ID", "javisos-sso-client")
+JAVIS_SSO_CLIENT_SECRET = os.getenv("JAVIS_SSO_CLIENT_SECRET", "dev-sso-client-secret")
+SME_BTOS_BASE_URL = os.getenv("SME_BTOS_BASE_URL", "http://localhost:8000").rstrip("/")
+JAVIS_CALLBACK_URL = os.getenv("JAVIS_CALLBACK_URL", "http://localhost:7777/auth/sme-callback")
+
+
+def _exchange_sso_code_for_session_token(code: str, client_id: str, redirect_uri: str) -> dict[str, Any]:
+    """Hop 1: Server-to-server call to SME_BTOS SSO Broker to exchange code for session_token."""
+    import urllib.request
+    url = f"{SME_BTOS_BASE_URL}/api/v1/iam/sso/token"
+    payload = json.dumps({
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+    }).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-SSO-Client-Id": JAVIS_SSO_CLIENT_ID,
+        "X-SSO-Client-Secret": JAVIS_SSO_CLIENT_SECRET,
+    }
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _exchange_session_token_for_execution_token(session_token: str) -> dict[str, Any]:
+    """Hop 2: Server-to-server call to SME_BTOS G0 Contract Adapter to exchange session_token for execution_token."""
+    import urllib.request
+    url = f"{SME_BTOS_BASE_URL}/api/v1/iam-pdp-contract/v1/tokens/exchange"
+    payload = json.dumps({
+        "subject_token": session_token,
+        "subject_token_type": "SESSION_TOKEN",
+        "requested_audience": "javisos-mcp-gateway",
+        "requested_workspace_id": "ws-corp-main",
+        "device_id": "dev_01",
+        "correlation_id": f"corr_sso_{secrets.token_hex(6)}",
+    }).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-Service-Client-Id": "javisos-mcp-gateway",
+        "X-Service-Token": os.getenv("JAVIS_GATEWAY_SERVICE_TOKEN", "dev-gateway-service-secret"),
+    }
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+@app.get("/auth/sme-sso/start")
+async def sme_sso_start():
+    """Initiate SME_BTOS SSO login: generate state nonce and return redirect URL."""
+    state = secrets.token_urlsafe(24)
+    now = time.time()
+    _SSO_STATES[state] = now
+    # Prune states older than 300s
+    for s in [k for k, v in list(_SSO_STATES.items()) if now - v > 300]:
+        _SSO_STATES.pop(s, None)
+
+    params = urllib.parse.urlencode({
+        "client_id": JAVIS_SSO_CLIENT_ID,
+        "redirect_uri": JAVIS_CALLBACK_URL,
+        "state": state,
+    })
+    redirect_url = f"{SME_BTOS_BASE_URL}/api/v1/iam/sso/authorize?{params}"
+    return {"ok": True, "state": state, "redirect_url": redirect_url}
+
+
+@app.get("/auth/sme-callback")
+async def sme_callback(code: str = Query(...), state: str = Query(...)):
+    """Handle SME_BTOS SSO callback, validate state, and execute 2-hop token exchange."""
+    now = time.time()
+    created = _SSO_STATES.pop(state, None)
+    if not created or (now - created > 300):
+        return JSONResponse({"ok": False, "error": "STATE_MISMATCH_OR_EXPIRED"}, status_code=400)
+
+    try:
+        # Hop 1: Code -> Session Token
+        res_hop1 = _exchange_sso_code_for_session_token(
+            code=code,
+            client_id=JAVIS_SSO_CLIENT_ID,
+            redirect_uri=JAVIS_CALLBACK_URL,
+        )
+        session_token = res_hop1["session_token"]
+
+        # Hop 2: Session Token -> Execution Token
+        res_hop2 = _exchange_session_token_for_execution_token(session_token=session_token)
+        execution_token = res_hop2["issued_token"]
+
+        # Store tokens server-side only (never expose in URL or browser storage)
+        sme_sess_id = f"sme_sess_{secrets.token_urlsafe(24)}"
+        _SME_SESSIONS[sme_sess_id] = {
+            "execution_token": execution_token,
+            "session_token": session_token,
+            "username": res_hop1.get("username", "alice_corp"),
+            "tenant_id": res_hop1.get("tenant_id", "t-corp-pilot"),
+            "created_at": now,
+        }
+
+        # Set cookie and redirect cleanly to /?auth=success
+        resp = RedirectResponse(url="/?auth=success", status_code=302)
+        resp.set_cookie(
+            key="sme_session_id",
+            value=sme_sess_id,
+            httponly=True,
+            samesite="lax",
+            max_age=3600 * 8,
+        )
+        return resp
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"SSO_EXCHANGE_FAILED: {str(exc)}"}, status_code=400)
 
 
 # ============================================================

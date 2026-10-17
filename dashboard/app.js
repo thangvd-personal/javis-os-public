@@ -4325,6 +4325,20 @@ document.getElementById("authSubmit").addEventListener("click", async () => {
     err.textContent = d.error || window.t("app.login_failed");
   } catch (e) { err.textContent = window.t("app.err_net"); }
 });
+document.getElementById("btnSmeSso")?.addEventListener("click", async () => {
+  const err = document.getElementById("authErr");
+  try {
+    const r = await fetch("/auth/sme-sso/start");
+    const d = await r.json();
+    if (d.ok && d.redirect_url) {
+      window.location.href = d.redirect_url;
+    } else {
+      if (err) err.textContent = d.error || "Không thể khởi tạo đăng nhập SSO";
+    }
+  } catch (e) {
+    if (err) err.textContent = window.t("app.err_net");
+  }
+});
 // Eye button: lets the user check what they typed (a Hostinger customer could not tell a typo
 // from a wrong env password, 2026-10-05). Focus stays in the field so Enter still signs in.
 (() => {
