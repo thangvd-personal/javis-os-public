@@ -1698,8 +1698,24 @@ async def auth_tokens_revoke(request: Request, id: str = Form(...)):
 @app.post("/auth/logout")
 async def auth_logout(request: Request):
     cfgmod.drop_session(request.cookies.get("javis_session", ""))
+    sme_sess = request.cookies.get("sme_session_id", "")
+    if sme_sess:
+        _SME_SESSIONS.pop(sme_sess, None)
     resp = JSONResponse({"ok": True})
     resp.delete_cookie("javis_session", path="/")
+    resp.delete_cookie("sme_session_id", path="/")
+    return resp
+
+
+@app.get("/auth/logout")
+async def auth_logout_get(request: Request):
+    cfgmod.drop_session(request.cookies.get("javis_session", ""))
+    sme_sess = request.cookies.get("sme_session_id", "")
+    if sme_sess:
+        _SME_SESSIONS.pop(sme_sess, None)
+    resp = RedirectResponse(url="/", status_code=302)
+    resp.delete_cookie("javis_session", path="/")
+    resp.delete_cookie("sme_session_id", path="/")
     return resp
 
 
