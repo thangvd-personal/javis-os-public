@@ -308,7 +308,8 @@ async def _auth_guard(request: Request, call_next):
                   # khi đúng tiền tố, để request thường không phải đi tra danh sách plugin.
                   or ((path.startswith("/ext/") or path.startswith("/.well-known/"))
                       and plugins_host.http_cong_khai(path, request.method)))
-        if not public and not cfgmod.valid_session(request.cookies.get("javis_session", "")):
+        has_session = cfgmod.valid_session(request.cookies.get("javis_session", "")) or bool(request.cookies.get("sme_session_id") in _SME_SESSIONS)
+        if not public and not has_session:
             # Client ngoài trình duyệt (CLI, script, cron) không có cookie. Nhánh token là
             # đường DUY NHẤT của chúng - xem docs/dev/2026-08-cli-spec.md. Đặt SAU nhánh
             # cookie để dashboard không phải đọc file token mỗi request.
@@ -1366,7 +1367,8 @@ async def auth_status(request: Request):
     cfg = cfgmod.read_settings()
     enabled = cfgmod.auth_enabled(cfg)
     require = cfgmod.require_login()
-    has_session = cfgmod.valid_session(request.cookies.get("javis_session", ""))
+    sme_sess = request.cookies.get("sme_session_id", "")
+    has_session = cfgmod.valid_session(request.cookies.get("javis_session", "")) or bool(sme_sess in _SME_SESSIONS)
     # authed: có session thật; HOẶC bản local không bắt buộc login + chưa đặt mật khẩu (giữ UX cũ).
     authed = has_session or (not enabled and not require)
     return {"needs_setup": not enabled, "auth_required": enabled or require,
@@ -1383,7 +1385,9 @@ async def auth_status(request: Request):
             # install.sh có thể ghi JAVIS_SETUP_2FA=1 vào .env khi người cài chọn bật 2FA.
             # Đây chỉ là LỜI NHẮC cho giao diện mở sẵn màn bật, không phải một cơ chế bảo mật.
             "totp_suggested": (_env_bat("JAVIS_SETUP_2FA") and not cfgmod.totp_enabled(cfg)),
-            "username": (cfg.get("auth", {}).get("username", "") if authed else "")}
+            "username": ((_SME_SESSIONS.get(sme_sess, {}).get("username") or cfg.get("auth", {}).get("username", "")) if authed else ""),
+            "sme_sso": bool(sme_sess in _SME_SESSIONS),
+            "tenant_id": (_SME_SESSIONS.get(sme_sess, {}).get("tenant_id") if authed else None)}
 
 
 @app.post("/auth/setup")
@@ -1783,7 +1787,7 @@ async def sme_sso_start():
 
 
 @app.get("/auth/sme-callback")
-async def sme_callback(code: str = Query(...), state: str = Query(...)):
+async def sme_callback(request: Request, code: str = Query(...), state: str = Query(...)):
     """Handle SME_BTOS SSO callback, validate state, and execute 2-hop token exchange."""
     now = time.time()
     created = _SSO_STATES.pop(state, None)
@@ -1821,7 +1825,11 @@ async def sme_callback(code: str = Query(...), state: str = Query(...)):
             httponly=True,
             samesite="lax",
             max_age=3600 * 8,
+            path="/",
         )
+        # Also mint local javis session for seamless UI unlock
+        local_tok = cfgmod.new_session()
+        _session_cookie(resp, local_tok, request)
         return resp
     except Exception as exc:
         return JSONResponse({"ok": False, "error": f"SSO_EXCHANGE_FAILED: {str(exc)}"}, status_code=400)

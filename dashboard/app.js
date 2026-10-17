@@ -4272,7 +4272,18 @@ async function initAuthGate() {
   // cookie phiên rất có thể vẫn còn hợp lệ, chỉ là chưa hỏi được. Cứ để nguyên UI, mọi lệnh
   // gọi API thật sự (chat, file...) tự lộ ra nếu phiên đã hết hạn thật.
   if (!s) return;
-  if (s.authed) { initSetup(); return; }
+  if (s.authed) {
+    initSetup();
+    if (window.location.search.includes("auth=success")) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("auth");
+        window.history.replaceState({}, document.title, url.pathname + (url.search || ""));
+      } catch (e) {}
+      _showSmeLoginSuccessToast(s);
+    }
+    return;
+  }
   if (s.needs_setup) {
     _wizardMandatory = !!s.require_login;
     const wz = document.getElementById("setupWizard");
@@ -4296,6 +4307,38 @@ async function initAuthGate() {
   } else {
     authOverlay.classList.add("open");
   }
+}
+
+function _showSmeLoginSuccessToast(s) {
+  const user = s.username || "alice_corp";
+  const tenant = s.tenant_id || "t-corp-pilot";
+  const banner = document.createElement("div");
+  banner.id = "smeAuthToast";
+  banner.style.cssText = "position:fixed;top:65px;right:20px;z-index:99999;background:#0f172a;color:#f8fafc;border:1px solid #0284c7;border-radius:10px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.5),0 0 15px rgba(2,132,199,0.3);padding:16px 20px;max-width:440px;font-family:inherit;";
+  banner.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="color:#38bdf8;font-size:22px;line-height:1;">🛡️</div>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:14px;margin-bottom:4px;color:#38bdf8;">Đăng Nhập Tổ Chức Thành Công</div>
+        <div style="font-size:12px;color:#94a3b8;line-height:1.4;margin-bottom:12px;">
+          Xác thực SSO qua <strong>SME_BTOS</strong> thành công cho tài khoản <strong>${user}</strong> (${tenant}).
+          Phiên làm việc Corporate PDP Guard đã được kích hoạt.
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a href="http://localhost:7778" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:#0284c7;color:white;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:500;text-decoration:none;">
+            <span>Mở Bảng Giám Sát (Port 7778)</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+          <button id="closeSmeToast" style="background:transparent;color:#94a3b8;border:1px solid #334155;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Đóng</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById("closeSmeToast")?.addEventListener("click", () => {
+    banner.remove();
+  });
+  setTimeout(() => { if (banner.parentNode) banner.remove(); }, 15000);
 }
 document.getElementById("authSubmit").addEventListener("click", async () => {
   const codeWrap = document.getElementById("authCodeWrap");
@@ -4326,16 +4369,32 @@ document.getElementById("authSubmit").addEventListener("click", async () => {
   } catch (e) { err.textContent = window.t("app.err_net"); }
 });
 document.getElementById("btnSmeSso")?.addEventListener("click", async () => {
+  const btn = document.getElementById("btnSmeSso");
   const err = document.getElementById("authErr");
   try {
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = "0.7";
+      btn.innerHTML = `<span style="display:inline-block;">⏳</span> <span>Đang kết nối SME_BTOS SSO...</span>`;
+    }
     const r = await fetch("/auth/sme-sso/start");
     const d = await r.json();
     if (d.ok && d.redirect_url) {
       window.location.href = d.redirect_url;
     } else {
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.innerHTML = `<span>Đăng nhập qua Tổ chức (SME_BTOS)</span>`;
+      }
       if (err) err.textContent = d.error || "Không thể khởi tạo đăng nhập SSO";
     }
   } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.innerHTML = `<span>Đăng nhập qua Tổ chức (SME_BTOS)</span>`;
+    }
     if (err) err.textContent = window.t("app.err_net");
   }
 });
