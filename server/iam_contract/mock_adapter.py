@@ -37,6 +37,9 @@ class InMemoryMockIamPdpAdapter:
         self.model_allowlist: set[tuple[str, str]] = {
             ("internal", "javis-corp-llm-v1"),
             ("anthropic", "claude-3-5-sonnet-enterprise"),
+            ("anthropic", "claude-3-5-sonnet-20241022"),
+            ("google", "gemini-2.5-flash"),
+            ("local", "qwen2.5:14b-instruct-q4_K_M"),
         }
 
     # --- Test Seeding Helpers ---

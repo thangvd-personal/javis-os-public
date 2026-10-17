@@ -24,6 +24,32 @@ SUPPORTED_OBLIGATION_TYPES = frozenset(
     }
 )
 
+APPROVED_MODEL_REGISTRY: dict[tuple[str, str], dict[str, Any]] = {
+    ("anthropic", "claude-3-5-sonnet-20241022"): {
+        "registry_id": "MOD-ANTHROPIC-SONNET-35",
+        "approved_for_classes": {"PUBLIC", "INTERNAL", "CONFIDENTIAL"},
+        "data_retention_policy": "ZERO_DATA_RETENTION",
+        "approval_status": "ACTIVE",
+    },
+    ("google", "gemini-2.5-flash"): {
+        "registry_id": "MOD-GOOGLE-FLASH-25",
+        "approved_for_classes": {"PUBLIC", "INTERNAL"},
+        "data_retention_policy": "ENTERPRISE_NO_TRAINING",
+        "approval_status": "ACTIVE",
+    },
+    ("local", "qwen2.5:14b-instruct-q4_K_M"): {
+        "registry_id": "MOD-LOCAL-OLLAMA-QWEN",
+        "approved_for_classes": {"PUBLIC", "INTERNAL", "CONFIDENTIAL"},
+        "data_retention_policy": "LOCAL_ON_PREM_ONLY",
+        "approval_status": "ACTIVE",
+        "network_isolation_requirements": {
+            "egress_blocked": True,
+            "telemetry_disabled": True,
+            "prompt_logging_disabled": True,
+        },
+    },
+}
+
 
 class GatewayPepError(PermissionError):
     """Structured fail-closed PEP error raised when MCP Gateway blocks an action."""
@@ -64,11 +90,13 @@ class McpGatewayPepService:
         catalog: ApprovedConnectorCatalog,
         audit_outbox: DurableAuditOutbox,
         required_audience: str = "javisos-mcp-gateway",
+        read_only_gate: bool = False,
     ) -> None:
         self.adapter = adapter
         self.catalog = catalog
         self.audit_outbox = audit_outbox
         self.required_audience = required_audience
+        self.read_only_gate = read_only_gate
         self._idempotency_store: dict[str, tuple[str, GatewayExecutionResult]] = {}
 
     def execute_enterprise_action(
@@ -138,6 +166,119 @@ class McpGatewayPepService:
                 )
             return prev_result
 
+        # 2b. Enforce G1 Policy Profile Read-Only Restrictions & Prompt Protection
+        if (self.read_only_gate or connector_id == "sme_hrm_iam_reader") and operation in ("write", "delete", "download", "export"):
+            reason = "DENY_GATE_RESTRICTION_READ_ONLY"
+            self.audit_outbox.append_event(
+                event_type="pdp.decision",
+                execution_stage="DECISION_DENIED",
+                execution_context=ctx,
+                resource_id=resource_id,
+                operation=operation,
+                decision_effect="DENY",
+                payload_hash=payload_hash,
+                reason_code=reason,
+            )
+            raise GatewayPepError(reason, f"Operation '{operation}' is prohibited under G1 Read-Only Pilot", effect="DENY")
+
+        if operation == "share":
+            reason = "DENY_CROSS_WORKSPACE_SHARE_FORBIDDEN"
+            self.audit_outbox.append_event(
+                event_type="pdp.decision",
+                execution_stage="DECISION_DENIED",
+                execution_context=ctx,
+                resource_id=resource_id,
+                operation=operation,
+                decision_effect="DENY",
+                payload_hash=payload_hash,
+                reason_code=reason,
+            )
+            raise GatewayPepError(reason, "Sharing across workspaces is prohibited", effect="DENY")
+
+        if operation == "prompt_use":
+            provider_id = args.get("provider_id")
+            model_id = args.get("model_id")
+            if not provider_id or not model_id:
+                reason = "DENY_PROVIDER_OR_MODEL_NOT_ALLOWLISTED"
+                self.audit_outbox.append_event(
+                    event_type="pdp.decision",
+                    execution_stage="DECISION_DENIED",
+                    execution_context=ctx,
+                    resource_id=resource_id,
+                    operation=operation,
+                    decision_effect="DENY",
+                    payload_hash=payload_hash,
+                    reason_code=reason,
+                )
+                raise GatewayPepError(reason, "Missing provider_id or model_id for prompt_use", effect="DENY")
+
+            model_entry = APPROVED_MODEL_REGISTRY.get((str(provider_id), str(model_id)))
+            if not model_entry or model_entry.get("approval_status") != "ACTIVE":
+                reason = "DENY_PROVIDER_OR_MODEL_NOT_ALLOWLISTED"
+                self.audit_outbox.append_event(
+                    event_type="pdp.decision",
+                    execution_stage="DECISION_DENIED",
+                    execution_context=ctx,
+                    resource_id=resource_id,
+                    operation=operation,
+                    decision_effect="DENY",
+                    payload_hash=payload_hash,
+                    reason_code=reason,
+                )
+                raise GatewayPepError(reason, f"Model {provider_id}:{model_id} not in approved registry or inactive", effect="DENY")
+
+            # Determine resource classification
+            classification = None
+            if action_context_extra and "classification" in action_context_extra:
+                classification = action_context_extra["classification"]
+            elif "classification" in args:
+                classification = args["classification"]
+            elif hasattr(self.adapter, "_resources") and resource_id in getattr(self.adapter, "_resources"):
+                classification = getattr(self.adapter, "_resources")[resource_id].get("classification")
+
+            if not classification:
+                classification = "CONFIDENTIAL" if "worker" in resource_id else "INTERNAL"
+
+            if classification not in model_entry.get("approved_for_classes", set()):
+                reason = "DENY_PROVIDER_OR_MODEL_NOT_ALLOWLISTED"
+                self.audit_outbox.append_event(
+                    event_type="pdp.decision",
+                    execution_stage="DECISION_DENIED",
+                    execution_context=ctx,
+                    resource_id=resource_id,
+                    operation=operation,
+                    decision_effect="DENY",
+                    payload_hash=payload_hash,
+                    reason_code=reason,
+                )
+                raise GatewayPepError(reason, f"Model {model_id} not approved for classification {classification}", effect="DENY")
+
+            if classification == "CONFIDENTIAL":
+                policy = model_entry.get("data_retention_policy")
+                retention_ok = False
+                if policy == "ZERO_DATA_RETENTION":
+                    retention_ok = bool(args.get("zero_retention_verified") or (action_context_extra and action_context_extra.get("zero_retention_verified")))
+                elif policy == "LOCAL_ON_PREM_ONLY":
+                    egress = bool(args.get("egress_blocked"))
+                    telemetry = bool(args.get("telemetry_disabled"))
+                    logging = bool(args.get("prompt_logging_disabled"))
+                    remote_fallback = bool(args.get("remote_fallback", False))
+                    retention_ok = egress and telemetry and logging and (not remote_fallback)
+
+                if not retention_ok:
+                    reason = "DENY_PROVIDER_OR_MODEL_NOT_ALLOWLISTED"
+                    self.audit_outbox.append_event(
+                        event_type="pdp.decision",
+                        execution_stage="DECISION_DENIED",
+                        execution_context=ctx,
+                        resource_id=resource_id,
+                        operation=operation,
+                        decision_effect="DENY",
+                        payload_hash=payload_hash,
+                        reason_code=reason,
+                    )
+                    raise GatewayPepError(reason, f"Retention policy requirements not satisfied for CONFIDENTIAL under {policy}", effect="DENY")
+
         # 3. Validate Approved Connector Catalog & SSRF URL overrides (`G0-005`)
         try:
             self.catalog.validate_request(connector_id, args)
@@ -172,6 +313,9 @@ class McpGatewayPepService:
             "approval_id": approval_id,
             "revalidation_stage": "INGRESS",
         }
+        if operation == "prompt_use":
+            action_context["target_provider"] = args.get("provider_id")
+            action_context["target_model"] = args.get("model_id")
         if action_context_extra:
             action_context.update(action_context_extra)
 
