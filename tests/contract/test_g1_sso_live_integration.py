@@ -32,11 +32,15 @@ def test_g1_sso_live_end_to_end_unmocked(tmp_path):
     state = start_data["state"]
     assert state in _SSO_STATES
 
-    # 2. Authenticate and Authorize on live SME_BTOS container
-    # Credentials from environment per Rule 4, never hardcoded in assertions or log
-    username = os.getenv("G1_SSO_TEST_USERNAME", "alice_corp")
-    password = os.getenv("G1_SSO_TEST_PASSWORD", "AliceCorp@2026")
+    # Credentials strictly from environment per Rule 4, no hardcoded fallbacks in repository
+    username = os.environ.get("G1_SSO_TEST_USERNAME")
+    password = os.environ.get("G1_SSO_TEST_PASSWORD")
+    if not username or not password:
+        raise ValueError(
+            "G1_SSO_TEST_USERNAME and G1_SSO_TEST_PASSWORD environment variables are required. Hardcoded fallbacks are strictly prohibited."
+        )
     sme_btos_url = os.getenv("SME_BTOS_BASE_URL", "http://localhost:8000").rstrip("/")
+
 
     auth_payload = urllib.parse.urlencode({
         "client_id": "javisos-sso-client",

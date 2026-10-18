@@ -19,16 +19,22 @@ from starlette.testclient import TestClient
 from javisos.server.main import app, _SSO_STATES, _SME_SESSIONS
 
 
-def _get_live_auth_code(username: str = "alice_corp", state: str = "test_sec_state") -> str:
+def _get_live_auth_code(username: str | None = None, state: str = "test_sec_state") -> str:
     """Helper to obtain a live one-time authorization code from SME_BTOS container."""
-    password = os.getenv("G1_SSO_TEST_PASSWORD", "AliceCorp@2026")
+    user = username or os.environ.get("G1_SSO_TEST_USERNAME")
+    password = os.environ.get("G1_SSO_TEST_PASSWORD")
+    if not user or not password:
+        raise ValueError(
+            "G1_SSO_TEST_USERNAME and G1_SSO_TEST_PASSWORD environment variables are required. Hardcoded fallbacks are strictly prohibited."
+        )
     sme_btos_url = os.getenv("SME_BTOS_BASE_URL", "http://localhost:8000").rstrip("/")
+
 
     auth_payload = urllib.parse.urlencode({
         "client_id": "javisos-sso-client",
         "redirect_uri": "http://localhost:7777/auth/sme-callback",
         "state": state,
-        "username": username,
+        "username": user,
         "password": password,
         "action": "approve",
     }).encode("utf-8")

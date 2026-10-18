@@ -127,7 +127,42 @@ class McpGatewayPepService:
                 required_audience=self.required_audience,
             )
         except Exception as exc:
-            raise GatewayPepError("TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN", str(exc)) from exc
+            raw_reason = str(exc)
+            if "PERMISSION_VERSION" in raw_reason or "PERMISSION_OR_IDENTITY_VERSION_STALE" in raw_reason:
+                reason = "PERMISSION_REVOKED"
+            elif "TENANT" in raw_reason:
+                reason = "TENANT_SUSPENDED"
+            elif "SESSION" in raw_reason or "USER_DEACTIVATED" in raw_reason:
+                reason = "PERMISSION_REVOKED"
+            else:
+                reason = raw_reason if raw_reason else "TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN"
+
+            early_ctx = {
+                "schema_version": "1.0.0",
+                "principal_id": "UNKNOWN",
+                "principal_type": "USER",
+                "tenant_id": "UNKNOWN",
+                "workspace_id": "UNKNOWN",
+                "workspace_tier": "CORPORATE",
+                "device_id": "dev_01",
+                "device_posture": "COMPLIANT",
+                "execution_id": exec_id,
+                "correlation_id": corr_id,
+                "initiated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "purpose": "WORKFLOW_EXECUTION",
+            }
+            self.audit_outbox.append_event(
+                event_type="pdp.decision",
+                execution_stage="DECISION_DENIED",
+                execution_context=early_ctx,
+                resource_id=resource_id,
+                operation=operation,
+                decision_effect="DENY",
+                payload_hash=payload_hash,
+                reason_code=reason,
+            )
+            raise GatewayPepError(reason, raw_reason, effect="DENY") from exc
+
 
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         ctx: dict[str, Any] = {

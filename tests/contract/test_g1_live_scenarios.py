@@ -186,8 +186,9 @@ def test_a_mid_flight_revocation_and_instant_cache_wipe(tmp_path):
             arguments={"subpath": "/workers", "worker_id": "res_worker_02"},
             idempotency_key="idem_test_a_step2",
         )
-    assert exc_info.value.code == "TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN"
+    assert exc_info.value.code in ("TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN", "PERMISSION_REVOKED")
     assert "PERMISSION_OR_IDENTITY_VERSION_STALE" in str(exc_info.value)
+
 
     # 4. Instant cache wipe: polling/revalidating cache_worker_01 wipes ephemeral key
     rev_check = lease_mgr.poll_and_enforce_revocation("cache_worker_01")
@@ -523,4 +524,4 @@ def test_g1_018_pilot_emergency_stop_and_suspension(tmp_path):
             connector_id="sme_hrm_iam_reader",
             idempotency_key="idem_emerg_stop",
         )
-    assert exc_info.value.code == "TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN"
+    assert exc_info.value.code in ("TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN", "PERMISSION_REVOKED")

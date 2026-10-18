@@ -163,9 +163,10 @@ class HttpIamPdpAdapter:
             "purpose": "TOKEN_VERIFICATION",
         }
         rev_res = self.check_revocation({"execution_context": exec_ctx})
-        if rev_res.get("is_revoked"):
-            reasons = rev_res.get("reasons") or ["SESSION_OR_PRINCIPAL_REVOKED"]
+        if rev_res.get("revoked") or rev_res.get("is_revoked"):
+            reasons = rev_res.get("revocation_reasons") or rev_res.get("reasons") or ["PERMISSION_REVOKED"]
             raise PermissionError(reasons[0])
+
 
         return {
             "jti": claims["jti"],
