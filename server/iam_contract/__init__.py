@@ -1,5 +1,6 @@
 """Standard IAM/PDP Contract v1.0 — Implementation-Neutral Core Package."""
 
+from javisos.server.iam_contract.http_adapter import HttpIamPdpAdapter
 from javisos.server.iam_contract.jcs import canonicalize_jcs, compute_action_payload_hash, compute_jcs_sha256
 from javisos.server.iam_contract.mock_adapter import InMemoryMockIamPdpAdapter
 from javisos.server.iam_contract.port import IamPdpAdapterPort
@@ -7,6 +8,7 @@ from javisos.server.iam_contract.schemas import ContractSchemaError, validate_co
 
 __all__ = [
     "ContractSchemaError",
+    "HttpIamPdpAdapter",
     "IamPdpAdapterPort",
     "InMemoryMockIamPdpAdapter",
     "canonicalize_jcs",
@@ -14,3 +16,4 @@ __all__ = [
     "compute_jcs_sha256",
     "validate_contract_payload",
 ]
+
