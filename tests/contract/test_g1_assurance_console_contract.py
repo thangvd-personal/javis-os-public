@@ -94,7 +94,11 @@ def test_assurance_console_contract_auditor_and_operator_isolation(tmp_path):
         headers={"X-Operator-Secret": operator_secret},
     )
     assert resp_run_ok.status_code == 200
-    assert resp_run_ok.json()["status"] == "TRIGGERED"
+    run_data = resp_run_ok.json()
+    assert run_data["status"] == "PASSED"
+    assert run_data["duration_ms"] >= 0
+    assert run_data["assertions_passed"] == 3
+    assert run_data["evidence"]["hash_verified"] is True
 
     # 6. Read-Only mode verification: writing to DB via read-only connection fails
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)

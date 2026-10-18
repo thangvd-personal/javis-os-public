@@ -134,6 +134,8 @@ class McpGatewayPepService:
                 reason = "TENANT_SUSPENDED"
             elif "SESSION" in raw_reason or "USER_DEACTIVATED" in raw_reason:
                 reason = "PERMISSION_REVOKED"
+            elif "IAM_CONTRACT_UNAVAILABLE" in raw_reason or "timed out" in raw_reason.lower():
+                reason = "PDP_NETWORK_UNREACHABLE"
             else:
                 reason = raw_reason if raw_reason else "TOKEN_INVALID_OR_NOT_EXECUTION_TOKEN"
 
@@ -151,17 +153,18 @@ class McpGatewayPepService:
                 "initiated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "purpose": "WORKFLOW_EXECUTION",
             }
+            fail_closed_effect = "PDP_UNAVAILABLE" if reason == "PDP_NETWORK_UNREACHABLE" else "DENY"
             self.audit_outbox.append_event(
                 event_type="pdp.decision",
                 execution_stage="DECISION_DENIED",
                 execution_context=early_ctx,
                 resource_id=resource_id,
                 operation=operation,
-                decision_effect="DENY",
+                decision_effect=fail_closed_effect,
                 payload_hash=payload_hash,
                 reason_code=reason,
             )
-            raise GatewayPepError(reason, raw_reason, effect="DENY") from exc
+            raise GatewayPepError(reason, raw_reason, effect=fail_closed_effect) from exc
 
 
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -173,7 +176,7 @@ class McpGatewayPepService:
             "workspace_id": str(tok_meta.get("workspace_id") or tok_meta.get("verified_context", {}).get("workspace_id")),
             "workspace_tier": "CORPORATE",
             "device_id": str(tok_meta.get("device_id") or tok_meta.get("verified_context", {}).get("device_id") or "dev_01"),
-            "device_posture": "COMPLIANT",
+            "device_posture": str(tok_meta.get("device_posture") or tok_meta.get("verified_context", {}).get("device_posture") or "").strip().upper(),
             "session_id": tok_meta.get("session_id") or tok_meta.get("verified_context", {}).get("session_id"),
             "identity_version": int(tok_meta["identity_version"]),
             "permission_version": int(tok_meta["permission_version"]),
@@ -190,6 +193,20 @@ class McpGatewayPepService:
             "initiated_at": now_iso,
             "purpose": "WORKFLOW_EXECUTION",
         }
+
+        if ctx["device_posture"] not in {"COMPLIANT", "NON_COMPLIANT"}:
+            reason = "DEVICE_POSTURE_UNVERIFIED"
+            self.audit_outbox.append_event(
+                event_type="pdp.decision",
+                execution_stage="DECISION_DENIED",
+                execution_context=ctx,
+                resource_id=resource_id,
+                operation=operation,
+                decision_effect="DENY",
+                payload_hash=payload_hash,
+                reason_code=reason,
+            )
+            raise GatewayPepError(reason, "Device posture must be explicitly verified", effect="DENY")
 
         # 2. Check Idempotency Key Binding (`G0-013`)
         if idempotency_key in self._idempotency_store:
@@ -365,6 +382,7 @@ class McpGatewayPepService:
                 }
             )
         except Exception as exc:
+            reason_code = "PDP_NETWORK_UNREACHABLE" if str(exc).startswith("IAM_CONTRACT_UNAVAILABLE:") else "PDP_ERROR_FAIL_CLOSED"
             self.audit_outbox.append_event(
                 event_type="pdp.decision",
                 execution_stage="DECISION_DENIED",
@@ -373,9 +391,9 @@ class McpGatewayPepService:
                 operation=operation,
                 decision_effect="PDP_UNAVAILABLE",
                 payload_hash=payload_hash,
-                reason_code="PDP_ERROR_FAIL_CLOSED",
+                reason_code=reason_code,
             )
-            raise GatewayPepError("PDP_UNAVAILABLE_FAIL_CLOSED", str(exc), effect="PDP_UNAVAILABLE") from exc
+            raise GatewayPepError(reason_code, str(exc), effect="PDP_UNAVAILABLE") from exc
 
         effect = str(decision.get("effect") or "PDP_UNAVAILABLE")
         reason_code = str(decision.get("reason_code") or "PDP_ERROR_FAIL_CLOSED")

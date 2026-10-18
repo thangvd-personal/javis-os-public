@@ -7,6 +7,7 @@ zero connector invocation after halt, and durable audit outbox evidence capture.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import time
 import urllib.parse
@@ -82,8 +83,11 @@ def _get_live_execution_token(client: TestClient) -> str:
 
 def _run_sme_backend_python(code: str) -> None:
     """Execute administrative Python command directly inside live sme_backend container."""
-    cmd = ["docker", "exec", "sme_backend", "python", "manage.py", "shell", "-c", code]
-    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    docker_bin = shutil.which("docker.exe") or shutil.which("docker") or "docker"
+    cmd = [docker_bin, "exec", "sme_backend", "python", "manage.py", "shell", "-c", code]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"sme_backend admin command failed: {result.stderr or result.stdout}")
 
 
 def test_g1_emergency_halt_permission_bump_live(tmp_path):
@@ -271,7 +275,7 @@ def test_g1_emergency_halt_tenant_suspended_live(tmp_path):
         # 2. Suspend Tenant on SME_BTOS backend
         _run_sme_backend_python(
             "from apps.platform.tenant.models import Tenant; "
-            "Tenant.objects.filter(code='t-corp-pilot').update(status=Tenant.Status.SUSPENDED)"
+        "Tenant.objects.filter(code='t-corp-pilot').update(status=Tenant.Status.SUSPENDED)"
         )
 
         # 3. Re-execute action with SAME token
@@ -300,7 +304,7 @@ def test_g1_emergency_halt_tenant_suspended_live(tmp_path):
         # Restore tenant status to ACTIVE
         _run_sme_backend_python(
             "from apps.platform.tenant.models import Tenant; "
-            "Tenant.objects.filter(code='t-corp-pilot').update(status=Tenant.Status.ACTIVE)"
+        "Tenant.objects.filter(code='t-corp-pilot').update(status=Tenant.Status.ACTIVE)"
         )
 
 
@@ -343,9 +347,14 @@ def test_g1_emergency_halt_fail_closed_on_network_down(tmp_path):
             correlation_id=fail_corr,
         )
 
-    # Must fail-closed with PDP_UNAVAILABLE effect
-    assert exc_info.value.effect in ("PDP_UNAVAILABLE", "DENY")
+    # Must fail-closed with the contract's precise network reason.
+    assert exc_info.value.code == "PDP_NETWORK_UNREACHABLE"
+    assert exc_info.value.effect == "PDP_UNAVAILABLE"
     assert len(handler_calls) == 0, "Handler must never be invoked when PDP is unreachable"
 
     events = [e for e in audit_outbox.list_events() if e.get("correlation_id") == fail_corr]
-    assert any(e.get("execution_stage") == "DECISION_DENIED" for e in events)
+    assert any(
+        e.get("execution_stage") == "DECISION_DENIED"
+        and e.get("reason_code") == "PDP_NETWORK_UNREACHABLE"
+        for e in events
+    )

@@ -1736,7 +1736,7 @@ _SSO_STATES: dict[str, float] = {}
 _SME_SESSIONS: dict[str, dict] = {}
 
 JAVIS_SSO_CLIENT_ID = os.getenv("JAVIS_SSO_CLIENT_ID", "javisos-sso-client")
-JAVIS_SSO_CLIENT_SECRET = os.getenv("JAVIS_SSO_CLIENT_SECRET", "dev-sso-client-secret")
+JAVIS_SSO_CLIENT_SECRET = os.getenv("JAVIS_SSO_CLIENT_SECRET", "")
 SME_BTOS_BASE_URL = os.getenv("SME_BTOS_BASE_URL", "http://localhost:8000").rstrip("/")
 JAVIS_CALLBACK_URL = os.getenv("JAVIS_CALLBACK_URL", "http://localhost:7777/auth/sme-callback")
 
@@ -1771,12 +1771,13 @@ def _exchange_session_token_for_execution_token(session_token: str) -> dict[str,
         "requested_audience": "javisos-mcp-gateway",
         "requested_workspace_id": "ws-corp-main",
         "device_id": "dev_01",
+        "device_posture": "COMPLIANT",
         "correlation_id": f"corr_sso_{secrets.token_hex(6)}",
     }).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
         "X-Service-Client-Id": "javisos-mcp-gateway",
-        "X-Service-Token": os.getenv("JAVIS_GATEWAY_SERVICE_TOKEN", "dev-gateway-service-secret"),
+        "X-Service-Token": os.getenv("JAVIS_GATEWAY_SERVICE_TOKEN", ""),
     }
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=5) as resp:

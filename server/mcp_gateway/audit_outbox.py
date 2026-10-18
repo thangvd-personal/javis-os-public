@@ -130,6 +130,25 @@ class DurableAuditOutbox:
             ).fetchall()
             return [json.loads(r[0]) for r in rows]
 
+    def verify_integrity(self) -> dict[str, Any]:
+        """Verify sequence continuity, hash links, and each event's content hash."""
+        events = self.list_events()
+        expected_prev = "GENESIS"
+        for index, event in enumerate(events, start=1):
+            sequence_no = int(event.get("sequence_no", 0))
+            if sequence_no != index:
+                return {"valid": False, "reason_code": "AUDIT_SEQUENCE_GAP", "sequence_no": sequence_no}
+            if event.get("stream_id") != self.stream_id:
+                return {"valid": False, "reason_code": "AUDIT_STREAM_MISMATCH", "sequence_no": sequence_no}
+            if event.get("prev_event_hash") != expected_prev:
+                return {"valid": False, "reason_code": "AUDIT_PREV_HASH_MISMATCH", "sequence_no": sequence_no}
+            supplied_hash = event.get("event_hash")
+            unsigned = {k: v for k, v in event.items() if k != "event_hash"}
+            if compute_jcs_sha256(unsigned) != supplied_hash:
+                return {"valid": False, "reason_code": "AUDIT_EVENT_HASH_MISMATCH", "sequence_no": sequence_no}
+            expected_prev = str(supplied_hash)
+        return {"valid": True, "event_count": len(events), "last_sequence_no": len(events)}
+
     def flush_to_adapter(self, adapter: IamPdpAdapterPort) -> dict[str, Any]:
         with self._connect() as conn:
             rows = conn.execute(

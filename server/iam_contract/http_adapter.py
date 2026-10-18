@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -27,12 +28,14 @@ class HttpIamPdpAdapter:
         self,
         base_url: str = "http://localhost:8000/api/v1/iam-pdp-contract/v1",
         service_client_id: str = "javisos-mcp-gateway",
-        service_token: str = "dev-gateway-service-secret",
+        service_token: str | None = None,
         timeout: float = 5.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.service_client_id = service_client_id
-        self.service_token = service_token
+        self.service_token = service_token or os.getenv("JAVIS_GATEWAY_SERVICE_TOKEN", "")
+        if not self.service_token:
+            raise ValueError("JAVIS_GATEWAY_SERVICE_TOKEN is required")
         self.timeout = timeout
 
     def _headers(self) -> dict[str, str]:
@@ -153,7 +156,7 @@ class HttpIamPdpAdapter:
             "workspace_id": str(claims["wid"]),
             "workspace_tier": "CORPORATE",
             "device_id": str(claims.get("did", "dev_01")),
-            "device_posture": "COMPLIANT",
+            "device_posture": str(claims.get("dposture") or "").strip().upper(),
             "session_id": str(claims.get("sid", "")),
             "identity_version": int(claims.get("iv", 1)),
             "permission_version": int(claims.get("pv", 1)),
@@ -185,4 +188,5 @@ class HttpIamPdpAdapter:
             "tenant_id": claims.get("tid"),
             "workspace_id": claims.get("wid"),
             "device_id": claims.get("did"),
+            "device_posture": claims.get("dposture"),
         }

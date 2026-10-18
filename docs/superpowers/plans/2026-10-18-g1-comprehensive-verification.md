@@ -1,5 +1,9 @@
 # G1 Comprehensive Live Verification & Security Test Suite Implementation Plan
 
+> **Execution status (2026-10-18): COMPLETE.** Fresh live evidence: `51
+> passed, 26 warnings` from `tests/contract/` against Docker `sme_backend`.
+> The Emergency Halt subset is `3 passed`; no credential values are recorded.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Triển khai bộ kiểm thử xác thực thực tế cấp độ 1, 2 và 3 cho G1 Pilot (P0 & P1), bao gồm End-to-End SSO thật (không mock token exchange hops), Authorization Code single-use & expiration security, Emergency Halt trên Gateway thật, Audit Outbox Tamper Detection, và Real Execution Test Runner trong Assurance Console.
@@ -215,3 +219,11 @@
 
 - [ ] **Step 3: Commit**
   - Lệnh: `git add brains/SME-BTOS/documents/g1-pilot/g1-acceptance-matrix.md brains/SME-BTOS/documents/g1-pilot/g1-pilot-report.md && git commit -m "docs(g1): update acceptance matrix and pilot report with 3-level assurance criteria and live evidence"`
+
+### Final verification record
+
+- Environment: Docker `sme_backend` at `http://localhost:8000`; credentials supplied only through environment variables.
+- Clock simulation: `DEBUG=True` and `ALLOW_TEST_CLOCK_OVERRIDE=True` only in the isolated debug test container.
+- Command: `python -m pytest --basetemp D:/btos_javis/javisos/tmp/pytest-g1-full-final tests/contract/ -q`
+- Result: `51 passed, 26 warnings` in `94.71s` (exit code 0).
+- Emergency Halt result: `3 passed, 26 warnings` in `88.98s` (exit code 0).

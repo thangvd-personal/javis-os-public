@@ -417,6 +417,20 @@ def test_g1_009_tamper_evident_audit_outbox_hash_chain(tmp_path):
         prev_ev = events[i - 1]
         cur_ev = events[i]
         assert cur_ev["prev_event_hash"] == prev_ev["event_hash"]
+    assert audit_outbox.verify_integrity()["valid"] is True
+
+    import json
+    import sqlite3
+    tampered = dict(events[0])
+    tampered["operation"] = "tampered"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE audit_outbox SET payload_json = ? WHERE sequence_no = 1",
+            (json.dumps(tampered),),
+        )
+
+    # A malformed persisted payload must be reported as tampering, not accepted.
+    assert audit_outbox.verify_integrity()["valid"] is False
 
 
 def test_g1_010_approved_connector_catalog_and_ssrf_protection(tmp_path):
