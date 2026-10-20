@@ -197,3 +197,6 @@ server/stt_bench/
 # Nguồn cài đặt các thư viện bổ sung
 source/
 server/agy-update.json
+
+# File rác / script cá nhân ở gốc (không thuộc sản phẩm public)
+**/tmp/*
