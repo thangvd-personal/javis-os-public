@@ -12,8 +12,10 @@ vòng lặp đó mỗi lần rất phiền, và dễ chạy nhầm bằng python
 """
 import os
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -28,6 +30,57 @@ def trinh_thong_dich() -> str:
         if p.is_file():
             return str(p)
     return sys.executable
+
+
+def xoa_cay(p) -> None:
+    """rmtree chịu được file chỉ-đọc (object của git trên Windows); sót gì thì bỏ qua."""
+    def go_chi_doc(ham, duong, _loi):
+        try:
+            os.chmod(duong, stat.S_IWRITE)
+            ham(duong)
+        except OSError:
+            pass
+
+    # \\?\ để xoá được cây sâu quá 260 ký tự (có test cố ý dựng như vậy).
+    p = os.path.abspath(p)
+    if os.name == "nt" and not p.startswith("\\\\?\\"):
+        p = "\\\\?\\" + p
+    try:
+        if sys.version_info >= (3, 12):
+            shutil.rmtree(p, onexc=go_chi_doc)
+        else:
+            shutil.rmtree(p, onerror=go_chi_doc)
+    except OSError:
+        pass
+
+
+# Thư mục tạm chưa xoá được ngay sau test (tiến trình cháu còn giữ file): thử lại ở cuối lượt.
+_SOT = []
+
+
+def chay_mot(cmd, env):
+    """Chạy một file test với thư mục tạm riêng, xoá ngay sau khi tiến trình thoát.
+
+    Xem tests/python/_paths.py: test tự dọn thư mục tạm lúc atexit, nhưng trên Windows sqlite
+    còn mở ở biến module thì lúc đó chưa xoá được, còn test JS thì không tự dọn. Tạo thư mục ở
+    ĐÂY (cùng tiền tố `jt-<pid>-` của _paths để lượt bị giết ngang cũng được quét), trỏ
+    TMP/TEMP/TMPDIR/JAVIS_TEST_TMP của tiến trình con vào đó, chờ nó thoát rồi xoá - lúc này
+    file đã được nhả. Một tầng, không lồng: thêm tầng là đường dẫn vượt 260 ký tự trên Windows.
+    """
+    tam = tempfile.mkdtemp(prefix=f"jt-{os.getpid()}-")
+    env = dict(env, TMP=tam, TEMP=tam, TMPDIR=tam, JAVIS_TEST_TMP=tam)
+    try:
+        return subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+    finally:
+        # Tiến trình cháu (server, CLI giả) có thể nhả file chậm hơn một chút - thử lại vài lần.
+        for _ in range(3):
+            xoa_cay(tam)
+            if not os.path.exists(tam):
+                break
+            time.sleep(0.5)
+        else:
+            _SOT.append(tam)
 
 
 def main() -> int:
@@ -69,8 +122,7 @@ def main() -> int:
     do, t0 = [], time.perf_counter()
     for i, (cmd, ten) in enumerate(viec, 1):
         t = time.perf_counter()
-        r = subprocess.run(cmd, cwd=str(ROOT), env=env, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
+        r = chay_mot(cmd, env)
         giay = time.perf_counter() - t
         cham = f"  ({giay:.0f}s)" if giay >= 5 else ""
         if r.returncode == 0:
@@ -94,4 +146,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    finally:
+        for p in _SOT:
+            xoa_cay(p)

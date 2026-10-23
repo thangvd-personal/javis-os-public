@@ -64,9 +64,19 @@ def cancel_all(tag=None):
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)],
                                capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             else:
-                p.terminate()
+                # Every registrant starts its child with start_new_session, so the child leads its own process group:
+                # signal the whole group so a CLI's own children (agy, codex tools) do not outlive Stop. Checked first,
+                # because a child sharing Javis's group would take Javis down with it.
+                import signal as _signal
+                if os.getpgid(p.pid) == p.pid:
+                    os.killpg(p.pid, _signal.SIGTERM)
+                else:
+                    p.terminate()
         except Exception:
-            pass
+            try:
+                p.terminate()
+            except Exception:
+                pass
     n = len(procs)
     try:
         import claude_sdk_engine
@@ -631,7 +641,9 @@ def auth_status(bo_qua_cache: bool = False):
     """
     cli = find_claude_cli()
     if not cli:
-        return {"connected": False, "error": cau_thieu_cli("claude", "Claude")}
+        # `cli_missing` lets the Models card show one install step instead of a login button
+        # that can only fail; `error` stays for callers that print it.
+        return {"connected": False, "cli_missing": True, "error": cau_thieu_cli("claude", "Claude")}
     now = time.time()
     if not bo_qua_cache and _AUTH_CACHE["val"] and now - _AUTH_CACHE["ts"] < _AUTH_TTL:
         return dict(_AUTH_CACHE["val"])
@@ -1558,6 +1570,9 @@ class CodexCLI:
         # Off otherwise, because an override under mcp_servers.javis with no hub entry would
         # create a broken half-entry.
         self.hub_turn = False
+        # True only on the main engine of a chat turn (web or chat channel, set by main.py): the turn then runs on
+        # `codex app-server` and takes the owner's messages mid-way (codex_steer.py, 0.213.0).
+        self.steer = False
 
     def is_available(self) -> bool:
         return self.cli_path is not None
@@ -1602,6 +1617,28 @@ class CodexCLI:
         return args
 
     async def query(self, prompt: str) -> AsyncIterator[dict]:
+        if self.cli_path:
+            import codex_steer
+            if codex_steer.wanted(self):
+                agen = codex_steer.run(self, prompt)
+                try:
+                    first = await agen.__anext__()
+                except StopAsyncIteration:
+                    return
+                except codex_steer.Fallback:
+                    first = None   # could not start on app-server: the exec path below, as before 0.213.0
+                if first is not None:
+                    try:
+                        yield first
+                        async for ev in agen:
+                            yield ev
+                    finally:
+                        await agen.aclose()   # Stop or an abandoned turn: close app-server now, not at GC
+                    return
+        async for ev in self._query_exec(prompt):
+            yield ev
+
+    async def _query_exec(self, prompt: str) -> AsyncIterator[dict]:
         if not self.cli_path:
             yield {"type": "error", "content": localefmt.chu("Không tìm thấy Codex CLI (cần ChatGPT login qua codex).",
                                                              "Codex CLI not found (ChatGPT sign-in through codex is needed).")}

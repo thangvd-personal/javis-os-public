@@ -94,18 +94,43 @@ check("goal: left quá dài bị cắt", R('<!-- JAVIS_GOAL: {"done":false,"left
 
 // ---- 6. /goal: quyết định vòng tiếp ----
 const Q = L.quyetDinhVongTiep;
-const st = (o) => Object.assign({ vong: 1, toiDa: 8, left: "" }, o || {});
+const st = (o) => Object.assign({ vong: 1, toiDa: 5, left: "" }, o || {});
 check("vòng: đạt -> dừng (dat)", (() => { const r = Q(st(), { marker: { done: true, left: "" } }); return r.act === "dung" && r.ly === "dat"; })());
 check("vòng: chưa đạt -> tiếp, mang left", (() => { const r = Q(st(), { marker: { done: false, left: "còn 2 đơn" } }); return r.act === "tiep" && r.left === "còn 2 đơn"; })());
-check("vòng: hết trần -> dừng (het_vong)", (() => { const r = Q(st({ vong: 8 }), { marker: { done: false, left: "a" } }); return r.act === "dung" && r.ly === "het_vong"; })());
-check("vòng: chưa tới trần thì còn chạy", Q(st({ vong: 7 }), { marker: { done: false, left: "a" } }).act === "tiep");
+check("vòng: hết trần -> dừng (het_vong)", (() => { const r = Q(st({ vong: 5 }), { marker: { done: false, left: "a" } }); return r.act === "dung" && r.ly === "het_vong"; })());
+check("vòng: chưa tới trần thì còn chạy", Q(st({ vong: 4 }), { marker: { done: false, left: "a" } }).act === "tiep");
 check("vòng: hai vòng liền báo y hệt -> dừng (khong_tien_trien)", (() => { const r = Q(st({ left: "Còn  2 đơn" }), { marker: { done: false, left: "còn 2 đơn" } }); return r.act === "dung" && r.ly === "khong_tien_trien"; })());
 check("vòng: left khác thì vẫn coi là có tiến triển", Q(st({ left: "còn 3 đơn" }), { marker: { done: false, left: "còn 2 đơn" } }).act === "tiep");
 check("vòng: không có marker -> DỪNG, không đoán 'chưa xong'", (() => { const r = Q(st(), { marker: null }); return r.act === "dung" && r.ly === "khong_bao"; })());
 check("vòng: ket rỗng/undefined -> dừng", Q(st(), undefined).act === "dung");
 check("vòng: lỗi thắng mọi thứ", Q(st(), { loi: true, marker: { done: false, left: "a" } }).ly === "loi");
 check("vòng: hỏi ngược người dùng -> dừng (hoi_lai)", Q(st(), { hoiLai: true, marker: { done: false, left: "a" } }).ly === "hoi_lai");
-check("vòng: trần lớn nhất luôn dừng dù model nói chưa xong (vô hạn là bug)", (() => { let s = st(), n = 0; while (n < 100) { const r = Q(s, { marker: { done: false, left: "l" + n } }); if (r.act !== "tiep") break; s = st({ vong: s.vong + 1, left: r.left }); n++; } return n === 7; })());
+check("vòng: trần lớn nhất luôn dừng dù model nói chưa xong (vô hạn là bug)", (() => { let s = st(), n = 0; while (n < 100) { const r = Q(s, { marker: { done: false, left: "l" + n } }); if (r.act !== "tiep") break; s = st({ vong: s.vong + 1, left: r.left }); n++; } return n === 4; })());
+
+// ---- 6b. /goal 0.173.1: trần 5, dừng khi không làm được, dòng nhắc gập mở ----
+check("goal: trần là 5 vòng", L.GOAL_TOI_DA === 5);
+check("goal: đọc được blocked kèm lý do", (() => { const r = R('Không vào được POS.\n<!-- JAVIS_GOAL: {"done":false,"blocked":"thiếu quyền POS"} -->'); return r.goal && r.goal.blocked === "thiếu quyền POS" && r.clean === "Không vào được POS."; })());
+check("goal: done true thì bỏ qua blocked", R('<!-- JAVIS_GOAL: {"done":true,"blocked":"x"} -->').goal.blocked === undefined);
+check("vòng: blocked -> dừng ngay (khong_lam_duoc), mang lý do", (() => { const r = Q(st({ vong: 1 }), { marker: { done: false, left: "a", blocked: "thiếu quyền POS" } }); return r.act === "dung" && r.ly === "khong_lam_duoc" && r.why === "thiếu quyền POS"; })());
+check("vòng: lỗi và hỏi ngược vẫn đứng trước blocked", Q(st(), { loi: true, marker: { done: false, blocked: "x" } }).ly === "loi");
+const V = L.docVong;
+const khoiVong = '[MỤC TIÊU: đối soát\nChế độ...\n<!-- JAVIS_GOAL_ROUND: {"v": 3, "n": 5, "left": "còn 8 đơn"} -->\nCuối...]\n\nTiếp tục làm cho tới khi đạt mục tiêu.';
+check("docVong: đọc v, n, left từ tin vòng tự động", (() => { const r = V(khoiVong); return r && r.v === 3 && r.n === 5 && r.left === "còn 8 đơn"; })());
+check("docVong: tin thường, vòng 1, JSON hỏng đều là null",
+  V("dọn kho giúp tôi") === null && V('<!-- JAVIS_GOAL_ROUND: {"v": 1, "n": 5} -->') === null && V("<!-- JAVIS_GOAL_ROUND: {v:2} -->") === null && V(null) === null);
+check("docVong: v lớn hơn n là null", V('<!-- JAVIS_GOAL_ROUND: {"v": 6, "n": 5} -->') === null);
+const H = L.vongHtml;
+check("vongHtml: dòng gập mở có vòng, tình trạng, nút Tắt mục tiêu đang bật",
+  (() => { const h = H({ v: 2, n: 5, left: "còn 8 đơn" }, true); return h.includes("<details") && h.includes("2/5") && h.includes("còn 8 đơn") && h.includes("goal-round-stop") && !h.includes("disabled") && h.includes("Tắt mục tiêu"); })());
+check("vongHtml: mục tiêu đã dừng thì nút mờ (disabled)", H({ v: 2, n: 5, left: "" }, false).includes("disabled"));
+check("vongHtml: escape tình trạng do model viết", (() => { const h = H({ v: 2, n: 5, left: "<b>x</b>" }, true); return !h.includes("<b>") && h.includes("&lt;b&gt;"); })());
+check("vongHtml: null thì rỗng", H(null, true) === "");
+check("goal kết thúc: mọi nút Tắt mục tiêu trên các dòng nhắc đều mờ đi", (() => {
+  const btns = [{ disabled: false }, { disabled: false }];
+  global.document = { querySelectorAll: (q) => (q === ".goal-round-stop" ? btns : []) };
+  try { L.ketThucMucTieu(); } finally { delete global.document; }
+  return btns.every((b) => b.disabled === true) && L.dangCoMucTieu() === false;
+})());
 
 // ---- 7. Định dạng ----
 check("gonSo", L.gonSo(950) === "950" && L.gonSo(84300) === "84k" && L.gonSo(6100) === "6.1k" && L.gonSo(1250000) === "1.3M");

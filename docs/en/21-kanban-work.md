@@ -15,7 +15,7 @@ Javis treats the work queue as a runtime for the AI. A job goes through this lif
 3. **Into the queue**: the task moves to a ready state, waiting its turn.
 4. **The dispatcher claims the task**: each task is held by exactly one worker (locked with an SQLite transaction), with a 90-second lease and a heartbeat every 20 seconds.
 5. **The worker runs**: a headless AI process works inside the brain, verifies its own result then reports briefly.
-6. **The end**: completed, or stopped waiting for you (missing information, missing permission, or because you ticked "Require result approval").
+6. **The end**: completed, or stopped waiting for you (missing information, missing permission, or because you ticked "Review the result after it runs").
 
 Workers share the **background engine** with the other background features, so Claude Code, ChatGPT/Codex and the API providers (OpenRouter, OpenAI, Anthropic, Google Gemini) can all run this queue. See [Models and engines](10-models-and-engines.md).
 
@@ -64,7 +64,7 @@ Click **+ Hand over a goal** in the right corner to open the form (click again t
 - **Context and desired output**: a multi-line field, natural writing is fine. This is where you state the output you want (which file, where, how long, which source for the figures). Left empty, Javis reuses the Goal field.
 - **Route**: choose **Let the AI pick the worker** (the default) to let the AI decide, or pick a **Workflow: `<name>`** entry to force the job through that workflow. The workflow list comes from the selected brain, see [Agents and Workflows](07-agents-and-workflows.md).
 - **Priority**: **🔺 High**, **🔼 Medium** (the default), **🔽 Low**. High-priority work is claimed first when the queue is busy.
-- **Exception**: the **Require result approval** checkbox. Ticked, a finished job does not close itself but stops at "Needs exception approval" waiting for you to look.
+- **Exception**: the **Review the result after it runs** checkbox. It does NOT ask for approval before the job runs: the job still runs as soon as its turn comes. Ticked, a finished job does not close itself but stops at "Result awaiting review" so you read the result before it counts as done.
 
 Click **Hand to the AI** to create it, or **Cancel** to close the form.
 
@@ -114,12 +114,39 @@ Depending on the status, the card (and the detail drawer) shows these buttons:
 
 | Button | Shown when | What it does |
 | --- | --- | --- |
-| **✓ Approve exception** | the job awaits approval | Marks it completed |
-| **↻ Retry** | the job is blocked or awaiting approval | Pushes it back into the queue to run again |
+| **✓ Approve result** | the job's result awaits review | Marks it completed |
+| **Send answer** | the job stopped to ask you (it has an answer box) | The job goes back to the queue and carries on with your answer |
+| **↻ Retry** | the job is blocked or awaiting approval (except a job that is asking) | Pushes it back into the queue to run again |
 | **Stop task** | the job is running | Cancels the running worker |
 | **Remove from board** | any job not running | Archives it, leaving the board without losing the history |
 
+### A job stops to ask you (since 0.235.0)
+
+When a worker hits something only you know (which customer to send to, whether the price includes VAT, what time to post), it does not guess. It stops and asks exactly one question. The question arrives in the chat where you gave the job (Telegram and Zalo included) and sits on the job's card in the **Needs you** area.
+
+You can answer in any of three places, all equal:
+
+- Type in the box right under the question in the web chat and press **Send**.
+- Type in the answer box on the job's card on the Work page and press **Send answer**.
+- Just reply in chat (Telegram or Zalo too), saying which job it is for. Javis passes the answer to the right job.
+
+Once answered, the job goes back to the queue and carries on. The next run reads the question, your answer and what the previous run already finished, so it neither starts over nor asks again. Asking and answering does **not** use up another attempt. A job that asks several times keeps every round under **Questions and answers** in the detail drawer.
+
 **Remove from board** asks for confirmation first, explaining the task will be archived so no history is lost. A running job must be stopped with **Stop task** before it can be removed. If an action fails, Javis shows the server's error verbatim, or "Could not update the task".
+
+### Running again never sends twice (since 0.238.0)
+
+A background job can run more than once: a temporary error is retried, a server restart mid-run puts the job back in the queue, or you press Retry. Each run used to start from scratch, so a Zalo message, a post or an order could go out twice.
+
+Javis now records every outside action of a job (sending, posting, creating an order through a connection or a plugin), keyed by the job, the tool and the exact content:
+
+- **Already done in an earlier run:** the rerun skips it, the worker gets the earlier result back and carries on with the rest.
+- **Not sure it went through** (the server stopped or the connection dropped right while sending): Javis does not send again on its own. The job stops and asks you, naming the action. Answer **"sent"** and Javis skips it; answer **"not sent"** and Javis does it again exactly once. Any answer that does not start with "not" or "resend" counts as sent, so a customer never gets a duplicate.
+- **The service returned a clear error** (wrong recipient, missing permission): treated as not sent, so the next run may try again.
+
+Ordinary chat is unchanged: the record only applies to background jobs on the Work board.
+
+Limits: the record lives in the Javis hub, so it only sees actions that go through the hub. Connectors tied to your Claude account (Gmail, Drive on claude.ai) and an engine's own shell commands bypass the hub and are not recorded. Grok Build and Antigravity CLI cannot yet carry the job id to the hub, so jobs running on those two engines do not have this protection yet.
 
 ## A job's states
 
@@ -131,7 +158,7 @@ This table translates in full the words shown on the status pill.
 | **Waiting on dependencies** | `todo` | The job has dependencies and must wait for its parent jobs |
 | **In the queue** | `ready` | Specified, waiting its turn to be claimed by a worker |
 | **Running** | `running` | A worker holds it and is executing |
-| **Needs exception approval** | `review` | Finished, but you asked to approve the result |
+| **Result awaiting review** | `review` | Finished, waiting for you to read and approve the result |
 | **Needs attention** | `blocked` | Blocked: missing information, missing permission, or an error that exhausted the retries |
 | **Completed** | `done` | Finished |
 | **Cancelled** | `cancelled` | You stopped it, or the worker was cancelled midway |
@@ -142,7 +169,7 @@ A few paths worth knowing:
 - After the specification step, the job is **not** counted as having used an attempt; the count is restored so execution gets a full 3 attempts.
 - A transient error (timeout, rate limit, 429, network loss, a busy engine) sends the job **back** to the queue by itself, up to 3 times, logging `retry_scheduled`. Only when the attempts run out does it move to "Needs attention".
 - A worker that dies without sending a heartbeat has its job reclaimed into the queue with a `reclaimed` event, so nothing hangs forever at "Running".
-- A worker that finds it is missing a decision or data returns a result starting with `[[NEEDS_INPUT]]`, moving the job to "Needs attention" with exactly one line of reason.
+- A worker that finds it is missing a decision or data returns a result starting with `[[NEEDS_INPUT]]` with exactly one question. The job moves to "Needs attention" and waits for your answer (see "A job stops to ask you" above).
 
 ## Quick reference of buttons and states
 
@@ -176,7 +203,7 @@ Beyond that, a worker also cannot see source repositories outside the brain, and
 Every job that ends completed, awaiting approval or blocked **sends a notice by itself** to the channel it came from, briefly:
 
 - `✅ The job '<title>' completed.` with the first few lines of the result.
-- `✅ The job '<title>' is done and needs exception approval.`
+- `✅ Job '<title>' is done and its result awaits your review.`
 - `⚠ The job '<title>' is blocked and needs your attention.` with a `Reason: ...` line.
 
 Every notice ends with a pointer to the Work page, because the full detail lives here rather than being crammed into a message.
@@ -196,7 +223,7 @@ The **Notifications** bell in the top bar only shows a red dot (and only sends a
 | The job ends as | Result in the chat box | Into the inbox | Red dot + push |
 |---|---|---|---|
 | Blocked | yes | yes | **yes** |
-| Awaiting exception approval | yes | yes | **yes** |
+| Result awaiting review | yes | yes | **yes** |
 | Finished cleanly | yes | yes | no |
 
 A cleanly finished job still sits in the bell list for you to review, it just does not wake you: the result already landed in the very chat box that handed it over. This changed because the repo owner reported (2026-09-01) that the bell rang constantly mid-conversation.
@@ -258,6 +285,7 @@ Details in [Self-learning](22-self-learning.md).
 ## Where the board's data lives
 
 - **The main source**: the `kanban.sqlite3` file in Javis's state folder (the `JAVIS_STATE_DIR` variable, defaulting to the `server/` folder). It holds the lifecycle, the runs and the event log. It sits deliberately outside the brain so running work is not overwritten by git sync.
+- **Record of outside actions** (since 0.238.0): `once_ledger.sqlite3` next to `kanban.sqlite3`, noting which actions of which job are done. Finished entries older than 30 days are removed.
 - **A readable copy**: `Javis/kanban.json` in the brain, rewritten every time the board changes. That file exists for backup and so older Javis builds can read it; editing it by hand changes nothing in the real queue.
 - An old board from earlier Javis versions is imported exactly once, and work stuck "running" under the old process is returned to the queue.
 - Work completed or cancelled over **3 days** ago is archived automatically so the board does not bloat.
@@ -287,6 +315,7 @@ The web page does not cover everything the server can do. The endpoints below ar
 | `POST /kanban/task` | Creates a job. Besides the form fields it also accepts `chat_id`, `capability`, `execution_mode`, `deps` (a comma-separated id list) and `idempotency_key` |
 | `POST /kanban/run` | Runs exactly one job by id |
 | `POST /kanban/task/move` | Moves a job to another state |
+| `POST /kanban/task/answer` | Answers a job that stopped to ask: `id` and `answer`. The job returns to the queue and carries on with the answer |
 | `POST /kanban/purge` | Permanently deletes finished work. By default it only touches archived and cancelled work; add `include_done=1` to touch completed work |
 | `POST /kanban/clear` | Wipes the board except running work. Cannot be undone |
 
@@ -295,7 +324,7 @@ The two cleanup endpoints at the end have no button in the interface, exactly as
 ## Tips
 
 - Write goals as "what the output is", not "think about". The more the **Context and desired output** field states the destination file, the length and the data source, the closer the specification step's completion conditions are, and the less the worker wanders.
-- Tick **Require result approval** on important work. You spend one extra click but are guaranteed to read the result before it counts as done.
+- Tick **Review the result after it runs** on important work. You spend one extra click but are guaranteed to read the result before it counts as done.
 - To try one job now without turning automatic running on: leave the mode at **Observe**, hand over the job, then click **Run a tick now**.
 - Work needing real data (revenue, calendar, ads) should name the source in the goal, for example "take it from the POS". The specification step then picks `mcp-read` and only then is the worker given the connections. See [Connections and business data](09-connections-and-business-data.md).
 - With a board full of dead experimental jobs, do not delete cards one by one: use **Remove from board** for the few whose history matters and let the rest archive themselves after 3 days.
@@ -316,7 +345,7 @@ The specification step needs a background model run. If the background engine is
 This is a safety rail, not a bug. Your job belongs to the group that sends messages, publishes, creates orders or changes something outside. If you genuinely want it done automatically, hand the job over again and state in the goal that you permit acting; if not, let Javis draft it and press send yourself.
 
 **A job is blocked with a reason starting "The worker needs more information".**
-The worker found a missing decision where guessing would do harm. Open the detail drawer and read the reason, supply what is missing by handing over a clearer goal, then click **↻ Retry** or delete the old job.
+The worker found a missing decision where guessing would do harm. Since 0.235.0 you just answer the question on the card (or in chat) and the job carries on with that answer.
 
 **"Remove from board" or "↻ Retry" cannot be clicked.**
 A running job cannot change state. Click **Stop task** first, wait for the card to leave the **Active** panel, then act again.

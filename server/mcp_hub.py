@@ -25,6 +25,7 @@ from urllib.parse import quote, unquote
 from fastapi.responses import JSONResponse, Response
 
 import chatbot_doc_tools
+import coding_files
 import config
 import doc_text
 import hub_trace
@@ -32,8 +33,10 @@ import localefmt
 import mcp_catalog
 import mcp_client
 import mcp_store
+import once_ledger
 import skill_router
 import skill_usage
+import team_gate
 import turn_context
 from config import STATE_DIR
 
@@ -100,7 +103,13 @@ def allow_patterns():
 # `javis_run_tool`. `discover_all(for_bot=True)` drops them before the lazy tier; bot paths pass that flag (API
 # engines directly, Claude Code through the X-Javis-Bot header written by `claude_config_path(bot=True)`).
 # `javis_team` (0.173.0) creates, edits and deletes team chats and writes assistant files: owner-only for the same reason.
-OWNER_ONLY_TOOLS = frozenset({"javis_reply_policy", "javis_reply_policy_tune", "javis_team"})
+# `javis_watch` (0.239.0) makes the server fetch an address on a schedule and message the owner: not a customer's call.
+# `javis_login` (0.251.0) opens pages signed in as the owner (login vault): a customer must never browse as them.
+OWNER_ONLY_TOOLS = frozenset({"javis_reply_policy", "javis_reply_policy_tune", "javis_team", "javis_memory",
+                              "javis_watch", "javis_login",
+                              # 0.259.0: tìm và đọc web. Bot nói chuyện với khách lạ không được biến
+                              # máy chủ của chủ thành máy đi đọc web hộ bất kỳ ai nhắn tới.
+                              "javis_web_search", "javis_web_fetch"})
 
 
 # ============================================================
@@ -219,23 +228,43 @@ def _guard(ent, fn, mode):
     async def _call(args):
         cls = mcp_catalog.classify(connector, tool, args)
         ok, why = mcp_catalog.allowed(connector, conn.get("perm"), mode, tool, args)
-        if ok and not _rate_ok(conn["id"], connector):
-            ok, why = False, (f"Kết nối '{conn.get('label')}' vượt giới hạn tần suất "
-                              f"(chống spam/khoá tài khoản). Chờ 1 phút rồi thử lại.")
+        gated_ask = False
+        if mode == team_gate.HUB_MODE and cls != "read":
+            # 0.207.0: a gated Team step. Anything that is not a read is an outside action (review: a custom
+            # connector's `send_email` is classed `write`, which `auto` would allow). The connection itself must allow
+            # it at full; then only the owner's approval of this exact call for this step lets it through
+            # (team_gate.py). No live gate means refused.
+            full_ok, full_why = mcp_catalog.allowed(connector, conn.get("perm"), "full", tool, args)
+            ok, why, gated_ask = (False, full_why, False) if not full_ok else (False, "", True)
+        if (ok or gated_ask) and not _rate_ok(conn["id"], connector):
+            ok, gated_ask = False, False
+            why = (f"Kết nối '{conn.get('label')}' vượt giới hạn tần suất "
+                   f"(chống spam/khoá tài khoản). Chờ 1 phút rồi thử lại.")
+        if gated_ask:
+            # Checked after the rate limit, so a refused call never burns the owner's approval.
+            ok, why = await asyncio.to_thread(team_gate.hub_check, fn, args,
+                                              f"{conn.get('label') or conn.get('connector_id') or ''}: {tool}")
+            why = why[len("ERROR: "):] if why.startswith("ERROR: ") else why
         if not ok:
             _audit_append({"ts": datetime.now().isoformat(timespec="seconds"), "conn_id": conn["id"],
                            "connector": conn.get("connector_id"), "label": conn.get("label"),
                            "tool": tool, "mode": mode, "cls": cls, "ok": False, "ms": 0,
-                           "err": why[:200], "args_keys": sorted((args or {}).keys())})
+                           "err": why[:200], "args_keys": sorted((args or {}).keys()), **team_gate.audit_fields()})
             return "ERROR: " + why
         t0 = time.time()
-        result = await mcp_client.call_route({fn: {"spec": ent["spec"], "tool": tool}}, fn, args)
+        if cls == "read":
+            result = await mcp_client.call_route({fn: {"spec": ent["spec"], "tool": tool}}, fn, args)
+        else:
+            # 0.238.0: a Kanban job that runs again must not send, post or order twice (once_ledger.py).
+            # Outside a background job this calls straight through.
+            result = await once_ledger.run(
+                fn, args, lambda a: mcp_client.call_route({fn: {"spec": ent["spec"], "tool": tool}}, fn, a))
         _audit_append({"ts": datetime.now().isoformat(timespec="seconds"), "conn_id": conn["id"],
                        "connector": conn.get("connector_id"), "label": conn.get("label"),
                        "tool": tool, "mode": mode, "cls": cls,
                        "ok": not str(result).startswith("ERROR:"), "ms": int((time.time() - t0) * 1000),
                        "err": str(result)[:200] if str(result).startswith("ERROR:") else "",
-                       "args_keys": sorted((args or {}).keys())})
+                       "args_keys": sorted((args or {}).keys()), **team_gate.audit_fields()})
         # Lỗi từ dịch vụ trả về NGUYÊN VĂN tiếng Anh thì model phải tự đoán, và nó đoán sai:
         # vụ 2026-07-30 Google trả "The caller does not have permission", model kết luận là hub
         # của Javis chặn quyền rồi đi sửa nhầm tầng. GẮN THÊM chẩn đoán (không thay thế - giữ
@@ -377,7 +406,8 @@ def _safe_path(vault_root, p, workspace_root=None):
 
       1. File CÓ THẬT ở gốc nào đó   -> gốc đó, xét theo thứ tự (vault trước, rồi từng thư
                                         mục làm việc), nên vault thắng khi nhiều gốc cùng có
-      2. THƯ MỤC CHA có thật ở gốc nào đó -> gốc đó, cùng thứ tự (cảnh GHI file mới)
+      2. THƯ MỤC CHA có thật ở gốc nào đó -> gốc đó, nhưng thư mục làm việc TRƯỚC brain (cảnh
+                                        GHI file mới, đổi ở 0.256.0)
       3. Không đâu có                -> vault, để câu báo lỗi nói về brain như cũ
 
     Bước 2 là thứ làm `javis_write_file` ghi đúng chỗ: ghi `server/moi.py` trong một phiên
@@ -398,7 +428,11 @@ def _safe_path(vault_root, p, workspace_root=None):
     for u in co_that:
         if u.exists():
             return u
-    for u in co_that:
+    # File MỚI: thư mục làm việc xét TRƯỚC brain (0.256.0). Trước đây xét theo cùng thứ tự với
+    # file có sẵn (brain trước), nên tạo `test_moi.py` ở GỐC repo trong một phiên Coding lại rơi
+    # vào gốc brain, vì gốc brain cũng là một thư mục cha có thật. File mới trong phiên Coding
+    # là của repo; thư mục chỉ brain có (notes/...) thì vẫn rơi vào brain như cũ.
+    for u in [x for x in co_that if x is not tv] + ([tv] if tv is not None else []):
         try:
             if u.parent.is_dir():
                 return u
@@ -462,7 +496,7 @@ def _safe_read_path(vault_root, p, cho_phep_staging=False, workspace_root=None):
     return trong_vault                  # trong vault nhưng không tồn tại: để chỗ gọi báo
 
 
-def _connections_json(include_ambient=False, hidden=None, bo_qua=None):
+def _connections_json(include_ambient=False, hidden=None, bo_qua=None, owner_chat=False):
     hidden = hidden or {}
     bo_qua = set(bo_qua or ())
     # Sức khoẻ từng nguồn (vòng check định kỳ). Import trong hàm: connect_health import
@@ -513,6 +547,18 @@ def _connections_json(include_ambient=False, hidden=None, bo_qua=None):
             out.append({"connector": s["name"], "label": s["name"], "source": "claude_account",
                         "goi_the_nao": f"Đã có sẵn trong danh sách tool: mcp__{_ambient_prefix(s['name'])}__* "
                                        "- GỌI THẲNG, không qua javis_run_tool."})
+    elif owner_chat:
+        # 0.228.0: an engine with no Claude account (Anthropic API, OpenAI API...) never gets these connectors. Not
+        # listing them let the model answer "there is no such tool" with no way forward (customer report 2026-10-19,
+        # browser control through a Composio connector added on claude.ai). Name them and the two real fixes.
+        # Owner chat only: a customer-facing bot has no business learning which accounts the owner connected.
+        for s in _ambient_servers():
+            out.append({"connector": s["name"], "label": s["name"], "source": "claude_account",
+                        "dung_duoc_o_luot_nay": False,
+                        "ly_do": ("Kết nối này gắn với TÀI KHOẢN Claude của chủ, chỉ có khi model chat là Claude "
+                                  "Code. Model đang chạy bằng API key nên không gọi được. Nói đúng lý do đó, rồi "
+                                  "chỉ hai cách: nối nguồn này ở trang Kết nối của Javis (mọi model đều dùng "
+                                  "được), hoặc đổi model chat sang Claude Code.")})
     return json.dumps(out, ensure_ascii=False, indent=1)
 
 
@@ -543,6 +589,53 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
     cấp thêm `javis_run_command`. Thiếu một trong hai thì tool đó không tồn tại - phiên chat
     thường không được thấy tool chạy lệnh."""
     tools, route = [], {}
+    # Phiên Coding nào đang dùng nhóm tool này (0.256.0). Rỗng ở chat thường. Dùng cho sổ "đã
+    # đọc" (chặn ghi đè file chưa đọc) và mốc khôi phục trước thao tác thay đổi.
+    _sid_coding = str(getattr(coding_ctx_cua_phien, "session_id", "") or "") if workspace_root else ""
+    _goc_lv = [str(Path(g).resolve()) for g in _goc_lam_viec(workspace_root)]
+    # 0.259.0: mọi khung chat của chủ đều có thư mục làm việc, và khi không ghim thư mục nào thì đó
+    # chính là gốc brain. Số dòng khi đọc và rào ghi đè file chưa đọc chỉ áp cho thư mục làm việc
+    # NGOÀI brain (repo, thư mục đã ghim): ghi chú, ghi nhớ, báo cáo trong brain vẫn ghi như xưa
+    # nay, không bắt đọc trước và không bị chèn số dòng.
+    try:
+        _vault_rs = str(Path(vault_root).resolve()) if vault_root else ""
+    except (OSError, ValueError):
+        _vault_rs = ""
+    _goc_rieng = [g for g in _goc_lv if g != _vault_rs]
+
+    def _trong_lam_viec(p):
+        try:
+            rp = Path(p).resolve()
+        except (OSError, ValueError):
+            return False
+        return any(rp == Path(g) or Path(g) in rp.parents for g in _goc_rieng)
+
+    def _goc_cua(p):
+        try:
+            rp = Path(p).resolve()
+        except (OSError, ValueError):
+            return ""
+        return next((g for g in _goc_lv if rp == Path(g) or Path(g) in rp.parents), "")
+
+    def _moc_truoc(p, ly_do):
+        """Mốc khôi phục trước thao tác thay đổi đầu tiên của lượt, chỉ trong thư mục làm việc."""
+        g = _goc_cua(p) if p is not None else (_goc_lv[0] if _goc_lv else "")
+        if not (_sid_coding and g):
+            return ""
+        try:
+            import coding_checkpoint
+            return coding_checkpoint.tao_neu_can(_sid_coding, g, ly_do)
+        except Exception:
+            return ""
+
+    def _da_doi(p=None):
+        if not _sid_coding:
+            return
+        try:
+            import coding_checkpoint
+            coding_checkpoint.ghi_nhan_hoat_dong(_sid_coding, p)
+        except Exception:
+            pass
 
     def add(name, description, props, required, call, effect="read"):
         tools.append({"fn": name, "server": "javis", "name": name, "description": description,
@@ -564,13 +657,14 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         "vào TÀI KHOẢN Claude (Drive/Gmail/lịch...) - loại source='claude_account' gọi THẲNG qua "
         "tool native mcp__<tên>__*, KHÔNG qua javis_run_tool. Dùng khi cần biết đang có nguồn nào / "
         "tài khoản nào là mặc định, hoặc khi không tìm thấy tool tưởng phải có.",
-        {}, [], lambda args: _async_const(_connections_json(include_ambient, hidden, bo_qua)))
+        {}, [], lambda args: _async_const(_connections_json(include_ambient, hidden, bo_qua, owner_chat=staging)))
 
     if not vault_root:
         return tools, route
 
     async def _read(args):
         rel = (args or {}).get("path")
+        _off, _lim = (args or {}).get("offset"), (args or {}).get("limit")
         try:
             p = _safe_read_path(vault_root, rel, cho_phep_staging=staging,
                                 workspace_root=workspace_root)
@@ -601,6 +695,15 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
             text = await asyncio.to_thread(doc_text.extract, p)
         else:
             text = p.read_text(encoding="utf-8", errors="replace")
+        # 0.256.0: đọc theo đoạn có số dòng "N|..." khi xin offset/limit, hoặc khi file nằm trong
+        # thư mục làm việc của phiên Coding (ở đó số dòng là thứ model cần để sửa từng đoạn).
+        # Chat thường không xin thì GIỮ NGUYÊN output cũ: chatbot và luồng brain dựa vào nó.
+        trong_lv = _sid_coding and _trong_lam_viec(p)
+        if _off or _lim or trong_lv:
+            out, den, tong = coding_files.doc_theo_dong(text, _off or 1, _lim or coding_files.DOC_DONG_MAC_DINH)
+            if trong_lv:
+                coding_files.ghi_nhan_doc(_sid_coding, p, den, tong, int(_off or 1) if str(_off or 1).isdigit() else 1)
+            return out
         return text[:100_000] + (f"\n… [cắt, file dài {len(text):,} ký tự]" if len(text) > 100_000 else "")
 
     async def _ls(args):
@@ -613,7 +716,8 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
             rows.append(("[d] " if e.is_dir() else "    ") + e.name)
         return "\n".join(rows) or "(trống)"
 
-    async def _write(args):
+    async def _kiem_ghi(args, ten_tool="javis_write_file"):
+        """(đường dẫn đã duyệt, lỗi). Mọi rào trước khi GHI, dùng chung cho ghi và sửa file."""
         if mcp_catalog.effective_perm("full", mode) == "readonly":
             # Câu này phải NÓI RÕ ĐÂY LÀ QUYỀN CỦA JAVIS, không phải lỗi máy. Bản cũ chỉ ghi
             # "chế độ hiện tại (suggest/chỉ đọc) không được ghi file", và model đọc xong tự
@@ -621,7 +725,7 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
             # được câu "môi trường filesystem đang lỗi quyền sandbox" rồi đi tìm lỗi ổ đĩa,
             # trong khi thứ cần làm chỉ là nâng mức việc lên Ghi nháp (2026-08-04).
             # Kèm luôn việc-cần-làm-thay-thế để lượt đó vẫn ra kết quả dùng được.
-            return ("ERROR: KHÔNG ghi được file vì việc này đang chạy ở mức 'Chỉ đọc' (suggest). "
+            return None, ("ERROR: KHÔNG ghi được file vì việc này đang chạy ở mức 'Chỉ đọc' (suggest). "
                     "Đây là GIỚI HẠN QUYỀN do người dùng đặt, KHÔNG phải lỗi ổ đĩa, không phải "
                     "lỗi sandbox, không phải thiếu quyền hệ điều hành - đừng báo cáo sai nguyên "
                     "nhân. Muốn ghi thật: mở trang Việc, nâng mức của việc này lên 'Ghi nháp' "
@@ -634,15 +738,96 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
             p = _safe_path(vault_root, (args or {}).get("path"), workspace_root=workspace_root)
         except ValueError:
             if workspace_root:
-                return (f"ERROR: '{(args or {}).get('path')}' nằm ngoài MỌI nơi được phép "
+                return None, (f"ERROR: '{(args or {}).get('path')}' nằm ngoài MỌI nơi được phép "
                         f"ghi: bộ não đang làm việc, và thư mục làm việc của phiên này "
                         f"({_ten_goc(workspace_root)}). Dùng đường dẫn tương đối so với một "
                         f"trong số đó.")
-            return (f"ERROR: '{(args or {}).get('path')}' nằm ngoài bộ não đang làm việc nên "
+            return None, (f"ERROR: '{(args or {}).get('path')}' nằm ngoài bộ não đang làm việc nên "
                     f"tool này không ghi được. Dùng đường dẫn tương đối trong brain.")
+        # 0.188.0 (Javis Core spec 13, 14): the learning switch and the forgotten list are the person's, never the
+        # model's; and with learning off nothing new is written under memory/.
+        try:
+            import memory_control
+            mem = (Path(vault_root) / "memory").resolve()
+            rp = p.resolve()
+            if rp.parent == mem and rp.name in (memory_control.LEARNING, memory_control.FORGOTTEN):
+                return None, "ERROR: công tắc ghi nhớ và danh sách đã quên do người dùng quản lý, tool không ghi được."
+            if (rp == mem or mem in rp.parents) and not memory_control.learning_enabled(mem):
+                return None, ("ERROR: người dùng đã TẮT việc lưu ghi nhớ mới cho brain này nên không ghi vào memory/. "
+                        "Nói với người dùng rằng ghi nhớ đang tắt (bật lại ở Javis Core > Trí nhớ).")
+        except Exception:
+            pass
+        if mode == team_gate.HUB_MODE:
+            # 0.207.0 review: a gated Team step writes its deliverables, never files that run or configure code
+            # (plugins/, .claude/, Javis/ loops and reminders...). Those go through the owner's approval like any action.
+            rel = None
+            for base in [vault_root] + list(workspace_root if isinstance(workspace_root, (list, tuple)) else
+                                            ([workspace_root] if workspace_root else [])):
+                try:
+                    rel = p.resolve().relative_to(Path(base).resolve())
+                    break
+                except (ValueError, TypeError, OSError):
+                    continue
+            if rel is None or team_gate.protected_rel(rel):
+                ok, why = await asyncio.to_thread(team_gate.hub_check, ten_tool, dict(args or {}),
+                                                  f"ghi {(args or {}).get('path')}")
+                if not ok:
+                    return None, why
+        return p, ""
+
+    async def _write(args):
+        p, loi = await _kiem_ghi(args)
+        if loi:
+            return loi
+        noi_dung = str((args or {}).get("content") or "")
+        canh_bao = ""
+        if _sid_coding and _trong_lam_viec(p):
+            # 0.256.0: trong thư mục làm việc, chặn ghi đè mù và chặn dán nguyên output có số dòng.
+            if coding_files.giong_output_doc(noi_dung):
+                return ("ERROR: nội dung trông như output của javis_read_file (mỗi dòng mở đầu bằng "
+                        "'số|'). Ghi vậy là ghi cả số dòng vào file. Bỏ tiền tố số dòng, hoặc dùng "
+                        "javis_edit_file để sửa đúng đoạn cần.")
+            chan = coding_files.chan_ghi_de(_sid_coding, p)
+            if chan:
+                return chan
+            canh_bao = _moc_truoc(p, f"ghi {(args or {}).get('path')}")
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(str((args or {}).get("content") or ""), encoding="utf-8")
-        return f"Đã ghi {p.name} ({len(str((args or {}).get('content') or ''))} ký tự)"
+        p.write_text(noi_dung, encoding="utf-8")
+        if _sid_coding and _trong_lam_viec(p):
+            coding_files.ghi_nhan_ghi(_sid_coding, p)
+            _da_doi(p)
+        return f"Đã ghi {p.name} ({len(noi_dung)} ký tự)" + (f"\n{canh_bao}" if canh_bao else "")
+
+    async def _edit(args):
+        args = args or {}
+        p, loi = await _kiem_ghi(args, "javis_edit_file")
+        if loi:
+            return loi
+        if not p.is_file():
+            return (f"ERROR: không có file '{args.get('path')}'. Tạo file mới thì dùng javis_write_file.")
+        canh_bao = _moc_truoc(p, f"sửa {args.get('path')}") if (_sid_coding and _trong_lam_viec(p)) else ""
+        ra = await asyncio.to_thread(
+            coding_files.sua_file, p, str(args.get("old_string") or ""), str(args.get("new_string") or ""),
+            bool(args.get("replace_all")), _sid_coding if _trong_lam_viec(p) else "", str(args.get("path") or p.name))
+        if _sid_coding and _trong_lam_viec(p) and not ra.startswith("ERROR"):
+            _da_doi(p)
+        return ra + (f"\n{canh_bao}" if canh_bao else "")
+
+    async def _search(args):
+        args = args or {}
+        goc = _goc_lv[0] if _goc_lv else str(vault_root)
+        raw = str(args.get("path") or "").strip()
+        try:
+            dich = _safe_path(vault_root, raw, workspace_root=workspace_root) if raw else Path(goc)
+        except ValueError:
+            return (f"ERROR: '{raw}' nằm ngoài nơi tool này được phép tìm"
+                    + (f" (bộ não và thư mục làm việc: {_ten_goc(workspace_root)})." if workspace_root else
+                       " (bộ não đang làm việc)."))
+        hien_thi = _goc_cua(dich) or (str(vault_root) if vault_root else str(dich))
+        return await asyncio.to_thread(
+            coding_files.tim, dich, str(args.get("pattern") or ""), str(args.get("target") or "content"),
+            str(args.get("file_glob") or ""), args.get("limit") or coding_files.TIM_MAC_DINH,
+            args.get("offset") or 0, args.get("context") or 0, Path(hien_thi))
 
     async def _skill(args):
         name = str((args or {}).get("name") or "").strip()
@@ -663,14 +848,57 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         return text
 
     add("javis_read_file", "Đọc 1 file trong vault (Second Brain). path tương đối so với gốc vault; "
-        "nhận CẢ đường dẫn tuyệt đối của file người dùng vừa đính kèm/dán vào khung chat.",
-        {"path": {"type": "string"}}, ["path"], _read)
+        "nhận CẢ đường dẫn tuyệt đối của file người dùng vừa đính kèm/dán vào khung chat. PDF, Word, Excel "
+        "(.xlsx: mọi sheet, giá trị công thức, ô lỗi) được bóc thành chữ. File dài: "
+        "đọc từng đoạn bằng offset/limit (có số dòng).",
+        {"path": {"type": "string"}, "offset": {"type": "integer"}, "limit": {"type": "integer"}},
+        ["path"], _read)
     add("javis_list_dir", "Liệt kê file/thư mục trong vault. path tương đối, bỏ trống = gốc vault.",
         {"path": {"type": "string"}}, [], _ls)
     add("javis_write_file", "Ghi/tạo file trong vault (ghi đè nếu có). Dùng khi cần lưu ghi chú, "
         "báo cáo, nháp. KHÔNG dùng cho hành động ra ngoài.",
         {"path": {"type": "string"}, "content": {"type": "string"}}, ["path", "content"], _write,
         effect="write")
+    add("javis_edit_file", "Sửa MỘT đoạn trong file có sẵn: thay old_string (chép nguyên văn từ file, đủ "
+        "dài để chỉ khớp một chỗ) bằng new_string. Sửa vài dòng thì LUÔN dùng tool này, đừng ghi đè cả "
+        "file bằng javis_write_file. replace_all=true để thay mọi chỗ khớp. Trả về diff.",
+        {"path": {"type": "string"}, "old_string": {"type": "string"},
+         "new_string": {"type": "string"}, "replace_all": {"type": "boolean"}},
+        ["path", "old_string", "new_string"], _edit, effect="write")
+    add("javis_search_files", "Tìm trong file: target='content' tìm theo nội dung (regex), target='files' "
+        "tìm theo tên file (glob như '*.py' hoặc một đoạn tên). path: thư mục để tìm (bỏ trống = thư mục "
+        "làm việc, hoặc gốc brain). file_glob lọc loại file, context = số dòng kèm quanh chỗ khớp.",
+        {"pattern": {"type": "string"}, "target": {"type": "string", "enum": ["content", "files"]},
+         "path": {"type": "string"}, "file_glob": {"type": "string"},
+         "limit": {"type": "integer"}, "offset": {"type": "integer"}, "context": {"type": "integer"}},
+        ["pattern"], _search)
+    if _sid_coding:
+        for _fn in CORE_CODING_FNS:
+            route[_fn]["hat_nhan"] = True
+
+    # 0.259.0: tìm và đọc web cho engine API (Claude Code, Codex, Grok có WebSearch/WebFetch riêng).
+    # Không vào nhóm hạt nhân: lượt nào cần web thì model tìm thấy qua javis_search_tools khi tầng
+    # lazy đang bật, còn lại chúng hiện thẳng như mọi tool khác. Xem web_tools.
+    async def _web_search(args):
+        import web_tools
+        args = args or {}
+        return await web_tools.tim(str(args.get("query") or ""), args.get("limit") or web_tools.TIM_MAC_DINH)
+
+    async def _web_fetch(args):
+        import web_tools
+        args = args or {}
+        return await web_tools.doc(str(args.get("url") or ""), args.get("offset") or 0,
+                                   args.get("limit") or web_tools.DOC_MAC_DINH)
+
+    add("javis_web_search", "Tìm trên web (tin mới, giá cả, tài liệu, bất cứ thứ gì cần thông tin hiện tại). "
+        "Trả danh sách tiêu đề, địa chỉ, đoạn trích; đọc kỹ trang nào thì gọi javis_web_fetch.",
+        {"query": {"type": "string"}, "limit": {"type": "integer", "description": "số kết quả, mặc định 5"}},
+        ["query"], _web_search)
+    add("javis_web_fetch", "Đọc một trang web hoặc file PDF theo url, trả nội dung dạng chữ (markdown). Trang "
+        "dài thì gọi lại với offset để đọc tiếp. Trang cần đăng nhập thì dùng javis_login.",
+        {"url": {"type": "string"}, "offset": {"type": "integer"},
+         "limit": {"type": "integer", "description": "số ký tự, mặc định 15000, tối đa 50000"}},
+        ["url"], _web_fetch)
     # Mô tả tool = router thu nhỏ: liệt kê slug + mô tả ngắn để engine biết KHI NÀO gọi skill nào.
     # Trần lấy từ skill_router (CHUNG với system prompt) - trước đây hub tự cắt 60, system prompt
     # cắt 100 - người viết skill không biết mình bị chấm theo thước nào.
@@ -694,7 +922,12 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
     # `javis_run_command` chỉ hiện khi phiên CÓ thư mục làm việc. Phiên chat thường không thấy
     # nó, nên không có chuyện một câu hỏi bình thường lại gọi được lệnh máy. Mức quyền vẫn do
     # chính `run_command` cưỡng chế lần nữa theo chip của phiên (hai lớp, không thay nhau).
-    if workspace_root and coding_ctx_cua_phien is not None:
+    # 0.256.0: mức Plan (chip suggest, hoặc lượt /plan hạ trần xuống chỉ đọc) không thấy tool này
+    # luôn. Trước đây nó vẫn hiện rồi mới từ chối lúc chạy, và một lượt /plan ở chip Tự động thì
+    # chạy được lệnh vì run_command chỉ đọc chip, không đọc trần của lượt.
+    if (workspace_root and coding_ctx_cua_phien is not None
+            and getattr(coding_ctx_cua_phien, "permission_mode", "") in ("auto", "full")
+            and mcp_catalog.effective_perm("full", mode) != "readonly"):
         async def _lenh(args):
             args = args or {}
             try:
@@ -715,6 +948,67 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
              "cwd": {"type": "string", "description": "thư mục con, mặc định gốc thư mục làm việc"},
              "timeout_s": {"type": "number"}},
             ["command"], _lenh, effect="full")
+
+    # 0.256.0: terminal THẬT chỉ ở mức Toàn quyền của phiên Coding, và chỉ khi trần quyền của lượt
+    # cũng là full (lệnh /plan hạ một lượt xuống suggest thì không có). Xem coding_terminal.
+    if (workspace_root and coding_ctx_cua_phien is not None and _sid_coding
+            and getattr(coding_ctx_cua_phien, "permission_mode", "") == "full"
+            and mcp_catalog.effective_perm("full", mode) == "full"):
+        import coding_terminal
+
+        def _chat_id():
+            return str(getattr(coding_ctx_cua_phien, "chat_id", "") or f"web:{_sid_coding}")
+
+        def _nhat_ky(lenh, ket, nguy):
+            try:
+                _audit_append({"ts": datetime.now().isoformat(timespec="seconds"), "conn_id": "javis-terminal",
+                               "tool": "javis_terminal", "session": _sid_coding, "cmd": str(lenh)[:500],
+                               "nguy_hiem": bool(nguy), "ok": not str(ket).startswith("ERROR"),
+                               "head": str(ket)[:80]})
+            except Exception:
+                pass
+
+        async def _terminal(args):
+            args = args or {}
+            lenh = str(args.get("command") or "")
+            nguy = coding_terminal.la_nguy_hiem(lenh)
+            canh_bao = ""
+            if nguy or not coding_terminal.la_chi_doc(lenh):
+                canh_bao = _moc_truoc(None, ("NGUY HIỂM: " if nguy else "lệnh: ") + lenh[:80])
+            if args.get("background"):
+                ket = await asyncio.to_thread(coding_terminal.chay_nen, lenh, _sid_coding, _goc_lv,
+                                              str(args.get("workdir") or ""), str(vault_root or ""), _chat_id())
+            else:
+                ket = await asyncio.to_thread(coding_terminal.chay, lenh, _sid_coding, _goc_lv,
+                                              args.get("timeout"), str(args.get("workdir") or ""),
+                                              str(vault_root or ""), _chat_id())
+            _nhat_ky(lenh, ket, nguy)
+            if not ket.startswith("ERROR"):
+                _da_doi()
+            return ket + (f"\n{canh_bao}" if canh_bao else "")
+
+        async def _process(args):
+            args = args or {}
+            return await asyncio.to_thread(coding_terminal.quan_ly, str(args.get("action") or "list"),
+                                           _sid_coding, str(args.get("process_id") or ""),
+                                           args.get("offset") or 0, args.get("limit") or 0,
+                                           args.get("timeout") or 0)
+
+        add("javis_terminal",
+            "Terminal thật (bash) trong thư mục làm việc của phiên: pipe, &&, cd đều được, nhớ thư mục "
+            "và biến export giữa các lệnh. Dev server hay lệnh chạy mãi thì background=true rồi xem bằng "
+            "javis_process. timeout mặc định 180 giây, tối đa 600 (xin lâu hơn thì tự chạy nền). workdir: "
+            "thư mục con chỉ cho lệnh này. Trước lệnh thay đổi file Javis tự tạo mốc khôi phục.",
+            {"command": {"type": "string"}, "background": {"type": "boolean"},
+             "timeout": {"type": "number"}, "workdir": {"type": "string"}},
+            ["command"], _terminal, effect="full")
+        add("javis_process",
+            "Quản lý tiến trình nền do javis_terminal bật: action=list | poll (trạng thái + vài dòng cuối) | "
+            "log (offset/limit dòng, mặc định 200 dòng cuối) | wait (chờ tới timeout giây, tối đa 600) | kill.",
+            {"action": {"type": "string", "enum": ["list", "poll", "log", "wait", "kill"]},
+             "process_id": {"type": "string"}, "offset": {"type": "integer"},
+             "limit": {"type": "integer"}, "timeout": {"type": "number"}},
+            ["action"], _process, effect="full")
 
     return tools, route
 
@@ -761,7 +1055,17 @@ CORE_TOOL_FNS = frozenset({
     # Schema nhỏ và cố định, nên đủ tiêu chí hạt nhân. Bắt model đi tìm nó trước khi dùng là
     # đốt thêm một vòng web, đúng cái hệ số 2 của tầng lazy mà engine Web phải tránh.
     "javis_run_command",
+    # Chỉ tồn tại ở mức Toàn quyền của phiên Coding, và ở đó lượt nào cũng dùng.
+    "javis_terminal",
+    "javis_process",
 })
+
+# 0.256.0: hạt nhân CHỈ TRONG PHIÊN CODING. Ở đó gần như lượt nào cũng sửa và tìm code, bắt model
+# đi tìm tool trước là đốt thêm một vòng. Ở chat thường chúng vẫn có, nhưng nằm trong pool như
+# mọi tool khác: hai schema này cộng lại gần 1.000 ký tự, và trần CORE_TOOLS_MAX_CHARS của
+# test_prompt_budget (gói Groq miễn phí) không chừa chỗ cho chúng ở MỌI lượt chat.
+# Route của chúng mang cờ `hat_nhan` khi dựng cho một phiên Coding; `_apply_lazy` đọc cờ đó.
+CORE_CODING_FNS = frozenset({"javis_edit_file", "javis_search_files"})
 
 # Mô tả nhóm tool nội bộ cho thực đơn lazy. Builtin/plugin không có connector trong
 # mcp_catalog nên không tự có mô tả; thiếu dòng này thì model chỉ thấy "javis (javis, N tool)".
@@ -1008,7 +1312,8 @@ def _apply_lazy(tools_spec, route, include_ambient=False, hidden=None, force=Fal
     tool MCP. Xem chú thích ở CORE_TOOL_FNS về lý do không suy pool ra từ 'conn'.
     include_ambient (đường engine Claude): kèm connector tài khoản Claude vào menu/search để
     model biết còn nhóm tool native mcp__* ngoài pool của hub."""
-    pool = [t for t in tools_spec if t["fn"] not in CORE_TOOL_FNS]
+    pool = [t for t in tools_spec if t["fn"] not in CORE_TOOL_FNS
+            and not (route.get(t["fn"]) or {}).get("hat_nhan")]
     if not force and not _lazy_on(len(pool), _pool_chars(pool)):
         return tools_spec, route
     pool_fns = {t["fn"] for t in pool}
@@ -1074,8 +1379,13 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
     # dựng ra nó, nên hai phiên cùng repo mà khác chip quyền dùng chung cache là phiên
     # `suggest` chạy được lệnh bằng quyền của phiên `full`.
     _quyen_ctx = getattr(coding_ctx_cua_phien, "permission_mode", "") or ""
+    # 0.256.0: route của nhóm tool coding ôm sổ "đã đọc", mốc khôi phục và terminal của ĐÚNG MỘT
+    # phiên (cwd, biến môi trường, tiến trình nền). Hai phiên cùng repo cùng chip mà dùng chung
+    # cache là phiên này chạy lệnh trong terminal của phiên kia.
+    _sid_ctx = getattr(coding_ctx_cua_phien, "session_id", "") if workspace_root else ""
     key = (mode, str(vault_root or ""), bool(include_plugins), bool(include_ambient),
-           bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _quyen_ctx, bool(for_bot))
+           bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _quyen_ctx, bool(for_bot),
+           str(_sid_ctx or ""))
     ent = _cache.get(key)
     mt = _store_mtime()
     if (not force_refresh and ent and time.time() - ent["ts"] < ent.get("ttl", _CACHE_TTL)
@@ -1098,7 +1408,9 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
             continue
         conn = raw["conn"]
         connector = mcp_catalog.get(conn.get("connector_id"))
-        eff = mcp_catalog.effective_perm(conn.get("perm"), mode)
+        # A gated Team step (0.207.0) lists like full: an outside action must be callable so the gate can stop it and
+        # turn it into an approval request, and run it once approved. The call itself is still capped (`_guard`).
+        eff = mcp_catalog.effective_perm(conn.get("perm"), "full" if mode == team_gate.HUB_MODE else mode)
         # Tool ĐA HÀNH ĐỘNG (schema có tham số arg_rules.param, vd action của Pancake) → coi là
         # "read" lúc LIST để còn liệt kê được; chặn thật lúc call (đã có args). Tool thường →
         # phân loại tĩnh theo tool_meta/heuristic.
@@ -1192,7 +1504,10 @@ def invalidate_cache():
     _ambient_cache["ts"] = 0.0   # ép nạp lại danh sách connector tài khoản ở lần discover kế
     try:
         for c in mcp_store.list_connections():
-            mcp_client.pool.invalidate(c["id"])
+            # A session still in its first package download is closed as soon as its handshake
+            # is over, not now: killing it mid-install leaves a half-installed npx folder that npx
+            # reuses forever. The new credentials or the disabled state apply right after.
+            mcp_client.pool.invalidate(c["id"], defer_if_starting=True)
     except Exception:
         pass
 
@@ -1338,11 +1653,20 @@ _NGUON_CHU = {"phien": "brain đang mở (cuộc trò chuyện gần nhất)",
               "duy-nhat": "brain duy nhất trên máy này"}
 
 
+def _ten_hien_brain(vault_root) -> str:
+    """Tên hiển thị của brain (0.219.0, brain_label), rơi về tên thư mục nếu không đọc được."""
+    try:
+        import brain_label
+        return brain_label.display(vault_root)
+    except Exception:
+        return Path(vault_root).name
+
+
 def _ghi_chu_brain(nguon, vault_root, header_hong):
     """Dòng gắn vào kết quả tool để người dùng luôn biết lượt đó chạy trên brain nào."""
     if nguon not in _NGUON_CHU:
         return ""
-    ra = (f"(Javis đang làm việc trên brain \"{Path(vault_root).name}\" - {vault_root}. "
+    ra = (f"(Javis đang làm việc trên brain \"{_ten_hien_brain(vault_root)}\" - {vault_root}. "
           f"Lượt gọi này tới hub không kèm header X-Javis-Vault nên hub lấy "
           f"{_NGUON_CHU[nguon]}. Muốn brain khác thì đổi brain trên dashboard, hoặc thêm "
           f"header X-Javis-Vault vào cấu hình MCP của client.)")
@@ -1680,7 +2004,7 @@ def codex_vault_override(vault_root):
 
 
 CODEX_MODE_KEY = "mcp_servers.javis.http_headers.X-Javis-Mode"
-_CODEX_MODES = ("suggest", "auto", "full")
+_CODEX_MODES = ("suggest", "auto", "full", "gated")
 
 
 def dat_codex_mode(extra_config, mode):
@@ -1735,6 +2059,17 @@ def dat_codex_hub_bat_buoc(extra_config):
     """Gắn `required = true` cho entry hub vào `-c` của MỘT CodexCLI, THAY bản cũ nếu có."""
     extra_config[:] = [x for x in extra_config if not str(x).startswith(CODEX_REQUIRED_KEY + "=")]
     extra_config.append(f"{CODEX_REQUIRED_KEY}=true")
+    return extra_config
+
+
+def dat_codex_team_gated(extra_config):
+    """0.207.0: one Codex process of a GATED Team step (team_gate.py): hub level `gated` (the gate decides outside
+    actions), no ChatGPT apps (they bypass the hub) and no shell network in its workspace sandbox, whatever the user's
+    own Codex config says. Chat and workflow Codex processes never get this."""
+    dat_codex_mode(extra_config, "gated")
+    dat_codex_tat_app(extra_config)
+    extra_config[:] = [x for x in extra_config if not str(x).startswith("sandbox_workspace_write.network_access=")]
+    extra_config.append("sandbox_workspace_write.network_access=false")
     return extra_config
 
 

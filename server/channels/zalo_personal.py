@@ -62,6 +62,12 @@ def bat(account_id: str, on: bool) -> dict:
     return zalo_personal_channel.bat(account_id, on)
 
 
+async def nhap_lich_su(account_id: str) -> dict:
+    """Nhập tin cũ (khoảng 2 tuần javis-zalo giữ được) vào Hộp thư, xem `zalo_personal_channel.nhap_lich_su`."""
+    import zalo_personal_channel
+    return await zalo_personal_channel.nhap_lich_su(account_id)
+
+
 def trang_thai() -> dict:
     import zalo_personal_channel
     return zalo_personal_channel.trang_thai()
@@ -271,7 +277,19 @@ async def gui(tk: dict, chat_id: str, text: str, chat_type: str = "private", men
     if not conn:
         return False, localefmt.chu("tài khoản Zalo này không còn ở trang Kết nối (hoặc đang tắt)",
                                      "this Zalo account is no longer on the Connections page (or is turned off)")
-    doan = cat_tin(str(text or "")) or [str(text or "")]
+    # Zalo shows its own tag markup as plain code (2026-10-19): keep only the "@Name", which `_send_tagged` turns into a real tag.
+    sach = zalo_personal_channel.strip_mention_markup(text)
+    if sach != str(text or ""):
+        # The caller remembered the raw text as our echo; remember the cleaned one too, or the read loop takes it for the owner.
+        try:
+            zalo_personal_channel.ghi_da_gui(str(conn.get("id") or ""), str(chat_id), sach)
+        except Exception:      # noqa: BLE001 - worst case one duplicate line in the inbox
+            pass
+    text = sach
+    # Several short messages the bot chose to send (0.281.0, bot_split): each part is its own message, and a part
+    # still longer than `TIN_TOI_DA` is cut as before. Without the marker this is exactly the old single split.
+    import bot_split
+    doan = [d for p in (bot_split.parts(text) or [str(text or "")]) for d in (cat_tin(p) or [])] or [str(text or "")]
     if len(doan) == 1:
         return await _gui_mot(conn, chat_id, doan[0], chat_type, mention)
     # Tin dài: gửi lần lượt từng đoạn. Mỗi đoạn về vòng đọc như một tin riêng, nên phải nhớ TỪNG đoạn là
@@ -309,6 +327,12 @@ async def _gui_mot(conn: dict, chat_id: str, text: str, chat_type: str, mention=
         return False, str(e)[:300]
     if isinstance(d, dict) and d.get("success") is False:
         return False, str(d.get("error") or d.get("message") or localefmt.chu("Zalo từ chối", "Zalo refused"))[:300]
+    # javis-zalo returns the id Zalo gave the message. "success" without one means Zalo never confirmed it (0.283.0,
+    # 22/10/2026: replies in the bot history that never reached the customer): report a failure, so the inbox marks the
+    # reply as not sent instead of showing it as delivered.
+    if isinstance(d, dict) and d.get("success") is True and "messageId" in d and not d.get("messageId"):
+        return False, localefmt.chu("Zalo không xác nhận đã nhận tin (không có mã tin)",
+                                    "Zalo did not confirm the message (no message id)")
     return True, ""
 
 
@@ -411,6 +435,15 @@ class Transport:
                 elif tt.get("loi"):
                     self.status = "error"
                     self.last_error = str(tt["loi"])
+                elif zc.evicted_recently(self.conn_id):
+                    # 0.283.0: reading answers, but another session of the account holds the live socket, so the bot
+                    # hears only seconds after each reconnect. Green here hid three hours of missed tags (22/10/2026).
+                    self.status = "error"
+                    self.last_error = localefmt.chu(
+                        "Một phiên khác của cùng nick đang giành kết nối Zalo, bot lỡ phần lớn tin. Đóng Zalo Web của "
+                        "nick này và các Javis hay Claude khác dùng cùng nick.",
+                        "Another session of this account keeps taking the Zalo connection, so the bot misses most "
+                        "messages. Close Zalo Web for this account and any other Javis or Claude client using it.")
                 elif tt.get("lan_cuoi"):
                     self.status = "polling"
                     self.last_error = ""
@@ -620,6 +653,14 @@ class Transport:
             "message_id": str(ev.get("external_message_id") or ""),
             "account_id": self.conn_id,
         }
+        # Labels the owner put on this chat in the Zalo app (0.281.0, javis-zalo 1.6.0): the bot can skip chats tagged
+        # e.g. "Gia đình" (`chatbot_runtime._ly_do_im`) and sees the tags in its prompt. Cached per connection, so this
+        # await costs nothing on most messages; any failure leaves the list empty and the turn runs as before.
+        try:
+            meta["zalo_labels"] = await zc.labels_of_chat(self.conn_id, thread)
+        except Exception as e:      # noqa: BLE001
+            meta["zalo_labels"] = []
+            print(f"[zalo-personal bot {self.conn_id}] tag Zalo lỗi: {type(e).__name__}", file=sys.stderr)
         if co_anh:
             meta["co_anh"] = True
             # 0.74.1: the photo's link, so the bot can actually look at it (see `chatbot_runtime.anh_cho_bot`).

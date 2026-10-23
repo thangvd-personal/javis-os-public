@@ -114,8 +114,13 @@ check("CANARY: không lấy CREATE_NO_WINDOW từ asyncio.subprocess (ở đó n
 sys.path.insert(0, str(ROOT / "server"))
 import winproc  # noqa: E402
 
-check("winproc.no_window() trả 0 ngoài Windows", winproc.no_window() == 0)
-check("winproc.kwargs_no_window() rỗng ngoài Windows", winproc.kwargs_no_window() == {})
+import os
+import subprocess
+
+expected_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+expected_kwargs = {"creationflags": expected_flags} if os.name == "nt" else {}
+check("winproc.no_window() matches the platform's actual console flag", winproc.no_window() == expected_flags)
+check("winproc.kwargs_no_window() matches the platform", winproc.kwargs_no_window() == expected_kwargs)
 
 print()
 if _fails:

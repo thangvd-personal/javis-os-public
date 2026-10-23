@@ -235,7 +235,11 @@ class FakeEngine:
             yield ev
 
 
-async def collect(engine):
+async def collect(engine, fresh=True):
+    # Each scenario starts with no resting links (0.222.0): a quota error in one scenario puts
+    # that model to rest for 5 minutes, which would reorder the next scenario's chain.
+    if fresh:
+        aux_engine._COOLDOWN.clear()
     return [ev async for ev in engine.query("lam viec")]
 
 
@@ -297,6 +301,11 @@ codex = FakeEngine([{"type": "error", "content": "Codex: You've hit your usage l
 claude = FakeEngine([FINAL("claude cứu")])
 evs = asyncio.run(collect(FB([codex, claude])))
 check("other Codex errors (quota) still fall back to Claude", evs[-1] == FINAL("claude cứu") and claude.ran == 1)
+codex2 = FakeEngine([FINAL("codex")], provider="openai-oauth")
+claude2 = FakeEngine([FINAL("claude chạy trước")])
+evs = asyncio.run(collect(FB([codex2, claude2]), fresh=False))
+check("0.222.0: right after that quota error, the next job tries Claude first (Codex is resting)",
+      evs[-1] == FINAL("claude chạy trước") and codex2.ran == 0)
 
 codex = FakeEngine([{"type": "tool_call", "name": "mcp__javis__javis_run_tool"}, FINAL("xong")], provider="openai-oauth")
 claude = FakeEngine([FINAL("không được chạy")])
@@ -314,6 +323,7 @@ async def send(chat_id, text, viec=None, web=None):
 
 
 def run_fire(chain_engines):
+    aux_engine._COOLDOWN.clear()   # see collect(): every scenario starts with no resting links
     rem = {"id": "r_hubreq01", "mode": "task", "text": "Đọc Gmail qua hub, chỉ đọc.", "label": "reminder test",
            "muc_quyen": "suggest", "cron": "30 */6 * * *", "status": "pending",
            "due_at": time.time() - 5, "fired_at": 0, "chat_id": "web:test", "result": "", "error": ""}
@@ -336,6 +346,7 @@ def run_fire(chain_engines):
 
 def run_fire_single(engine):
     """Same as run_fire, at muc_quyen full: the router hands back the Codex engine itself."""
+    aux_engine._COOLDOWN.clear()   # see collect(): every scenario starts with no resting links
     rem = {"id": "r_hubreq02", "mode": "task", "text": "Đọc số liệu qua hub.", "label": "full test", "muc_quyen": "full",
            "cron": "0 */6 * * *", "status": "pending", "due_at": time.time() - 5, "fired_at": 0,
            "chat_id": "", "result": "", "error": ""}
@@ -383,7 +394,13 @@ users = sorted(n for n, s in SRC.items() if "dat_codex_hub_bat_buoc(" in s or "d
 check("only mcp_hub (definition) and aux_engine (_build_codex) use the overrides",
       users == ["aux_engine.py", "mcp_hub.py"], users)
 callers = sorted(n for n, s in SRC.items() if re.search(r"\b_build_codex\(", s))
-check("_build_codex is only called inside aux_engine (background router)", callers == ["aux_engine.py"], callers)
+# 0.194.0: team Work/Help turns build Codex through the same builder (team_engine.build_tools). Their tag
+# ("team-<id>-<turn>") is not a scheduled background lane, so the hub-required and no-app overrides stay off for them.
+check("_build_codex is only called by the background router and the team Work turn builder",
+      callers == ["aux_engine.py", "team_engine.py"], callers)
+import aux_engine as _ae  # noqa: E402
+check("a team turn tag is not a scheduled background lane (no hub-required override)",
+      not _ae.la_viec_nen_theo_lich("team-1d2c3b4a-tu_0a1b2c3d") and not _ae.la_viec_nen_theo_lich("team-x-y-main"))
 # The allowlist (reminder, loop, dispatch:*) only works while these lanes keep passing those tags.
 REM_SRC, TASK_SRC, LOOP_SRC = SRC.get("reminders.py", ""), SRC.get("tasks.py", ""), SRC.get("self_improve.py", "")
 check('reminders still route with tag="reminder"', 'aux_engine.apply(self.deps, cli, mode=mq, tag="reminder")' in REM_SRC)

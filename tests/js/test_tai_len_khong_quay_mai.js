@@ -30,9 +30,12 @@ function catHam(ten) {
   const j = APP.indexOf("\n}\n", i);
   return APP.slice(i, j + 3);
 }
-const hang = ["TAI_KET_MS", "TAI_CHO_MAY_CHU_MS", "TAI_THU_LAI"]
-  .map(k => (APP.match(new RegExp("const " + k + " = [^;]*;")) || [""])[0]).join("\n");
-const { guiUpload } = new Function(hang + "\n" + catHam("guiUpload") + "\nreturn { guiUpload };")();
+// The XHR with progress and the stall watch moved to chat-upload.js (JavisUpload.send), shared with the Team chat. The
+// checks below run it with the old option names mapped to the new ones.
+const U = require(path.join(ROOT, "dashboard", "chat-upload.js"));
+const guiUpload = (fd, on, o) => U.send(fd, on, o ? { XHR: o.XHR, clock: o.dongHo, stallMs: o.ketMs, waitMs: o.choMs } : undefined);
+check("app.js uses the shared upload", /function guiUpload\(fd, onTien, opt\) \{ return window\.JavisUpload\.send\(fd, onTien, opt\); \}/.test(APP)
+  && /const TAI_THU_LAI = window\.JavisUpload\.RETRIES;/.test(APP) && U.RETRIES === 2 && U.STALL_MS === 30000 && U.SERVER_WAIT_MS === 90000);
 
 // Đồng hồ giả: tick(ms) đẩy thời gian và chạy bộ canh.
 function dongHoGia() {
@@ -167,8 +170,8 @@ const cho = () => new Promise(r => setImmediate(r));
     XHRHong.prototype.open = function () { throw new TypeError("không mở được"); };
     let loi = null;
     await guiUpload("FD", null, { XHR: XHRHong, dongHo: dongHoGia() }).catch(e => { loi = e; });
-    check("open ném lỗi -> kind=client, kèm chi tiết", loi && loi.kind === "client" && /không mở được/.test(loi.chiTiet || ""),
-      loi && (loi.kind + " " + loi.chiTiet));
+    check("open ném lỗi -> kind=client, kèm chi tiết", loi && loi.kind === "client" && /không mở được/.test(loi.detail || ""),
+      loi && (loi.kind + " " + loi.detail));
   }
   const thanTai = catHam("_taiLen");
   check("_taiLen: lỗi phía trình duyệt báo đúng tên, KHÔNG tự thử lại",

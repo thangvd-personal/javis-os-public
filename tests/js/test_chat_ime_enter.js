@@ -12,12 +12,22 @@ function check(name, cond) {
   if (!cond) fails.push(name);
 }
 
-check("theo dõi compositionstart", /chatInput\.addEventListener\("compositionstart"/.test(app));
-check("theo dõi compositionend", /chatInput\.addEventListener\("compositionend"/.test(app));
-check("keydown chặn cờ composition riêng", /if \(chatInputComposing \|\|/.test(app));
-check("keydown chặn isComposing chuẩn", /\|\| e\.isComposing \|\|/.test(app));
-check("keydown có dự phòng IME keyCode 229", /e\.keyCode === 229\) return/.test(app));
-check("Enter thường vẫn gửi tin", /e\.key === "Enter" && !e\.shiftKey/.test(app));
+// The rules live in chat-acts.js (shared with the Team chat): checked by behaviour.
+const Acts = require(path.join(root, "dashboard", "chat-acts.js"));
+const mouse = { matchMedia: () => ({ matches: false }) };
+const enter = { key: "Enter", shiftKey: false, keyCode: 13 };
+const seen = {};
+const fakeInput = { addEventListener: (n, fn) => { seen[n] = fn; } };
+const composing = Acts.trackComposition(fakeInput);
+check("tracks compositionstart and compositionend", typeof seen.compositionstart === "function" && typeof seen.compositionend === "function");
+seen.compositionstart();
+check("keydown blocked by our own composition flag", composing() === true && Acts.enterSends(enter, composing(), mouse) === false);
+seen.compositionend();
+check("flag clears on compositionend", composing() === false);
+check("keydown blocked by the standard isComposing", Acts.enterSends(Object.assign({}, enter, { isComposing: true }), false, mouse) === false);
+check("keydown blocked by the IME keyCode 229 fallback", Acts.enterSends(Object.assign({}, enter, { keyCode: 229 }), false, mouse) === false);
+check("plain Enter still sends", Acts.enterSends(enter, false, mouse) === true);
+check("main chat wires the composition tracker on its input", /const chatInputComposing = window\.JavisActs\.trackComposition\(chatInput\);/.test(app));
 const appVersion = Number((html.match(/app\.js\?v=(\d+)/) || [])[1] || 0);
 check("app.js đã bump cache", appVersion >= 80);
 

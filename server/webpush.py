@@ -39,10 +39,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, utils as asym_utils
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+# `cryptography` (about 20 ms) loads in the functions that sign or encrypt, not at `import main` (0.274.0).
 
 from config import STATE_DIR
 
@@ -70,6 +67,8 @@ def b64u_giai(s) -> bytes:
 # Khoá VAPID - sinh một lần, sống mãi ở STATE_DIR
 # ============================================================
 def _sinh_vapid() -> dict:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
     pk = ec.generate_private_key(ec.SECP256R1())
     pem = pk.private_bytes(serialization.Encoding.PEM,
                            serialization.PrivateFormat.PKCS8,
@@ -136,6 +135,8 @@ def _jwt_vapid(endpoint: str, sub_lien_he: str = None) -> str:
     Chữ ký PHẢI là r||s thô 64 byte. `cryptography` ký ra DER, nên có bước đổi ở dưới -
     quên bước này thì mọi dịch vụ đẩy trả 401 mà không nói vì sao.
     """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec, utils as asym_utils
     sub_lien_he = sub_lien_he or lien_he()
     d = khoa_vapid()
     pk = serialization.load_pem_private_key(d["private_pem"].encode("ascii"), password=None)
@@ -164,6 +165,10 @@ def ma_hoa(plaintext: bytes, p256dh: str, auth: str, *,
     `salt` và `khoa_tam` chỉ để test bơm giá trị cố định vào - chạy thật thì luôn ngẫu nhiên,
     và PHẢI ngẫu nhiên: dùng lại cặp (khoá tạm, salt) cho hai tin là lộ khoá dòng.
     """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
     ua_pub_raw = b64u_giai(p256dh)
     auth_raw = b64u_giai(auth)
     if len(ua_pub_raw) != 65 or ua_pub_raw[0] != 0x04:
@@ -198,6 +203,10 @@ def giai_ma(body: bytes, khoa_rieng_ua, auth: str) -> bytes:
     Không có hàm này thì test chỉ kiểm được "có ra bytes", tức là một lỗi dẫn khoá vẫn
     lọt qua và chỉ lộ ra khi trình duyệt thật im lặng không hiện thông báo nào.
     """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
     salt, ct = body[:16], body[21 + body[20]:]
     as_pub_raw = body[21:21 + body[20]]
     ua_pub_raw = khoa_rieng_ua.public_key().public_bytes(
@@ -236,7 +245,7 @@ def _save_subs(d: dict) -> None:
         print(f"[webpush] ghi {SUBS_FILE.name} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
 
 
-def dang_ky(sub: dict, nhan: str = "") -> tuple:
+def dang_ky(sub: dict, nhan: str = "", phien: str = "") -> tuple:
     """Ghi nhận MỘT trình duyệt. Trả (ok, lỗi). Trùng endpoint thì CẬP NHẬT, không đẻ thêm.
 
     Trùng là chuyện bình thường chứ không phải ngoại lệ: mỗi lần mở lại dashboard, trang
@@ -257,8 +266,12 @@ def dang_ky(sub: dict, nhan: str = "") -> tuple:
     with _LOCK:
         d = _load_subs()
         d["subs"] = [s for s in d["subs"] if s.get("endpoint") != ep]
-        d["subs"].append({"endpoint": ep, "p256dh": p256dh, "auth": auth,
-                          "nhan": str(nhan or "")[:120], "ts": time.time()})
+        moi = {"endpoint": ep, "p256dh": p256dh, "auth": auth, "nhan": str(nhan or "")[:120], "ts": time.time()}
+        # 0.187.0: the login this device subscribed under (a hash, never the token). Logging out drops the device,
+        # and while login is required a device whose login ended gets nothing (`gui_het`).
+        if phien:
+            moi["phien"] = str(phien)[:32]
+        d["subs"].append(moi)
         _save_subs(d)
     return True, ""
 
@@ -316,7 +329,19 @@ def ten_dich_vu(endpoint: str) -> str:
     return host or "?"
 
 
-async def gui_het(tieu_de: str, than: str, url: str = "/", tag: str = "javis") -> tuple:
+def huy_theo_phien(phien: str) -> int:
+    """Drop every device subscribed under this login (logout, 0.187.0). Returns how many."""
+    if not phien:
+        return 0
+    with _LOCK:
+        d = _load_subs()
+        truoc = len(d["subs"])
+        d["subs"] = [s for s in d["subs"] if s.get("phien") != phien]
+        _save_subs(d)
+        return truoc - len(d["subs"])
+
+
+async def gui_het(tieu_de: str, than: str, url: str = "/", tag: str = "javis", phien_hop_le=None) -> tuple:
     """Đẩy MỘT thông báo tới MỌI trình duyệt đã đăng ký. Trả (số_gửi_được, số_bị_dọn, chi_tiết).
 
     Gửi cho tất cả là cố ý: bật/tắt là việc của từng thiết bị, nên đã bật ở đâu thì ở đó phải
@@ -327,6 +352,10 @@ async def gui_het(tieu_de: str, than: str, url: str = "/", tag: str = "javis") -
     chắc chắn hỏng. Mọi mã lỗi KHÁC đều được giữ lại trên đăng ký để màn hình nói ra được.
     """
     subs = danh_sach_sub()
+    # `phien_hop_le` (0.187.0): the set of logins still valid, or None when login is not required. A device bound to
+    # a login that ended (logout elsewhere, expiry) is skipped: it may now be someone else's browser.
+    if phien_hop_le is not None:
+        subs = [x for x in subs if not x.get("phien") or x.get("phien") in phien_hop_le]
     if not subs:
         return 0, 0, []
     payload = json.dumps({"title": tieu_de, "body": than, "url": url, "tag": tag},

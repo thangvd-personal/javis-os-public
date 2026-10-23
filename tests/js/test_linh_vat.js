@@ -219,7 +219,7 @@ check("hàng đợi có trần, không phình vô hạn", /if \(_tinDutMang\.len
 check("mất mạng được báo NGAY TRONG khung chat (orb bị ẩn ở trang Trò chuyện)",
   /function baoDutMang\(dut\)/.test(app) && /showActivity\(Icons\.warn\(window\.t\("app\.ws_mat_ket_noi"\)\)\)/.test(app));
 check("chờ một nhịp mới báo, khỏi nhấp nháy khi iOS ẩn trang", /\}, 2500\);/.test(app));
-check("ws.onclose gọi baoDutMang", /ws\.onclose = \(\) => \{[\s\S]{0,200}baoDutMang\(true\);/.test(app));
+check("ws.onclose gọi baoDutMang", /ws\.onclose = \(e?\) => \{[\s\S]{0,320}baoDutMang\(true\);/.test(app));
 ["app.ws_mat_ket_noi", "app.ws_giu_tin", "app.ws_tra_tin"].forEach(k => {
   check("i18n vi+en có " + k, typeof vi[k] === "string" && typeof en[k] === "string");
 });
@@ -345,8 +345,9 @@ check("ws.onclose gọi baoDutMang", /ws\.onclose = \(\) => \{[\s\S]{0,200}baoDu
 {
   const menu = pet.slice(pet.indexOf("var muc = ["), pet.indexOf("];", pet.indexOf("var muc = [")));
   const ids = [...menu.matchAll(/\{ id: "([a-z]+)"/g)].map(m => m[1]);
-  check("menu nhanh đúng 5 mục theo thứ tự chốt",
-    ids.join(",") === "chat,agent,workflow,mic,pet");
+  // 0.263.0 (issue #755): Team chat added on the last row.
+  check("menu nhanh đúng 6 mục theo thứ tự chốt",
+    ids.join(",") === "chat,agent,workflow,mic,pet,teams");
   check("Trợ lý / Quy trình đi qua openTab của trang Cộng sự",
     /window\.JavisWorkspace\.openTab\(id\)/.test(pet));
   // Mic: BẤM HỘ nút mic thật, không dựng đường thứ hai. Nút đó còn kéo theo loa, chế độ Live

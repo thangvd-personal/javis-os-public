@@ -23,9 +23,9 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-deepseek-test-"))
-
 from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path
+
+os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-deepseek-test-"))
 
 import aux_engine  # noqa: E402
 import config as cfgmod  # noqa: E402

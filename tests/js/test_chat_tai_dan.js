@@ -68,8 +68,19 @@ check("còn nút bấm tay khi trình duyệt không có IntersectionObserver",
   /typeof IntersectionObserver !== "function"/.test(APP));
 // Bẫy 1.
 check("có cờ chặn cuộn trong lúc chèn ngược", /let _neoChenCu = null, _dangChenCu = false;/.test(APP));
+// scrollBottom goes through chat-scroll.js, which does not scroll while suspended() says older messages go in.
+const CS = require(path.join(__dirname, "..", "..", "dashboard", "chat-scroll.js"));
+const fakeArea = { scrollHeight: 2000, clientHeight: 400, scrollTop: 100, addEventListener() {}, querySelector: () => null };
+const fakeBtn = { parentNode: null, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, addEventListener() {} };
+let inserting = true;
+const sc = CS.attach(fakeArea, { button: fakeBtn, win: {}, suspended: () => inserting });
+sc.toBottom(true);
+const held = fakeArea.scrollTop === 100;
+inserting = false;
+sc.toBottom(true);
 check("scrollBottom thoát sớm khi đang chèn ngược",
-  /function scrollBottom\(force\) \{[\s\S]{0,400}?if \(_dangChenCu\) return;/.test(APP));
+  /suspended: \(\) => _dangChenCu,/.test(APP) && /function scrollBottom\(force\) \{ chatScroll\.toBottom\(force\); \}/.test(APP)
+  && held && fakeArea.scrollTop === 2000);
 check("chatAppend chèn trước cái neo khi có neo",
   /chatArea\.insertBefore\(el, _neoChenCu \|\| newMsgBtn\)/.test(APP));
 // Bẫy 2.

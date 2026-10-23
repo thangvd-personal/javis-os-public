@@ -103,4 +103,6 @@ if _fails:
 # flush kết quả; lỗi dọn WebSocket trong khối with ở trên vẫn bị test bắt bình thường.
 sys.stdout.flush()
 sys.stderr.flush()
+import _paths  # noqa: E402  - os._exit bỏ qua atexit, nên tự xoá thư mục tạm trước
+_paths.don_thu_muc_tam()
 os._exit(1 if _fails else 0)

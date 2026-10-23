@@ -33,11 +33,14 @@ check("hôm qua: chữ Hôm qua", g.gioNgan(at(2026, 9, 13, 23, 59), now) === "H
 check("xa hơn: ngày/tháng; khác năm thì kèm năm", g.gioNgan(at(2026, 8, 30, 8, 0), now) === "30/09" &&
   g.gioNgan(at(2025, 11, 31, 8, 0), now) === "31/12/2025");
 check("chưa nhắn bao giờ: không ghi gì", g.gioNgan(0, now) === "" && g.gioNgan(undefined, now) === "");
-check("thẻ trợ lý: giờ cùng hàng tên, chỉ ở tab Trợ lý",
-  /<span class="ws-item-top"><strong>' \+ esc\(x\.name\) \+ '<\/strong>' \+\s*\(S\.loai === "agent" \? gioNhanHtml\(x\.last_chat_at\) : ""\)/.test(src));
+check("0.190.0: thẻ trợ lý: giờ nhỏ đứng cùng cụm với công tắc Auto ở góc dưới phải, chỉ ở tab Trợ lý",
+  /\(laAgent \? '<div class="ws-item-end">' \+ gioNhanHtml\(x\.last_chat_at\) \+/.test(src)
+  && !/'<\/strong>' \+\s*\(he \? '<span class="ws-sys">'[^\n]*gioNhanHtml/.test(src)
+  && /var laAgent = S\.loai === "agent";/.test(src));
 check("xong một lượt chat: giờ trên thẻ đổi ngay", /function onTurnDone\(sid\) \{[\s\S]{0,400}ag\.last_chat_at = Date\.now\(\) \/ 1000/.test(src));
-check("CSS: tên co giãn, giờ đứng yên bên phải", /\.ws-item-top \{ display: flex;/.test(css) &&
-  /\.ws-item-top > strong \{ flex: 1 1 auto; min-width: 0; \}/.test(css) && /\.ws-item-time \{ flex: none;/.test(css));
+check("CSS: tên co giãn; giờ nhỏ 12px, không phóng to trên màn hẹp", /\.ws-item-top \{ display: flex;/.test(css) &&
+  /\.ws-item-top > strong \{ flex: 1 1 auto; min-width: 0; \}/.test(css)
+  && /\.ws-item-time \{ flex: none; font-size: 12px;/.test(css) && !/\.ws-item-time \{ font-size: 14px; \}/.test(css));
 
 // ───────────── cột phải mặc định ẩn, nhớ lựa chọn ─────────────
 const phaiSrc = cut("  function manRong() {", "  // ---------- kéo đường biên");
@@ -80,11 +83,12 @@ const cot = { w: 300, getBoundingClientRect() { return { width: this.w }; } };
 const page2 = {
   clientWidth: 1200,
   style: { setProperty: (k, v) => { props[k] = v; cot.w = parseInt(v, 10); }, removeProperty: (k) => { delete props[k]; } },
-  classList: { add() {}, remove() {} },
+  classList: { _c: {}, add() {}, remove() {}, toggle(c, on) { this._c[c] = !!on; } },
   querySelectorAll: () => [handle],
   querySelector: () => cot,
 };
-const k = vm.createContext({ localStorage: { getItem: (x) => store2[x] || null, setItem: (x, v) => { store2[x] = v; },
+const k = vm.createContext({ S: { el: null }, document: { getElementById: () => null }, heptLai: () => false, esc: String,
+  localStorage: { getItem: (x) => store2[x] || null, setItem: (x, v) => { store2[x] = v; },
   removeItem: (x) => { delete store2[x]; } } });
 vm.runInContext(keoSrc + "\nglobalThis.api = { chanBeRong, apBeRong, noiKeoBien };", k);
 k.api.noiKeoBien(page2);
@@ -96,7 +100,13 @@ check("kéo biên trái sang phải 80px: cột rộng 380px và được nhớ"
 handlers.pointerdown({ button: 0, clientX: 380, preventDefault() {}, pointerId: 1 });
 handlers.pointermove({ clientX: 10 });
 handlers.pointerup({});
-check("kéo quá hẹp: dừng ở 220px", props["--ws-left-w"] === "220px", props["--ws-left-w"]);
+check("0.191.0: kéo quá hẹp: co về dải avatar 72px, trang mang lớp ws-mini",
+  props["--ws-left-w"] === "72px" && page2.classList._c["ws-mini"] === true, props["--ws-left-w"]);
+handlers.pointerdown({ button: 0, clientX: 72, preventDefault() {}, pointerId: 1 });
+handlers.pointermove({ clientX: 190 });
+handlers.pointerup({});
+check("kéo ra quá ngưỡng: danh sách đầy đủ, ít nhất 220px, bỏ lớp ws-mini",
+  props["--ws-left-w"] === "220px" && page2.classList._c["ws-mini"] === false, props["--ws-left-w"]);
 check("không rộng quá 45% trang", k.api.chanBeRong("left", 2000, page2) === 540 && k.api.chanBeRong("right", 2000, page2) === 600);
 handlers.keydown({ key: "ArrowRight", preventDefault() {} });
 check("bàn phím: mũi tên phải nới 16px", props["--ws-left-w"] === "236px", props["--ws-left-w"]);
@@ -110,8 +120,10 @@ check("CSS: cột trái rộng hơn mặc định và theo biến kéo được;
   /\.wspage > \.ws-left \{ width: var\(--ws-left-w, clamp\(240px, 24vw, 320px\)\);/.test(css) &&
   /\.wspage > \.ws-right \{ width: var\(--ws-right-w, 350px\);/.test(css) && /\.ws-resize \{ display: none; \}/.test(css) &&
   /cursor: col-resize; touch-action: none;/.test(css));
-check("CSS: cột phải ẩn thì chữ trong khung chat giãn ra",
-  /\.wspage\.right-open \.ws-slot \.msg-javis \.bubble \{ max-width: min\(120ch, 100%\); \}/.test(css));
+// 0.181.0: the owner reversed the 120ch widening (answers ran up to the outline bar); the assistant page keeps the main
+// chat's 72ch measure.
+check("CSS: no 120ch widening on the assistant page any more (same measure as the main chat)",
+  !/\.wspage\.right-open \.ws-slot \.msg-javis \.bubble \{ max-width: min\(120ch/.test(css));
 // Rà soát trước khi phát hành.
 check("đổi khổ màn: đặt lại right-open theo nghĩa mới (màn hẹp đóng ngăn, màn rộng theo lựa chọn)",
   /function theoKhoMan\(\)[\s\S]{0,600}page\.classList\.toggle\("right-open", manRong\(\) \? !nhoPhaiHien\(\) : false\)/.test(src) &&

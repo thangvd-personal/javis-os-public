@@ -27,9 +27,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-gitchu-"))
-
 from _paths import ROOT, SERVER  # noqa: E402,F401
+
+os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-gitchu-"))
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

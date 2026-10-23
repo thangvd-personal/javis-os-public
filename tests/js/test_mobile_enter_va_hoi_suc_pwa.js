@@ -21,21 +21,21 @@ function check(name, cond) {
   if (!cond) fails.push(name);
 }
 
-// ---- 1. Enter trên máy chạm = xuống dòng ----
-check("keydown chat có nhánh máy chạm (pointer: coarse)",
-  /matchMedia\("\(pointer: coarse\)"\)\.matches\) return;/.test(app));
-// Đo bằng pointer chứ không đo bề rộng màn: laptop cảm ứng có chuột vẫn Enter-gửi.
-check("KHÔNG đo bằng bề rộng màn hình trong handler Enter",
-  !/innerWidth[^\n]*sendMessage|sendMessage[^\n]*innerWidth/.test(app));
-check("desktop vẫn Enter-gửi, Shift+Enter xuống dòng",
-  /e\.key === "Enter" && !e\.shiftKey.*sendMessage\(\)/.test(app));
-// Nhánh chạm phải đứng SAU chốt IME (tin đang ghép vần vẫn được bảo vệ ở mọi thiết bị)
-// và TRƯỚC nhánh Enter-gửi.
-const iIme = app.indexOf("e.keyCode === 229");
-const iCoarse = app.indexOf('matchMedia("(pointer: coarse)")');
-const iSend = app.indexOf('e.key === "Enter" && !e.shiftKey');
-check("thứ tự: chốt IME -> nhánh chạm -> Enter-gửi",
-  iIme > 0 && iCoarse > iIme && iSend > iCoarse);
+// ---- 1. Enter on a touch screen = new line ----
+// The rules moved to chat-acts.js (JavisActs.enterSends) so the Team chat shares them; checked by behaviour here.
+const Acts = require(path.join(root, "dashboard", "chat-acts.js"));
+const touch = { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) };
+const mouse = { matchMedia: () => ({ matches: false }) };
+const enter = { key: "Enter", shiftKey: false, keyCode: 13 };
+check("touch screen (pointer: coarse): Enter does not send", Acts.enterSends(enter, false, touch) === false);
+// Measured by pointer, not screen width: a touch laptop with a mouse still sends on Enter.
+check("enterSends does not look at the screen width", !/innerWidth/.test(Acts.enterSends.toString()));
+check("computer: Enter sends, Shift+Enter is a new line",
+  Acts.enterSends(enter, false, mouse) === true && Acts.enterSends(Object.assign({}, enter, { shiftKey: true }), false, mouse) === false);
+check("an IME composition never sends, on any device",
+  Acts.enterSends(Object.assign({}, enter, { keyCode: 229 }), false, mouse) === false && Acts.enterSends(enter, true, mouse) === false);
+check("main chat keydown uses the shared rules",
+  /if \(window\.JavisActs\.enterSends\(e, chatInputComposing\(\)\)\) \{ e\.preventDefault\(\); sendMessage\(\); \}/.test(app));
 
 // ---- 2. Hồi sức sau giấc ngủ nền ----
 check("connect() có chốt chống nối trùng (hai đường gọi: retry 3s + hồi sức)",

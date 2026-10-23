@@ -26,6 +26,10 @@ import localefmt
 PLAN_MARK = "[CHẾ ĐỘ KẾ HOẠCH:"
 GOAL_MARK = "[MỤC TIÊU:"
 GOAL_TAG = "JAVIS_GOAL"
+# 0.173.1: hidden line inside the /goal block of an automatic round (v >= 2), so the dashboard can draw that
+# round as a collapsible "nudged to continue" line with a Stop goal button, also after a reload.
+GOAL_ROUND_TAG = "JAVIS_GOAL_ROUND"
+GOAL_MAX_ROUNDS = 5
 
 # Neo đầu DÒNG chứ không phải đầu tin: trước khối này dashboard còn chèn khối "file đang ghim" và
 # "ngữ cảnh giao diện", nên nó hiếm khi đứng ở byte 0. Neo đầu dòng để một đoạn văn dán vào
@@ -76,23 +80,34 @@ def _don_dieu_kien(dieu_kien: str, toi_da: int = 400) -> str:
     return s[:toi_da]
 
 
-def khoi_muc_tieu(dieu_kien: str, vong: int = 1, toi_da: int = 8) -> str:
+def khoi_muc_tieu(dieu_kien: str, vong: int = 1, toi_da: int = GOAL_MAX_ROUNDS, left: str = "") -> str:
     """Khối chỉ dẫn `/goal`: làm tiếp cho tới khi điều kiện đúng, tự báo trạng thái ở cuối.
 
     Trình duyệt đọc dòng ẩn `<!-- JAVIS_GOAL: {...} -->` để quyết định có tự gửi vòng tiếp
     không. Cách này giống JAVIS_ASK/JAVIS_LESSON: MODEL đề xuất, CODE quyết định (trần vòng,
     dừng khi không tiến triển, dừng khi người dùng chen vào).
     """
+    import json
     dk = _don_dieu_kien(dieu_kien)
+    left = _don_dieu_kien(left, 300).replace("-->", "- ->")
+    # Rounds 2+ carry the previous status twice: in words for the model, and as a hidden JSON line for the
+    # dashboard. "-->" is stripped so the status cannot close the HTML comment early.
+    round_line = ""
+    if int(vong) >= 2:
+        info = json.dumps({"v": int(vong), "n": int(toi_da), "left": left}, ensure_ascii=False)
+        round_line = ((f"Vòng trước còn: {left}\n" if left else "") + f"<!-- {GOAL_ROUND_TAG}: {info} -->\n")
     return (
         f"{GOAL_MARK} {dk}\n"
         f"Chế độ làm tới khi đạt, vòng {int(vong)}/{int(toi_da)}. Làm tiếp phần còn thiếu bằng "
         "công cụ sẵn có, rồi tự kiểm tra bằng dữ liệu thật xem điều kiện trên đã đúng chưa.\n"
+        + round_line +
         "Cuối câu trả lời LUÔN thêm đúng MỘT dòng ẩn: "
         f'<!-- {GOAL_TAG}: {{"done":true}} --> nếu điều kiện đã đúng và đã kiểm chứng, hoặc '
-        f'<!-- {GOAL_TAG}: {{"done":false,"left":"tình trạng và phần còn lại, một câu ngắn"}} --> nếu chưa. '
-        "Không báo đã đạt khi chưa kiểm chứng. Cần người dùng quyết định điều gì thì hỏi rõ rồi "
-        "dừng.]\n\n"
+        f'<!-- {GOAL_TAG}: {{"done":false,"left":"tình trạng và phần còn lại, một câu ngắn"}} --> nếu chưa, hoặc '
+        f'<!-- {GOAL_TAG}: {{"done":false,"blocked":"lý do, một câu ngắn"}} --> nếu KHÔNG THỂ làm tiếp vì '
+        "thiếu quyền, thiếu công cụ, thiếu kết nối hay thiếu dữ liệu mà chỉ người dùng gỡ được (khi đó đừng "
+        "thử lại vô ích). Không báo đã đạt khi chưa kiểm chứng. Cần người dùng quyết định điều gì thì hỏi rõ "
+        "rồi dừng.]\n\n"
     )
 
 
@@ -117,7 +132,11 @@ def doc_muc_tieu(text: str):
         return None
     if not isinstance(d, dict) or not isinstance(d.get("done"), bool):
         return None
-    return {"done": d["done"], "left": str(d.get("left") or "").strip()[:300]}
+    out = {"done": d["done"], "left": str(d.get("left") or "").strip()[:300]}
+    blocked = str(d.get("blocked") or "").strip()[:300]
+    if blocked and not d["done"]:
+        out["blocked"] = blocked
+    return out
 
 
 async def nen_phien(store, sid, *, kind, prov, api_key, model, api_stream, giu=GIU_NGUYEN):

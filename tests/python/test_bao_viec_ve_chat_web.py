@@ -25,9 +25,9 @@ import re
 import sys
 import tempfile
 
-os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-push-test-"))
-
 from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+
+os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-push-test-"))
 
 import channel_context  # noqa: E402
 import main  # noqa: E402

@@ -1,0 +1,19 @@
+.improvement-candidate-panel {
+  position: fixed; inset: 3vh max(12px, calc((100vw - 1040px) / 2));
+  z-index: 1500; overflow: auto; padding: 24px; border: 1px solid var(--border, #777);
+  border-radius: 12px; background: var(--bg, #16191f); color: var(--text, #eef0f4);
+  box-shadow: 0 0 0 100vmax #0009; overscroll-behavior: contain;
+}
+.improvement-candidate-panel label { display: block; margin: 12px 0; }
+.improvement-candidate-panel textarea,
+.improvement-candidate-panel input,
+.improvement-candidate-panel select { display: block; width: 100%; max-width: 100%; box-sizing: border-box; margin-top: 6px; }
+.improvement-candidate-panel textarea { min-height: 88px; }
+.improvement-candidate-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; border: 1px solid var(--border, #777); padding: 12px; }
+.improvement-candidate-panel p { overflow-wrap: anywhere; }
+.improvement-candidate-panel button { margin: 6px 8px 6px 0; min-height: 38px; }
+.improvement-candidate-panel details { margin-top: 20px; }
+@media (max-width: 600px) {
+  .improvement-candidate-panel { inset: 8px; padding: 14px; border-radius: 8px; }
+  .improvement-candidate-panel button { max-width: 100%; white-space: normal; }
+}

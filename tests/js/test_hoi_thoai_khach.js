@@ -120,7 +120,8 @@ check("kho tai khoan co truong brain rieng, khong suy tu bot",
       SRV.includes('"brain": a.get("brain") or ""') &&
       ACC.includes('def list_accounts(channel: str = "", brain: str = "")'));
 check("tai khoan CHUA gan brain hien o MOI brain (khong co token nao tang hinh)",
-      /_clean_brain\(a\.get\("brain"\)\) not in \(""/.test(ACC));
+      // 0.263.0 (#716): an empty brain (`mine`) still skips the filter, any spelling of the open brain matches.
+      /mine = _clean_brain\(a\.get\("brain"\)\)\s*\n\s*if br and mine and /.test(ACC));
 check("tab goi API kem brain dang mo",
       /api\("\/channels\/accounts\?brain=" \+ encodeURIComponent\(brain\(\)\)/.test(SRC));
 check("co cong tac xem MOI brain, de tim lai tai khoan gan nham cho",
@@ -133,7 +134,7 @@ check("hang loc noi ro dang xem brain nao (danh sach ngan di phai co ly do)",
 // "brain brain" hoac mot dong path dai ngoang - da thay tan mat luc chup man hinh 21/09.
 check("nhan brain hien TEN doc duoc, khong phai khoa tho",
       /function tenBrain\(v\)/.test(SRC) &&
-      /o\.dataset && o\.dataset\.brainName/.test(SRC) &&
+      /o\.dataset && \(o\.dataset\.brainLabel \|\| o\.dataset\.brainName\)/.test(SRC) &&   // 0.219.0: tên đã đổi trước
       /replace\(\/\\s\*·\\s\*\\d\+\\\+\?\$\//.test(SRC));
 // Nhan brain tren the chi hien khi CO CHUYEN de noi. Loc theo brain roi ma the nao cung dan
 // ten brain dang mo thi chi la tieng on.

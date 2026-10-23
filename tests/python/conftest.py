@@ -7,6 +7,15 @@ việc nền, không nằm trên đường găng.
 
 File này tồn tại để khi chạy `pytest tests/python/test_abc.py` với một file ĐÃ chuyển sang
 kiểu pytest thì nó import được module server. Import `_paths` là đủ: chính nó nạp server/
-vào sys.path.
+vào sys.path, và trỏ thư mục tạm của tiến trình vào một thư mục riêng tự xoá khi thoát.
 """
-import _paths  # noqa: F401
+import os
+
+import _paths
+
+
+def pytest_configure(config):
+    # tmp_path nằm trong thư mục tạm của _paths (xoá cùng lúc), và NGẮN hơn mặc định
+    # `pytest-of-<user>/pytest-N/`: Windows chưa bật long path thì vượt 260 ký tự là ghi hỏng.
+    if not config.option.basetemp:
+        config.option.basetemp = os.path.join(_paths.TEST_TMP, "p")

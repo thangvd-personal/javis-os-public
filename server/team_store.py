@@ -10,8 +10,8 @@ cùng một giao dịch. Kho này giữ phần còn lại.
   cấp nhóm. Nhận bước bằng CAS `queued -> running`, mỗi bước chạy tối đa một lần.
 - Sổ lượt (`team_turns`) có một dòng cho MỖI lời gọi model: giữ chỗ trước khi dựng engine, ghi mốc gọi engine ngay
   trước lời gọi; trước mốc thì hoàn được, sau mốc thì luôn tính (kể cả lỗi, hết giờ, huỷ, restart).
-- Khoá bận (`agent_busy`) đảm bảo một agent chạy tối đa một lượt nhóm cùng lúc trên cả máy (D3), có hạn để tự nhả khi
-  tiến trình chết.
+- Khoá bận (`agent_busy`) đảm bảo một agent chạy tối đa một lượt cùng lúc trong MỘT nhóm (D3, nới ở 0.257.0: trước đó là
+  trên cả máy), có hạn để tự nhả khi tiến trình chết. Nhịp chủ động và xem xét vẫn giữ trọn agent.
 """
 from __future__ import annotations
 
@@ -42,6 +42,9 @@ DEFAULT_CAPS = {
     "judge_daily": 40,
     "volunteer_k": 1,
     "judge_off_batch": 1,
+    # 0.260.0 (chủ 20/10/2026): các người được @ trong một tin trả lời CÙNG LÚC (1) hay lần lượt theo thứ tự @ (0, người sau
+    # đọc được câu của người trước, như trước 0.260.0).
+    "reply_parallel": 1,
 }
 # Trần chủ nhóm đổi được (POST /teams/{id}/caps). GOAL T1 mục 9 (bảng giới hạn): `running_jobs` và `no_progress` vẫn nằm
 # trong DEFAULT_CAPS để hiện và để đọc dòng cũ, nhưng do MÁY CHỦ cố định:
@@ -50,14 +53,18 @@ DEFAULT_CAPS = {
 #   giới hạn kỹ thuật, thay vì mở song song trong một nhóm (đụng khoá bận theo agent, thứ tự hàng đợi, ngữ cảnh chung).
 # - no_progress: bộ chạy dừng ở hai kết quả GIỐNG HỆT liên tiếp (so sha), con số không được đọc ở đâu.
 OWNER_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
-              "volunteer_k", "judge_off_batch")
+              "volunteer_k", "judge_off_batch", "reply_parallel")
 # Trần có lựa chọn "Không giới hạn" (lưu `None`, không thay bằng số lớn). Bộ chạy đọc `None` là không chặn.
 UNLIMITED_CAPS = ("task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily")
 # Giá trị lớn nhất của các ô không phải trần lượt (T3 J): K tối đa 5 người, chế độ phán xử là 0 hay 1.
-CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1}
+CAP_MAX = {"volunteer_k": 5, "judge_off_batch": 1, "reply_parallel": 1}
 FIXED_CAPS = {"running_jobs": 1, "no_progress": 2}
 TEAM_STATUS = ("active", "paused", "archived")
 STEP_KINDS = ("plan", "work", "help", "synthesize", "reply")
+# A step that waits for every step before it (a sequential plan), see `TeamStore.add_step(held=...)`.
+STEP_HELD = "held"
+# Steps that still have to run or finish: a job with one of these left is not done.
+STEP_OPEN = ("queued", STEP_HELD, "running", "waiting", "waiting_owner")
 TURN_ROLES = ("leader_reply", "member_reply", "plan", "work", "help", "synthesize", "member_volunteer")
 # Kết cục của một lượt trả lời trò chuyện (0.142.0), lưu bền để tải lại trang hay khởi động lại máy chủ không mất dấu:
 # queued (đang chờ) -> running (đang trả lời) -> done (xong) | error (lỗi, kèm lý do, có Thử lại).
@@ -130,6 +137,8 @@ CREATE TABLE IF NOT EXISTS team_reaction_log(
 from reaction_values import (AXES as REACTION_AXES, COMMENT_MAX, REACTION_EMOJI, REACTIONS,  # noqa: E402
                              REASONS as REACTION_REASONS, SOURCE_KINDS, STATUSES as REACTION_STATUSES)
 T2_SNAPSHOT_SUFFIX = ".pre-0.154.0"
+GATE_SNAPSHOT_SUFFIX = ".pre-0.207.0"
+WORK_MODES = ("gated", "full")
 # Cột thêm cho kho đã có (ALTER, idempotent). Mọi cột có mặc định: bản 0.153.x vẫn đọc ghi được kho đã nâng. Dòng nhật ký
 # cũ coi như đã chiếu xong (`effect_state` mặc định 'done', không backfill tác động).
 _T2_REACTION_COLS = (
@@ -171,6 +180,37 @@ def _j(v: Any) -> str:
     return json.dumps(v, ensure_ascii=False, sort_keys=True)
 
 
+# Team tags (0.195.0): short project labels. A tag is trimmed, inner spaces collapsed, at most TAG_CHARS characters; a
+# team keeps at most TAGS_MAX, duplicates (ignoring case) dropped, first spelling kept.
+TAGS_MAX = 8
+TAG_CHARS = 40
+
+
+def clean_tags(tags: Any) -> list:
+    if isinstance(tags, str):
+        tags = tags.split(",")
+    if not isinstance(tags, (list, tuple)):
+        raise TeamError("nhãn phải là một danh sách chữ")
+    out, seen = [], set()
+    for t in tags:
+        t = " ".join(str(t or "").split())[:TAG_CHARS].strip()
+        if not t or t.lower() in seen:
+            continue
+        seen.add(t.lower())
+        out.append(t)
+        if len(out) >= TAGS_MAX:
+            break
+    return out
+
+
+def _tags_of(raw: Any) -> list:
+    try:
+        v = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [str(x) for x in v if str(x).strip()] if isinstance(v, list) else []
+
+
 def new_team_id() -> str:
     return "tm_" + secrets.token_hex(8)
 
@@ -181,8 +221,15 @@ class TeamStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # T2: kho có từ trước thì chụp một bản trước khi thêm cột reaction (khôi phục khi hạ phiên bản).
         team_migration.snapshot_once(self.path, "team_reactions", "axis", suffix=T2_SNAPSHOT_SUFFIX)
+        # 0.207.0: one copy before the approval gate's column, so a downgrade can restore the store as it was.
+        team_migration.snapshot_once(self.path, "teams", "work_mode", suffix=GATE_SNAPSHOT_SUFFIX)
+        team_migration.snapshot_before_table(self.path, 'teams', 'team_cap_settings', '.pre-0.283.0')
         with closing(self._conn()) as c:
             c.executescript(_SCHEMA)
+            c.execute('CREATE TABLE IF NOT EXISTS team_cap_settings(team_id TEXT NOT NULL, cap TEXT NOT NULL, '
+                      'set_at REAL NOT NULL, event_id INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(team_id,cap))')
+            if 'event_id' not in {r[1] for r in c.execute('PRAGMA table_info(team_cap_settings)')}:
+                c.execute('ALTER TABLE team_cap_settings ADD COLUMN event_id INTEGER NOT NULL DEFAULT 0')
             for table, col, decl in _T2_REACTION_COLS:
                 if col not in {r[1] for r in c.execute(f"PRAGMA table_info({table})").fetchall()}:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
@@ -211,9 +258,30 @@ class TeamStore:
                 # Người tạo nhóm (0.142.0): người thật, lấy từ phiên xác thực của server, không từ client. Javis hiện chỉ
                 # có một tài khoản chủ máy nên nhóm cũ nhận đúng chủ đó ("owner"), không giả lập đa người dùng.
                 c.execute("ALTER TABLE teams ADD COLUMN created_by TEXT NOT NULL DEFAULT 'owner'")
+            if "avatar_image" not in tcols:
+                # Ảnh nhóm tự tải lên (0.176.0): tên ảnh trong kho avatar_upload; rỗng = ảnh ghép từ gương mặt thành viên.
+                c.execute("ALTER TABLE teams ADD COLUMN avatar_image TEXT NOT NULL DEFAULT ''")
             if "client_req_id" not in tcols:
                 # Mã yêu cầu tạo nhóm của client (0.142.0): bấm Tạo hai lần hay mạng chậm gửi lại thì trả lại nhóm đã tạo.
                 c.execute("ALTER TABLE teams ADD COLUMN client_req_id TEXT")
+            if "tags_json" not in tcols:
+                # Nhãn dự án của nhóm (0.195.0): danh sách chuỗi; nhiều nhóm cùng dự án gắn chung một nhãn để lọc.
+                c.execute("ALTER TABLE teams ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'")
+            if "owner_at" not in tcols:
+                # Lần cuối chủ làm việc trong nhóm (0.195.0: nhắn hay mở nhóm), để trang Team mở đúng nhóm đó trên mọi máy.
+                c.execute("ALTER TABLE teams ADD COLUMN owner_at REAL")
+            if "read_at" not in tcols:
+                # Lần cuối chủ đã đọc nhóm (0.197.0): tin sau mốc này là tin chưa đọc trên danh sách nhóm. Nhóm cũ coi như
+                # đã đọc hết lúc nâng cấp, khỏi hiện cả trăm tin chưa đọc một lúc.
+                c.execute("ALTER TABLE teams ADD COLUMN read_at REAL")
+                c.execute("UPDATE teams SET read_at=?", (time.time(),))
+            if "muted" not in tcols:
+                # Tắt thông báo của nhóm (0.197.0): 1 = không báo gì về máy chủ, kể cả tin gọi tên chủ.
+                c.execute("ALTER TABLE teams ADD COLUMN muted INTEGER NOT NULL DEFAULT 0")
+            if "work_mode" not in tcols:
+                # Quyền làm việc của nhóm (0.207.0, team_gate.py): `gated` (mặc định, cả nhóm cũ) = hành động ra ngoài
+                # phải có yêu cầu chủ đã duyệt; `full` = chủ cho nhóm tự làm, không hỏi từng bước. Bản cũ bỏ qua cột.
+                c.execute("ALTER TABLE teams ADD COLUMN work_mode TEXT NOT NULL DEFAULT 'gated'")
             c.execute("CREATE UNIQUE INDEX IF NOT EXISTS teams_client_req ON teams(brain_id, client_req_id) "
                       "WHERE client_req_id IS NOT NULL")
 
@@ -250,7 +318,14 @@ class TeamStore:
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
                 "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
-                "pinned_at": r["pinned_at"], "created_by": r["created_by"] if "created_by" in r.keys() else "owner"}
+                "pinned_at": r["pinned_at"], "created_by": r["created_by"] if "created_by" in r.keys() else "owner",
+                "avatar_image": (r["avatar_image"] or "") if "avatar_image" in r.keys() else "",
+                "tags": _tags_of(r["tags_json"] if "tags_json" in r.keys() else "[]"),
+                "owner_at": r["owner_at"] if "owner_at" in r.keys() else None,
+                # A new team counts from its creation: nothing in it is unread until someone writes.
+                "read_at": (r["read_at"] if "read_at" in r.keys() else None) or r["created_at"],
+                "muted": bool(r["muted"]) if "muted" in r.keys() else False,
+                "work_mode": (r["work_mode"] if "work_mode" in r.keys() else "") or "gated"}
 
     def _event(self, c, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
@@ -340,8 +415,42 @@ class TeamStore:
             self._event(c, team_id, "pinned" if on else "unpinned", by, {"pinned_at": r["pinned_at"]}, {"pinned_at": after})
         return self.get(team_id)
 
+    def mark_owner(self, team_id: str) -> None:
+        """The owner just worked in this team (sent a message, opened it or read new messages in it): GET /teams lets the
+        page open it next time, and everything in it so far is read (0.197.0). Not an edit of the team: no event,
+        `updated_at` (the list order) stays."""
+        now = time.time()
+        with closing(self._conn()) as c:
+            c.execute("UPDATE teams SET owner_at=?, read_at=? WHERE team_id=?", (now, now, str(team_id or "")))
+
+    def set_muted(self, team_id: str, on: bool, by: str = "owner") -> Optional[dict]:
+        """Turn this team's notifications off (or back on), 0.197.0. A muted team never notifies the owner's devices, not
+        even for a message that calls the owner; its unread count still shows. Not an edit: `updated_at` stays."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT muted FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            c.execute("UPDATE teams SET muted=? WHERE team_id=?", (1 if on else 0, team_id))
+            self._event(c, team_id, "muted" if on else "unmuted", by, {"muted": bool(r["muted"])}, {"muted": bool(on)})
+        return self.get(team_id)
+
+    def set_work_mode(self, team_id: str, mode: str, by: str = "owner") -> Optional[dict]:
+        """Owner's switch for outside actions (0.207.0): `gated` asks for approval, `full` lets the team act. Logged as an
+        event with the previous value, so the team history shows who opened or closed it and when."""
+        mode = str(mode or "").strip().lower()
+        if mode not in WORK_MODES:
+            raise TeamError("quyền làm việc không hợp lệ")
+        with self._Tx(self) as c:
+            r = c.execute("SELECT work_mode FROM teams WHERE team_id=?", (team_id,)).fetchone()
+            if r is None:
+                raise TeamError("không có nhóm này")
+            if r["work_mode"] != mode:
+                c.execute("UPDATE teams SET work_mode=? WHERE team_id=?", (mode, team_id))
+                self._event(c, team_id, "work_mode", by, {"work_mode": r["work_mode"]}, {"work_mode": mode})
+        return self.get(team_id)
+
     def update(self, team_id: str, by: str = "owner", **fields) -> dict:
-        allowed = {"name", "description", "status"}
+        allowed = {"name", "description", "status", "avatar_image", "tags"}
         bad = set(fields) - allowed
         if bad:
             raise TeamError(f"trường không đổi được: {sorted(bad)}")
@@ -353,10 +462,14 @@ class TeamStore:
             r = c.execute("SELECT * FROM teams WHERE team_id=?", (team_id,)).fetchone()
             if r is None:
                 raise TeamError("không có nhóm này")
-            before = {k: r[k] for k in fields}
-            sets = ", ".join(f"{k}=?" for k in fields)
+            cols = {("tags_json" if k == "tags" else k): (_j(clean_tags(v)) if k == "tags" else str(v))
+                    for k, v in fields.items()}
+            before = {k: (_tags_of(r["tags_json"]) if k == "tags" else r[k]) for k in fields}
+            sets = ", ".join(f"{k}=?" for k in cols)
             c.execute(f"UPDATE teams SET {sets}, updated_at=? WHERE team_id=?",
-                      (*[str(v) for v in fields.values()], time.time(), team_id))
+                      (*cols.values(), time.time(), team_id))
+            if "tags" in fields:
+                fields = dict(fields, tags=clean_tags(fields["tags"]))
             self._event(c, team_id, "updated", by, before, fields)
         return self.get(team_id)
 
@@ -422,7 +535,18 @@ class TeamStore:
             after = dict(before, **clean)
             c.execute("UPDATE teams SET caps_json=?, updated_at=? WHERE team_id=?", (_j(after), time.time(), team_id))
             self._event(c, team_id, "caps_set", by, before, after)
+            event_id = c.execute('SELECT MAX(id) FROM team_events WHERE team_id=?', (team_id,)).fetchone()[0]
+            if by == 'owner':
+                for key in clean:
+                    c.execute('INSERT INTO team_cap_settings(team_id,cap,set_at,event_id) VALUES(?,?,?,?) '
+                              'ON CONFLICT(team_id,cap) DO UPDATE SET set_at=excluded.set_at,event_id=excluded.event_id',
+                              (team_id, key, time.time(), event_id))
         return self.get(team_id)
+
+    def owner_caps_after(self, team_id, event_id):
+        with closing(self._conn()) as c:
+            return {r['cap'] for r in c.execute('SELECT cap FROM team_cap_settings WHERE team_id=? AND event_id>?',
+                                                (team_id, int(event_id)))}
 
     def log_event(self, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         with self._Tx(self) as c:
@@ -604,7 +728,9 @@ class TeamStore:
                 "note": r["note"], "created_at": r["created_at"], "updated_at": r["updated_at"]}
 
     def add_step(self, task_id: str, team_id: str, kind: str, agent_key: str, job_revision: int, brief: str,
-                 input_refs: list, parent_step: Optional[str] = None) -> dict:
+                 input_refs: list, parent_step: Optional[str] = None, held: bool = False) -> dict:
+        """`held` (customer report 0.270, Code 23): the step waits for every step before it. It is not queued, so no
+        wave or tick picks it; `release_held_step` queues it once the job has nothing else left to run."""
         if kind not in STEP_KINDS:
             raise TeamError("loại bước không hợp lệ")
         now = time.time()
@@ -613,9 +739,9 @@ class TeamStore:
                                 (task_id,)).fetchone()[0])
             sid = "st_" + secrets.token_hex(8)
             c.execute("INSERT INTO team_steps(step_id,task_id,team_id,seq,kind,agent_key,job_revision,brief,"
-                      "input_refs_json,parent_step,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                      "input_refs_json,parent_step,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (sid, task_id, team_id, seq, kind, agent_key, int(job_revision), str(brief or "")[:8000],
-                       _j(list(input_refs or [])), parent_step, now, now))
+                       _j(list(input_refs or [])), parent_step, STEP_HELD if held else "queued", now, now))
             return self._step(c.execute("SELECT * FROM team_steps WHERE step_id=?", (sid,)).fetchone())
 
     def steps(self, task_id: str) -> list:
@@ -633,6 +759,26 @@ class TeamStore:
             r = c.execute("SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq LIMIT 1",
                           (task_id,)).fetchone()
             return self._step(r) if r else None
+
+    def queued_steps(self, task_id: str) -> list:
+        """Mọi bước đang chờ của việc theo thứ tự (0.260.0: bộ chạy gom bước Làm/Hỗ trợ thành một đợt chạy song song)."""
+        with closing(self._conn()) as c:
+            return [self._step(r) for r in c.execute(
+                "SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq", (task_id,)).fetchall()]
+
+    def release_held_step(self, task_id: str, extra_inputs: Optional[list] = None) -> Optional[dict]:
+        """Queue the FIRST held step of the job (lowest seq), its inputs extended with `extra_inputs` (the results of the
+        steps before it, so the step sees what it waited for). None when no step is held."""
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM team_steps WHERE task_id=? AND status=? ORDER BY seq LIMIT 1",
+                          (task_id, STEP_HELD)).fetchone()
+            if r is None:
+                return None
+            refs = list(json.loads(r["input_refs_json"] or "[]"))
+            refs += [x for x in (extra_inputs or []) if x not in refs]
+            c.execute("UPDATE team_steps SET status='queued', input_refs_json=?, updated_at=? WHERE step_id=? AND status=?",
+                      (_j(refs), time.time(), r["step_id"], STEP_HELD))
+            return self._step(c.execute("SELECT * FROM team_steps WHERE step_id=?", (r["step_id"],)).fetchone())
 
     def claim_step(self, step_id: str) -> bool:
         with self._Tx(self) as c:
@@ -656,7 +802,8 @@ class TeamStore:
     def cancel_open_steps(self, task_id: str, note: str) -> int:
         with self._Tx(self) as c:
             return c.execute("UPDATE team_steps SET status='cancelled', note=?, updated_at=? "
-                             "WHERE task_id=? AND status IN ('queued','waiting')", (note, time.time(), task_id)).rowcount
+                             "WHERE task_id=? AND status IN ('queued','held','waiting','waiting_owner')",
+                             (note, time.time(), task_id)).rowcount
 
     def set_step_status(self, step_id: str, status: str, note: str = "") -> None:
         with self._Tx(self) as c:
@@ -767,6 +914,14 @@ class TeamStore:
                 "OR (created_at < ? AND settled_at >= ?) OR settled_at >= ?",
                 (float(floor), float(floor), float(settled_since))).fetchall()]
         return window, special
+
+    def active_turns(self, team_id: str) -> list:
+        """Lượt đang chạy engine của một nhóm, cũ trước: [{agent_key, role, engine_at}]. Dải "đang trả lời" trên ô nhập của
+        khung chat nhóm đọc từ đây (0.192.0). Lượt mới giữ chỗ (`reserved`, còn chờ khoá bận) chưa tính là đang trả lời."""
+        with closing(self._conn()) as c:
+            return [dict(r) for r in c.execute(
+                "SELECT agent_key, role, engine_at FROM team_turns WHERE team_id=? AND status='running' "
+                "ORDER BY engine_at, turn_id", (team_id,)).fetchall()]
 
     def open_turns(self) -> list:
         """Lượt còn `reserved` hay `running` (dùng khi khởi động lại để chốt `interrupted` hay hoàn)."""
@@ -1122,18 +1277,54 @@ class TeamStore:
             c.execute("UPDATE team_reactions SET updated_at=? WHERE session_id=? AND message_id=?",
                       (float(ts), session_id, int(message_id)))
 
-    # ───────────── khoá bận theo agent (D3) ─────────────
+    # ───────────── khoá bận theo agent (D3, nới ở 0.257.0) ─────────────
+    # Hai loại dòng trong `agent_busy`, cùng một cột khoá:
+    # - dòng CHUNG `<agent_key>`: giữ trọn agent (nhịp chủ động, xem xét, dòng cũ của bản trước 0.257.0). Chặn mọi lượt nhóm
+    #   của agent đó và bị mọi dòng khác của agent chặn lại.
+    # - dòng MẠCH `<agent_key>#<team_id>` (0.257.0, chủ 20/10/2026): một lượt nhóm giữ đúng mạch `teammate:<team>:<agent>`.
+    #   Hai nhóm khác nhau không chặn nhau nữa; cùng một nhóm vẫn một lượt mỗi agent (một phiên CLI không chạy hai lần).
+    #   Lý do cũ của D3 đã có chỗ khác lo: bài học ghi trong `accept_lock`, mạch hội thoại tách theo nhóm.
+    SLOT_SEP = "#"
+
+    @classmethod
+    def busy_slot(cls, agent_key: str, team_id: str) -> str:
+        return f"{agent_key}{cls.SLOT_SEP}{team_id}"
+
+    @classmethod
+    def _busy_key_of(cls, raw: str) -> str:
+        return str(raw).split(cls.SLOT_SEP, 1)[0]
+
+    _AGENT_ROWS = "(agent_key=? OR substr(agent_key, 1, ?)=?)"
+
+    @classmethod
+    def _agent_args(cls, agent_key: str) -> tuple:
+        pre = f"{agent_key}{cls.SLOT_SEP}"
+        return (agent_key, len(pre), pre)
+
+    @classmethod
+    def _busy_row(cls, r: Any) -> dict:
+        d = dict(r)
+        d["slot"] = d["agent_key"]
+        d["agent_key"] = cls._busy_key_of(d["agent_key"])
+        return d
 
     def acquire_busy(self, agent_key: str, team_id: str, turn_id: str, lease_s: float = 300,
-                     now: Optional[float] = None) -> bool:
+                     now: Optional[float] = None, per_team: bool = False) -> bool:
+        """Lấy khoá bận. `per_team=False` (nhịp, xem xét): dòng chung, chỉ lấy được khi agent không có dòng nào còn hạn.
+        `per_team=True` (lượt nhóm): dòng mạch của `team_id`, chỉ vướng dòng chung và lượt khác của CHÍNH nhóm đó."""
         t = time.time() if now is None else float(now)
+        key = self.busy_slot(agent_key, team_id) if per_team else agent_key
         with self._Tx(self) as c:
-            r = c.execute("SELECT * FROM agent_busy WHERE agent_key=?", (agent_key,)).fetchone()
-            if r is not None and r["turn_id"] != turn_id and float(r["lease_until"]) > t:
+            if per_team:
+                rows = c.execute("SELECT * FROM agent_busy WHERE agent_key IN (?, ?)", (agent_key, key)).fetchall()
+            else:
+                rows = c.execute(f"SELECT * FROM agent_busy WHERE {self._AGENT_ROWS}",
+                                 self._agent_args(agent_key)).fetchall()
+            if any(r["turn_id"] != turn_id and float(r["lease_until"]) > t for r in rows):
                 return False
             c.execute("INSERT INTO agent_busy(agent_key,team_id,turn_id,lease_until) VALUES(?,?,?,?) "
                       "ON CONFLICT(agent_key) DO UPDATE SET team_id=excluded.team_id, turn_id=excluded.turn_id, "
-                      "lease_until=excluded.lease_until", (agent_key, team_id, turn_id, t + float(lease_s)))
+                      "lease_until=excluded.lease_until", (key, team_id, turn_id, t + float(lease_s)))
             return True
 
     def renew_busy(self, agent_key: str, turn_id: str, lease_s: float, now: Optional[float] = None) -> bool:
@@ -1142,31 +1333,47 @@ class TeamStore:
         gia hạn."""
         t = time.time() if now is None else float(now)
         with self._Tx(self) as c:
-            return c.execute("UPDATE agent_busy SET lease_until=? WHERE agent_key=? AND turn_id=?",
-                             (t + float(lease_s), agent_key, turn_id)).rowcount == 1
+            return c.execute(f"UPDATE agent_busy SET lease_until=? WHERE turn_id=? AND {self._AGENT_ROWS}",
+                             (t + float(lease_s), turn_id) + self._agent_args(agent_key)).rowcount == 1
 
-    def busy_turn(self, agent_key: str) -> Optional[str]:
-        """Lượt đang ghi trên dòng khoá bận của agent (kể cả dòng đã hết hạn mà chưa ai lấy), None khi không có dòng."""
+    def busy_turn(self, agent_key: str, team_id: Optional[str] = None) -> Optional[str]:
+        """Lượt đang ghi trên dòng khoá bận của agent (kể cả dòng đã hết hạn mà chưa ai lấy), None khi không có dòng.
+        Có `team_id`: dòng mạch của nhóm đó (lượt nhóm kiểm mình còn giữ khoá không)."""
+        key = self.busy_slot(agent_key, team_id) if team_id is not None else agent_key
         with closing(self._conn()) as c:
-            r = c.execute("SELECT turn_id FROM agent_busy WHERE agent_key=?", (agent_key,)).fetchone()
+            r = c.execute("SELECT turn_id FROM agent_busy WHERE agent_key=?", (key,)).fetchone()
             return str(r["turn_id"]) if r else None
 
     def release_busy(self, agent_key: str, turn_id: str) -> None:
         with self._Tx(self) as c:
-            c.execute("DELETE FROM agent_busy WHERE agent_key=? AND turn_id=?", (agent_key, turn_id))
+            c.execute(f"DELETE FROM agent_busy WHERE turn_id=? AND {self._AGENT_ROWS}",
+                      (turn_id,) + self._agent_args(agent_key))
 
     def busy_of(self, agent_key: str, now: Optional[float] = None) -> Optional[dict]:
+        """Một dòng còn hạn bất kỳ của agent (chung hay mạch): agent đang làm gì đó trong nhóm. `agent_key` của dòng trả
+        về là mã agent trần, `slot` là khoá thật của dòng."""
         t = time.time() if now is None else float(now)
         with closing(self._conn()) as c:
-            r = c.execute("SELECT * FROM agent_busy WHERE agent_key=? AND lease_until > ?", (agent_key, t)).fetchone()
-            return dict(r) if r else None
+            r = c.execute(f"SELECT * FROM agent_busy WHERE {self._AGENT_ROWS} AND lease_until > ? "
+                          "ORDER BY lease_until DESC LIMIT 1", self._agent_args(agent_key) + (t,)).fetchone()
+            return self._busy_row(r) if r else None
+
+    def busy_blocking(self, agent_key: str, team_id: str, now: Optional[float] = None) -> Optional[dict]:
+        """Dòng còn hạn đang CHẶN lượt nhóm của agent ở `team_id` (0.257.0): dòng chung, hay lượt khác cùng nhóm. Lượt của
+        agent ở nhóm khác không chặn nên không trả về."""
+        t = time.time() if now is None else float(now)
+        with closing(self._conn()) as c:
+            r = c.execute("SELECT * FROM agent_busy WHERE agent_key IN (?, ?) AND lease_until > ? "
+                          "ORDER BY lease_until DESC LIMIT 1",
+                          (agent_key, self.busy_slot(agent_key, team_id), t)).fetchone()
+            return self._busy_row(r) if r else None
 
     def busy_keys(self, now: Optional[float] = None) -> set:
         """Mọi agent đang giữ khoá bận còn hạn (một câu đọc cho cả nhịp lớp 3)."""
         t = time.time() if now is None else float(now)
         with closing(self._conn()) as c:
-            return {str(r[0]) for r in c.execute("SELECT agent_key FROM agent_busy WHERE lease_until > ?",
-                                                 (t,)).fetchall()}
+            return {self._busy_key_of(r[0]) for r in c.execute("SELECT agent_key FROM agent_busy WHERE lease_until > ?",
+                                                               (t,)).fetchall()}
 
     # ───────────── kết cục lượt trả lời trò chuyện (0.142.0) ─────────────
 

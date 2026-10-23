@@ -17,7 +17,7 @@ The most important thing to understand: **changing model does NOT cost Javis any
 
 | Route | Provider | Javis MCP · brain file tools · skills | Shell commands (Bash) |
 |---|---|---|---|
-| Through **Claude Code** | Anthropic OAuth (Claude Code) | Yes, native MCP + native skills | **Yes** |
+| Through **Claude Code** | Claude Code | Yes, native MCP + native skills | **Yes** |
 | Through **Codex** | OpenAI OAuth (ChatGPT) | Yes, MCP through the hub (local connections such as Zalo/Webcake included) + Codex's OWN MCP registry (servers you added with `codex mcp add`) + skills through the router (`javis_use_skill` / reading `skills/` files) | **Yes** |
 | Through **Antigravity CLI** | Google Antigravity CLI (`agy`) | Yes, MCP through the hub (written into `~/.gemini/config/mcp_config.json`, see B1b) + skills through the router | **Yes** |
 | **Direct API** | OpenRouter | Yes, MCP through the hub + vault file tools + skills through the router | No |
@@ -59,7 +59,7 @@ The **Providers** block lists 10 providers. **Connected ones are sorted first**,
 
 | Provider (on-screen label) | Connection type | Notes |
 |---|---|---|
-| **Anthropic OAuth (Claude Code)** | Claude Code sign-in, no key needed | Full MCP/skills/shell. The default Main Model |
+| **Claude Code** | Claude Code sign-in, no key needed | Full MCP/skills/shell. The default Main Model |
 | **OpenAI OAuth (ChatGPT)** | Device code (ChatGPT plan sign-in) | Runs through Codex, wires the Connections store through the hub and uses skills through the router |
 | **xAI Grok Build CLI** | Sign in **on the Models page itself** (device code), no key needed | Uses your existing **SuperGrok / X Premium+** plan. Runs through the `grok` binary. Full MCP/skills/shell, and can resume a conversation thread. It is the **only CLI card that can sign in while Javis runs on a VPS**, see [B1a](#b1a-connecting-grok-build-cli-using-a-supergrok--x-premium-plan) |
 | **Google Antigravity CLI** | Type `agy` **once in a terminal**, no key needed | Google's designated replacement for Gemini CLI. Runs through the `agy` binary. Full MCP/skills/shell, and can pick **exactly the Antigravity IDE model lineup** (non-Google models included) |
@@ -81,8 +81,8 @@ Each provider card shows **● Connected** or **○ Not connected**, the number 
 
 This is the default engine. It can use every tool, skill and memory, plus run shell commands. It is not mandatory: if you have no Claude plan, skip this and go straight to section B (ChatGPT) or C (API keys), where Javis has the same functionality minus shell commands.
 
-1. Open **Models** and find the **Anthropic OAuth (Claude Code)** card.
-2. If you are not signed in, the card reads **○ Not signed in** with two buttons: **Sign into Claude** and **↻ Re-check**.
+1. Open **Models** and find the **Claude Code** card.
+2. If you are not signed in, the card reads **○ Not signed in** with two buttons: **Sign into Claude** and **↻ Re-check**. If the machine running Javis has no `claude` command, the card reads **○ Claude Code not installed**, shows one install box (Docker build: update Javis; manual install: one command to copy) and offers only **↻ Re-check**.
 3. Click **Sign into Claude**. Javis shows "**1)** Open this link to sign into claude.ai" with the link.
 4. Open that link and sign into your claude.ai account.
 5. If the page shows **a code**, paste it into the "paste code (if any)" field and click **Send code**. Some flows need no code: Javis waits and re-checks every 3 seconds, and the card updates once connected. After 5 minutes it reports a timeout and asks you to retry.
@@ -201,6 +201,46 @@ Where to get a key:
 - **Anthropic (API)**: console.anthropic.com.
 - **OpenAI (ChatGPT API)**: platform.openai.com.
 - **Google Gemini (API)**: a Gemini API key from aistudio.google.com.
+
+### C1. Connecting an Anthropic Compatible gateway (a key bought from a reseller)
+
+Use this when you bought a Claude key (or another model) from a reseller that offers an **Anthropic-standard endpoint**. Many resellers offer both an OpenAI endpoint and an Anthropic one, and often say the Anthropic one is more stable with Claude. The "anthropic" endpoints of DeepSeek, Kimi and MiniMax connect the same way. Available from 0.254.0.
+
+**Get 3 things from the seller** (for the ANTHROPIC endpoint, not the OpenAI one):
+
+- **Base URL**: the address the seller gives for `ANTHROPIC_BASE_URL`, for example `https://api.seller.com` or `https://api.seller.com/anthropic`. Pasting it with `/v1` or `/v1/messages` at the end is fine, Javis trims it.
+- **API key**: the string the seller issued, usually starting with `sk-`.
+- **Model name**: for example `claude-sonnet-4-6`. Ask the seller which models your plan includes and copy the names exactly.
+
+**Connect:**
+
+1. Open **Models**, choose the **Cloud Model** tab and find the **Anthropic Compatible** card.
+2. Fill the 3 boxes from top to bottom: Base URL, model names (separate several with commas), API key.
+3. Click **Connect**. Javis sends one very short test message to the seller first; on success the card shows **● Connected** with a model count.
+4. Make it the main model as in section D: pick the **Anthropic Compatible** provider, then the model name. Send a test message; a small line under the reply reading "Anthropic Compatible · model-name" means it went the right way.
+
+Javis only saves when the check succeeds, so an error means nothing was saved. The model name box is needed because most such gateways do not list their models, so Javis cannot know which ones the seller has. When a gateway does list them, Javis adds them too.
+
+**Errors when clicking Connect:**
+
+| Message | Meaning | What to do |
+|---|---|---|
+| Invalid API key (HTTP 401) or (HTTP 403) | The key is wrong, expired or blocked | Copy the key again (no extra spaces), or ask the seller for a new one |
+| This gateway does not list its models | No model name was entered | Enter the model name the seller gave you and click Connect again |
+| .../v1/messages not found (HTTP 404) | The Base URL is wrong | Ask the seller for the Anthropic endpoint address; the usual mistake is using the OpenAI one |
+| The gateway returned HTTP 400 for model ... | Usually a wrong model name, or a model your plan lacks | Check the spelling, or ask the seller for the exact name |
+| Could not reach ... | The machine running Javis cannot reach that address | Check the Base URL and the network, or ask the seller whether the endpoint is up |
+
+If chat later reports **429** or **529**, the seller is overloaded or you have used up your quota: wait a moment and retry, or ask the seller about your plan's limits.
+
+**Good to know:**
+
+- Change the key: enter the new key in the API key box and click **Save**. Leaving the key box empty keeps the old key.
+- Add or remove models: edit the model name box and click **Save**.
+- Switching to a different Base URL requires entering the key again: Javis never sends a saved key to a new address.
+- Stop using it: click **Disconnect** (clears the address, key and model names). If it was the Main Model, Javis switches back to Claude Code.
+- Javis sends the key both ways (`x-api-key` and `Bearer`), so it works whichever one the seller reads.
+- This gateway gets MCP, reading and writing the brain, skills, agents, background work and chatbots like the other API engines. Like every API engine it cannot run shell commands (see "The four things API engines lack").
 
 ### D. Setting the Main Model
 
@@ -322,6 +362,7 @@ Up to and including 0.42.1 there was a bug in exactly this place: only ChatGPT/C
 | **MAIN** | Corner of a provider card | This provider is the Main Model |
 | **● Connected** / **○ Not connected** | Provider card | The state, with the number of available models |
 | **○ Not signed in** | Claude Code card | Claude Code is not signed in on this machine |
+| **○ Claude Code not installed** | Claude Code card | The machine running Javis has no `claude` command; follow the install box on the card |
 | **Sign into Claude** | Claude Code card | Start the link-based sign-in flow |
 | **↻ Re-check** | Claude Code card (only while signed out) | Re-query the sign-in state |
 | **Sign into ChatGPT** | OpenAI OAuth card | Sign in with a device code |

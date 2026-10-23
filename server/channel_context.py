@@ -223,7 +223,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
             "NGƯỜI YÊU CẦU. Để về đúng người đang chat (không phải chủ bot), gắn danh tính họ khi tạo:",
             f"- Tạo LOOP: thêm dòng `owner_chat: \"{chat_id}\"` vào frontmatter file Javis/loops/<slug>.md.",
             f"- Tạo VIỆC: khi POST http://127.0.0.1:{port}/kanban/task, kèm field \"chat_id\":\"{chat_id}\".",
-            "- Bỏ trống owner_chat/chat_id (vd tạo trên bản web) → báo về chủ bot (ID Telegram đầu tiên).",
+            "- Bỏ trống owner_chat/chat_id → báo vào khung Javis Core của brain đó (và Telegram của chính chủ nếu đã liên kết), không về người đang chat.",
             "- Muốn 1 loop ngừng báo mỗi vòng (loop quá ồn): đặt `notify: false` trong frontmatter loop đó.",
         ]
     elif source == "zalo":
@@ -259,7 +259,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
             f"\"{chat_id}\"` cho loop, hoặc field \"chat_id\":\"{chat_id}\" khi POST "
             f"http://127.0.0.1:{port}/kanban/task. Giữ NGUYÊN cả tiền tố `zalo:` - đó chính là "
             "thứ server đọc để biết gửi về Zalo chứ không phải Telegram.",
-            "- Bỏ trống thì kết quả rơi về chủ bot Telegram, tức là người đang hỏi không thấy gì.",
+            "- Bỏ trống thì kết quả vào khung Javis Core của brain trên dashboard, tức là người đang hỏi không thấy gì.",
         ]
     elif source in _CHAT_APPS:
         # Slack and WhatsApp (0.71.0), Discord and Lark/Feishu (0.85.0). One branch because the
@@ -333,6 +333,12 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
             "số liệu. Câu trả lời dài có từ 3 phần rõ rệt thì đặt tiêu đề `###` cho từng phần.",
             "- Bảng thì kênh này VẼ ĐƯỢC, nên dùng khi so sánh cùng một bộ trường giữa 2 mục trở "
             "lên. Chỉ một danh sách phẳng thì gạch đầu dòng đọc nhanh hơn bảng.",
+            "- Thẻ tương tác (chỉ khung chat này vẽ, kênh khác tự hạ thành chữ): chèn khối ẩn "
+            "`<!-- JAVIS_CARD: {...} -->` một dòng JSON. `{\"type\":\"chart\",\"title\",\"kind\":\"bar|line\","
+            "\"labels\":[..],\"series\":[{\"name\",\"data\":[số]}]}` cho xu hướng theo ngày/tuần; "
+            "`{\"type\":\"stats\",\"items\":[{\"label\",\"value\",\"delta\"}]}` cho vài con số chính; "
+            "`{\"type\":\"buttons\",\"buttons\":[{\"label\",\"reply\"}]}` (tối đa 4) khi cần chủ chọn nhanh, "
+            "bấm là gửi `reply` như tin của chủ. Chỉ dùng với SỐ THẬT vừa lấy được; vẫn viết kết luận bằng chữ.",
             "- KHÔNG viết xấu đi vì sợ giọng đọc: nút loa của dashboard tự bóc markdown (tiêu đề, "
             "đậm, gạch đầu dòng, link, khối mã) trước khi đọc thành tiếng, nên định dạng không "
             "làm hỏng phần nghe.",
@@ -396,7 +402,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
                 f"`curl -s -X POST http://127.0.0.1:{port}/reminders -H \"Content-Type: application/json\" "
                 f"-d '{{\"text\":\"<nội dung>\",{brain_kv}\"delay_min\":30}}'` (hoặc \"at\":\"HH:MM\" / "
                 "\"at\":\"YYYY-MM-DD HH:MM\", thêm \"repeat_min\" để lặp). Giữ nguyên field \"brain\" để nhắc "
-                "thuộc đúng brain. Server tính giờ VN; tới giờ Javis tự gửi nhắc qua Telegram cho chủ bot.",
+                "thuộc đúng brain. Server tính giờ VN; tới giờ Javis tự báo vào khung Javis Core của brain đó (và Telegram của chủ nếu đã liên kết).",
             ]
     return "\n".join(lines) + "\n"
 
@@ -683,6 +689,11 @@ def strip_control_blocks(text: str) -> str:
     def _sub(m):
         if m.group(1) == "ASK":
             t = _ask_to_text(m.group(2))
+            return ("\n\n" + t) if t else ""
+        if m.group(1) == "CARD":
+            # 0.201.0: a chart, number tiles or buttons the dashboard draws; text channels get the plain version.
+            import chat_cards
+            t = chat_cards.card_to_text(m.group(2))
             return ("\n\n" + t) if t else ""
         return ""
 

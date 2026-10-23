@@ -18,6 +18,12 @@
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
+  // (i) button (info-tip.js, 0.214.0): explanations sit behind it; without the helper (Node tests) they draw open.
+  function infoBtn() { var J = typeof window !== "undefined" && window.JavisInfo; return J ? J.btn(window.t("info.more")) : ""; }
+  function infoBody(html) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    return J ? J.body(html) : '<div class="info-body">' + html + "</div>";
+  }
   function el(html) { var d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
   function brain() { try { return (window.currentBrainPath && window.currentBrainPath()) || "brain"; } catch (e) { return "brain"; } }
 
@@ -85,6 +91,12 @@
       return '<button type="button" class="cb-kenh-chip cb-kenh-sua" data-tk="' + esc(a.id) + '" title="' +
              esc(window.t("cb.sua_kenh_title", { kenh: k.nhan })) + '">' + ten + "</button>";
     }
+    // 0.174.0: kênh nhập được tin cũ (Zalo cá nhân) thì chip là nút nhập tin cũ. Kênh đã có bot không hiện thẻ riêng ở mục
+    // "Kênh chưa có bot", nên đây là chỗ duy nhất chủ bấm được.
+    if ((k.nang_luc || {}).nhap_lich_su) {
+      return '<button type="button" class="cb-kenh-chip cb-kenh-nhap-cu" data-tk="' + esc(a.id) + '" title="' +
+             esc(window.t("cb.nhap_cu_title", { kenh: k.nhan })) + '">' + ten + ' ' + ic("history") + "</button>";
+    }
     return '<span class="cb-kenh-chip" title="' + esc(k.nhan) + '">' + ten + "</span>";
   }
   // Bot có tài khoản nào đứng được trong nhóm không (quyết định khối cấu hình nhóm).
@@ -127,13 +139,13 @@
             esc(window.t("cb.bot_moi")) + '</button>' +
         '</div>' +
         '<div class="cb-loc"></div>' +
-        '<p class="cb-intro">' + esc(window.t("cb.intro_1")) + ' <b>' + esc(brain()) + '</b>' +
-        esc(window.t("cb.intro_2")) + ' <b>Agent</b> ' + esc(window.t("cb.intro_3")) +
-        esc(window.t("cb.intro_4")) + ' <b>' + esc(window.t("cb.intro_chi_doc")) + '</b>' +
-        esc(window.t("cb.intro_5")) + ' <b>' + esc(window.t("cb.intro_lam_that")) + '</b> ' +
-        esc(window.t("cb.intro_6")) + '<br>' +
-        esc(window.t("cb.intro_7")) + '<br>' +
-        esc(window.t("cb.intro_8")) + '</p>' +
+        // One short line stays on the page; the rest of the intro folds behind (i) (0.214.0).
+        '<div class="cb-intro">' + esc(window.t("cb.intro_1")) + ' <b>' + esc(brain()) + '</b>' + infoBtn() + '</div>' +
+        infoBody(esc(window.t("cb.intro_2").replace(/^[.\s]+/, "")) + ' <b>Agent</b> ' +
+          esc(window.t("cb.intro_3")) + esc(window.t("cb.intro_4")) +
+          ' <b>' + esc(window.t("cb.intro_chi_doc")) + '</b>' + esc(window.t("cb.intro_5")) +
+          ' <b>' + esc(window.t("cb.intro_lam_that")) + '</b> ' + esc(window.t("cb.intro_6")) + '<br>' +
+          esc(window.t("cb.intro_7")) + '<br>' + esc(window.t("cb.intro_8"))) +
         '<div class="cb-grid"></div>' +
       '</div>';
     host.querySelector(".cb-new").onclick = function () { moForm(null); };
@@ -210,9 +222,8 @@
     if (!_bots.length) {
       box.innerHTML =
         '<div class="cb-empty"><div class="cb-empty-ico">' + ic("headset", { cls: "ic-xl" }) + '</div>' +
-        '<b>' + esc(window.t("cb.rong_tieu_de")) + '</b>' +
-        '<div>' + esc(window.t("cb.rong_1")) + ' <b>' + esc(window.t("cb.rong_tat")) + '</b>' +
-        esc(window.t("cb.rong_2")) + '</div></div>';
+        '<b>' + esc(window.t("cb.rong_tieu_de")) + infoBtn() + '</b>' +
+        infoBody(esc(window.t("cb.rong_1")) + ' <b>' + esc(window.t("cb.rong_tat")) + '</b>' + esc(window.t("cb.rong_2"))) + '</div>';
       return;
     }
     if (!ds.length) { box.innerHTML = '<div class="cb-empty">' + esc(window.t("cb.khong_khop")) + '</div>'; return; }
@@ -312,11 +323,12 @@
         ' <b>' + esc(window.t("cb.rt_che_do")) + '</b> ' + esc(window.t("cb.rt_2")) +
         ' <b>' + esc(window.t("cb.rt_lenh")) + '</b> ' + esc(window.t("cb.rt_va")) +
         ' <b>' + esc(window.t("cb.rt_tra_thang")) + '</b>' +
-        esc(b.reply_when === "always" || b.reply_when === "auto" ? window.t("cb.rt_always") : window.t("cb.rt_mention")) + '.<br>' +
-        esc(window.t("cb.rt_fix_1")) + ' <b>@BotFather</b> ' + esc(window.t("cb.rt_go")) +
+        esc(b.reply_when === "always" || b.reply_when === "auto" ? window.t("cb.rt_always") : window.t("cb.rt_mention")) + '.' +
+        // The problem stays visible; how to fix it opens from (i) (0.214.0).
+        infoBtn() + '</span>' + infoBody(esc(window.t("cb.rt_fix_1")) + ' <b>@BotFather</b> ' + esc(window.t("cb.rt_go")) +
         ' <b>/setprivacy</b>' + esc(window.t("cb.rt_fix_2")) + ' <b>Disable</b>' +
         esc(window.t("cb.rt_fix_3")) + ' <b>' + esc(window.t("cb.rt_quan_tri")) + '</b>. ' +
-        esc(window.t("cb.rt_fix_4")) + '</span></div>' : "";
+        esc(window.t("cb.rt_fix_4"))) + '</div>' : "";
     var c = el(
       '<div class="cb-card">' +
         '<div class="cb-head">' +
@@ -411,6 +423,13 @@
       if (window.JavisTryBot) window.JavisTryBot.open(b, { groups: coNhom(b) || !(b.accounts || []).length });
     };
     c.querySelector(".cb-kenh-them").onclick = function () { moForm(b, { buoc: 1 }); };
+    c.querySelectorAll(".cb-kenh-nhap-cu").forEach(function (n) {
+      n.onclick = function () {
+        var fn = window.JavisConversations && window.JavisConversations.nhapTinCu;
+        var a = (b.accounts || []).filter(function (x) { return x.id === n.dataset.tk; })[0];
+        if (fn && a) fn(a, n);
+      };
+    });
     c.querySelectorAll(".cb-kenh-sua").forEach(function (n) {
       n.onclick = function () {
         var fn = window.JavisConversations && window.JavisConversations.suaKenh;
@@ -611,6 +630,8 @@
   function secH(bieuTuong, key) {
     return '<div class="cb-sec-h">' + ic(bieuTuong) + ' <span>' + esc(window.t(key)) + '</span></div>';
   }
+  // Adds HTML (the (i) button of the section's folded explanation) at the end of a secH() title row.
+  function voiInfo(tieuDe, them) { return tieuDe.replace(/<\/div>$/, (them || infoBtn()) + "</div>"); }
 
   // Thẻ chọn (radio card) cho "bot trả lời ai": tiêu đề + một dòng mô tả. Ba phương án đứng cạnh
   // nhau vì quyết định này là thứ chủ cần NHÌN THẤY cùng lúc để so sánh.
@@ -646,7 +667,9 @@
   function veCanhBao(id) {
     var m = mucCua(id);
     if (!(m.canh_bao || []).length) {
-      return '<div class="cb-hint">' + esc(window.t(id === "read_docs" ? "cb2.mq_read_docs" : "cb2.mq_doc")) + '</div>';
+      // What this level allows: the level name stays, the description opens from (i) (0.214.0).
+      return '<div class="cb-hint">' + esc(m.nhan) + infoBtn() + '</div>' +
+        infoBody(esc(window.t(id === "read_docs" ? "cb2.mq_read_docs" : "cb2.mq_doc")));
     }
     var HIEN = 2;
     return '<div class="cb-canhbao ' + (id === "full" ? "full" : "ghi") + '">' +
@@ -809,9 +832,10 @@
 
         // ---------------------------------------------------------------- BƯỚC 1: trả lời ở đâu
         '<div class="cb-b" id="cbB1">' +
-          '<label>' + esc(window.t("cb.lb_tai_khoan")) + '</label>' +
+          // for= points at the account list (not a form control), so the (i) inside never becomes the label's control.
+          '<label for="cbTkBox">' + esc(window.t("cb.lb_tai_khoan")) + infoBtn() + '</label>' +
           '<div id="cbTkBox">' + veChonTK(b, chonSan) + '</div>' +
-          '<div class="cb-hint">' + esc(window.t("cb.hint_tai_khoan")) + '</div>' +
+          infoBody(esc(window.t("cb.hint_tai_khoan"))) +
           '<button class="s-btn-ghost cb-noi-kenh" type="button">' + ic("plus") + ' ' +
             esc(window.t("cb.noi_kenh_moi")) + '</button>' +
         '</div>' +
@@ -834,6 +858,8 @@
 
           // 2. Bot trả lời ai
           '<div class="cb-sec">' + secH("users", "cb2.s_doituong") +
+            // Why there are no group options (filled by apDoiTuong). Stays open: owners took a missing option for a bug (0.102.1).
+            '<div class="cb-hint" id="cbKoNhom" hidden></div>' +
             '<div class="cb-rcs" id="cbRcs">' +
               htmlThe("auto", card0, "cb2.aud_auto_t", "cb2.aud_auto_d") +
               htmlThe("all", card0, "cb2.aud_all_t", "cb2.aud_all_d") +
@@ -857,17 +883,19 @@
               '</div>' +
               '<div class="cb-hint cb-pk-hint" id="cbPkHint"></div>' +
             '</div>' +
-            '<div class="cb-hint" id="cbKoNhom" style="display:none"></div>' +
             '<div id="cbRwBox" style="display:none">' +
               '<div id="cbRwSeg">' +
-                '<div class="cb-sub">' + esc(window.t("cb2.rw_lb")) + '</div>' +
+                '<div class="cb-sub">' + esc(window.t("cb2.rw_lb")) + infoBtn() + '</div>' +
                 htmlSeg("cbRw", "cbRw", [
                   { v: "mention", t: window.t("cb2.rw_mention") },
                   { v: "auto", t: window.t("cb2.rw_auto") },
                   { v: "always", t: window.t("cb2.rw_always") }], rw0) +
-                '<div class="cb-hint" id="cbRwH"></div>' +
+                // What the picked mode does (filled by veRw), behind the (i) of the label above.
+                '<div class="info-body" id="cbRwH" hidden></div>' +
               '</div>' +
-              '<div class="cb-hint cb-chi-tg" id="cbRwTg">' + esc(window.t("cb2.rw_tg")) + '</div>' +
+              // A required fix (privacy off in BotFather), shown only when it applies: stays open (review 0.214.0).
+              '<div class="cb-hint cb-chi-tg" id="cbRwTg">' + ic("triangle-alert") + ' <b>Telegram</b>: ' +
+                esc(window.t("cb2.rw_tg")) + '</div>' +
               // Chỉ hiện khi chọn "Tự đánh giá": một dòng giải thích, không ô cài đặt nào (bộ phán xử tự vận hành).
               (RP ? RP.formHtml() : '') +
             '</div>' +
@@ -891,29 +919,37 @@
 
           // 5. Active hours (0.130.0). Both empty = all day. Outside them the bot stays silent and the message
           // still lands in the inbox; an end earlier than the start runs past midnight (08:00 to 02:00).
-          '<div class="cb-sec">' + secH("alarm-clock", "cb.s_gio_truc") +
+          '<div class="cb-sec">' + voiInfo(secH("alarm-clock", "cb.s_gio_truc")) +
             '<div class="cb-gio-truc">' +
               '<label>' + esc(window.t("cb.gio_tu")) +
                 ' <input type="time" id="cbGioTu" value="' + esc(((b && b.gio_truc) || {}).tu || "") + '"></label>' +
               '<label>' + esc(window.t("cb.gio_den")) +
                 ' <input type="time" id="cbGioDen" value="' + esc(((b && b.gio_truc) || {}).den || "") + '"></label>' +
             '</div>' +
-            '<div class="cb-hint">' + esc(window.t("cb.hint_gio_truc")) + '</div>' +
+            infoBody(esc(window.t("cb.hint_gio_truc"))) +
             // Owner yield (0.172.0, personal Zalo only): minutes the bot stays out of a chat after the owner types into it
             // by hand; 0 = never. Left blank = not set: the channel default (10 minutes, groups silent as before), shown
             // as a placeholder so saving the form does not turn an unset bot into an explicit 10.
             '<div class="cb-gio-truc">' +
-              '<label>' + esc(window.t("cb.nhuong_tay")) +
+              '<label for="cbNhuongTay">' + esc(window.t("cb.nhuong_tay")) + infoBtn() +
                 ' <input type="number" id="cbNhuongTay" min="0" max="240" step="1" style="width:8em" placeholder="' + esc(window.t("cb.ph_nhuong_tay")) + '" value="' +
                 esc(b && b.nhuong_tay_phut != null ? String(b.nhuong_tay_phut) : "") + '"></label>' +
             '</div>' +
-            '<div class="cb-hint">' + esc(window.t("cb.hint_nhuong_tay")) + '</div>' +
+            infoBody(esc(window.t("cb.hint_nhuong_tay"))) +
             // Friend-request intake (0.172.0): accept requests and hand their introduction to the bot. Shown only
             // while a personal Zalo account is ticked (`apDoiTuong`): no other channel has friend requests.
             '<div id="cbKbBox" style="display:none">' +
-              '<label class="cb-gio-truc"><input type="checkbox" id="cbNhanKetBan"' +
-                (b && b.nhan_ket_ban ? " checked" : "") + '> ' + esc(window.t("cb.nhan_ket_ban")) + '</label>' +
-              '<div class="cb-hint">' + esc(window.t("cb.hint_nhan_ket_ban")) + '</div>' +
+              '<label class="cb-gio-truc" for="cbNhanKetBan"><input type="checkbox" id="cbNhanKetBan"' +
+                (b && b.nhan_ket_ban ? " checked" : "") + '> ' + esc(window.t("cb.nhan_ket_ban")) + infoBtn() + '</label>' +
+              infoBody(esc(window.t("cb.hint_nhan_ket_ban"))) +
+            '</div>' +
+            // Never answer chats carrying these Zalo labels (0.281.0, personal Zalo only): the labels the owner set in the
+            // Zalo app (Family, Friends...) are listed from the ticked accounts; one not listed can be typed below.
+            '<div id="cbTagBox" style="display:none">' +
+              '<label for="cbTagMore">' + esc(window.t("cb.skip_tags")) + infoBtn() + '</label>' +
+              infoBody(esc(window.t("cb.hint_skip_tags"))) +
+              '<div class="cb-tag-list" id="cbTagList"></div>' +
+              '<input id="cbTagMore" placeholder="' + esc(window.t("cb.ph_skip_tags")) + '">' +
             '</div>' +
           '</div>' +
 
@@ -921,7 +957,7 @@
           // own level and wait, without raising the bot that also answers strangers.
           // Picked from the chats the inbox knows on the ticked accounts, never typed: each exception carries the
           // channel account it lives on, so the same id on another account or channel never matches.
-          '<div class="cb-sec">' + secH("user", "cb.s_ngoai_le") +
+          '<div class="cb-sec">' + voiInfo(secH("user", "cb.s_ngoai_le")) +
             '<div class="cb-pk">' +
               '<div class="cb-pk-body" id="cbNlList"></div>' +
               '<div class="cb-pk-add">' +
@@ -930,7 +966,7 @@
                 '<button type="button" class="s-btn-ghost" id="cbNlAdd">' + esc(window.t("cb2.pk_them")) + '</button>' +
               '</div>' +
             '</div>' +
-            '<div class="cb-hint">' + esc(window.t("cb.hint_ngoai_le")) + '</div>' +
+            infoBody(esc(window.t("cb.hint_ngoai_le"))) +
           '</div>' +
 
           // Nâng cao: chỉ ngôn ngữ trả lời. Ngôn ngữ của bot ĐỘC LẬP với ngôn ngữ của chủ: bot nói
@@ -938,9 +974,9 @@
           // là chuyện bình thường, nên suy ngôn ngữ của bot từ ngôn ngữ của chủ là suy sai.
           '<details class="cb-nangcao">' +
             '<summary>' + ic("settings") + ' ' + esc(window.t("cb.nang_cao")) + '</summary>' +
-            '<label>' + esc(window.t("cb.lb_ngon_ngu")) + '</label>' +
+            '<label for="cbNgonNgu">' + esc(window.t("cb.lb_ngon_ngu")) + infoBtn() + '</label>' +
             '<select id="cbNgonNgu">' + htmlNgonNgu((b && b.ngon_ngu) || "auto") + '</select>' +
-            '<div class="cb-hint">' + esc(window.t("cb.hint_ngon_ngu")) + '</div>' +
+            infoBody(esc(window.t("cb.hint_ngon_ngu"))) +
           '</details>' +
         '</div>' +
 
@@ -1013,6 +1049,48 @@
     // Friend-request intake only exists on a personal Zalo account.
     function coZaloCaNhan() {
       return tkDangChon().some(function (a) { return a.channel === "zalo_personal"; });
+    }
+
+    // ---- Zalo labels the bot stays out of (0.281.0). `tagChon` is the truth of the form (name -> ticked); the list from
+    // the server only offers names to tick, and a saved name the account no longer has stays shown so it can be unticked.
+    var tagChon = {}, tagDs = [], tagCo = true, tagKhoa = "";
+    ((b && b.skip_labels) || []).forEach(function (x) { tagChon[x] = true; });
+    function veTag() {
+      var el = box.querySelector("#cbTagList");
+      var ten = tagDs.slice();
+      Object.keys(tagChon).forEach(function (x) { if (ten.indexOf(x) < 0) ten.push(x); });
+      if (!ten.length) {
+        el.innerHTML = '<div class="cb-pk-rong">' + esc(window.t(tagCo ? "cb.skip_tags_none" : "cb.skip_tags_old")) + '</div>';
+        return;
+      }
+      el.innerHTML = ten.map(function (x) {
+        return '<label class="cb-pk-li"><input type="checkbox" data-tag="' + esc(x) + '"' + (tagChon[x] ? " checked" : "") +
+          '><span class="cb-pk-n">' + esc(x) + '</span></label>';
+      }).join("");
+      el.querySelectorAll("input[type=checkbox]").forEach(function (i) {
+        i.onchange = function () { tagChon[i.dataset.tag] = i.checked; };
+      });
+    }
+    async function taiTag() {
+      var ids = tkDangChon().map(function (a) { return a.id; }).join(",");
+      if (ids === tagKhoa) return;      // same accounts: the list is already there
+      tagKhoa = ids;
+      try {
+        var d = await api("/chatbots/zalo-labels?account_ids=" + encodeURIComponent(ids) +
+          (sua ? "&bot_id=" + encodeURIComponent(b.id) : ""));
+        if (ids !== tagKhoa) return;
+        tagDs = d.labels || [];
+        tagCo = d.supported !== false;
+      } catch (e) { tagDs = []; tagCo = false; }
+      veTag();
+    }
+    function tagLuu() {
+      var ds = Object.keys(tagChon).filter(function (x) { return tagChon[x]; });
+      ((box.querySelector("#cbTagMore") || {}).value || "").split(",").forEach(function (x) {
+        x = x.trim();
+        if (x && ds.indexOf(x) < 0) ds.push(x);
+      });
+      return JSON.stringify(ds);
     }
 
     // ---- Ô chọn người và nhóm (lấy từ Hộp thư)
@@ -1216,10 +1294,11 @@
       });
       box.querySelector("#cbRwBox").style.display = co ? "" : "none";
       box.querySelector("#cbKbBox").style.display = coZaloCaNhan() ? "" : "none";
+      box.querySelector("#cbTagBox").style.display = coZaloCaNhan() ? "" : "none";
+      if (coZaloCaNhan()) taiTag();
       // Không có nhóm thì nói vì sao, thay vì ẩn im lặng (0.102.1): chủ tưởng phải đưa bot vào nhóm mới hiện.
       var koNhom = box.querySelector("#cbKoNhom");
       var dsTk = tkDangChon();
-      koNhom.style.display = !co && dsTk.length ? "" : "none";
       if (!co && dsTk.length) {
         var tenKenh = [];
         dsTk.forEach(function (a) {
@@ -1227,6 +1306,9 @@
           if (tenKenh.indexOf(n) < 0) tenKenh.push(n);
         });
         koNhom.textContent = window.t("cb2.ko_nhom", { kenh: tenKenh.join(", ") });
+        koNhom.hidden = false;
+      } else {
+        koNhom.hidden = true;
       }
       apGoiY();
       veRw();
@@ -1361,7 +1443,8 @@
                     account_ids: ids.join(","),
                     gio_truc: gioTu ? JSON.stringify({ tu: gioTu, den: gioDen }) : "",
                     nhuong_tay_phut: nhuong, ngoai_le: JSON.stringify(nlDs),
-                    nhan_ket_ban: coZaloCaNhan() && (box.querySelector("#cbNhanKetBan") || {}).checked ? "1" : "0" };
+                    nhan_ket_ban: coZaloCaNhan() && (box.querySelector("#cbNhanKetBan") || {}).checked ? "1" : "0",
+                    skip_labels: coZaloCaNhan() ? tagLuu() : "[]" };
       if (nang.length) chung.xac_nhan_ngoai_le = "1";
       try {
         if (sua) {

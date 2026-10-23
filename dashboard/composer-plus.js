@@ -98,7 +98,8 @@
   function refreshConnHealth() {
     getJson("/connect/health").then(function (d) {
       var h = (d && d.health) || {};
-      var n = Object.keys(h).filter(function (k) { return h[k] && h[k].ok === false; }).length;
+      // A source still in its first start (kind "starting") is not broken: leave it out.
+      var n = Object.keys(h).filter(function (k) { return h[k] && h[k].ok === false && h[k].kind !== "starting"; }).length;
       if (n === badConn) return;
       badConn = n;
       if (isOpen() && !menu.querySelector("[data-back]")) render(topRows());
@@ -164,11 +165,9 @@
         var names = {}; cat.forEach(function (c) { names[c.id] = c.name; });
         var rows = conns.map(function (c) {
           var h = health[c.id];
-          return {
-            label: c.label || names[c.connector_id] || c.name || c.id,
-            dot: !h ? "unknown" : (h.ok ? "ok" : "bad"), hint: h && !h.ok ? (h.message || "") : "",
-            run: function () { goPage("mcp"); }
-          };
+          return { label: c.label || names[c.connector_id] || c.name || c.id,
+            dot: !h || h.kind === "starting" ? "unknown" : (h.ok ? "ok" : "bad"), hint: h && !h.ok ? (h.message || "") : "",
+            run: function () { goPage("mcp"); } };
         });
         if (rows.length) rows.push({ sep: true });
         rows.push({ label: tw("cp.conn_open"), run: function () { goPage("mcp"); } });

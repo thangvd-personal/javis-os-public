@@ -51,6 +51,8 @@ server/connector-cred/
 server/purge-trash/
 # Công cụ Javis tự cài ngầm lúc chạy (bản ghim của CLI Zalo javis-zalo, chạy thẳng bằng Node). Sinh ra lúc chạy, có node_modules nặng.
 server/tools/
+# cloudflared that Remote access downloads on first use (remote_tunnel.py, 0.242.0): a 40 MB binary per machine.
+server/bin/
 # Lựa chọn GỠ năng lực mặc định (connector lõi...). Dữ liệu người dùng, mỗi máy một kiểu.
 server/core-off.json
 # Gói mở rộng người dùng cài (connector/plugin thả vào lúc chạy). Dữ liệu người dùng.
@@ -93,6 +95,12 @@ server/capability_registry.db*.corrupt-*
 # Bổ sung 0.9.241: 6 artifact dưới đây vừa KHÔNG track vừa KHÔNG ignore, nên một cú
 # `git add -A` là commit thẳng dữ liệu chạy + trạng thái deploy vào repo.
 server/kanban.sqlite3*
+# once_ledger.sqlite3 (0.238.0): sổ thao tác ra ngoài của việc nền, nằm cạnh kanban.sqlite3.
+server/once_ledger.sqlite3*
+# web_watch.sqlite3 (0.239.0): các trang đang theo dõi, cùng lớp với kanban.sqlite3.
+server/web_watch.sqlite3*
+# login_vault.sqlite3 (0.251.0): the owner's encrypted sign-ins. Never commit it.
+server/login_vault.sqlite3*
 # workflow_runs.sqlite3: kho lịch sử chạy quy trình (Task 2 Cộng sự), cùng lớp với
 # kanban.sqlite3* trên - test không đặt JAVIS_STATE_DIR sẽ ghi rơi vào server/ vì
 # execute_workflow giờ luôn chạm workflow_runs.get_store().
@@ -193,6 +201,9 @@ server/mcp-stdio-pids.json
 
 # Bộ đo tai nghe (tools/stt_bench): clip âm thanh và kết quả, không lên git
 server/stt_bench/
+# Loop watchdog heartbeat and restart log (server/loop_watch.py): runtime state written to the default state dir server/.
+server/loop_beat.json
+server/loop_restarts.json
 
 # Nguồn cài đặt các thư viện bổ sung
 source/

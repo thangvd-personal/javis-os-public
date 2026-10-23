@@ -48,7 +48,8 @@ brain = Path(tempfile.mkdtemp(prefix="javis-brain-")).resolve()
 (brain / "attachments" / "so do.png").write_bytes(b"\x89PNG")
 ngoai = Path(tempfile.mkdtemp(prefix="javis-ngoai-")).resolve()
 (ngoai / "lac.md").write_text("z", encoding="utf-8")
-ENC = quote(f"{brain}/wiki/{TEN}")          # dạng model ghi: %20, %C3%A0, %28...
+# A real file URI also preserves the Windows drive instead of treating it as a host.
+ENC = (brain / "wiki" / TEN).as_uri().removeprefix("file://")
 
 
 def H(t, w=None):
@@ -101,7 +102,8 @@ check("URL http có (ngoặc) trong query giữ nguyên",
 # ============================================================
 check("file:// trỏ đúng file trong brain → không báo", K(f"[x](file://{ENC})") == [])
 check("file:// ngoài brain → báo bằng đường dẫn đã gỡ giao thức",
-      K(f"[x](file://{ngoai}/lac.md)") == [f"{ngoai}/lac.md"], K(f"[x](file://{ngoai}/lac.md)"))
+      K(f"[x]({(ngoai / 'lac.md').as_uri()})") == [(ngoai / "lac.md").as_posix()],
+      K(f"[x]({(ngoai / 'lac.md').as_uri()})"))
 check("file:///wiki/khong-co.md → báo", K("[x](file:///wiki/khong-co.md)") == ["/wiki/khong-co.md"])
 
 # ============================================================
@@ -120,9 +122,13 @@ check("chuẩn hoá tuyệt đối có (ngoặc) ra đủ đuôi .md",
 # ============================================================
 # 5. Prompt: dặn thẳng model không dùng file://
 # ============================================================
+_agentic = main.main_prompt_rendering.render_agentic_paths(
+    str(brain), brain / "agents", brain / "workflows", brain / "Javis/loops", brain / "skills")
+check("production nối đúng renderer LỚP AGENTIC dùng chung",
+      "base += main_prompt_rendering.render_agentic_paths(root, ag, wf, lp, sk)" in MAIN)
 check("LỚP AGENTIC dặn KHÔNG dùng giao thức file:// và không mã hoá %20",
-      "KHÔNG dùng giao thức `file://` và không mã hoá %20" in MAIN)
-check("không em dash trong đoạn dặn", "\u2014" not in MAIN[MAIN.find("LỚP AGENTIC"):MAIN.find("LỚP AGENTIC") + 2500])
+      "KHÔNG dùng giao thức `file://` và không mã hoá %20" in _agentic)
+check("không em dash trong đoạn dặn", "\u2014" not in _agentic)
 
 print("")
 if _fails:

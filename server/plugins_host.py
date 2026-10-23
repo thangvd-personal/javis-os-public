@@ -67,7 +67,9 @@ _HTTP_NGUON = frozenset({"bundled", "pack", "user"})
 
 # Tên tool builtin/lõi - plugin KHÔNG được trùng (mcp_hub cũng skip lúc merge, đây là lớp 2).
 _RESERVED_TOOLS = {"javis_connections", "javis_read_file", "javis_list_dir",
-                   "javis_write_file", "javis_use_skill"}
+                   "javis_write_file", "javis_use_skill", "javis_edit_file", "javis_search_files",
+                   "javis_run_command", "javis_terminal", "javis_process",
+                   "javis_web_search", "javis_web_fetch"}
 
 # Name of the in-process plugin MCP server the Claude Agent SDK engine mounts (claude_sdk_engine).
 PLUGIN_SERVER = "javis-plugins"
@@ -396,6 +398,7 @@ class PluginContext:
         self._on_unload: List[Callable] = []
         self._http: List[dict] = []
         self._well_known: Dict[str, Callable] = {}
+        self._webhook_handlers: Dict[str, dict] = {}
 
     @property
     def data_dir(self) -> Path:
@@ -501,6 +504,47 @@ class PluginContext:
             raise ValueError(f"method không hợp lệ: {methods!r}")
         self._http.append({"path": duong, "handler": handler, "methods": mt,
                            "public": bool(public), "no_cookie": bool(no_cookie)})
+
+    def register_event_handler(self, name: str, handler: Callable, schema: Optional[dict] = None,
+                               min_mode: str = "full", description: str = "", ai: bool = False,
+                               idempotent: bool = True) -> None:
+        """Webhook platform (spec §8.2): a handler a webhook can bind as an action
+        (`{"kind": "plugin", "plugin": "<slug>", "handler": "<name>"}`). Only the bound plugin + handler receives the
+        event: nothing is broadcast to other plugins, and `fire_hook` is never used for business events.
+
+        handler(envelope: dict, ctx) -> {"status": ..., "ref"?: job id, "detail"?: str} (sync or async). `envelope`
+        holds `delivery_id` (the SAME on every retry of this delivery: keep it, and answer a second copy with the same
+        job id), `event_id`, `hook_id`, `action_id`, `attempt`, `generation`, `source`, `brain`, `revision`,
+        `verified`, `fields`, `payload`, `raw_sha256`, `business_key`, `level`. Never the owner's cookie or the
+        sender's signing secret. Status:
+          completed        done now (a short receipt in `detail`);
+          accepted         the plugin committed the work in its OWN store and runs it on its own schedule (a 15-minute
+                           wait, an approval list): return its job id in `ref`. Only after the plugin's commit;
+          retryable_error  not done, try again later;     permanent_error  not done, never for this event;
+          unknown          may have acted, the owner reconciles;     waiting_approval  waits for someone in the plugin.
+        `schema` (webhook rules schema format, paths over the envelope: {"fields": {"fields.order_id": {"type":
+        "string", "required": true}}}) is checked before the call: an event that does not fit is never handed over.
+        `ai=True` declares that the handler calls a model: it then runs only when the owner allowed it in the action,
+        and each call counts against the hook's AI budget. `idempotent` (default True: the contract above) lets a
+        delivery whose worker died mid-call be handed over again under the same delivery id."""
+        if not _TOOL_RE.match(str(name or "")):
+            raise ValueError(f"tên handler không hợp lệ (a-z0-9_): {name!r}")
+        if min_mode not in VALID_MIN_MODE:
+            min_mode = "full"
+        sch = None
+        if schema:
+            import webhook_rules
+            sch = webhook_rules._v_schema(schema)
+        self._webhook_handlers[str(name)] = {"handler": handler, "min_mode": min_mode,
+                                             "description": str(description or "")[:300], "schema": sch,
+                                             "ai": bool(ai), "idempotent": bool(idempotent)}
+
+    def register_webhook_handler(self, name: str, handler: Callable, min_mode: str = "full",
+                                 description: str = "", schema: Optional[dict] = None, ai: bool = False,
+                                 idempotent: bool = True) -> None:
+        """Older name of register_event_handler (same contract)."""
+        self.register_event_handler(name, handler, schema=schema, min_mode=min_mode, description=description, ai=ai,
+                                    idempotent=idempotent)
 
     def register_well_known(self, name: str, handler: Callable) -> None:
         """Phục vụ `GET /.well-known/<name>` và `/.well-known/<name>/<phần sau>` (ví dụ metadata
@@ -746,6 +790,31 @@ def tim_http(slug: str, duong: str, method: str = ""):
     return None
 
 
+def find_webhook_handler(vault_root: Optional[str], slug: str, name: str) -> Optional[dict]:
+    """The webhook handler `name` of the ENABLED plugin `slug` visible to this brain (its own vault plugins, plus
+    bundled, pack and global ones), as {"handler", "ctx", "min_mode"}; None if absent or off. Another brain's vault
+    plugin is never found here."""
+    ent = _load_all(vault_root)
+    for lp in ent["plugins"]:
+        if lp.slug == slug:
+            h = getattr(lp.ctx, "_webhook_handlers", {}).get(name)
+            if h:
+                return {"handler": h["handler"], "ctx": lp.ctx, "min_mode": h["min_mode"], "schema": h.get("schema"),
+                        "ai": h.get("ai", False), "idempotent": h.get("idempotent", True)}
+    return None
+
+
+def webhook_handlers(vault_root: Optional[str] = None) -> List[dict]:
+    """Handlers a webhook of this brain can choose (for the dashboard)."""
+    out = []
+    for lp in _load_all(vault_root)["plugins"]:
+        for n, h in getattr(lp.ctx, "_webhook_handlers", {}).items():
+            out.append({"plugin": lp.slug, "handler": n, "label": lp.name, "min_mode": h["min_mode"],
+                        "description": h["description"], "ai": h.get("ai", False),
+                        "schema": h.get("schema") or {}})
+    return out
+
+
 def tim_well_known(ten: str):
     """(plugin, handler) phục vụ `/.well-known/<ten>`, hoặc None. Plugin nạp trước giữ tên."""
     for lp in _plugin_http():
@@ -839,7 +908,16 @@ def _make_call(tool: dict, ctx: PluginContext, mode: str):
     name = tool["name"]
 
     async def _call(args):
-        if not _min_mode_ok(min_mode, mode):
+        if str(mode or "").strip().lower() == "gated" and min_mode != "readonly":
+            # 0.207.0: a gated Team step. A plugin that writes or acts (review: `javis_task` and `javis_schedule` are
+            # `safe` yet queue work that runs at full later) needs the owner's approval of this exact call
+            # (team_gate.py). Read-only plugin tools run.
+            import asyncio
+            import team_gate
+            ok, why = await asyncio.to_thread(team_gate.hub_check, name, args or {}, f"plugin: {name}")
+            if not ok:
+                return why
+        elif not _min_mode_ok(min_mode, mode):
             loai = "ghi/hành động" if min_mode == "safe" else "nguy hiểm (chỉ chế độ full)"
             return (f"ERROR: tool '{name}' cần mức quyền cao hơn ({min_mode}) - thao tác {loai} "
                     f"bị chặn ở chế độ hiện tại. Nâng chế độ chạy nếu thật sự cần.")
@@ -851,12 +929,19 @@ def _make_call(tool: dict, ctx: PluginContext, mode: str):
                 return f"ERROR: kiểm tra điều kiện tool '{name}' lỗi: {type(e).__name__}: {e}"
             if why:
                 return f"ERROR: {why}"
-        try:
-            res = handler(args or {}, ctx)
-            res = await _maybe_await(res)
-            return res if isinstance(res, str) else json.dumps(res, ensure_ascii=False, default=str)
-        except Exception as e:
-            return f"ERROR: tool plugin '{name}' lỗi: {type(e).__name__}: {e}"
+        async def _run(a):
+            try:
+                res = handler(a or {}, ctx)
+                res = await _maybe_await(res)
+                return res if isinstance(res, str) else json.dumps(res, ensure_ascii=False, default=str)
+            except Exception as e:
+                return f"ERROR: tool plugin '{name}' lỗi: {type(e).__name__}: {e}"
+
+        if min_mode == "full":
+            # 0.238.0: an outside action (send, post, order) runs once per Kanban job, even when the job runs again.
+            import once_ledger
+            return await once_ledger.run(name, args or {}, _run)
+        return await _run(args)
 
     return _call
 

@@ -17,7 +17,7 @@ Javis có thể chạy trên nhiều "engine" (nhà cung cấp AI) khác nhau. B
 
 | Cách gọi | Provider | MCP Javis · tool file brain · skill | Chạy lệnh máy (Bash) |
 |---|---|---|---|
-| Qua **Claude Code** | Anthropic OAuth (Claude Code) | Có - MCP native + skill native | **Có** |
+| Qua **Claude Code** | Claude Code | Có - MCP native + skill native | **Có** |
 | Qua **Codex** | OpenAI OAuth (ChatGPT) | Có - MCP qua hub (cả kết nối local như Zalo/Webcake) + kho MCP GỐC của Codex (server bạn tự `codex mcp add`) + skill qua router (`javis_use_skill` / đọc file `skills/`) | **Có** |
 | Qua **Antigravity CLI** | Google Antigravity CLI (`agy`) | Có - MCP qua hub (ghi vào `~/.gemini/config/mcp_config.json`, xem B1b) + skill qua router | **Có** |
 | **Gọi API thẳng** | OpenRouter | Có - MCP qua hub + tool file vault + skill qua router | Không |
@@ -59,7 +59,7 @@ Khối **Providers** liệt kê 10 nhà cung cấp. **Cái nào đã kết nối
 
 | Provider (nhãn trên màn hình) | Kiểu kết nối | Ghi chú |
 |---|---|---|
-| **Anthropic OAuth (Claude Code)** | Đăng nhập Claude Code, không cần key | Đầy đủ MCP/skill/tool máy. Là Main Model mặc định |
+| **Claude Code** | Đăng nhập Claude Code, không cần key | Đầy đủ MCP/skill/tool máy. Là Main Model mặc định |
 | **OpenAI OAuth (ChatGPT)** | Device code (đăng nhập gói ChatGPT) | Chạy qua Codex, đấu kho Kết nối qua hub + dùng skill qua router |
 | **xAI Grok Build CLI** | Đăng nhập **ngay trên trang Models** (device code), không cần key | Dùng gói **SuperGrok / X Premium+** sẵn có. Chạy qua binary `grok`. Đầy đủ MCP/skill/tool máy, nối lại được mạch hội thoại. Là thẻ CLI **duy nhất đăng nhập được khi Javis chạy trên VPS** - xem [B1a](#b1a-kết-nối-grok-build-cli-dùng-gói-supergrok--x-premium) |
 | **Google Antigravity CLI** | Gõ `agy` **một lần trong terminal**, không cần key | Bản Google chỉ định thay Gemini CLI. Chạy qua binary `agy`. Đầy đủ MCP/skill/tool máy, và chọn được **đúng dàn model của Antigravity IDE** (có cả model không phải của Google) |
@@ -81,8 +81,8 @@ Mỗi card provider hiển thị trạng thái **● Đã kết nối** hoặc *
 
 Đây là engine mặc định. Nó dùng được toàn bộ công cụ, skill và bộ nhớ, cộng thêm chạy lệnh máy. Không bắt buộc: nếu bạn không có gói Claude thì bỏ qua mục này và đi thẳng xuống mục B (ChatGPT) hoặc C (API key) - Javis chạy đủ chức năng như nhau, chỉ thiếu phần lệnh máy khi đi bằng API key.
 
-1. Vào **Models**, tìm card **Anthropic OAuth (Claude Code)**.
-2. Nếu chưa đăng nhập, card báo **○ Chưa đăng nhập** và có hai nút: **Đăng nhập Claude** và **↻ Kiểm tra lại**.
+1. Vào **Models**, tìm card **Claude Code**.
+2. Nếu chưa đăng nhập, card báo **○ Chưa đăng nhập** và có hai nút: **Đăng nhập Claude** và **↻ Kiểm tra lại**. Nếu máy chạy Javis chưa có lệnh `claude`, card báo **○ Chưa cài Claude Code**, hiện một khung hướng dẫn cài (bản Docker: cập nhật Javis; bản cài tay: một lệnh để chép) và chỉ có nút **↻ Kiểm tra lại**.
 3. Bấm **Đăng nhập Claude**. Javis hiện dòng "**1)** Mở link này để đăng nhập claude.ai" kèm đường link.
 4. Mở link đó để đăng nhập tài khoản claude.ai của bạn.
 5. Nếu trang hiện **một mã code**, dán mã vào ô "dán code (nếu có)" rồi bấm **Gửi code**. Một số luồng không cần dán code - Javis vừa chờ vừa tự kiểm tra mỗi 3 giây, kết nối xong là card tự đổi. Quá 5 phút không xong thì báo "Hết thời gian, thử lại.".
@@ -201,6 +201,46 @@ Lấy key ở đâu:
 - **Anthropic (API)**: console.anthropic.com.
 - **OpenAI (ChatGPT API)**: platform.openai.com.
 - **Google Gemini (API)**: key của Gemini API, lấy ở aistudio.google.com.
+
+### C1. Kết nối Anthropic Compatible (key mua từ bên bán lại)
+
+Dùng khi bạn mua key Claude (hoặc model khác) từ một bên bán lại, và bên bán có **cổng chuẩn Anthropic**. Nhiều bên bán có cả cổng OpenAI lẫn cổng Anthropic, và hay nói cổng Anthropic chạy ổn định hơn với Claude. Cổng "anthropic" của DeepSeek, Kimi, MiniMax cũng kết nối theo đúng cách này. Có từ bản 0.254.0.
+
+**Chuẩn bị 3 thứ từ bên bán** (lấy thông tin của cổng ANTHROPIC, không phải cổng OpenAI):
+
+- **Base URL**: địa chỉ bên bán ghi cho `ANTHROPIC_BASE_URL`, ví dụ `https://api.tenbenban.com` hoặc `https://api.tenbenban.com/anthropic`. Lỡ dán cả đuôi `/v1` hay `/v1/messages` cũng không sao, Javis tự cắt.
+- **API key**: chuỗi bên bán cấp, thường bắt đầu bằng `sk-`.
+- **Tên model**: ví dụ `claude-sonnet-4-6`. Hỏi bên bán gói của bạn dùng được model nào và chép đúng từng chữ.
+
+**Kết nối:**
+
+1. Vào **Models**, chọn tab **Cloud Model**, tìm thẻ **Anthropic Compatible**.
+2. Điền 3 ô từ trên xuống: Base URL, tên model (nhiều model thì cách nhau bằng dấu phẩy), API key.
+3. Bấm **Kết nối**. Javis gửi thử một tin rất ngắn tới bên bán để kiểm tra, xong thì thẻ hiện **● Đã kết nối** kèm số model.
+4. Đặt làm model chính như mục D: chọn provider **Anthropic Compatible** rồi chọn tên model. Chat thử một câu, dưới câu trả lời có dòng nhỏ ghi "Anthropic Compatible · tên-model" là đã chạy đúng đường.
+
+Javis chỉ lưu khi kiểm tra thành công, nên thấy báo lỗi tức là chưa lưu gì. Lý do cần ô tên model: đa số cổng kiểu này không trả danh sách model, Javis không tự biết bên bán có những model nào. Cổng nào có danh sách thì Javis tự nạp thêm.
+
+**Gặp lỗi khi bấm Kết nối:**
+
+| Câu báo | Nghĩa là | Làm gì |
+|---|---|---|
+| API key không hợp lệ (HTTP 401) hoặc (HTTP 403) | Key sai, hết hạn hoặc bị khoá | Chép lại key (không thừa dấu cách), hoặc xin bên bán key mới |
+| Cổng này không trả danh sách model | Chưa điền tên model | Điền tên model bên bán đưa rồi bấm Kết nối lại |
+| Không thấy .../v1/messages (HTTP 404) | Base URL chưa đúng | Hỏi lại bên bán địa chỉ cổng Anthropic; hay gặp nhất là lấy nhầm địa chỉ cổng OpenAI |
+| Cổng trả HTTP 400 khi thử model ... | Thường là tên model sai, hoặc gói không có model đó | Kiểm tra chính tả tên model, hoặc hỏi bên bán tên đúng |
+| Không gọi được ... | Máy chạy Javis không tới được địa chỉ đó | Kiểm tra Base URL, mạng, hoặc hỏi bên bán cổng còn chạy không |
+
+Đã kết nối mà lúc chat báo **429** hoặc **529** nghĩa là bên bán đang quá tải hoặc bạn đã hết hạn mức: đợi một lúc rồi thử lại, hoặc hỏi bên bán về hạn mức gói.
+
+**Nên biết:**
+
+- Đổi key: điền key mới vào ô API key rồi bấm **Lưu**. Để trống ô key thì Javis giữ key cũ.
+- Thêm hay bớt model: sửa ô tên model rồi bấm **Lưu**.
+- Đổi sang Base URL khác thì phải nhập lại key: Javis không bao giờ gửi key cũ sang một địa chỉ mới.
+- Thôi dùng: bấm **Ngắt** (xoá cả địa chỉ, key và tên model). Nếu đang là Main Model, Javis tự quay về Claude Code.
+- Javis gửi key theo cả hai kiểu xác thực (`x-api-key` và `Bearer`), nên bên bán đọc kiểu nào cũng nhận.
+- Cổng này có đủ MCP, đọc ghi brain, skill, agent, việc nền và chatbot như các engine API khác. Như mọi engine API, nó không chạy lệnh máy (xem mục "Bốn thứ engine API không có").
 
 ### D. Đặt Main Model (chọn model chính)
 
@@ -338,6 +378,7 @@ Từ 0.42.1 trở về trước có lỗi ở đúng chỗ này: chỉ mạch c�
 | **MAIN** | Góc card provider | Provider này đang là Main Model |
 | **● Đã kết nối** / **○ Chưa kết nối** | Card provider | Trạng thái, kèm số model khả dụng |
 | **○ Chưa đăng nhập** | Card Claude Code | Chưa đăng nhập Claude Code trên máy |
+| **○ Chưa cài Claude Code** | Card Claude Code | Máy chạy Javis chưa có lệnh `claude`, làm theo khung hướng dẫn cài trên card |
 | **Đăng nhập Claude** | Card Claude Code | Bắt đầu luồng đăng nhập bằng link |
 | **↻ Kiểm tra lại** | Card Claude Code (chỉ khi chưa đăng nhập) | Hỏi lại trạng thái đăng nhập |
 | **Đăng nhập ChatGPT** | Card OpenAI OAuth | Đăng nhập bằng mã device code |

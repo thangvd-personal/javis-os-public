@@ -30,8 +30,10 @@
   }
   // FAST_NOTE_END
   let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off", fast: false };
+  let agentEff = null;   // { slug, level } while the chat in front is an assistant's (0.193.0)
   let sessionPin = null;   // {provider, model} phiên đang mở đã ghim; null = theo mặc định chung
   let pinBroken = false;   // phiên có ghim nhưng ghim HỎNG (provider mất key) - server đang chạy mặc định chung
+  let pinLimited = 0;      // 0.285.0: the pinned plan is out of quota until this epoch; the chat runs on the main model
   let pinSid = null;       // phiên mà sessionPin đang nói về (chống vẽ nhầm khi đổi phiên nhanh)
   let pendingPin = null;   // model chọn khi CHƯA có phiên (chat trống) - áp ngay khi mint id
   let expanded = null;     // provider đang mở rộng trong popover; "" = đã thu hết (bấm lại tên nhà)
@@ -39,6 +41,22 @@
 
   const short = (m) => (m || "").split("/").pop().replace(/^(claude-|gpt-)/, "").slice(0, 26) || window.t("models.mp_default");
   const provShort = (lbl) => (lbl || "").split(" ")[0];
+  // Chip text: the model name alone. No model set means the provider's own default, so the provider name stands in
+  // ("Claude") rather than a bare "Default".
+  const chipLabel = (eff, p) => (eff.model ? prettyModel(eff.model) : (p ? provShort(p.label) : "Model"));
+  // "claude-opus-4-8-20260101" -> "Opus 4.8", "gpt-5.1-codex" -> "GPT-5.1 codex", "openai/gpt-4o" -> "GPT-4o",
+  // "gemini-2.5-pro" -> "Gemini 2.5 pro". Pure, so the node test can run it.
+  function prettyModel(id) {
+    let n = String(id || "").split("/").pop().replace(/[-@]\d{8}$/, "").replace(/^claude-/, "");
+    const fam = /^(opus|sonnet|haiku|fable)((?:-\d{1,2})*)(.*)$/i.exec(n);
+    if (fam) {
+      const ver = fam[2] ? " " + fam[2].slice(1).split("-").join(".") : "";
+      return (fam[1][0].toUpperCase() + fam[1].slice(1).toLowerCase() + ver + fam[3].replace(/-/g, " ")).trim();
+    }
+    if (/^gpt-/i.test(n)) return ("GPT-" + n.slice(4)).replace(/-(?=[a-z])/g, " ").replace(/^GPT /, "GPT-");
+    n = n.replace(/-/g, " ").replace(/:/g, " ");
+    return n ? n[0].toUpperCase() + n.slice(1) : n;
+  }
   const $ = (id) => document.getElementById(id);
   const curSid = () => { try { return (window.JavisSessions && window.JavisSessions.current()) || null; } catch (e) { return null; } };
   const curBrain = () => { try { return (window.JavisSessions && window.JavisSessions.brain()) || ""; } catch (e) { return ""; } };
@@ -50,6 +68,14 @@
     fd.append("section", "model");
     fd.append("data", JSON.stringify(patch));
     try { await fetch("/settings", { method: "POST", body: fd }); } catch (e) {}
+  }
+
+  async function saveAgentEffort(slug, level) {
+    const fd = new FormData();
+    fd.append("level", level);
+    fd.append("brain", curBrain() || "brain");
+    try { await fetch(`/agents/${encodeURIComponent(slug)}/reasoning`, { method: "POST", body: fd }); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent("javis:agent-reasoning", { detail: { slug: slug, level: level } })); } catch (e) {}
   }
 
   async function pinToSession(sid, prov, model) {
@@ -76,7 +102,7 @@
   async function loadSessionPin() {
     const sid = curSid();
     pinSid = sid;
-    if (!sid) { sessionPin = null; pinBroken = false; pendingPin = null; return; }
+    if (!sid) { sessionPin = null; pinBroken = false; pinLimited = 0; pendingPin = null; agentEff = null; return; }
     pendingPin = null;
     try {
       const r = await fetch(`/sessions/${encodeURIComponent(sid)}/meta`);
@@ -85,9 +111,12 @@
       // pin_ok=false: ghim còn trong DB nhưng không chạy được (provider mất key) -
       // server đang rơi về mặc định chung, nên hiển thị cũng phải theo mặc định chung.
       pinBroken = !!(d && d.pinned_provider && d.pin_ok === false);
+      pinLimited = (d && d.pin_limited_until) || 0;
+      // 0.193.0: in an assistant's chat the effort chip shows and sets that assistant's own level (default medium).
+      agentEff = d && d.agent_slug ? { slug: d.agent_slug, level: d.agent_reasoning || "medium" } : null;
       sessionPin = (d && d.pinned_provider && !pinBroken)
         ? { provider: d.pinned_provider, model: d.pinned_model || "" } : null;
-    } catch (e) { if (pinSid === sid) { sessionPin = null; pinBroken = false; } }
+    } catch (e) { if (pinSid === sid) { sessionPin = null; pinBroken = false; pinLimited = 0; agentEff = null; } }
   }
 
   function renderBar() {
@@ -95,13 +124,32 @@
     const p = state.providers.find((x) => x.id === eff.provider);
     const mt = $("mbModelTxt");
     if (mt) {
-      mt.textContent = (p ? provShort(p.label) : "Model") + " · " + short(eff.model)
-        + (sessionPin ? " · " + window.t("mpick.pin") : pinBroken ? " · " + window.t("mpick.pin_broken") : "");
-      mt.title = sessionPin
+      // 0.180.0 (owner): the chip shows the model name only, like "Opus 5.5" in the Claude app. The provider moves to
+      // the tooltip; the pin state shows as an icon (below).
+      mt.textContent = chipLabel(eff, p);
+      mt.title = (p ? p.label + " · " + (eff.model || window.t("models.mp_default")) + "\n" : "") + (sessionPin
         ? window.t("mpick.pin_title")
         : pinBroken
-          ? window.t("mpick.pin_broken_title")
-          : window.t("mpick.follow_default");
+          ? window.t(pinLimited ? "mpick.pin_limited_title" : "mpick.pin_broken_title")
+          : window.t("mpick.follow_default"));
+      // The per-session pin keeps a visible mark (owner: "chế độ ghim vẫn hoạt động nhé"): a small pin icon on the
+      // chip instead of the old "· ghim" text, orange-amber when the pin is broken. Screen readers get it in words.
+      const chip = $("mbOpen");
+      if (chip) {
+        chip.classList.toggle("is-pinned", !!sessionPin);
+        chip.classList.toggle("is-pin-broken", pinBroken);
+        let pin = chip.querySelector(".mb-pin");
+        if (!pin) {
+          pin = document.createElement("span");
+          pin.className = "mb-pin";
+          pin.setAttribute("aria-hidden", "true");
+          pin.innerHTML = typeof ic === "function" ? ic("pin") : "";
+          chip.insertBefore(pin, chip.querySelector(".mb-caret"));
+        }
+        pin.hidden = !(sessionPin || pinBroken);
+        chip.setAttribute("aria-label", mt.textContent
+          + (sessionPin ? ", " + window.t("mpick.pin") : pinBroken ? ", " + window.t("mpick.pin_broken") : ""));
+      }
     }
     const eb = $("effTxt");
     if (eb) {
@@ -109,7 +157,10 @@
       const effM = effective();
       const own = window.JavisEffortSlider && window.JavisEffortSlider.isLocked(effM.provider, effM.model)
         ? window.JavisEffortSlider.lockedLevel(effM.model) : "";
-      eb.textContent = window.t(EFF_KEY[own || (EFFORT.find((e) => e[0] === state.reasoning) || EFFORT[0])[0]]);
+      const lvl = agentEff ? agentEff.level : state.reasoning;
+      eb.textContent = window.t(EFF_KEY[own || (EFFORT.find((e) => e[0] === lvl) || EFFORT[0])[0]]);
+      const effB = $("effBtn");
+      if (effB) effB.title = agentEff ? window.t("mpick.eff_agent") : "";
     }
     renderFast();
   }
@@ -172,6 +223,11 @@
     };
     let html = await window.JavisModelList.render(o);
     if (luot !== luotVe || pop.hidden) return;
+    // An assistant's chat with its own model: one row to go back to following the main chat's model (0.285.0).
+    if (agentEff && (sessionPin || pinBroken)) {
+      html = '<button type="button" class="mb-follow">' + (typeof ic === "function" ? ic("rotate-cw") : "") + " " +
+        window.t("mpick.follow_main") + "</button>" + html;
+    }
     // Ô tìm đang được gõ thì giữ con trỏ ở đó sau khi vẽ lại. Mới MỞ bảng thì chỉ tự focus
     // trên máy có bàn phím thật: trên điện thoại focus là bật bàn phím ảo che nửa bảng, người
     // dùng chỉ muốn bấm chọn model (chủ repo báo 27/09 "tự nhảy lên bàn phím").
@@ -213,10 +269,13 @@
     const locked = window.JavisEffortSlider.isLocked(eff.provider, eff.model);
     if (btn) btn.setAttribute("aria-expanded", "true");
     effSlider = window.JavisEffortSlider.mount(pop, {
-      value: state.reasoning,
+      value: agentEff ? agentEff.level : state.reasoning,
       locked: locked,
       lockedValue: locked ? window.JavisEffortSlider.lockedLevel(eff.model) : "",
-      onChange: async (v) => { state.reasoning = v; renderBar(); await saveModel({ reasoning: v }); },
+      onChange: async (v) => {
+        if (agentEff) { agentEff.level = v; renderBar(); await saveAgentEffort(agentEff.slug, v); return; }
+        state.reasoning = v; renderBar(); await saveModel({ reasoning: v });
+      },
     });
     // Keep the popover inside the card: on a narrow phone the chip sits far enough right that a
     // popover opened at its left edge would spill past the screen.
@@ -238,7 +297,9 @@
   // đang mở (phiên này giữ đúng model kể cả khi mặc định chung bị đổi ở chỗ khác). Dùng chung
   // cho cú bấm trong bảng chọn và lệnh `/model <tên>` của khung chat.
   async function chonModel(prov, model) {
-    await saveModel({ main: { provider: prov, model: model } });
+    // 0.285.0 (owner, 22/10/2026): in an assistant's chat (any partner, Javis Core) the choice pins THAT chat only. It
+    // used to also rewrite the main chat's model. An assistant chat with no pin follows the main chat's model.
+    if (!agentEff) await saveModel({ main: { provider: prov, model: model } });
     const sid = curSid();
     if (sid) {
       sessionPin = { provider: prov, model: model };
@@ -305,6 +366,13 @@
       try { if (window.Alpine) Alpine.store("nav").go(goto.dataset.goto); } catch (er) {}
       return;
     }
+    if (e.target.closest(".mb-follow")) {
+      const sid = curSid();
+      if (sid) await pinToSession(sid, "", "");
+      sessionPin = null; pinBroken = false; pinLimited = 0; pendingPin = null;
+      await loadState(); renderBar(); close();
+      return;
+    }
     const item = e.target.closest(".mb-item");
     if (item) {
       await chonModel(item.dataset.prov, item.dataset.model);
@@ -351,6 +419,7 @@
       return r;
     },
     fastNote: fastNote,
+    prettyModel: prettyModel,
     hienTai: function () {
       const eff = effective();
       const p = state.providers.find((x) => x.id === eff.provider);

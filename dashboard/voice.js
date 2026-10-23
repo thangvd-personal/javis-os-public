@@ -1186,7 +1186,16 @@ class JavisVoice {
   }
 
   _chunkUrl(text) {
-    return `${this.ttsBackend}?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(this.ttsVoice)}&rate=${encodeURIComponent(this.ttsRate)}`;
+    return `${this.ttsBackend}?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(this._voiceFor(text))}&rate=${encodeURIComponent(this.ttsRate)}`;
+  }
+
+  // "auto" (0.220.0): the Edge voice follows the language of the text being read (voice-lang.js).
+  _voiceFor(text) {
+    if (this.ttsVoice !== "auto") return this.ttsVoice;
+    const L = typeof window !== "undefined" && window.JavisVoiceLang;
+    if (!L) return "en-US-EmmaMultilingualNeural";
+    if (!this._langTracker) this._langTracker = new L.Tracker(String(this.lang || "vi").split("-")[0]);
+    return this._langTracker.pick(text);
   }
 
   async _speakBackend(text) {
@@ -1200,7 +1209,7 @@ class JavisVoice {
 
   // Cắt câu ĐẦU ra riêng cho ngắn (phát nhanh), phần còn lại gộp chunk lớn cho liền mạch.
   _splitForLatency(text) {
-    const sentences = text.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [text];
+    const sentences = this._sentences(text);
     let first = (sentences.shift() || "").trim();
     // Câu đầu vẫn dài → cắt tại dấu phẩy đầu tiên cho audio đầu ra thật nhanh.
     if (first.length > 160) {
@@ -1404,8 +1413,16 @@ class JavisVoice {
     if (this.recognition) this.recognition.lang = this.lang;
   }
 
+  // Sentences for TTS. Shares the chunker's rule: "0.220.0" and "1.5" are not sentence ends, and
+  // Japanese/Chinese stops (。！？) are, though no space follows them (0.220.0).
+  _sentences(text) {
+    const C = typeof window !== "undefined" && window.JavisVoiceChunker;
+    if (C && C.splitSentences) { const out = C.splitSentences(text); return out.length ? out : [text]; }
+    return text.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [text];
+  }
+
   _splitIntoChunks(text, maxLen) {
-    const sentences = text.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [text];
+    const sentences = this._sentences(text);
     const chunks = [];
     let current = "";
     for (const s of sentences) {

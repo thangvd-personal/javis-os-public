@@ -4,7 +4,8 @@
 //                nên điện thoại và máy tính đếm giống nhau, và bấm vào là quay về ĐÚNG hội
 //                thoại đã hỏi - nội dung đầy đủ nằm ở đó, không phải trong cái thẻ này.
 //   "Tin tức"  = /notifications : bản phát hành + tin cộng đồng, phát chung cho mọi người.
-//                Đã-đọc giữ ở localStorage như cũ (ai đọc trên máy nấy, không cần đồng bộ).
+//                Từ 0.187.0 đã-đọc cũng nằm ở SERVER (/notifications/read), nên đọc trên điện thoại là
+//                máy tính cũng hết chấm; localStorage chỉ còn là bản đệm, và lần đầu được đẩy lên server.
 //
 // Gộp một danh sách thì một kết quả công việc thật bị chôn dưới mấy dòng changelog.
 (function () {
@@ -35,12 +36,37 @@
       state.read = new Set(Array.isArray(raw) ? raw.map(String) : []);
     } catch (e) { state.read = new Set(); }
   }
-  function saveRead() {
+  function saveRead(moi) {
     try { localStorage.setItem(READ_KEY, JSON.stringify(Array.from(state.read).slice(-300))); } catch (e) {}
+    // 0.187.0: the server keeps this account's read set, so every device agrees.
+    if (moi && moi.length) guiDaDoc({ ids: moi });
+  }
+  function guiDaDoc(body) {
+    try {
+      return fetch("/notifications/read", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body) }).then(function (r) { return r.json(); }).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
+  // Read set from the server, merged with this browser's old local one (pushed up once).
+  var daDocTuServer = null;
+  function taiDaDoc() {
+    if (daDocTuServer) return daDocTuServer;
+    daDocTuServer = fetch("/notifications/read", { cache: "no-store" }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        var sv = new Set(((d && d.read) || []).map(String));
+        var chiMayNay = Array.from(state.read).filter(function (x) { return !sv.has(x); });
+        sv.forEach(function (x) { state.read.add(x); });
+        state.serverInit = !!(d && d.initialized);
+        if (chiMayNay.length || (!state.serverInit && localStorage.getItem(INIT_KEY) === "1")) {
+          state.serverInit = true;
+          guiDaDoc({ ids: chiMayNay, initialized: true });
+        }
+      }).catch(function () {});
+    return daDocTuServer;
   }
   function firstRun(items) {
     try {
-      if (localStorage.getItem(INIT_KEY) === "1") return;
+      if (state.serverInit || localStorage.getItem(INIT_KEY) === "1") return;
       // Không biến toàn bộ lịch sử phiên bản thành hàng trăm tin chưa đọc ở lần mở đầu.
       // Chỉ giữ unread cho bản đang dùng/bản mới và thông báo cộng đồng ưu tiên cao.
       items.forEach(function (item) {
@@ -49,7 +75,9 @@
         if (!important) state.read.add(String(item.id));
       });
       localStorage.setItem(INIT_KEY, "1");
+      state.serverInit = true;
       saveRead();
+      guiDaDoc({ ids: Array.from(state.read), initialized: true });
     } catch (e) {}
   }
   // Bản ĐÃ CÀI thì không bao giờ tính là chưa đọc.
@@ -70,27 +98,31 @@
     return state.items.filter(chuaDoc);
   }
   function markRead(id) {
+    var moi = !state.read.has(String(id));
     state.read.add(String(id));
-    saveRead();
+    saveRead(moi ? [String(id)] : null);
     render();
   }
+  // 0.204.0: "Read all" reads BOTH tabs. It used to read only the open one, so the bell kept a count after pressing it.
   function markAll() {
-    if (state.tab === "mine") {
-      // Thư riêng: đã-đọc nằm ở SERVER, nên đánh dấu ở đây phải đi qua API chứ không
-      // chỉ tô lại màu trên máy này.
+    // Thư riêng: đã-đọc nằm ở SERVER, nên đánh dấu ở đây phải đi qua API chứ không
+    // chỉ tô lại màu trên máy này.
+    if (state.thuChuaDoc || state.thu.some(function (t) { return !t.read; })) {
       state.thu.forEach(function (t) { t.read = true; });
       state.thuChuaDoc = 0;
       docThu({ all: true }).then(render);
-      render();
-      return;
     }
-    state.items.forEach(function (item) { state.read.add(String(item.id)); });
-    saveRead();
+    if (unreadItems().length) {
+      state.items.forEach(function (item) { state.read.add(String(item.id)); });
+      saveRead();
+      guiDaDoc({ all: true });
+    }
     render();
   }
   function kindLabel(kind) {
     if (kind === "marketing") return window.t("noti.kind_marketing");
     if (kind === "community") return window.t("noti.kind_community");
+    if (kind === "security") return window.t("noti.kind_security");
     return window.t("noti.kind_update");
   }
   function openUpdates() {
@@ -141,11 +173,29 @@
   }
   // Bấm một mẩu thư = quay về ĐÚNG hội thoại đã hỏi. Mở hội thoại MỚI ở đây là sai: toàn bộ
   // ngữ cảnh nằm trong hội thoại cũ, hỏi tiếp ở chỗ khác là phải kể lại từ đầu.
+  // 0.188.0 (Javis Core spec 9): an item of another brain switches the dashboard to that brain FIRST (only on this
+  // click, never when a report arrives), so the chat opens in the right brain and what you type goes there.
+  // Returns true when it switched (the caller then waits for the pages to redraw on the new brain).
+  function chuyenBrainNeuCan(item) {
+    var gs = (typeof document !== "undefined" && document.getElementById) ? document.getElementById("graphSource") : null;
+    var v = item && item.brain_ui;
+    if (!gs || !v || gs.value === v) return false;
+    if (!Array.prototype.some.call(gs.options || [], function (o) { return o.value === v; })) return false;
+    gs.value = v;
+    gs.dispatchEvent(new Event("change"));
+    return true;
+  }
   function moThu(item) {
     item.read = true;
     docThu({ id: item.id }).then(render);
-    if (!item.session_id) { render(); return; }
+    // 0.191.0 (owner, 16/10/2026): a notice with no chat of its own opens in Javis Core (copied there with its source
+    // and time, once); a notice that answers a chat opens that chat. No separate "Ask Javis Core" button.
+    if (!item.session_id) { closePanel(); hoiCore("inbox", item.id); return; }
     closePanel();
+    if (chuyenBrainNeuCan(item)) { setTimeout(function () { moThuTiep(item); }, 450); return; }
+    moThuTiep(item);
+  }
+  function moThuTiep(item) {
     // Hội thoại của một TRỢ LÝ / QUY TRÌNH phải mở ở trang Cộng sự, không đổ vào khung chat
     // của bộ não chính. Đổ nhầm thì hai chuyện xảy ra cùng lúc: người dùng nhìn một đoạn chat
     // với trợ lý trên màn Javis mà không hiểu vì sao, và phiên đang mở trở thành phiên của
@@ -171,9 +221,23 @@
     } catch (e) {}
     try { if (window.JavisSessions) window.JavisSessions.open(item.session_id); } catch (e) {}
   }
+  // Javis Core (0.187.0, spec 7.3): the notice goes into this person's own Javis Core chat, with its source and time,
+  // and the chat opens there. The shared notice itself never changes.
+  async function hoiCore(src, id) {
+    var brain = "brain";
+    try { if (window.JavisSessions && window.JavisSessions.brain) brain = window.JavisSessions.brain() || "brain"; } catch (e) {}
+    try {
+      var r = await (await fetch("/javis-core/cite", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: src, id: id, brain: brain }) })).json();
+      if (!r || !r.id) return;
+      closePanel();
+      if (window.JavisWorkspace && window.JavisWorkspace.openCommand) window.JavisWorkspace.openCommand("agent", "javis-core", r.id);
+    } catch (e) {}
+  }
   function theThu(item) {
     var chua = !item.read ? " unread" : "";
-    var phu = item.session_id ? window.t("noti.reopen_chat") : "";
+    // Where a press takes you: the chat it answers, or Javis Core for a notice with no chat of its own (0.191.0).
+    var phu = window.t(!item.session_id || item.channel === "agent:javis-core" ? "noti.open_core" : "noti.reopen_chat");
     return '<article class="noti-card' + chua + '" tabindex="0" role="button" data-thu-id="' + esc(item.id) + '">' +
       '<div class="noti-card-top"><span class="noti-kind ' + esc(item.kind || "answer") + '">' +
       esc(nhanLoai(item.kind)) + '</span><span class="noti-time">' + esc(thoiGian(item.ts)) + "</span></div>" +
@@ -222,6 +286,9 @@
     if (summary) summary.textContent = tong
       ? window.t("noti.unread_n", { count: tong })
       : window.t("noti.all_read");
+    // 0.204.0: "Read all" is a real button, lit while something is unread and dimmed (disabled) once nothing is.
+    var readAll = byId("notificationReadAll");
+    if (readAll) { readAll.disabled = tong === 0; readAll.classList.toggle("has-unread", tong > 0); }
 
     var tabMine = byId("notiTabMine"), tabNews = byId("notiTabNews");
     if (tabMine && tabNews) {
@@ -308,6 +375,7 @@
       state.items = Array.isArray(data.items) ? data.items : [];
       state.visibleCount = PAGE_SIZE;
       state.loadedAt = Date.now();
+      await taiDaDoc();
       firstRun(state.items);
       render();
     } catch (e) {
@@ -347,6 +415,19 @@
     }
     nut.hidden = false;
     var on = await JavisPush.dangBat();
+    // 0.187.0: privacy of the push preview (the setting is per account, on the server).
+    var anRow = byId("notificationPushHideRow"), an = byId("notificationPushHide");
+    if (anRow && an) {
+      anRow.hidden = !on;
+      if (!an.dataset.wired) {
+        an.dataset.wired = "1";
+        try { var st = await (await fetch("/settings", { cache: "no-store" })).json(); an.checked = !!(st.push && st.push.preview === "hidden"); } catch (e) {}
+        an.addEventListener("change", function () {
+          var f = new FormData(); f.append("section", "push"); f.append("data", JSON.stringify({ preview: an.checked ? "hidden" : "full" }));
+          fetch("/settings", { method: "POST", body: f }).catch(function () {});
+        });
+      }
+    }
     nut.textContent = on ? window.t("noti.push_off") : window.t("noti.push_on");
     nut.classList.toggle("primary", !on);
     if (thu) thu.hidden = !on;
@@ -398,6 +479,7 @@
     var trigger = byId("notificationTrigger");
     if (!trigger) return;
     loadRead();
+    taiDaDoc().then(render);
     try { state.tab = localStorage.getItem(TAB_KEY) === "news" ? "news" : "mine"; } catch (e) {}
     trigger.addEventListener("click", function () {
       byId("notificationPanel").hidden ? openPanel() : closePanel();

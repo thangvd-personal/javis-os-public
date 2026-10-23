@@ -59,7 +59,7 @@ _DEFAULT = {
         "openai_tts_model": "gpt-4o-mini-tts",        # hoặc tts-1 / tts-1-hd
         "elevenlabs_key": "",
         "elevenlabs_voice": "21m00Tcm4TlvDq8ikWAM",   # Rachel (premade, đa ngôn ngữ) - đổi được
-        "elevenlabs_model": "eleven_multilingual_v2",
+        "elevenlabs_model": "eleven_flash_v2_5",      # speaks Vietnamese (multilingual_v2 does not), tts_eleven.py
         # --- Voice V2 (docs/dev/2026-10-voice-call-spec.md mục 3.1 và 5) ---
         # standard | fast | live. Mặc định Làn nhanh (chủ dự án chốt 17/09). Chưa chọn bộ não
         # giọng thì tin từ mic vẫn đi bộ não chính y như chế độ chuẩn (xem _bao_lan_nhanh_bo_qua
@@ -75,6 +75,8 @@ _DEFAULT = {
         "live_provider": "gemini",     # gemini | openai (đều cần API key ở trang Models)
         "live_model": "",              # rỗng = gợi ý trong voice_live.PROVIDERS
         "live_voice": "",
+        "live_proactive": True,        # Live qua API: bỏ qua tiếng không nói với Javis (TV, người bên cạnh)
+        "live_turn": "normal",         # fast | normal | slow: nhịp trả lời của Live qua API
     },
     "model": {
         # --- Mô hình MAIN MODEL theo provider (mới) ---
@@ -121,6 +123,9 @@ _DEFAULT = {
         #       chỉ định cho sản phẩm bên thứ ba (xem claude_auth.CANH_BAO_SUBSCRIPTION).
         # Đổi ở trang Models. Cả hai đều giữ NGUYÊN năng lực: Bash, WebFetch, MCP, nối phiên cũ.
         "claude_auth": "subscription",
+        # Daily `claude update` (claude_update.py). The switch sits on the Claude Code card of the
+        # Models page; env JAVIS_CLAUDE_AUTO_UPDATE=0 still forces it off over this value.
+        "claude_auto_update": True,
         "openrouter_key": "",
         "anthropic_api_key": "",               # provider Anthropic API (P2)
         "openai_api_key": "",                  # provider OpenAI (ChatGPT API)
@@ -137,6 +142,11 @@ _DEFAULT = {
         # và /models. Key có thể rỗng nếu endpoint không đòi xác thực.
         "openai_compat_base": "",
         "openai_compat_key": "",
+        # Provider 'anthropic-compat' (0.254.0): ONE gateway speaking the Anthropic Messages API
+        # (resellers of Claude, DeepSeek/Kimi/MiniMax "anthropic" endpoints...). The base URL has
+        # the shape of Claude Code's ANTHROPIC_BASE_URL (no /v1); Javis appends /v1/messages.
+        "anthropic_compat_base": "",
+        "anthropic_compat_key": "",
         # --- Ollama chạy trên MÁY NHÀ (provider 'ollama-local') ---
         # Ca đặc biệt mà khối chú thích ngay trên vừa từ chối, nay mở ra nhưng KHÔNG bằng cách
         # giả định "localhost là máy người dùng". Cái Javis lưu là một ĐỊA CHỈ người dùng tự
@@ -517,6 +527,7 @@ _SECRET_PATHS = (
     "packs.tokens.*",
     "model.openrouter_key", "model.anthropic_api_key", "model.openai_api_key", "model.gemini_api_key",
     "model.groq_api_key", "model.deepseek_api_key", "model.ollama_key", "model.ollama_local_key", "model.openai_compat_key",
+    "model.anthropic_compat_key",
     "model.openai_oauth.access_token", "model.openai_oauth.refresh_token", "model.openai_oauth.id_token",
     # Gemini CLI (đăng nhập Google ngay trên dashboard). Refresh token ở đây mở được cả gói
     # Code Assist của tài khoản Google, nên nó ngang hàng mọi secret khác trong danh sách.
@@ -526,6 +537,8 @@ _SECRET_PATHS = (
     # Secret TOTP là thứ SINH RA mã đăng nhập, nên nó ngang hàng mật khẩu chứ không phải một
     # tuỳ chọn. Ai đọc được nó thì tự sinh mã 2FA mãi mãi, và chủ máy không hề hay biết.
     "auth.totp.secret",
+    # Cloudflare Tunnel token (remote_tunnel.py): whoever holds it can serve any site on the owner's tunnel hostname.
+    "remote_tunnel.token",
 )
 
 
@@ -1120,8 +1133,25 @@ def apply_tool_env(cfg=None):
         print(f"[config] apply_tool_env lỗi: {e}", file=__import__('sys').stderr)
     # Windows: helper Python con (vd video-use) in Unicode ra console cp1252 sẽ crash
     # (UnicodeEncodeError) -> ép UTF-8 cho mọi tiến trình con. Tôn trọng giá trị user tự đặt.
-    if os.name == "nt" and not os.environ.get("PYTHONUTF8"):
-        os.environ["PYTHONUTF8"] = "1"
+    child_utf8_env()
+
+
+def child_utf8_env(env=None, os_name=None) -> dict:
+    """Windows: every child process Javis starts (engine CLIs, and through them the shell commands and Python scripts a
+    Team member or a chat turn runs) prints UTF-8. Without it a Python child writing Vietnamese to a pipe uses the ANSI
+    code page (cp1252) and dies with UnicodeEncodeError (customer report 0.270, codes 5 and 22). PYTHONUTF8 turns on UTF-8
+    mode (3.7+); PYTHONIOENCODING also covers older or embedded interpreters. A value the user set is kept. Applied when
+    this module is imported, so it holds before any engine starts, and again from apply_tool_env. No-op elsewhere."""
+    env = os.environ if env is None else env
+    if (os_name or os.name) == "nt":
+        if not env.get("PYTHONUTF8"):
+            env["PYTHONUTF8"] = "1"
+        if not env.get("PYTHONIOENCODING"):
+            env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+child_utf8_env()
 
 
 # ---- Mật khẩu ----
@@ -1139,8 +1169,16 @@ def auth_enabled(cfg=None):
 def require_login():
     """Có BẮT BUỘC đăng nhập để dùng Javis không (kể cả khi CHƯA đặt mật khẩu → ép setup).
     - JAVIS_REQUIRE_LOGIN=1/0 ép bật/tắt tường minh.
+    - Built-in remote access (Cloudflare Tunnel, remote_tunnel.py) is on → True.
     - Mặc định: BẬT khi server nghe public (JAVIS_HOST=0.0.0.0, vd Docker/Hostinger/VPS) -
       vì Claude chạy full quyền, không được để hở ai cũng vào được."""
+    # The built-in Cloudflare Tunnel (remote_tunnel.py) puts a localhost-only Javis on the Internet, which the bind
+    # address below cannot see. It wins over an explicit JAVIS_REQUIRE_LOGIN=0 for the same reason.
+    try:
+        if (read_settings().get("remote_tunnel") or {}).get("enabled"):
+            return True
+    except Exception:
+        pass
     v = os.getenv("JAVIS_REQUIRE_LOGIN", "").strip().lower()
     if v in ("1", "true", "yes", "on"):
         return True
@@ -1203,6 +1241,15 @@ def totp_enabled(cfg=None):
     bật trước khi người dùng chứng minh app của họ sinh đúng mã là tự khoá mình ra ngoài."""
     t = _totp_conf(cfg)
     return bool(t.get("enabled")) and bool(t.get("secret"))
+
+
+def kept_totp(cfg=None) -> dict:
+    """`{"totp": ...}` to carry into a NEW `auth` object, or `{}` when there is nothing to keep.
+
+    Turning off login (0.224.0) keeps the 2FA block, so whoever creates the account again (setup
+    page, JAVIS_ADMIN_PASSWORD at boot) must not replace `auth` wholesale and drop it."""
+    t = ((cfg or read_settings()).get("auth") or {}).get("totp")
+    return {"totp": t} if isinstance(t, dict) and t.get("enabled") else {}
 
 
 def totp_secret(cfg=None):
@@ -1571,7 +1618,8 @@ def provision_admin_from_env():
     marker = {"username": user, "hash": hash_password(pw, m_salt)[0], "salt": m_salt}
     if not a.get("password_hash"):
         h, salt = hash_password(pw)
-        cfg["auth"] = {"username": user, "password_hash": h, "salt": salt, "env_applied": marker}
+        cfg["auth"] = {**kept_totp(cfg), "username": user, "password_hash": h, "salt": salt,
+                       "env_applied": marker}
         write_settings(cfg)
         return "created"
     applied = a.get("env_applied") if isinstance(a.get("env_applied"), dict) else {}

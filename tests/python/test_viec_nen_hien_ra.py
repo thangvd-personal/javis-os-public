@@ -33,9 +33,9 @@ import re
 import sys
 import tempfile
 
-os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-bgstatus-test-"))
-
 from _paths import ROOT, SERVER, DASHBOARD, SYSTEM  # noqa: E402,F401
+
+os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-bgstatus-test-"))
 
 import background_status as bg  # noqa: E402
 import channel_context  # noqa: E402

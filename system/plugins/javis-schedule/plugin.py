@@ -205,6 +205,11 @@ def _loops_dir(vault_root: str) -> Path:
 
 
 _LOOP_MODES = ("suggest", "auto", "full")
+# 0.275.0 (customer report, codes 15 and 27; owner kept "full" as the default on 2026-10-22): the reply tells the
+# model to say plainly what a full-level job may do, so a user who never opened the form still knows.
+FULL_LEVEL_NOTE = (" Nói rõ với user bằng lời thường: việc này ở mức Toàn quyền, tới giờ sẽ tự sửa file, chạy lệnh và"
+                   " thao tác ra ngoài (gửi tin, đăng bài, tạo đơn) mà không hỏi lại; muốn nhẹ hơn thì nói để đổi"
+                   " sang mức chỉ ghi nháp (auto) hoặc chỉ đọc (suggest).")
 _LOOP_MODE_MAC_DINH = "full"
 
 
@@ -265,7 +270,7 @@ def _create_loop_file(vault_root: str, name: str, prompt: str, schedule: str,
                 "suggest": "chỉ đọc rồi đề xuất"}[mode]
     return (f"Đã tạo việc lặp '{name}'{where} (Javis/loops/{slug}.md), chạy mỗi {interval} phút, "
              f"mức quyền {mode} ({ten_mode}). Đang TẮT (enabled: false): người dùng vào tab Việc "
-             f"trong dashboard bấm Bật thì nó mới chạy.")
+             f"trong dashboard bấm Bật thì nó mới chạy." + (FULL_LEVEL_NOTE if mode == "full" else ""))
 
 
 def _list_loops(vault_root: str) -> list:
@@ -375,14 +380,28 @@ async def _post_reminder(payload: dict, brain_name: str = "") -> str:
         lich = data.get("cron_human") or data["cron"]
         ra = (f"Đã đặt lịch lặp {lich} (cron {data['cron']}){where} (id {data.get('id')}), "
               f"lần chạy kế tiếp {data.get('due_human') or '?'}.")
+        ra += _next_runs_line(data.get("next_runs"))
     else:
         ra = f"Đã đặt nhắc hẹn lúc {data.get('due_human') or '?'}{where} (id {data.get('id')})."
     mq = str(data.get("muc_quyen") or "").strip().lower()
     if data.get("mode") == "task" and mq:
         ten = {"full": "toàn quyền, tự thao tác ra ngoài", "auto": "chỉ ghi file nháp",
                "suggest": "chỉ đọc rồi báo lại"}.get(mq, mq)
-        ra += f" Mức quyền {mq} ({ten})."
+        ra += f" Mức quyền {mq} ({ten})." + (FULL_LEVEL_NOTE if mq == "full" else "")
+    if data.get("remember_last"):
+        ra += " Mỗi lần chạy sẽ nhận lại kết quả lần trước."
+    if data.get("speak"):
+        ra += " Kết quả sẽ kèm tin thoại đọc thành tiếng."
+    if data.get("call"):
+        ra += (" Tới giờ Javis sẽ GỌI ĐẾN trên trang Javis đang mở: bấm Nghe là vào cuộc gọi và Javis đọc"
+               " kết quả; không mở Javis thì kết quả vẫn tới như tin nhắn thường.")
     return ra
+
+
+def _next_runs_line(runs) -> str:
+    """Three upcoming dates, so the reply confirms the schedule in dates rather than cron syntax."""
+    days = [str(r.get("human") or "") for r in (runs or []) if isinstance(r, dict) and r.get("human")]
+    return (" Ba lần chạy tới: " + "; ".join(days) + ". Đọc lại các ngày này cho user xác nhận.") if days else ""
 
 
 async def _get_reminders(vault_root: str) -> dict:
@@ -432,6 +451,12 @@ async def _do_create(vault_root: str, args: dict) -> str:
     # Bỏ trống thì máy chủ tự đặt mặc định; chỉ gửi khi model có ý hạ/nâng mức rõ ràng.
     if str(args.get("muc_quyen") or "").strip():
         payload["muc_quyen"] = str(args["muc_quyen"]).strip().lower()
+    if args.get("remember_last") and not notify_only:
+        payload["remember_last"] = True
+    if args.get("speak"):
+        payload["speak"] = True
+    if args.get("call"):
+        payload["call"] = True
     payload.update(_reminder_time_payload(schedule))
     return await _post_reminder(payload, brain_name=brain_name)
 
@@ -449,7 +474,8 @@ async def _update_reminder(vault_root: str, rid: str, fields: dict) -> str:
     rem = data.get("reminder") or {}
     when = rem.get("cron_human") or rem.get("cron") or ""
     return (f"Đã sửa lịch {rid}" + (f" thành '{when}'" if when else "")
-            + f", lần chạy kế tiếp {rem.get('due_human') or '?'}.")
+            + f", lần chạy kế tiếp {rem.get('due_human') or '?'}."
+            + _next_runs_line(rem.get("next_runs")))
 
 
 def _update_loop_file(vault_root: str, slug: str, fields: dict) -> str:
@@ -508,9 +534,14 @@ async def _do_update(vault_root: str, args: dict) -> str:
         fields["prompt"] = str(args["prompt"]).strip()
     if str(args.get("schedule") or "").strip():
         fields["schedule"] = str(args["schedule"]).strip()
-    if not fields:
+    if isinstance(args.get("remember_last"), bool):
+        fields["remember_last"] = args["remember_last"]
+    call = args.get("call") if isinstance(args.get("call"), bool) else None
+    if not fields and call is None:
         return "ERROR: không có gì để sửa - truyền ít nhất một trong name / prompt / schedule."
     if (_loops_dir(vault_root) / f"{rid}.md").is_file():
+        if not fields:
+            return "ERROR: việc lặp không gọi điện được; 'call' chỉ dành cho nhắc hẹn."
         return _update_loop_file(vault_root, rid, fields)
     # Kho nhắc hẹn: đổi lịch thì dịch chuỗi lịch sang tham số thời gian như lúc tạo.
     payload = {}
@@ -520,6 +551,10 @@ async def _do_update(vault_root: str, args: dict) -> str:
         payload["text"] = fields["prompt"]
     if "schedule" in fields:
         payload.update(_reminder_time_payload(fields["schedule"]))
+    if "remember_last" in fields:
+        payload["remember_last"] = "true" if fields["remember_last"] else "false"
+    if call is not None:
+        payload["call"] = "true" if call else "false"
     return await _update_reminder(vault_root, rid, payload)
 
 
@@ -634,6 +669,14 @@ def register(ctx) -> None:
                                               "tạo đơn, thanh toán). 'auto' = đọc + ghi file, "
                                               "không hành động ra ngoài. 'suggest' = chỉ đọc rồi "
                                               "báo lại. Chỉ hạ mức khi user muốn vậy.")},
+                "speak": {"type": "boolean",
+                          "description": "true = tới giờ gửi kèm TIN THOẠI đọc kết quả thành tiếng (user muốn nghe)."},
+                "call": {"type": "boolean",
+                         "description": ("true = tới giờ Javis GỌI ĐẾN như cuộc gọi trên trang Javis đang mở, user bấm "
+                                         "Nghe thì Javis đọc kết quả và nói chuyện tiếp (\"7h gọi đọc báo cáo cho anh\").")},
+                "remember_last": {"type": "boolean",
+                                  "description": ("true = mỗi lần chạy nhận lại kết quả lần trước (theo dõi, "
+                                                  "báo cái mới). Chỉ cho nhắc hẹn tự làm, không cho loop.")},
                 "chat_id": {"type": "string",
                              "description": "chat_id Telegram người yêu cầu, để báo đúng người. Bỏ trống nếu không rõ."},
                 "allow_no_channel": {"type": "boolean",

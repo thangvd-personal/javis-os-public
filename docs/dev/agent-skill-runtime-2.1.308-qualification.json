@@ -1,0 +1,190 @@
+{
+  "label": "synthetic/native-technical-qualification-only",
+  "production_billing": false,
+  "passed": true,
+  "profile_hash": "ffe27adc5caba5249b95358245d874e99f1d59ffc9ee49684d9f0e085198e643",
+  "scenarios": [
+    {
+      "scenario": "synthetic/native-pending-query-cancellation",
+      "elapsed_s": 4.641,
+      "production_billing": false,
+      "query_count": 1,
+      "owned_process_count": 4,
+      "all_owned_processes_closed": true,
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "requests": [
+        "/v1/messages"
+      ],
+      "usage_coverage": "unknown: cancelled before synthetic response",
+      "retry_count": 0
+    },
+    {
+      "scenario": "synthetic/native-local-fake-provider",
+      "elapsed_s": 5.922,
+      "production_billing": false,
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "worker_has_console": false,
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {
+            "bad-bash": true,
+            "bad-read": true,
+            "bad-web": true,
+            "bad-mcp": true,
+            "hit": false,
+            "miss": true,
+            "bad-agent": true,
+            "bad-task": true,
+            "bad-skill": true,
+            "bad-search": true,
+            "bad-deferred": true
+          }
+        }
+      ],
+      "tool_denials": [
+        "bad-agent",
+        "bad-task",
+        "bad-skill",
+        "bad-search",
+        "bad-deferred"
+      ],
+      "fixture_statuses": [
+        "fixture_hit",
+        "fixture_miss"
+      ],
+      "ambient_plugin_hook_ran": false,
+      "session_transcripts_persisted": false,
+      "coverage": {
+        "model": "observed",
+        "reasoning": "unknown",
+        "asset_use": "unknown"
+      },
+      "sdk_children_closed": true
+    }
+  ],
+  "runtime": {
+    "platform": "win32",
+    "cli_version": "2.1.308",
+    "pe_file_version": "2.1.308.0",
+    "cli_sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+    "sdk_version": "0.2.116"
+  },
+  "selected_configuration": {
+    "provider": "anthropic-cli",
+    "model": "claude-opus-5-5",
+    "reasoning": "medium",
+    "auth_mode": "subscription",
+    "fast": false
+  },
+  "selected_configuration_hash": "3bf3fc794eb7c1d9fd9470903d90105f292c998dd84f587b219e7de4ebae6cf8",
+  "reused_blackbox_assertions": [
+    "outside Bash marker absent",
+    "outside Read canary unchanged and not in model request",
+    "ambient SessionStart hook absent",
+    "ambient MCP and forbidden WebFetch endpoints untouched",
+    "fixture-only native tool inventory",
+    "exact final native result artifact and installation receipt",
+    "fixture_hit and structured fixture_miss with no live fallback"
+  ],
+  "constraints": [
+    "explicit candidate hash and SDK validated before developer-only native execution",
+    "fresh empty auth HOME and config; dummy API credential only",
+    "all inference requests terminate at localhost fake provider; proxy CONNECT/GET attempts rejected",
+    "at most three fake model responses per exchange; process bound under 45 seconds",
+    "no production configuration decryption, account authentication, real model inference or account usage"
+  ],
+  "limitations": [
+    "Technical native isolation qualification only; no real model or business capability evidence",
+    "Actual reasoning and asset use remain unknown",
+    "No OS filesystem or network sandbox is claimed",
+    "Permission denial is observed through absent native capability/tool-error results, not inferred permission callback invocation"
+  ],
+  "reproduce": {
+    "runtime": "D:/Project/Javis-OS/.venv/Scripts/python.exe",
+    "script": "tests/python/test_improvement_runtime_qualification.py",
+    "opt_in_environment": "JAVIS_TEST_NATIVE_QUALIFICATION_CLI=<explicit exact candidate path>",
+    "default": "native tests skipped; engineering/unknown-runtime tests run without opt-in",
+    "evidence_environment": "JAVIS_TEST_NATIVE_QUALIFICATION_EVIDENCE=docs/dev/agent-skill-runtime-2.1.308-qualification.json",
+    "state_isolation": "Before server imports, set JAVIS_STATE_DIR, BRAINS_DIR, OBSIDIAN_VAULT_PATH, BRAIN_PATH, SOURCES_PATH and JAVIS_SESSIONS_DB to scratch locations; use tests/python on sys.path."
+  },
+  "source_sha256": {
+    "server/improvement_worker.py": "6b5222f7b034095ecd2fed10b629a8adb12688d9260e9eb273ec06d733a80851",
+    "server/improvement_claude.py": "7549aecf35133fc864c7fb67364cbd90ac15d9ba70a8808e14a14cf87ba54453",
+    "server/improvement_sandbox.py": "b4ac1e4b80f18c6dc8be8671d2c341caa2952167aa724b9589ac5f71e92b5167",
+    "server/claude_sdk_engine.py": "6b13f5b77f78e0dfe3ffc1268e46ef70d8d800324e8dd2664f793f0b8df49906",
+    "tests/python/test_improvement_native.py": "869d1cb826d8396e684bccaa04fde3103921c596ecb1e75bb35351a93348a929",
+    "tests/python/test_improvement_runtime_qualification.py": "73b39b1a6bf04bb3c661d686c673eb1b2679e8b1be82f799217b871ce4ab2423"
+  },
+  "verification": {
+    "qualification_tests": 5,
+    "qualification_passed": 5,
+    "unknown_runtime_no_execution": "passed",
+    "qualification_elapsed_s": 14.845
+  },
+  "prior_profile_hash": "c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6",
+  "historical_real_smoke_profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+  "retained_prior_verification": {
+    "profile_hash": "c3b4f27ee81899fa1ae650513ae5c4b051cdcfd7b4106635a2e6acd2209f4df6",
+    "verification": {
+      "qualification_tests": 5,
+      "qualification_passed": 5,
+      "worker_tests": 9,
+      "profile_tests": 20,
+      "selection_tests": 32,
+      "windows_no_console": "passed",
+      "unknown_runtime_no_execution": "passed",
+      "runner_tests": 24
+    },
+    "scope": {
+      "current_profile_rerun": [
+        "qualification_tests",
+        "qualification_passed",
+        "unknown_runtime_no_execution"
+      ],
+      "retained_prior_check_profile_hash": "79bad7e9cb477a79e6d91833be967dcd2c301086381f7d56491dfbeae9107b4e",
+      "retained_prior_checks": [
+        "worker_tests",
+        "profile_tests",
+        "selection_tests",
+        "runner_tests",
+        "windows_no_console"
+      ],
+      "qualification_elapsed_s": 15.517
+    }
+  },
+  "provenance_note": "Current source rerun: five tests, scratch HOME/config, dummy credential, localhost fake inference only. Selected configuration metadata is retained from the prior document and was not reread from production settings. Only qualification_tests/qualification_passed/unknown_runtime_no_execution were rerun here. Historical real-smoke evidence retains its original profile and unknown reasoning/asset-use coverage."
+}

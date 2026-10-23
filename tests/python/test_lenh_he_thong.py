@@ -45,10 +45,18 @@ check("plan: nhắc dấu nhận diện GIỮA câu không phải lệnh", not L
 check("plan: rỗng/None an toàn", not L.la_luot_ke_hoach("") and not L.la_luot_ke_hoach(None))
 
 # ---- 2. Khối /goal ----
-kg = L.khoi_muc_tieu("mọi đơn hôm nay đã đối soát", 2, 8)
+kg = L.khoi_muc_tieu("mọi đơn hôm nay đã đối soát", 2, 5, "còn 8 đơn")
 check("goal: mở bằng dấu nhận diện + điều kiện", kg.startswith(L.GOAL_MARK + " mọi đơn hôm nay đã đối soát"))
 check("goal: kết thúc bằng ]\\n\\n", kg.endswith("]\n\n"))
-check("goal: có vòng hiện tại/tối đa", "vòng 2/8" in kg)
+check("goal: có vòng hiện tại/tối đa", "vòng 2/5" in kg)
+# 0.173.1: trần mặc định 5, vòng tự động mang tình trạng vòng trước và dòng ẩn JAVIS_GOAL_ROUND, dặn báo blocked
+check("goal: trần mặc định là 5", L.GOAL_MAX_ROUNDS == 5 and "vòng 1/5" in L.khoi_muc_tieu("x"))
+check("goal: vòng 2+ có tình trạng vòng trước và dòng ẩn JAVIS_GOAL_ROUND",
+      "Vòng trước còn: còn 8 đơn" in kg and '<!-- JAVIS_GOAL_ROUND: {"v": 2, "n": 5, "left": "còn 8 đơn"} -->' in kg)
+check("goal: vòng 1 không có dòng JAVIS_GOAL_ROUND", "JAVIS_GOAL_ROUND" not in L.khoi_muc_tieu("x", 1, 5, "y"))
+check("goal: dặn model báo blocked khi thiếu quyền/công cụ/dữ liệu", '"blocked"' in kg and "thiếu quyền" in kg)
+check("goal: tình trạng có --> hay ] không phá khối", (lambda k: "-->" not in k.split("JAVIS_GOAL_ROUND")[1].split("-->")[0]
+      and k[:-3].count("]") == 0)(L.khoi_muc_tieu("a", 2, 5, "x --> ] y")))
 check("goal: dặn model tự báo qua dòng ẩn JAVIS_GOAL", "JAVIS_GOAL" in kg and '"done":true' in kg and '"done":false' in kg)
 check("goal: điều kiện chứa ] thì bị đổi (không cắt sớm khối)", (lambda k: k[:-3].count("]") == 0 and "(x)" in k)(L.khoi_muc_tieu("đạt [x]", 1, 8)))
 check("goal: điều kiện nhiều dòng gộp về một dòng", "\n" not in L.khoi_muc_tieu("a\n\n  b\tc", 1, 8).split("\n")[0].replace(L.GOAL_MARK, ""))
@@ -58,6 +66,8 @@ check("goal: điều kiện dài bị cắt", len(L.khoi_muc_tieu("x" * 5000, 1,
 D = L.doc_muc_tieu
 check("doc: done true", D('ok <!-- JAVIS_GOAL: {"done":true} -->') == {"done": True, "left": ""})
 check("doc: done false + left", D('<!-- JAVIS_GOAL: {"done":false,"left":"thiếu báo cáo"} -->') == {"done": False, "left": "thiếu báo cáo"})
+check("doc: blocked kèm lý do", D('<!-- JAVIS_GOAL: {"done":false,"blocked":"thiếu quyền POS"} -->') == {"done": False, "left": "", "blocked": "thiếu quyền POS"})
+check("doc: done true bỏ qua blocked", D('<!-- JAVIS_GOAL: {"done":true,"blocked":"x"} -->') == {"done": True, "left": ""})
 check("doc: không có -> None", D("không có gì") is None)
 check("doc: JSON hỏng -> None", D("<!-- JAVIS_GOAL: {done -->") is None)
 check("doc: done không phải bool -> None", D('<!-- JAVIS_GOAL: {"done":1} -->') is None)

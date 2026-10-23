@@ -1,0 +1,321 @@
+{
+  "activation": false,
+  "aggregate_verdict": "unknown",
+  "business_pilot": false,
+  "candidate_executed": false,
+  "evidence": {
+    "artifact_hash": "c44e0dc84b897ea2c8283c19653b040e173f4f997a4142f05a86d85ef67b0c06",
+    "database": "state/resonance.sqlite3",
+    "encrypted_blobs": "state/assets",
+    "private_output_root": ".superpowers/live-a",
+    "private_report_sha256": "5dacef032b6f07b49815a070c4c22c2cf2fa450e4156bbad47f3e207d361dc1c",
+    "receipt_hash": "1e2700e1795208b2409e943b69d1dfdb95ce260244e57e06a6ac2ffa12ba3b21",
+    "results": [
+      {
+        "blob_hash": "6c5efdbcc4a427d6b26a975f92359fb4d013c229fd3c300a2efab63b79e36be4",
+        "id": "ir_229b3b4eb9600fdc381ce2e6",
+        "result_hash": "6c5efdbcc4a427d6b26a975f92359fb4d013c229fd3c300a2efab63b79e36be4"
+      }
+    ],
+    "trace": [
+      {
+        "kind": "worker_ready",
+        "payload_hash": "12c1a25303e02a1fd993cb8f9ab22349237c5f5f2183a80b71198a168ee95eae",
+        "sequence": 1
+      },
+      {
+        "kind": "engine_start_requested",
+        "payload_hash": "c8b4b3450c592e26f606963744ae841e52696dfeb5e8cf65aeba13382141db0a",
+        "sequence": 2
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "248d7be0a9727c0cb535f0cb4b948e68ce89e23508953cbdd4d098f9d9df1f67",
+        "sequence": 3
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "b54c87af05541b44222802df79938c4b1d262585d0493304aaea4f81f453b129",
+        "sequence": 4
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "8ea0377ad33801894f2d0ce9a79bdbb0f7ffaebdb40999a68dc38130550b637b",
+        "sequence": 5
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "087917c8051e1a23243fef3fe48e92849de559d88094991e46bc7ee2502b8979",
+        "sequence": 6
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "e0a319e0739806d1dce3e7b8c33e0744004749ff2ba03a6d10e64a028146a598",
+        "sequence": 7
+      },
+      {
+        "kind": "fixture_event",
+        "payload_hash": "81f5034d3b52d94f08b909b3f2c174eaeb315185b6469f9e327e7eb9939ca3e5",
+        "sequence": 8
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "5d9b00776e458d3b72b74dad03478b523c8e970271e6b79b50c4b92daa915cb0",
+        "sequence": 9
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "fdfcd11cf77716af98b6c19d1dd9de7267924479b759c4e07c461be79b1a0d05",
+        "sequence": 10
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "4fe4d696618d67c14dbb6206a618b5faeda5afcc2bb6a661dd1a01c2e3ea8c19",
+        "sequence": 11
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "7767eac91fedaccf0ca466ff1ab1164627af65738055ce03df315e93808d4be3",
+        "sequence": 12
+      },
+      {
+        "kind": "engine_event",
+        "payload_hash": "5bd73d06cb02b0f0e182aae2d1d10b807809183f7adf5c04d3c096a5890fbc0b",
+        "sequence": 13
+      },
+      {
+        "kind": "worker_complete",
+        "payload_hash": "0b5481842ccdeab39995a70abc445d36bbc0ae9965e402460e4042e6fc5f0587",
+        "sequence": 14
+      }
+    ],
+    "trace_count": 14,
+    "verdict": "unknown"
+  },
+  "executed_at_utc": "2026-10-22T18:29:29.482281+00:00",
+  "execution_checks": [
+    {
+      "id": "materialization",
+      "reason": "record_pins_match",
+      "verdict": "pass"
+    },
+    {
+      "id": "contract_projection",
+      "reason": "public_full_contract_match",
+      "verdict": "pass"
+    },
+    {
+      "id": "workspace_binding",
+      "reason": "record_pins_match",
+      "verdict": "pass"
+    },
+    {
+      "id": "worker_protocol",
+      "reason": "worker_protocol_complete",
+      "verdict": "pass"
+    },
+    {
+      "id": "installation",
+      "reason": "record_pins_match",
+      "verdict": "pass"
+    },
+    {
+      "id": "tool_inventory",
+      "reason": "fixture_only_inventory_observed",
+      "verdict": "pass"
+    },
+    {
+      "id": "prompt_installation",
+      "reason": "prompt_attested",
+      "verdict": "pass"
+    },
+    {
+      "id": "asset_installation",
+      "reason": "exact_revisions_available_and_selected",
+      "verdict": "pass"
+    },
+    {
+      "id": "asset_observed_use",
+      "reason": "native_asset_use_unobserved",
+      "verdict": "unknown"
+    },
+    {
+      "id": "actual_reasoning",
+      "reason": "native_reasoning_unobserved",
+      "verdict": "unknown"
+    },
+    {
+      "id": "context_coverage",
+      "reason": "complete_context_declared_and_installed",
+      "verdict": "pass"
+    },
+    {
+      "id": "fixture_inventory",
+      "reason": "record_pins_match",
+      "verdict": "pass"
+    },
+    {
+      "id": "source_coverage",
+      "reason": "fixture_read_observed",
+      "verdict": "pass"
+    },
+    {
+      "id": "actual_model",
+      "reason": "exact_model_observed",
+      "verdict": "pass"
+    },
+    {
+      "id": "session_binding",
+      "reason": "single_native_session_bound",
+      "verdict": "pass"
+    },
+    {
+      "id": "side_effects",
+      "reason": "tool_outcome_or_boundary_unobserved",
+      "verdict": "unknown"
+    },
+    {
+      "id": "completion",
+      "reason": "terminal_artifact_and_worker_complete",
+      "verdict": "pass"
+    },
+    {
+      "id": "event_coverage",
+      "reason": "unrecognized_event",
+      "verdict": "unknown"
+    }
+  ],
+  "ledger": [
+    {
+      "attempt": 1,
+      "engine": "anthropic-cli",
+      "engine_at": 1792693769.4822812,
+      "id": 1,
+      "model": "claude-opus-5-5",
+      "purpose": "improve_probe",
+      "status": "ok"
+    }
+  ],
+  "limitations": [
+    "One controlled synthetic tuning baseline/repeat only; no comparative or business-value conclusion.",
+    "Configured medium effort is pinned; actual reasoning is unobserved.",
+    "Exact skill revision was installed; internal asset use is unobserved.",
+    "Native ui_invalidate event is unclassified and successful fixture ToolResultBlock.is_error is null; execution coverage remains unknown.",
+    "Token totals are observed lower bounds with partial request attribution; requests remains null.",
+    "Subscription equivalent USD is an observed reference value, not an additional cash bill.",
+    "No production trial endpoint, promotion, activation, live canary or rollout enabled.",
+    "Private encrypted evidence and disposable key are retained; key loss prevents recovery."
+  ],
+  "observed": {
+    "models": {
+      "status": "observed",
+      "values": [
+        "claude-opus-5-5"
+      ]
+    },
+    "reasoning": {
+      "status": "unknown",
+      "values": null
+    }
+  },
+  "original_engine_config_hash": "bb3164099ff790df2baa5d67c2d3e31d6fe8bbfffe62bd15a34c242a9e428233",
+  "pin": {
+    "cli_hash": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+    "cli_version": "2.1.308",
+    "engine_id": "claude-sdk",
+    "model": "claude-opus-5-5",
+    "profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+    "profile_version": "claude-isolated-trial-v1",
+    "provider": "anthropic-cli",
+    "reasoning": "medium",
+    "sdk_version": "0.2.116",
+    "version": 1
+  },
+  "pin_path_omitted": true,
+  "product_evaluation": {
+    "business_verdict": "pass",
+    "mandatory_verdict": "pass",
+    "reason": "evaluated",
+    "verdict": "pass"
+  },
+  "production_context_coverage": "unavailable",
+  "requested": {
+    "auth_mode": "subscription",
+    "fast": false,
+    "model": "claude-opus-5-5",
+    "provider": "anthropic-cli",
+    "reasoning": "medium"
+  },
+  "runtime": {
+    "capability_hash": "9b33bae4c540ac9b91c6166ca535067f7cfa060e70275964425fb1164f337e9a",
+    "observations": {
+      "cli_hash": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+      "cli_version": "2.1.308",
+      "managed_policy": "absent",
+      "platform": "win32",
+      "profile_hash": "06e75c3046a666790035fd4ef8910abe3a1113baba5bc67f6f96a9378a98abed",
+      "sdk_version": "0.2.116"
+    },
+    "reason": null,
+    "verified": true
+  },
+  "scope": "controlled_synthetic_engine_feasibility",
+  "source_evidence": {
+    "runner": {
+      "capture": "current file captured after execution; not a contemporaneous pre-query snapshot",
+      "sha256": "2f8f022191669810ec0ef30c8e0aa5774047f2273ab451d46d7940379e0ef3ce"
+    },
+    "smoke_script_at_execution": {
+      "capture": "exact pre-report-enhancement source retained after execution",
+      "preserved_copy": ".superpowers/sdd/2026-10-22-agent-skill-improvement-m1/smoke-live-a-source.py",
+      "sha256": "e4af162c1b7648242a49b1c88b7a90b51f5f6c693524dd77d23986f9ac1660dc"
+    }
+  },
+  "trial": {
+    "attempt": 1,
+    "repeat": 1,
+    "status": "completed",
+    "trial_id": "it_b37e985639b9714bcbcdf0eb",
+    "variant": "baseline"
+  },
+  "usage": {
+    "attempts": 1,
+    "cost_behavior": "observe_only",
+    "coverage": {
+      "cli_detail": "linked_and_reconciled_only",
+      "execution_reference_errors": 0,
+      "execution_sources": [
+        "resonance.sqlite3"
+      ],
+      "missing_requests": 0,
+      "money_complete": true,
+      "observed_requests": 0,
+      "requests_complete": false,
+      "scope": "instrumented_executions",
+      "status": "partial",
+      "telemetry_errors": 0,
+      "tokens_complete": false,
+      "unobserved_attempts": 0,
+      "unresolved_events": 2
+    },
+    "experiment_id": "synthetic-smoke",
+    "money": {
+      "currency": "USD",
+      "estimated_usd": null,
+      "local_requests": 0,
+      "reported_usd": null,
+      "subscription_equivalent_usd": 0.0226818,
+      "subscription_requests": 1,
+      "unknown_requests": 0
+    },
+    "requests": null,
+    "statuses": {
+      "completed": 1,
+      "unknown": 1
+    },
+    "tokens_in": 4362,
+    "tokens_out": 158,
+    "trial_id": "it_b37e985639b9714bcbcdf0eb"
+  },
+  "version": 1
+}

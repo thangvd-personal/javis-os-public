@@ -53,8 +53,8 @@ check("CANARY: mở thư gọi JavisSessions.open (quay về hội thoại đã 
   /window\.JavisSessions\.open\(item\.session_id\)/.test(noti));
 check("CANARY: KHÔNG mở hội thoại mới khi đọc thư",
   noti.indexOf("JavisSessions.new()") === -1);
-check("thư không gắn hội thoại thì chỉ đánh dấu đã đọc, không nhảy đi đâu",
-  /if \(!item\.session_id\) \{ render\(\); return; \}/.test(noti));
+check("0.191.0: thư không gắn hội thoại thì mở trong Javis Core (chép sang đó một lần, kèm nguồn)",
+  /if \(!item\.session_id\) \{ closePanel\(\); hoiCore\("inbox", item\.id\); return; \}/.test(noti));
 
 // ---- 3. Đã-đọc nằm ở server ----
 check("đánh dấu đã đọc gọi /inbox/read", noti.indexOf('fetch("/inbox/read"') !== -1);
@@ -79,7 +79,7 @@ const iBat = push.indexOf("async function bat()");
 const iXin = push.indexOf("Notification.requestPermission()");
 check("CANARY: lời xin quyền nằm bên trong bat()", iXin > iBat && iBat !== -1);
 check("tự nối lại chỉ khi ĐÃ được cấp quyền từ trước",
-  /Notification\.permission !== "granted"\) return;[\s\S]{0,120}setTimeout/.test(push));
+  /Notification\.permission !== "granted"( \|\| daTat\(\))?\) return;[\s\S]{0,120}setTimeout/.test(push));
 check("ẩn nút + nói lý do khi không phải secure context (http trần)",
   /isSecureContext/.test(push) && /https/.test(push));
 check("nút hỏng thì GIỮ lý do trên màn hình, không vẽ đè bằng ghi chú mặc định",

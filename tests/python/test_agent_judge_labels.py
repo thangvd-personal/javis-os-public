@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
+import _paths  # noqa: E402,F401  - thư mục tạm riêng, tự xoá khi thoát (xem _paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-judge-labels-")
 
 from _judge_world import World, batch, check, finish, keys_in  # noqa: E402

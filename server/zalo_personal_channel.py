@@ -156,6 +156,72 @@ async def _goi(conn: dict, tool: str, args: dict) -> Any:
     return _json_cua(raw)
 
 
+# ============================================================
+# Chat labels (tags the owner set in the Zalo app), 0.281.0
+# ============================================================
+# Read with javis-zalo 1.6.0's `zalo_get_labels`. One call returns every label with its chats, so the whole map is
+# kept per connection for `LABEL_TTL_S` and each incoming message only looks it up. A connection whose MCP has no such
+# tool (older javis-zalo) or that fails is asked again only after `LABEL_RETRY_S`: a bot must never wait on Zalo for
+# every message just to learn there are no labels.
+LABEL_TTL_S = 60
+LABEL_RETRY_S = 600
+_LABELS: Dict[str, dict] = {}       # conn_id -> {"at", "names": [...], "by_thread": {thread_id: [names]}, "ok"}
+
+
+def _label_map(data: Any) -> dict:
+    """`zalo_get_labels` result -> {"names": [label names in the owner's order], "by_thread": {thread_id: [names]}}."""
+    names, by_thread = [], {}
+    labels = data.get("labels") if isinstance(data, dict) else None
+    for lb in labels if isinstance(labels, list) else []:
+        if not isinstance(lb, dict):
+            continue
+        name = " ".join(str(lb.get("name") or "").split())[:60]
+        if not name:
+            continue
+        if name not in names:
+            names.append(name)
+        for t in lb.get("threads") or []:
+            tid = str((t or {}).get("threadId") or "").strip() if isinstance(t, dict) else ""
+            if tid:
+                ds = by_thread.setdefault(tid, [])
+                if name not in ds:
+                    ds.append(name)
+    return {"names": names, "by_thread": by_thread}
+
+
+async def _labels_of_conn(conn_id: str) -> dict:
+    """The cached label map of one connection; `{"names": [], "by_thread": {}}` when unknown. Never raises."""
+    now = time.time()
+    c = _LABELS.get(conn_id)
+    if c and now - c["at"] < (LABEL_TTL_S if c.get("ok") else LABEL_RETRY_S):
+        return c
+    conn = ket_noi_theo_id(conn_id)
+    if not conn:
+        return {"names": [], "by_thread": {}}
+    try:
+        data = await asyncio.wait_for(_goi(conn, "zalo_get_labels", {}), timeout=8)
+        m = _label_map(data)
+        if not isinstance(data, dict) or "labels" not in data:
+            raise RuntimeError("no labels in the reply")
+        c = dict(m, at=now, ok=True)
+    except Exception as e:      # noqa: BLE001 - labels are a hint for the bot; without them it runs as before
+        print(f"[zalo-personal {conn_id}] đọc tag Zalo lỗi: {type(e).__name__}: {str(e)[:160]}", file=sys.stderr)
+        c = dict(c or {"names": [], "by_thread": {}}, at=now, ok=False)
+    _LABELS[conn_id] = c
+    return c
+
+
+async def labels_of_chat(conn_id: str, thread_id: str) -> List[str]:
+    """Names of the Zalo labels on one chat of a connection (e.g. ["Gia đình"]); [] when none or unknown."""
+    m = await _labels_of_conn(str(conn_id or ""))
+    return list((m.get("by_thread") or {}).get(str(thread_id or ""), []))
+
+
+async def label_names(conn_id: str) -> List[str]:
+    """Every label name of a connection, for the bot form's picker; [] when unknown."""
+    return list((await _labels_of_conn(str(conn_id or ""))).get("names") or [])
+
+
 def _json_cua(raw: Any) -> Any:
     """Kết quả MCP về dạng chữ; bóc JSON nếu có, không thì trả nguyên."""
     if isinstance(raw, (dict, list)):
@@ -348,7 +414,7 @@ def chuan_hoa_tin(conn: dict, msg: dict, ten: Dict[str, dict]) -> Optional[dict]
     text = _lay(msg, "text", "content", "msg", "message", mac_dinh="")
     if isinstance(text, dict):
         text = _lay(text, "text", "title", "description", "href", mac_dinh="")
-    text = str(text or "")
+    text = strip_mention_markup(str(text or ""))
     if loai != "text" and not text.strip():
         # The account's own photo (isSelf, from the owner's phone) is not "the customer sent".
         text = (f"[{conversations.KENH_NHAN[KENH]}: gửi {loai}]" if _la_cua_minh(msg)
@@ -386,6 +452,92 @@ def chuan_hoa_tin(conn: dict, msg: dict, ten: Dict[str, dict]) -> Optional[dict]
                          **({"attachment": normalize_attachment(msg)} if loai == "file" else {}),
                          **({"image_url": _link_anh(msg)} if loai == "image" and _link_anh(msg) else {})),
     }
+
+
+# ============================================================
+# Nhập tin cũ (0.174.0)
+# ============================================================
+# Chủ repo hỏi 16/10/2026: đăng nhập Zalo vào Javis lần đầu thì Hộp thư trống trơn, dù điện thoại có cả trăm cuộc chat. javis-zalo
+# (từ 1.1.0) tự kéo tin cũ về mỗi lần kết nối, khoảng 2 tuần gần nhất theo cửa sổ phát lại của Zalo, rồi giữ trong kho lịch sử của
+# nó (`zalo_search_history`). Vòng đọc ở dưới không dùng kho đó: nó chỉ đọc bộ đệm tin MỚI (`zalo_get_messages`), đúng như quyết
+# định 3 ở đầu file. Nút "Nhập tin cũ" là lựa chọn riêng của chủ, không chạy tự động.
+#
+# Ba rào:
+#   1. Chỉ nhập vào cuộc chat CHƯA có tin nào trong kho. Khung tin xếp theo id, nên tin cũ nhập sau tin mới sẽ hiện SAU tin mới.
+#      Cuộc chat đã có tin thì bỏ qua, nói rõ trong kết quả.
+#   2. Không giao cho bot, không cộng số chưa đọc, không đụng đồng hồ "chủ vừa nhắn tay": đây là tin đã qua, ghi để xem lại.
+#   3. Có trần (`NHAP_TOI_DA` tin, `NHAP_NGAY` ngày) để một nick nhiều nhóm không làm kho phình. Nhóm vẫn chỉ giữ
+#      `conversations.GIU_TIN_NHOM` tin gần nhất như mọi lúc.
+NHAP_NGAY = 14
+NHAP_TOI_DA = 5000
+NHAP_TRANG = 200            # trần `limit` của zalo_search_history
+_DANG_NHAP: set = set()     # conn_id đang nhập: bấm hai lần liền không chạy chồng
+
+
+async def nhap_lich_su(conn_id: str, ngay: int = NHAP_NGAY) -> dict:
+    """Nhập tin cũ javis-zalo đã giữ (tối đa `ngay` ngày, `NHAP_TOI_DA` tin) vào Hộp thư, chỉ cho cuộc chat chưa có tin nào.
+
+    Trả {"ok", "so_tin", "so_cuoc_chat", "bo_qua", "het_tran"} hoặc {"ok": False, "loi"}."""
+    cid = str(conn_id or "")
+    conn = ket_noi_theo_id(cid)
+    if not conn:
+        return {"ok": False, "loi": localefmt.chu("Tài khoản Zalo này không còn ở trang Kết nối (hoặc đang tắt).",
+                                                   "This Zalo account is no longer on the Connections page (or is off).")}
+    if cid in _DANG_NHAP:
+        return {"ok": False, "loi": localefmt.chu("Đang nhập tin cũ cho tài khoản này, chờ chút rồi xem lại Hộp thư.",
+                                                   "Old messages are already being imported for this account.")}
+    _DANG_NHAP.add(cid)
+    try:
+        ngay = max(1, min(int(ngay or NHAP_NGAY), 30))
+        tu = int((time.time() - ngay * 86400) * 1000)
+        tin: List[dict] = []
+        truoc, het_tran = None, False
+        while True:
+            args: Dict[str, Any] = {"since": tu, "limit": NHAP_TRANG}
+            if truoc:
+                args["before"] = truoc
+            try:
+                d = await _goi(conn, "zalo_search_history", args)
+            except Exception as e:
+                if not tin:
+                    return {"ok": False, "loi": localefmt.chu(
+                        f"javis-zalo không trả được tin cũ: {str(e)[:200]}. Bản javis-zalo cần từ 1.1.0 trở lên.",
+                        f"javis-zalo could not return old messages: {str(e)[:200]}. javis-zalo 1.1.0 or newer is needed.")}
+                break
+            trang = (d.get("messages") if isinstance(d, dict) else None) or []
+            tin.extend(m for m in trang if isinstance(m, dict))
+            if len(tin) >= NHAP_TOI_DA:
+                het_tran = True
+                break
+            truoc = d.get("cursor") if isinstance(d, dict) else None
+            if not (isinstance(d, dict) and d.get("hasMore") and truoc and trang):
+                break
+        if not tin:
+            return {"ok": True, "so_tin": 0, "so_cuoc_chat": 0, "bo_qua": 0, "het_tran": False}
+        ten = await _nap_ten(conn, {})
+        theo_chat: Dict[str, List[dict]] = {}
+        for m in tin:
+            ev = chuan_hoa_tin(conn, m, ten)
+            if ev and ev.get("external_message_id"):
+                ev["metadata"] = dict(ev.get("metadata") or {}, lich_su=True)
+                theo_chat.setdefault(ev["external_chat_id"], []).append(ev)
+        so_tin = so_chat = bo_qua = 0
+        for chat, evs in theo_chat.items():
+            if conversations.co_tin(KENH, cid, chat):
+                bo_qua += 1
+                continue
+            evs.sort(key=lambda e: float(e.get("created_at") or 0))
+            ghi = 0
+            for ev in evs:
+                r = conversations.ghi_su_kien(ev, dem_chua_doc=False)
+                if r.get("ok") and not r.get("trung"):
+                    ghi += 1
+            if ghi:
+                so_tin += ghi
+                so_chat += 1
+        return {"ok": True, "so_tin": so_tin, "so_cuoc_chat": so_chat, "bo_qua": bo_qua, "het_tran": het_tran}
+    finally:
+        _DANG_NHAP.discard(cid)
 
 
 # ============================================================
@@ -640,6 +792,7 @@ async def _vong() -> None:
                         print(f"[zalo-personal {conn.get('label')}] {tt['loi']}", file=sys.stderr)
                     else:
                         _nhan_loi_moi(conn)
+                    _soi_tranh_phien(conn)
                     # Hạn sớm hơn một nhịp chút ít: vòng ngủ đúng một nhịp thì lần thức sau chắc chắn đã tới hạn.
                     tt["doc_toi"] = luc + _nhip_cua(conn["id"]) * 0.9
         except asyncio.CancelledError:
@@ -651,6 +804,84 @@ async def _vong() -> None:
         except asyncio.CancelledError:
             raise
     print("[zalo-personal] vòng đọc dừng", file=sys.stderr)
+
+
+# ============================================================
+# Another session evicting ours (0.283.0)
+# ============================================================
+# Zalo keeps ONE live socket per account. When a second session of the same account is up (an `mcp start` an earlier
+# server lifetime left behind, Zalo Web of this nick in a browser, another Javis or Claude client), ours is evicted
+# right after every re-login and javis-zalo backs off up to five minutes. Reading still "works" (the buffer answers),
+# so the bot card stayed green while the bot heard only the few seconds after each reconnect (field report
+# 22/10/2026, Javis Vũ: three hours of tags in two groups unanswered). javis-zalo prints each close as
+# "Connection closed (code: N). Re-login in Ss... (reconnect #R, rapid #K)"; K counts closes that came before the
+# connection was stable, so K >= THRASH_RAPID means a rival.
+THRASH_RAPID = 3
+THRASH_SHOW_S = 900          # the bot card says "evicted" this long after the last rapid close
+THRASH_BELL_GAP_S = 6 * 3600
+_THRASH_RE = re.compile(r"reconnect #(\d+), rapid #(\d+)")
+_THRASH_SEEN: Dict[str, tuple] = {}      # conn_id -> (session pid, last reconnect number handled)
+
+
+def thrash_of(lines: List[str]) -> Optional[tuple]:
+    """(reconnect number, rapid count) of the latest close line in a javis-zalo stderr tail, None when there is none."""
+    for line in reversed(lines or []):
+        m = _THRASH_RE.search(str(line))
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    return None
+
+
+def _soi_tranh_phien(conn: dict) -> None:
+    """After each read: a new rapid close in this connection's MCP log means another session holds the account. Kill
+    any other `mcp start` on the same HOME (this machine), mark the bot card, ring the owner (once per 6 hours)."""
+    try:
+        import mcp_client
+        import mcp_orphans
+        cid = str(conn.get("id") or "")
+        pid = mcp_client.pool.session_pid(cid)
+        th = thrash_of(mcp_client.pool.stderr_lines(cid)) if pid else None
+        if not th:
+            return
+        seen_pid, seen_n = _THRASH_SEEN.get(cid, (0, 0))
+        if (pid, th[0]) == (seen_pid, seen_n) or (pid == seen_pid and th[0] < seen_n):
+            return
+        _THRASH_SEEN[cid] = (pid, th[0])
+        if th[1] < THRASH_RAPID:
+            return
+        tt = _TT.setdefault(cid, {})
+        tt["tranh_phien"] = time.time()
+        home = str(((conn.get("env") or {}).get("HOME")) or "")
+        killed = mcp_orphans.reap_same_home(home, keep_pgids=(pid,)) if home else []
+        print(f"[zalo-personal {conn.get('label')}] another session keeps evicting this one "
+              f"(reconnect #{th[0]}, rapid #{th[1]}); killed {len(killed)} local copy(ies)", file=sys.stderr)
+        if NOTIFY_OWNER is None or time.time() - float(tt.get("tranh_phien_bao") or 0) < THRASH_BELL_GAP_S:
+            return
+        tt["tranh_phien_bao"] = time.time()
+        tk = conn.get("label") or "Zalo"
+        don = (localefmt.chu(f" Javis đã tắt {len(killed)} bản Zalo cũ còn chạy trên máy này.",
+                             f" Javis stopped {len(killed)} old Zalo copy(ies) still running on this machine.")
+               if killed else "")
+        cau = localefmt.chu(
+            f"Zalo ({tk}) đang bị một phiên khác của cùng nick giành kết nối: bot chỉ nghe được tin vài giây sau mỗi lần "
+            f"nối lại, tin tag và tin nhắn riêng ở giữa bị lỡ.{don} Nếu vẫn tiếp diễn: đóng Zalo Web (chat.zalo.me) của "
+            "nick này trên mọi trình duyệt, tắt Javis hoặc Claude khác đang dùng cùng nick, rồi bấm Kiểm tra ở trang "
+            "Kết nối.",
+            f"Zalo ({tk}) is being evicted by another session of the same account: the bot only hears messages for a few "
+            f"seconds after each reconnect, and tags and private messages in between are missed.{don} If it goes on: "
+            "close Zalo Web (chat.zalo.me) for this account in every browser, stop any other Javis or Claude client "
+            "using it, then click Check on the Connections page.")
+        loop = asyncio.get_running_loop()
+        t = loop.create_task(NOTIFY_OWNER("", cau, kind="system", label="Zalo", source="zalo"))
+        _VIEC.add(t)
+        t.add_done_callback(_VIEC.discard)
+    except Exception as e:      # noqa: BLE001 - the watch must never cost a read
+        print(f"[zalo-personal {conn.get('label')}] thrash watch: {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def evicted_recently(conn_id: str) -> bool:
+    """Another session evicted this connection within `THRASH_SHOW_S` (see `_soi_tranh_phien`)."""
+    return time.time() - float((_TT.get(str(conn_id or "")) or {}).get("tranh_phien") or 0) < THRASH_SHOW_S
 
 
 def _nhan_loi_moi(conn: dict) -> None:
@@ -879,6 +1110,21 @@ def co_bot(conn_id: str) -> bool:
 
 def _chuan(text: str) -> str:
     return " ".join(str(text or "").split())
+
+
+# Zalo's own markup for a tag, e.g. `<a_mention href="zm://Profile/110413987_mention">@Minh</a_mention> Quý`.
+# Field report 2026-10-19: a group reply reached Zalo with this markup as plain text, so the group saw code instead
+# of a tag. The model copies it from messages that carry it, so it is stripped both ways: incoming (`chuan_hoa_tin`)
+# and outgoing (`channels.zalo_personal.gui`), leaving "@Minh Quý" for the real tag (`--mention`) to find.
+_MENTION_MARKUP = re.compile(r"</?a_mention\b[^>]*>", re.IGNORECASE)
+
+
+def strip_mention_markup(text: str) -> str:
+    """`text` without Zalo's `<a_mention ...>` / `</a_mention>` tags; the "@Name" between them stays."""
+    s = str(text or "")
+    if "a_mention" not in s.lower():
+        return s
+    return _MENTION_MARKUP.sub("", s)
 
 
 def ghi_da_gui(conn_id: str, thread: str, text: str) -> None:

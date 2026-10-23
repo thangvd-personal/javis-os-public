@@ -27,49 +27,66 @@ function check(name, cond) {
   if (!cond) fails.push(name);
 }
 // Lay than mot rule CSS theo dung selector (khong dinh rule ".x.y" hay ".x:hover")
+// The main chat's #newMsgBtn shares its rules with the Team chat's .jv-new-msg ("#newMsgBtn, .jv-new-msg { ... }").
 function than(sel) {
-  const re = new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{[^}]*\\}");
+  const re = new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:, [.#][\\w.-]+)?\\s*\\{[^}]*\\}");
   const m = CSS.match(re);
   return m ? m[0] : "";
 }
 
-// ---- 1. Bộ xử lý cuộn phải TỰ bật nút, không ăn theo scrollBottom ----
-const iScroll = APP.indexOf('chatArea.addEventListener("scroll"');
-check("có bắt sự kiện cuộn của khung chat", iScroll !== -1);
-const thanScroll = APP.slice(iScroll, APP.indexOf("});", iScroll));
-check("CANARY: cuộn lên là cập nhật nút NGAY trong bộ xử lý cuộn",
-      /capNhatNutXuong\(\)/.test(thanScroll));
-check("bộ xử lý cuộn tính lại việc đang-ở-đáy", /stickBottom\s*=\s*ganDay\(\)/.test(thanScroll));
+// The logic moved to chat-scroll.js (shared with the Team chat). It is checked by BEHAVIOUR here, on a fake chat area,
+// plus the main chat's wiring in app.js.
+const CS = require(path.join(__dirname, "../../dashboard/chat-scroll.js"));
+const SCROLL = fs.readFileSync(path.join(__dirname, "../../dashboard/chat-scroll.js"), "utf8");
+function fakeBtn() {
+  const set = new Set();
+  const b = { parentNode: null, innerHTML: "", title: "", attrs: {}, listeners: {},
+    classList: { add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c),
+      toggle: (c, on) => { if (on === undefined) on = !set.has(c); if (on) set.add(c); else set.delete(c); return on; } },
+    setAttribute(k, v) { b.attrs[k] = v; }, addEventListener(n, f) { b.listeners[n] = f; }, removeEventListener() {} };
+  return b;
+}
+function fakeArea() {
+  const ls = {};
+  const area = { scrollHeight: 3000, clientHeight: 500, scrollTop: 2500, hover: {},
+    addEventListener(n, fn) { (ls[n] = ls[n] || []).push(fn); }, removeEventListener() {},
+    querySelector: (s) => area.hover[s] || null, fire(n, e) { (ls[n] || []).forEach((f) => f(e || {})); } };
+  return area;
+}
+const win = { t: (k) => VI[k] || k, ic: (n) => "<svg data-ic=\"" + n + "\"></svg>", addEventListener() {},
+  matchMedia: () => ({ matches: false }) };
+const area = fakeArea();
+const btn = fakeBtn();
+const ctl = CS.attach(area, { button: btn, msg: ".msg", hold: ".msg-acts:hover, .jr-chat:hover", near: 90, win });
 
-// Ham cap nhat phai BAT nut khi roi day, chu khong chi tat khi ve day (loi cu).
-const iCap = APP.indexOf("function capNhatNutXuong");
-const thanCap = APP.slice(iCap, APP.indexOf("\n}", iCap));
-check("rời đáy -> thêm lớp show", /classList\.add\("show"\)/.test(thanCap));
-check("về đáy -> bỏ lớp show", /classList\.remove\("show"\)/.test(thanCap));
-check("chưa có tin nào thì chưa đụng tới nút", /if \(!newMsgBtn\.parentNode\) return/.test(thanCap));
+// ---- 1. Scrolling up shows the button AT ONCE, without waiting for a new message ----
+area.scrollTop = 2400; area.fire("scroll");
+check("no message yet (button not placed): the button is left alone", !btn.classList.contains("show"));
+btn.parentNode = area;                       // app.js places it with the first message (chatAppend)
+area.scrollTop = 1500; area.fire("scroll");
+check("CANARY: scrolling up shows the button right in the scroll handler", btn.classList.contains("show") && ctl.stuck() === false);
+area.scrollTop = 2450; area.fire("scroll");
+check("back within 90px of the end: hidden, following again", !btn.classList.contains("show") && ctl.stuck() === true);
 
-// ---- 2. Hai dạng nút ----
-check("có hàm vẽ nút theo hai dạng", /function veNutXuong\(/.test(APP));
-const iVe = APP.indexOf("function veNutXuong");
-const thanVe = APP.slice(iVe, APP.indexOf("\n}", iVe));
-check("dạng gọn: chỉ icon, không chữ",
-      /coTinMoi \? XUONG_ICON \+ " " \+ window\.t\("app\.new_msg"\) : XUONG_ICON/.test(thanVe)
-      && VI["app.new_msg"] === "Tin mới");
-check("gắn/nhả lớp has-new", /classList\.toggle\("has-new"/.test(thanVe));
-check("có nhãn trợ năng cho cả hai dạng",
-      /aria-label/.test(thanVe) && /window\.t\("app\.scroll_bottom"\)/.test(thanVe)
-      && (VI["app.scroll_bottom"] || "").indexOf("Xuống cuối hội thoại") !== -1);
+// ---- 2. Two looks ----
+check("compact look: only the icon, no words", btn.innerHTML === "<svg data-ic=\"chevron-down\"></svg>" && VI["app.new_msg"] === "Tin mới");
+check("accessible label for the compact look", btn.attrs["aria-label"] === VI["app.scroll_bottom"]
+  && (VI["app.scroll_bottom"] || "").indexOf("Xuống cuối hội thoại") !== -1);
+area.scrollTop = 1000; area.fire("scroll");
+area.scrollHeight = 3200;                    // a new message arrives while reading higher up
+ctl.toBottom();
+check("a new message while reading: the view does not move, the button grows into New messages",
+  area.scrollTop === 1000 && btn.classList.contains("has-new") && btn.innerHTML.indexOf(VI["app.new_msg"]) > 0
+  && btn.attrs["aria-label"] === VI["app.new_msg_title"]);
 
-// Icon dung ic() nhung phai co loi thoat: app.js chay sau icons.js, van guard cho chac.
-check("icon lấy qua ic() có lối thoát khi chưa nạp icons.js",
-      /typeof ic === "function"/.test(APP) && /ic\("chevron-down"\)/.test(APP));
-
-// ---- 3. Về đáy phải NHẢ dạng "Tin mới" ----
-// Không nhả thì lần sau chỉ cuộn lên đọc lại vẫn thấy chữ "Tin mới" - báo sai, mất tin cậy.
-const iSb = APP.indexOf("function scrollBottom");
-const thanSb = APP.slice(iSb, APP.indexOf("\n}\n", iSb));
-check("CANARY: cuộn về đáy thì nhả dạng Tin mới", /veNutXuong\(false\)/.test(thanSb));
-check("có tin mới lúc đang đọc thì bật dạng Tin mới", /veNutXuong\(true\)/.test(thanSb));
+// ---- 3. Back at the end drops the New messages look ----
+btn.listeners.click();
+check("pressing the button jumps to the end", area.scrollTop === area.scrollHeight && ctl.stuck() === true);
+check("CANARY: at the end the New messages look is dropped", !btn.classList.contains("has-new") && !btn.classList.contains("show"));
+check("icon through ic() with a fallback when icons.js is missing", /typeof win\.ic === "function"\) \? win\.ic\("chevron-down"\)/.test(SCROLL));
+check("main chat uses the shared module on #chatArea with its button, selectors and the 90px threshold",
+  /const chatScroll = window\.JavisChatScroll\.attach\(chatArea, \{\s*button: newMsgBtn, msg: "\.msg", hold: "\.msg-acts:hover, \.jr-chat:hover", near: 90,/.test(APP)
+  && /function scrollBottom\(force\) \{ chatScroll\.toBottom\(force\); \}/.test(APP));
 
 // ---- 4. CSS ----
 const B = than("#newMsgBtn");
@@ -85,7 +102,7 @@ const HN = than("#newMsgBtn.has-new");
 check("dạng Tin mới nở ra thành viên thuốc",
       /width:\s*auto/.test(HN) && /border-radius:\s*16px/.test(HN));
 check("dạng Tin mới ăn màu nhấn", /var\(--accent\)/.test(HN));
-check("lớp show mới thực sự hiện", /#newMsgBtn\.show\s*\{[^}]*display:\s*inline-flex/.test(CSS));
+check("lớp show mới thực sự hiện", /#newMsgBtn\.show(?:, \.jv-new-msg\.show)?\s*\{[^}]*display:\s*inline-flex/.test(CSS));
 // Nut noi DE len chu tin nhan -> bong phai du dam, khong thi chim vao nen chu.
 check("bóng đủ đậm để tách khỏi chữ bên dưới", /box-shadow:\s*var\(--shadow-2\)/.test(B));
 

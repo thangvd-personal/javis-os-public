@@ -60,6 +60,21 @@ def observe(provider: str, model: str, tokens: int, now: float | None = None) ->
         return
 
 
+def observe_snapshot(provider: str, model: str, observation_id: str, points, now: float | None = None) -> None:
+    """Replace an attributed usage projection in this same rolling ledger, preserving its time."""
+    try:
+        ts = time.time() if now is None else float(now)
+        values = [(float(at), max(0, int(tokens)), observation_id) for at, tokens in points]
+        with _lock:
+            bucket = _ledger[_key(provider, model)]
+            retained = [row for row in bucket if len(row) < 3 or row[2] != observation_id]
+            bucket.clear()
+            bucket.extend(sorted(retained + [row for row in values if row[1] > 0], key=lambda row: row[0]))
+            _prune(bucket, ts - WINDOW_MAX_SECONDS)
+    except Exception:
+        return
+
+
 def used(provider: str, model: str, window_seconds: int = 60,
          now: float | None = None) -> int:
     """Tổng token thật đã dùng cho provider/model trong cửa sổ vừa qua."""
@@ -72,7 +87,7 @@ def used(provider: str, model: str, window_seconds: int = 60,
             if not bucket:
                 return 0
             _prune(bucket, ts - WINDOW_MAX_SECONDS)
-            return sum(tok for at, tok in bucket if at >= cutoff)
+            return sum(row[1] for row in bucket if row[0] >= cutoff)
     except Exception:  # noqa: BLE001
         return 0
 

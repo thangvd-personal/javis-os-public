@@ -77,8 +77,10 @@ check("onTranscript vẫn gửi thẳng, không qua bước xác nhận",
 // Chỗ thứ 10 (0.65.28) VẪN là hoãn: trong cuộc gọi, câu nói lúc Javis đang trả lời không dừng
 // lượt cũ nữa mà xếp hàng, gửi khi lượt xong và loa đọc xong (guiCauChoLuot).
 const goiGui = (app.match(/(?<!function )\bsendMessage\(/g) || []).length;
-check("có 10 chỗ gọi sendMessage (giọng nói, thử lại, Enter, nút gửi, sau khi tải file xong, sau khi dừng lượt cũ, sau khi nối lại mạng, sau khi mở agent/workflow, adaptive commit, câu chờ lượt trong cuộc gọi)",
-  goiGui === 10, goiGui);
+check("có 10 chỗ gọi sendMessage (giọng nói, thử lại, Enter, nút gửi, sau khi tải file xong, sau khi dừng lượt cũ, sau khi nối lại mạng, sau khi mở agent/workflow, adaptive commit, câu chờ lượt trong cuộc gọi, bấm Nghe cuộc gọi hẹn giờ)",
+  goiGui === 11, goiGui);
+// Chỗ thứ 11 (0.203.0) KHÔNG phải mic tự gửi: người dùng bấm Nghe trên thẻ cuộc gọi hẹn giờ, đường giọng cơ bản
+// gửi câu mở đầu nhờ Javis đọc nhắc hẹn (goiDenTheoLich, test_incoming_call_0203.js).
 // Reconnect sends and cancellation across chats execute in test_voice_app_session.js.
 check("chỗ thứ 5 nằm TRONG sendMessage và chỉ chạy sau Promise.all của file đang tải",
   /Promise\.all\(dangTai\.map\(a => a\.xong[\s\S]{0,300}sendMessage\(text, opts\);/.test(app));
@@ -88,7 +90,7 @@ check("chỗ thứ 6 là tin hoãn, chỉ gửi sau khi lượt cũ đã dừng"
 
 // ---- 4. Server không tự nhập liệu: việc nền luôn là tin của Javis ----
 check("push_to_chat ghi vai assistant, không bao giờ là user",
-  /def push_to_chat[\s\S]{0,1400}append_message\(sid, "assistant", clean\)/.test(server));
+  /def push_to_chat[\s\S]{0,1900}append_message\(sid, "assistant", clean\)/.test(server));
 // Năm chỗ ghi vai "user": bốn đường nhập liệu và một thao tác duyệt quy trình.
 // Bốn đường nhập liệu là: WebSocket của dashboard,
 // tin nhắn đến từ Telegram/Zalo (phiên riêng theo chat_id), và HAI chỗ trong phiên nghe nói
@@ -100,7 +102,13 @@ const ghiUser = (server.match(/append_message\([^)]*"user"/g) || []).length;
 // 0.64.66 thêm chỗ thứ sáu: lượt nối tiếp sau khi việc chạy nền xong (_start_followup_turn)
 // ghi tin mở lượt, có đánh dấu "[Việc chạy nền đã xong]", để mở lại hội thoại vẫn hiểu vì sao
 // Javis tự nói tiếp. Không phải chữ của mic nên không đụng luật "mic không tự gửi".
-check("chỉ 6 chỗ ghi vai user (web + bot + 2 Live + duyệt quy trình + nối tiếp việc nền)", ghiUser === 6, ghiUser);
+// 0.206.0 thêm chỗ thứ bảy: tin GÕ thêm trong lúc lượt đang chạy (action "steer", steer_inbox.py), ghi ngay khi tới để
+// lịch sử đúng thứ tự. Người dùng tự gõ và bấm gửi, không phải mic tự gửi.
+// 0.213.0 adds the eighth: a message typed on a chat channel (Telegram, Zalo...) while a turn runs is written to the
+// session when that turn reads it (steer_inbox sink in _tg_answer). Typed and sent by the owner, never the mic.
+// 0.236.0 adds the ninth, inside voice_live_ws: a message with files TYPED in the chat during a Live call (the "ask"
+// frame) is stored there instead of by an ordinary chat turn. Typed and sent by the owner, never the mic.
+check("chỉ 9 chỗ ghi vai user (web + bot + 3 Live + duyệt quy trình + nối tiếp việc nền + gửi thêm lúc đang chạy, web và kênh)", ghiUser === 9, ghiUser);
 check("chỗ thứ sáu nằm TRONG _start_followup_turn",
   /async def _start_followup_turn[\s\S]{0,1600}store\.append_message\(conv_sid, "user", text\)/.test(server));
 const approvalBody = server.slice(server.indexOf('if action == "wf_resume":'), server.indexOf('if action == "resume_now":'));
@@ -108,7 +116,7 @@ check("đường ghi thứ năm chỉ thuộc thao tác duyệt quy trình",
   (approvalBody.match(/append_message\([^)]*"user"/g) || []).length === 1
   && approvalBody.includes('store.append_message(_sid, "user", _msg)'));
 const liveBody = (server.match(/async def voice_live_ws\([\s\S]*?\n@app\./) || [""])[0];
-check("hai chỗ mới nằm TRONG voice_live_ws", (liveBody.match(/append_message\([^)]*"user"/g) || []).length === 2);
+check("ba chỗ nằm TRONG voice_live_ws (gõ chữ, câu đã nói, tin có file)", (liveBody.match(/append_message\([^)]*"user"/g) || []).length === 3);
 
 // ---- 5. cache-bust ----
 const v = (f) => Number((html.match(new RegExp(f.replace(/\./g, "\\.") + "\\?v=(\\d+)")) || [])[1] || 0);

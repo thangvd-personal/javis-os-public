@@ -93,7 +93,112 @@
     return !!(el && el.classList && el.classList.contains("msg-user"));
   }
 
+  // Copy text to the clipboard, shared by the main chat, the Team chat and the code block Copy button. The clipboard
+  // API needs a secure context; on plain HTTP (a LAN or a VPS without https) or with the permission blocked it falls back
+  // to a hidden textarea and execCommand. Resolves true when the text was copied, false when every way failed; never
+  // rejects. `doc`/`nav`/`win` are for tests only.
+  function copy(text, env) {
+    env = env || {};
+    var doc = env.doc || (typeof document !== "undefined" ? document : null);
+    var nav = env.nav || (typeof navigator !== "undefined" ? navigator : null);
+    var win = env.win || (typeof window !== "undefined" ? window : {});
+    var s = String(text == null ? "" : text);
+    function fallback() {
+      if (!doc || !doc.body) return false;
+      var ok = false;
+      var ta = doc.createElement("textarea");
+      ta.value = s; ta.style.cssText = "position:fixed;opacity:0";
+      doc.body.appendChild(ta); ta.select();
+      try { ok = doc.execCommand("copy") !== false; } catch (e) { ok = false; }
+      ta.remove();
+      return ok;
+    }
+    try {
+      if (nav && nav.clipboard && nav.clipboard.writeText && win.isSecureContext) {
+        return Promise.resolve(nav.clipboard.writeText(s)).then(function () { return true; }, fallback);
+      }
+    } catch (e) { /* fall through to the textarea */ }
+    return Promise.resolve().then(fallback);
+  }
+
+  // Enter in a chat composer, shared by the main chat and the Team chat.
+  //  - A Vietnamese IME (or any IME) can fire keydown Enter before compositionend; sending and clearing the box then
+  //    lets the browser commit the composed letters into the cleared box. Some browsers report isComposing unreliably,
+  //    so the caller also tracks compositionstart/compositionend itself (trackComposition) and passes that flag.
+  //  - A touch screen (the MAIN pointer is a finger) keeps Enter as a new line like every messaging app: an on-screen
+  //    keyboard has no Shift+Enter, so sending on Enter would make a multi-line message impossible. Measured with
+  //    pointer: coarse, not screen width, so a touch laptop with a mouse still sends on Enter.
+  //  - Shift+Enter is a new line on a computer.
+  // `win` is for tests only.
+  function touchMain(win) {
+    win = win || (typeof window !== "undefined" ? window : null);
+    try { return !!(win && win.matchMedia && win.matchMedia("(pointer: coarse)").matches); } catch (e) { return false; }
+  }
+  function enterSends(e, composing, win) {
+    if (!e || composing || e.isComposing || e.keyCode === 229) return false;
+    if (e.key !== "Enter" || e.shiftKey) return false;
+    return !touchMain(win);
+  }
+  // Watch compositionstart/compositionend on `root` (the input itself, or a container whose inputs get redrawn: the
+  // events bubble). Returns a function that says whether an IME composition is running now.
+  function trackComposition(root) {
+    var on = false;
+    if (root && root.addEventListener) {
+      root.addEventListener("compositionstart", function () { on = true; });
+      root.addEventListener("compositionend", function () { on = false; });
+    }
+    return function () { return on; };
+  }
+
+  // The text the user has selected INSIDE `el` (a chat message), trimmed; "" when nothing is selected there. Quoting a
+  // message with part of it selected quotes just that part (main chat and Team chat). `win` is for tests only.
+  function selectedIn(el, win) {
+    win = win || (typeof window !== "undefined" ? window : null);
+    try {
+      var sel = win && win.getSelection && win.getSelection();
+      if (el && sel && !sel.isCollapsed && sel.rangeCount && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        return String(sel.toString() || "").trim();
+      }
+    } catch (e) { /* no selection API */ }
+    return "";
+  }
+
+  // Long messages the user wrote collapse to ten lines with "Show more" (main chat and Team chat): more than CLAMP_LINES
+  // lines or CLAMP_CHARS characters. The text sits in `.utext` (class `clamped` while collapsed) and the toggle is a
+  // `button.clamp-more` in the same bubble; one delegated listener below handles every chat container.
+  var CLAMP_LINES = 10, CLAMP_CHARS = 900;
+  function isLongText(text) {
+    var s = String(text == null ? "" : text);
+    return !!s && (s.split("\n").length > CLAMP_LINES || s.length > CLAMP_CHARS);
+  }
+  function clampButtonHtml(open) {
+    return '<button class="clamp-more" type="button">' + esc(tw(open ? "app.show_less" : "app.show_more")) + "</button>";
+  }
+  // Open or close the long message the button belongs to. Returns true when it is open after the click.
+  function toggleClamp(btn) {
+    var host = (btn.closest && btn.closest(".bubble, .tm-bubble")) || btn.parentNode;
+    var u = host && host.querySelector(".utext");
+    if (!u) return false;
+    u.classList.toggle("clamped");
+    var open = !u.classList.contains("clamped");
+    btn.textContent = tw(open ? "app.show_less" : "app.show_more");
+    return open;
+  }
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("click", function (e) {
+      var t = e.target;
+      if (t && t.classList && t.classList.contains("clamp-more")) toggleClamp(t);
+    });
+  }
+
   var API = {
+    copy: copy,
+    isLongText: isLongText,
+    clampButtonHtml: clampButtonHtml,
+    toggleClamp: toggleClamp,
+    selectedIn: selectedIn,
+    enterSends: enterSends,
+    trackComposition: trackComposition,
     fmtTime: fmtTime,
     fmtTimeFull: fmtTimeFull,
     actsHtml: actsHtml,

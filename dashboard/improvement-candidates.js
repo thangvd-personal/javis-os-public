@@ -1,0 +1,311 @@
+/* Exact private skill review. All returned text is data, never HTML or Markdown. */
+(function () {
+  "use strict";
+  let active = null, epoch = 0;
+  const enc = new TextEncoder();
+  const tr = key => t(["improve", key].join("."));
+  function node(tag, text, action) {
+    const el = document.createElement(tag);
+    if (text != null) el.textContent = String(text);
+    if (action) el.setAttribute("data-action", action);
+    return el;
+  }
+  function button(label, action, fn) {
+    const el = node("button", label, action); el.type = "button"; el.onclick = fn; return el;
+  }
+  function alive(s, version = s.version) {
+    return active === s && s.version === version && (!s.isCurrent || s.isCurrent())
+      && (!window.currentBrainPath || window.currentBrainPath() === s.brain);
+  }
+  function close() {
+    if (!active) return;
+    active.version++; clearInterval(active.watch); active.panel.remove(); active = null; epoch++;
+  }
+  function info(parent, text) {
+    const toggle = button(tr("explanation"), "explanation", null);
+    toggle.className = "info-i with-text"; toggle.setAttribute("aria-expanded", "false");
+    const body = node("div", text); body.className = "info-body"; body.hidden = true;
+    parent.append(toggle, body); // info-tip.js owns the delegated disclosure behavior.
+  }
+  function failure(s, error) {
+    if (!alive(s)) return;
+    const key = error.status === 409 ? "stale" : error.status === 400 ? "rejected" : "unavailable";
+    s.status.textContent = tr(key);
+  }
+  async function request(s, path, body) {
+    if (!alive(s)) throw Error("stale_panel");
+    const version = s.version;
+    const suffix = (path.includes("?") ? "&" : "?") + "brain=" + encodeURIComponent(s.brain);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(path + suffix, {credentials:"same-origin", signal:controller.signal,
+        ...(body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)})});
+      const value = await response.json();
+      if (!alive(s, version)) throw Error("stale_panel");
+      if (!response.ok || value.ok !== true) { const error = Error("request_unavailable"); error.status = response.status; throw error; }
+      return value;
+    } finally { clearTimeout(timer); }
+  }
+  function event(s, operation, payload) {
+    const fingerprint = operation + JSON.stringify(payload);
+    if (!s.events.has(fingerprint)) s.events.set(fingerprint, "candidate-ui-" + crypto.randomUUID());
+    return s.events.get(fingerprint); // Preserve the exact event through an uncertain transport retry.
+  }
+  async function write(s, path, payload, operation) {
+    const fingerprint = operation + JSON.stringify(payload), key = event(s, operation, payload);
+    const value = await request(s, path, {...payload, event_key:key});
+    // An acknowledged operation is complete; the next explicit click is a new
+    // intent. Unknown transport outcomes retain their key for an exact retry.
+    if (s.events.get(fingerprint) === key) s.events.delete(fingerprint);
+    return value;
+  }
+  async function exact(value) {
+    if (!value || typeof value.text !== "string" || !/^[a-f0-9]{64}$/.test(value.hash)) throw Error("exact_text_required");
+    const bytes = enc.encode(value.text);
+    if (bytes.length !== value.byte_size || bytes.length > 1048576) throw Error("exact_size_changed");
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), x=>x.toString(16).padStart(2,"0")).join("");
+    if (digest !== value.hash) throw Error("exact_hash_changed");
+    return bytes;
+  }
+  function content(s, parent, name, value, bytes, action) {
+    const version = s.version;
+    parent.append(node("h4", name), node("p", `${value.byte_size} ${tr("bytes")} · SHA-256 ${value.hash}`, action + "-facts"));
+    const pre = node("pre", value.text, action + "-text"); pre.tabIndex = 0; parent.append(pre);
+    parent.append(button(tr("download"), action + "-download", () => {
+      if (!alive(s, version)) return;
+      const url = URL.createObjectURL(new Blob([bytes], {type:"application/octet-stream"}));
+      const link = node("a"); link.href = url; link.download = action + ".txt"; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }));
+  }
+  function contextActive(s) {
+    return s.context && s.context.grant_status === "active" && s.context.base_generation === s.context.current_generation;
+  }
+  async function rows(s) {
+    const data = await request(s, "/improvement-candidates?experiment_id=" + encodeURIComponent(s.context.experiment_id));
+    if (!Array.isArray(data.candidates)) throw Error("candidate_metadata_required");
+    s.rows = data.candidates;
+    s.list.replaceChildren();
+    for (const row of s.rows) {
+      const card = node("div"); card.append(node("p", `${tr("proposal")} ${row.ordinal} · ${tr("semantic_pending")}`));
+      if (row.edit_authority) card.append(node("p", tr(row.edit_authority.status === "active" ? "edit_authorized" : "edit_revoked")));
+      card.append(button(tr("review"), "review-" + row.candidate_id, () => review(s, row.candidate_id)));
+      s.list.append(card);
+    }
+    if (!s.rows.length) s.list.append(node("p", tr("no_candidates")));
+    return s.rows;
+  }
+  async function review(s, candidateId) {
+    const version = s.version;
+    s.review.replaceChildren(); s.status.textContent = tr("loading");
+    try {
+      const value = (await request(s, "/improvement-candidates/" + encodeURIComponent(candidateId) + "/review", {})).review;
+      const before = await exact(value.before), after = await exact(value.after);
+      const current = (await rows(s)).find(row=>row.candidate_id === candidateId);
+      if (!alive(s, version)) return;
+      if (!current || value.candidate_id !== current.candidate_id || value.before.hash !== current.base_hash || value.after.hash !== current.content_hash
+          || value.metadata.base_generation !== current.base_generation) throw Error("candidate_metadata_changed");
+      content(s, s.review, tr("before"), value.before, before, "before");
+      content(s, s.review, tr("after"), value.after, after, "after");
+      for (const key of ["hypothesis", "failure_signature", "expected_behavior", "possible_regressions"]) {
+        s.review.append(node("h4", tr(key)), node("pre", Array.isArray(value[key]) ? value[key].join("\n") : value[key]));
+      }
+      s.review.append(node("p", tr("semantic_pending")));
+      const authorize = button(tr("authorize"), "authorize", async () => {
+        if (!alive(s, version) || authorize.disabled) return;
+        authorize.disabled = true;
+        try {
+          await write(s, "/improvement-candidates/" + encodeURIComponent(candidateId) + "/authorize", {
+            expected_generation:current.base_generation, before_hash:value.before.hash, after_hash:value.after.hash}, "authorize-" + candidateId);
+          await review(s, candidateId); // Read current authority, never render a historical event as current.
+        } catch (error) { failure(s, error); }
+      });
+      authorize.disabled = !contextActive(s) || current.context_grant.status !== "active" || !!current.edit_authority;
+      s.review.append(authorize);
+      if (current.edit_authority && current.edit_authority.status === "active") {
+        const authority = current.edit_authority;
+        const revoke = button(tr("revoke"), "revoke", async () => {
+          if (!alive(s, version) || revoke.disabled) return;
+          revoke.disabled = true;
+          try {
+            await write(s, "/improvement-edit-authorities/" + encodeURIComponent(authority.authority_id) + "/revoke",
+              {expected_generation:authority.generation}, "revoke-" + authority.authority_id);
+            await review(s, candidateId);
+          } catch (error) { failure(s, error); }
+        });
+        s.review.append(revoke);
+      }
+      s.status.textContent = tr(current.edit_authority ? (current.edit_authority.status === "active" ? "edit_authorized" : "edit_revoked") : "proposal");
+    } catch (error) { if (alive(s, version)) { s.review.replaceChildren(); failure(s, error); } }
+  }
+  function field(parent, key, kind = "textarea") {
+    const label = node("label", tr(key)), input = node(kind, null, key);
+    if (kind === "input") input.type = "number";
+    label.append(input); parent.append(label); return input;
+  }
+  // Textarea selection counts UTF-16 with LF-normalized newlines. Map it back to
+  // the original string first, then count UTF-8 bytes; reject split surrogates.
+  function selection(raw, shown, start, end) {
+    let normalized = "", positions = [0];
+    for (let i = 0; i < raw.length;) {
+      if (raw[i] === "\r" && raw[i + 1] === "\n") { normalized += "\n"; i += 2; positions.push(i); }
+      else { normalized += raw[i++]; positions.push(i); }
+    }
+    if (shown !== normalized || !Number.isInteger(start) || !Number.isInteger(end) || start > end || positions[end] === undefined) throw Error("selection_changed");
+    const boundary = n => n === 0 || n === raw.length || !(/[\uD800-\uDBFF]/.test(raw[n - 1]) && /[\uDC00-\uDFFF]/.test(raw[n]));
+    if (!boundary(positions[start]) || !boundary(positions[end])) throw Error("split_character");
+    return [enc.encode(raw.slice(0, positions[start])).length, enc.encode(raw.slice(0, positions[end])).length];
+  }
+  async function baseline(s) {
+    const version = s.version;
+    s.form.replaceChildren();
+    try {
+      if (!contextActive(s)) throw Error("context_unavailable");
+      const base = (await request(s, "/improvement-candidate-baselines/" + encodeURIComponent(s.context.experiment_id) + "/review", {target_id:s.context.target_id})).review;
+      const bytes = await exact(base.baseline);
+      if (!alive(s, version)) return;
+      if (base.target_id !== s.context.target_id || base.base_generation !== s.context.base_generation) throw Error("baseline_changed");
+      content(s, s.form, tr("before"), base.baseline, bytes, "baseline");
+      const select = field(s.form, "baseline-selection"); select.value = base.baseline.text; select.readOnly = true; select.rows = 8;
+      const start = field(s.form, "start", "input"), end = field(s.form, "end", "input");
+      start.value = String(base.editable_start); end.value = String(base.baseline.byte_size);
+      const replacement = field(s.form, "replacement");
+      s.form.append(button(tr("use_selection"), "use-selection", () => {
+        if (!alive(s, version)) return;
+        try { const bounds = selection(base.baseline.text, select.value, select.selectionStart, select.selectionEnd); start.value = String(bounds[0]); end.value = String(bounds[1]); }
+        catch (error) { failure(s, error); }
+      }));
+      const fields = {};
+      for (const key of ["hypothesis", "failure_signature", "expected_behavior", "possible_regressions"]) fields[key] = field(s.form, key);
+      const angle = node("select", null, "angle");
+      for (const key of ["execution", "domain_process"]) { const option = node("option", tr(key)); option.value = key; angle.append(option); }
+      angle.value = "execution"; const angleLabel = node("label", tr("angle")); angleLabel.append(angle); s.form.append(angleLabel);
+      const payload = () => ({experiment_id:s.context.experiment_id, patch:{version:1,target_id:base.target_id,base_revision_id:base.base_revision_id,
+        before_hash:base.baseline.hash,operation:"replace_body_region",start:Number(start.value),end:Number(end.value),replacement:replacement.value,
+        hypothesis:fields.hypothesis.value,failure_signature:fields.failure_signature.value,expected_behavior:fields.expected_behavior.value,
+        possible_regressions:fields.possible_regressions.value.split(/\r?\n/).filter(x=>x.trim()),evidence_refs:[],angle:angle.value}});
+      const stage = button(tr("stage"), "stage", async () => {
+        if (!alive(s, version) || stage.disabled) return;
+        stage.disabled = true;
+        let committed = false;
+        try {
+          const data = await write(s, "/improvement-candidates", payload(), "stage");
+          committed = true;
+          await rows(s); s.form.replaceChildren(); await review(s, data.candidate.candidate_id);
+        } catch (error) {
+          if (alive(s, version)) {
+            if (committed) s.status.textContent = tr("staged_refresh_required");
+            else { failure(s, error); stage.disabled = false; }
+          }
+        }
+      });
+      stage.disabled = s.rows.length >= 2; s.form.append(stage);
+      s.form.append(button(tr("declare_region"), "declare-region", async () => {
+        if (!alive(s, version)) return;
+        try {
+          await write(s, "/improvement-edit-regions", {experiment_id:s.context.experiment_id,base_revision_id:base.base_revision_id,
+            start:Number(start.value),end:Number(end.value),expected_target_generation:base.base_generation}, "region");
+          s.status.textContent = tr("region_authorized");
+        } catch (error) { failure(s, error); }
+      }));
+      s.status.textContent = tr("semantic_pending");
+    } catch (error) { if (alive(s, version)) failure(s, error); }
+  }
+  async function load(s) {
+    if (s.more) { s.more.remove(); s.more = null; }
+    try {
+      const data = (await request(s, "/improvement-candidate-contexts?slug=" + encodeURIComponent(s.slug))).contexts;
+      s.contexts = data.items; s.choose.replaceChildren();
+      for (let i = 0; i < s.contexts.length; i++) {
+        const row = s.contexts[i], date = new Date(row.created_at * 1000).toLocaleDateString();
+        const option = node("option", (row.objectives.map(x=>x.objective).join(" · ") || tr("prepared_context")) + " · " + date);
+        option.value = String(i); s.choose.append(option);
+      }
+      s.choose.value = "0";
+      const change = async () => {
+        s.version++; s.review.replaceChildren(); s.form.replaceChildren(); s.context = s.contexts[Number(s.choose.value)];
+        s.prepare.disabled = !contextActive(s);
+        if (s.context) await rows(s); else s.list.replaceChildren();
+        s.status.textContent = tr(!s.context ? "no_contexts" : !contextActive(s) ? "stale" : "semantic_pending");
+      };
+      s.choose.onchange = async () => { try { await change(); } catch (error) { failure(s, error); } };
+      await change();
+      if (data.next_cursor) {
+        const more = button(tr("more_contexts"), "more-contexts", async () => {
+          try {
+            const next = (await request(s, "/improvement-candidate-contexts?slug=" + encodeURIComponent(s.slug) + "&cursor=" + encodeURIComponent(data.next_cursor))).contexts;
+            data.next_cursor = next.next_cursor;
+            for (const row of next.items) { const option = node("option", (row.objectives.map(x=>x.objective).join(" · ") || tr("prepared_context")) + " · " + new Date(row.created_at * 1000).toLocaleDateString()); option.value = String(s.contexts.length); s.contexts.push(row); s.choose.append(option); }
+            more.disabled = !data.next_cursor;
+          } catch (error) { failure(s, error); }
+        }); s.more = more; s.panel.append(more);
+      }
+    } catch (error) { failure(s, error); }
+  }
+  function shell(brain, slug, isCurrent) {
+    close();
+    const panel = node("section"); panel.className = "improvement-candidate-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-label", tr("title"));
+    const s = {brain,slug,isCurrent,panel,version:++epoch,events:new Map(),rows:[]}; active = s;
+    panel.append(node("h2", tr("title")), button(tr("close"), "close", close));
+    info(panel, tr("scope_hint"));
+    s.status = node("p", tr("loading"), "status"); s.status.setAttribute("role", "status"); panel.append(s.status);
+    document.body.append(panel);
+    s.watch = setInterval(() => { if (active === s && !alive(s)) close(); }, 250);
+    panel.onkeydown = e => {
+      if (e.key === "Escape") close();
+      if (e.key === "Tab") {
+        const controls = Array.from(panel.querySelectorAll("button, input, textarea, select, a[href], [tabindex='0']")).filter(x=>!x.disabled && !x.hidden);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (controls.length && ((e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last))) {
+          e.preventDefault(); (e.shiftKey ? last : first).focus();
+        }
+      }
+    };
+    s.status.tabIndex = -1; s.status.focus();
+    return s;
+  }
+  async function open({brain, slug, isCurrent}) {
+    const s = shell(brain, slug, isCurrent);
+    const contextLabel = node("label", tr("context")); s.choose = node("select", null, "context"); contextLabel.append(s.choose); s.panel.append(contextLabel);
+    s.prepare = button(tr("load_baseline"), "load-baseline", () => baseline(s)); s.prepare.disabled = true; s.panel.append(s.prepare);
+    s.panel.append(button(tr("capture"), "capture", async () => {
+      if (!alive(s)) return;
+      s.version++; s.prepare.disabled = true; s.form.replaceChildren(); s.review.replaceChildren();
+      try { await write(s, "/improvement-targets/capture", {kind:"skill",slug:s.slug}, "capture"); await load(s); }
+      catch (error) { failure(s, error); }
+    }));
+    s.list = node("div"); s.form = node("div"); s.review = node("div"); s.panel.append(s.list, s.form, s.review);
+    const artifacts = node("details"); artifacts.append(node("summary", tr("artifact")));
+    const trial = field(artifacts, "trial_id", "input"); trial.type = "text";
+    const attempt = field(artifacts, "attempt", "input"); attempt.value = "1"; attempt.min = "1";
+    artifacts.append(button(tr("review_artifact"), "review-artifact", () => {
+      if (alive(s) && trial.value.trim() && Number.isSafeInteger(Number(attempt.value)) && Number(attempt.value) > 0) {
+        return openArtifact({brain:s.brain,trialId:trial.value.trim(),attempt:Number(attempt.value),isCurrent:s.isCurrent});
+      }
+      failure(s, {status:400});
+    }));
+    s.panel.append(artifacts);
+    await load(s);
+  }
+  async function openArtifact({brain, trialId, attempt, isCurrent}) {
+    const s = shell(brain, "", isCurrent);
+    try {
+      const value = (await request(s, "/improvement-trials/" + encodeURIComponent(trialId) + "/artifact-review", {attempt})).review;
+      const bytes = await exact(value.artifact);
+      const fixtures = [];
+      for (const entry of value.fixtures) fixtures.push([entry, await exact({text:entry.text,hash:entry.fixture_hash,byte_size:entry.byte_size})]);
+      if (!alive(s)) return;
+      s.panel.append(node("h3", tr("task")), node("pre", value.task), node("h3", tr("contract")), node("pre", JSON.stringify(value.contract, null, 2)));
+      content(s, s.panel, tr("artifact"), value.artifact, bytes, "artifact");
+      for (let i = 0; i < fixtures.length; i++) {
+        const [entry, raw] = fixtures[i];
+        const metadata = Object.fromEntries(["source_ref", "source_version", "timezone", "data_period", "cutoff", "schema"].map(key=>[key, entry[key]]));
+        s.panel.append(node("pre", JSON.stringify(metadata, null, 2), "fixture-" + i + "-metadata"));
+        content(s, s.panel, tr("fixture"), {text:entry.text,hash:entry.fixture_hash,byte_size:entry.byte_size}, raw, "fixture-" + i);
+      }
+      s.status.textContent = tr("artifact_review_only");
+    } catch (error) { failure(s, error); }
+  }
+  window.JavisImprovementCandidates = {open, openArtifact, close};
+})();

@@ -41,6 +41,16 @@ def hoi(args, cau: str, session: str = "") -> int:
     """Một lượt. Có tty thì đi SSE để thấy tiến độ; đổ vào pipe thì đi đường đồng bộ cho gọn."""
     c = _client(args)
     data = {"message": cau, "brain": _brain(args), "session": session, "host": _may()}
+    agent = (getattr(args, "agent", "") or "").strip()
+    if agent:
+        # The turn runs as this agent of the brain (its prompt, skills and model), in its own
+        # session on the server. Sent only when asked for, so a plain question is unchanged.
+        data["agent"] = agent
+    project = (getattr(args, "project", "") or "").strip()
+    if project:
+        # The server attaches the conversation to this project of the brain before the turn, and
+        # it stays there. Sent only when asked for, so a plain question is unchanged.
+        data["project"] = project
     dung_sse = sys.stderr.isatty() and not getattr(args, "quiet", False)
     if not dung_sse:
         d = c.post("/chat", data)

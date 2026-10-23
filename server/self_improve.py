@@ -75,6 +75,10 @@ LEGACY_SLUG = "vong-lap-goc"
 # loop legacy nữa, kể cả khi người dùng đã xoá nó (xem ensure_migrated).
 MIGRATED_KEY = "loops_migrated"
 GOALS = ("business", "brain", "product", "custom")
+# Tail of earlier rounds handed to the next round (see LoopFeature._previous_rounds_block).
+PREV_ROUNDS_MAX = 5
+PREV_ROUND_CHARS = 600
+PREV_ROUNDS_TOTAL_CHARS = 2000
 
 # Chỉ dẫn cho loop chạy ở hai mức NHẸ (suggest/auto) mà chủ tự chọn: mức này chỉ đọc MCP và
 # ghi nháp, hub chặn hành động ra ngoài nên nói thẳng cho model biết để nó không gọi rồi hỏng.
@@ -140,6 +144,16 @@ def _in_quiet_hours(spec: str, hour: int) -> bool:
     return (a <= hour < b) if a < b else (hour >= a or hour < b)
 
 
+def _accepts(fn, name: str) -> bool:
+    """`fn` takes keyword `name` (or **kwargs). Lets a report hook gain fields without breaking test fakes."""
+    import inspect
+    try:
+        ps = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return any(p.name == name or p.kind is p.VAR_KEYWORD for p in ps)
+
+
 @dataclass
 class LoopDeps:
     """Các helper của main.py được tiêm vào (tránh import vòng)."""
@@ -160,6 +174,8 @@ class LoopDeps:
     # Đổi engine việc nền theo model phụ người dùng chọn (Claude / Codex / API rẻ).
     # None = giữ nguyên Claude như trước (test dựng deps tối giản không cần tiêm).
     aux_swap: Optional[Callable] = None
+    # 0.199.0: (source, ref, brain=, title=, error=, request=) -> report a broken run to Javis Core (incident_desk.py).
+    incident_hook: Optional[Callable] = None
 
 
 class LoopFeature:
@@ -658,6 +674,55 @@ class LoopFeature:
                 entries.extend(reversed(chunks))
         return entries[:limit]
 
+    def _previous_rounds_block(self, brain: str, slug: str) -> str:
+        """A short tail of this loop's earlier rounds, appended to the next round's prompt.
+
+        Each round runs in a fresh, isolated session, so until this fix a loop told "suggest 1 new
+        page, do not repeat earlier rounds" had no way to know what earlier rounds said: two
+        manual runs one minute apart suggested the same wiki page, and the model wrote that it
+        "found no record of previous rounds" (customer report 0.270, Code 16). The rounds are
+        already logged in Javis/loop-log/ (the Recurring work page reads the same entries), so
+        the tail comes from there, with the state's last_summary as a fallback when the log is
+        missing. Bounded: at most PREV_ROUNDS_MAX entries, each cut to PREV_ROUND_CHARS, the
+        whole block to PREV_ROUNDS_TOTAL_CHARS. Failed rounds are left out: an error line says
+        nothing about what was already suggested or done.
+        """
+        picked: List[str] = []
+        used = 0
+        try:
+            entries = self._read_log_entries(brain, slug, PREV_ROUNDS_MAX * 3)
+        except Exception:
+            entries = []
+        for chunk in entries:
+            head, _, body = chunk.partition("\n")
+            body = body.strip()
+            if not body or body.startswith("Lỗi:"):
+                continue
+            m = re.match(r"## \[([^\]]+)\]", head)
+            stamp = m.group(1) if m else ""
+            if len(body) > PREV_ROUND_CHARS:
+                body = body[:PREV_ROUND_CHARS].rstrip() + " [...]"
+            item = f"### Vòng {stamp}\n{body}"
+            if used + len(item) > PREV_ROUNDS_TOTAL_CHARS:
+                break
+            picked.append(item)
+            used += len(item)
+            if len(picked) >= PREV_ROUNDS_MAX:
+                break
+        if not picked:
+            st = (self.read_state(brain).get(slug) or {})
+            last = str(st.get("last_summary") or "").strip()
+            if last and not last.startswith("Lỗi:") and st.get("last_status") != "no-data":
+                picked.append("### Vòng gần nhất\n" + last[:PREV_ROUND_CHARS])
+        if not picked:
+            return ("\n\nNHẬT KÝ CÁC VÒNG TRƯỚC: chưa có vòng nào của loop này được ghi lại, "
+                    "đây là vòng đầu tiên.\n")
+        return (
+            "\n\nNHẬT KÝ CÁC VÒNG TRƯỚC CỦA LOOP NÀY (mới nhất trước, đã rút gọn). Đây là kết quả "
+            "THẬT của các vòng đã chạy: nếu nhiệm vụ bảo không lặp lại thì KHÔNG đề xuất hay làm lại "
+            "đúng thứ đã có dưới đây, chọn cái khác.\n" + "\n\n".join(picked) + "\n"
+        )
+
     # ══════════════════════ 1 vòng (giữ khung 4 bước bản gốc) ══════════════════════
 
     async def _build_prompt(self, loop: dict) -> Tuple[str, str]:
@@ -881,8 +946,8 @@ class LoopFeature:
                 body += f"\n\n⚠ **{patch['auto_paused_reason']}** - bật lại hoặc bấm Chạy ngay để tiếp tục."
             self._log_append(brain, {"title": title, "body": body})
             # BÁO CÁO mỗi vòng cho NGƯỜI YÊU CẦU loop (mặc định của Javis; đặt notify: false
-            # trong frontmatter để tắt loop nào quá ồn). owner_chat rỗng (loop tạo trên web) →
-            # helper report tự gửi ID Telegram đầu tiên.
+            # trong frontmatter để tắt loop nào quá ồn). owner_chat rỗng → Javis Core của brain loop
+            # (0.186.0; trước đây là ID Telegram đầu tiên).
             report_sent = False
             # Thẻ cho khung chat web (dashboard/chat-viec.js, 0.64.49): dòng đầu thẻ đã nói
             # trạng thái và tên loop, nên bản web bỏ câu đầu có emoji.
@@ -912,16 +977,28 @@ class LoopFeature:
                     # thông báo - lúc đó cái đáng báo (loop hỏng, loop tự tạm dừng) cũng mất
                     # theo. Đây đúng luật việc Kanban đã theo từ 01/09/2026: chỉ thứ CẦN
                     # người dùng ra tay mới được kêu.
+                    # 0.186.0: the loop's own brain (an empty owner_chat lands in that brain's Javis Core) and a key
+                    # per run, so a retried report is filed once.
+                    kw = {}
+                    if _accepts(self.deps.report, "brain"):
+                        kw = {"brain": vault_root, "dedup": f"loop:{vault_root}:{slug}:{patch['last_run']}"}
                     asyncio.create_task(self.deps.report(
                         loop.get("owner_chat", ""),
                         channel_context.strip_control_blocks("\n\n".join(parts)),
                         quiet=not (failed or paused_now), viec=viec,
-                        web=channel_context.strip_control_blocks("\n\n".join(parts[1:]) or parts[0])))
+                        web=channel_context.strip_control_blocks("\n\n".join(parts[1:]) or parts[0]), **kw))
                     report_sent = True
                 except Exception:
                     pass
             # Auto-pause: broadcast tới MỌI admin (sự kiện an toàn hiếm). Bỏ nếu báo-mỗi-vòng đã
             # gửi chủ loop rồi (tránh nhắn trùng ở setup 1 người dùng).
+            if paused_now and self.deps.incident_hook:
+                try:
+                    self.deps.incident_hook("loop", f"{vault_root}::{slug}", brain=vault_root,
+                                            title=str(loop.get("name") or slug), error=summary[:1500],
+                                            request=str(loop.get("body") or "")[:1500])
+                except Exception:
+                    pass
             if paused_now and self.deps.notify and not report_sent:
                 try:
                     asyncio.create_task(self.deps.notify(
@@ -951,8 +1028,10 @@ class LoopFeature:
             self._update_state(brain, slug, last_run=time.time(), last_summary=skip[:200],
                                last_status="no-data")
             return {"ok": True, "summary": skip}
+        # Read the tail BEFORE this round is logged, so it holds earlier rounds only.
+        prompt += self._previous_rounds_block(brain, slug)
 
-        sysprompt = self.deps.build_system_prompt(brain)
+        sysprompt =self.deps.build_system_prompt(brain)
         gcli = self._make_cli(loop, cwd, sysprompt, brain=brain)
         if gcli is None:
             return _finish("Lỗi: không tạo được file MCP rỗng để cô lập (profile code từ chối chạy)", "", True)

@@ -10,6 +10,9 @@
   const editor = document.getElementById("studioEditor");
   const brain = () => (window.currentBrainPath ? currentBrainPath() : "brain");
   const esc = (s) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  // 0.214.0: the (i) button and its hidden block (info-tip.js); without it the text is drawn open.
+  const infoBtn = () => (window.JavisInfo ? window.JavisInfo.btn(t("info.more")) : "");
+  const infoBody = (html) => (window.JavisInfo ? window.JavisInfo.body(html) : `<div class="info-body">${html}</div>`);
   const api = async (p, o) => {
     // Timeout 12s → loader hiện trạng thái rỗng thay vì kẹt "Đang tải..." mãi nếu server chậm/treo.
     const ctrl = new AbortController();
@@ -337,13 +340,15 @@
     cards.innerHTML = "";
     wfs.forEach(w => {
       const active = w.status === "active";
+      // A long description shows two lines on the card; the full text sits behind the (i) next to the name.
+      const dai = String(w.description || "").length > 80;
       const div = document.createElement("div");
       div.className = "wf-row" + (active ? "" : " archived");
       div.dataset.slug = w.slug;
       div.innerHTML = `
         <div class="wf-header">
           <input type="checkbox" class="wf-sel" data-slug="${esc(w.slug)}" title="${esc(t("studio.sel_one"))}">
-          <div class="wf-name">${esc(w.name)}</div>
+          <div class="wf-name">${esc(w.name)}${dai ? infoBtn() : ""}</div>
           <span class="wf-badge ${active ? "ready" : "off"}">${esc(active ? t("studio.ready") : t("studio.archived"))}</span>
           <span class="wf-group">${ic("folder-open")} ${esc(nhomCua(w))}</span>
           <span class="wf-count">${(w.steps || []).length} ${esc(t("studio.steps"))}</span>
@@ -356,7 +361,8 @@
             <button class="s-btn-ghost del">${esc(t("common.delete"))}</button>
           </div>
         </div>
-        ${w.description ? `<div class="wf-desc">${esc(w.description)}</div>` : ''}
+        ${w.description ? `<div class="wf-desc${dai ? " j-clamp2" : ""}">${esc(w.description)}</div>` : ''}
+        ${dai ? infoBody(esc(w.description)) : ""}
         <div class="wf-pipeline">${renderPipeline(w.steps)}</div>`;
       noiSel("workflow", "wfDl", div.querySelector(".wf-sel"), w.slug);
       div.querySelector(".exp").onclick = () => exportItem("workflow", w.slug);
@@ -747,15 +753,26 @@
     if (opts.host && !box.isConnected) return;
     let avatar = window.JavisAvatar ? (a ? window.JavisAvatar.of(a) : window.JavisAvatar.random()) : null;
     box.classList.add("agent-editor");
-    box.innerHTML = `<h3>${esc(a ? t("studio.edit") : t("studio.create"))} Agent</h3>
+    // 0.175.0: câu giải thích dài của Tài liệu và Model nằm sau nút i cạnh nhãn (info-tip.js); câu báo việc cần làm (chưa
+    // lưu nên chưa gắn tài liệu được, chưa kết nối nhà cung cấp nào) vẫn hiện thẳng.
+    const JI = window.JavisInfo;
+    // 0.193.0: the assistant's own reasoning level (default medium) and, from a team, a button to message it privately.
+    // Same English level names as the main chat's effort chip (eff.*, owner 22/10/2026).
+    const REASONING = [["off", "eff.off"], ["low", "eff.low"], ["medium", "eff.medium"], ["high", "eff.high"],
+                       ["xhigh", "eff.xhigh"], ["ultra", "eff.ultra"]];
+    const curReason = (a && a.reasoning) || "medium";
+    const chatBtn = opts.chatButton && a && a.slug
+      ? `<button type="button" class="s-btn-ghost ag-chat-btn" id="agChat">${ic("message-circle")} ${esc(t("studio.chat_private"))}</button>` : "";
+    box.innerHTML = `<div class="ag-head"><h3>${esc(a ? t("studio.edit") : t("studio.create"))} Agent</h3>${chatBtn}</div>
       <div class="agent-avatar-picker" id="agAvatar"></div>
       <label>${esc(t("studio.name"))}</label><input id="agName" value="${esc(a ? a.name : "")}">
       <label>${esc(t("studio.role"))}</label><input id="agRole" value="${esc(a ? a.role : "")}">
-      <label for="agAssets">${esc(t("studio.assets"))}</label>
+      <label for="agAssets">${esc(t("studio.assets"))}${a && a.slug && JI ? JI.btn(t("info.more")) : ""}</label>
       <div class="ag-assets">
         <button type="button" class="s-btn-ghost" id="agAssets"${a && a.slug ? "" : " disabled"}>${ic("paperclip")} ${esc(t("studio.assets_open"))}</button>
-        <div class="dim ag-assets-hint">${esc(a && a.slug ? t("studio.assets_hint") : t("studio.assets_new"))}</div>
+        ${a && a.slug && JI ? "" : `<div class="dim ag-assets-hint">${esc(a && a.slug ? t("studio.assets_hint") : t("studio.assets_new"))}</div>`}
       </div>
+      ${a && a.slug && JI ? JI.body(`<div class="dim ag-assets-hint">${esc(t("studio.assets_hint"))}</div>`) : ""}
       <label>${esc(t("studio.sys_prompt"))}</label><textarea id="agPrompt" rows="4">${esc(a ? (a.prompt || "") : "")}</textarea>
       <label>Skills</label>
       ${skills.length ? `<div class="sp-box">
@@ -764,7 +781,7 @@
           <button type="button" class="s-btn-ghost sp-clear" id="spClear">${esc(t("studio.sp_clear"))}</button></div>
         <div class="sp-groups" id="skillPick"></div>
       </div>` : `<div class="skill-pick"><span class="dim">${esc(t("studio.sp_none"))}</span></div>`}
-      <label for="agModelBtn">Model</label>
+      <label for="agModelBtn">Model${coKetNoi && JI ? JI.btn(t("info.more")) : ""}</label>
       <div class="ag-model-pick" id="agModelPick">
         <button type="button" class="ag-model-btn" id="agModelBtn">
           <span id="agModelTxt">${esc(nhanModel())}</span>${ic("chevron-down")}
@@ -772,9 +789,11 @@
         <input type="hidden" id="agModel" value="${esc(mModel ? val(mProv, mModel) : "")}">
         <div class="mb-pop ag-model-pop" id="agModelPop" hidden></div>
       </div>
-      <div class="dim" style="font-size:12px;margin-top:4px">${esc(coKetNoi
-        ? t("studio.model_hint")
-        : t("studio.model_none"))}</div>
+      ${coKetNoi && JI ? JI.body(`<div class="dim" style="font-size:12px">${esc(t("studio.model_hint"))}</div>`)
+        : `<div class="dim" style="font-size:12px;margin-top:4px">${esc(coKetNoi ? t("studio.model_hint") : t("studio.model_none"))}</div>`}
+      <label for="agReasoning">${esc(t("studio.reasoning"))}${JI ? JI.btn(t("info.more")) : ""}</label>
+      <select id="agReasoning">${REASONING.map(([v, k]) => `<option value="${v}"${v === curReason ? " selected" : ""}>${esc(t(k))}</option>`).join("")}</select>
+      ${infoBody(`<div class="dim" style="font-size:12px">${esc(t("studio.reasoning_hint"))}</div>`)}
       <div class="editor-actions"><button class="s-btn-ghost" id="cancelEd"${opts.host ? ' style="display:none"' : ""}>${esc(t("common.cancel"))}</button><button class="s-btn" id="saveAg">${esc(t("common.save"))}</button></div>`;
     if (window.JavisAvatar) window.JavisAvatar.picker(box.querySelector("#agAvatar"), avatar, v => { avatar = v; });
     // TÀI LIỆU & LINK của trợ lý: mở ĐÚNG ngăn kéo mà project và cuộc trò chuyện đang dùng
@@ -870,6 +889,11 @@
     // nó đã bị ẩn ở trên; giữ handler để bấm nhầm bằng bàn phím cũng không đóng modal người
     // khác đang mở.
     box.querySelector("#cancelEd").onclick = () => { if (opts.host) return; moDong(false); };
+    const nutChat = box.querySelector("#agChat");
+    if (nutChat) nutChat.onclick = () => {
+      moDong(false);
+      if (window.JavisWorkspace && window.JavisWorkspace.openCommand) window.JavisWorkspace.openCommand("agent", a.slug);
+    };
     box.querySelector("#saveAg").onclick = async () => {
       const name = box.querySelector("#agName").value.trim(); if (!name) return alert(t("studio.need_name"));
       const sk = [...chosen].join(",");
@@ -884,6 +908,7 @@
         // người dùng vừa đổi ở cột trái. Server thấy thiếu field là giữ nguyên nhóm đang có.
         const saved = await api("/agents", { method: "POST", body: fd({ name, role: box.querySelector("#agRole").value,
           prompt: box.querySelector("#agPrompt").value, skills: sk, model: mName, model_provider: mProv,
+          reasoning: (box.querySelector("#agReasoning") || {}).value || "medium",
           slug: a ? a.slug : "", brain: brain(), ...(avatar ? window.JavisAvatar.formFields(avatar) : {}) }) });
         if (!saved.ok) { alert(loiLuu(saved.error)); return; }
         moDong(false);
@@ -1043,11 +1068,11 @@
     .sk3-bulk-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .sk3-bulk-row strong{font-size:14.5px;margin-right:auto}
     .sk3-bulk-row.sub{font-size:13px}
-    .sk3-bulk-hint{margin-right:auto;opacity:.78;flex:1 1 260px;line-height:1.45}
     .sk3-bulk button{height:34px;padding:0 12px;border-radius:8px;border:1px solid color-mix(in srgb, var(--bg) 35%, transparent);background:transparent;color:var(--bg);font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
     .sk3-bulk button.main{border:0;background:var(--accent-solid);color:var(--on-accent);font-weight:600;height:38px;padding:0 16px;font-size:14px}
     .sk3-bulk button.link{border:0;text-decoration:underline}
     .sk3-bulk button:disabled{opacity:.55;cursor:wait}
+    .sk3-bulk .info-i{height:20px;padding:0;border:0;color:inherit;opacity:.8}   /* (i) on the dark bar, not a bar button */
     .sk3-detail{flex:0 0 360px;max-width:400px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;padding:18px;border:1px solid var(--hairline);border-radius:14px;background:var(--panel-solid);box-shadow:var(--shadow-2)}
     .sk3-detail[hidden],.sk3-scrim[hidden],#skBulk[hidden],.sk3-d-sec[hidden]{display:none}   /* display:flex đè thuộc tính hidden */
     .sk3-d-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
@@ -1070,7 +1095,6 @@
     .sk3-d-act button{height:40px;padding:0 14px;border-radius:9px;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hairline);background:var(--panel-solid);color:var(--text)}
     .sk3-d-act button.pri{border:0;background:var(--accent-solid);color:var(--on-accent);font-weight:600}
     .sk3-d-act button.del{margin-left:auto;border:0;background:transparent;color:var(--red)}
-    .sk3-d-act .sk3-sysnote{flex-basis:100%;margin:0;font-size:12.5px;line-height:1.5;color:var(--text3)}
     .sk3-scrim{position:fixed;inset:0;background:var(--scrim);z-index:59;display:none}
     /* Form sửa: một cột, nút Lưu ở cuối (chủ repo: trang cài đặt xếp một cột). */
     .sk3-form{display:flex;flex-direction:column;gap:18px;max-width:720px}
@@ -1111,7 +1135,6 @@
       .sk3-merged{display:none}
       .sk3-top{flex-wrap:wrap;gap:10px}
       .sk3-top h3{flex:1 1 100%}
-      .sk3-bulk-hint{flex-basis:100%;font-size:12.5px}
       .sk3-pick{width:44px}
       .sk3-pick input,.sk3-all input{width:20px;height:20px}
       .sk3-nm{font-size:16px}
@@ -1319,8 +1342,9 @@
     if (!n) { bar.hidden = true; bar.innerHTML = ""; return; }
     bar.hidden = false;
     bar.innerHTML = `<div class="sk3-bulk" role="region" aria-label="${esc(t("studio.sk_picked", { n }))}">
-      <div class="sk3-bulk-row"><strong>${esc(t("studio.sk_picked", { n }))}</strong><button type="button" class="main" id="skBulkExport">${ic("download")} ${esc(t("studio.sk_export_n", { n }))}</button></div>
-      <div class="sk3-bulk-row sub"><span class="sk3-bulk-hint">${esc(t("studio.sk_export_hint"))}</span><button type="button" id="skBulkOn">${esc(t("studio.sk_bulk_on"))}</button><button type="button" id="skBulkOff">${esc(t("studio.sk_bulk_off"))}</button><button type="button" class="link" id="skBulkClear">${esc(t("studio.sk_bulk_clear"))}</button></div></div>`;
+      <div class="sk3-bulk-row"><strong>${esc(t("studio.sk_picked", { n }))}${infoBtn()}</strong><button type="button" class="main" id="skBulkExport">${ic("download")} ${esc(t("studio.sk_export_n", { n }))}</button></div>
+      ${infoBody(esc(t("studio.sk_export_hint")))}
+      <div class="sk3-bulk-row sub"><button type="button" id="skBulkOn">${esc(t("studio.sk_bulk_on"))}</button><button type="button" id="skBulkOff">${esc(t("studio.sk_bulk_off"))}</button><button type="button" class="link" id="skBulkClear">${esc(t("studio.sk_bulk_clear"))}</button></div></div>`;
     document.getElementById("skBulkExport").onclick = () => taiDaChon("skill");
     document.getElementById("skBulkOn").onclick = () => batTatLoat(true);
     document.getElementById("skBulkOff").onclick = () => batTatLoat(false);
@@ -1412,8 +1436,9 @@
       : t("studio.sk_no_usage");
     const duongDan = (s.source === ".agents" ? ".agents/skills/" : "skills/") + s.slug + "/SKILL.md";
     box.innerHTML = `
-      <div class="sk3-d-head"><div><h4>${esc(s.name)}</h4><div class="sk3-d-sub">${esc(nhomCua(s))} · ${esc(s.system ? t("studio.sk_system_lbl") : t("studio.sk_by_you"))}</div></div>
+      <div class="sk3-d-head"><div><h4>${esc(s.name)}</h4><div class="sk3-d-sub">${esc(nhomCua(s))} · ${esc(s.system ? t("studio.sk_system_lbl") : t("studio.sk_by_you"))}${s.system ? infoBtn() : ""}</div></div>
         <button type="button" class="sk3-x" aria-label="${esc(t("studio.sk_close"))}">${ic("x")}</button></div>
+      ${s.system ? infoBody(esc(t("studio.sk_sys_note"))) : ""}
       <div class="sk3-d-state"><span>${esc(on ? t("studio.sk_state_on") : t("studio.sk_state_off"))}</span>
         <button type="button" class="sk3-sw" role="switch" aria-checked="${on}" aria-label="${esc(t("studio.sk_sw_aria", { ten: s.name }))}"><span class="sk3-tr"><span class="sk3-kn"></span></span></button></div>
       <section class="sk3-d-sec"><h5><span>${esc(t("studio.sk_desc_h"))}</span><span class="sk3-n${len > SKILL_DESC_MAX ? " over" : ""}">${esc(t("studio.sk_chars", { n: len, max: SKILL_DESC_MAX }))}</span></h5>
@@ -1424,12 +1449,20 @@
         <p class="sk3-path">${esc(t("studio.sk_file"))}: <code>${esc(duongDan)}</code></p></section>
       <details class="sk3-full"><summary>${esc(t("studio.sk_full"))}</summary><div class="sk3-md" id="skMd">${esc(t("common.loading"))}</div></details>
       <div class="sk3-d-act"><button type="button" class="pri" id="skDEdit">${ic("pencil")} ${esc(t("common.edit"))}</button>${s.system
-        ? `<p class="sk3-sysnote">${esc(t("studio.sk_sys_note"))}</p>`
+        ? ""
         : `<button type="button" id="skDExp" title="${esc(t("studio.export_title"))}">${ic("download")} ${esc(t("studio.sk_export_one"))}</button><button type="button" class="del" id="skDDel">${ic("trash-2")} ${esc(t("common.delete"))}</button>`}</div>`;
     box.querySelector(".sk3-x").onclick = dongChiTiet;
     const sw = box.querySelector(".sk3-sw");
     sw.onclick = () => { sw.disabled = true; toggleSkill(s, !on); };
     box.querySelector("#skDEdit").onclick = () => openSkillForm(s.slug);
+    if (on && !s.system && s.source !== ".agents" && window.JavisImprovementCandidates) {
+      const improve = document.createElement("button");
+      improve.type = "button";
+      improve.textContent = t("improve.title");
+      improve.onclick = () => window.JavisImprovementCandidates.open({brain:brain(), slug:s.slug,
+        isCurrent:() => _skState.open === s.slug && _skState.skills.some(x => x.slug === s.slug && x.enabled !== false && !x.system)});
+      box.querySelector(".sk3-d-act").append(improve);
+    }
     const exp = box.querySelector("#skDExp"); if (exp) exp.onclick = () => exportItem("skill", s.slug);
     const del = box.querySelector("#skDDel"); if (del) del.onclick = () => deleteSkill(s.slug, s.name);
     napThanSkill(s.slug);
@@ -1481,9 +1514,10 @@
           <select id="skGroupSel" class="js-input">${opts}</select>
           <input id="skGroupNew" class="js-input" placeholder="${esc(t("studio.sk_group_ph"))}" value="${esc(nhomChon ? "" : (sk.group || ""))}"${nhomChon ? " hidden" : ""}>
           <span class="hint">${esc(t("studio.sk_group_hint"))}</span></div>
-        <div class="fld"><div class="row"><label for="skDesc">${esc(t("studio.sk_desc_lbl"))}</label><span class="hint" id="skDescN"></span></div>
+        <div class="fld"><div class="row"><label for="skDesc">${esc(t("studio.sk_desc_lbl"))}${infoBtn()}</label><span class="hint" id="skDescN"></span></div>
           <textarea id="skDesc" class="js-input" style="min-height:76px">${esc(sk.description || "")}</textarea>
-          <span class="hint" id="skDescHint">${esc(t("studio.sk_desc_hint", { max: SKILL_DESC_MAX }))}</span></div>
+          ${infoBody(esc(t("studio.sk_desc_hint", { max: SKILL_DESC_MAX })))}
+          <span class="hint" id="skDescHint" hidden></span></div>
         <div class="fld"><div class="row"><span class="lbl">${esc(t("studio.sk_body_lbl"))}</span>
             <div class="tabs" role="tablist"><button type="button" role="tab" class="sel" aria-selected="true" data-tab="edit">${esc(t("studio.sk_tab_edit"))}</button><button type="button" role="tab" aria-selected="false" data-tab="preview">${esc(t("studio.sk_tab_preview"))}</button></div></div>
           <textarea id="skBody" class="js-input" aria-label="${esc(t("studio.sk_body_lbl"))}" style="min-height:260px;font-family:ui-monospace,monospace">${esc(sk.body || "")}</textarea>
@@ -1500,7 +1534,8 @@
       $("#skDescN").classList.toggle("over", over);
       desc.classList.toggle("over", over);
       const h = $("#skDescHint");
-      h.textContent = over ? t("studio.sk_desc_over", { n, max: SKILL_DESC_MAX }) : t("studio.sk_desc_hint", { max: SKILL_DESC_MAX });
+      h.textContent = over ? t("studio.sk_desc_over", { n, max: SKILL_DESC_MAX }) : "";
+      h.hidden = !over;
       h.classList.toggle("over", over);
       return over;
     };

@@ -32,6 +32,14 @@ On narrow screens, use the list and details buttons to open the side drawers. Sw
 
 Partner conversations are separate from Javis's main chat history. Returning to a partner resumes its most recent conversation.
 
+### Unread messages and muting
+
+From 0.205.0 the partner list works like a message list:
+
+- A partner with a new message (you wrote, the partner replied, or a background job reported into its chat) **moves to the top**. Javis Core and the **Pinned** ones still come first.
+- A partner card shows its **unread count** in the bottom corner, next to the time. Opening that partner's chat clears it, in every open tab.
+- Each card's **⋮** button has **Mute notifications**, with **For 1 hour**, **For 4 hours**, **Until 8:00 AM** or **Until turned back on**. A muted card shows a crossed-out bell and a grey unread count. Messages still reach the chat and the bell, just without a sound or a push notification. Press **Unmute notifications** to turn them back on.
+
 ## Creating, searching and Javis Store
 
 Choose a tab and use the create agent or workflow button at the bottom of the left column. **Javis Store** opens the matching package catalogue. Agents are sorted by **tags**, workflows by **group** (see below).
@@ -205,6 +213,62 @@ You can package an agent, skill or workflow into **one `.zip`** to send to someo
 - **Safety:** on import, Javis blocks unusual paths inside the package (nothing may be written outside the agent/skill/workflow folders) and limits the size to guard against malicious files. Even so, only import packages from sources you trust, because skill content is instructions the AI follows.
 
 Note: an exported package only contains definition files. **An agent's memory and run log do not travel with it**, so the recipient gets the role and the skills, not the memories.
+
+## Share a whole Team
+
+On the Teams page, a team's **⋯** menu has **Share team**: it downloads one `.team.javis.zip` file with the team's partners, their skills, the leader and the pinned messages (as shared instructions). The file holds **no** chat history, keys, passwords, models or Auto switches; text that looks like an API key, a bot token or a `password: ...` line is replaced with `[REDACTED]` before writing.
+
+The person who receives it presses **Import team** at the top of the team list, picks the file, sees which partners and how many skills come in, and confirms. A partner already in the brain under the same name keeps the receiver's version; models and Auto are the receiver's choice afterwards. An older Javis can still open the file with the Import button on the Partners page (it then adds the partners without building the team).
+
+Every chat turn that creates, edits or removes a schedule, loop, partner, workflow or skill also leaves a small line under the answer ("Created schedule: ..."). New items get an **Undo** button: it cancels the schedule or deletes the loop, partner, workflow or skill just created.
+
+## A Team waiting for your approval (from 0.207.0)
+
+In a job given to a Team, when a member needs your decision (pick a plan, spend money, send or post something outside) that step **really stops**: the job moves to **Waiting for your approval**, frees the team's slot for its other jobs, and the chat shows an **Approval request** card with what will be done, the scope, the impact, the evidence and the exact calls that will run. Before, "@Owner please approve?" was taken as the result and the job closed itself.
+
+- **Approve**: the member carries on in a new step, and only the exact approved calls run, each once. A restart or a rerun of the step never repeats an action that already ran.
+- **Ask for changes**: write what should change; the member brings a new proposal (as a new card).
+- **Reject**: write the reason; the job stops there, and you edit the job to give a new direction or cancel it.
+- **Revoke approval**: take back an approval that was not used yet.
+
+Editing or cancelling the job voids its old cards. Words in the chat (yours or a member's) never stand in for the Approve button. Each click carries its own key, so a retry on a flaky connection does not act twice, and a second tab is told the request was already decided.
+
+**The team's permission** (Team tab, **The team's outside actions**):
+- **Needs your approval** (default, older teams too): members read, search, write files in the brain and the team folder, and run read-only commands on their own. Sending, posting, paying, ordering, deleting data or other machine commands are stopped BEFORE they run and become an approval card.
+- **The team acts without asking**: the same rights as your private chat with each member (how Teams ran from 0.194.0 to 0.206.0).
+
+With Needs your approval, Claude Code, Codex (with its own sandbox) and the API-key brains stop an action before it runs. Grok Build only does the in-scope part (an approved action cannot run on Grok). Antigravity cannot stop its own tools, so that step is refused with an explanation: move the member to another brain or turn on "The team acts without asking".
+
+## A Team's department mandate (from 0.208.0)
+
+The Team tab has a **Department mandate** section. Older teams have none, so nothing runs on its own until you set one and press **Turn on**.
+
+- **Outcome**: what this team is for. **How it is measured**: one criterion per line.
+- **Granted sources**, one per line: `folder:reports` (a folder in the brain), `kanban` (failed Kanban jobs of the brain), `mcp:<connection id>` (whether a connection is down), `test:<check command>` (runs at the Coding page's auto level, so it can run code such as `pytest` or `npm test`; only you can set it; a non-zero exit or more than 2 minutes is a failure).
+- **Scope**, **observe every**, **observations per day**, **jobs it may open per day**, and **stop opening jobs at N open jobs**.
+- For each kind of opportunity (documents changed, Kanban job failed, check command failing, connection down) pick: **Only record it**, **Propose it to me**, **Open a job, wait for my approval** or **Open the job itself**.
+
+Javis reads the sources with code, no model. A source it cannot read shows as **missing** with the reason; no problem is made up. A change becomes an **opportunity** with its source, data version, a reason tied to the outcome and the benefit. The same data never opens twice, an opportunity you **Skip** only returns when the data changes, each source has a cooldown, and a proposal left for 48 hours expires. Past the day's job budget or the open-job limit it only proposes.
+
+A job the mandate opens carries the trace (mandate, version, observation, opportunity) in its request, and its outside actions still go through the approval gate. **Pause** stops observing; **Revoke** cancels the mandate's jobs that have not started and closes open proposals. Every edit is a new version with history.
+
+## Product acceptance for a Team (from 0.209.0)
+
+On the Jobs tab, a waiting or running job has an **Acceptance** button to set criteria, one per line:
+
+- `file: reports/week.md`: the file must exist.
+- `contains: posts/a.md | 300 | price, contact`: at least 300 characters and every phrase.
+- `json: data.json | revenue, orders`: valid JSON with those keys.
+- `cmd: pytest -q`: a check command must exit 0 (runs at the Coding page's auto level).
+- `confirm: reports/week.md`: you confirm it yourself.
+
+When a member hands in the result, Javis checks the product itself (the files) against each criterion: **pass**, **fail** or **unclear**, with evidence (path, sha256 hash, size, modified time). A model's opinion is never the verdict.
+
+- All pass: only then is the job **done**.
+- A criterion fails: that member gets a fix step saying what failed. Past the fix rounds (2 by default) the job stops at **did not meet the criteria**; edit the job to try again.
+- A criterion is unclear or needs your confirmation: the chat shows a **Product acceptance** card with **Passes, close the job** or **Not yet, send back** (with a note). A file that changed after the check cannot be accepted until it is checked again.
+
+Editing the job voids the old evidence. After acceptance, editing a product file shows "The product changed after the check" on the card. A member's learning score only goes up from a passed acceptance or your confirmation, once per job.
 
 ## Quick actions and troubleshooting
 

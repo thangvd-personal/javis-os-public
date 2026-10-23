@@ -88,13 +88,25 @@
     return tw("noti.ago_day", { count: Math.floor(s / 86400) });
   }
 
+  // Lý do "Chờ bạn" (0.175.0): mục tiêu Auto gửi MÃ (engine_blocked, budget, guard...), chủ repo thấy nguyên văn
+  // "Chờ bạn: engine_blocked". Mã đọc bằng lời qua bảng trạng thái của thẻ mục tiêu (chat-resonance.js); mã lạ thì một câu
+  // chung, không lộ mã thô. Lý do là câu chữ (việc nhóm, việc chat) thì giữ nguyên.
+  function reasonText(r) {
+    r = String(r || "");
+    if (!/^[a-z][a-z0-9_]*$/.test(r)) return r;
+    var RS = typeof window !== "undefined" ? window.JavisResonance : null;
+    var k = RS && RS.stateKey ? RS.stateKey({ status: "active", block_reason: r }) : "";
+    if (k && k !== "resonance.st_working" && k !== "resonance.st_blocked" && k !== "resonance.st_running") return tw(k);
+    return tw("ajobs.reason.code_generic");
+  }
+
   // Bước kế tiếp do server tính (mã + tham số), đọc bằng lời.
   function nextText(j) {
     var n = j && j.next;
     if (!n || !n.code) return "";
     if (n.code === "queue") return n.n ? tw("ajobs.next.queue", { n: n.n, team: bareTeam(n.team) }) : "";
     if (n.code === "busy") return tw("ajobs.next.busy", { team: bareTeam(n.team) });
-    if (n.code === "needs_you") return n.reason ? tw("ajobs.next.needs_you", { reason: n.reason }) : tw("ajobs.next.needs_you_plain");
+    if (n.code === "needs_you") return n.reason ? tw("ajobs.next.needs_you", { reason: reasonText(n.reason) }) : tw("ajobs.next.needs_you_plain");
     if (n.code === "board_off") return tw("ajobs.next.board_off");
     if (n.code === "agent_busy") return tw("ajobs.next.agent_busy");
     if (n.code === "queued") return tw("ajobs.next.queued");
@@ -119,7 +131,7 @@
     // Mã lý do của mục tiêu Auto (đang dừng, đã gỡ người review cố định) đọc bằng lời thường; lý do khác hiện nguyên văn.
     // Bước kế "Chờ bạn: <lý do>" đã mang lý do thì không lặp lại dòng lý do.
     var why = REASON_KEY[j.reason_code] ? tw(REASON_KEY[j.reason_code])
-      : (j.next && j.next.code === "needs_you" && j.next.reason ? "" : j.reason);
+      : (j.next && j.next.code === "needs_you" && j.next.reason ? "" : reasonText(j.reason));
     var reason = why ? '<div class="aj-reason">' + esc(why) + "</div>" : "";
     var result = j.result ? '<div class="aj-result">' + esc(j.result) + "</div>" : "";
     var link = "";
@@ -141,13 +153,34 @@
       (ui.canVerify && j.kind !== "verify" ? '<button type="button" class="ws-btn aj-verify" data-aj-verify="' + esc(j.id) + '">' +
         esc(tw("ajobs.verify_this")) + "</button>" : "") +
       (j.cancel ? '<button type="button" class="ws-btn aj-cancel" data-aj-cancel="' + esc(j.id) + '"' + (busy ? " disabled" : "") + ">" +
-        esc(tw(busy ? "ajobs.cancelling" : "ajobs.cancel")) + "</button>" : "");
+        esc(tw(busy ? "ajobs.cancelling" : "ajobs.cancel")) + "</button>" : "") +
+      // 0.193.0: a finished job stays until the owner checks it and presses Done; Done moves it to the Archive.
+      (j.bucket === "done" && !j.archived_at ? '<button type="button" class="ws-btn aj-done-btn" data-aj-archive="' + esc(j.id) + '">' +
+        ic("check") + esc(tw("ajobs.mark_done")) + "</button>" : "");
     return '<li class="aj-job aj-' + esc(j.bucket) + '" data-aj-id="' + esc(j.id) + '">' +
-      '<div class="aj-top"><span class="aj-title">' + esc(j.title) + "</span></div>" +
+      '<div class="aj-top"><span class="aj-title" title="' + esc(j.title) + '">' + esc(j.title) + "</span>" +
+        '<span class="aj-state aj-state-' + esc(j.bucket) + '">' + esc(tw(BUCKET_KEY[j.bucket] || "ajobs.b.waiting")) + "</span></div>" +
       '<div class="aj-meta"><span class="aj-src">' + ic(SOURCE_ICON[j.source] || "circle") + esc(sourceText(j)) + "</span>" + roles + "</div>" +
       (nxt ? '<div class="aj-next">' + esc(nxt) + "</div>" : "") +
       (lines.length ? '<div class="aj-line">' + esc(lines.join(" · ")) + "</div>" : "") + link + reason + result +
       (acts ? '<div class="aj-acts">' + acts + "</div>" : "") + "</li>";
+  }
+
+  // 0.193.0: jobs the owner pressed Done on, folded at the bottom. Only here can a job be deleted (one, or all).
+  function archiveHtml(list, ui) {
+    if (!list.length) return "";
+    var open = !!ui.archOpen;
+    return '<section class="aj-sec aj-arch"><div class="aj-arch-head"><button type="button" class="aj-arch-toggle" aria-expanded="' +
+      (open ? "true" : "false") + '">' + ic(open ? "chevron-down" : "chevron-right") + esc(tw("ajobs.archive")) +
+      ' <span class="aj-n">' + list.length + "</span></button>" +
+      (open ? '<button type="button" class="ws-btn aj-arch-clear">' + ic("trash-2") + esc(tw("ajobs.archive_clear")) + "</button>" : "") +
+      "</div>" + (open ? '<ul class="aj-list">' + list.map(function (j) {
+        return '<li class="aj-job aj-archived" data-aj-id="' + esc(j.id) + '"><div class="aj-top"><span class="aj-title" title="' +
+          esc(j.title) + '">' + esc(j.title) + "</span></div>" + (j.result ? '<div class="aj-result">' + esc(j.result) + "</div>" : "") +
+          '<div class="aj-acts"><button type="button" class="ws-btn" data-aj-unarchive="' + esc(j.id) + '">' + esc(tw("ajobs.archive_back")) +
+          '</button><button type="button" class="ws-btn aj-cancel" data-aj-delete="' + esc(j.id) + '">' + ic("trash-2") +
+          esc(tw("ajobs.archive_delete")) + "</button></div></li>";
+      }).join("") + "</ul>" : "") + "</section>";
   }
 
   function chipHtml(attr, key, label, n, on, extra) {
@@ -203,6 +236,8 @@
 
   function assignHtml(ui, data) {
     ui = ui || {};
+    // 0.191.0: Javis Core takes no jobs of its own (no agent file, no team seat), so it gets no Assign button.
+    if (ui.noAssign) return "";
     if (!ui.assignOpen) {
       return '<button type="button" class="ws-btn primary aj-assign-open">' + ic("plus") + esc(tw("ajobs.assign")) + "</button>";
     }
@@ -293,7 +328,7 @@
     var body;
     var anyAtAll = SOURCES.some(function (s) { return ((data.source_counts || {})[s] || 0) > 0; }) || (data.jobs || []).length;
     if (!jobs.length) {
-      body = '<div class="aj-empty">' + esc(tw(anyAtAll ? "ajobs.empty_filter" : "ajobs.empty")) + "</div>";
+      body = '<div class="aj-empty">' + esc(tw(anyAtAll ? "ajobs.empty_filter" : ui.noAssign ? "ajobs.empty_core" : "ajobs.empty")) + "</div>";
     } else if (ui.filter) {
       body = '<ul class="aj-list">' + jobs.map(function (j) { return jobHtml(j, ui); }).join("") + "</ul>";
     } else {
@@ -305,6 +340,7 @@
           '</span></h4><ul class="aj-list">' + part.map(function (j) { return jobHtml(j, ui); }).join("") + "</ul></section>";
       }).join("");
     }
+    body += archiveHtml(data.archived || [], ui);
     var more = data.next ? '<button type="button" class="ws-btn aj-more"' + (ui.loadingMore ? " disabled" : "") + ">" +
       esc(tw(ui.loadingMore ? "ajobs.loading" : "ajobs.more")) + "</button>" : "";
     var foot = '<div class="aj-foot">' + esc(tw(data.board === "off" ? "ajobs.foot_off" : "ajobs.foot", { n: data.max_workers || 2 })) +
@@ -316,9 +352,30 @@
   function badgeHtml(c) {
     if (!c || (!c.running && !c.needs_you)) return "";
     var label = tw("ajobs.badge_aria", { running: c.running || 0, needs: c.needs_you || 0 });
+    // 0.175.0: nói bằng CHỮ ("Cần bạn 1", "Đang làm 2"). Biểu tượng bàn tay cũ đứng cạnh dấu ghim nên chủ repo đọc thành
+    // "ghim bàn tay" và không biết nó nghĩa là gì.
     return '<span class="ws-jb" role="img" aria-label="' + esc(label) + '" title="' + esc(label) + '">' +
-      (c.running ? '<span class="ws-jb-run">' + ic("loader") + esc(c.running) + "</span>" : "") +
-      (c.needs_you ? '<span class="ws-jb-need">' + ic("hand") + esc(c.needs_you) + "</span>" : "") + "</span>";
+      (c.needs_you ? '<span class="ws-jb-need">' + esc(tw("ajobs.chip_needs", { n: c.needs_you })) + "</span>" : "") +
+      (c.running ? '<span class="ws-jb-run">' + esc(tw("ajobs.chip_running", { n: c.running })) + "</span>" : "") + "</span>";
+  }
+
+  // 0.191.1 (owner, 16/10/2026: "4 trạng thái xanh nước biển, vàng cam, xanh lá và đỏ ... giống như bên claude"): the dot on
+  // an assistant's avatar. One state, the most urgent first: red needs you (blocked, to review, or failed in the last day),
+  // blue working, orange waiting in line, green finished in the last day. Nothing at all: no dot.
+  function statusOf(c) {
+    if (!c) return "";
+    if (c.needs_you || c.failed) return "need";
+    if (c.running) return "run";
+    if (c.waiting) return "wait";
+    if (c.done) return "done";
+    return "";
+  }
+  function statusText(c) {
+    var st = statusOf(c);
+    if (!st) return "";
+    var n = st === "need" ? (c.needs_you || 0) + (c.failed || 0) : st === "run" ? c.running : st === "wait" ? c.waiting : c.done;
+    var key = { need: "ajobs.dot_need", run: "ajobs.dot_run", wait: "ajobs.dot_wait", done: "ajobs.dot_done" }[st];
+    return tw(key, { n: n || 0 });
   }
 
   function newNonce() {
@@ -338,7 +395,7 @@
     var st = { data: null, nonce: "",
       ui: { filter: "", source: "", assignOpen: false, step: "edit", kind: "task", draft: "", criteria: "", target: "chat",
         link: "", verifier: "", verifyFor: null, targets: null, name: opts.name, cancelling: {}, busy: {}, canVerify: true,
-        agents: [] } };
+        agents: [], noAssign: !!opts.noAssign } };
     var alive = true, seq = 0, timer = null, poll = null;
     function q(s) { return encodeURIComponent(s); }
     function others() {
@@ -409,6 +466,12 @@
       fetch("/agents/" + q(opts.slug) + "/jobs/verify-targets?brain=" + q(opts.brain())).then(function (r) { return r.json(); })
         .then(function (j) { st.ui.targetsLoading = false; st.ui.targets = (j && j.ok && j.items) || []; draw(); },
           function () { st.ui.targetsLoading = false; st.ui.targets = []; draw(); });
+    }
+    function markJobs(ids, state) {
+      return jsonPost("/jobs/marks", { brain: opts.brain(), ids: ids, state: state }).then(function (r) {
+        if (!r.ok) { st.ui.note = tw("ajobs.mark_err"); draw(); return; }
+        changed(); load(true);
+      });
     }
     function byId(id) { return ((st.data && st.data.jobs) || []).filter(function (x) { return x.id === id; })[0]; }
     function jsonPost(url, body) {
@@ -539,6 +602,17 @@
       if (t.classList.contains("aj-assign-send")) { send(); return; }
       if (t.classList.contains("aj-reload")) { st.ui.error = false; draw(); load(false); return; }
       if (t.classList.contains("aj-more")) { loadMore(); return; }
+      if (d.ajArchive) { markJobs([d.ajArchive], "archived"); return; }
+      if (d.ajUnarchive) { markJobs([d.ajUnarchive], ""); return; }
+      if (d.ajDelete) { markJobs([d.ajDelete], "deleted"); return; }
+      if (t.classList.contains("aj-arch-toggle")) { st.ui.archOpen = !st.ui.archOpen; draw(); return; }
+      if (t.classList.contains("aj-arch-clear")) {
+        var all = ((st.data && st.data.archived) || []).map(function (x) { return x.id; });
+        if (all.length && (typeof window === "undefined" || window.confirm(tw("ajobs.archive_clear_confirm", { n: all.length })))) {
+          markJobs(all, "deleted");
+        }
+        return;
+      }
       if (d.ajCancel) { var jc = byId(d.ajCancel); if (jc) cancelJob(jc); return; }
       if (d.ajResume) { var jr = byId(d.ajResume); if (jr) resumeJob(jr); return; }
       if (d.ajPrio) { var jp = byId(d.ajPrio); if (jp) prioJob(jp); return; }
@@ -588,7 +662,7 @@
   }
 
   var api = { html: html, jobHtml: jobHtml, toolbarHtml: toolbarHtml, assignHtml: assignHtml,
-    confirmHtml: confirmHtml, badgeHtml: badgeHtml, nextText: nextText, relTime: relTime, mount: mount, loadCounts: loadCounts,
+    confirmHtml: confirmHtml, badgeHtml: badgeHtml, archiveHtml: archiveHtml, statusOf: statusOf, statusText: statusText, nextText: nextText, reasonText: reasonText, relTime: relTime, mount: mount, loadCounts: loadCounts,
     RELOAD_MS: RELOAD_MS, setStrings: function (o) { STR = o || {}; } };
   if (typeof window !== "undefined") window.JavisAgentJobs = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

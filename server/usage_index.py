@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import localefmt
 import glob
+import hashlib
 import json
 import os
 import sqlite3
+import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -51,6 +53,7 @@ SPIKE_RATIO = 1.5               # token/ngay ky nay gap prev qua ngan nay lan
 
 DB_PATH = STATE_DIR / "usage_index.db"
 _EVENTS_PATH = STATE_DIR / "usage-events.jsonl"
+_IMPROVEMENT_PATH = "__improvement_usage_v1__:"
 
 _DIMS = {"provider", "source", "activity", "model", "project", "day"}
 # provider API (chi nhung nay lay tu usage-events.jsonl; claude/codex lay tu log tho)
@@ -58,8 +61,12 @@ _DIMS = {"provider", "source", "activity", "model", "project", "day"}
 # main.py; thieu mot ten la moi dong cua provider do bi VUT IM LANG (chuoi if/elif ben duoi
 # khong co else), va o "tien mat thang nay" bao 0 trong khi vi van voi di. 'groq' va 'gemini'
 # tung thieu dung nhu vay.
+# 'openai-compat' and 'anthropic-compat' (custom gateways, 0.254.0) were missing the same way.
 _API_PROVIDERS = {"openrouter", "openai", "anthropic", "anthropic-api", "oauth", "ollama",
-                  "groq", "gemini", "deepseek"}
+                  "groq", "gemini", "deepseek", "openai-compat", "anthropic-compat"}
+# Ollama on the user's own machine: real tokens, but no bill. Its own column, never 'api',
+# or the "real cash this month" box would charge llama prices for a model that runs for free.
+_EVENT_LOCAL = {"ollama-local"}
 
 
 def _claude_dir() -> str:
@@ -112,7 +119,126 @@ def _connect() -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fd_path ON file_daily(path)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fh_hour ON file_hourly(hour)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_fh_path ON file_hourly(path)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_observations("
+                 "event_key TEXT PRIMARY KEY, team_id TEXT, task_id TEXT, payload TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_team ON usage_observations(team_id,task_id)")
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}
+    for column in ("experiment_id", "trial_id", "cli_session_id"):
+        if column not in columns:
+            try:
+                conn.execute(f"ALTER TABLE usage_observations ADD COLUMN {column} TEXT")
+            except sqlite3.OperationalError:
+                if column not in {row[1] for row in conn.execute("PRAGMA table_info(usage_observations)")}:
+                    raise
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_improvement ON usage_observations(experiment_id,trial_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_session ON usage_observations(cli_session_id)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_cli_requests("
+                 "request_key TEXT PRIMARY KEY, session_id TEXT, payload TEXT)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_cli_session ON usage_cli_requests(session_id)")
+    if "path" not in {row[1] for row in conn.execute("PRAGMA table_info(usage_cli_requests)")}:
+        try:
+            conn.execute("ALTER TABLE usage_cli_requests ADD COLUMN path TEXT")
+        except sqlite3.OperationalError:
+            if "path" not in {row[1] for row in conn.execute("PRAGMA table_info(usage_cli_requests)")}:
+                raise
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_projection_gaps("
+                 "path TEXT, day TEXT, project TEXT, reason TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS usage_daily_events(event_key TEXT PRIMARY KEY, payload TEXT)")
     return conn
+
+
+def _project_observation(conn, event) -> None:
+    """The event file owns bills; this rebuildable projection only supplies execution attribution."""
+    ex = event.get("execution") or {}
+    if not (ex.get("team_id") or (ex.get("experiment_id") and ex.get("trial_id"))) or not event.get("event_id"):
+        return
+    key = up.observation_key(event)
+    prior = conn.execute("SELECT payload FROM usage_observations WHERE event_key=?", (key,)).fetchone()
+    if prior:
+        old = json.loads(prior[0])
+        event = {**event, "ts": old.get("ts"), "day": old.get("day")}
+    conn.execute("INSERT INTO usage_observations(event_key,team_id,task_id,experiment_id,trial_id,cli_session_id,payload) "
+                 "VALUES(?,?,?,?,?,?,?) ON CONFLICT(event_key) DO UPDATE SET "
+                 "cli_session_id=excluded.cli_session_id,payload=excluded.payload",
+                 (key, ex.get("team_id"), ex.get("task_id"), ex.get("experiment_id"), ex.get("trial_id"),
+                  ex.get("cli_session_id"), json.dumps(event)))
+
+
+def _ingest_team_events(conn) -> int:
+    """Independent cursor backfills execution metadata without perturbing the legacy daily projection."""
+    if not _EVENTS_PATH.exists():
+        return 0
+    marker = "__execution_events_v3__:" + str(_EVENTS_PATH)
+    row = conn.execute("SELECT offset FROM files_seen WHERE path=?", (marker,)).fetchone()
+    offset = row[0] if row else 0
+    if _EVENTS_PATH.stat().st_size < offset:
+        offset = 0
+    count = 0
+    with open(_EVENTS_PATH, "rb") as fh:
+        fh.seek(offset)
+        for raw in fh:
+            if not raw.endswith(b"\n"):
+                break
+            offset += len(raw)
+            try:
+                event = json.loads(raw)
+            except (ValueError, UnicodeError):
+                continue
+            if isinstance(event, dict):
+                _project_observation(conn, event)
+                count += 1
+    _mark(conn, marker, 0, 0, offset)
+    return count
+
+
+def execution_events(team_id, task_id=None):
+    """Read the existing usage projection; no engine or Team execution ledger is a billing source."""
+    conn = _connect()
+    try:
+        _ingest_team_events(conn)
+        conn.commit()
+        where, args = "team_id=?", [team_id]
+        if task_id is not None:
+            where += " AND task_id=?"
+            args.append(task_id)
+        events = [json.loads(r[0]) for r in conn.execute(
+            "SELECT payload FROM usage_observations WHERE " + where, args)]
+        return events, _linked_cli_details(conn, events)
+    finally:
+        conn.close()
+
+
+def improvement_events(experiment_id, trial_id=None):
+    """Read improvement attribution from the same rebuildable observation/request tables."""
+    conn = _connect()
+    try:
+        _ingest_team_events(conn)
+        conn.commit()
+        where, args = "experiment_id=?", [experiment_id]
+        if trial_id is not None:
+            where += " AND trial_id=?"
+            args.append(trial_id)
+        events = [json.loads(row[0]) for row in conn.execute(
+            "SELECT payload FROM usage_observations WHERE " + where, args)]
+        return events, _linked_cli_details(conn, events)
+    finally:
+        conn.close()
+
+
+def _linked_cli_details(conn, events):
+    from usage_execution import _attempt_key
+    sessions = {event.get("execution", {}).get("cli_session_id") for event in events
+                if event.get("execution", {}).get("cli_session_new")}
+    details = []
+    for sid in sessions - {None, ""}:
+        owners = {_attempt_key(json.loads(row[0])) for row in conn.execute(
+            "SELECT payload FROM usage_observations WHERE cli_session_id=?", (sid,))}
+        if len(owners) != 1:
+            details.append({"session_id": sid, "ambiguous_session": True})
+        else:
+            details.extend(json.loads(row[0]) for row in conn.execute(
+                "SELECT payload FROM usage_cli_requests WHERE session_id=?", (sid,)))
+    return details
 
 
 # First words of the prompt compaction.py sends when it moves a long chat onto a fresh Claude
@@ -180,6 +306,9 @@ def _mark(conn, path, size, mtime, offset=0) -> None:
 def _clear_file(conn, path) -> None:
     conn.execute("DELETE FROM file_daily WHERE path=?", (path,))
     conn.execute("DELETE FROM file_hourly WHERE path=?", (path,))
+    conn.execute("DELETE FROM usage_cli_requests WHERE path=?", (path,))
+    if path == str(_EVENTS_PATH):
+        conn.execute("DELETE FROM usage_daily_events")
 
 
 def _gio(ev) -> str:
@@ -200,6 +329,11 @@ def _insert_events(conn, path, events) -> None:
     groups = {}
     theo_gio = {}
     for ev in events:
+        if ev.get("provider") == "claude" and ev.get("request_id") and ev.get("session_id"):
+            key = "claude:" + ev["session_id"] + ":" + ev["request_id"]
+            conn.execute("INSERT INTO usage_cli_requests(request_key,session_id,payload,path) VALUES(?,?,?,?) "
+                         "ON CONFLICT(request_key) DO UPDATE SET payload=excluded.payload,path=excluded.path",
+                         (key, ev["session_id"], json.dumps(ev), path))
         k = (ev.get("day") or "", ev["provider"], ev["source"], ev["activity"], ev["model"], ev["project"])
         g = groups.setdefault(k, [0, 0, 0, 0, 0])
         g[0] += ev["input"]
@@ -321,6 +455,8 @@ _EVENT_CODEX = {"codex", "openai-oauth", "chatgpt", "oauth"}
 # xAI la duong TRA TIEN theo luot goi, con day la duong THUE BAO - hai thu khac hoan toan ve
 # hoa don du cung ten model.
 _EVENT_GROK_CLI = {"grok-cli", "grok_cli", "grok"}
+# Antigravity CLI (Google plan) has no raw log Javis reads, so these lines are its only record.
+_EVENT_ANTIGRAVITY = {"antigravity-cli", "agy"}
 
 
 def _ingest_events(conn) -> int:
@@ -357,6 +493,7 @@ def _ingest_events(conn) -> int:
         start = 0
 
     events = []
+    unknown = set()
     for ln in lines[start:complete]:
         ln = ln.strip()
         if not ln:
@@ -366,6 +503,8 @@ def _ingest_events(conn) -> int:
         except Exception:
             continue
         prov = (e.get("provider") or "").lower()
+        if (e.get("execution") or {}).get("experiment_id") and prov in _EVENT_CLAUDE:
+            continue  # Rebuilt by request/session identity, outside legacy provider/day dedup.
         tin = int(e.get("in") or 0)
         tout = int(e.get("out") or 0)
         if tin + tout <= 0:
@@ -376,6 +515,22 @@ def _ingest_events(conn) -> int:
         # "so luot" va "cua so truot" cua nhung nhanh do.
         chung = {"day": day, "ts": int(e.get("ts") or 0), "model": model,
                  "input": tin, "output": tout, "cache_read": 0, "cache_create": 0, "turns": 1}
+        if e.get("execution") and e.get("event_id"):
+            if e.get("event_kind") in ("execution", "cli_detail"):
+                continue
+            event_key = up.observation_key(e)
+            prior = conn.execute("SELECT payload FROM usage_daily_events WHERE event_key=?", (event_key,)).fetchone()
+            if prior:
+                old = json.loads(prior[0])
+                if (old.get("in"), old.get("out"), old.get("model"), old.get("provider")) == (tin, tout, model, prov):
+                    continue
+                # All updates of one request retain their original dimensions/timestamp.
+                chung["day"], chung["ts"] = old.get("day") or day, int(old.get("ts") or 0)
+                chung["input"] -= int(old.get("in") or 0)
+                chung["output"] -= int(old.get("out") or 0)
+                chung["turns"] = 0
+            conn.execute("INSERT INTO usage_daily_events(event_key,payload) VALUES(?,?) "
+                         "ON CONFLICT(event_key) DO UPDATE SET payload=excluded.payload", (event_key, json.dumps(e)))
         if prov in _API_PROVIDERS:
             events.append({**chung, "provider": "api", "source": "javis", "activity": "chat",
                            "project": "(api)"})
@@ -388,6 +543,19 @@ def _ingest_events(conn) -> int:
         elif prov in _EVENT_GROK_CLI:
             events.append({**chung, "provider": "grok-cli", "source": "javis",
                            "activity": "chat", "project": "(events)"})
+        elif prov in _EVENT_ANTIGRAVITY:
+            events.append({**chung, "provider": "antigravity-cli", "source": "javis",
+                           "activity": "chat", "project": "(events)"})
+        elif prov in _EVENT_LOCAL:
+            events.append({**chung, "provider": "local", "source": "javis",
+                           "activity": "chat", "project": "(local)"})
+        elif prov:
+            # Never drop a line silently: a provider added later without a mapping here used
+            # to vanish from every report. Logged once per refresh so it gets noticed.
+            unknown.add(prov)
+    if unknown:
+        print(f"[usage index] usage-events provider not mapped, skipped: {sorted(unknown)}",
+              file=sys.stderr)
     if events:
         _insert_events(conn, path, events)
     conn.execute("INSERT INTO files_seen(path,size,mtime,offset) VALUES(?,?,?,?) "
@@ -416,12 +584,89 @@ def _dedup_events_vs_raw(conn) -> None:
     for prov in ("claude", "codex"):
         conn.execute(
             "DELETE FROM file_daily WHERE path=? AND provider=? AND day IN "
-            "(SELECT DISTINCT day FROM file_daily WHERE provider=? AND path<>?)",
-            (ev, prov, prov, ev))
+            "(SELECT DISTINCT day FROM file_daily WHERE provider=? AND path<>? AND substr(path,1,?)<>?)",
+            (ev, prov, prov, ev, len(_IMPROVEMENT_PATH), _IMPROVEMENT_PATH))
         conn.execute(
             "DELETE FROM file_hourly WHERE path=? AND provider=? AND substr(hour,1,10) IN "
-            "(SELECT DISTINCT day FROM file_daily WHERE provider=? AND path<>?)",
-            (ev, prov, prov, ev))
+            "(SELECT DISTINCT day FROM file_daily WHERE provider=? AND path<>? AND substr(path,1,?)<>?)",
+            (ev, prov, prov, ev, len(_IMPROVEMENT_PATH), _IMPROVEMENT_PATH))
+
+
+def _usage_vector(event):
+    """A missing cache component cannot be silently reclassified as uncached input."""
+    values = [event.get(name) for name in ("in", "out", "cache_read", "cache_create")]
+    if not event.get("tokens_known") or any(type(value) is not int or value < 0 for value in values):
+        return None
+    tin, tout, read, create = values
+    return (tin - read - create, tout, read, create) if tin >= read + create else None
+
+
+def _project_improvement_usage(conn):
+    """Rebuild trial contributions in this index; usage-events remains the billing source.
+
+    Raw requests already contribute globally. A summary contributes only its component-wise
+    residual against the exact fresh session. Unrelated chat never removes trial usage.
+    """
+    from usage_execution import _attempts
+    _ingest_team_events(conn)
+    events = [json.loads(row[0]) for row in conn.execute(
+        "SELECT payload FROM usage_observations ORDER BY rowid")]
+    details = [json.loads(row[0]) for row in conn.execute(
+        "SELECT r.payload FROM usage_cli_requests r WHERE r.path IS NOT NULL "
+        "AND EXISTS(SELECT 1 FROM file_daily d WHERE d.path=r.path)")]
+    for table in ("file_daily", "file_hourly", "usage_projection_gaps"):
+        conn.execute(f"DELETE FROM {table} WHERE substr(path,1,?)=?", (len(_IMPROVEMENT_PATH), _IMPROVEMENT_PATH))
+    count = 0
+    for attempt in _attempts(events, details):
+        group = attempt["group"]
+        anchor = group[-1]
+        ex = anchor.get("execution") or {}
+        if not ex.get("experiment_id") or anchor.get("provider") not in _EVENT_CLAUDE:
+            continue
+        path = _IMPROVEMENT_PATH + hashlib.sha256(json.dumps(attempt["key"]).encode()).hexdigest()
+        project = "(improvement)"
+        if any(event.get("telemetry_errors") or event.get("usage_complete") is False for event in group):
+            conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                         (path, anchor.get("day") or "", project, "incomplete_telemetry"))
+        if attempt["ambiguous_session"]:
+            conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                         (path, anchor.get("day") or "", project, "ambiguous_session"))
+            continue
+        fallback = attempt["fallback"][-1:]
+        use_summary = bool(fallback and _usage_vector(fallback[0]) is not None)
+        selected = fallback if use_summary else [r for r in attempt["requests"] if not r.get("raw_observation")]
+        if fallback and not use_summary:
+            conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                         (path, fallback[0].get("day") or "", project, "unknown_summary_components"))
+        if not selected:
+            if not attempt["requests"]:
+                conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                             (path, anchor.get("day") or "", project, "missing_usage"))
+            continue
+        rows = []
+        for event in selected:
+            vector = _usage_vector(event)
+            reason = "unknown_components"
+            if vector is not None and use_summary:
+                raw = attempt["raw"]
+                vector = tuple(value - sum(d[field] for d in raw) for value, field in
+                               zip(vector, ("input", "output", "cache_read", "cache_create")))
+                reason = "summary_request_conflict"
+                if any(value < 0 for value in vector):
+                    vector = None
+            if vector is None:
+                conn.execute("INSERT INTO usage_projection_gaps VALUES(?,?,?,?)",
+                             (path, event.get("day") or "", project, reason))
+                continue
+            inp, out, read, create = vector
+            rows.append({"day": event.get("day") or "", "ts": event.get("ts") or 0,
+                "model": event.get("model") or "?", "provider": "claude", "source": "javis",
+                "activity": "background", "project": project, "input": inp, "output": out,
+                "cache_read": read, "cache_create": create,
+                "turns": int(bool(sum(vector))) if use_summary else 1})
+        _insert_events(conn, path, rows)
+        count += len(rows)
+    return count
 
 
 # Marker migration: ban cu chi nap provider API tu usage-events.jsonl (bo cli/codex) va da day
@@ -436,6 +681,7 @@ def _migrate_events_once(conn) -> None:
         return
     ep = str(_EVENTS_PATH)
     conn.execute("DELETE FROM file_daily WHERE path=?", (ep,))
+    conn.execute("DELETE FROM usage_daily_events")
     conn.execute("DELETE FROM files_seen WHERE path=?", (ep,))
     conn.execute("INSERT INTO files_seen(path,size,mtime,offset) VALUES(?,0,0,1) "
                  "ON CONFLICT(path) DO NOTHING", (_EVENTS_MIGRATE_MARK,))
@@ -448,7 +694,7 @@ def _migrate_events_once(conn) -> None:
 # dung lai het. Ton mot lan (vai giay toi vai chuc giay tuy so file), sau do lai tang dan.
 # v4 (0.107.0): rotated chat threads were counted as background. Rescan once so the history the
 # disk still holds is reclassified (see _chat_sessions and CHAT_RESUME_MARKER).
-_SCHEMA_MARK = "__schema_v4_chat_threads__"
+_SCHEMA_MARK = "__schema_v6_improvement_projection__"
 
 
 def _migrate_schema_once(conn) -> bool:
@@ -465,6 +711,7 @@ def _migrate_schema_once(conn) -> bool:
     ev = str(_EVENTS_PATH)
     conn.execute("DELETE FROM file_daily WHERE path=?", (ev,))
     conn.execute("DELETE FROM file_hourly WHERE path=?", (ev,))
+    conn.execute("DELETE FROM usage_daily_events")
     conn.execute("DELETE FROM files_seen")
     conn.execute("INSERT INTO files_seen(path,size,mtime,offset) VALUES(?,0,0,1)", (_SCHEMA_MARK,))
     # Xoa sach files_seen cung xoa luon dau migrate v2 o tren; ghi lai ngay de lan refresh sau
@@ -476,6 +723,21 @@ def _migrate_schema_once(conn) -> bool:
     return True
 
 
+def _stage(name, conn, fn, *args):
+    """Run one refresh source; on error log it, keep what earlier sources wrote, return 0."""
+    try:
+        out = fn(*args)
+        conn.commit()
+        return out or 0
+    except Exception as e:  # noqa: BLE001
+        try:
+            conn.rollback()   # drop this source's half-written rows only; earlier ones are committed
+        except Exception:  # noqa: BLE001
+            pass
+        print(f"[usage index] {name} scan failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
+
+
 def refresh() -> dict:
     """Quet tang dan ca 3 nguon. Tra so file/event thuc su xu ly lan nay."""
     res = {"claude_files": 0, "codex_files": 0, "api_events": 0, "quet_lai": False}
@@ -483,12 +745,18 @@ def refresh() -> dict:
     try:
         res["quet_lai"] = _migrate_schema_once(conn)   # 1 lan khi doi schema: quet lai tat ca
         _migrate_events_once(conn)                  # 1 lan: backfill cli/codex tu events cu
+        conn.commit()                               # a failing source below must not undo these
         chat = _chat_sessions()
         brains = session_brain.mapping()   # phien nao thuoc brain nao -> nhan du an dung
-        res["claude_files"] = _scan_claude(conn, chat, brains)
-        res["codex_files"] = _scan_codex(conn)
-        res["api_events"] = _ingest_events(conn)   # API + du phong cli/codex tu usage-events.jsonl
-        _dedup_events_vs_raw(conn)                  # log tho phu ngay nao thi xoa event ngay do
+        # Each source in its own guard. Before, one bad transcript line in ~/.claude/projects (or a
+        # Codex rollout) raised out of refresh() before usage-events.jsonl was read and before the
+        # commit, so the API branch (whose ONLY source is that file) stayed at 0 tokens for good,
+        # and /usage/refresh swallowed the error. A broken source now costs only its own numbers.
+        res["claude_files"] = _stage("claude", conn, _scan_claude, conn, chat, brains)
+        res["codex_files"] = _stage("codex", conn, _scan_codex, conn)
+        res["api_events"] = _stage("events", conn, _ingest_events, conn)   # API + du phong cli/codex
+        _stage("dedup", conn, _dedup_events_vs_raw, conn)  # log tho phu ngay nao thi xoa event ngay do
+        res["improvement_events"] = _stage("improvement", conn, _project_improvement_usage, conn)
         conn.commit()
     finally:
         conn.close()
@@ -627,6 +895,13 @@ def summary(period: str = "this_month", provider: str = None, project: str = Non
     try:
         rows = _fetch_rows(conn, cs_s, ce_s, provider, project)
         tokens_prev = _sum_tokens(conn, ps_s, pe_s, provider, project)
+        gaps = 0
+        if provider in (None, "", "all", "claude"):
+            where, args = "day BETWEEN ? AND ?", [cs_s, ce_s]
+            if project:
+                where += " AND project=?"
+                args.append(project)
+            gaps = conn.execute("SELECT COUNT(*) FROM usage_projection_gaps WHERE " + where, args).fetchone()[0]
     finally:
         conn.close()
 
@@ -664,6 +939,9 @@ def summary(period: str = "this_month", provider: str = None, project: str = Non
     return {
         "period": period, "range": [cs_s, ce_s], "range_prev": [ps_s, pe_s],
         "filter": {"provider": provider, "project": project},
+        "coverage": {"improvement": {"status": "partial" if gaps else "no_known_gaps",
+            "unresolved_observations": gaps, "totals": "known_lower_bound" if gaps else "observed",
+            "scope": "improvement_projection"}},
         "kpi": {
             "tokens": tokens, "tokens_prev": tokens_prev, "delta_pct": delta,
             "per_day_avg": round(tokens / n_days, 1) if n_days else 0,

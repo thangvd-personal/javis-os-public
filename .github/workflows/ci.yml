@@ -56,6 +56,9 @@ jobs:
       - name: Lấy commit 0.151.0 cho test khôi phục team-adaptive
         run: git fetch --no-tags --depth=1 origin 1d1b52faed35a79aa5597f1fbde85b63da2bc3ea
 
+      - name: Fetch 0.292.0 for the improvement schema4 reader check
+        run: git fetch --no-tags --depth=1 origin cbef2f464932e533825512e8e11c2299e6b3bf4f
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

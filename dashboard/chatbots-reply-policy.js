@@ -22,6 +22,12 @@
   }
   function el(html) { var d = document.createElement("div"); d.innerHTML = html.trim(); return d.firstChild; }
   function tt(k, v) { return window.t(k, v); }
+  // (i) button (info-tip.js, 0.214.0): explanations sit behind it; without the helper (Node tests) they draw open.
+  function infoBtn() { var J = typeof window !== "undefined" && window.JavisInfo; return J ? J.btn(tt("info.more")) : ""; }
+  function infoBody(html) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    return J ? J.body(html) : '<div class="info-body">' + html + "</div>";
+  }
   function loc() { return (window.JavisI18n && window.JavisI18n.locale()) || "vi-VN"; }
   function gio(ts) {
     if (!ts) return "";
@@ -57,8 +63,10 @@
 
   // ---------------------------------------------------------------- khối trong form
   // Chỉ một dòng giải thích. `#cbRpBox` giữ nguyên để chatbots.js bật/tắt theo lựa chọn "Tự đánh giá".
+  // 0.214.0: only the name stays visible, the explanation opens from (i).
   function formHtml() {
-    return '<div id="cbRpBox" class="cb-hint cb-rp-note" style="display:none">' + esc(tt("rp.auto_note")) + '</div>';
+    return '<div id="cbRpBox" class="cb-hint cb-rp-note" style="display:none">' + esc(tt("rp.menu")) + infoBtn() +
+      infoBody(esc(tt("rp.auto_note"))) + '</div>';
   }
 
   // Một dòng tóm tắt cho thẻ bot; "" khi bot không ở chế độ Tự đánh giá (thẻ không cần nói gì).
@@ -106,14 +114,15 @@
     }
     function khoiChu() {
       var ids = chuBot();
-      var h = '<div class="cb-rp-owners"><div class="cb-sub">' + esc(tt("rp.owner_lb")) + '</div>';
+      var h = '<div class="cb-rp-owners"><div class="cb-sub">' + esc(tt("rp.owner_lb")) + (ids.length ? infoBtn() : "") + '</div>';
       // Chưa có chủ: MỘT đoạn nói rõ hệ quả và cách đặt. Có chủ: danh sách kèm một dòng ngắn (điện thoại không nên nhồi chữ).
+      // 0.214.0: with owners, the note opens from (i); with none, the state and what to press stay open.
       h += ids.length
         ? '<div class="cb-rp-ownlist">' + ids.map(function (sid) {
             return '<span class="cb-rp-own">' + chip("ok", tenNguoi(sid)) +
               ' <button type="button" class="cb-rp-lnk rp-unowner" data-sid="' + esc(sid) + '" title="' + esc(tt("rp.owner_remove_tip")) + '">' +
               esc(tt("rp.owner_remove")) + '</button></span>';
-          }).join("") + '</div><div class="cb-hint">' + esc(tt("rp.owner_h")) + '</div>'
+          }).join("") + '</div>' + infoBody(esc(tt("rp.owner_h")))
         : '<div class="cb-hint">' + esc(tt("rp.owner_none")) + '</div>';
       return h + '</div>';
     }
@@ -144,11 +153,11 @@
       var s = d.stats || {};
       var h = '<div class="cb-sum">' + esc(tt("rp.stats", { decisions: s.decisions || 0, silent: s.silent || 0,
         labeled: s.labeled || 0, cases: s.cases || 0, lessons: s.lessons || 0 })) + '</div>';
-      h += '<div class="cb-hint">' + esc(tt("rp.panel_h")) + '</div>';
+      // What the Right/Wrong buttons mean opens from (i) after the panel hint (0.214.0).
+      h += '<div class="cb-hint">' + esc(tt("rp.panel_h")) + infoBtn() + '</div>' + infoBody(esc(tt("rp.thumb_hint")));
       h += khoiChu();
       h += '<label class="cb-rp-learn"><input type="checkbox" id="rpSolo"' + (soloSilent ? " checked" : "") + '> ' +
         esc(tt("rp.only_silent")) + '</label>';
-      h += '<div class="cb-hint cb-rp-thumbh">' + esc(tt("rp.thumb_hint")) + '</div>';
       h += '<div class="cb-rp-list">' + ((d.decisions || []).length
         ? d.decisions.map(dongQuyetDinh).join("") : '<div class="cb-empty">' + esc(tt("rp.empty")) + '</div>') + '</div>';
       h += '<div class="cb-sub">' + esc(tt("rp.lessons")) + '</div>' + ((d.lessons || []).length

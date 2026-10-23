@@ -32,8 +32,8 @@
   <!-- Biến --ic-* cho icon dùng trong content: của CSS. Phải đứng TRƯỚC style.css
        vì style.css tham chiếu các biến này. -->
   <link rel="stylesheet" href="/static/vendor/lucide-icons.css?v=1">
-  <link rel="stylesheet" href="/static/style.css?v=113">
-  <link rel="stylesheet" href="/static/console.css?v=84">
+  <link rel="stylesheet" href="/static/style.css?v=139">
+  <link rel="stylesheet" href="/static/console.css?v=112">
   <!-- Áp tông đã lưu TRƯỚC khi vẽ để không nháy tối rồi mới đổi sang sáng.
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
        Chế độ "auto" (0.74.0, mặc định khi chưa chọn gì từ 0.75.1) tính theo khung giờ "HH:MM-HH:MM", cùng quy tắc với lightAt() trong
@@ -61,6 +61,7 @@
             <option value="brain">Brain Default</option>
           </select>
           <button class="graph-folder-btn" id="newBrainBtn" title="Tạo brain mới trong thư mục brains" data-i18n-title="top.brain_new"><i data-ic="plus"></i></button>
+          <button class="graph-folder-btn" id="renameBrainBtn" title="Đổi tên brain đang chọn (thư mục và liên kết giữ nguyên)" data-i18n-title="top.brain_rename"><i data-ic="pencil"></i></button>
           <button class="graph-folder-btn" id="delBrainBtn" title="Xoá brain đang chọn (xác nhận gõ đúng tên)" data-i18n-title="top.brain_delete"><i data-ic="trash-2"></i></button>
           <button class="graph-folder-btn" id="pickFolderBtn" title="Chọn brain từ folder ngoài bất kỳ" data-i18n-title="top.brain_pick"><i data-ic="folder-open"></i></button>
           <span class="graph-stats" id="graphStats">-</span>
@@ -176,6 +177,8 @@
         </div>
         <button class="noti-text-btn" id="notificationPushTest" type="button" hidden data-i18n="noti.push_test">Gửi thử</button>
         <button class="noti-text-btn primary" id="notificationPushToggle" type="button" data-i18n="noti.push_on">Bật</button>
+        <label class="noti-push-hide" id="notificationPushHideRow" hidden><input type="checkbox" id="notificationPushHide">
+          <span data-i18n="noti.push_hide">Ẩn nội dung trên thông báo đẩy</span></label>
       </div>
       <div class="noti-foot">
         <button class="noti-text-btn" id="notificationRefresh" type="button" data-i18n="noti.refresh">↻ Làm mới</button>
@@ -196,6 +199,7 @@
           <span class="vault-tools">
             <button class="mini-btn" id="vtNewFile" title="Tạo file mới ở gốc brain" data-i18n-title="vault.new_file">＋</button>
             <button class="mini-btn" id="vtNewDir" title="Tạo thư mục mới ở gốc brain" data-i18n-title="vault.new_dir"><i data-ic="folder-plus"></i></button>
+            <button class="mini-btn" id="vtDaily" title="Nhật ký hôm nay (Ctrl+D / Cmd+D khi đang ở khung ghi chú)" data-i18n-title="vault.daily"><i data-ic="calendar"></i></button>
             <button class="mini-btn" id="vtRefresh" title="Làm mới cây" data-i18n-title="vault.refresh">⟳</button>
             <button class="mini-btn" id="vtCollapse" title="Thu gọn panel Vault (như sidebar)" data-i18n-title="vault.collapse"><i data-ic="panel-left"></i></button>
           </span>
@@ -367,6 +371,49 @@
                 </div>
               </div>
               <div class="qs-hint" id="vcVoiceNote" data-i18n="qs.voice_ml_note" hidden>Giọng đa ngôn ngữ hỗ trợ tiếng Việt.</div>
+              <!-- 0.255.0 (owner: "đang thiếu ElevenLabs"): ChatGPT Live and Live over an API speak with their own
+                   voice, so on those paths the list above holds their voices and ElevenLabs had nowhere to go. This
+                   row picks the voice that reads chat answers and voice notes; on the Basic path the list above
+                   already does that, so console.js hides this row there. -->
+              <div class="qs-field" id="vcReadRow" hidden>
+                <label class="qs-lbl" for="vcReadVoice"><span data-i18n="settings.vc_read_voice">Giọng đọc tin nhắn</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></label>
+                <div class="info-body" hidden data-i18n="settings.vc_read_info">Giọng đọc câu trả lời trong chat và ghi chú giọng nói gửi qua Telegram, Zalo. Cuộc gọi ChatGPT Live hay Live qua API nói bằng giọng riêng của nó nên không đổi theo ô này.</div>
+                <div class="v2-voice-row">
+                  <select class="js-input" id="vcReadVoice"></select>
+                  <button class="gcard-btn ghost" type="button" id="vcReadTry" data-i18n="qs.test_voice">▶ Nghe thử</button>
+                </div>
+              </div>
+              <!-- ElevenLabs (0.255.0): out of Advanced, right under the list where it was picked. The voice comes
+                   from the account by name (/voice/elevenlabs/voices); the raw Voice ID box only shows when the
+                   list cannot load. -->
+              <div id="vcEleven" hidden>
+                <div class="qs-field">
+                  <label class="qs-lbl" for="vcElKey"><span>ElevenLabs API key</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button> <span class="dim" id="vcElKeySet" data-i18n="settings.key_set" hidden>(đã có - để trống nếu không đổi)</span></label>
+                  <div class="info-body" hidden data-i18n="settings.vc_el_info">Lấy key ở elevenlabs.io, mục Developers, API Keys. Giọng bạn tự nhân bản trên ElevenLabs cũng có trong danh sách. Model Multilingual v2 không đọc được tiếng Việt, nên câu tiếng Việt tự dùng Flash v2.5.</div>
+                  <input class="js-input" id="vcElKey" type="password" autocomplete="off" data-i18n-ph="settings.eleven_ph" placeholder="Dán API key ElevenLabs">
+                </div>
+                <div class="qs-field">
+                  <label class="qs-lbl" for="vcElVoiceSel" data-i18n="settings.vc_el_voice">Giọng ElevenLabs</label>
+                  <select class="js-input" id="vcElVoiceSel" hidden></select>
+                  <input class="js-input" id="vcElVoice" data-i18n-ph="settings.eleven_voice_ph" placeholder="Ví dụ: 21m00Tcm4TlvDq8ikWAM (Rachel)">
+                  <div class="qs-hint" id="vcElVoiceMsg" role="status"></div>
+                </div>
+                <div class="qs-field">
+                  <label class="qs-lbl" for="vcElModel" data-i18n="settings.vc_el_model">Model</label>
+                  <select class="js-input" id="vcElModel"></select>
+                </div>
+              </div>
+              <!-- Mic and speaker test (0.222.0, dashboard/mic-test.js): a person speaking is the only check
+                   a muted mic or a level slider at zero cannot pass. -->
+              <div class="qs-field">
+                <span class="qs-lbl" data-i18n="settings.vc_mic_lbl">Thử mic và loa</span>
+                <div class="v2-voice-row">
+                  <button class="gcard-btn ghost" type="button" id="vcMicTest" data-i18n="settings.vc_mic_btn">Thử mic</button>
+                  <button class="gcard-btn ghost" type="button" id="vcSpkTest" data-i18n="settings.vc_spk_btn">Thử loa</button>
+                </div>
+              </div>
+              <div class="mic-meter" aria-hidden="true"><div class="mic-meter-bar" id="vcMicBar"></div></div>
+              <div class="mic-result" id="vcMicResult" role="status"></div>
               <details class="qs-advanced" id="vcAdvanced">
                 <summary data-i18n="settings.vc_advanced">Nâng cao</summary>
                 <div class="qs-field">
@@ -393,6 +440,25 @@
                   </div>
                   <div class="qs-hint" data-i18n="settings.vc_brain_hint">Bộ não trả lời các câu nói ở đường Cơ bản. Việc cần dữ liệu vẫn đi bộ não chính.</div>
                 </div>
+                <!-- Live over an API key only (0.220.0): console.js shows this box when call.engine is "api". -->
+                <div id="vcLiveBox" hidden>
+                  <div class="qs-field">
+                    <label class="qs-lbl" for="vcLiveProactive" data-i18n="settings.vc_live_proactive">Lọc tiếng xung quanh</label>
+                    <select class="js-input" id="vcLiveProactive">
+                      <option value="on" data-i18n="settings.vc_live_proactive_on">Bật: bỏ qua TV, người bên cạnh</option>
+                      <option value="off" data-i18n="settings.vc_live_proactive_off">Tắt: trả lời mọi câu nghe được</option>
+                    </select>
+                  </div>
+                  <div class="qs-field">
+                    <label class="qs-lbl" for="vcLiveTurn" data-i18n="settings.vc_live_turn">Nhịp trả lời</label>
+                    <select class="js-input" id="vcLiveTurn">
+                      <option value="fast" data-i18n="settings.vc_live_turn_fast">Nhanh: đáp ngay khi bạn ngừng</option>
+                      <option value="normal" data-i18n="settings.vc_live_turn_normal">Vừa (mặc định)</option>
+                      <option value="slow" data-i18n="settings.vc_live_turn_slow">Chậm rãi: chờ bạn nghĩ thêm</option>
+                    </select>
+                  </div>
+                  <div class="qs-hint" data-i18n="settings.vc_live_hint">Áp dụng cho Gemini Live và OpenAI Realtime, từ cuộc gọi kế tiếp.</div>
+                </div>
                 <div class="qs-field" id="vcRateRow">
                   <label class="qs-lbl" for="rateSel" data-i18n="qs.rate_lbl">Tốc độ đọc</label>
                   <select class="js-input" id="rateSel">
@@ -402,12 +468,6 @@
                     <option value="1.25" data-i18n="qs.rate_opt_fast">Nhanh · 1,25×</option>
                     <option value="1.45" data-i18n="qs.rate_opt_veryfast">Rất nhanh · 1,45×</option>
                   </select>
-                </div>
-                <div id="vcEleven" hidden>
-                  <label class="js-lbl" for="vcElKey">ElevenLabs API key <span class="dim" id="vcElKeySet" data-i18n="settings.key_set" hidden>(đã có - để trống nếu không đổi)</span></label>
-                  <input class="js-input" id="vcElKey" type="password" autocomplete="off" data-i18n-ph="settings.eleven_ph" placeholder="Dán API key ElevenLabs">
-                  <label class="js-lbl" for="vcElVoice">Voice ID <span class="dim" data-i18n="settings.voice_id_hint">(lấy ở ElevenLabs → Voices)</span></label>
-                  <input class="js-input" id="vcElVoice" data-i18n-ph="settings.eleven_voice_ph" placeholder="Ví dụ: 21m00Tcm4TlvDq8ikWAM (Rachel)">
                 </div>
                 <div class="qs-hint" id="vcOpenaiNote" data-i18n="settings.vc_openai_note" hidden>Muốn giọng OpenAI: dán API key OpenAI ở trang Models.</div>
               </details>
@@ -423,6 +483,7 @@
                 <option value="en-US-AndrewMultilingualNeural" data-i18n="qs.voice_opt_andrew">Andrew · Nam, ấm và tự tin · đa ngôn ngữ</option>
                 <option value="en-US-BrianMultilingualNeural" data-i18n="qs.voice_opt_brian">Brian · Nam, gần gũi đời thường · đa ngôn ngữ</option>
                 <option value="en-AU-WilliamMultilingualNeural" data-i18n="qs.voice_opt_william">William · Nam, thân thiện giọng Úc · đa ngôn ngữ</option>
+                <option value="auto" data-i18n="qs.voice_opt_auto">Tự động theo thứ tiếng · Hoài My, Emma hoặc giọng bản xứ</option>
               </select>
             </div>
 
@@ -475,6 +536,15 @@
               </div>
             </div>
 
+            <!-- Remote access through the built-in Cloudflare Tunnel (0.242.0). remote-access.js draws #raBox from
+                 /remote-access/status; the server downloads and supervises cloudflared (remote_tunnel.py). -->
+            <div class="qs-block" data-settings-section="general" id="remoteAccessBlock">
+              <div class="popover-label"><span data-i18n="ra.title">TRUY CẬP TỪ XA</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></div>
+              <div class="info-body" hidden data-i18n="ra.intro_long">Javis tự tải và chạy cloudflared (công cụ chính thức, miễn phí của Cloudflare) ngay trên máy này.</div>
+              <div class="opt-sub" data-i18n="ra.sub">Mở Javis từ điện thoại hay máy khác qua link HTTPS, không cần VPS.</div>
+              <div id="raBox" class="ra"></div>
+            </div>
+
           </div>
         </details>
       </aside>
@@ -485,6 +555,11 @@
          thật không". Được đăng ký trong CHAT_NODE_IDS (console.js) nên sang trang Trò chuyện
          là nó đi theo, không bị bỏ lại như thanh #toolBar cũ. -->
     <div class="bg-strip" id="bgStrip" hidden></div>
+
+    <!-- Thanh MỤC TIÊU của /goal (chat-goal.js, 0.290.0): mục tiêu đang theo đuổi, đồng hồ, nút xoá, tạm dừng,
+         xem chi tiết; nhiều mục tiêu thì có số ở đầu, bấm xổ danh sách. Ẩn khi không có mục tiêu. Nằm trong
+         CHAT_NODE_IDS (console.js) nên sang trang Trò chuyện là đi theo khung chat. -->
+    <div class="goal-bar" id="goalBar" hidden></div>
 
     <!-- The Coding page's own chip row (that page inserts its chips here on desktop). Empty on the home
          page, so hidden (.model-bar:empty). The model chip moved into the composer in 0.153.0. -->
@@ -518,10 +593,31 @@
           </button>
         </div>
         <span class="cp-gap"></span>
-        <button type="button" class="mic-big" id="voiceBtn" title="Bấm để gọi Javis" data-i18n-title="bar.mic">
+        <!-- Dictation bar (composer-dictate.js, 0.230.0): replaces +, chips, mic and voice chat while recording.
+             X drops the recording, the meter shows the mic level, the square stops and keeps the text to edit,
+             and the send button next to it stops and sends. -->
+        <div class="dict-bar" id="dictBar">
+          <button type="button" class="dict-cancel" id="dictCancel" title="Huỷ ghi âm" data-i18n-title="dict.cancel" aria-label="Huỷ ghi âm" data-i18n-aria="dict.cancel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+          <canvas class="dict-wave" id="dictWave" aria-hidden="true"></canvas>
+          <span class="dict-busy" id="dictBusy" hidden data-i18n="dict.busy">Đang chuyển thành chữ...</span>
+          <span class="dict-time" id="dictTime" aria-live="off">0:00</span>
+          <button type="button" class="dict-stop" id="dictStop" title="Dừng ghi, giữ chữ để sửa" data-i18n-title="dict.stop" aria-label="Dừng ghi, giữ chữ để sửa" data-i18n-aria="dict.stop">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+          </button>
+        </div>
+        <!-- Two voice buttons (0.230.0): the mic records speech into the text box (nothing is sent by itself),
+             the sound-wave button is the live voice chat (#voiceBtn, unchanged behaviour). -->
+        <button type="button" class="mic-big dict-btn" id="dictBtn" title="Ghi âm thành chữ" data-i18n-title="dict.btn" aria-label="Ghi âm thành chữ" data-i18n-aria="dict.btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+          </svg>
+        </button>
+        <button type="button" class="mic-big" id="voiceBtn" title="Đàm thoại: nói chuyện trực tiếp với Javis" data-i18n-title="bar.mic" aria-label="Đàm thoại: nói chuyện trực tiếp với Javis" data-i18n-aria="bar.mic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/>
           </svg>
         </button>
         <button type="button" class="stop-btn" id="stopBtn" title="Ngắt lệnh / dừng đọc (Esc)" data-i18n-title="bar.stop" style="display:none">
@@ -760,7 +856,8 @@
           <button class="s-btn" id="saveGeneral" data-i18n="common.save">Lưu</button>
         </div>
         <div class="set-sec">
-          <h4>Model</h4>
+          <h4>Model <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.or_note">Danh sách model tải động từ OpenRouter. Không thấy model cần? Chọn "Nhập tên khác" rồi gõ chính xác id. OpenRouter sẽ kích hoạt ở bản kế (P2).</div>
           <label data-i18n="setm.engine">Engine xử lý chat</label>
           <select id="setEngine">
             <option value="cli" data-i18n="setm.engine_cli">Claude Code CLI - MCP Javis + skill + loop + lệnh máy</option>
@@ -777,11 +874,11 @@
           <label>OpenRouter model <button type="button" class="set-mini" id="loadModelsBtn" data-i18n="setm.load_models">↻ Tải danh sách</button></label>
           <select id="setOrModelSel"><option value="__custom__" data-i18n="setm.custom_model">Nhập tên model khác (custom)…</option></select>
           <input id="setOrModel" placeholder="Ví dụ: openai/gpt-4o-mini" data-i18n-ph="setm.or_model_ph" style="display:none">
-          <div class="set-note" data-i18n="setm.or_note">Danh sách model tải động từ OpenRouter. Không thấy model cần? Chọn "Nhập tên khác" rồi gõ chính xác id. OpenRouter sẽ kích hoạt ở bản kế (P2).</div>
           <button class="s-btn" id="saveModel" data-i18n="common.save">Lưu</button>
         </div>
         <div class="set-sec">
-          <h4>Telegram</h4>
+          <h4>Telegram <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.tg_note">Nhắn Telegram ↔ Javis. Dùng đúng engine đang chọn (CLI thì có cả MCP để hỏi doanh thu/ads qua điện thoại). Có thể dùng lại token bot Morning Briefing.</div>
           <label class="loop-row" style="padding:0"><span data-i18n="setm.tg_on">Bật bot Telegram</span>
             <label class="toggle"><input type="checkbox" id="setTgEnabled"><span></span></label></label>
           <label>Bot token <span class="dim" id="setTgHint"></span></label>
@@ -789,14 +886,14 @@
           <label><span data-i18n="setm.tg_chat">Chat ID được phép dùng</span> <span class="dim" data-i18n="setm.tg_chat_dim">(nhiều ID cách nhau dấu phẩy)</span></label>
           <input id="setTgChat" placeholder="Ví dụ: 123456789, 987654321" data-i18n-ph="setm.tg_chat_ph">
           <div class="set-note" id="setTgStatus">-</div>
-          <div class="set-note" data-i18n="setm.tg_note">Nhắn Telegram ↔ Javis. Dùng đúng engine đang chọn (CLI thì có cả MCP để hỏi doanh thu/ads qua điện thoại). Có thể dùng lại token bot Morning Briefing.</div>
           <div class="set-actions">
             <button class="s-btn" id="saveTelegram" data-i18n="setm.tg_save">Lưu & bật</button>
             <button class="s-btn-ghost" id="testTelegram" data-i18n="setm.tg_test">Gửi test</button>
           </div>
         </div>
         <div class="set-sec">
-          <h4 data-i18n="setm.auth">Tài khoản đăng nhập</h4>
+          <h4><span data-i18n="setm.auth">Tài khoản đăng nhập</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.auth_note">Đặt mật khẩu để chặn người lạ khi đưa Javis lên VPS. Lưu ý: trên VPS nên chạy sau HTTPS (reverse proxy).</div>
           <div class="set-note" id="setAuthState"></div>
           <label data-i18n="common.account">Tài khoản</label><input id="setAuthUser" placeholder="Ví dụ: admin" data-i18n-ph="wz.user_ph">
           <!-- Mật khẩu hiện tại: chỉ hiện khi ĐÃ có tài khoản (app.js refreshAuthRow bật lên).
@@ -809,7 +906,6 @@
             <button class="s-btn-ghost" id="logoutBtn" data-i18n="setm.logout">Đăng xuất</button>
             <button class="s-btn-ghost" id="disableAuthBtn" data-i18n="setm.auth_off">Tắt đăng nhập</button>
           </div>
-          <div class="set-note" data-i18n="setm.auth_note">Đặt mật khẩu để chặn người lạ khi đưa Javis lên VPS. Lưu ý: trên VPS nên chạy sau HTTPS (reverse proxy).</div>
           <!-- Xác thực 2 lớp: CỐ Ý chỉ là dòng trạng thái + lối đi, không phải luồng bật đầy đủ.
                Màn quét QR nằm ở trang Tài khoản. Bê nguyên luồng đó sang đây là có hai bản sao
                của một tính năng bảo mật, và chỗ nào quên sửa thì chỗ đó thành lỗ.
@@ -834,8 +930,9 @@
        bắt được cả trường hợp một file phía dưới hỏng vì đang chạy bản cũ. -->
   <script src="/static/freshness.js"></script>
   <script src="/static/i18n/index.js?v=2"></script>
-  <script src="/static/vendor/lucide-icons.js?v=7"></script>
+  <script src="/static/vendor/lucide-icons.js?v=10"></script>
   <script src="/static/icons.js?v=2"></script>
+  <script src="/static/info-tip.js?v=1"></script>
 
   <!-- theme.js phải nạp TRƯỚC mọi file khác: graph.js / app.js đăng ký
        hàm vẽ lại theo tông ngay lúc parse, nếu window.javisTheme chưa có thì chúng
@@ -847,10 +944,12 @@
   <script src="/static/voice-adaptive.js?v=1"></script>
   <script src="/static/voice-adaptive-ui.js?v=2"></script>
   <script src="/static/voice-attention.js?v=2"></script>
-  <script src="/static/voice-chunker.js?v=1"></script>
-  <script src="/static/voice.js?v=27"></script>
+  <script src="/static/mic-test.js?v=1" defer></script>
+  <script src="/static/voice-chunker.js?v=2"></script>
+  <script src="/static/voice-lang.js?v=1"></script>
+  <script src="/static/voice.js?v=29"></script>
   <script src="/static/graph.js?v=18"></script>
-  <script src="/static/chat-render.js?v=19"></script>
+  <script src="/static/chat-render.js?v=22"></script>
   <script src="/static/code-hl.js?v=1"></script>
   <script src="/static/dataview.js?v=2"></script>
   <!-- window.JavisCopy: chép một chuỗi vào bảng nhớ tạm, có đường lui cho http trần. Đứng
@@ -859,77 +958,101 @@
   <script src="/static/task-suggest.js?v=1"></script>
   <!-- Bảng lệnh của trình soạn .md (nút thanh công cụ + phím tắt + menu "/"). PHẢI đứng
        trước console.js: _neBuildToolbar đọc window.JavisEditorCmds để vẽ nút. -->
-  <script src="/static/editor-cmds.js?v=1"></script>
+  <script src="/static/editor-cmds.js?v=2"></script>
   <!-- Đếm từ + ký tự cho trình sửa file (0.65.32). Thuần, console.js dùng qua window.JavisWordCount. -->
   <script src="/static/word-count.js?v=1"></script>
   <script src="/static/file-editor.js?v=13"></script>
+  <!-- Insert images into a note (paste/drop/button): compress, then save into images/. After
+       editor-cmds.js because it shares its editor lookup (contextFor). -->
+  <script src="/static/note-images.js?v=1"></script>
   <script src="/static/chat-ask.js?v=2"></script>
   <script src="/static/limit-resume.js?v=1"></script>
-  <script src="/static/chat-slash.js?v=4"></script>
+  <script src="/static/chat-slash.js?v=5"></script>
   <!-- Lệnh "/" hệ thống (/status /model /compact /plan /goal ...): chạy lệnh mà chat-slash.js vừa nhận
        diện. Phải nạp TRƯỚC app.js (sendMessage gọi window.JavisLenh) và SAU chat-slash.js (đọc menu). -->
-  <script src="/static/chat-lenh.js?v=1"></script>
-  <script src="/static/chat-acts.js?v=4"></script>
+  <script src="/static/chat-goal.js?v=1"></script>
+  <script src="/static/chat-lenh.js?v=2"></script>
+  <script src="/static/chat-acts.js?v=5"></script>
+  <!-- One POST /upload with progress and stall watch, shared by the main chat and the Team chat (app.js, teams.js). -->
+  <script src="/static/chat-upload.js?v=1"></script>
+  <!-- Stick to the latest message, the jump button and its "New messages" pill, shared by app.js and teams.js. -->
+  <script src="/static/chat-scroll.js?v=1"></script>
   <script src="/static/chat-quote.js?v=2"></script>
   <!-- Sáu reaction dùng chung (T2 0.154.0): nạp TRƯỚC chat-reactions.js, app.js, teams.js và mobile-chat.js. -->
-  <script src="/static/reactions.js?v=1"></script>
-  <script src="/static/chat-reactions.js?v=1"></script>
-  <script src="/static/chat-marks.js?v=3"></script>
+  <script src="/static/reactions.js?v=3"></script>
+  <!-- Nhấn giữ tin trên điện thoại (0.179.0): nạp TRƯỚC chat-reactions.js và teams.js. -->
+  <script src="/static/msg-press.js?v=5"></script>
+  <!-- Vuốt tin sang trái để trích dẫn trên điện thoại (0.216.0): nạp TRƯỚC chat-reactions.js. -->
+  <script src="/static/msg-swipe.js?v=1"></script>
+  <script src="/static/chat-reactions.js?v=6"></script>
+  <script src="/static/chat-marks.js?v=4"></script>
   <!-- Khối tiến trình từng bước trong khung chat: phải đứng TRƯỚC app.js vì app.js gọi
        window.JavisSteps ngay khi khung tool_call đầu tiên về. -->
   <script src="/static/chat-steps.js?v=2"></script>
-  <script src="/static/chat-viec.js?v=2"></script>
-  <script src="/static/chat-resonance.js?v=2"></script>
-  <script src="/static/resonance-agent.js?v=1"></script>
+  <script src="/static/chat-viec.js?v=6"></script>
+  <script src="/static/chat-nho.js?v=1"></script>
+  <script src="/static/chat-doi.js?v=1"></script>
+  <script src="/static/chat-card.js?v=2"></script>
+  <script src="/static/chat-resonance.js?v=3"></script>
+  <script src="/static/resonance-agent.js?v=5"></script>
   <!-- Voice V1: khối ngữ cảnh giao diện + bộ nhận lệnh ui_action, nạp TRƯỚC app.js. -->
   <!-- Kéo đổi bề rộng cột ở trang đồ thị và trang Trò chuyện (0.148.0): nạp TRƯỚC app.js và console.js. -->
   <script src="/static/col-resize.js?v=2"></script>
   <script src="/static/ui-context.js?v=1"></script>
-  <script src="/static/ui-actions.js?v=1"></script>
+  <script src="/static/ui-actions.js?v=2"></script>
   <!-- Voice V2: nghe nói thẳng (Live), app.js gọi lười khi bấm mic ở chế độ Live. -->
-  <script src="/static/voice-live.js?v=6"></script>
+  <script src="/static/voice-live.js?v=7"></script>
   <script src="/static/screen-awake.js?v=1"></script>
+  <script src="/static/incoming-call.js?v=1"></script>
   <script src="/static/call-bar.js?v=1"></script>
-  <script src="/static/app.js?v=134"></script>
+  <script src="/static/app.js?v=150"></script>
   <!-- Sau app.js: dải việc nền đọc window.JavisSessions (app.js dựng) để biết phiên + brain. -->
   <script src="/static/background-strip.js?v=3"></script>
   <!-- Thân bảng chọn model dùng chung: phải đứng TRƯỚC model-picker.js (thanh chat) và
        studio.js (ô Model của trợ lý) vì cả hai gọi window.JavisModelList lúc vẽ. -->
   <script src="/static/model-list.js?v=3"></script>
   <script src="/static/effort-slider.js?v=2"></script>
-  <script src="/static/model-picker.js?v=13"></script>
+  <script src="/static/model-picker.js?v=15"></script>
   <script src="/static/composer-plus.js?v=3"></script>
-  <script src="/static/composer-folder.js?v=2"></script>
-  <script src="/static/branding.js?v=7"></script>
+  <script src="/static/composer-folder.js?v=3"></script>
+  <script src="/static/branding.js?v=8"></script>
   <script src="/static/quick-settings.js?v=11"></script>
+  <script src="/static/remote-access.js?v=2"></script>
   <script src="/static/chat-zoom.js?v=6"></script>
-  <script src="/static/brains-ui.js?v=7"></script>
-  <script src="/static/sessions-ui.js?v=21"></script>
-  <script src="/static/studio.js?v=43"></script>
+  <script src="/static/brains-ui.js?v=8"></script>
+  <script src="/static/sessions-ui.js?v=23"></script>
+  <link rel="stylesheet" href="/static/improvement-candidates.css?v=1">
+  <script src="/static/improvement-candidates.js?v=1"></script>
+  <script src="/static/studio.js?v=46"></script>
   <!-- Trang Cộng sự: nạp SAU studio.js (mượn trình sửa agent/workflow của Studio) và TRƯỚC
        console.js (renderWorkspace ủy quyền cho window.JavisWorkspace). -->
   <!-- Tab Công việc của trợ lý (0.142.0): nạp TRƯỚC workspace.js, workspace.js gọi window.JavisAgentJobs. -->
-  <script src="/static/agent-jobs.js?v=2"></script>
-  <script src="/static/agent-pulse.js?v=1"></script>
+  <script src="/static/agent-jobs.js?v=6"></script>
+  <script src="/static/agent-pulse.js?v=4"></script>
   <script src="/static/pulse-seen.js?v=1"></script>
-  <script src="/static/agent-lessons-ui.js?v=1"></script>
-  <script src="/static/workspace.js?v=20"></script>
+  <script src="/static/agent-lessons-ui.js?v=4"></script>
+  <!-- Tag filter bar and tag picker shared by Cộng sự and Team (0.195.0): load BEFORE workspace.js and teams.js. -->
+  <script src="/static/tag-picker.js?v=1"></script>
+  <script src="/static/workspace.js?v=33"></script>
   <script src="/static/packs.js?v=1"></script>
   <!-- Hộp chọn thành viên kiểu Zalo (0.142.0): nạp TRƯỚC teams.js, teams.js gọi window.JavisTeamPicker. -->
   <script src="/static/team-picker.js?v=1"></script>
   <!-- Bộ phán xử nói / chờ / im của từng trợ lý (T3 phần J 0.156.0): lịch sử quyết định và nút sửa. Nạp TRƯỚC teams.js
        (ngăn Nhóm gọi window.JavisAgentJudge.hydrate); góp phần "judge" vào khung nhịp qua window.JavisPulseParts. -->
-  <script src="/static/agent-judge-ui.js?v=1"></script>
-  <script src="/static/teams.js?v=2"></script>
+  <script src="/static/agent-judge-ui.js?v=2"></script>
+  <!-- Nút mic nhập chữ của khung soạn Nhóm (0.176.0): nạp TRƯỚC teams.js. -->
+  <script src="/static/dictate.js?v=3"></script>
+  <script src="/static/composer-dictate.js?v=2"></script>
+  <script src="/static/teams.js?v=20"></script>
   <script src="/static/chatbots-reply-policy.js?v=1"></script>
   <script src="/static/chatbots-try.js?v=1"></script>
-  <script src="/static/chatbots.js?v=17"></script>
+  <script src="/static/chatbots.js?v=18"></script>
   <!-- Trang Hội thoại (hộp thư khách): nạp TRƯỚC console.js để renderConversations uỷ quyền được. -->
   <script src="/static/conversations-filters.js?v=1"></script>
-  <script src="/static/ht-media.js?v=2"></script>
-  <script src="/static/conversations.js?v=8"></script>
+  <script src="/static/ht-media.js?v=3"></script>
+  <script src="/static/conversations.js?v=10"></script>
   <!-- Dashboard Token (trang Mức dùng nâng cấp): nạp TRƯỚC console.js để renderUsage ủy quyền được. -->
-  <script src="/static/usage.js?v=1"></script>
+  <script src="/static/usage.js?v=2"></script>
   <!-- Trang Code (terminal): nạp TRƯỚC console.js để renderCode ủy quyền được. File này CHỈ có
        phần khung - xterm.js (285KB) nạp lười ở lần đầu mở tab, không nằm trong đường khởi động. -->
   <script src="/static/code-term.js?v=3"></script>
@@ -937,20 +1060,27 @@
   <script src="/static/folder-picker.js?v=2"></script>
   <!-- Trang Coding (nhóm Code): mượn khung chat của app, nên nạp TRƯỚC console.js y như
        workspace.js để renderCoding uỷ quyền được. -->
-  <script src="/static/coding.js?v=9"></script>
+  <script src="/static/coding.js?v=13"></script>
   <!-- Console layer: console.js đăng ký store TRƯỚC khi Alpine khởi động (defer) -->
   <!-- Phần đọc cấu hình của form "Tự thêm MCP" (thuần, có test node). Nạp TRƯỚC console.js. -->
   <script src="/static/mcp-form-parse.js?v=1"></script>
-  <script src="/static/console.js?v=172"></script>
-  <script src="/static/mobile-chat.js?v=13"></script>
+  <!-- Webhooks section of the Work page (0.198.0): load BEFORE console.js, which mounts window.JavisWebhooks. -->
+  <script src="/static/webhooks.js?v=7"></script>
+  <!-- Health section of the Work page (0.199.0): incidents Javis Core handles and the read-only scan. -->
+  <script src="/static/health-panel.js?v=1"></script>
+  <!-- Watch tab of the Recurring work page (0.239.0): token-free web page watching (server/web_watch.py). -->
+  <script src="/static/web-watch.js?v=3"></script>
+  <script src="/static/login-vault.js?v=2"></script>
+  <script src="/static/console.js?v=186"></script>
+  <script src="/static/mobile-chat.js?v=15"></script>
   <script src="/static/brain-view.js?v=1"></script>
-  <script src="/static/push.js?v=2"></script>
+  <script src="/static/push.js?v=3"></script>
   <script src="/static/install-nudge.js?v=1"></script>
-  <script src="/static/notifications.js?v=3"></script>
+  <script src="/static/notifications.js?v=9"></script>
   <!-- Linh vật ở mép màn hình. Nạp SAU app.js vì nó chỉ được app.js gọi vào
        (setOrbState -> JavisPet.setState), và sau console.js để trang Cài đặt vẽ được thẻ chọn. -->
   <script src="/static/pet.js?v=1"></script>
-  <script src="/static/agent-avatar.js?v=2"></script>
+  <script src="/static/agent-avatar.js?v=4"></script>
   <!-- (Nút đổi tông TỐI ↔ SÁNG: theme.js đã nạp ở đầu khối script phía trên) -->
   <!-- Alpine self-host (dashboard/vendor): bản unpkg đo được 2.1s lúc first load + chết khi offline -->
   <script defer src="/static/vendor/alpinejs-3.14.1.min.js?v=1"></script>

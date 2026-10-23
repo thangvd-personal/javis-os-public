@@ -28,6 +28,7 @@ import types
 from pathlib import Path
 
 import lang
+import localefmt
 import sessions
 import voice_live
 
@@ -35,14 +36,20 @@ import voice_live
 # not been changed yet fails on behaviour, not on a harness AttributeError.
 _ROUTE_NAMES = ("is_followup_ack", "is_same_request", "is_noop_result", "FOLLOWUP_ACK",
                 "parallel_request", "is_progress_question", "status_line",
-                "STATUS_FIRST_S", "STATUS_EVERY_S", "STATUS_TICK_S")
+                "STATUS_FIRST_S", "STATUS_EVERY_S", "STATUS_TICK_S", "DEFERRED_ACK", "LATE_RESULT_WAIT_S",
+                "is_about_attachment", "ATTACHMENT_ACK", "ATTACHMENT_GUARD_S")
+
+
+# Module-level helpers of main.py the route calls; compiled along with it.
+_ROUTE_HELPERS = ("_live_call_lang",)
 
 
 def route_tree():
     tree = ast.parse((SERVER / "main.py").read_text(encoding="utf-8"))
     route = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "voice_live_ws")
     route.decorator_list = []
-    return ast.Module(body=[route], type_ignores=[])
+    helpers = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in _ROUTE_HELPERS]
+    return ast.Module(body=helpers + [route], type_ignores=[])
 
 
 class FakeProvider:
@@ -55,7 +62,7 @@ class FakeProvider:
 
     def __init__(self, status_supported=True):
         self.q = asyncio.Queue()
-        self.results, self.acks, self.status_calls = [], [], []
+        self.results, self.acks, self.status_calls, self.readbacks = [], [], [], []
         self.status_supported = status_supported
         self.quiet = True
 
@@ -73,6 +80,12 @@ class FakeProvider:
     async def send_tool_ack(self, cid, name, text):
         self.acks.append((cid, text))
 
+    async def read_result(self, text):
+        self.readbacks.append(text)
+
+    async def wait_quiet(self, max_s):
+        return True
+
     async def say_status(self, text):
         if self.status_supported:
             self.status_calls.append(text)
@@ -89,7 +102,31 @@ class FakeProvider:
             yield ev
 
 
+class DeferringProvider(FakeProvider):
+    """A Gemini-3.1-shaped provider: tool calls must be answered at once, results arrive later."""
+    name = "gemini"
+    transport = "pcm"
+
+    def __init__(self, status_supported=True):
+        super().__init__(status_supported)
+        self.late, self.waits = [], []
+
+    def supports_async_tools(self): return False
+    def defers_tool_results(self): return True
+
+    async def wait_quiet(self, max_s):
+        self.waits.append(max_s)
+        while not self.quiet:
+            await asyncio.sleep(0.01)
+        return True
+
+    async def send_late_result(self, text):
+        self.late.append(text)
+
+
 class LiveRouteMixin:
+    provider_class = FakeProvider
+
     async def run_route(self, script, answers, status_supported=True, live_overrides=None):
         with tempfile.TemporaryDirectory() as directory:
             store = sessions.SessionStore(str(Path(directory) / "sessions.db"))
@@ -102,7 +139,7 @@ class LiveRouteMixin:
         sid = store.get_or_create(None, brain="brain", engine="test", model="test")
         frames, asks, keys, langs, progress = [], [], [], [], {}
         inbox = asyncio.Queue()
-        prov = FakeProvider(status_supported)
+        prov = self.provider_class(status_supported)
 
         class Socket:
             async def accept(self): pass
@@ -131,7 +168,7 @@ class LiveRouteMixin:
         names = {n: getattr(voice_live, n, None) for n in _ROUTE_NAMES}
         names.update(live_overrides)
         namespace = dict(
-            asyncio=asyncio, json=json, sys=sys, WebSocket=Socket, Query=lambda x: x, lang_mod=lang,
+            asyncio=asyncio, json=json, sys=sys, WebSocket=Socket, Query=lambda x: x, lang_mod=lang, localefmt=localefmt,
             cfgmod=types.SimpleNamespace(gate_active=lambda: False,
                                          read_settings=lambda: {"voice": {"live_provider": "chatgpt"}}),
             voice_live=types.SimpleNamespace(

@@ -55,6 +55,8 @@ BOT_COMMANDS = [
     {"command": "skills", "description": "Liệt kê skill có sẵn"},
     {"command": "notes", "description": "Lưu tin nhắn (kèm ảnh) vào Sources của brain"},
     {"command": "agents", "description": "Liệt kê agent + việc đang chạy"},
+    # Pick the agent (partner) that answers this chat; `@<agent name> ...` does it for one message.
+    {"command": "agent", "description": "Chọn cộng sự trả lời chat này (/agent off: về Javis)"},
     {"command": "workflows", "description": "Liệt kê workflow"},
     {"command": "model", "description": "Xem hoặc đổi model"},
     {"command": "brain", "description": "Xem hoặc đổi brain (vault) của phiên này"},
@@ -70,6 +72,8 @@ BOT_COMMANDS = [
 ]
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+# 0.202.0: audio (voice notes) goes as sendAudio so Telegram shows a player instead of a file.
+AUDIO_EXTS = {".mp3", ".m4a"}
 MAX_DOC_MB = 50     # trần sendDocument của bot API
 MAX_PHOTO_MB = 10   # trần sendPhoto
 MAX_DOWNLOAD_MB = 20  # bot API chỉ cho TẢI VỀ file ≤ 20MB
@@ -216,7 +220,8 @@ class TelegramBot(HangLuot):
         # cùng 1 tài khoản vẫn tuần tự (1 lượt/lúc). Map chat_id(str) -> asyncio.Task.
         self._current = {}
         # Tin đến trong lúc chat đó đang bận, chờ trả lời xong lượt trước rồi gộp làm một lượt.
-        # Chỉ dùng ở chế độ người thật; chế độ chủ vẫn báo "đang xử lý câu trước" như cũ.
+        # Human mode merges them here. Owner mode (0.213.0) hands them to the running turn first
+        # (bot_gateway._steer); whatever that turn never read lands here too, for the next turn.
         # chat_id(str) -> {"texts": [str], "meta": dict}
         self._cho = {}
         self._stop = False
@@ -387,6 +392,13 @@ class TelegramBot(HangLuot):
                     except Exception:
                         pass
                     # ảnh bị từ chối (kích thước/định dạng lạ) → rơi xuống gửi dạng document
+                elif p.suffix.lower() in AUDIO_EXTS:
+                    r = await client.post(self._url("sendAudio"), data=data, files={"audio": (p.name, content)})
+                    try:
+                        if r.json().get("ok"):
+                            return True, ""
+                    except Exception:
+                        pass
                 r = await client.post(self._url("sendDocument"), data=data,
                                       files={"document": (p.name, content)})
                 d = {}

@@ -132,6 +132,9 @@ operations index and media cleanup; Kanban has its own dispatcher.
 | Kanban tasks | `tasks.py`, `task_store.py` | `STATE_DIR/kanban.sqlite3` (+ JSON snapshot in `<brain>/Javis/kanban.json`) | Dispatcher claims tasks atomically and runs them as asyncio tasks |
 | Loops | `self_improve.py` | `<brain>/Javis/loops/<slug>.md`, state in `Javis/loop-state.json` | "Every X minutes find one unit of work"; run one at a time |
 | Reminders and cron jobs | `reminders.py`, `cron_util.py` | `<brain>/Javis/reminders.json` | Dependency-free 5-field cron parser |
+| Webhook triggers | `webhook_triggers.py` | `STATE_DIR/webhooks.json` (token hashes only) | `POST /hooks/<id>` runs a workflow or job from an outside event |
+| Incidents | `incident_desk.py` | `STATE_DIR/incidents.json` | A broken background run reaches Javis Core: retried once or the owner is told what to fix |
+| Health scan | `sentinel.py`, `tools/sentinel.py` | (read only) | Groups failures from every store by cause; runs without the server |
 | Workflows | `execute_workflow()` in `main.py`, `workflow_runtime.py`, `workflow_runs.py` | `<brain>/workflows/<slug>.md`, run history in SQLite | A chain of agent steps with checkpoints |
 | Self-learning | `learn.py`, `git_brain.py` | `<brain>/memory/` | The learning fork is read-only; only trusted Python writes, and only when the brain is a git checkout |
 | Results inbox | `inbox.py`, `webpush.py` | `STATE_DIR/inbox.json` | Every background result lands here, plus browser push |
@@ -204,6 +207,13 @@ workflow on the Collaborators page), `chat_runtime.py`.
   zip export/import of agents, skills and workflows.
 - `coding_store.py`, `coding_ctx.py`, `terminal.py`: the Code group (folders bound to a session,
   context for engines without file tools, a real PTY terminal for the owner).
+- `coding_files.py`, `coding_terminal.py`, `coding_checkpoint.py`, `run_command.py` (0.256.0): the
+  coding toolkit API brains get through the hub (paged reads, fuzzy section edits, file search, a
+  real bash terminal with background processes at Full access, automatic restore points in a
+  shadow git store with selective Undo). `secret_redact.py` masks secrets for logs and terminal output.
+- `web_tools.py` (0.259.0): `javis_web_search` (DuckDuckGo keyless, Tavily, Brave, SearXNG with
+  failover) and `javis_web_fetch` (HTML to markdown, PDF, paging cache, private-network guard shared
+  with `web_watch.check_url`) for API brains in owner chats.
 
 **Adaptive Context Runtime** (phased, mostly shadow or canary paths behind settings):
 `context_runtime.py` (trace substrate, `runtime.db`), `adaptive_context_runtime.py`,

@@ -89,12 +89,35 @@ elif command -v brew >/dev/null 2>&1; then
 fi
 
 # --- 3. Node.js 22 LTS (system pkg -> nodejs.org tarball fallback) ---
-need_node() { ! command -v node >/dev/null 2>&1 || [ "$(node -v | sed 's/v//;s/\..*//')" -lt 20 ]; }
+# First patched release of each supported line (Node.js security release of 2026-10-21, incl.
+# CVE-2026-111497 Brotli RCE). Keep in sync with PATCHED in server/node_security.py.
+node_floor() { case "$1" in 22) echo 22.23.4;; 24) echo 24.22.1;; 26) echo 26.12.1;; esac; }
+ver_num() { echo "$1" | awk -F. '{ printf "%d%04d%04d\n", $1, $2, $3 }'; }
+# ok | outdated (supported line, patch missing) | eol (line gets no fix) | missing
+node_status() {
+  command -v node >/dev/null 2>&1 || { echo missing; return; }
+  local v major floor
+  v=$(node -v | sed 's/^v//'); major=${v%%.*}; floor=$(node_floor "$major")
+  if [ -n "$floor" ]; then
+    [ "$(ver_num "$v")" -lt "$(ver_num "$floor")" ] && echo outdated || echo ok
+  elif [ "$major" -gt 26 ]; then echo ok
+  else echo eol; fi
+}
+# Install 22 LTS when Node is missing, older than 22, or an unpatched 22. A 24/26 the owner
+# installed on purpose is only warned about below: swapping it for 22 would be a downgrade.
+need_node() {
+  case "$(node_status)" in
+    missing) return 0;;
+    ok) return 1;;
+  esac
+  local major; major=$(node -v | sed 's/^v//;s/\..*//')
+  [ "$major" -le 22 ]
+}
 if need_node; then
-  log "Installing Node.js 22 LTS..."
+  log "Installing Node.js 22 LTS (patched)..."
   if command -v apt-get >/dev/null 2>&1; then
     curl -fsSL https://deb.nodesource.com/setup_22.x | $SUDO -E bash - >/dev/null 2>&1 && $SUDO apt-get install -y nodejs || true
-  elif command -v brew >/dev/null 2>&1; then brew install node@22 || true; fi
+  elif command -v brew >/dev/null 2>&1; then brew upgrade node@22 2>/dev/null || brew install node@22 || true; fi
   if need_node; then
     arch=$(uname -m); case "$arch" in x86_64) na=x64;; aarch64|arm64) na=arm64;; *) err "unsupported arch $arch"; exit 1;; esac
     tb=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/ | grep -oE "node-v22\.[0-9]+\.[0-9]+-linux-${na}\.tar\.xz" | head -1)
@@ -108,7 +131,12 @@ if need_node; then
     export PATH="$HOME/.local/bin:$PATH"
   fi
 fi
-ok "Node $(node -v)"
+case "$(node_status)" in
+  ok) ok "Node $(node -v)";;
+  outdated) warn "Node $(node -v) is missing the 2026-10-21 security fix. Upgrade to $(node_floor "$(node -v | sed 's/^v//;s/\..*//')") or newer: https://nodejs.org/en/blog/vulnerability/october-2026-security-releases";;
+  eol) warn "Node $(node -v) is end of life and gets no security fixes. Install Node.js 22 LTS (22.23.4 or newer) from https://nodejs.org";;
+  *) warn "Node.js not found; Claude Code and Codex need it.";;
+esac
 
 # --- 4. Claude Code CLI (the brain) ---
 if ! command -v claude >/dev/null 2>&1; then

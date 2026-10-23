@@ -32,6 +32,13 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
+  // Nút "i" (info-tip.js, 0.175.0): có thì lời giải thích ẩn sau nút cạnh tiêu đề; không có (test Node) thì vẽ thẳng ra.
+  function infoBtn() { var J = typeof window !== "undefined" && window.JavisInfo; return J ? J.btn(tw("info.more")) : ""; }
+  function infoBody(html) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    return J ? J.body(html) : '<div class="info-body">' + html + "</div>";
+  }
+
 
   function brain() {
     try {
@@ -40,20 +47,23 @@
     } catch (e) { return "brain"; }
   }
 
-  /* Dòng giải thích ngay dưới công tắc: theo trạng thái trợ lý và phiên đang mở. */
-  function toggleNote(agent, session) {
-    if (!agent || agent.status === "missing") return tw("resonance.a1_missing");
-    if (agent.status === "retired") return tw("resonance.a1_retired");
-    if (!agent.enabled) return tw("resonance.a1_off_note");
-    if (session === "needs_new_session") return tw("resonance.a1_needs_new_session");
-    return tw("resonance.a1_on_note");
+  /* Dòng giải thích theo trạng thái trợ lý và phiên đang mở. Trả về KHOÁ (như stateKey); chữ chỉ được vẽ trong khối
+     (i) của panelHtml. */
+  function toggleNoteKey(agent, session) {
+    if (!agent || agent.status === "missing") return "resonance.a1_missing";
+    if (agent.status === "retired") return "resonance.a1_retired";
+    if (!agent.enabled) return "resonance.a1_off_note";
+    if (session === "needs_new_session") return "resonance.a1_needs_new_session";
+    return "resonance.a1_on_note";
   }
 
-  /* Cảnh báo theo engine của trợ lý (thiết kế A1 mục 2): lập mục tiêu, nhận bản chat, việc nền. */
+  function sub(text, cls) { return '<div class="rsa-sub' + (cls ? " " + cls : "") + '">' + esc(text) + "</div>"; }
+
+  /* Cảnh báo theo engine của trợ lý (thiết kế A1 mục 2): lập mục tiêu, việc nền. Ghi chú "chưa nhận bản chat" nằm
+     trong khối (i) của panelHtml. */
   function supportHtml(support) {
     var s = support || {};
     if (s.goal === false) return '<div class="rsa-warn">' + esc(tw("resonance.a1_engine_no_goal")) + "</div>";
-    if (s.chat_output === false) return '<div class="rsa-sub">' + esc(tw("resonance.a1_engine_no_chat_output")) + "</div>";
     // A4 (mục 6.1): engine nộp được qua công cụ hub thì nói rõ Javis đăng, và chỉ khi bạn đã cho phép file đích.
     if (s.submit_tool) return '<div class="rsa-sub">' + esc(tw("resonance.a4_engine_submit")) + "</div>";
     return "";
@@ -101,22 +111,25 @@
   /* Khối Cộng hưởng của MỘT trợ lý. `row`: một mục của GET /resonance/agents (hay null khi chưa tải được),
      `session`: ready | needs_new_session | not_this_agent | null, `goals`: GET /resonance/goals?agent_key=. */
   /* 0.142.0: bỏ ô Người review (cặp làm/review cố định của A5). Mục tiêu mới không gắn người review; cần kiểm chứng thì
-     giao một việc riêng cho trợ lý phù hợp ở tab Công việc. Tiêu chí hoàn thành, góp ý và lịch sử review cũ vẫn giữ. */
-  function verifyNoteHtml() {
-    return '<div class="rsa-sub rsa-note rsa-verify">' + esc(tw("resonance.verify_note")) + "</div>";
-  }
-
+     giao một việc riêng cho trợ lý phù hợp ở tab Công việc (dòng rsa-verify trong khối (i)). Tiêu chí hoàn thành, góp ý
+     và lịch sử review cũ vẫn giữ. */
   function panelHtml(row, session, goals, all) {
     var r = row || { status: "unregistered", enabled: false };
     var on = !!r.enabled && r.status === "active";
     // T0: công tắc nằm trên dòng trợ lý ở cột trái (một nơi duy nhất). Ở đây chỉ còn trạng thái bằng chữ.
-    var html = '<div class="rsa-head"><span class="rsa-title">' + esc(tw("resonance.a1_title")) + "</span>" +
-      '<span class="rsa-state">' + esc(tw(stateKey(r))) + "</span></div>" +
-      '<div class="rsa-sub rsa-desc">' + esc(tw("resonance.auto_desc")) + "</div>" +
-      '<div class="rsa-sub">' + esc(tw("resonance.t0_where")) + "</div>" +
-      '<div class="rsa-sub rsa-note">' + esc(tw("resonance.auto_not_full")) + "</div>";
-    html += '<div class="rsa-sub rsa-note">' + esc(toggleNote(r.status === "unregistered" ? { status: "active",
-      enabled: false } : r, session)) + "</div>";
+    // 0.175.0 (chủ repo 16/10/2026: "bên cài đặt quá rồi... có một nút nhỏ kiểu nút i"): đầu mục chỉ còn tên và trạng thái.
+    // Mọi câu giải thích (Auto làm gì, bật ở đâu, Auto không phải Toàn quyền, ghi chú công tắc, kiểm chứng) nằm sau nút i.
+    // Thứ cần chủ làm (mở phiên mới, xác nhận trợ lý, cảnh báo engine) vẫn đứng ngoài, không bị giấu.
+    var html = '<div class="rsa-head"><span class="rsa-title">' + esc(tw("resonance.a1_title")) + infoBtn() + "</span>" +
+      '<span class="rsa-state">' + esc(tw(stateKey(r))) + "</span></div>";
+    var sup = supportHtml(r.support);
+    var supWarn = sup.indexOf("rsa-warn") >= 0;
+    var noChat = !supWarn && (r.support || {}).chat_output === false;
+    var nk = toggleNoteKey(r.status === "unregistered" ? { status: "active", enabled: false } : r, session);
+    html += infoBody(sub(tw("resonance.auto_desc"), "rsa-desc") + sub(tw("resonance.t0_where")) +
+      sub(tw("resonance.auto_not_full"), "rsa-note") + sub(tw(nk), "rsa-note") +
+      (noChat ? sub(tw("resonance.a1_engine_no_chat_output")) : supWarn ? "" : sup) +
+      (on ? sub(tw("resonance.verify_note"), "rsa-note rsa-verify") : ""));
     if (on && session === "needs_new_session") {
       html += '<button type="button" class="ws-btn rsa-new-session">' + esc(tw("resonance.a1_open_new")) + "</button>";
     }
@@ -125,122 +138,34 @@
         esc(tw("resonance.a1_confirm_same")) + '</button><button type="button" class="ws-btn rsa-confirm" data-same="0">' +
         esc(tw("resonance.a1_confirm_new")) + "</button></div>";
     }
-    html += supportHtml(r.support);
-    if (on) html += verifyNoteHtml();
+    if (supWarn) html += sup;
     var list = (goals || []).filter(function (g) { return g && g.goal_id; });
-    html += '<div class="rsa-goals-title">' + esc(tw("resonance.a1_goals_title")) + "</div>";
-    if (!list.length) html += '<div class="rsa-sub">' + esc(tw("resonance.a1_no_goals")) + "</div>";
+    // 0.190.0 (chủ repo 16/10/2026: "tối giản nhất"): no goals means nothing to show, not a "no goals yet" line.
+    if (list.length) html += '<div class="rsa-goals-title">' + esc(tw("resonance.a1_goals_title")) + "</div>";
     list.forEach(function (g) {
       html += '<div class="rs-card rsa-card" data-goal="' + esc(g.goal_id) + '"></div>';
     });
     return html;
   }
 
-  /* A3: mục "Bài học" của trợ lý (GET /resonance/lessons). Một cột (luật trang cài đặt xếp một cột): đề xuất kèm câu cũ
-     và câu mới xếp dọc, bài học đang dùng có nút Thu hồi, lịch sử ngắn. Khoá từ điển nguyên văn qua bảng tra. */
-  var LESSON_KEYS = {
-    "notice_detail:brief": "resonance.a3_p_brief",
-    "notice_detail:full": "resonance.a3_p_full",
-    "notice_ping:quiet": "resonance.a3_p_quiet",
-    "notice_ping:ping": "resonance.a3_p_ping"
-  };
-  var STATUS_KEYS = {
-    proposed: "resonance.a3_st_proposed", active: "resonance.a3_st_active", superseded: "resonance.a3_st_superseded",
-    revoked: "resonance.a3_st_revoked", dismissed: "resonance.a3_st_dismissed", expired: "resonance.a3_st_expired",
-    stale: "resonance.a3_st_stale", skipped: "resonance.a3_st_skipped", rejected: "resonance.a3_st_rejected",
-    unknown: "resonance.a3_st_unknown", out_of_scope: "resonance.a3_st_out_of_scope",
-    trial_pending: "resonance.a3_st_trial_pending", trialing: "resonance.a3_st_trialing"
-  };
-
-  /* Câu xem trước dựng từ mẫu tin báo (markdown): bỏ cú pháp liên kết, giữ chữ. */
-  function plainMd(s) {
-    return String(s == null ? "" : s).replace(/\[([^\]]*)\]\(([^)]*)\)/g, "$1");
-  }
-
-  function lessonLabel(l) {
-    if (l.lane === "method") return tw("resonance.a3_m_method", { to: l.to_label || l.to_value || "" });
-    var k = String(l.key || "") + ":" + String(l.to_value || "");
-    return tw(Object.prototype.hasOwnProperty.call(LESSON_KEYS, k) ? LESSON_KEYS[k] : "resonance.a3_p_other");
-  }
-
-  function statusLabel(st) {
-    return tw(Object.prototype.hasOwnProperty.call(STATUS_KEYS, st) ? STATUS_KEYS[st] : "resonance.a3_st_unknown");
-  }
-
-  function lessonsHtml(data) {
-    var d = data || {};
-    var all = d.lessons || [];
-    var html = '<div class="rsa-goals-title">' + esc(tw("resonance.a3_lessons_title")) + "</div>";
-    var props = all.filter(function (l) { return l.status === "proposed" && l.lane === "presentation"; });
-    var act = all.filter(function (l) { return l.status === "active"; });
-    // Phép thử cách làm đang chờ hay đang chạy: hiện riêng kèm nút Bỏ qua, không lẫn vào lịch sử.
-    var trying = all.filter(function (l) {
-      return l.lane === "method" && (l.status === "trial_pending" || l.status === "trialing");
-    });
-    var hist = all.filter(function (l) {
-      return l.status !== "proposed" && l.status !== "active" && trying.indexOf(l) < 0;
-    }).slice(0, 5);
-    if (!all.length) html += '<div class="rsa-sub">' + esc(tw("resonance.a3_lessons_empty")) + "</div>";
-    props.forEach(function (l) {
-      var n = ((l.evidence || {}).reactions || []).length;
-      html += '<div class="rsa-lesson rsa-proposed" data-lid="' + esc(l.id) + '">' +
-        '<div class="rsa-lesson-text">' + esc(lessonLabel(l)) + "</div>" +
-        '<div class="rsa-sub">' + esc(tw("resonance.a3_evidence", { n: n })) + "</div>";
-      var pv = l.preview || {};
-      if (pv.kind === "detail") {
-        html += '<div class="rsa-pv"><div class="rsa-pv-label">' + esc(tw("resonance.a3_preview_old")) + "</div>" +
-          '<div class="rsa-pv-text">' + esc(plainMd(pv.old)) + "</div>" +
-          '<div class="rsa-pv-label">' + esc(tw("resonance.a3_preview_new")) + "</div>" +
-          '<div class="rsa-pv-text">' + esc(plainMd(pv.new)) + "</div></div>";
-      } else if (pv.kind === "ping") {
-        html += '<div class="rsa-sub">' + esc(tw("resonance.a3_preview_ping")) + "</div>";
-      }
-      html += '<div class="rsa-sub">' + esc(tw("resonance.a3_mandatory_note")) + "</div>" +
-        '<div class="rsa-acts"><button type="button" class="ws-btn rsa-lesson-act" data-act="apply" data-lid="' +
-        esc(l.id) + '" data-upd="' + esc(l.updated_at) + '">' + esc(tw("resonance.a3_apply")) + "</button>" +
-        '<button type="button" class="ws-btn rsa-lesson-act" data-act="dismiss" data-lid="' + esc(l.id) + '">' +
-        esc(tw("resonance.a3_dismiss")) + "</button></div></div>";
-    });
-    trying.forEach(function (l) {
-      html += '<div class="rsa-lesson rsa-trying" data-lid="' + esc(l.id) + '">' +
-        '<div class="rsa-lesson-text">' + esc(lessonLabel(l)) + " · " + esc(statusLabel(l.status)) + "</div>" +
-        (l.goal_label ? '<div class="rsa-sub">' + esc(l.goal_label) + "</div>" : "") +
-        '<div class="rsa-acts"><button type="button" class="ws-btn rsa-lesson-act" data-act="dismiss" data-lid="' +
-        esc(l.id) + '">' + esc(tw("resonance.a3_dismiss")) + "</button></div></div>";
-    });
-    act.forEach(function (l) {
-      html += '<div class="rsa-lesson rsa-active" data-lid="' + esc(l.id) + '">' +
-        '<div class="rsa-lesson-text">' + esc(lessonLabel(l)) + " · " + esc(statusLabel(l.status)) + "</div>" +
-        (l.goal_label ? '<div class="rsa-sub">' + esc(l.goal_label) + "</div>" : "") +
-        '<div class="rsa-sub">' + esc(tw(l.lane === "method" ? "resonance.a3_scope_goal" : "resonance.a3_scope_agent")) +
-        "</div>" +
-        (l.evidence_missing ? '<div class="rsa-sub">' + esc(tw("resonance.a3_evidence_missing")) + "</div>" : "") +
-        '<div class="rsa-acts"><button type="button" class="ws-btn rsa-lesson-act" data-act="revoke" data-lid="' +
-        esc(l.id) + '">' + esc(tw("resonance.a3_revoke")) + "</button></div></div>";
-    });
-    if (hist.length) {
-      html += '<div class="rsa-sub">' + esc(tw("resonance.a3_history")) + "</div>" + hist.map(function (l) {
-        return '<div class="rsa-sub rsa-hist">' + esc(lessonLabel(l)) + " · " + esc(statusLabel(l.status)) + "</div>";
-      }).join("");
-    }
-    var st = d.stats || {};
-    if (st.up || st.down) {
-      html += '<div class="rsa-sub">' + esc(tw("resonance.a3_stats", { up: st.up || 0, down: st.down || 0 })) + "</div>";
-    }
-    return html;
-  }
+  /* 0.190.0 (owner, 16/10/2026): the A3 "Lessons" list (proposals, active lessons with Revoke, history) is no longer on
+     the assistant's column. People never used it; lessons are handled in chat with the javis_memory tool. Method
+     lessons still surface as cards in the chat itself (chat-resonance.js). */
 
   /* Khối trên trang Cài đặt (T0): chỉ còn tóm tắt và đường sang trang Cộng sự, nơi bật, tắt từng trợ lý. Trợ lý mất
      file vẫn được liệt kê bằng chữ để thấy; mã mồ côi; mục tiêu chờ gán kèm ô chọn trợ lý. */
   function settingsHtml(data, unassigned) {
     var d = data || {};
     var agents = d.agents || [];
-    var html = '<div class="opt-sub">' + esc(tw("resonance.a1_settings_desc")) + "</div>";
-    if (!agents.length) html += '<div class="opt-sub">' + esc(tw("resonance.a1_settings_empty")) + "</div>";
-    else {
-      var nOn = agents.filter(function (a) { return a && a.enabled && a.status === "active"; }).length;
-      html += '<div class="opt-sub rsa-summary">' + esc(tw("resonance.t0_settings_summary", { n: nOn })) + "</div>" +
-        '<button type="button" class="ws-btn rsa-goto-ws">' + esc(tw("resonance.t0_settings_manage")) + "</button>";
+    // 0.214.0: what Auto does sits behind the (i) at the end of the first line (summary, or the empty note).
+    var html = "";
+    var nOn = agents.filter(function (a) { return a && a.enabled && a.status === "active"; }).length;
+    html += agents.length
+      ? '<div class="opt-sub rsa-summary">' + esc(tw("resonance.t0_settings_summary", { n: nOn })) + infoBtn() + "</div>"
+      : '<div class="opt-sub">' + esc(tw("resonance.a1_settings_empty")) + infoBtn() + "</div>";
+    html += infoBody('<div class="opt-sub">' + esc(tw("resonance.a1_settings_desc")) + "</div>");
+    if (agents.length) {
+      html += '<button type="button" class="ws-btn rsa-goto-ws">' + esc(tw("resonance.t0_settings_manage")) + "</button>";
     }
     agents.forEach(function (a) {
       if (!a || a.status !== "missing") return;
@@ -253,8 +178,8 @@
     var wait = (unassigned || []).filter(function (g) { return g && g.goal_id; });
     if (wait.length) {
       var live = agents.filter(function (a) { return a.status === "active" && a.agent_key; });
-      html += '<div class="popover-label rsa-wait-title">' + esc(tw("resonance.a1_unassigned_title")) + "</div>" +
-        '<div class="opt-sub">' + esc(tw("resonance.a1_unassigned_desc")) + "</div>";
+      html += '<div class="popover-label rsa-wait-title">' + esc(tw("resonance.a1_unassigned_title")) + infoBtn() + "</div>" +
+        infoBody('<div class="opt-sub">' + esc(tw("resonance.a1_unassigned_desc")) + "</div>");
       wait.forEach(function (g) {
         html += '<div class="rsa-wait" data-goal="' + esc(g.goal_id) + '" data-rev="' + esc(g.revision) + '">' +
           '<div class="rsa-wait-text">' + esc(g.understanding || g.goal_id) + "</div>" +
@@ -326,19 +251,6 @@
         var goals = (gr.j && gr.j.goals) || [];
         host.innerHTML = panelHtml(row, session, goals, (res.j && res.j.agents) || []);
         wire(host, row);
-        if (key) {
-          // A3: mục Bài học của trợ lý (đọc ghi bù hết hạn đề xuất ở server). Lỗi tải thì bỏ qua mục này.
-          getJson("/resonance/lessons?brain=" + q(brain()) + "&agent_key=" + q(key)).then(function (lr) {
-            if (t !== S.ticket || lr.code !== 200) return;
-            var box = document.createElement("div");
-            box.className = "rsa-lessons";
-            // Câu báo xung đột của lần bấm trước được giữ qua lần vẽ lại (không thì vừa hiện đã mất).
-            box.innerHTML = (S.lessonNote ? '<div class="rsa-warn">' + esc(S.lessonNote) + "</div>" : "") +
-              lessonsHtml(lr.j);
-            S.lessonNote = "";
-            host.appendChild(box);
-          }).catch(function () {});
-        }
         if (window.JavisResonance) {
           goals.forEach(function (g) {
             var el = host.querySelector('.rsa-card[data-goal="' + g.goal_id + '"]');
@@ -372,26 +284,6 @@
       // Mở phiên mới đi đúng đường của trang; trang gắn lại khối với phiên mới và host nói nó có dùng được không.
       if (S.onNewSession) Promise.resolve(S.onNewSession()).then(function () { refresh(); });
     });
-    // `host` sống qua nhiều lần vẽ lại: chỉ gắn trình nghe MỘT lần, không thì một lần bấm gửi nhiều request.
-    if (!host._a3Wired && host.addEventListener) {
-      host._a3Wired = true;
-      host.addEventListener("click", function (ev) {
-        var b = ev.target && ev.target.closest && ev.target.closest(".rsa-lesson-act");
-        if (!b) return;
-        var act = b.getAttribute("data-act");
-        if (act === "revoke" && !window.confirm(tw("resonance.a3_revoke_q"))) return;
-        b.disabled = true;
-        var upd = b.getAttribute("data-upd");
-        postJson("/resonance/lessons/" + q(b.getAttribute("data-lid")) + "/decision?brain=" + q(brain()),
-          { action: act, expected_status: act === "apply" ? "proposed" : "", expected_updated_at: upd || "" })
-          .then(function (res) {
-            if (res.code !== 200) {
-              S.lessonNote = tw("resonance.a3_changed");
-            }
-            refresh();
-          }).catch(function () { b.disabled = false; });
-      });
-    }
     host.querySelectorAll(".rsa-confirm").forEach(function (b) {
       b.addEventListener("click", function () {
         if (!row || !row.agent_key) return;
@@ -463,20 +355,15 @@
     window.addEventListener("javis:sessions-changed", function () {
       if (S.host && S.host.isConnected && currentSession() !== S.lastSid) refresh();
     });
-    // A3: một phản hồi trên tin báo vừa ghi (chat-resonance.js); không tải lại thì mục Bài học vẫn hiện "chưa có".
-    window.addEventListener("javis:resonance-lessons", function () {
-      if (S.host && S.host.isConnected) refresh();
-    });
     // T0: công tắc trên dòng trợ lý (hay tab khác) vừa đổi trạng thái: bảng bên phải hỏi lại host.
     window.addEventListener("javis:resonance-agents-changed", function () {
       if (S.host && S.host.isConnected) refresh();
     });
   }
 
-  var api = { mount: mount, refresh: refresh, panelHtml: panelHtml, verifyNoteHtml: verifyNoteHtml,
+  var api = { mount: mount, refresh: refresh, panelHtml: panelHtml,
     rowToggleHtml: rowToggleHtml, stateKey: stateKey, offConfirmText: offConfirmText, toggleAgent: toggleAgent,
-    settingsHtml: settingsHtml, toggleNote: toggleNote,
-    lessonsHtml: lessonsHtml, supportHtml: supportHtml };
+    settingsHtml: settingsHtml, toggleNoteKey: toggleNoteKey, supportHtml: supportHtml };
   if (typeof window !== "undefined") window.JavisResonanceAgent = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

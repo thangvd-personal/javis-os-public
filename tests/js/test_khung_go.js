@@ -38,7 +38,7 @@ check("CSS: an empty #modelBar is hidden", css.indexOf(".model-bar:empty { displ
 check("CSS: no old phone order rules left", css.indexOf(".hud-voice .attach-btn { order: 1;") === -1);
 
 check("CHAT_NODE_IDS drops attachBar (it lives inside the card)",
-  consoleJs.indexOf('const CHAT_NODE_IDS = ["callBar", "chatArea", "bgStrip", "modelBar", "hudVoice"];') !== -1);
+  consoleJs.indexOf('const CHAT_NODE_IDS = ["callBar", "chatArea", "bgStrip", "goalBar", "modelBar", "hudVoice"];') !== -1);
 check("Chat page cp-css uses 24px corners", consoleJs.indexOf(".chatpage-slot .hud-voice{ background:var(--bg2); border:1px solid var(--border); border-radius:24px; }") !== -1);
 
 check("phone to desktop: the model chip goes back into #cpChips before #effBtn",
@@ -58,7 +58,8 @@ check("the / menu anchors to the card (#hudVoice) and does not cover attachments
 
 // 0.160.0 follow-ups.
 check("workspace locks send through a flag that app.js honours, so a turn update cannot re-enable it",
-  /dataset\.wsLock/.test(ws) && /sendBtn\.disabled = isProcessing \|\| sendBtn\.dataset\.wsLock === "1"/.test(app)
+  /dataset\.wsLock/.test(ws) && // 0.206.0: during a turn the button unlocks for an add-on message (coTheGuiBoSung); the workspace flag still wins.
+  /sendBtn\.disabled = \(isProcessing && !coTheGuiBoSung\(\)\) \|\| sendBtn\.dataset\.wsLock === "1"/.test(app)
   && /function setProcessing\(s\) \{[^}]*sendBtn\.dataset\.wsLock === "1"/.test(app));
 check("leaving the page mid-turn does not re-enable send (workspace asks app.js to resync)", /JavisSyncActiveUI/.test(ws) && /window\.JavisSyncActiveUI = syncActiveUI/.test(app));
 check("no CSS left for the old Effort row and separator", !/\.mb-eff-row|\.mb-eff-btn|\.mb-sep|\.mb-eff \{/.test(css));

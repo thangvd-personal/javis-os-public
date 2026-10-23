@@ -9,7 +9,7 @@ Trang này hướng dẫn hai việc: đổi logo/avatar của Javis thành ản
 - **Ảnh đại diện (logo/avatar):** thay ảnh JAVIS OS mặc định bằng ảnh của bạn. Ảnh mới hiện ngay ở góc trên bên trái, ở thanh bên, ở màn hình đăng nhập, ở cửa sổ chào mừng, và làm luôn icon tab trình duyệt (favicon).
 - **Tên miền riêng (HTTPS):** thay vì mở Javis bằng địa chỉ IP kèm cổng (kiểu `http://12.34.56.78:7777`), bạn dùng một tên miền dễ nhớ và có khóa an toàn HTTPS. Javis tự cấp chứng chỉ HTTPS (cơ chế On-Demand TLS qua Caddy), và có nút **Bật SSL** để chủ động xin chứng chỉ ngay thay vì ngồi đợi.
 
-Lưu ý quan trọng ngay từ đầu: phần **Tên miền riêng** chỉ hoạt động khi bạn deploy Javis bằng Docker trên VPS và đã mở cổng 80/443. Nếu bạn chạy Javis trên máy cá nhân, phần đổi logo vẫn dùng bình thường, còn phần tên miền sẽ không lên HTTPS được. Chi tiết deploy xem [Cấu hình .env](16-cau-hinh-env.md) và file `DEPLOY.md` trong thư mục dự án.
+Lưu ý quan trọng ngay từ đầu: phần **Tên miền riêng** chỉ hoạt động khi bạn deploy Javis bằng Docker trên VPS và đã mở cổng 80/443. Nếu bạn chạy Javis trên máy cá nhân (Windows, macOS), hãy dùng mục **Truy cập từ xa** ngay bên dưới: Javis tự dựng Cloudflare Tunnel, có HTTPS và cả tên miền riêng mà không cần VPS. Xem [Truy cập từ xa trên máy Windows hoặc macOS](#truy-cập-từ-xa-trên-máy-windows-hoặc-macos). Chi tiết deploy xem [Cấu hình .env](16-cau-hinh-env.md) và file `DEPLOY.md` trong thư mục dự án.
 
 ## Mở ở đâu trong Javis
 
@@ -88,6 +88,49 @@ Nút **Kiểm tra lại** dùng được bất cứ lúc nào: nó chỉ đọc 
 
 Trên Hostinger, nút **Bật SSL** bị ẩn đi, vì Traefik của hPanel mới là bên cấp chứng chỉ. Xem mục Hostinger bên dưới.
 
+## Truy cập từ xa trên máy Windows hoặc macOS
+
+Mục **TRUY CẬP TỪ XA** (Cài đặt, ngay dưới Tên miền & SSL) mở Javis ra Internet qua **Cloudflare Tunnel** (hoặc riêng tư qua **Tailscale**, xem Cách 3) mà không cần VPS, không mở cổng modem, không gõ lệnh. Javis tự tải `cloudflared` (công cụ chính thức, miễn phí của Cloudflare) đúng bản cho máy (Windows x64/ARM, macOS Intel/Apple Silicon, Linux), chạy nó cùng Javis và tự nối lại khi rớt mạng. Có HTTPS nên micro và giọng nói chạy được trên điện thoại.
+
+**Bắt buộc đặt mật khẩu đăng nhập trước** (mục Tài khoản đăng nhập). Khi tunnel đang bật, Javis luôn đòi đăng nhập và không cho tắt đăng nhập. Nếu mật khẩu bị xoá (ví dụ chạy `reset-auth`), tunnel tự dừng trong vài giây.
+
+### Cách 1: Link nhanh (không cần tài khoản)
+
+1. Chọn **Link nhanh**, bấm **Bật truy cập từ xa**.
+2. Lần đầu Javis tải `cloudflared` (khoảng 40 MB), rồi hiện link dạng `https://ba-tu-ngau-nhien.trycloudflare.com`.
+3. Mở link đó trên điện thoại, đăng nhập bằng mật khẩu.
+
+Link này **đổi mỗi lần Javis khởi động lại**, hợp để thử hoặc dùng tạm.
+
+### Cách 2: Tên miền riêng (link cố định)
+
+Cần một tài khoản Cloudflare miễn phí và một tên miền đang dùng DNS của Cloudflare.
+
+1. Vào [one.dash.cloudflare.com](https://one.dash.cloudflare.com), mục **Networks**, chọn **Tunnels**, bấm **Create a tunnel**, chọn **Cloudflared**, đặt tên.
+2. Ở bước cài connector, bấm sao chép dòng lệnh (bản Windows hay Mac đều được). **Không cần chạy lệnh đó**, chỉ cần dán nguyên dòng vào ô **Token tunnel Cloudflare** trong Javis. Javis tự lấy token ra.
+3. Sang bước **Public Hostname**: chọn tên miền con (ví dụ `javis.tencuaban.com`), Service chọn **HTTP**, ô URL điền địa chỉ dịch vụ Javis hiện ra (mặc định `127.0.0.1:7777`, có nút sao chép).
+4. Quay lại Javis, chọn **Tên miền riêng**, bấm **Bật truy cập từ xa**. Khi trạng thái là **Đang chạy**, Javis đọc tên miền bạn vừa đặt và hiện link `https://javis.tencuaban.com`.
+
+Token được mã hoá khi lưu, không bao giờ gửi ngược ra trình duyệt, và đưa cho `cloudflared` qua biến môi trường chứ không nằm trên dòng lệnh.
+
+### Cách 3: Tailscale (riêng tư, chỉ máy của bạn)
+
+Hợp khi chỉ mình bạn dùng: link không lộ ra Internet, chỉ máy đã cài Tailscale và đăng nhập cùng tài khoản mới mở được. Javis không tự cài Tailscale (nó cần quyền hệ thống và đăng nhập tài khoản), nhưng lo phần còn lại.
+
+1. Cài [Tailscale](https://tailscale.com/download) trên máy chạy Javis và trên điện thoại, đăng nhập cùng một tài khoản.
+2. Trong Javis chọn **Tailscale**, bấm **Bật truy cập từ xa**. Javis tự chạy `tailscale serve`, không cần gõ lệnh.
+3. Lần đầu, Tailscale có thể đòi bật HTTPS cho mạng của bạn: Javis hiện link **Mở trang bật HTTPS**, bấm vào rồi bấm **Enable**. Javis tự thử lại.
+4. Mở link `https://ten-may.ten-mang.ts.net` trên điện thoại đang bật Tailscale.
+
+Link Tailscale vẫn chạy khi Javis khởi động lại; bấm **Tắt** thì Javis gỡ đúng phần nó đã thêm, không đụng các cấu hình Tailscale khác của bạn. Người ngoài mạng Tailscale của bạn không mở được link này, nên nó không dùng cho link chia sẻ hay webhook từ dịch vụ bên ngoài; những việc đó dùng Cách 1 hoặc Cách 2.
+
+### Nên biết
+
+- Máy tắt hoặc ngủ thì link cũng tắt. Muốn mở 24/7, tắt chế độ Sleep (Windows) hoặc bật "Prevent automatic sleeping" (macOS).
+- Javis bật lại tunnel sau khi khởi động lại hoặc cập nhật, nếu lần trước bạn để nó bật.
+- Nếu Javis báo Cloudflare đang trỏ tới một địa chỉ khác, sửa URL dịch vụ trong Public Hostname thành đúng địa chỉ Javis hiện.
+- Bản Docker trên VPS vẫn có thể dùng cách cũ (`docker compose --profile tunnel`) trong `DEPLOY.md`.
+
 ## Bảng tra nhanh nút và trạng thái
 
 Hai badge nằm ngay dưới ô nhập tên miền:
@@ -145,6 +188,8 @@ Dòng trạng thái dưới cùng của card có thể là:
 
 ## Nếu bạn deploy trên Hostinger (khác cách trên)
 
+> 🛒 Chưa có VPS Hostinger? [Đăng ký tại đây](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN).
+
 Hostinger VPS đã cài sẵn reverse proxy Traefik lo SSL, và cổng 80/443 đã bị Traefik chiếm. Javis vẫn cho nhập tên miền, kiểm tra DNS và tạo sẵn biến cần dùng ngay trên UI, nhưng container không có quyền sửa route Traefik của hPanel. Vì thế nút **Bật SSL** bị ẩn, badge SSL ghi **SSL: qua Hostinger**, và bước 3 của wizard đổi thành **3. Kích hoạt route HTTPS trên Hostinger**:
 
 1. Trỏ DNS: bản ghi `A  <tên miền của bạn> → <IP VPS Hostinger>`.
@@ -155,6 +200,19 @@ Hostinger VPS đã cài sẵn reverse proxy Traefik lo SSL, và cổng 80/443 đ
 Nếu bạn cố bấm Bật SSL trên Hostinger (ví dụ qua API), Javis từ chối và nói rõ: Hostinger quản lý HTTPS bằng Traefik, hãy đặt `DOMAIN_NAME` trong Docker Manager rồi Redeploy.
 
 Sau khi Redeploy, trở lại Cài đặt và bấm **Kiểm tra lại**. Chi tiết và xử lý sự cố xem mục "Tên miền + HTTPS trên Hostinger" trong `DEPLOY.md`; hai link tài liệu cũng nằm ngay dưới card tên miền.
+
+### Badge SSL nói gì (từ 0.248.0)
+
+Mỗi lần Kiểm tra lại, Javis tự mở `https://<tên miền>` từ chính máy chủ và xem ai trả lời, rồi ghi đúng bước đang hỏng lên badge:
+
+- **SSL: đang bật**: xong, mở link là vào được.
+- **SSL: Hostinger chưa nhận tên miền**: DNS đã tới VPS nhưng Traefik chưa có đường cho tên miền này. Dòng `traefik...rule=Host(...)` của dự án vẫn là tên cũ: đặt `DOMAIN_NAME` đúng tên miền (hoặc sửa thẳng dòng `Host` trong YAML) rồi **Redeploy**. Đây là ca hay gặp nhất: đã nhập tên miền trong Javis và trỏ DNS, nhưng chưa Redeploy với tên miền mới.
+- **SSL: đang chờ cấp chứng chỉ**: đường đã thông tới Javis, Let's Encrypt chưa cấp xong. Đợi vài phút rồi Kiểm tra lại.
+- **SSL: proxy không gọi được Javis**: Traefik báo 502, kiểm tra container Javis có đang chạy.
+- **SSL: tên miền mở nhầm trang khác**: tên miền đang trỏ vào một trang khác hoặc một bản Javis khác (ví dụ stack thứ hai trên cùng VPS).
+- **SSL: không kết nối được cổng 443**: không có gì trả lời ở cổng HTTPS của VPS.
+
+Nếu bạn sửa thẳng dòng `Host(...)` trong YAML thay vì đặt `DOMAIN_NAME`, Javis không còn báo "còn bước Redeploy" khi tên miền đã chạy HTTPS.
 
 ## Theme riêng cho người vận hành (CSS)
 
@@ -175,7 +233,7 @@ Xoá file là về giao diện gốc. Trần 512 KB.
 
 - Ảnh logo nên là ảnh vuông (tỉ lệ 1:1) để không bị cắt méo, vì Javis hiển thị logo trong khung vuông bo góc.
 - Sau khi tải ảnh mới mà chỗ nào đó vẫn còn ảnh cũ, chờ khoảng 1 phút hoặc tải lại trang; hệ thống có bộ nhớ đệm ngắn cho ảnh logo (favicon lâu hơn, khoảng 5 phút).
-- Nếu chưa có tên miền riêng nhưng vẫn muốn truy cập từ xa có HTTPS, có thể dùng cách khác (ví dụ Cloudflare Tunnel) mô tả trong `DEPLOY.md`.
+- Nếu chưa có VPS hay tên miền riêng mà vẫn muốn truy cập từ xa có HTTPS, dùng mục **Truy cập từ xa** (xem phần trên).
 - Dùng đúng bản ghi loại **A** (trỏ theo IPv4). Đừng dùng CNAME cho tên miền này trừ khi bạn hiểu rõ hệ quả.
 - Đừng bấm **Bật SSL** liên tục khi DNS chưa đúng. Mỗi lần bấm là một lần Javis buộc Caddy đi xin chứng chỉ, xin hỏng nhiều lần sẽ chạm giới hạn của Let's Encrypt.
 

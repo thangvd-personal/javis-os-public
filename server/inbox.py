@@ -115,7 +115,7 @@ def _tieu_de(text: str) -> str:
 
 def add(text: str, *, kind: str = "answer", session_id: str = "", brain: str = "",
         source: str = "", label: str = "", title: str = "", read: bool = False,
-        channel: str = "") -> dict:
+        channel: str = "", dedup: str = "", routing: str = "") -> dict:
     """Bỏ MỘT mẩu thư vào hòm. Trả về thư vừa tạo.
 
     `text` là nguyên văn nội dung đã gửi cho người dùng; hòm thư chỉ giữ bản cắt ngắn để
@@ -146,8 +146,20 @@ def add(text: str, *, kind: str = "answer", session_id: str = "", brain: str = "
         # (đúng lỗi bản 0.59.15 đã chữa cho đường rời trang).
         "channel": str(channel or ""),
     }
+    # `dedup` (0.186.0): a retried report (a reminder sent again after a crash, a job reported twice) carries the
+    # same key; the first item stands and the caller learns it was a repeat (`duplicate`), so no channel rings twice.
+    # `routing` (0.186.0): why the report could not be delivered to a chat ("no_target": no chat and no source brain),
+    # kept so the owner sees it in the bell instead of Javis guessing a recipient.
+    if dedup:
+        item["dedup"] = str(dedup)[:200]
+    if routing:
+        item["routing"] = str(routing)[:40]
     with _LOCK:
         d = _load()
+        if dedup:
+            cu = next((it for it in d["items"] if it.get("dedup") == item["dedup"]), None)
+            if cu is not None:
+                return {**cu, "duplicate": True}
         d["items"].append(item)
         if len(d["items"]) > MAX_ITEMS:
             # Cắt từ ĐẦU (cũ nhất) và chỉ cắt thư ĐÃ ĐỌC trước; thư chưa đọc là thứ người
@@ -235,3 +247,53 @@ def xoa(item_id: str) -> bool:
             return False
         _save(d)
         return True
+
+
+# ── read state of the shared news (releases, announcements), 0.187.0 ─────────────────────────────────────────────
+#
+# The "News" tab is computed for everyone (`GET /notifications`), so the items are not stored once per person; only
+# WHICH of them this account has read is. It used to live in each browser's localStorage, so the phone and the
+# laptop disagreed. One instance has one account (the owner), so one file holds that account's read set; reading on
+# one device clears it on every device, and switching brains changes nothing.
+NEWS_STORE = STATE_DIR / "news_read.json"
+NEWS_MAX = 500
+
+
+def _news_load() -> dict:
+    try:
+        d = json.loads(NEWS_STORE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        d = {}
+    ids = d.get("read") if isinstance(d, dict) else None
+    return {"read": [str(x) for x in ids] if isinstance(ids, list) else [],
+            "initialized": bool(isinstance(d, dict) and d.get("initialized"))}
+
+
+def news_state() -> dict:
+    with _LOCK:
+        return _news_load()
+
+
+def news_mark(ids, *, initialized: bool = False) -> dict:
+    """Add `ids` to the read set (newest kept, capped). `initialized` records that the first-run pass is done."""
+    with _LOCK:
+        d = _news_load()
+        seen = set(d["read"])
+        for x in ids or []:
+            x = str(x or "").strip()[:200]
+            if x and x not in seen:
+                d["read"].append(x)
+                seen.add(x)
+        d["read"] = d["read"][-NEWS_MAX:]
+        if initialized:
+            d["initialized"] = True
+        tmp = NEWS_STORE.with_name(NEWS_STORE.name + ".tmp")
+        tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(NEWS_STORE)
+        return d
+
+
+def get(item_id: str):
+    """One inbox item by id, or None."""
+    with _LOCK:
+        return next((it for it in _load()["items"] if it.get("id") == str(item_id or "")), None)

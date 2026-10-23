@@ -122,6 +122,14 @@ check("tran cuc chat: buoc phai bo bot dong", kept < n_all)
 check("bo dong thi PHAI noi ro con bao nhieu + duong doc tiep",
       "chưa liệt kê" in tiny and "memory/MEMORY.md" in tiny)
 check("rut mo ta thi chi duong sang facts/", "memory/facts/" in main._fit_memory_index(mem, 8000))
+# 0.222.0: the hidden memories are NAMED, so the model knows what it can still read.
+dropped = [i for i in range(60) if f"(facts/ky-uc-{i}.md)" not in tiny]
+check("bo dong thi van NEU TEN file cua ky uc bi an (it nhat ky uc dau tien bi an)",
+      dropped and f"ky-uc-{dropped[0]}" in tiny.split("chưa liệt kê")[-1])
+check("bo dong: ten ky uc an kem duong doc memory/facts/<tên>.md", "memory/facts/<tên>.md" in tiny)
+for cap in (1200, 4000):
+    got = main._fit_memory_index(mem * 3, cap)
+    check(f"bo dong: tran {cap} van giu duoi tran ke ca danh sach ten", len(got) <= cap)
 check("CANARY: khong duong chi tiep nao quay lai cach viet Memory/ hoa",
       "Memory/" not in tiny and "Memory/" not in main._fit_memory_index(mem, 8000))
 check("tran doc duoc tu bien moi truong", "JAVIS_MEMORY_INDEX_MAX" in

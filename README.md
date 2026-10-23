@@ -6,7 +6,7 @@
 
 ### Your self-hosted AI agent with a swappable brain, and a Second Brain that gets smarter every day.
 
-Run it on your laptop or a small VPS. Talk to it by voice. Plug in Claude, ChatGPT, Grok, Gemini or any of 13 providers, keep every tool when you switch, and let it work in the background while you sleep.
+Run it on your laptop or a small VPS. Talk to it by voice. Plug in Claude, ChatGPT, Grok, Gemini or any of 14 providers, keep every tool when you switch, and let it work in the background while you sleep.
 
 [![GitHub stars](https://img.shields.io/github/stars/thangvd-personal/javis-store-public?style=flat&logo=github&label=stars)](https://github.com/thangvd-personal/javis-os-public/stargazers)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e)](LICENSE)
@@ -35,7 +35,7 @@ Run it on your laptop or a small VPS. Talk to it by voice. Plug in Claude, ChatG
 
 🇬🇧 **English** · [🇻🇳 Tiếng Việt](docs/i18n/vi/README.md) · [🇨🇳 简体中文](docs/i18n/zh/README.md) · [🇪🇸 Español](docs/i18n/es/README.md) · [🇯🇵 日本語](docs/i18n/ja/README.md) · [🇮🇳 हिन्दी](docs/i18n/hi/README.md) · [🇧🇷 Português](docs/i18n/pt-BR/README.md) · [🇰🇷 한국어](docs/i18n/ko/README.md) · [🇷🇺 Русский](docs/i18n/ru/README.md) · [🇩🇪 Deutsch](docs/i18n/de/README.md) · [🇫🇷 Français](docs/i18n/fr/README.md) · [🇮🇩 Bahasa Indonesia](docs/i18n/id/README.md) · [🌍 Help translate](CONTRIBUTING.md#translations)
 
-[Quick start](#-quick-start) · [Why Javis](#-why-javis) · [Brains](#-13-brains-one-toolkit) · [Features](#-features) · [Install](#-installation) · [Docs](docs/en/README.md) · [Support](#-support-javis-os)
+[Quick start](#-quick-start) · [Why Javis](#-why-javis) · [Brains](#-14-brains-one-toolkit) · [Features](#-features) · [Install](#-installation) · [Docs](docs/en/README.md) · [Support](#-support-javis-os)
 
 <br>
 
@@ -108,13 +108,13 @@ What that buys you:
 
 | | An ordinary chatbot | **Javis OS** |
 |---|---|---|
-| **Brain** | Locked to one model, one stateless API call per message | **Swappable**: 13 providers, each with the full set of tools, MCP, skills and sessions, including models running on your own machine through Ollama |
+| **Brain** | Locked to one model, one stateless API call per message | **Swappable**: 14 providers, each with the full set of tools, MCP, skills and sessions, including models running on your own machine through Ollama |
 | **Memory** | Forgets after every session | **A living Second Brain** that remembers you and thickens with every conversation |
 | **Data** | Made up, or absent | **Real numbers** from the connections you wire in (sales, ads, calendar, email, messaging) |
 | **Work** | Answers, then waits | **Background loops, reminders and an AI-run task queue** that report back to you |
 | **Interface** | A chat box | Dashboard + knowledge graph + **hands-free voice** + Telegram, Slack, WhatsApp, Zalo + a CLI |
 | **Your work** | Stays on the vendor's servers, in the vendor's format | **Plain files on your machine**: history, memory, skills, agents and workflows carry over to any new model |
-| **Deployment** | Someone else's cloud | **Self-hosted**: one-click Hostinger, Docker, or any VPS |
+| **Deployment** | Someone else's cloud | **Self-hosted**: one-click [Hostinger](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN), Docker, or any VPS |
 
 > 💡 **The philosophy: capability lives in Javis, not in the model.** Every brain gets the same toolbox through one shared connection hub (the MCP Hub). Switching from Claude to Gemini costs you nothing except shell access, which only the CLI engines have.
 
@@ -124,9 +124,9 @@ What that buys you:
 
 ---
 
-## 🧠 13 brains, one toolkit
+## 🧠 14 brains, one toolkit
 
-Pick the brain on the **Models** page and change it whenever you like. Javis supports **13 providers** today.
+Pick the brain on the **Models** page and change it whenever you like. Javis supports **14 providers** today.
 
 <p align="center">
 <img src="docs/assets/diagrams/swappable-brain.svg" width="100%" alt="Animated diagram: the Javis core in the middle with its toolkit (MCP Hub, Skills, Second Brain, Tasks, Schedules, Plugins) around it, while the brains take turns plugging in and every tool stays lit">
@@ -141,7 +141,7 @@ Pick the brain on the **Models** page and change it whenever you like. Javis sup
 | **OpenRouter** | API key (hundreds of models behind one key) | via Javis tools |
 | **OpenAI API** · **Anthropic API** · **Google Gemini** · **Groq** · **DeepSeek** | API key | via Javis tools |
 | **Ollama Cloud** · **Ollama on this machine** | API key, or free on your own hardware | via Javis tools |
-| **Any OpenAI-compatible endpoint** | Whatever that endpoint needs | via Javis tools |
+| **Any OpenAI-compatible or Anthropic-compatible endpoint** | Whatever that endpoint or reseller needs | via Javis tools |
 
 Every brain can call your connected MCP servers, read and write the brain, run skills, queue Kanban work, and create agents, workflows, loops and reminders. The CLI engines additionally run **shell commands**, **fetch and search the web**, and **spawn parallel sub-agents**.
 
@@ -244,6 +244,8 @@ flowchart LR
 <details open>
 <summary><b>Option 1: Hostinger Docker Manager (domain + HTTPS, one click)</b></summary>
 
+> 🛒 **No VPS yet?** [Get a Hostinger VPS here](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN). Docker Manager comes built in, so Javis installs in one click. Once it is ready, come back to the steps below.
+
 Hostinger VPS → **Docker Manager → Compose → URL** → paste the Hostinger file and press **Deploy**:
 
 ```
@@ -269,6 +271,8 @@ Details and troubleshooting: [DEPLOY.en.md](DEPLOY.en.md).
 
 <details>
 <summary><b>Option 2: Docker on any VPS (no clone needed)</b></summary>
+
+> 🛒 **Need a VPS?** A [Hostinger VPS](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN) runs this option too.
 
 ```bash
 # Docker required (don't have it?  curl -fsSL https://get.docker.com | sh)

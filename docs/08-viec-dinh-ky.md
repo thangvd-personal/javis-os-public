@@ -117,17 +117,25 @@ Mọi giờ tính theo giờ Việt Nam (UTC+7). Ba dạng đầu là hẹn **m�
 
 ## Danh sách việc
 
-### Gom theo brain
+### Ba tab: Việc, Sự cố, Nhật ký
 
-Mỗi brain một khối, tiêu đề `🧠 <tên brain>`, kèm nhãn nhỏ **đang xem** cho brain bạn đang chọn ở thanh bên và **mặc định** cho brain mặc định. Brain đang xem được đẩy lên đầu. Brain không có việc nào và cũng không phải brain đang xem thì bị ẩn đi cho gọn.
+Từ 0.204.0 trang chia thành ba tab ngay dưới nút **+ Thêm việc**. Tab **Việc** là danh sách việc, cạnh tên có số việc. Tab **Sự cố** là phần sức khoẻ việc nền, có số đỏ khi đang có sự cố mở. Tab **Nhật ký** là nhật ký gần đây. Trang nhớ tab bạn mở lần trước.
 
-Trong mỗi khối, việc lặp liệt kê trước, rồi tới mục **Nhắc hẹn đang chờ**.
+### Chọn bộ não
 
-Brain đang xem mà chưa có việc thì hiện dòng "Chưa có việc nào ở brain này. Bấm **+ Thêm việc**, hoặc nói với Javis trong chat." Cả hệ thống chưa có việc nào thì hiện "Chưa có việc định kỳ hay nhắc hẹn nào."
+Ô chọn đầu tab Việc chỉ hiện việc của **một bộ não**, mặc định là bộ não bạn đang chọn ở thanh bên (ghi **đang xem**). Mỗi bộ não ghi kèm số việc, ví dụ `Brain Default (14)`. Chọn **Tất cả bộ não** thì thấy hết, mỗi thẻ có dòng nhỏ ghi thẻ đó thuộc bộ não nào. Trang nhớ lựa chọn này.
+
+Cạnh đó là ba nút lọc **Tất cả**, **Việc lặp** và **Nhắc hẹn**.
+
+### Phân trang
+
+Mỗi trang **10 thẻ**, có nút **← Trước** và **Sau →** cùng dòng đếm "Trang 1/2 · 14 mục". Đổi bộ não, đổi bộ lọc hay gõ tìm kiếm thì quay về trang đầu.
+
+Bộ não chưa có việc thì hiện dòng "Chưa có việc nào ở brain này. Bấm **+ Thêm việc**, hoặc nói với Javis trong chat."
 
 ### Ô tìm kiếm
 
-Ô **🔍 Tìm việc theo tên...** ở trên danh sách lọc thẻ ngay khi bạn gõ, **bỏ dấu tiếng Việt** nên gõ "kho" vẫn khớp "khô", gõ "email" vẫn khớp "Email". Nhóm brain nào không còn thẻ nào khớp thì tự ẩn. Không khớp gì cả thì hiện "Không có việc nào khớp."
+Ô **🔍 Tìm việc theo tên...** lọc thẻ ngay khi bạn gõ, **bỏ dấu tiếng Việt** nên gõ "kho" vẫn khớp "khô", gõ "email" vẫn khớp "Email". Ô này tìm trong bộ não đang chọn (hoặc tất cả). Không khớp gì cả thì hiện "Không có việc nào khớp."
 
 ### Đọc một thẻ việc lặp
 
@@ -237,7 +245,7 @@ Cả hai đều cần bot đã bật, xem [Kênh Telegram](11-telegram.md). Chư
 
 ## Nhật ký gần đây
 
-Khối cuối trang. Cạnh tiêu đề có một ô chọn để lọc:
+Ở tab **Nhật ký**. Cạnh tiêu đề có một ô chọn để lọc:
 
 - **Nhật ký brain đang xem**: gộp mọi việc lặp của brain đang chọn ở thanh bên.
 - Hoặc chọn đúng một việc, hiển thị dạng `<tên việc> · <tên brain>`.
@@ -264,6 +272,50 @@ Hai rào an toàn cứng của đường này, không tham số nào đổi đư
 
 - Việc lặp tạo qua chat **luôn** ở `enabled: false`, và mặc định `mode: full` (nói "chỉ đọc" hoặc "chỉ ghi nháp" nếu muốn nhẹ hơn). Bạn phải vào trang Việc định kỳ bấm **Bật** thì nó mới chạy thật.
 - Không rõ chu kỳ (ví dụ bạn chỉ nói "mỗi sáng" mà không kèm giờ) thì công cụ báo lỗi và hỏi lại, tuyệt đối không tự đoán.
+
+## Webhook: hệ thống bên ngoài gọi Javis làm việc
+
+Nhắc hẹn chạy theo giờ. Webhook chạy theo **sự kiện**: khách vừa điền form trên landing page, vừa thanh toán, hay một app khác vừa có dữ liệu mới thì Javis vào việc ngay, không phải chờ tới lượt lịch kế tiếp.
+
+**Tạo một webhook:** từ 0.204.0 webhook có trang riêng: mở nhóm **Việc** trên thanh bên, chọn **Webhook**, bấm **+ Thêm webhook**. Đặt tên, chọn brain, rồi chọn chạy gì:
+
+- **Một quy trình**: chọn quy trình có sẵn trong brain. Dữ liệu sự kiện thành đầu vào của quy trình.
+- **Một việc viết tay**: viết việc cần làm, ví dụ "Gọi lại cho khách trong 5 phút, ghi vào sổ khách hàng".
+
+Chọn mức quyền như nhắc hẹn (Chỉ đọc, Được ghi file, Toàn quyền), rồi **Lưu**.
+
+**Mã bí mật chỉ hiện một lần**, ngay sau khi lưu, kèm một lệnh `curl` để thử. Hệ thống gọi tới gửi mã trong header `Authorization: Bearer <mã>` (hoặc header `X-Javis-Token`, hoặc `?token=` cuối link nếu nó không đặt được header). Javis chỉ giữ bản băm của mã, nên quên mã thì bấm **Tạo mã mới**; mã cũ ngừng chạy ngay.
+
+**Kết quả về đâu:** như nhắc hẹn, vào khung Javis Core của brain, hòm thư (chuông) và Telegram của bạn. Kết quả mở đầu bằng `[SILENT]` thì không báo.
+
+**Rào an toàn:**
+
+- Link sai mã, webhook đã tắt hay không tồn tại đều nhận cùng một câu từ chối, nên không ai dò được.
+- Dữ liệu sự kiện được đưa cho bộ não như **dữ liệu**, không phải lệnh. Giới hạn 32 KB mỗi lần gọi.
+- Mỗi webhook chạy từng việc một, chờ tối đa 5 việc, tối đa 30 lần mỗi giờ.
+- Hệ thống gọi lại vì mạng chập (gửi kèm header `Idempotency-Key` hoặc `X-Request-Id`) thì Javis nhận nhưng không chạy lần hai.
+
+**Link phải ra được Internet.** Javis chạy trên VPS có tên miền thì dùng luôn. Chạy trên máy nhà thì cần một đường hầm (Cloudflare Tunnel, Tailscale Funnel) trỏ vào Javis.
+
+## Sức khoẻ việc nền: Javis Core lo sự cố
+
+Việc nền nào hỏng (việc Kanban, việc lặp tự tạm dừng, nhắc hẹn kiểu Tự làm rồi báo, webhook) thì **Javis Core** của brain đó được báo trước tiên, rồi quyết một trong ba:
+
+- **Chạy lại một lần** nếu lỗi thoáng qua (mạng chập, hết giờ, máy bận). Chỉ áp cho việc Kanban và nhắc hẹn; việc lặp và webhook không tự chạy lại.
+- **Báo bạn** một hai câu nếu chỉ bạn gỡ được: đăng nhập lại, khoá API, quyền, gói hết lượt, kết nối chưa đấu, việc đang tắt.
+- **Im** nếu việc đã tự ổn.
+
+Quyết định do model việc nền đưa ra ở chế độ chỉ chữ (không công cụ nào), nhưng luật cứng do Javis giữ: lỗi về đăng nhập hay khoá không bao giờ được chạy lại, mỗi sự cố chạy lại tối đa một lần, và chạy lại vẫn hỏng thì chỉ báo đúng một tin. Không có model sẵn sàng thì Javis tự phân loại theo chữ lỗi.
+
+Tab **Sự cố** của trang Việc định kỳ hiện các sự cố đang mở (bấm **Đã xử lý** để đóng) và các lỗi 24 giờ qua gom theo nguyên nhân. Muốn tắt hẳn việc báo cho Javis Core thì đặt `incidents.enabled` thành `false` trong cài đặt.
+
+**Khi Javis không mở được:** chạy `python tools/sentinel.py` trên máy chủ. Lệnh này chỉ đọc dữ liệu, không gọi model, in danh sách lỗi gom theo nguyên nhân; thêm `--json` để lấy bản máy đọc, `--out <thư mục>` để lưu báo cáo (thư mục phải nằm ngoài thư mục dữ liệu của Javis).
+
+## Nhắc hẹn nhớ kết quả lần trước
+
+Nhắc hẹn kiểu **Tự làm rồi báo** có thêm ô **Nhớ kết quả lần trước**. Bật lên thì mỗi lần chạy Javis nhận lại báo cáo lần trước (tối đa 2.000 ký tự), nên chỉ báo cái mới hay cái thay đổi. Hợp với việc theo dõi giá đối thủ, theo dõi chỉ số, rà hộp thư.
+
+Lịch lặp theo cron còn hiện **ba lần chạy tới** ngay trên thẻ. Lần chạy bị trễ vì máy tắt thì vẫn chạy bù một lần khi máy mở lại, và Javis được báo là đang chạy trễ để tính theo giờ hiện tại.
 
 ## Trường nâng cao (chỉ sửa được trong file .md)
 

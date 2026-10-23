@@ -36,7 +36,8 @@
   function PROVS() {
     return [["", window.t("studio.all")], ["claude", "Claude Code"], ["codex", "ChatGPT"], ["api", "API"]];
   }
-  var PROV_LABEL = { claude: "Claude Code", codex: "ChatGPT/Codex", api: "API (OpenRouter...)", "grok-cli": "Grok Build" };
+  var PROV_LABEL = { claude: "Claude Code", codex: "ChatGPT/Codex", api: "API (OpenRouter...)", "grok-cli": "Grok Build",
+    "antigravity-cli": "Antigravity CLI", local: "Ollama (Local)" };
   function SRC_LABEL() { return { manual: window.t("usage.nguon.tay"), javis: window.t("usage.nguon.javis") }; }
   function ACT_LABEL() {
     return { chat: "Chat", background: window.t("usage.hd.nen"), subagent: "Subagent", manual: window.t("usage.hd.thu_cong") };
@@ -71,6 +72,16 @@
   }
   function model(m) { return String(m || "").split("/").pop().replace(/^(claude-|gpt-)/, "").slice(0, 26); }
   function pct(x) { return Math.round((+x || 0) * 100) + "%"; }
+  // (i) button from info-tip.js: explanations sit behind it, next to the title they belong to.
+  function infoBtn() { var J = typeof window !== "undefined" && window.JavisInfo; return J ? J.btn(window.t("info.more")) : ""; }
+  function infoBody(html) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    return J ? J.body(html) : '<div class="info-body">' + html + "</div>";
+  }
+  function infoPair(html) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    return J ? J.pair(html, window.t("info.more")) : '<div class="info-body">' + html + "</div>";
+  }
 
   var _css = false;
   function injectCss() {
@@ -117,7 +128,8 @@
       + ".tk-ns .chk input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:var(--accent-solid)}"
       + ".tk-ns .acts{display:flex;gap:8px;margin-top:12px;align-items:center}"
       + ".tk-ns button.save{padding:7px 15px;border-radius:9px;border:0;background:var(--accent-solid);color:var(--on-accent);font-size:13px;font-weight:600;cursor:pointer}"
-      + ".tk-ns .hint{font-size:11.5px;color:var(--text3);line-height:1.6;margin-top:10px}"
+      + ".tk-ns .kw-row{display:flex;align-items:center;gap:6px;margin-top:11px}"
+      + ".tk-ns .kw-row .chk{margin-top:0}"
       // --- Ô số phụ
       + ".tk-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px}"
       + ".tk-card{flex:1 1 140px;background:var(--glass);border:1px solid var(--glass-brd);border-radius:12px;padding:13px 15px}"
@@ -160,7 +172,6 @@
       + ".tk-ins .ico{font-size:16px;flex:0 0 auto}"
       + ".tk-ins .t{font-weight:600;color:var(--text);font-size:13.5px}"
       + ".tk-ins .d{color:var(--text2);font-size:12.5px;margin-top:2px;line-height:1.5}"
-      + ".tk-note{margin-top:22px;font-size:12px;color:var(--text3);line-height:1.55;max-width:760px}"
       // Dải chế độ tiết kiệm. Vẫn nằm ĐẦU trang (chủ repo chốt vậy), nhưng thu về MỘT DÒNG:
       // đây là cái công tắc chỉnh vài tháng một lần, không đáng chiếm trọn màn hình đầu mỗi
       // lần mở trang. Bấm vào mới bung ba nút với đầy đủ số liệu.
@@ -183,7 +194,6 @@
       + ".tk-muc-b small{display:block;font-size:12px;line-height:1.5;color:var(--text2)}"
       + ".tk-muc-now{display:inline-block;margin-top:8px;font-size:11px;padding:1px 8px;border-radius:999px;background:var(--accent-solid);color:var(--on-accent)}"
       + ".tk-muc-na{display:inline-block;margin-top:8px;font-size:11px;color:var(--text3)}"
-      + ".tk-muc-note{font-size:12px;color:var(--text3);line-height:1.55;margin-top:10px;max-width:720px}"
       + ".tk-muc-do{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:14px;padding:13px 15px;border:1px solid var(--glass-brd);border-radius:12px;background:var(--glass)}"
       + ".tk-muc-do .k{font-size:12px;color:var(--text2)}"
       + ".tk-muc-do .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}"
@@ -195,7 +205,6 @@
       + ".tk-tien .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}"
       + ".tk-tien .s{font-size:11px;color:var(--text3);margin-top:2px}"
       + ".tk-tien .tien .v{color:var(--accent2,var(--accent))}"
-      + ".tk-tien-note{font-size:11.5px;color:var(--text3);line-height:1.65;margin-top:11px}"
       + ".tk-muc-toast{padding:9px 13px;border-radius:10px;font-size:13px;margin-top:10px;border:1px solid var(--glass-brd)}"
       + ".tk-muc-toast.ok{border-color:var(--accent)}"
       + ".tk-muc-toast.err{color:var(--red)}";
@@ -307,8 +316,10 @@
       fetch("/usage/tong-quan?period=" + encodeURIComponent(state.period)).then(jsonOk).catch(function () { return null; }),
       loadMuc(false),
       loadViec(false),
+      fetch("/cache-keepwarm").then(jsonOk).catch(function () { return null; }),
     ]).then(function (res) {
       state.tq = res[2] || null;
+      state.kw = res[5] || null;
       paint(res[0] || {}, (res[1] || {}).items || []);
     }).catch(function (e) {
       loi(e && e.message ? e.message : "");
@@ -346,28 +357,26 @@
         ? window.t("usage.gia.bang")
         : window.t("usage.gia.pho_bien"));
     var gioDo = dod.gio_do || 24;
+    var noteVars = {
+      do_duoc: "<b>" + window.t("usage.tien.do_duoc") + "</b>",
+      uoc_luong: "<b>" + window.t("usage.tien.uoc_luong") + "</b>",
+      gio: gioDo, cach: esc(cachTinh), gia: (t.gia_1m_usd || 0),
+    };
+    var hdVars = { a: "<code>gia_input_1m</code>", b: "<code>settings.json</code>", c: "<code>model</code>" };
     return '<div class="tk-tien">'
       + '<div class="tk-tien-row">'
       + '<div><div class="k">' + window.t("usage.tk.tieu_de") + '</div><div class="v">' + fTok(dod.token_tiet_kiem)
       + '</div><div class="s">' + window.t("usage.tien.token_trong_gio", { gio: gioDo }) + "</div></div>"
       + '<div><div class="k">' + window.t("usage.tien.theo_nhip") + '</div><div class="v">' + fTok(dod.token_thang)
       + '</div><div class="s">' + window.t("usage.tien.token_thang") + "</div></div>"
-      + '<div class="tien"><div class="k">' + window.t("usage.tien.quy_ra_tien") + '</div><div class="v">~' + usdThang + "</div>"
+      + '<div class="tien"><div class="k">' + window.t("usage.tien.quy_ra_tien") + infoBtn() + '</div><div class="v">~' + usdThang + "</div>"
       + '<div class="s">' + window.t("usage.tien.moi_thang_gia_api") + "</div></div>"
       + "</div>"
-      + '<div class="tk-tien-note">'
-      + window.t("usage.tien.note", {
-        do_duoc: "<b>" + window.t("usage.tien.do_duoc") + "</b>",
-        uoc_luong: "<b>" + window.t("usage.tien.uoc_luong") + "</b>",
-        gio: gioDo, cach: esc(cachTinh), gia: (t.gia_1m_usd || 0),
-      })
-      + (thueBao
-        ? " " + window.t("usage.tien.thue_bao", { goi: "<b>" + window.t("usage.tien.goi") + "</b>" })
-        : "")
-      + " " + window.t("usage.tien.hop_dong", {
-        a: "<code>gia_input_1m</code>", b: "<code>settings.json</code>", c: "<code>model</code>",
-      })
-      + "</div></div>";
+      // How each number was got (measured, projected, estimated): behind the (i) on the money label.
+      + infoBody(window.t("usage.tien.note", noteVars)
+        + (thueBao ? " " + window.t("usage.tien.thue_bao", { goi: "<b>" + window.t("usage.tien.goi") + "</b>" }) : "")
+        + " " + window.t("usage.tien.hop_dong", hdVars))
+      + "</div>";
   }
 
   function mucHtml(d) {
@@ -406,7 +415,7 @@
       doHtml += tienHtml(dod, d);
     }
 
-    var chuaChon = d.tu_chon ? "" : " " + window.t("usage.muc.chua_chon");
+    var mucVars = { tat: "<b>" + window.t("usage.muc.tat") + "</b>" };
 
     // Dải một dòng luôn hiện; phần thân chỉ dựng khi người dùng bung ra.
     var mm = (dangDung && dangDung.m) || {};
@@ -424,9 +433,10 @@
       ? '<div class="tk-muc-body"><div class="tk-muc-list">' + btns + "</div>"
       + (state.toast ? state.toast : "")
       + doHtml
-      + '<div class="tk-muc-note">'
-      + window.t("usage.muc.note", { tat: "<b>" + window.t("usage.muc.tat") + "</b>" })
-      + esc(chuaChon) + "</div></div>"
+      // Takes effect at once and how to undo: behind the (i). Whether the level was ever picked is state, so it stays open.
+      + infoPair(window.t("usage.muc.note", mucVars))
+      + (d.tu_chon ? "" : '<div class="tk-muc-chua">' + esc(window.t("usage.muc.chua_chon")) + "</div>")
+      + "</div>"
       : (state.toast || "");
 
     return '<div class="tk-muc">' + strip + body + "</div>";
@@ -565,10 +575,13 @@
       // Hai lý do khác hẳn nhau, và gộp làm một là nói dối theo hướng làm người ta tắt chế độ
       // tiết kiệm đi: "chưa chạy lượt nào" với "bạn đang chỉnh tay nên Javis không biết cấu
       // hình đó tốn bao nhiêu".
+      if (k.khong_do_duoc) {
+        // The reason is state, like "chua_luot" below, so it stays open (review 0.214.0).
+        return '<div class="tk-a"><div class="h">' + ic("sparkles", { cls: "ic-sm" }) + window.t("usage.tk.tieu_de") + "</div>"
+          + '<div class="big">-</div><div class="s">' + window.t("usage.tk.chinh_tay") + "</div></div>";
+      }
       return '<div class="tk-a"><div class="h">' + ic("sparkles", { cls: "ic-sm" }) + window.t("usage.tk.tieu_de") + "</div>"
-        + '<div class="big">-</div><div class="s">'
-        + (k.khong_do_duoc ? window.t("usage.tk.chinh_tay") : window.t("usage.tk.chua_luot"))
-        + "</div></div>";
+        + '<div class="big">-</div><div class="s">' + window.t("usage.tk.chua_luot") + "</div></div>";
     }
     var ti = k.tien || {};
     return '<div class="tk-a"><div class="h">' + ic("sparkles", { cls: "ic-sm" }) + window.t("usage.tk.tieu_de") + "</div>"
@@ -602,15 +615,19 @@
       + window.t("usage.ns.tu_phanh") + "</label>"
       + '<label class="chk"><input id="tk-ns-tuan" type="checkbox"' + tick("tuan", !!t.bao_cao_tuan) + ">"
       + window.t("usage.ns.bao_cao_tuan") + "</label>"
+      // 0.202.0: keep a Claude Code chat's prompt cache warm across a short break (server/cache_keepwarm.py).
+      // The (i) sits beside the label, not inside it: a button inside a label is invalid markup.
+      + '<div class="kw-row"><label class="chk"><input id="tk-kw" type="checkbox"'
+      + ((state.kw || {}).enabled ? " checked" : "") + ">" + window.t("usage.kw.label") + "</label>" + infoBtn() + "</div>"
+      + infoBody(esc(window.t("usage.kw.hint")))
       + '<div class="acts"><button class="save" data-act="ns-luu">' + window.t("common.save") + "</button>"
-      + '<button class="tk-mini" data-act="ns">' + window.t("common.cancel") + "</button></div>"
-      + '<div class="hint">'
-      + window.t("usage.ns.hint", { nen: "<b>" + window.t("usage.ns.viec_nen") + "</b>" })
-      + "</div></div>";
+      + '<button class="tk-mini" data-act="ns">' + window.t("common.cancel") + "</button>" + infoBtn() + "</div>"
+      + infoBody(window.t("usage.ns.hint", { nen: "<b>" + window.t("usage.ns.viec_nen") + "</b>" }))
+      + "</div>";
   }
 
-  function card(k, v, sub, accent) {
-    return '<div class="tk-card' + (accent ? " accent" : "") + '"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div><div class="s">' + (sub || "") + "</div></div>";
+  function card(k, v, sub, accent, extra) {
+    return '<div class="tk-card' + (accent ? " accent" : "") + '"><div class="k">' + esc(k) + (extra || "") + '</div><div class="v">' + v + '</div><div class="s">' + (sub || "") + "</div></div>";
   }
 
   function barList(items, labelMap, colorFn) {
@@ -727,7 +744,7 @@
     var cache = t.cache || {};
     var db = t.du_bao || {};
     var cards = '<div class="tk-cards">'
-      + card(window.t("usage.card.tong_token"), fTok(k.tokens), deltaHtml, true)
+      + card(window.t("usage.card.tong_token"), fTok(k.tokens), deltaHtml, true, infoBtn())
       + card(window.t("usage.card.so_luot"), (k.turns || 0).toLocaleString(LOC()),
         window.t("usage.token_moi_luot", { n: fTok(k.avg_per_turn) }))
       + card(window.t("usage.card.cache"), fCost(cache.usd), window.t("usage.card.cache_sub", { pc: pct(cache.ty_le) }))
@@ -790,14 +807,15 @@
       }).join("") + "</div>";
     }
 
-    var note = '<div class="tk-note">' + window.t("usage.note", {
+    // What the totals include and the two kinds of money: opens from the (i) on the total-token card.
+    var note = infoBody(window.t("usage.note", {
       tong: window.t("usage.card.tong_token"),
       cache: window.t("usage.card.cache"),
       tien_mat: "<b>" + window.t("usage.note_tien_mat") + "</b>",
       quy_doi: "<b>" + window.t("usage.note_quy_doi") + "</b>",
-    }) + "</div>";
+    }));
 
-    el.innerHTML = '<div class="tk-wrap">' + mucHtml(state.muc) + bar1 + heroHtml() + act + cards + chart + grid + tables + loopHtml() + engineHtml() + insHtml + note + "</div>";
+    el.innerHTML = '<div class="tk-wrap">' + mucHtml(state.muc) + bar1 + heroHtml() + act + cards + note + chart + grid + tables + loopHtml() + engineHtml() + insHtml + "</div>";
     // Thông báo đã hiện xong thì thôi. Không xoá ở đây thì câu "Đã chuyển sang mức Tối ưu"
     // bám vào trang qua mọi lần đổi chip kỳ, mọi lần Làm mới, cho tới khi người dùng F5 -
     // và một thông báo nói về việc xảy ra mười phút trước thì chỉ gây hiểu nhầm.
@@ -828,6 +846,13 @@
         load(false);
       };
     });
+    var kw = el.querySelector("#tk-kw");
+    if (kw) kw.onchange = function () {
+      fetch("/cache-keepwarm", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: kw.checked }) }).then(jsonOk).then(function (r) {
+        state.kw = Object.assign({}, state.kw || {}, { enabled: !!(r && r.enabled) });
+      }).catch(function () { kw.checked = !kw.checked; });
+    };
     var luu = el.querySelector('[data-act="ns-luu"]');
     if (luu) luu.onclick = function () {
       luu.disabled = true;

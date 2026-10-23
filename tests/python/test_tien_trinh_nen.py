@@ -11,8 +11,9 @@ import sys
 import tempfile
 import time
 
-os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ttn-")
 from _paths import ROOT, SERVER  # noqa: E402,F401
+
+os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ttn-")
 import asyncio  # noqa: E402
 import subprocess  # noqa: E402
 

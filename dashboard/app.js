@@ -25,7 +25,26 @@ let stopTag = null;        // tag phiên chat server phát qua message hello →
 function updateStopBtn() {
   const active = isProcessing || voice.isSpeaking();
   stopBtn.style.display = active ? "flex" : "none";
-  sendBtn.style.display = active ? "none" : "flex";
+  // 0.206.0: while Javis works, typed text can still go out (as an add-on to the running turn), so the send button
+  // comes back next to Stop as soon as there is something to send.
+  const boSung = coTheGuiBoSung();
+  // 0.231.0: two buttons (owner 2026-10-19). An empty box shows the voice chat button; text or an attachment turns
+  // it into send. In a call the button stays the red hang-up and the dictate mic steps aside.
+  const goi = handsFreeActive();
+  const coNoiDung = coNoiDungGui();
+  sendBtn.style.display = (active ? boSung : coNoiDung) ? "flex" : "none";
+  sendBtn.title = boSung ? window.t("app.steer_send") : window.t("bar.send");
+  voiceBtn.style.display = goi || (!active && !coNoiDung) ? "" : "none";
+  const dictBtn = document.getElementById("dictBtn");
+  if (dictBtn) dictBtn.style.display = goi ? "none" : "";
+}
+function coNoiDungGui() {
+  try { return !!(chatInput.value.trim() || pendingAttachments.some(a => a.path)); }
+  catch (e) { return false; }
+}
+function coTheGuiBoSung() {
+  try { return isProcessing && !handsFreeActive() && !!(chatInput.value.trim() || pendingAttachments.some(a => a.path)); }
+  catch (e) { return false; }
 }
 
 // Đồng bộ nút gửi/dừng + cờ isProcessing theo lượt của phiên ĐANG XEM (savedSessionId).
@@ -33,7 +52,7 @@ function syncActiveUI() {
   const t = savedSessionId ? turns[savedSessionId] : null;
   isProcessing = !!(t && t.running);
   // Workspace may lock send while its session is not ready (dataset.wsLock); both reasons count.
-  sendBtn.disabled = isProcessing || sendBtn.dataset.wsLock === "1";
+  sendBtn.disabled = (isProcessing && !coTheGuiBoSung()) || sendBtn.dataset.wsLock === "1";
   // Đang trả lời thì khoá nút gửi lại của mọi tin (CSS .transcript.busy) cho khỏi chồng lượt.
   try { chatArea.classList.toggle("busy", isProcessing); } catch (e) {}
   updateStopBtn();
@@ -43,7 +62,7 @@ function stopCurrent() {
   try { ketThucTheoLoi(false); } catch (e) {}
   voice.stopSpeaking();
   const sid = savedSessionId;
-  try { if (window.JavisLenh) window.JavisLenh.dungMucTieu(); } catch (e) {}   // Dừng cũng dừng /goal
+  try { if (window.JavisLenh) window.JavisLenh.tamDungVi(sid); } catch (e) {}   // Dừng cũng tạm dừng /goal (0.290.0: không xoá)
   if (sid && adaptiveCurrent.has(sid)) adaptiveCancelled.add(adaptiveCurrent.get(sid));
   // Dừng ĐÚNG phiên đang xem (phiên nền khác vẫn chạy). Server huỷ lượt + gửi turn_done về.
   if (sid && ws && ws.readyState === WebSocket.OPEN) {
@@ -68,6 +87,32 @@ function stopCurrent() {
   syncActiveUI();
 }
 function handsFreeActive() { return typeof handsFree !== "undefined" && handsFree; }
+// 0.188.0 (Javis Core spec 9): one line in the chat saying the open chat belongs to another brain, with a button to
+// switch the dashboard to it. Javis already answers on that chat's brain (server side); this makes it visible.
+function veNhanBrain(ten, uiVal) {
+  try {
+    const area = document.getElementById("chatArea");
+    if (!area || !ten) return;
+    const cu = area.querySelector(".jv-brain-note");
+    if (cu) cu.remove();
+    const d = document.createElement("div");
+    d.className = "jv-brain-note";
+    d.setAttribute("role", "status");
+    const sp = document.createElement("span");
+    sp.textContent = window.t("app.brain_of_chat", { name: ten });
+    d.appendChild(sp);
+    const gs = document.getElementById("graphSource");
+    if (gs && uiVal && [...gs.options].some(o => o.value === uiVal)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "jv-brain-note-btn";
+      b.textContent = window.t("app.brain_switch_to", { name: ten });
+      b.onclick = () => { gs.value = uiVal; gs.dispatchEvent(new Event("change")); d.remove(); };
+      d.appendChild(b);
+    }
+    area.insertBefore(d, area.firstChild);
+  } catch (e) {}
+}
 function currentBrainPath() {
   const v = document.getElementById("graphSource").value;
   return v.startsWith("path:") ? v.slice(5) : "brain";
@@ -906,9 +951,18 @@ function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   ws = new WebSocket(WS_URL);
   _wsLastFrameAt = Date.now(); _wsPingAt = 0;
+  // 0.194.0: a handshake that hangs (server busy, a proxy holding the request) used to leave the page "reconnecting"
+  // for minutes, since nothing retried a socket stuck in CONNECTING. Give it WS_MO_MS, then close it: onclose retries.
+  const dangMo = ws;
+  setTimeout(() => {
+    if (dangMo === ws && dangMo.readyState === WebSocket.CONNECTING) { _ghiDut("connect_timeout", false, 0); try { dangMo.close(); } catch (e) {} }
+  }, WS_MO_MS);
+  ws.onopen = () => { _wsMoLuc = Date.now(); };
   // Mất socket là trạng thái THẬT người dùng cần thấy ("ĐANG KẾT NỐI LẠI"), không phải đoán.
-  ws.onclose = () => {
-    try { runActions(turn.wsDown()); } catch (e) {}
+  ws.onclose = (e) => {
+    _ghiDut(e && e.code, !!(e && e.wasClean), _wsMoLuc);
+    _wsMoLuc = 0;
+    try { runActions(turn.wsDown()); } catch (e2) {}
     baoDutMang(true);
     setTimeout(connect, 3000);
   };
@@ -926,9 +980,36 @@ function connect() {
 // Im quá WS_IM_MS thì hỏi server một tiếng; không ai đáp trong WS_PONG_MS là socket chết thật:
 // bỏ nó, nối socket mới. Lời chào "hello" của socket mới đồng bộ lại lượt đang chạy và câu trả lời
 // đã xong trong lúc đứt.
-const WS_IM_MS = 30000, WS_PONG_MS = 10000;
+// 0.194.0: pong wait 10s -> 20s. A server busy for a few seconds answers late, and dropping a live socket then only
+// adds a reconnect on top of the wait.
+const WS_IM_MS = 30000, WS_PONG_MS = 20000, WS_MO_MS = 10000;
 let _wsLastFrameAt = 0, _wsPingAt = 0;
+
+// ---- Dấu vết đứt kết nối (0.197.1) ----
+// Khách báo 17/10: Safari mất kết nối tới 10 phút trong khi Chrome mở cùng lúc vẫn chạy. Không có số liệu thì mỗi lần
+// chỉ đoán được. Mỗi lần đứt ghi mã đóng (1006 = đứt không lời chào, "ping" = socket im không đáp, "connect_timeout"
+// = bắt tay treo), socket đã sống bao lâu, mốc bắt đầu đứt; nối lại được thì gửi một lần về máy chủ (POST
+// /diag/ws-drops, xem ở /health/loop). Chỉ giữ 10 lần gần nhất, gửi hỏng thì bỏ.
+let _wsMoLuc = 0, _wsDut = [], _wsDutTu = 0;
+function _ghiDut(code, clean, moLuc) {
+  const now = Date.now();
+  if (!_wsDutTu) _wsDutTu = now;
+  _wsDut.push({ code: String(code == null ? "" : code), clean: !!clean, open_s: moLuc ? (now - moLuc) / 1000 : 0,
+    at: now / 1000 });
+  if (_wsDut.length > 10) _wsDut.shift();
+}
+function _baoDutVeMayChu() {
+  if (!_wsDut.length) return;
+  const body = { ua: navigator.userAgent, down_s: _wsDutTu ? (Date.now() - _wsDutTu) / 1000 : 0, drops: _wsDut };
+  _wsDut = []; _wsDutTu = 0;
+  try {
+    fetch("/diag/ws-drops", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .catch(() => {});
+  } catch (e) {}
+}
 function _dropDeadSocket() {
+  _ghiDut("ping", false, _wsMoLuc);
+  _wsMoLuc = 0;
   const cu = ws;
   ws = null;
   if (cu) {
@@ -1070,6 +1151,7 @@ function handleMessage(data) {
     // Socket NỐI LẠI (không phải lần chào đầu): tin tới trong lúc đứt có thể đã rơi mất, ví dụ
     // câu trả lời của một lượt chạy xong khi điện thoại đang tắt màn hình. Đồng bộ nhẹ.
     if (_daChao) setTimeout(_dongBoNeuLech, 300);
+    _baoDutVeMayChu();
     // Nhóm chat (0.142.0): gói team_message/team_replies lỡ trong lúc mất kết nối không được gửi lại, nên trang Nhóm
     // tự tải lại tin và kết cục lượt trả lời của nhóm đang mở khi socket nối lại.
     if (_daChao) { try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: { type: "team_resync" } })); } catch (e) {} }
@@ -1165,9 +1247,17 @@ function handleMessage(data) {
     // Tin do việc chạy NỀN đẩy vào (việc Kanban / loop / nhắc hẹn xong), không thuộc lượt
     // hỏi-đáp nào. KHÔNG đụng turns[sid]: lượt đang chạy (nếu có) vẫn stream bình thường,
     // tin này chỉ chèn thêm một bong bóng. Server đã lưu vào kho phiên nên F5 vẫn còn.
+    // 0.204.0: a "call me" reminder rings whichever chat is open. Its message usually lands in the brain's Javis Core
+    // chat (a reminder made without a chat id), so ringing only when that chat was the open one meant no call at all.
+    const daGoi = goiDenTheoLich(data.content || "");
     if (isActive) {
       const el = appendJavisMessage(data.content || "");
       recordTurn("javis", data.content || "", null, null);
+      // 0.203.0: a reminder made with "call me" rings as an incoming call; otherwise (0.202.1) a reminder that reads
+      // aloud plays its voice note at once.
+      if (!daGoi) ringReminder(el, data.content || "");
+      // The memory receipt line is not a message: no reactions, never read aloud (0.190.0).
+      if (el && el.classList.contains("msg-nho")) { scrollBottom(); notifySessions(); return; }
       // Tin đẩy về có mã tin (0.168.0): gắn hàng sáu cảm xúc ngay, kể cả tin báo goal (không còn hàng A3 riêng).
       if (el && data.message_id != null && window.JavisChatReactions && window.JavisChatReactions.attach) {
         window.JavisChatReactions.attach(el, { sid: data.session_id, mid: data.message_id, sha: data.content_sha || "",
@@ -1196,7 +1286,18 @@ function handleMessage(data) {
     lamMoiCayVault(null, data.content || "");
     return;
   }
-  if (data.type === "team_message" || data.type === "team_state" || data.type === "team_replies") {
+  if (data.type === "steer_ack" || data.type === "steer_read" || data.type === "steer_turn") {
+    // 0.206.0: a message sent while Javis works was received, read by the running turn, or is now its own turn.
+    try { trangThaiBoSung(data); } catch (e) {}
+    return;
+  }
+  if (data.type === "agent_read") {
+    // 0.205.0: a partner chat was read or muted (this tab or another): the Partners list reads its counts again.
+    try { window.dispatchEvent(new CustomEvent("javis:agent-read", { detail: data })); } catch (e) {}
+    return;
+  }
+  if (data.type === "team_message" || data.type === "team_state" || data.type === "team_replies" || data.type === "team_typing" ||
+      data.type === "team_read") {
     // Nhóm chat team (T1): tin mới của thành viên, hàng đợi đổi. Trang Nhóm (teams.js) nghe sự kiện này để vẽ lại;
     // trang khác bỏ qua. Không đụng khung chat chính.
     try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: data })); } catch (e) {}
@@ -1205,6 +1306,11 @@ function handleMessage(data) {
   if (data.type === "resonance_agents") {
     // T0 nhóm chat team: trợ lý vừa được bật, tắt Cộng hưởng (tab này hay tab khác). Trang Cộng sự, bảng bên phải và trang Cài đặt tự tải lại trạng thái thật.
     try { window.dispatchEvent(new CustomEvent("javis:resonance-agents-changed")); } catch (e) {}
+    return;
+  }
+  if (data.type === "brain_follow") {
+    // 0.188.0: the turn ran on the brain this chat belongs to, not the one picked on screen. Say so in the chat.
+    if (isActive) veNhanBrain(data.brain_name || "", data.brain_ui || "");
     return;
   }
   if (data.type === "inbox") {
@@ -1391,8 +1497,9 @@ function handleMessage(data) {
     // Lượt vừa xong có thể đã giao việc nền. Đây là ĐÚNG khoảnh khắc người dùng đọc câu trả
     // lời "em đã giao 3 việc" và tự hỏi nó có chạy thật không - dải phải trả lời được ngay.
     try { if (window.JavisBackground) window.JavisBackground.refresh(); } catch (e) {}
-    // /goal: lượt vừa đóng, đây là lúc duy nhất quyết định có tự gửi vòng tiếp không.
-    try { if (isActive && window.JavisLenh) window.JavisLenh.hetLuot(sid); } catch (e) {}
+    // /goal: lượt vừa đóng, đây là lúc duy nhất quyết định có tự gửi vòng tiếp không. Gọi cho cả chat
+    // chạy nền (0.290.0): mục tiêu của chat đó ghi nhận vòng đã xong, mở lại chat là nó đi tiếp.
+    try { if (window.JavisLenh) window.JavisLenh.hetLuot(sid); } catch (e) {}
     lamMoiCayVault(t, t ? t.text : "");
   }
 }
@@ -1640,7 +1747,9 @@ function sendMessage(text, opts) {
       datTinCho(msg, opts);
       return;
     }
-    if (!(_tuGiong || handsFree)) return;   // gõ chữ lúc không rảnh tay: giữ chốt cũ
+    // 0.206.0 (owner, 17/10/2026: "like Claude Code, type and send more while it works"): typed text goes to the
+    // running turn. It reads it at its next step, or it runs right after the turn (server steer_inbox.py).
+    if (!(_tuGiong || handsFree)) { guiBoSung(msg, atts); return; }
     // Đang gọi (0.65.28): KHÔNG dừng lượt đang chạy. Câu mới xếp hàng, gửi khi lượt cũ xong và
     // loa đọc xong. Chủ dự án báo 02/10: nói chen một câu là "Đã dừng lượt này", mô hình bị
     // cắt liên tục nên không liền mạch; cuộc gọi chỉ được dừng khi bấm lại nút mic.
@@ -1669,8 +1778,26 @@ function sendMessage(text, opts) {
     window.JavisVoiceLive.sendText(msg);
     return;
   }
+  // 0.236.0: có file thì cũng KHÔNG mở lượt chat thường. Trước đây lượt chat đọc ảnh và đọc ra
+  // loa bằng giọng Edge, trong khi model Live nghe "xem ảnh này" lại giao chính ảnh đó cho
+  // ask_javis: hai lượt bộ não, hai giọng chồng nhau. Nay gửi khung "ask" để server chạy MỘT lượt
+  // và model Live đọc kết quả; socket chưa mở thì mới rơi về đường thường.
+  if (voiceMode === "live" && atts.length && _slash.type === "passthrough"
+      && window.JavisVoiceLive && window.JavisVoiceLive.isOn() && window.JavisVoiceLive.ask) {
+    const liveMsg = boiNguCanh(tinDocFile(atts, msg), true);
+    if (window.JavisVoiceLive.ask(liveMsg, msg, atts.map(a => a.name))) {
+      chatInput.value = ""; chatInput.style.height = "auto";
+      appendUserMessage(msg, atts);
+      recordTurn("user", msg, atts.map(a => ({ name: a.name, kind: a.kind, url: a.url || "" })));
+      clearAttachments();
+      return;
+    }
+  }
   window.JavisAsk.freezeAll();   // trả lời rồi thì chip của lượt trước hết bấm được
-  const userElement = appendUserMessage(msg, atts);
+  // 0.173.1: an automatic /goal round (block carries JAVIS_GOAL_ROUND) is drawn as the collapsible round line.
+  const _goalRound = (_slash.type === "prefix" && window.JavisLenh && window.JavisLenh.docVong)
+    ? window.JavisLenh.docVong(_slash.prefix) : null;
+  const userElement = _goalRound ? appendGoalRound(_goalRound, true) : appendUserMessage(msg, atts);
   // /goal đang chạy: tin do vòng tự động gửi thì gắn nó vào phiên này; tin người dùng tự gõ thì
   // dừng mục tiêu (lời của họ lên trước, không chạy tiếp vòng tự động dưới một câu họ vừa nói).
   try {
@@ -1682,6 +1809,7 @@ function sendMessage(text, opts) {
   // Lưu cả `url` (đường /upload/raw của file stage): thiếu nó thì F5 xong ảnh trong tin cũ
   // không còn gì để trỏ tới, và bong bóng chỉ còn trơ cái tên file.
   recordTurn("user", msg, atts.map(a => ({ name: a.name, kind: a.kind, url: a.url || "" })));
+  if (_goalRound) { convo[convo.length - 1].goalRound = _goalRound; persistSession(); }
 
   // Soạn message gửi Javis (kèm đường dẫn file trong Sources)
   const _isSkill = _slash.type === "skill";
@@ -1698,14 +1826,7 @@ function sendMessage(text, opts) {
       // Với lệnh skill (vd /notes): đưa path như dữ liệu, để chính skill quyết định lưu.
       outMsg = `[File đính kèm (đường dẫn), Sources="${src}", Attachments="${attDir}":\n${lines}]\n\n${_slash.message}`;
     } else {
-      const ctx =
-        `[File đính kèm để ĐỌC (đường dẫn):\n${lines}\n` +
-        `Mặc định: chỉ đọc file rồi trả lời, KHÔNG tự lưu đi đâu.\n` +
-        `CHỈ khi user yêu cầu rõ (vd "lưu vào source", "ingest", "ghi vào second brain") thì mới: ` +
-        `chuyển thành .md (ảnh thì đọc hiểu + mô tả) lưu vào Sources="${src}" (ảnh gốc chuyển vào Attachments="${attDir}"), kèm frontmatter source.]`;
-      outMsg = _than
-        ? `${ctx}\n\n${_than}`
-        : `${ctx}\n\nHãy đọc (các) file trên và phản hồi / tóm tắt nội dung chính.`;
+      outMsg = tinDocFile(atts, _than);
     }
   }
   // File đang ghim đi TRƯỚC mọi thứ: nó là ngữ cảnh nền của cả lượt, không phải dữ liệu
@@ -1713,22 +1834,9 @@ function sendMessage(text, opts) {
   // không giữ trạng thái "đang mở file nào" giữa các lượt.
   // Ngữ cảnh giao diện (Voice V1, spec mục 5): trang đang mở, đoạn đang bôi đen, câu Javis bị
   // ngắt lời. Đứng SAU khối file ghim và TRƯỚC câu hỏi; rỗng thì không chèn gì.
-  try {
-    // `voice`: đang nói chuyện bằng giọng (tin từ mic, HAY gõ chữ khi mic rảnh tay đang bật):
-    // câu trả lời sẽ đọc ra loa nên model phải trả lời ngắn như người đang nói (V3).
-    const ctxUi = window.JavisUiContext ? window.JavisUiContext.build({
-      page: nguCanhTrang(), selection: nguCanhChon(), interruptedAt: _ngatLoiTai,
-      voice: _tuGiong || handsFree,
-    }) : "";
-    if (ctxUi) outMsg = `${ctxUi}\n\n${outMsg}`;
-  } catch (e) {}
-  _ngatLoiTai = "";
-  if (pinnedNote) {
-    outMsg = `[FILE ĐANG MỞ trong trình sửa của Javis: ${pinnedNote.abs}\n`
-      + `Đây là file người dùng ĐANG LÀM VIỆC TRÊN ĐÓ - coi như đầu vào của cuộc trò chuyện này. `
-      + `Đọc nó trước khi trả lời. Khi được yêu cầu sửa/viết thêm/dọn lại mà không nói rõ file nào `
-      + `thì ghi thẳng vào chính file này.]\n\n${outMsg}`;
-  }
+  // `voice`: đang nói chuyện bằng giọng (tin từ mic, HAY gõ chữ khi mic rảnh tay đang bật):
+  // câu trả lời sẽ đọc ra loa nên model phải trả lời ngắn như người đang nói (V3).
+  outMsg = boiNguCanh(outMsg, _tuGiong || handsFree);
 
   chatInput.value = ""; chatInput.style.height = "auto";
   clearAttachments();
@@ -1768,6 +1876,38 @@ function sendMessage(text, opts) {
   const _w = _pinWait; _pinWait = null;
   if (_w) _w.then(_send, _send); else _send();
   _tuGiong = false;
+}
+// Khối "[File đính kèm để ĐỌC ...]" đứng trước câu người dùng gõ. Dùng chung cho lượt chat thường
+// và tin có file gửi lúc đang gọi Live (0.236.0), để F5 dựng lại bong bóng ảnh y như nhau.
+function tinDocFile(atts, than) {
+  const lines = atts.map(a => `- ${a.path}`).join("\n");
+  const src = (atts.find(a => a.sources) || {}).sources || "", attDir = (atts.find(a => a.attachments) || {}).attachments || "";
+  const ctx =
+    `[File đính kèm để ĐỌC (đường dẫn):\n${lines}\n` +
+    `Mặc định: chỉ đọc file rồi trả lời, KHÔNG tự lưu đi đâu.\n` +
+    `CHỈ khi user yêu cầu rõ (vd "lưu vào source", "ingest", "ghi vào second brain") thì mới: ` +
+    `chuyển thành .md (ảnh thì đọc hiểu + mô tả) lưu vào Sources="${src}" (ảnh gốc chuyển vào Attachments="${attDir}"), kèm frontmatter source.]`;
+  return than
+    ? `${ctx}\n\n${than}`
+    : `${ctx}\n\nHãy đọc (các) file trên và phản hồi / tóm tắt nội dung chính.`;
+}
+// Ngữ cảnh giao diện (trang, đoạn bôi đen, câu bị ngắt lời) rồi file đang ghim, bọc NGOÀI tin.
+// Thứ tự này chuNguoiGo gỡ ngược lại được, nên bong bóng vẫn chỉ hiện đúng câu người dùng gõ.
+function boiNguCanh(outMsg, voice) {
+  try {
+    const ctxUi = window.JavisUiContext ? window.JavisUiContext.build({
+      page: nguCanhTrang(), selection: nguCanhChon(), interruptedAt: _ngatLoiTai, voice: voice,
+    }) : "";
+    if (ctxUi) outMsg = `${ctxUi}\n\n${outMsg}`;
+  } catch (e) {}
+  _ngatLoiTai = "";
+  if (pinnedNote) {
+    outMsg = `[FILE ĐANG MỞ trong trình sửa của Javis: ${pinnedNote.abs}\n`
+      + `Đây là file người dùng ĐANG LÀM VIỆC TRÊN ĐÓ - coi như đầu vào của cuộc trò chuyện này. `
+      + `Đọc nó trước khi trả lời. Khi được yêu cầu sửa/viết thêm/dọn lại mà không nói rõ file nào `
+      + `thì ghi thẳng vào chính file này.]\n\n${outMsg}`;
+  }
+  return outMsg;
 }
 // Trang đang mở và đoạn đang bôi đen, cho khối NGỮ CẢNH GIAO DIỆN. Chọn trong ô nhập chat thì
 // không tính (đó là câu đang gõ, không phải thứ đang nhìn).
@@ -1894,7 +2034,10 @@ function restoreSession() {
   const _traLoi = [];   // T2: các câu trả lời vừa dựng lại, để refresh() sửa reaction và gắn mã còn thiếu
   convo.forEach((t, i) => {
     // t.ts vắng mặt ở tin lưu từ trước bản này -> truyền 0 để ẩn giờ thay vì hiện giờ F5.
-    if (t.role === "user") { appendUserMessage(t.text, t.atts || [], t.ts || 0); return; }
+    if (t.role === "user") {
+      if (t.goalRound && window.JavisLenh && window.JavisLenh.vongHtml) { appendGoalRound(t.goalRound, false); return; }
+      appendUserMessage(t.text, t.atts || [], t.ts || 0); return;
+    }
     // t.brain vắng ở tin lưu từ trước bản này -> rơi về brain của cả phiên, rồi mới tới
     // brain đang chọn. Không có thì hành vi y như cũ, không hỏng thêm gì.
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
@@ -1903,7 +2046,7 @@ function restoreSession() {
     _traLoi.push({ el, entry: t });
     // T2: tin đã có mã (lịch sử hay gói turn_saved) mang lại hàng reaction; tin lưu trước bản này không có mã thì không có nút.
     try {
-      if (t.mid != null && window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
+      if (t.mid != null && window.JavisChatReactions && !el.classList.contains("msg-nho")) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
         sha: t.sha || "", brain: t.brain || s.brain, reaction: t.reaction || null, entry: t });
     } catch (e) {}
     // Chip chỉ sống lại ở tin CUỐI: có tin sau nó nghĩa là câu hỏi đã được trả lời rồi.
@@ -1943,6 +2086,8 @@ function veTinDaLuu(m, brainCua, sidCua) {
     // Đọc lại từ chính khối đó, không thì mở lại hội thoại là ảnh và file biến mất khỏi
     // bong bóng, người dùng không xem lại được mình đã gửi gì (chủ repo báo 2026-09-10).
     const _sach = chuNguoiGo(m.content || "");
+    const _vongCu = window.JavisLenh && window.JavisLenh.docVong ? window.JavisLenh.docVong(m.content || "") : null;
+    if (_vongCu) { appendGoalRound(_vongCu, false); return { role: "user", text: _sach, atts: [], ts, goalRound: _vongCu }; }
     const _atts = docDinhKem(m.content || "");
     const el = appendUserMessage(_sach, _atts, ts);
     if(m.voice_metadata && m.voice_metadata.response_policy==='ack_only' && !m.voice_metadata.answer_requested) renderVoiceReceipt(el,{...m.voice_metadata,session_id:savedSessionId});
@@ -1957,7 +2102,7 @@ function veTinDaLuu(m, brainCua, sidCua) {
     const entry = { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua,
                     mid: m.id, sha: m.content_sha || "", reaction: m.reaction || null };
     try {
-      if (window.JavisChatReactions) window.JavisChatReactions.attach(el, { sid: sidCua, mid: m.id, sha: m.content_sha || "",
+      if (window.JavisChatReactions && !el.classList.contains("msg-nho")) window.JavisChatReactions.attach(el, { sid: sidCua, mid: m.id, sha: m.content_sha || "",
         brain: brainCua, reaction: m.reaction || null, entry });
     } catch (e) {}
     return entry;
@@ -2080,6 +2225,8 @@ async function openStoredSession(id, stillCurrent) {
       ? { sid: id, brain: sess.brain, ts: ds[0].ts, id: ds[0].id, con: !!sess.has_more, dangTai: false }
       : null;
     datMoiTinCu();
+    // 0.188.0: a chat of another brain (opened from the bell, history, a link) says whose it is.
+    if (sess.brain_ui && sess.brain_ui !== graphSource.value) veNhanBrain(sess.brain_name || "", sess.brain_ui);
     savedSessionId = id;          // lượt gửi tiếp theo → server resume đúng phiên này
     try { if (window.JavisInbox) window.JavisInbox.docPhien(id); } catch (e) {}
     // Phiên này đang generate NỀN → gắn bong bóng SỐNG (kèm phần đã stream) để xem tiếp trực tiếp.
@@ -2267,20 +2414,94 @@ function appendUserMessage(text, attachments, ts) {
   div.className = "msg msg-user";
   div.dataset.text = text || "";   // giữ nguyên văn để gửi lại / sửa lại đúng chữ gốc
   const attHtml = attachHtml(attachments);
-  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở
-  const isLong = text && (text.split("\n").length > 10 || text.length > 900);
+  // Tin dài (>10 dòng hoặc >900 ký tự) thu gọn lại, bấm "Xem thêm" để mở (chat-acts.js, dùng chung với trang Nhóm)
+  const isLong = window.JavisActs.isLongText(text);
   const textHtml = text
     ? `<div class="utext${isLong ? " clamped" : ""}">${window.JavisQuote ? window.JavisQuote.utextHtml(text, escapeHtml) : escapeHtml(text)}</div>` +
-      (isLong ? `<button class="clamp-more" type="button">${window.t("app.show_more")}</button>` : "")
+      (isLong ? window.JavisActs.clampButtonHtml(false) : "")
     : "";
   div.innerHTML = `<div class="bubble">${textHtml}${attHtml}</div>` +
     actsHtml("user", ts === undefined ? Date.now() : ts, !!(text || "").trim());
   vaAnhHong(div);
   chatAppend(div); scrollBottom(true);
 }
+// 0.206.0: send more while Javis is working. The message is stored and shown at once; its small status line follows
+// what the server reports: read by the running turn, or waiting to run right after it.
+let _boSungSeq = 0;
+const _boSungEl = {};   // client_id or "s<steer_id>" -> the status line of that message
+function guiBoSung(msg, atts) {
+  const sid = savedSessionId;
+  const tep = (atts || []).filter(a => a.path);
+  let chu = String(msg || "");
+  if (tep.length) chu += (chu ? "\n\n" : "") + tep.map(a => "\uD83D\uDCCE " + a.path).join("\n");
+  if (!chu.trim() || !sid || !ws || ws.readyState !== WebSocket.OPEN) return false;
+  const cid = "bs" + (++_boSungSeq) + "-" + Date.now().toString(36);
+  chatInput.value = ""; chatInput.style.height = "auto";
+  if (tep.length) clearAttachments();
+  appendUserMessage(msg, tep);
+  const _ds = chatArea.querySelectorAll(".msg-user"), div = _ds[_ds.length - 1];
+  recordTurn("user", chu, tep);
+  if (div) {
+    div.classList.add("msg-steer");
+    const note = document.createElement("div");
+    note.className = "steer-note";
+    note.textContent = window.t("app.steer_sent");
+    div.appendChild(note);
+    _boSungEl[cid] = note;
+  }
+  ws.send(JSON.stringify({ action: "steer", session_id: sid, message: chu, client_id: cid }));
+  syncActiveUI();
+  return true;
+}
+function trangThaiBoSung(data) {
+  const ghi = (el, key) => { if (el) el.textContent = window.t(key); };
+  if (data.type === "steer_ack") {
+    const el = _boSungEl[data.client_id];
+    if (el && data.steer_id) _boSungEl["s" + data.steer_id] = el;
+    ghi(el, data.mode === "live" ? "app.steer_live" : "app.steer_after");
+  } else {
+    (data.ids || []).forEach(id => ghi(_boSungEl["s" + id], data.type === "steer_read" ? "app.steer_read" : "app.steer_turn"));
+  }
+}
+// 0.173.1: one automatic /goal round as a collapsible line with a Stop goal button (chat-lenh.js draws the
+// HTML). `live`: drawn while the goal runs, so the button works; restored rounds show it disabled.
+function appendGoalRound(round, live) {
+  const div = document.createElement("div");
+  div.className = "msg msg-goal-round";
+  const active = !!(live && window.JavisLenh && window.JavisLenh.dangCoMucTieu());
+  div.innerHTML = window.JavisLenh.vongHtml(round, active);
+  const btn = div.querySelector(".goal-round-stop");
+  if (btn) btn.addEventListener("click", () => { if (window.JavisLenh) window.JavisLenh.dungMucTieu(); });
+  chatAppend(div); scrollBottom(true);
+  return div;
+}
 // brain (tuỳ chọn): brain của HỘI THOẠI chứa tin này. Bỏ trống = brain đang chọn (tin mới).
 // Truyền vào khi dựng lại tin CŨ, để ảnh trong tin phân giải theo đúng brain của nó thay vì
 // brain đang chọn - nếu không thì mở hội thoại cũ ở brain khác là ảnh 404 rồi biến thành ô xám.
+// 0.202.1: plays the voice note of a reminder pushed into the open chat. A browser that blocks autoplay
+// leaves the player in place to press.
+function ringReminder(el, raw) {
+  if (!el || !/JAVIS_VIEC:[^>]*"kind":\s*"reminder"/.test(raw)) return;
+  const a = el.querySelector("audio.jv-audio");
+  if (!a) return;
+  try { const p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* autoplay blocked */ }
+}
+// 0.203.0 (incoming-call.js): "Javis calls you at a set time". Answer = press the mic, and the call's first line asks
+// Javis to read the reminder aloud. Already in a call: nothing rings, the message is in the chat.
+let _goiDenMoDau = "";
+function layMoDauGoiDen() { const s = _goiDenMoDau; _goiDenMoDau = ""; return s; }
+function goiDenTheoLich(raw) {
+  const IC = window.JavisIncomingCall;
+  const c = IC ? IC.parse(raw) : null;
+  if (!c || handsFree) return false;
+  IC.show({ title: c.title, t: window.t, onAnswer: () => {
+    if (handsFree) return;
+    const moDau = IC.script(c, window.t);
+    if (voiceMode === "live") { _goiDenMoDau = moDau; voiceBtn.click(); }
+    else { voiceBtn.click(); if (handsFree) sendMessage(moDau); }
+  } });
+  return true;
+}
 function appendJavisMessage(text, ts, brain) {
   // Tin do việc nền đẩy về mang khối ẩn JAVIS_VIEC (chat-viec.js): bóc ra để vẽ thành THẺ việc
   // (icon trạng thái, tên việc, nút mở trang Việc) thay cho bong bóng chữ trơn (0.64.48).
@@ -2288,6 +2509,12 @@ function appendJavisMessage(text, ts, brain) {
   // Thẻ mục tiêu (Resonance M4, chat-resonance.js): bóc khối JAVIS_RESONANCE rồi vẽ thẻ sống dưới bong bóng.
   const tr = window.JavisResonance ? window.JavisResonance.tach(tv.clean) : { clean: tv.clean, cards: [] };
   tv.clean = tr.clean;
+  // 0.190.0: the "Đã nhớ · Hoàn tác" line (chat-nho.js): a pushed message with a JAVIS_NHO block is drawn as that line.
+  const tn = window.JavisNho ? window.JavisNho.tach(tv.clean) : { clean: tv.clean, nho: null };
+  tv.clean = tn.clean;
+  // 0.200.0: the "Đã tạo · Hoàn tác" line for schedules, loops, partners, workflows and skills (chat-doi.js).
+  const td = window.JavisDoi ? window.JavisDoi.tach(tv.clean) : { clean: tv.clean, doi: null };
+  tv.clean = td.clean;
   const div = document.createElement("div");
   div.className = "msg msg-javis";
   // Phiên bản ẢNH của tin này (0.65.33, xem markdownToHtml): tin cũ dựng lại dùng đúng mốc giờ của
@@ -2297,6 +2524,8 @@ function appendJavisMessage(text, ts, brain) {
     actsHtml("javis", ts === undefined ? Date.now() : ts, !!lastUserText().trim());
   if (tv.viec) window.JavisViec.ve(div, tv.viec);
   for (const c of tr.cards) window.JavisResonance.ve(div, c);
+  if (tn.nho) window.JavisNho.ve(div, tn.nho);
+  if (td.doi) window.JavisDoi.ve(div, td.doi);
   div.dataset.md = tv.clean || "";   // copy nội dung markdown, không chép marker việc nền
   chatAppend(div); scrollBottom();
   return div;
@@ -2438,32 +2667,31 @@ function hideActivity() {
 function setProcessing(s) { isProcessing = s; sendBtn.disabled = s || sendBtn.dataset.wsLock === "1"; }
 // workspace.js calls this after changing its lock, so send ends up disabled for the right reason.
 window.JavisSyncActiveUI = syncActiveUI;
+// composer-dictate.js reports a mic problem with the same passing note (0.230.0).
+window.JavisNoteFlash = ghiChuThoang;
+// 0.231.0: the box is emptied or filled from many places (send, restore after a dropped connection, slash menu,
+// "ask again"...). Watching the value itself keeps the voice chat / send button right without touching each one.
+(function () {
+  if (typeof HTMLTextAreaElement === "undefined" || !(chatInput instanceof HTMLTextAreaElement)) return;
+  const d = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  if (!d || !d.get || !d.set) return;
+  Object.defineProperty(chatInput, "value", {
+    configurable: true,
+    get() { return d.get.call(this); },
+    set(v) { d.set.call(this, v); try { updateStopBtn(); } catch (e) {} },
+  });
+})();
+try { updateStopBtn(); } catch (e) {}   // first paint: an empty box shows voice chat, not send
 
 // ============================================
 // Cuộn thông minh: chỉ tự cuộn khi user đang ở đáy; đang đọc lại phía trên thì
 // KHÔNG giật xuống - hiện nút "↓ Tin mới" (sticky trong khung chat) để nhảy xuống.
 // Nút được chèn lazy khi có tin đầu tiên → .transcript:empty::after vẫn hoạt động.
+// The logic (follow only at the end, the jump button and its "New messages" look, holding the follow while the mouse
+// is on a message) lives in chat-scroll.js, shared with the Team chat.
 // ============================================
-let stickBottom = true;
 const newMsgBtn = document.createElement("button");
 newMsgBtn.id = "newMsgBtn"; newMsgBtn.type = "button";
-newMsgBtn.addEventListener("click", () => scrollBottom(true));
-
-// Nút có HAI dạng, vì hai tình huống khác nhau:
-//   - Chỉ đang cuộn lên đọc lại  -> nút tròn nhỏ chỉ có mũi tên, đủ để nhảy xuống đáy.
-//   - Có tin MỚI tới lúc đang đọc -> nở ra thành "Tin mới" để báo là có cái đáng xuống xem.
-// Trước đây chỉ có dạng thứ hai, mà nó lại chỉ hiện khi scrollBottom() được gọi (tức là khi
-// có tin mới). Cuộn lên đọc lại một hội thoại dài rồi muốn quay xuống thì KHÔNG có nút nào,
-// phải tự kéo tay hết cả khung - đúng chỗ chủ repo kêu mất thời gian.
-const XUONG_ICON = (typeof ic === "function") ? ic("chevron-down") : "↓";
-function veNutXuong(coTinMoi) {
-  newMsgBtn.classList.toggle("has-new", !!coTinMoi);
-  newMsgBtn.innerHTML = coTinMoi ? XUONG_ICON + " " + window.t("app.new_msg") : XUONG_ICON;
-  newMsgBtn.title = coTinMoi ? window.t("app.new_msg_title") : window.t("app.scroll_bottom");
-  newMsgBtn.setAttribute("aria-label", newMsgBtn.title);
-}
-veNutXuong(false);
-window.addEventListener("javis:i18n", () => veNutXuong(newMsgBtn.classList.contains("has-new")));
 
 // _neoChenCu: lúc CHÈN NGƯỢC tin cũ (cuộn lên tải tiếp), mọi bong bóng dựng ra phải nằm
 // TRƯỚC tin cũ nhất đang hiện chứ không phải cuối khung. Đặt cái neo ở đây thay vì thêm
@@ -2474,53 +2702,21 @@ function chatAppend(el) {
   if (newMsgBtn.parentNode !== chatArea) chatArea.appendChild(newMsgBtn);
   chatArea.insertBefore(el, _neoChenCu || newMsgBtn);
 }
-// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút.
-function ganDay() {
-  return chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 90;
-}
-function capNhatNutXuong() {
-  if (!newMsgBtn.parentNode) return;             // chưa có tin nào thì chưa chèn nút
-  if (stickBottom) { newMsgBtn.classList.remove("show"); veNutXuong(false); return; }
-  newMsgBtn.classList.add("show");
-}
-chatArea.addEventListener("scroll", () => {
-  stickBottom = ganDay();
-  // Rời đáy là hiện nút NGAY, không chờ tin mới nào cả.
-  capNhatNutXuong();
+// Ngưỡng 90px: coi như "đang ở đáy" nên vẫn tự cuộn theo tin mới, và không hiện nút. Đang chèn ngược tin cũ
+// (_dangChenCu): appendUserMessage/appendJavisMessage vẫn gọi scrollBottom theo thói quen, mà cuộn xuống đáy lúc này
+// là quăng người đọc khỏi chỗ họ đang đứng, nên chat-scroll.js không cuộn khi suspended() đúng.
+const chatScroll = window.JavisChatScroll.attach(chatArea, {
+  button: newMsgBtn, msg: ".msg", hold: ".msg-acts:hover, .jr-chat:hover", near: 90,
+  suspended: () => _dangChenCu,
 });
-function scrollBottom(force) {
-  // Đang chèn ngược tin cũ: appendUserMessage/appendJavisMessage vẫn gọi vào đây theo thói
-  // quen, mà cuộn xuống đáy lúc này là quăng người đọc khỏi chỗ họ đang đứng.
-  if (_dangChenCu) return;
-  if (force) stickBottom = true;
-  if (stickBottom) {
-    chatArea.scrollTop = chatArea.scrollHeight;
-    newMsgBtn.classList.remove("show");
-    veNutXuong(false);
-  } else if (newMsgBtn.parentNode) {
-    veNutXuong(true);                            // đang đọc phía trên mà có tin mới tới
-    newMsgBtn.classList.add("show");
-  }
-}
+function scrollBottom(force) { chatScroll.toBottom(force); }
 
 // ============================================
 // Copy code block / copy tin nhắn / xem thêm tin dài - event delegation
 // (bubble re-render liên tục khi stream nên KHÔNG gắn handler từng nút)
 // ============================================
-function copyFallback(s) {   // HTTP LAN/VPS chưa https, hoặc clipboard API bị chặn quyền
-  return new Promise((res) => {
-    const ta = document.createElement("textarea");
-    ta.value = s; ta.style.cssText = "position:fixed;opacity:0";
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); } catch (e) {}
-    ta.remove(); res();
-  });
-}
-function copyText(s) {
-  if (navigator.clipboard && window.isSecureContext)
-    return navigator.clipboard.writeText(s).catch(() => copyFallback(s));
-  return copyFallback(s);
-}
+// Shared with the Team chat and the code block Copy button (chat-acts.js): clipboard API, textarea fallback on plain HTTP.
+function copyText(s) { return window.JavisActs.copy(s); }
 function flashCopied(btn, label) {
   const old = btn.textContent;
   btn.innerHTML = ic("check", { cls: "ic-ok" }) + " " + window.t("app.copied");
@@ -2536,13 +2732,7 @@ function runMsgAct(btn) {
   if (act === "quote") {
     // Bôi đen một đoạn TRONG tin này thì trích đúng đoạn đó; không thì trích cả tin. Tin Javis lấy
     // markdown gốc (dataset.md), không lấy chữ đã vẽ, để đoạn trích còn nguyên đậm, danh sách, link.
-    let chon = "";
-    try {
-      const sel = window.getSelection && window.getSelection();
-      if (sel && !sel.isCollapsed && sel.rangeCount && msgEl.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-        chon = String(sel.toString() || "").trim();
-      }
-    } catch (e) {}
+    const chon = window.JavisActs.selectedIn(msgEl);
     const b = msgEl.querySelector(".bubble");
     const ca = msgEl.classList.contains("msg-javis")
       ? window.JavisVisibleMarkdown(msgEl.dataset.md || (b ? b.innerText : ""))
@@ -2587,14 +2777,8 @@ chatArea.addEventListener("click", (e) => {
   const t = e.target;
   const actBtn = t.closest && t.closest(".msg-act");
   if (actBtn) { runMsgAct(actBtn); return; }
-  if (t.classList.contains("code-copy")) {
-    const wrap = t.closest(".code-wrap");
-    const pre = wrap && wrap.querySelector("pre");
-    if (pre) copyText(pre.innerText).then(() => flashCopied(t, "⧉ Copy"));
-  } else if (t.classList.contains("clamp-more")) {
-    const u = t.closest(".bubble") && t.closest(".bubble").querySelector(".utext");
-    if (u) { u.classList.toggle("clamped"); t.textContent = u.classList.contains("clamped") ? window.t("app.show_more") : window.t("app.show_less"); }
-  }
+  // The code block Copy button (chat-render.js) and "Show more" on a long message (chat-acts.js) are handled on the
+  // document, so they work in every chat container.
 });
 // Điện thoại không có hover: chạm vào tin để bật/tắt hàng nút của đúng tin đó.
 chatArea.addEventListener("click", (e) => {
@@ -3419,6 +3603,7 @@ function _pinRestore() {
 // tải file mới kế tiếp.
 let attachNote = "";
 function renderChips() {
+  try { updateStopBtn(); } catch (e) {}   // 0.231.0: an attachment turns voice chat into send
   attachBar.classList.toggle("has-items", pendingAttachments.length > 0 || !!pinnedNote || !!attachNote || !!_quote);
   attachBar.innerHTML = "";
   if (_quote && window.JavisQuote) {
@@ -3554,58 +3739,12 @@ function clearAttachments() {
 //   1. Chip hiện PHẦN TRĂM đã gửi, và tách hẳn hai khúc: "đang gửi 45%" (việc của mạng) với
 //      "máy chủ đang lưu" (việc của máy chủ). Nhìn là biết kẹt ở đâu.
 //   2. Canh KẸT thay cho trần cứng 3 phút: file to trên mạng chậm vẫn đi hết miễn còn nhích;
-//      còn đứng im TAI_KET_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
+//      còn đứng im JavisUpload.STALL_MS không nhích byte nào thì cắt và TỰ THỬ LẠI (tối đa TAI_THU_LAI lần).
 //   3. Hỏng hẳn thì chip có nút tải lại, bấm là gửi lại đúng file đó, không phải chọn lại.
-const TAI_KET_MS = 30000;        // đứng im bao lâu (không nhích byte nào) thì coi là kết nối chết
-const TAI_CHO_MAY_CHU_MS = 90000; // gửi xong 100% mà máy chủ im bao lâu thì thôi
-const TAI_THU_LAI = 2;           // số lần tự thử lại khi mạng đứt/đứng (ngoài lần đầu)
-
-// Một lượt POST /upload bằng XHR (fetch không cho biết tiến độ GỬI lên). Trả Promise
-// {status, text}; lỗi thì reject Error có `kind`: "stall" (mạng đứng giữa chừng), "server"
-// (gửi xong mà máy chủ không trả lời), "net" (đứt kết nối). `XHR` và `dongHo` truyền vào được
-// để test chạy không cần trình duyệt.
-function guiUpload(fd, onTien, opt) {
-  opt = opt || {};
-  const XHR = opt.XHR || XMLHttpRequest;
-  // PHẢI bọc bằng hàm mũi tên (0.64.51). Bản 0.64.43 viết `{ setInterval, clearInterval }` rồi
-  // gọi `dongHo.setInterval(...)`: trình duyệt thấy `this` là object này chứ không phải window
-  // và ném "TypeError: Illegal invocation" ngay trước khi gửi. Mọi file đính kèm đều hỏng, chip
-  // báo "lỗi mạng" (chủ repo báo 25/09). Node không kiểm `this` nên test cũ không bắt được.
-  const dongHo = opt.dongHo || {
-    now: () => Date.now(),
-    setInterval: (fn, ms) => setInterval(fn, ms),
-    clearInterval: (id) => clearInterval(id),
-  };
-  const ketMs = opt.ketMs || TAI_KET_MS, choMs = opt.choMs || TAI_CHO_MAY_CHU_MS;
-  return new Promise((resolve, reject) => {
-    const xhr = new XHR();
-    // Lỗi ném ngay trong lúc DỰNG yêu cầu (không phải lỗi mạng) phải nói đúng tên, không được
-    // rơi thành "lỗi mạng" rồi tự thử lại vô ích như vụ 25/09.
-    let moc = dongHo.now(), guiXong = false, xong = false, ly = null;
-    const ket = (loai) => { if (xong) return; ly = loai; try { xhr.abort(); } catch (e) {} };
-    const canh = dongHo.setInterval(() => {
-      const im = dongHo.now() - moc;
-      if (!guiXong && im > ketMs) ket("stall");
-      else if (guiXong && im > choMs) ket("server");
-    }, 2000);
-    const het = (fn, v) => { if (xong) return; xong = true; dongHo.clearInterval(canh); fn(v); };
-    const loi = (loai) => { const e = new Error(loai); e.kind = loai; return e; };
-    xhr.upload.onprogress = (e) => {
-      moc = dongHo.now();
-      if (onTien && e.lengthComputable) onTien(e.loaded, e.total);
-    };
-    xhr.upload.onload = () => { guiXong = true; moc = dongHo.now(); if (onTien) onTien(-1, -1); };
-    xhr.onload = () => het(resolve, { status: xhr.status, text: xhr.responseText });
-    xhr.onerror = () => het(reject, loi("net"));
-    xhr.onabort = () => het(reject, loi(ly || "net"));
-    try {
-      xhr.open("POST", "/upload");
-      xhr.send(fd);
-    } catch (e) {
-      het(reject, Object.assign(loi("client"), { chiTiet: (e && e.message) || String(e) }));
-    }
-  });
-}
+// The XHR with progress and the stall watch live in chat-upload.js (JavisUpload.send, shared with the Team chat); errors
+// carry `kind`: "stall" (network stopped mid way), "server" (sent but no answer), "net" (dropped), "client" (browser).
+const TAI_THU_LAI = window.JavisUpload.RETRIES;   // automatic retries after a stall or a dropped connection
+function guiUpload(fd, onTien, opt) { return window.JavisUpload.send(fd, onTien, opt); }
 
 async function uploadFile(file, att) {
   const isImg = file.type.startsWith("image/");
@@ -3672,7 +3811,7 @@ async function _taiLen(file, att) {
       if (kind === "client") {
         try { console.error("[upload] browser-side error:", e); } catch (_e) {}
         att.loi = true;
-        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.chiTiet || e.message)) || e).slice(0, 80) });
+        att.statusText = window.t("app.att_client_err", { msg: String((e && (e.detail || e.message)) || e).slice(0, 80) });
         return;
       }
       // Mạng đứng/đứt thì tự thử lại (máy chủ có lưu dở cũng vô hại: mỗi lần là một tên
@@ -3805,6 +3944,8 @@ function chupFile(f) {
 // Events
 // ============================================
 chatInput.addEventListener("input", () => {
+  // 0.206.0: the send button shows up next to Stop once there is text; 0.231.0: and in place of voice chat.
+  if (isProcessing) syncActiveUI(); else updateStopBtn();
   chatInput.style.height = "auto";
   // Ô nhập NỞ THEO CHỮ như claude.ai (chủ yêu cầu 27/08): xuống dòng là thấy toàn bộ văn
   // bản, không phải cuộn trong một ô 3 dòng. Trần ở trang Trò chuyện là 40% màn hình
@@ -3814,20 +3955,11 @@ chatInput.addEventListener("input", () => {
     ? Math.round(window.innerHeight * 0.4) : 200;
   chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
 });
-// Bộ gõ tiếng Việt/IME có thể phát keydown Enter trước compositionend. Nếu gửi và xoá
-// textarea ở thời điểm đó, trình duyệt sẽ chốt phần chữ đang ghép vào ô vừa xoá, làm sót
-// lại ký tự hoặc từ cuối. Giữ cờ riêng cho các trình duyệt báo isComposing không ổn định.
-let chatInputComposing = false;
-chatInput.addEventListener("compositionstart", () => { chatInputComposing = true; });
-chatInput.addEventListener("compositionend", () => { chatInputComposing = false; });
+// Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
+// chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
+const chatInputComposing = window.JavisActs.trackComposition(chatInput);
 chatInput.addEventListener("keydown", (e) => {
-  if (chatInputComposing || e.isComposing || e.keyCode === 229) return;
-  // Máy chạm (điện thoại/tablet): Enter là XUỐNG DÒNG như mọi app nhắn tin, gửi bằng nút
-  // Gửi. Bàn phím ảo không có Shift+Enter nên giữ lối desktop là user không cách nào viết
-  // tin nhiều dòng. Đo bằng pointer: coarse (con trỏ CHÍNH là ngón tay) chứ không đo bề
-  // rộng màn hình - laptop cảm ứng có chuột vẫn giữ Enter-gửi như cũ.
-  if (window.matchMedia("(pointer: coarse)").matches) return;
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (window.JavisActs.enterSends(e, chatInputComposing())) { e.preventDefault(); sendMessage(); }
 });
 sendBtn.addEventListener("click", () => sendMessage());
 
@@ -3873,6 +4005,7 @@ function tatRanhTay() {
   runActions(turn.micOff());
   updateVoiceFocus();
   try { if (window.JavisTts) window.JavisTts.set(false); } catch (e) {}
+  try { updateStopBtn(); } catch (e) {}   // tests lift this function out alone
 }
 
 // Câu báo lỗi mic. Nói ĐÚNG nguyên nhân, vì ba nguyên nhân cần ba hành động khác hẳn nhau và
@@ -3907,6 +4040,7 @@ voiceBtn.addEventListener("click", () => {
   handsFree = !handsFree;
   if (handsFree) attention.start();
   voiceBtn.classList.toggle("handsfree", handsFree);
+  updateStopBtn();
   if (handsFree) {
     // Bấm mic là GỌI: hiện thanh gọi, nút mic thành Cúp máy (0.65.18).
     _callMuted = false;
@@ -3924,7 +4058,8 @@ voiceBtn.addEventListener("click", () => {
   try { if (window.JavisTts) window.JavisTts.set(handsFree); } catch (e) {}
   // Voice V2 bậc Live: nút mic mở phiên nghe nói thẳng thay cho Web Speech + TTS.
   if (voiceMode === "live") {
-    if (handsFree) batLive();
+    // 0.203.0: a call answered from the incoming-call card opens with its reminder line (goiDenTheoLich).
+    if (handsFree) batLive(layMoDauGoiDen());
     else tatRanhTay();
     return;
   }
@@ -4066,6 +4201,8 @@ const ENGINE_LABEL = {
   // Hai engine CLI gói thuê bao. Nhãn phải TÁCH khỏi nhà cung cấp API cùng tên: khác đường
   // và khác hoá đơn (gói đã trả, so với API key trả theo lượt gọi).
   "grok-cli": "Grok Build", "antigravity-cli": "Antigravity",
+  // A gateway the owner points Javis at: the label says which wire format, not who serves it.
+  "openai-compat": "OpenAI Compatible", "anthropic-compat": "Anthropic Compatible",
 };
 // Một dòng nhỏ dưới câu trả lời: lượt này chạy BẰNG GÌ, ở chế độ nào, và tốn bao nhiêu
 // token vào. Trước đây chuyện này hoàn toàn vô hình - chỉ lộ ra khi nhà cung cấp báo vượt hạn
@@ -4400,9 +4537,36 @@ async function refreshAuthRow() {
   if (curLbl) curLbl.hidden = !co;
   const p = document.getElementById("setAuthPass");
   if (p) p.placeholder = co ? window.t("app.pw_ph_change") : window.t("app.pw_ph_set");
+  // The server refuses to turn off login on a public server (0.224.0), so do not offer it there.
+  const off = document.getElementById("disableAuthBtn");
+  if (off) off.hidden = !co || !!a.require_login;
   return co;
 }
 window.__javisRefreshAuthRow = refreshAuthRow;
+
+// Turn off login (0.224.0, security report C2): the server wants the current password and, with
+// 2FA on, a code. Shared by both account surfaces (this settings block and console.js renderAccount).
+// Returns {ok, error}; ok=false with no error means the user cancelled.
+async function disableLogin(password) {
+  if (!password) return { ok: false, error: window.t("app.pw_need_cur") };
+  if (!confirm(window.t("app.disable_auth_confirm"))) return { ok: false };
+  const send = async (code) => {
+    const fd = new FormData();
+    fd.append("password", password);
+    if (code) fd.append("code", code);
+    return (await fetch("/auth/disable", { method: "POST", body: fd })).json();
+  };
+  try {
+    let r = await send("");
+    if (!r.ok && r.needs_2fa) {
+      const code = (prompt(window.t("app.disable_auth_code")) || "").trim();
+      if (!code) return { ok: false };
+      r = await send(code);
+    }
+    return r.ok ? { ok: true } : { ok: false, error: r.error || window.t("app.err_low") };
+  } catch (e) { return { ok: false, error: window.t("app.err_net_low") }; }
+}
+window.__javisDisableLogin = disableLogin;
 function _saveSetting(section, dataObj, btn) {
   const fd = new FormData();
   fd.append("section", section);
@@ -4510,9 +4674,14 @@ if (document.getElementById("settingsBtn")) {
   document.getElementById("logoutBtn").addEventListener("click", async () => {
     await fetch("/auth/logout", { method: "POST" }); location.reload();
   });
-  document.getElementById("disableAuthBtn").addEventListener("click", async () => {
-    if (!confirm(window.t("app.disable_auth_confirm"))) return;
-    await fetch("/auth/disable", { method: "POST" }); location.reload();
+  document.getElementById("disableAuthBtn").addEventListener("click", async (e) => {
+    const curEl = document.getElementById("setAuthCur");
+    const btn = e.target; const old = btn.textContent;
+    const r = await disableLogin(curEl ? curEl.value : "");
+    if (r.ok) { location.reload(); return; }
+    if (!r.error) return;
+    btn.innerHTML = ic("triangle-alert", { cls: "ic-warn" }) + " " + escapeHtml(r.error);
+    setTimeout(() => { btn.textContent = old; }, 4000);
   });
 }
 // Lối thoát khi quên mật khẩu (trên màn đăng nhập)

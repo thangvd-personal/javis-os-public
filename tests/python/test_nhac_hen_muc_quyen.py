@@ -22,10 +22,10 @@ import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: E402,F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-nhachen-")
 os.environ.setdefault("JAVIS_STATE_DIR", _STATE)
-
-from _paths import ROOT, SERVER  # noqa: E402,F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

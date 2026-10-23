@@ -2,6 +2,20 @@
   "format_version": 1,
   "announcements": [
     {
+      "id": "security-nodejs-2026-10",
+      "kind": "security",
+      "title": "Cập nhật Node.js: lỗ hổng bảo mật nghiêm trọng",
+      "summary": "Ngày 21/10/2026 Node.js vá 10 lỗ hổng, trong đó có lỗi Brotli cho phép chạy mã từ xa. Claude Code, Codex và các MCP chạy bằng npx đều dùng Node.js trên máy bạn.",
+      "body": "Docker hoặc VPS: cập nhật Javis lên 0.295.0 trở lên, ảnh mới đã có Node.js 22.23.4. Cài trực tiếp trên máy: cài Node.js 22.23.4, 24.22.1, 26.12.1 hoặc mới hơn (Windows: winget upgrade OpenJS.NodeJS.LTS; Mac: brew upgrade node), rồi khởi động lại Javis. Node.js 20 trở xuống đã hết hỗ trợ, không có bản vá. Từ 0.295.0 Javis tự kiểm tra và chỉ nhắc khi máy còn thiếu bản vá.\n\nEnglish: Node.js fixed 10 vulnerabilities on 2026-10-21, including a Brotli remote code execution flaw. Update Javis to 0.295.0+ (Docker) or install Node.js 22.23.4 / 24.22.1 / 26.12.1 or newer, then restart Javis.",
+      "published_at": "2026-10-23",
+      "expires_at": "2027-01-31",
+      "priority": "high",
+      "cta": {
+        "label": "Xem thông báo của Node.js →",
+        "url": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases"
+      }
+    },
+    {
       "id": "community-notification-inbox-launch",
       "kind": "community",
       "title": "Hộp thư Thông báo đã sẵn sàng",

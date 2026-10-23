@@ -43,7 +43,7 @@ CODEX = "openai-oauth"
 GROK_CLI = "grok-cli"
 ANTIGRAVITY = "antigravity-cli"
 API_PROVIDERS = ("openrouter", "openai", "gemini", "groq", "deepseek", "anthropic-api", "ollama",
-                 "ollama-local", "openai-compat")
+                 "ollama-local", "openai-compat", "anthropic-compat")
 
 # provider -> tên trường chứa API key trong settings["model"]
 _KEY_FIELD = {
@@ -62,6 +62,8 @@ _KEY_FIELD = {
     # Endpoint OpenAI-compatible tự khai. Như ollama-local: thứ quyết định dùng được là ĐỊA CHỈ
     # (`openai_compat_base`), khoá có thể rỗng khi endpoint không đòi xác thực.
     "openai-compat": "openai_compat_key",
+    # Anthropic-compatible gateway (0.254.0): usable once its base URL is set, like openai-compat.
+    "anthropic-compat": "anthropic_compat_key",
 }
 
 # mode của Javis -> sandbox của Codex CLI. Bản đồ thật nằm ở `claude_cli.codex_sandbox_cho_mode`
@@ -250,6 +252,8 @@ def api_key_for(provider: str, settings: dict = None) -> str:
     if provider == "openai-compat":
         # Có Base URL là chạy được; khoá rỗng thì gửi "none" (endpoint không đòi xác thực).
         return (m.get(field) or "none") if (m.get("openai_compat_base") or "").strip() else ""
+    if provider == "anthropic-compat":
+        return (m.get(field) or "none") if (m.get("anthropic_compat_base") or "").strip() else ""
     return m.get(field) or ""
 
 
@@ -304,6 +308,11 @@ def availability(spec: dict, settings: dict = None) -> tuple:
         s = settings if settings is not None else cfgmod.read_settings()
         if not (s.get("model", {}) or {}).get("openai_compat_base"):
             return False, "Chưa đặt Base URL cho OpenAI Compatible - vào trang Models."
+        return True, ""
+    if prov == "anthropic-compat":
+        s = settings if settings is not None else cfgmod.read_settings()
+        if not (s.get("model", {}) or {}).get("anthropic_compat_base"):
+            return False, "Chưa đặt Base URL cho Anthropic Compatible - vào trang Models."
         return True, ""
     if prov in API_PROVIDERS:
         if not api_key_for(prov, settings):
@@ -405,7 +414,8 @@ class _ApiAuxEngine:
                   "anthropic-api": eng.anthropic_chat_with_mcp,
                   "ollama": eng.ollama_chat_with_mcp,
                   "ollama-local": eng.ollama_local_chat_with_mcp,
-                  "openai-compat": eng.openai_compat_chat_with_mcp}[self.provider]
+                  "openai-compat": eng.openai_compat_chat_with_mcp,
+                  "anthropic-compat": eng.anthropic_compat_chat_with_mcp}[self.provider]
             stream = fn(key, self.model, messages, self.reasoning, tools, route)
         else:
             fn = {"openrouter": eng.openrouter_stream, "openai": eng.openai_stream,
@@ -414,21 +424,39 @@ class _ApiAuxEngine:
                   "anthropic-api": eng.anthropic_stream,
                   "ollama": eng.ollama_stream,
                   "ollama-local": eng.ollama_local_stream,
-                  "openai-compat": eng.openai_compat_stream}[self.provider]
+                  "openai-compat": eng.openai_compat_stream,
+                  "anthropic-compat": eng.anthropic_compat_stream}[self.provider]
             stream = fn(key, self.model, messages, self.reasoning)
 
         # Đường API sinh "text" theo mảnh; việc nền chỉ đọc "final" nên gom lại rồi phát MỘT lần.
         buf = []
-        async for ev in stream:
-            t = ev.get("type")
-            if t == "text":
-                buf.append(ev.get("content") or "")
-            elif t in ("tool_call", "error", "usage"):
-                if t == "usage":
-                    self._ghi_muc_dung(ev)
-                yield ev
-                if t == "error":
-                    return
+        import turn_context
+        observed_requests = [False]
+        request_ids = set()
+        self.usage_request_count = 0
+
+        def observe_request(event):
+            observed_requests[0] = True
+            request_ids.add(event.get("event_id"))
+            self.usage_request_count = len(request_ids)
+            self._ghi_muc_dung(event)
+
+        observer = observe_request if (turn_context.current() or {}).get("execution") else None
+        observer_token = eng.TEAM_REQUEST_OBSERVER.set(observer)
+        try:
+            async for ev in stream:
+                t = ev.get("type")
+                if t == "text":
+                    buf.append(ev.get("content") or "")
+                elif t in ("tool_call", "error", "usage"):
+                    if t == "usage" and not observed_requests[0]:
+                        self.usage_request_count += 1
+                        self._ghi_muc_dung(ev)
+                    yield ev
+                    if t == "error":
+                        return
+        finally:
+            eng.TEAM_REQUEST_OBSERVER.reset(observer_token)
         yield {"type": "final", "content": "".join(buf)}
 
     def _ghi_muc_dung(self, ev: dict) -> None:
@@ -446,9 +474,81 @@ class _ApiAuxEngine:
         try:
             import usage_store
             usage_store.record(self.provider, self.model,
-                               ev.get("input", 0), ev.get("output", 0), ev.get("cost", 0) or 0)
+                               ev.get("input"), ev.get("output"), ev.get("cost"),
+                               request_id=ev.get("request_id"), event_id=ev.get("event_id"),
+                               cache_read=ev.get("cache_read"), cache_create=ev.get("cache_create"))
         except Exception as e:  # noqa: BLE001
+            try:
+                usage_store.note_telemetry_error()
+            except Exception:
+                pass
             print(f"[aux usage] {type(e).__name__}: {e}", file=sys.stderr)
+
+
+# ---- Cooldown of broken links (0.222.0) ----
+# A link that just failed is put to rest for a while, so the next background job does not pay for
+# the same dead model again (a 504 can take 15 seconds to arrive). Process memory only: a restart
+# forgets, which is the right default after an update or a new key. Resting links are not skipped,
+# they move to the END of the chain: if every other link fails too, the one closest to waking is
+# still tried, because a background job must run rather than die.
+COOLDOWN_QUOTA_S = 5 * 60          # 429 / quota: quotas refill
+COOLDOWN_DOWN_S = 30 * 60          # 502/503/504/529/timeout: an outage outlasts a retry
+COOLDOWN_ACCESS_S = 6 * 3600       # 401/403/404 / no access to the model: will not change in a minute
+COOLDOWN_MAX_S = 6 * 3600
+_COOLDOWN: dict = {}               # key -> monotonic time it may be tried first again
+_COOL_CLASSES = ("ClaudeSDK", "CodexCLI", "GrokCLI", "AntigravityCLI")
+
+_RE_RETRY_AFTER = re.compile(r"retry[- ]?after\D{0,5}(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?)?", re.I)
+_RE_TRY_AGAIN = re.compile(r"try again in\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?|h|hours?)", re.I)
+
+
+def _seconds(num: str, unit: str) -> float:
+    n = float(num)
+    unit = (unit or "s").lower()
+    if unit == "ms":
+        return n / 1000
+    if unit.startswith("h"):
+        return n * 3600
+    if unit.startswith("m"):
+        return n * 60
+    return n
+
+
+def cooldown_for(error) -> float:
+    """Seconds to rest a link after `error`, 0 when the error says nothing about the link itself
+    (a bad prompt, a tool failing). Retry-After / "try again in" wins when the provider states it."""
+    text = str(error or "")
+    low = text.lower()
+    for rx in (_RE_RETRY_AFTER, _RE_TRY_AGAIN):
+        m = rx.search(text)
+        if m:
+            return min(COOLDOWN_MAX_S, max(1.0, _seconds(m.group(1), m.group(2) or "s")))
+    if re.search(r"\b(401|403|404)\b", low) or any(k in low for k in (
+            "not found", "does not exist", "no access", "permission", "unauthorized", "forbidden",
+            "invalid api key", "invalid_api_key", "model_not_found", "mất đăng nhập", "not logged in")):
+        return COOLDOWN_ACCESS_S
+    if re.search(r"\b429\b", low) or any(k in low for k in (
+            "quota", "rate limit", "rate_limit", "usage limit", "too many requests", "hết lượt", "hết hạn mức",
+            "resource_exhausted")):
+        return COOLDOWN_QUOTA_S
+    if re.search(r"\b(502|503|504|529)\b", low) or any(k in low for k in (
+            "timeout", "timed out", "deadline", "overloaded", "unavailable", "bad gateway", "không phản hồi")):
+        return COOLDOWN_DOWN_S
+    return 0.0
+
+
+def _cool_key(e) -> str:
+    """provider:model for API links, class:model for CLI links; "" for anything else (never rests)."""
+    prov = getattr(e, "provider", None)
+    kind = prov if isinstance(prov, str) and prov else (type(e).__name__ if type(e).__name__ in _COOL_CLASSES else "")
+    return f"{kind}:{getattr(e, 'model', '') or ''}" if kind else ""
+
+
+def _resting(e, now: float) -> float:
+    """Monotonic time a resting link wakes, 0 when it is not resting."""
+    key = _cool_key(e)
+    until = _COOLDOWN.get(key, 0.0) if key else 0.0
+    return until if until > now else 0.0
 
 
 class _FallbackChain:
@@ -497,10 +597,27 @@ class _FallbackChain:
     def _name(e) -> str:
         return getattr(e, "provider", None) or type(e).__name__
 
+    def _order(self):
+        """Links in chain order, resting links moved to the end (soonest to wake first)."""
+        now = time.monotonic()
+        engines = self._all()
+        awake = [e for e in engines if not _resting(e, now)]
+        resting = sorted((e for e in engines if _resting(e, now)), key=lambda e: _resting(e, now))
+        for e in resting:
+            print(f"[aux router] {self._name(e)} đang nghỉ thêm {int(_resting(e, now) - now)} giây sau lỗi "
+                  "lần trước: thử sau cùng.", file=sys.stderr)
+        return awake + resting
+
+    @staticmethod
+    def _rest(e, error) -> None:
+        key, secs = _cool_key(e), cooldown_for(error)
+        if key and secs:
+            _COOLDOWN[key] = time.monotonic() + secs
+
     async def query(self, prompt: str):
         fail = "chuỗi engine việc nền rỗng"
         dau = ""      # lỗi của mắt xích ĐẦU TIÊN thật sự chạy - thường là lỗi có nghĩa nhất
-        for e in self._all():
+        for e in self._order():
             try:
                 if not e.is_available():
                     fail = f"{self._name(e)} không sẵn sàng"
@@ -541,10 +658,13 @@ class _FallbackChain:
                     if t == "final":
                         got_final = True
                 if got_final:
+                    _COOLDOWN.pop(_cool_key(e), None)            # it works again: no more rest
                     return                                       # mắt này chạy ngon → xong
                 fail = got_error or f"{self._name(e)} kết thúc mà không có final"
+                self._rest(e, fail)
             except Exception as exc:
                 fail = f"{self._name(e)}: {type(exc).__name__}: {exc}"
+                self._rest(e, fail)
             print(f"[aux router] {self._name(e)} lỗi → thử mắt xích kế tiếp. Lý do: {str(fail)[:300]}",
                   file=sys.stderr)
             dau = dau or str(fail)

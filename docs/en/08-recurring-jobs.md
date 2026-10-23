@@ -117,17 +117,25 @@ All times use Vietnam time (UTC+7). The first three forms are **one-shot** (once
 
 ## The job list
 
-### Grouped by brain
+### Three tabs: Jobs, Incidents, Log
 
-Each brain gets a block headed `🧠 <brain name>`, with a small **viewing** label on the brain selected in your sidebar and **default** on the default brain. The brain you are viewing is pushed to the top. Brains with no jobs that you are not viewing are hidden to keep things tidy.
+From 0.204.0 the page has three tabs right under **+ Add job**. **Jobs** is the job list, with the job count next to it. **Incidents** is the background health section, with a red count while an incident is open. **Log** is the recent log. The page remembers the tab you had open.
 
-Inside each block, loops are listed first, then a **Pending reminders** section.
+### Picking a brain
 
-If the brain you are viewing has no jobs, it reads "No jobs in this brain yet. Click **+ Add job**, or tell Javis in chat." With nothing anywhere, it reads "No recurring jobs or reminders yet."
+The picker at the top of Jobs shows the jobs of **one brain**, by default the brain selected in your sidebar (marked **viewing**). Each brain shows its job count, for example `Brain Default (14)`. Pick **All brains** to see everything; each card then carries a small line naming its brain. The page remembers this choice.
+
+Next to it, three filters: **All**, **Repeating job** and **Reminder**.
+
+### Paging
+
+**10 cards** a page, with **← Previous** and **Next →** and a count line such as "Page 1/2 · 14 items". Changing the brain, the filter or the search goes back to the first page.
+
+If the brain has no jobs, it reads "No jobs in this brain yet. Click **+ Add job**, or tell Javis in chat."
 
 ### The search box
 
-The **🔍 Find a job by name...** box above the list filters cards as you type, **ignoring Vietnamese accents**, so typing "kho" still matches "khô" and "email" still matches "Email". Brain groups with no matching cards hide themselves. With no matches at all it reads "No job matches."
+The **🔍 Find a job by name...** box filters cards as you type, **ignoring Vietnamese accents**, so typing "kho" still matches "khô" and "email" still matches "Email". It searches the selected brain (or all of them). With no matches at all it reads "No job matches."
 
 ### Reading a loop card
 
@@ -237,7 +245,7 @@ Both need the bot enabled, see [Telegram channel](11-telegram.md). Without it, j
 
 ## Recent log
 
-The last block on the page. Next to the title is a picker to filter:
+On the **Log** tab. Next to the title is a picker to filter:
 
 - **Log for the brain you are viewing**: every loop of the brain selected in the sidebar.
 - Or one specific job, shown as `<job name> · <brain name>`.
@@ -264,6 +272,50 @@ Two hard safety rails on this path, which no parameter can change:
 
 - A loop created through chat is **always** `enabled: false`, and defaults to `mode: full` (say "read only" or "drafts only" for a lighter one). You must open the Recurring jobs page and click **Enable** for it to run for real.
 - If the cycle is unclear (you said "every morning" without a time), the tool reports an error and asks back, never guessing.
+
+## Webhooks: outside systems start work in Javis
+
+Reminders run on the clock. A webhook runs on an **event**: a customer just filled the form on a landing page, just paid, or another app just has new data, and Javis starts at once instead of waiting for the next scheduled run.
+
+**Create a webhook:** from 0.204.0 webhooks have their own page: open the **Work** group in the sidebar, choose **Webhooks**, click **+ Add webhook**. Name it, pick a brain, then choose what runs:
+
+- **A workflow**: pick an existing workflow in the brain. The event data becomes the workflow's input.
+- **A written job**: write what to do, for example "Call the customer back within 5 minutes and log them in the CRM".
+
+Pick the permission level as for a reminder (Read only, Can write files, Full access), then **Save**.
+
+**The secret is shown only once**, right after saving, together with a `curl` command to test it. The calling system sends it in the `Authorization: Bearer <token>` header (or the `X-Javis-Token` header, or `?token=` at the end of the link when it cannot set headers). Javis keeps only a hash, so if you lose it press **New token**; the old one stops working at once.
+
+**Where results go:** like a reminder, to the brain's Javis Core chat, the inbox (bell) and your Telegram. A result starting with `[SILENT]` is not reported.
+
+**Safety rails:**
+
+- A wrong token, a switched-off webhook and an unknown one all get the same refusal, so nobody can probe.
+- The event data reaches the brain as **data**, not instructions. 32 KB per call at most.
+- Each webhook runs one job at a time, queues at most 5, and runs at most 30 times an hour.
+- When the sender retries after a network glitch (sending an `Idempotency-Key` or `X-Request-Id` header), Javis acknowledges it without running twice.
+
+**The link must be reachable from the Internet.** On a VPS with a domain it works as is. On a home machine you need a tunnel (Cloudflare Tunnel, Tailscale Funnel) pointing at Javis.
+
+## Background health: Javis Core handles incidents
+
+When a background run breaks (a Kanban job, a loop that paused itself, a Do it and report reminder, a webhook), the brain's **Javis Core** hears first and decides one of three things:
+
+- **Run it again once** for a passing failure (a network glitch, a timeout, a busy machine). Only for Kanban jobs and reminders; loops and webhooks are not re-run on their own.
+- **Tell you** in one or two sentences when only you can fix it: a sign-in, an API key, a permission, a plan out of quota, a connection not made, a job switched off.
+- **Stay quiet** when it already recovered.
+
+The background model decides in text-only mode (no tools), but Javis keeps the hard rules: a sign-in or key error is never re-run, each incident is re-run at most once, and a retry that fails again sends exactly one message. With no model ready, Javis classifies by the error text.
+
+The **Incidents** tab of the Recurring jobs page lists open incidents (press **Done** to close one) and the last 24 hours of failures grouped by cause. To stop reporting to Javis Core, set `incidents.enabled` to `false` in the settings.
+
+**When Javis will not open:** run `python tools/sentinel.py` on the server. It only reads data, calls no model, and prints the failures grouped by cause; add `--json` for a machine-readable copy and `--out <folder>` to save a report (the folder must be outside Javis's data folder).
+
+## Reminders that remember the last result
+
+A **Do it and report** reminder has a **Remember the last result** box. With it on, each run receives the previous report (up to 2,000 characters), so it reports only what is new or changed. Good for watching competitor prices, a metric or an inbox.
+
+A cron schedule also shows its **next three runs** on the card. A run missed because the machine was off still runs once when it comes back, and Javis is told it is running late so it works from the current time.
 
 ## Advanced fields (editable only in the .md file)
 
