@@ -218,6 +218,7 @@ for (const [ten, o] of [["vi.json", vi], ["en.json", en]]) {
 // là giữ nguyên hành vi mà file vẫn sạch (chat-render.js, studio.js... đã làm vậy).
 const NGOAI_LE_DU_LIEU = {
   "app.js": { tran: 12, vi_sao: "khối ngữ cảnh gửi cho AI (file đính kèm, FILE ĐANG MỞ) và tiền tố để bóc chúng khỏi bong bóng" },
+  "chat-render.js": { tran: 25, vi_sao: "danh sách từ khoá định hướng trang nội bộ theo từ người dùng gõ" },
   "chat-slash.js": { tran: 5, vi_sao: "lời dặn dùng skill gửi cho AI, và gập dấu tên skill" },
   "console.js": { tran: 11, vi_sao: "từ khoá xếp loại nhật ký thay đổi, đơn vị thời gian người dùng gõ, tên danh mục làm khoá lọc, gập dấu" },
   "packs.js": { tran: 12, vi_sao: "tên nhóm của kho gói là khoá lọc data-kho-nhom, nhãn hiện ra đã dịch qua tw()" },

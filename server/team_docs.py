@@ -69,7 +69,8 @@ def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_d
             continue
         if not src.is_file():
             continue
-        staged, in_brain = _inside(src, staging), _inside(src, brain_root)
+        staged = _inside(src, staging) or _inside(src, brain_root / "temporary")
+        in_brain = _inside(src, brain_root)
         if not (staged or in_brain):
             continue                       # never pull a file from elsewhere on the machine into a team
         name = _safe_name(a.get("name") or src.name)

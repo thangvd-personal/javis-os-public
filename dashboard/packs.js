@@ -649,7 +649,7 @@
     // bản về sau không đè lên thứ mới hơn.
     const tuoi = d.fetched_at ? (Date.now() / 1000 - Number(d.fetched_at)) : 0;
     if (!lamMoi && tuoi > CU_QUA) {
-      fetch("/packs/store?" + new URLSearchParams({ refresh: "1", brain: curBr }).toString())
+      fetch("/packs/store?refresh=1" + (curBr ? "&brain=" + encodeURIComponent(curBr) : ""))
         .then(r => r.json())
         .then(d2 => {
           if (d2 && d2.ok && _kho.dl === d) { _kho.dl = d2; veLuoi(el, host); }

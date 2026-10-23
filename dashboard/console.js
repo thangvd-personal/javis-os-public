@@ -528,7 +528,7 @@
     const cv = document.getElementById("cview");
     if (cv) cv.classList.toggle("cview-hoi-thoai", id === "conversations" || id === "chatbots");
     _renderGen++;   // đổi trang → vô hiệu mọi render async đang dở (guard bổ sung cho renderer đã có)
-    if (id === "chat") return renderChat(el);
+    if (id === "chat")     return renderChat(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
     if (id === "settings") return renderSettingsPage(el);
@@ -3067,7 +3067,7 @@
         box.innerHTML = `<div style="padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-1);line-height:1.6">
           <div style="color:var(--warn-ink);font-weight:600;margin-bottom:4px">${esc(window.t("cs.ln_no_git"))}</div>
           <div class="dim" style="font-size:13px;color:var(--text3);margin-bottom:10px">${esc(window.t("cs.ln_no_git_desc"))}</div>
-          <button class="s-btn-ghost" id="lnInitGitBtn" style="font-size:12.5px;padding:4px 10px">⚡ ${esc(window.t("cs.ln_init_git_btn"))}</button>
+          <button class="s-btn-ghost" id="lnInitGitBtn" style="font-size:12.5px;padding:4px 10px">${ic("zap")} ${esc(window.t("cs.ln_init_git_btn"))}</button>
         </div>`;
         const btn = box.querySelector("#lnInitGitBtn");
         if (btn) {

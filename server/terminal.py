@@ -537,7 +537,7 @@ class Phien:
         nhom = not IS_WINDOWS and self._la_nhom_truong(p)
         try:
             if nhom:
-                os.killpg(p.pid, signal.SIGHUP)
+                os.killpg(p.pid, signal.SIGHUP if CO_PTY else signal.SIGTERM)
             else:
                 p.terminate()
         except (OSError, ProcessLookupError):

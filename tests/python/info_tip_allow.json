@@ -26,6 +26,7 @@
  "cs.cn_removed_desc": "content: inside a details the user opens",
  "cs.ct_nhac_browser": "content: warning inside connect dialog",
  "cs.fm_err_404": "error: file list load failed",
+ "cs.ln_no_git_desc": "status: explanation shown when git repo is not initialized in review",
  "cs.mf_paste_hint": "content: hint in the add-MCP dialog, replaced by the paste result",
  "cs.oc_wa_need_https": "error: webhook not on HTTPS",
  "cs.ov_mig_confirm": "confirm: migrate brain layout",
