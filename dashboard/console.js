@@ -6083,10 +6083,7 @@
                   + '">' + esc(window.t("cs.cn_orphan_btn", { ten: cid })) + '</button>').join("")
               + '</div>'
             : "")
-
         + '</div>'
-        : "")
-      + '</div>'
       : "";
     // A connected service whose extra tools moved to a store pack the machine does not have yet
     // (0.73.0: Zalo -> javis.zalo). Javis never installs a pack silently, so it has to be said here.
