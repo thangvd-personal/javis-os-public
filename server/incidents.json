@@ -1,0 +1,22 @@
+{
+ "incidents": [
+  {
+   "id": "inc_bb11f49c9b",
+   "source": "reminder",
+   "ref": "r_6ac3f93003",
+   "at": 1792755107.8478835,
+   "last_at": 1792755107.8478835,
+   "count": 1,
+   "status": "needs_you",
+   "retries": 0,
+   "decision": "person",
+   "message": "",
+   "brain": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+   "title": "x",
+   "error": "Claude CLI chưa cài",
+   "request": "x",
+   "decided_by": "rule",
+   "note": ""
+  }
+ ]
+}
