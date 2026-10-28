@@ -85,6 +85,24 @@
   --link-ink: #7fb0ff;
   --on-accent: #1a1400;      /* chữ đặt TRÊN nền màu nhấn/vàng đặc */
 
+  /* --- Buttons (shared by .gcard-btn, .s-btn-ghost, .mp-btn, .ws-btn and the banners).
+         Owner report 25/10/2026 ("nhiều nút vẫn hơi mờ"): secondary buttons were edged with
+         --hairline or --border, about 1.2:1 to 1.6:1 against the card, so a ghost button read
+         as loose text. --btn-line is a border you can actually see (about 2.5:1), --btn-fill a
+         faint body so the button reads as a button before the pointer reaches it. --ctl-h is
+         the one height a button and the field beside it share, so a row lines up. --- */
+  --btn-line: rgba(255, 255, 255, 0.28);
+  --btn-fill: rgba(255, 255, 255, 0.07);
+  --btn-fill-hover: rgba(255, 255, 255, 0.12);
+  --ctl-h: 40px;
+  /* Violet solid button (.s-btn). White on #7c3aed is 5.7:1; the old dark text on #8b5cf6 was 4.3:1. */
+  --accent2-solid: #7c3aed;
+  --on-accent2: #ffffff;
+  /* Text and wash for destructive buttons. Many rules already read var(--danger-ink, #b3261e), whose
+     fallback is 2.4:1 on the dark theme; declaring the token makes them readable there. */
+  --danger-ink: #ff8a8a;
+  --danger-bg: rgba(244, 86, 90, 0.18);
+
   /* --- Trạng thái: cảnh báo / nguy hiểm / xong. Mỗi trạng thái một bộ ba
          mực-nền-viền để dùng nhất quán ở mọi thẻ, banner, badge. --- */
   --warn-ink: #e0a04a;
@@ -180,6 +198,13 @@
 
   --link-ink: #1d4ed8;
   --on-accent: #ffffff;      /* nền vàng tông sáng là #a16207 (sẫm) nên chữ phải trắng */
+
+  /* Buttons on paper: a warm brown edge at about 2.4:1 and an even fainter body than --surface-1. */
+  --btn-line: rgba(60, 42, 24, 0.42);
+  --btn-fill: rgba(60, 42, 24, 0.045);
+  --btn-fill-hover: rgba(60, 42, 24, 0.09);
+  --danger-ink: #b42318;
+  --danger-bg: #f5dcdc;
 
   /* Trên giấy, nền trạng thái phải NHẠT hơn hẳn (7-10% thay vì 14-16%) còn mực
      thì ĐẬM hơn hẳn - ngược chiều với nền tối. */
@@ -755,7 +780,7 @@ body.vault-thu .hud-body > .hud-left > .vault-expand:hover { color: var(--accent
   flex: 1; background: var(--accent-solid); color: var(--on-accent); border: none; border-radius: 7px;
   padding: 7px; font-size: 14px; cursor: pointer; font-weight: 600;
 }
-.loop-btn.ghost { background: none; border: 1px solid var(--border); color: var(--text2); }
+.loop-btn.ghost { background: none; border: 1px solid var(--btn-line); color: var(--text2); }
 .loop-btn:hover { filter: brightness(1.1); }
 .loop-btn:disabled { opacity: .5; cursor: default; }
 .loop-status { font-size: 13px; color: var(--text3); font-family: var(--font); }
@@ -817,8 +842,8 @@ body.vault-thu .hud-body > .hud-left > .vault-expand:hover { color: var(--accent
 .set-mini { background: none; border: 1px solid var(--border); color: var(--text2); border-radius: 5px; font-size: 12px; padding: 1px 7px; cursor: pointer; margin-left: 6px; }
 .set-mini:hover { color: var(--accent); border-color: var(--accent); }
 .set-actions { display: flex; gap: 8px; }
-.settings-body .s-btn { align-self: flex-start; background: var(--accent-solid); color: var(--on-accent); border: none; border-radius: 7px; padding: 7px 14px; font-size: 14px; cursor: pointer; }
-.settings-body .s-btn-ghost { background: none; border: 1px solid var(--border); color: var(--text2); border-radius: 7px; padding: 7px 14px; font-size: 14px; cursor: pointer; }
+.settings-body .s-btn { align-self: flex-start; background: var(--accent-solid); color: var(--on-accent); border: 1px solid transparent; border-radius: 7px; padding: 7px 14px; font-size: 16px; line-height: 1.25; cursor: pointer; }
+.settings-body .s-btn-ghost { background: var(--btn-fill); border: 1px solid var(--btn-line); color: var(--text); border-radius: 7px; padding: 7px 14px; font-size: 16px; font-weight: 500; line-height: 1.25; cursor: pointer; }
 
 /* Markdown bảng + code trong chat */
 .md-table { border-collapse: collapse; margin: 6px 0; font-size: 14px; width: 100%; }
@@ -1109,7 +1134,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   border-radius: 6px; cursor: pointer; font-size: 13px; line-height: 1; padding: 3px 6px; }
 .msg-act:hover { color: var(--text-hi); border-color: var(--border); }
 /* Đang chạy một lượt thì không cho bấm gửi lại (app.js gắn .busy vào #chatArea) */
-.transcript.busy .msg-act[data-act="retry"] { opacity: 0.35; pointer-events: none; }
+.transcript.busy .msg-act[data-act="rewind"] { opacity: 0.35; pointer-events: none; }
 
 /* 0.177.0 reactions on answers (chat-reactions.js + reactions.js), like Zalo (owner, 2026-10-16). A zero-height anchor
    right after the bubble, as wide as the bubble (same max-width, same font so `ch` matches), holds the corner on the
@@ -1421,6 +1446,8 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   text-align: center; color: var(--text3); font-size: 12px; font-family: var(--font);
   padding: 2px 12px; opacity: 0.85;
 }
+/* 0.354.0: the turn moved to the next route (out of quota). Stays in the chat, readable on a phone. */
+.msg-ghichu.msg-doiduong { font-size: 16px; opacity: 1; padding: 4px 12px; }
 /* Trả lời của lệnh "/" hệ thống (/status, /usage, /tasks...). Nền nhạt, chữ nhỏ hơn và viền
    trái màu nhấn: nhìn ra ngay đây là KẾT QUẢ LỆNH của giao diện chứ không phải lời của model. */
 .msg-lenh .bubble {
@@ -1495,14 +1522,14 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cp-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
 .cp-gap { flex: 1 1 auto; }
-.cp-plus, .cp-fast {
+.cp-plus, .cp-limit {
   flex: none; width: 32px; height: 32px; border-radius: 50%; padding: 0;
   border: 1px solid var(--border); background: transparent; color: var(--text2);
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
   transition: border-color .15s, color .15s, background .15s;
 }
-.cp-plus:hover, .cp-plus[aria-expanded="true"], .cp-fast:hover { border-color: var(--accent); color: var(--accent); }
-.cp-plus:focus-visible, .cp-fast:focus-visible, .cp-eff:focus-visible, .mic-big:focus-visible,
+.cp-plus:hover, .cp-plus[aria-expanded="true"], .cp-limit:hover, .cp-limit[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.cp-plus:focus-visible, .cp-limit:focus-visible, .cp-eff:focus-visible, .mic-big:focus-visible,
 .send-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cp-eff {
   flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
@@ -1510,20 +1537,42 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   color: var(--accent-ink); font-family: var(--font); font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .cp-eff:hover, .cp-eff[aria-expanded="true"] { border-color: var(--accent); }
-/* Fast mode bolt: still when off; when on, an orange background with a moving shine and a gently pulsing bolt. */
-.cp-fast[aria-pressed="true"] {
+.cp-limit[hidden] { display: none; }
+/* Plan usage ring (plan-limit.js, 0.329.0): fills with the larger of the 5-hour and weekly meters,
+   green, then amber from 50%, red from 80%. Grey while no number has come in yet. */
+.cp-limit svg { transform: rotate(-90deg); }
+.cp-limit circle { fill: none; stroke-width: 4.5; }
+.cp-limit .lim-bg { stroke: var(--border); }
+.cp-limit .lim-fg { stroke-linecap: round; stroke: var(--text3); transition: stroke-dasharray .4s ease, stroke .2s; }
+.cp-limit[data-muc="ok"] .lim-fg { stroke: var(--green, #3fb27f); }
+.cp-limit[data-muc="warn"] .lim-fg { stroke: var(--warn-ink); }
+.cp-limit[data-muc="bad"] .lim-fg { stroke: var(--red); }
+.cp-limit[data-muc="bad"] { border-color: var(--red); }
+/* Fast mode, now in the Effort popover's top-right corner: still when off; when on, an orange background with a
+   moving shine and a gently pulsing bolt. The chip shows a small bolt while it is on. */
+.cp-eff-fast { display: inline-flex; color: var(--accent); }
+.cp-eff-fast[hidden] { display: none; }
+.eff-fast {
+  margin-left: auto; flex: none; width: 32px; height: 32px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text2);
+  display: inline-flex; align-items: center; justify-content: center; align-self: center;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.eff-fast:hover { border-color: var(--accent); color: var(--accent); }
+.eff-fast:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eff-fast[aria-pressed="true"] {
   color: var(--on-accent); border-color: var(--accent);
   background: linear-gradient(110deg, var(--accent) 0%, var(--accent-ink) 25%, var(--accent) 50%, var(--accent-solid) 75%, var(--accent) 100%);
   background-size: 250% 100%; animation: fastWave 1.6s linear infinite;
 }
-.cp-fast[aria-pressed="true"] svg { animation: fastZap 1.6s ease-in-out infinite; }
-.cp-fast[aria-disabled="true"] { opacity: .45; cursor: help; }
+.eff-fast[aria-pressed="true"] svg { animation: fastZap 1.6s ease-in-out infinite; }
+.eff-fast[aria-disabled="true"] { opacity: .45; cursor: help; }
 @keyframes fastWave { to { background-position: -250% 0; } }
 @keyframes fastZap { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) {
-  .cp-fast[aria-pressed="true"], .cp-fast[aria-pressed="true"] svg { animation: none; }
+  .eff-fast[aria-pressed="true"], .eff-fast[aria-pressed="true"] svg { animation: none; }
 }
-/* Pinned working folder chip, right after the bolt (composer-folder.js, 0.158.0). */
+/* Pinned working folder chip, right after the usage ring (composer-folder.js, 0.158.0). */
 .cp-pin { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 190px; padding: 0 10px;
   border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text2);
   font: inherit; font-size: 12.5px; cursor: pointer; flex: 0 1 auto; min-width: 0; }
@@ -1864,11 +1913,16 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .panel-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .panel-bar h3 { font-size: 16px; color: var(--text); }
 .pb-actions { display: flex; gap: 8px; }
-.s-btn { background: var(--accent2); color: var(--on-accent); border: none; padding: 8px 16px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+/* Primary and secondary button pair. Both carry a 1px border (transparent on the solid one) and the same
+   line-height, so a .s-btn and a .s-btn-ghost side by side are the same height. */
+.s-btn { background: var(--accent2-solid); color: var(--on-accent2); border: 1px solid transparent; padding: 7px 16px; border-radius: 8px; font-size: 16px; font-weight: 600; line-height: 1.25; cursor: pointer; }
 .s-btn:hover { opacity: 0.88; }
-.s-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.s-btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); padding: 7px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
-.s-btn-ghost:hover { color: var(--text); border-color: var(--accent2); }
+.s-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Orange solid variants take the dark-on-orange ink: white on the dark theme's orange is only 2.6:1. */
+.s-btn.run, .s-btn.sk3-new { color: var(--on-accent); }
+.s-btn-ghost { background: var(--btn-fill); color: var(--text); border: 1px solid var(--btn-line); padding: 7px 14px; border-radius: 8px; font-size: 16px; font-weight: 500; line-height: 1.25; cursor: pointer; }
+.s-btn-ghost:hover { color: var(--text); background: var(--btn-fill-hover); border-color: var(--accent2); }
+.s-btn-ghost:disabled { opacity: 0.55; cursor: not-allowed; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 .empty { color: var(--text3); font-size: 15px; padding: 30px; text-align: center; grid-column: 1/-1; line-height: 1.7; }
 .dim { color: var(--text3); font-size: 13px; }
@@ -1924,7 +1978,7 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .wps-task { font-size: 13px; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .wps-name { font-size: 11px; color: var(--text3); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.s-btn.run { background: var(--accent-solid); padding: 6px 12px; font-size: 14px; }
+.s-btn.run { background: var(--accent-solid); padding: 6px 12px; font-size: 16px; }
 @keyframes wf-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(168,139,250,0); }
   50% { box-shadow: 0 0 0 5px var(--accent2-wash-2); }
@@ -2365,7 +2419,30 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cp-pin-here { color: var(--accent-ink, var(--accent)); font-weight: 600; }
 @media (pointer: coarse) { .cp-in { width: 44px; height: 44px; } }
 .eff-pop { padding: 14px 16px; width: min(330px, calc(100vw - 32px)); }
-.eff-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; }
+.eff-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; min-height: 32px; }
+.eff-head .eff-lbl, .eff-head .eff-val { align-self: center; }
+/* Plan usage popover (plan-limit.js): two meters with their reset times, like Claude's "Plan usage limits". */
+.lim-pop { width: min(320px, calc(100vw - 32px)); }
+.lim-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.lim-h { font-size: 16px; font-weight: 600; color: var(--text); }
+.lim-who { font-size: 13px; color: var(--text3); }
+.lim-row { margin-top: 12px; }
+.lim-row-h { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; color: var(--text); }
+.lim-pct { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.lim-pct.lim-ok { color: var(--text2); }
+.lim-pct.lim-warn { color: var(--warn-ink); }
+.lim-pct.lim-bad { color: var(--red); }
+.lim-bar { height: 8px; border-radius: 999px; background: var(--bg3); overflow: hidden; margin: 6px 0 4px; }
+.lim-bar i { display: block; height: 100%; border-radius: 999px; min-width: 4px; }
+.lim-bar i.lim-ok { background: var(--green, #3fb27f); }
+.lim-bar i.lim-warn { background: var(--warn-ink); }
+.lim-bar i.lim-bad { background: var(--red); }
+.lim-reset { font-size: 13px; color: var(--text3); }
+.lim-het { margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--red) 12%, transparent); }
+.lim-het-h { margin: 0; font-size: 14px; font-weight: 600; color: var(--red); }
+.lim-het-r { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--text2); }
+.lim-at, .lim-none { margin: 12px 0 0; font-size: 13px; line-height: 1.45; color: var(--text3); }
+.lim-none { color: var(--text2); }
 .eff-lbl { color: var(--text2); }
 .eff-val { color: var(--accent-ink); font-weight: 600; }
 .eff-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--text2); margin: 12px 0 6px; }
@@ -2476,6 +2553,22 @@ body.jv-lb-open { overflow: hidden; }        /* khoá cuộn nền để lăn ch
 @media (max-width: 700px) {
   .jv-lb-bar { padding: 8px 10px; }
   .jv-lb-nut button { padding: 6px 9px; }
+}
+/* 0.358.0: a gallery of every picture in the chat. Counter "2 / 4" in the bar, round arrows on the sides (a swipe does
+   the same on a phone), the first and last picture dim the arrow that leads nowhere. */
+.jv-lb-dem { color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; flex: none; opacity: .9; }
+.jv-lb-di { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; display: inline-flex; align-items: center;
+  justify-content: center; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.45); color: #fff; cursor: pointer; font-size: 20px; }
+.jv-lb-di:hover:not(:disabled) { background: rgba(255, 255, 255, 0.2); }
+.jv-lb-di:disabled { opacity: .25; cursor: default; }
+.jv-lb-truoc { left: calc(12px + env(safe-area-inset-left, 0px)); }
+.jv-lb-sau { right: calc(12px + env(safe-area-inset-right, 0px)); }
+.jv-lb.that .jv-lb-di, .jv-lb.pinch .jv-lb-di { display: none; }
+@media (max-width: 700px) {
+  .jv-lb-di { width: 44px; height: 44px; background: rgba(0, 0, 0, 0.3); }
+  .jv-lb-truoc { left: calc(4px + env(safe-area-inset-left, 0px)); }
+  .jv-lb-sau { right: calc(4px + env(safe-area-inset-right, 0px)); }
 }
 
 /* Code block: header nhan ngon ngu + nut Copy + to mau cu phap */
@@ -2798,6 +2891,21 @@ body.ni-dragging, body.ni-dragging * { cursor: ew-resize !important; user-select
 .ni-status.ni-err { border-color: var(--red); }
 /* .pdf xem tại chỗ (nền trắng vì trình xem PDF của trình duyệt tự vẽ trên nền của nó) */
 .ne-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
+/* 0.332.0: the PDF scrolls inside this box. Safari on an iPhone grows a PDF iframe to the whole document;
+   without a scrolling box of its own the page scrolled instead and took the toolbar with it. */
+.ne-pdf { flex: 1; display: flex; min-width: 0; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
+.ne-pdf .ne-frame { display: block; }
+/* Round close button floating over a PDF on a phone: reachable however far the PDF was scrolled.
+   Bottom right, clear of the toolbar's own close button and of the iPhone home bar. */
+.pdf-float-close { display: none; }
+@media (max-width: 860px), (pointer: coarse) {
+  .pdf-float-close { display: flex; align-items: center; justify-content: center; position: fixed; z-index: 3500;
+    right: calc(env(safe-area-inset-right, 0px) + 16px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    width: 52px; height: 52px; padding: 0; border-radius: 50%; cursor: pointer;
+    background: rgba(20, 20, 28, .82); color: #fff; border: 1px solid rgba(255, 255, 255, .35);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .35); }
+  .pdf-float-close .ic, .pdf-float-close svg { width: 24px; height: 24px; }
+}
 .ne-dl { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   color: var(--text2); padding: 24px; text-align: center; }
 .ne-dl .ne-dl-ico { font-size: 46px; }
@@ -3197,6 +3305,25 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .cb-nhomcho-d { font-size: 12.5px; line-height: 1.5; color: var(--text3); }
 .cb-nhomcho-a { display: flex; gap: 6px; flex-wrap: wrap; }
 .cb-acts { display: flex; gap: 6px; margin-top: 2px; }
+/* 0.309.0: a long error (a raw API reply, a Google link) used to run out of the card. Wrap anywhere. */
+.cb-err, .cb-quyen-t, .cb-nhomcho-t, .cb-nhomcho-d { overflow-wrap: anywhere; word-break: break-word; }
+/* Status row on the card: counts only, the details open in a popup (owner, 25/10/2026). */
+.cb-st { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-3); color: var(--text); font: inherit; font-size: 16px; cursor: pointer; text-align: left; }
+.cb-st.err { border-color: var(--danger-line); background: var(--danger-wash); }
+.cb-st.warn { border-color: var(--warn-line); background: var(--warn-wash); }
+.cb-st.wait { border-color: var(--info-line); background: var(--info-wash); }
+.cb-st:hover { filter: brightness(0.97); }
+.cb-st-chips { display: flex; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.cb-st-chip { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; }
+.cb-st-chip.err { color: var(--red); }
+.cb-st-chip.warn { color: var(--warn-ink); }
+.cb-st-chip.wait { color: var(--text); }
+.cb-st-more { flex: none; display: inline-flex; align-items: center; gap: 2px; color: var(--text3); }
+.cb-st-body { display: flex; flex-direction: column; gap: 10px; }
+.cb-st-body .cb-err, .cb-st-body .cb-quyen, .cb-st-body .cb-nhomcho-d { font-size: 16px; }
+.cb-st-body .cb-nhomcho-t { font-size: 16px; }
 .cb-empty { grid-column: 1 / -1; text-align: center; color: var(--text3); padding: 40px 16px;
   font-size: 14px; line-height: 1.7; }
 .cb-empty b { color: var(--text); display: block; margin: 8px 0 4px; font-size: 15px; }
@@ -3352,8 +3479,9 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
    và nhãn "Trả lời:" xuống dòng giữa chừng. Ép về block để câu chảy tự nhiên. */
 .cb-meta.cb-tt .cb-tt-t { display: block; color: var(--text2); line-height: 1.5; }
 .cb-meta.cb-tt .cb-tt-t svg { vertical-align: -2px; margin-right: 4px; }
-.cb-mn { position: relative; margin-left: auto; }
-.cb-mn-b { font-size: 18px; line-height: 1; padding: 4px 10px; }
+/* flex on the wrapper so the "..." button stretches to the row: it used to sit 8px shorter than Sửa/Thử. */
+.cb-mn { position: relative; margin-left: auto; display: flex; }
+.cb-mn-b { font-size: 18px; line-height: 1; padding: 4px 12px; }
 .cb-mn-l { position: absolute; right: 0; bottom: calc(100% + 4px); min-width: 170px; z-index: 5;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 4px;
   box-shadow: var(--shadow-3, 0 10px 30px rgba(0, 0, 0, .35)); display: flex; flex-direction: column; }
@@ -3411,13 +3539,14 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .inud-nut { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
 .inud-day { flex: 1 1 auto; }
 .inud-nut button {
-  border-radius: 9px; font: 600 13px var(--font); cursor: pointer; padding: 9px 14px;
-  border: 1px solid var(--border); background: none; color: var(--text2);
+  border-radius: 9px; font: 600 16px/1.25 var(--font); cursor: pointer; padding: 9px 14px; min-height: var(--ctl-h);
+  border: 1px solid var(--btn-line); background: var(--btn-fill); color: var(--text);
 }
-.inud-tat { font-weight: 500 !important; color: var(--text3) !important; border-color: transparent !important; padding-left: 0 !important; }
+.inud-tat { font-weight: 500 !important; color: var(--text3) !important; border-color: transparent !important; background: none !important; padding-left: 0 !important; }
 .inud-tat:hover { color: var(--text2) !important; }
-.inud-sau:hover { color: var(--text); border-color: var(--info-line); }
-.inud-cai { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff !important; }
+.inud-sau:hover { color: var(--text); background: var(--btn-fill-hover); border-color: var(--info-line); }
+/* --accent-solid + --on-accent: white on the brand orange was 2.6:1 (dark) and 3.4:1 (light). */
+.inud-cai { background: var(--accent-solid) !important; border-color: var(--accent-solid) !important; color: var(--on-accent) !important; }
 .inud-cai:disabled { opacity: .6; cursor: default; }
 
 /* ===== Chip project + ngăn kéo Hướng dẫn / File / Link ==========================
@@ -3607,6 +3736,12 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .pd-panel.tha-file { outline: 2px dashed var(--accent); outline-offset: -5px; }
 .pd-panel.tha-file .pd-drop { border-color: var(--accent-line); color: var(--accent); }
 .pd-frow { display: flex; gap: 7px; }
+/* Báo ngay trong form link: ô trống, link đã có sẵn, server từ chối, hoặc đã thêm xong. */
+.pd-fmsg { font-size: 13px; line-height: 1.5; color: var(--text2); }
+.pd-fmsg.loi { color: var(--danger-ink); }
+/* Hàng vừa thêm hoặc trùng với link vừa dán sáng lên một nhịp để mắt tìm thấy ngay. */
+.pd-row.nhay { animation: pdNhay 1.6s ease-out; }
+@keyframes pdNhay { 0%, 35% { background: var(--accent-wash); } 100% { background: transparent; } }
 .pd-ok, .pd-huy { padding: 7px 13px; border-radius: 8px; cursor: pointer;
   font-family: inherit; font-size: 13px; border: 1px solid var(--border); }
 .pd-ok { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
@@ -4292,3 +4427,122 @@ div.info-body > * { margin: 0; font-size: inherit; }
 select option, select optgroup { background-color: var(--bg2); color: var(--text); }
 /* 0.206.0: a message sent while Javis works shows where it is (read by the running turn, or waiting to run next). */
 .msg-user .steer-note { font-size: 12px; color: var(--text3); text-align: right; margin: 3px 4px 0; }
+
+/* Facebook Messenger card on the Connections page (0.311.0) */
+.msc .msc-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 12px; max-width: 760px; }
+.msc .msc-new { max-width: 760px; margin-bottom: 12px; }
+.msc-form-head { display: flex; align-items: center; gap: 8px; font-size: 16px; margin-bottom: 8px; }
+.msc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.msc-field label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text2); margin-bottom: 4px; }
+.msc-field .js-input { width: 100%; box-sizing: border-box; }
+.msc-warn { border-left: 3px solid var(--warn, #e0a33e); padding: 6px 10px; margin: 6px 0 10px; display: flex; align-items: center; gap: 6px; }
+.msc-sum { margin-top: 12px; font-weight: 600; }
+.msc-sum.ok { color: var(--green, #2c7a4b); }
+.msc-sum.bad { color: var(--danger-ink, #b3261e); }
+.msc-checks { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.msc-row { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.msc-mark { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.msc-mark svg { width: 14px; height: 14px; }
+.msc-row.ok .msc-mark { background: color-mix(in srgb, var(--green, #2c7a4b) 18%, transparent); color: var(--green, #2c7a4b); }
+.msc-row.bad .msc-mark { background: color-mix(in srgb, var(--danger-ink, #b3261e) 16%, transparent); color: var(--danger-ink, #b3261e); }
+.msc-row.warn .msc-mark { background: color-mix(in srgb, var(--warn, #e0a33e) 20%, transparent); color: var(--warn-ink, #b9821f); }
+.msc-row-detail { color: var(--text2); font-size: 13px; word-break: break-all; }
+.msc-row-fix { color: var(--text2); font-size: 14px; margin-top: 2px; }
+
+/* Searchable agent picker (agent-picker.js). The native <select> stays in the DOM, hidden; this button opens a
+   popover on desktop and a bottom sheet on phones. Every text here is at least 16px (owner rule, also stops iOS zoom). */
+.ap-native { display: none !important; }
+.agent-picker { position: relative; min-width: 0; }
+.ap-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; box-sizing: border-box;
+  padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--field-bg);
+  color: var(--text); font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.ap-btn:hover { border-color: var(--text3); }
+.ap-btn:focus-visible, .ap-btn[aria-expanded="true"] { outline: none; border-color: var(--info-line); }
+.ap-btn:disabled { opacity: .6; cursor: default; }
+.ap-btn-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.ap-btn-name, .ap-btn-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+.ap-btn-name { font-weight: 600; }
+.ap-btn-desc { color: var(--text3); }
+.ap-btn-chev { flex: 0 0 auto; display: inline-flex; color: var(--text3); font-size: 18px; }
+.ap-layer { position: fixed; inset: 0; z-index: 3400; }
+.ap-pop { position: fixed; display: flex; flex-direction: column; min-height: 0; box-sizing: border-box;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-2);
+  overflow: hidden; }
+.ap-head { display: none; }
+.ap-search { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin: 8px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--field-bg); color: var(--text3); font-size: 18px; }
+.ap-search:focus-within { border-color: var(--info-line); }
+.ap-q { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text);
+  font: inherit; font-size: 16px; padding: 10px 0; }
+.ap-q::placeholder { color: var(--text3); }
+.ap-list { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px; }
+.ap-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.ap-row.is-active { background: var(--surface-2); }
+.ap-row.is-sel { background: var(--accent-wash-2); }
+.ap-row.is-sel.is-active { background: var(--accent-wash-2); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.ap-row.is-off { opacity: .5; cursor: default; }
+.ap-row-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-row-name { font-size: 16px; font-weight: 600; color: var(--text); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-row-desc { font-size: 16px; color: var(--text3); line-height: 1.4; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.ap-row-check { flex: 0 0 auto; width: 20px; display: inline-flex; color: var(--accent-ink); font-size: 18px; }
+.ap-empty { padding: 14px 16px 18px; font-size: 16px; color: var(--text3); overflow-wrap: anywhere; }
+/* Phone: a bottom sheet with a title row and a close button, tall enough to scroll, rows with a full touch height. */
+.ap-layer.is-phone { background: var(--scrim); }
+.ap-layer.is-phone .ap-pop { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: 82vh; height: 82dvh;
+  max-height: none; border-radius: 16px 16px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+  animation: ap-up .18s ease-out; }
+.ap-layer.is-phone .ap-pop:focus { outline: none; }
+.ap-layer.is-phone .ap-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 0 16px; }
+.ap-title { flex: 1; min-width: 0; font-size: 17px; font-weight: 700; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-x { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--text2); font-size: 22px; cursor: pointer; }
+.ap-x:hover { background: var(--surface-2); }
+.ap-layer.is-phone .ap-row { min-height: 56px; padding: 10px 12px; }
+.ap-layer.is-phone .ap-list { padding: 0 8px 12px; }
+@keyframes ap-up { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ap-layer.is-phone .ap-pop { animation: none; } }
+/* Workflow steps (studio.js): the picker takes the old select's place and hides with it when the step is folded. */
+.step-header .agent-picker { flex: 1; }
+.step-row:not(.open) .step-header .agent-picker { display: none; }
+.st-verify .agent-picker { flex: 1; min-width: 160px; }
+
+/* GitHub inside chat (0.362.0, github-connect.js): the built-in card on Connections and the repo chip. */
+.gh-card .gh-local { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.gh-local-head { font-weight: 600; font-size: 16px; }
+.gh-local-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 16px; }
+.gh-local-name { font-weight: 600; word-break: break-all; }
+.gh-local-meta { color: var(--text2); flex: 1; min-width: 120px; }
+.gh-chip svg { width: 15px; height: 15px; flex: none; }
+.gh-apply[disabled] { opacity: .55; cursor: default; }
+.gh-checks-box { width: 100%; min-height: 160px; font-family: var(--mono, ui-monospace, monospace); font-size: 16px; line-height: 1.45; resize: vertical; }
+/* GitHub status icon per conversation (0.365.0, spec 12.1): right of the title in the chat list, and in the repo chip. */
+.cside-item.has-gh { position: relative; }
+.cside-item.has-gh .ci-title { padding-right: 36px; }
+.gh-st { display: inline-flex; align-items: center; gap: 2px; cursor: pointer; border-radius: 6px; padding: 2px; line-height: 1; }
+.cside-item .gh-st { position: absolute; right: 8px; top: 7px; }
+.gh-st svg { width: 17px; height: 17px; }
+.gh-st b { font-size: 16px; font-weight: 700; line-height: 1; }
+.gh-st:hover, .gh-st:focus-visible { background: var(--info-wash); outline: none; }
+.gh-working { color: var(--accent, #c06a2b); }
+.gh-working svg { animation: gh-pulse 1.6s ease-in-out infinite; }
+.gh-ready { color: var(--green, #2c7a4b); }
+.gh-merged { color: #8957e5; }
+.gh-broken, .gh-warn { color: var(--danger-ink, #b3261e); }
+.gh-sub-stuck::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--danger-ink, #b3261e); margin-left: 1px; }
+@keyframes gh-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .gh-working svg { animation: none; } }
+.gh-chip .gh-st { margin-left: 2px; padding: 0; }
+.gh-detail-body { display: flex; flex-direction: column; gap: 14px; padding: 6px 2px 4px; font-size: 16px; max-height: 70vh; overflow-y: auto; }
+.gh-row { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.gh-row-head code { font-size: 16px; word-break: break-all; }
+.gh-row-state { color: var(--text2); }
+.gh-checks { margin: 0; padding-left: 18px; color: var(--text2); }
+.gh-chk-failure, .gh-chk-timed_out { color: var(--danger-ink, #b3261e); }
+.gh-chk-success { color: var(--green, #2c7a4b); }
+.gh-auto { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; cursor: pointer; }
+.gh-table-wrap { overflow-x: auto; margin-top: 10px; }
+.gh-table { border-collapse: collapse; width: 100%; font-size: 16px; }
+.gh-table th, .gh-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }

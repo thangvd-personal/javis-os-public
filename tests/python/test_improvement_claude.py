@@ -318,8 +318,16 @@ class AdapterVerificationTests(unittest.TestCase):
     def verify(self):
         known = {("win32", "2.1.304", "a" * 64, "0.2.116")}
         with patch.object(IC, "_runtime_observation", return_value=self.observation), \
-                patch.object(IC, "VERIFIED_NATIVE_RUNTIMES", known):
+                patch.object(IC, "VERIFIED_NATIVE_RUNTIMES", known), \
+                patch.object(IC, "_profile_qualification", return_value="c" * 64):
             return IC.ClaudeTrialAdapter(self.pin).verify()
+
+    def test_new_profile_is_not_qualified_by_an_old_known_runtime_tuple(self):
+        pin = {**self.pin, "profile_hash": IC.profile_hash()}
+        with patch.object(IC, "_runtime_observation", side_effect=AssertionError("Unqualified profile probed native auth/version")):
+            result = IC.ClaudeTrialAdapter(pin).verify()
+        self.assertFalse(result["supported"])
+        self.assertEqual(result["reason"], "native_profile_unqualified")
 
     def test_supported_verification_has_a_pinned_capability_hash_without_account_data(self):
         result = self.verify()
@@ -348,6 +356,7 @@ class AdapterVerificationTests(unittest.TestCase):
 
     def test_unavailable_verification_returns_a_reason_without_creating_an_engine(self):
         with patch.object(IC, "_runtime_observation", side_effect=OSError("native unavailable")), \
+                patch.object(IC, "_profile_qualification", return_value="c" * 64), \
                 patch("claude_cli.claude_engine", side_effect=AssertionError("Engine created before verification")):
             result = IC.ClaudeTrialAdapter(self.pin).verify()
         self.assertFalse(result["supported"])
@@ -362,6 +371,20 @@ class AdapterVerificationTests(unittest.TestCase):
                 patch.object(IC.subprocess, "run", side_effect=AssertionError("Unverified binary executed")):
             observed = IC._runtime_observation(pin)
         self.assertEqual(observed["auth"], {})
+
+    def test_profile_registration_binds_every_runtime_and_source_field_to_evidence(self):
+        import improvement_native_qualifications as registry
+        key = ("win32", self.pin["cli_version"], self.pin["cli_hash"], self.pin["sdk_version"],
+               self.pin["profile_version"], self.pin["profile_hash"])
+        with patch.object(registry, "QUALIFIED_PROFILES", {key: "d" * 64}):
+            self.assertEqual(registry.profile_qualification(self.pin, "win32"), "d" * 64)
+            self.assertIsNone(registry.profile_qualification(self.pin, "linux"))
+            for field in ("cli_version", "cli_hash", "sdk_version", "profile_version", "profile_hash"):
+                with self.subTest(field=field):
+                    self.assertIsNone(registry.profile_qualification({**self.pin, field: "changed"}, "win32"))
+        for forged in (True, "caller-ready", None):
+            with patch.object(registry, "QUALIFIED_PROFILES", {key: forged}):
+                self.assertIsNone(registry.profile_qualification(self.pin, "win32"))
 
 
 if __name__ == "__main__":

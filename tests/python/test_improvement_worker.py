@@ -270,8 +270,8 @@ class WorkerSpawnOwnershipTests(unittest.IsolatedAsyncioTestCase):
         original_group = IW.WorkerGroup
 
         class Group:
-            def __init__(self, pid):
-                self.guard = original_group(pid)
+            def __init__(self, pid, **kwargs):
+                self.guard = original_group(pid, **kwargs)
 
             def close(self):
                 closing.set()
@@ -326,7 +326,10 @@ class WorkerSpawnOwnershipTests(unittest.IsolatedAsyncioTestCase):
                     release_close.set()
                 with self.assertRaises(TimeoutError if timeout else asyncio.CancelledError):
                     await asyncio.wait_for(task, 5)
-                group.assert_called_once_with(children[0].pid)
+                group.assert_called_once()
+                self.assertEqual(group.call_args.args, (children[0].pid,))
+                self.assertEqual(len(group.call_args.kwargs['recovery_fences']), 2)
+                self.assertEqual(group.call_args.kwargs['suspended'], sys.platform == 'win32')
                 self.assertIsNotNone(children[0].poll(), "Interrupted worker survived cleanup")
                 self.assertTrue(all(stream.closed for stream in
                                     (children[0].stdin, children[0].stdout, children[0].stderr)))

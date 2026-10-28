@@ -49,6 +49,8 @@ truoc_khi_chay = CATALOG.read_bytes()
 
 with tempfile.TemporaryDirectory() as td:
     goc_store = core_off.STORE
+    goc_lop_goi = mcp_catalog._lop_goi
+    mcp_catalog._lop_goi = lambda: {}
     core_off.STORE = Path(td) / "core-off.json"
     core_off._cache.update(sig=None, data={})
     mcp_catalog._cache.update(sig=None, by_id={})
@@ -149,6 +151,7 @@ with tempfile.TemporaryDirectory() as td:
         finally:
             mcp_store._load = goc_load
     finally:
+        mcp_catalog._lop_goi = goc_lop_goi
         core_off.STORE = goc_store
         core_off._cache.update(sig=None, data={})
         mcp_catalog._cache.update(sig=None, by_id={})

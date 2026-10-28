@@ -74,7 +74,16 @@ class RevisionBlobs:
                 handle.write(ciphertext)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, path)
+            try:
+                os.replace(temporary, path)
+            except PermissionError:
+                # Windows can deny replacement while another publisher/reader
+                # holds the winner open. Reuse only verified identical content;
+                # no existing winner means this remains a real write failure.
+                if not path.exists():
+                    raise
+                if self.read(brain, digest) != content:
+                    raise AssetUnavailable("asset_hash_collision")
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)

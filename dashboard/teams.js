@@ -684,6 +684,8 @@
     } else if (mine && meta.as_job) {
       head.push('<span class="tm-tag tm-tag-new">' + ic("list-todo") + esc(tw("teams.as_job")) + "</span>");
     }
+    // 0.357.0: a job Javis Core gave the team on the owner's behalf (javis_team op=dispatch, issue #826).
+    if (mine && meta.via_core) head.push('<span class="tm-role">' + esc(tw("teams.via_core")) + "</span>");
     if (meta.job_result) head.push('<span class="tm-result">' + esc(tw("teams.job_result")) + "</span>");
     var late = !mine && LATE.indexOf(meta.status) >= 0;
     var body = bodyHtml(m, mine, !!(ctx.unclamped && ctx.unclamped[m.id]));
@@ -2348,7 +2350,8 @@
         if (st === "idle") { var inp = S.el.querySelector(".tm-input"); if (inp) inp.focus(); }
       },
       onError: function (code) {
-        setNote(tw(code === "denied" ? "teams.mic_denied" : code === "unsupported" ? "teams.mic_unsupported" : "teams.mic_failed"));
+        setNote(tw(code === "denied" ? "teams.mic_denied" : code === "unsupported" ? "teams.mic_unsupported"
+          : code === "nothing" ? "dict.nothing" : "teams.mic_failed"));
       }
     });
     S.dict.start();
@@ -2876,10 +2879,19 @@
     if (older && S.msgs.length && !S.filterTask) url += "?before_ts=" + q(S.msgs[0].ts) + "&before_id=" + q(S.msgs[0].id);
     var forTeam = S.activeId;
     var forTask = S.filterTask;
+    // 0.358.0 (owner: "gửi xong không thấy hiện câu của mình"): only the LATEST load of the newest page may replace the
+    // list. An older load that answers late (the phone waking up, a reconnect) carries a list taken before the message
+    // was stored, and used to wipe it off the screen.
+    var seq = older ? S.msgsSeq : (S.msgsSeq = (S.msgsSeq || 0) + 1);
     return call("GET", url).then(function (r) {
-      if (S.activeId !== forTeam || S.filterTask !== forTask) return;
+      if (S.activeId !== forTeam || S.filterTask !== forTask || seq !== S.msgsSeq) return;
       if (r.code !== 200) return fail(r);
       var got = r.j.messages || [];
+      if (!older && !forTask && got.length) {
+        // Messages the socket brought while this load was on its way are newer than the page: keep them.
+        var last = Number(got[got.length - 1].id);
+        got = got.concat(S.msgs.filter(function (m) { return Number(m.id) > last; }));
+      }
       // Lọc theo một việc đã xong (mở từ tab Công việc): việc không còn trong hàng đợi, học tên từ chính bản ghi việc để
       // thanh lọc và nhãn tin hiện tên việc thay vì mã (0.142.0).
       if (S.filterTask && r.j.task && r.j.task.id) {
@@ -3351,6 +3363,9 @@
     if (scan.all) body.mention_all = true;
     if (atts.length) body.attachments = atts.map(function (a) { return { path: a.path, name: a.name, kind: a.kind }; });
     entry.body = body;
+    // Sent while the chat shows one job only: the message belongs to the whole chat, so go back to it (like any
+    // messaging app) instead of a filtered list that would never show it.
+    if (S.filterTask) { S.filterTask = ""; S.taskDetail = null; drawFilterbar(); }
     S.outbox.push(entry);
     // The composer is free again right away, like any messaging app.
     S.pending = null; S.asJob = false; S.picked = []; S.replyTo = null; S.plusOpen = false; input.value = ""; S.atts = [];
@@ -3380,7 +3395,9 @@
         if (entry.atts.length && S.side && S.tab === "info") loadInfo();
         setNote(r.j.notes && r.j.notes.length ? r.j.notes.filter(function (n) { return !/^[a-z_]+$/.test(n); }).join(" · ") : "");
         if ((r.j.notes || []).indexOf("daily_cap") >= 0) setNote(tw("teams.daily_cap"));
-        loadMsgs(false).then(function () { dropEntry(entry, true); drawMsgs(false); });
+        // The bubble goes only once the server's copy is on screen (`pendingEntries` hides it then); a load that failed
+        // or answered late no longer takes the owner's message away with it.
+        loadMsgs(false).then(function () { pruneOutbox(); drawMsgs(false); });
         loadQueue();
         return;
       }
@@ -3402,6 +3419,15 @@
     var i = S.outbox.indexOf(entry);
     if (i >= 0) S.outbox.splice(i, 1);
     if (done) forgetAtts(entry.atts);
+  }
+
+  // Delivered messages whose server copy is now in the list leave the outbox (their picture previews are released).
+  function pruneOutbox() {
+    var have = {}, ids = {};
+    S.msgs.forEach(function (m) { if (m.client_msg_id) have[m.client_msg_id] = true; ids[Number(m.id)] = true; });
+    S.outbox.slice().forEach(function (p) {
+      if (p.state === "sent" && (have[p.cid] || (p.mid && ids[Number(p.mid)]))) dropEntry(p, true);
+    });
   }
 
   // Outbox messages the server's copy has not replaced yet (it can arrive over the socket before the POST answers).
@@ -3426,7 +3452,8 @@
         '<button type="button" class="ws-btn tm-pending-retry" data-out-retry="' + esc(p.cid) + '">' + esc(tw("teams.retry_action")) +
         '</button><button type="button" class="tm-bar-x" data-out-drop="' + esc(p.cid) + '" aria-label="' + esc(tw("teams.send_remove")) +
         '" title="' + esc(tw("teams.send_remove")) + '">' + ic("x") + "</button>"
-      : "<span>" + esc(tw("app.sending")) + "</span>";
+      // Delivered but its server copy not on screen yet (a load failed or is late): say so, never "Sending..." forever.
+      : "<span>" + esc(tw(p.state === "sent" ? "teams.sent_ok" : "app.sending")) + "</span>";
     return '<div class="tm-msg tm-msg-owner tm-msg-pending' + (failed ? " is-failed" : "") + '" data-cid="' + esc(p.cid) + '">' +
       '<div class="tm-col"><div class="tm-bubble">' + bodyHtml(fake, true) + (files ? '<div class="tm-files">' + files + "</div>" : "") +
       '</div><div class="tm-pending-st" role="status">' + st + "</div></div></div>";

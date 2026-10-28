@@ -150,6 +150,25 @@ def execution_metadata(value) -> Optional[dict]:
     """Allow only host identifiers, never prompts or credentials, into usage telemetry."""
     if not isinstance(value, dict):
         return None
+    if "operation_id" in value:
+        required = {"experiment_id", "operation_id", "attempt", "execution_id", "role", "purpose", "learning_origin"}
+        if not required <= set(value) or set(value) - required - {"cli_session_id", "cli_session_new"}:
+            return None
+        for key in ("experiment_id", "operation_id"):
+            if not isinstance(value[key], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", value[key]):
+                return None
+        purposes = {"improver": "improve_propose", "semantic_reviewer": "improve_evaluate", "composer": "improve_compose"}
+        if (type(value["role"]) is not str or value["role"] not in purposes
+                or value["purpose"] != purposes[value["role"]] or value["learning_origin"] != "compose"
+                or value["execution_id"] != "improvement_operation:" + value["operation_id"]
+                or type(value["attempt"]) is not int or value["attempt"] not in (1, 2)):
+            return None
+        sid = value.get("cli_session_id")
+        if sid is not None and (not isinstance(sid, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}", sid)):
+            return None
+        if "cli_session_new" in value and (type(value["cli_session_new"]) is not bool or not sid):
+            return None
+        return dict(value)
     if value.get("experiment_id") or value.get("trial_id"):
         if value.get("team_id"):
             return None

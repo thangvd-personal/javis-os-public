@@ -6,7 +6,7 @@ Hướng dẫn sử dụng chi tiết từng chức năng của Javis OS. Mỗi 
 
 > Mới bắt đầu? Đọc [Cài đặt trong README](i18n/vi/README.md#-cài-đặt) trước, rồi qua [01 - Bắt đầu & thiết lập lần đầu](01-bat-dau-thiet-lap.md).
 
-Thanh điều hướng của dashboard gom **19 trang** thành **7 nhóm**: Trợ lý · Bộ não · Code · Năng lực · Việc · Kết nối · Hệ thống. Mục lục dưới đây xếp theo cùng logic đó.
+Thanh điều hướng của dashboard gom **19 trang** thành **5 nhóm**: Bộ não · Năng lực · Việc · Kết nối · Hệ thống. Mục lục dưới đây xếp theo cùng logic đó.
 
 ## Mục lục
 
@@ -19,8 +19,8 @@ Thanh điều hướng của dashboard gom **19 trang** thành **7 nhóm**: Tr�
 - [04 - Phiên hội thoại](04-phien-hoi-thoai.md) - lưu, mở lại, đổi tên, xoá, tìm kiếm toàn văn, nén phiên dài.
 - [05 - Quản lý tệp tin](05-quan-ly-tep-tin.md) - duyệt brain, tìm file theo tên/nội dung, sửa .md/.txt trực tiếp, tải lên/về.
 
-### Code (nhóm Code)
-- [27 - Nhóm Code: Terminal](27-tab-code-terminal.md) - dòng lệnh thật của máy chạy Javis, mở ngay trong dashboard, không cần SSH.
+### Terminal (nhóm Năng lực)
+- [27 - Terminal](27-tab-code-terminal.md) - dòng lệnh thật của máy chạy Javis, mở ngay trong dashboard, không cần SSH.
 
 ### Mở rộng năng lực (nhóm Năng lực)
 - [06 - Skills](06-skills.md) - gom nhóm, tìm kiếm, bật/tắt, thêm/sửa/xoá, nhập/xuất skill.
@@ -49,6 +49,7 @@ Thanh điều hướng của dashboard gom **19 trang** thành **7 nhóm**: Tr�
 
 ### Bộ não & dữ liệu
 - [13 - Second Brain: bộ nhớ, Wiki, INGEST](13-second-brain-bo-nho-wiki.md) - đa brain, bộ nhớ sống, tiêu hoá tri thức.
+- [34 - GitHub ngay trong khung chat](34-github-trong-chat.md) - gắn repo vào cuộc trò chuyện, Javis tự kiểm tra, đẩy lên, mở PR, theo dõi CI, sửa khi đỏ và merge khi xanh.
 - [18 - Sao lưu brain lên GitHub](18-sao-luu-github.md) - đồng bộ 2 chiều lên repo riêng, khôi phục khi mất máy/VPS.
 - [19 - Task & Dataview trong note](19-task-va-dataview.md) - tick checkbox tự lưu kiểu Obsidian, khối ```dataview chạy thật.
 

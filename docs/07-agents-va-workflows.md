@@ -27,7 +27,7 @@ Trên màn hình hẹp, dùng nút mở danh sách hoặc cột chi tiết để
 
 1. Chọn tab **Trợ lý**, rồi chọn một trợ lý ở cột trái.
 2. Gửi tin ở giữa trang. Trợ lý trả lời theo vai trò, hướng dẫn và bộ nhớ riêng đã cấu hình.
-3. Sửa tên, vai trò, hướng dẫn, skills hoặc model ở cột phải rồi bấm **Lưu**.
+3. Sửa tên, vai trò, hướng dẫn, skills hoặc model ở cột phải rồi bấm **Lưu thay đổi** (hoặc Ctrl+S). Thanh lưu luôn nằm ở cuối form: còn thay đổi chưa lưu thì ghi "Có thay đổi chưa lưu" kèm chấm vàng, lưu xong ghi "Đã lưu".
 4. Bấm nút tạo hội thoại mới để bắt đầu một cuộc trò chuyện riêng với cùng trợ lý. Mỗi trợ lý có nhiều hội thoại; mở lại hội thoại gần đây ở cột phải để tiếp tục.
 
 Hội thoại cộng sự tách khỏi lịch sử chat chính của Javis. Quay lại một cộng sự sẽ mở tiếp phiên gần nhất của cộng sự đó.
@@ -61,7 +61,7 @@ Chọn tab cần dùng rồi bấm nút tạo trợ lý hoặc quy trình ở cu
 | **Skills** | Danh sách skill có sẵn trong vault, bấm tick để cho agent được dùng. | Chọn skill hợp với vai trò |
 | **Model** | Ô chọn có 8 lựa chọn, xem bảng ngay dưới. | Sonnet cho cân bằng, Opus khi cần suy luận sâu, Haiku khi cần nhanh và rẻ |
 
-4. Bấm **Lưu**. Nếu bạn quên nhập Tên, Javis sẽ nhắc "Nhập tên".
+4. Bấm **Tạo agent** (agent đã có thì nút ghi **Lưu thay đổi**). Nếu bạn quên nhập Tên, Javis sẽ nhắc "Nhập tên".
 5. Thẻ agent mới hiện trong danh sách, có biểu tượng 🤖, kèm tên model và các nhãn skill đã gán. Nếu chưa gán skill nào, thẻ ghi "chưa gán skill".
 
 Ghi chú về ô Skills: danh sách skill lấy từ thư mục skill của vault. Nếu vault chưa có skill nào, khung sẽ báo "Vault chưa có skill trong skills/ - vẫn tạo agent được, gán skill sau." Bạn vẫn tạo agent bình thường và quay lại gán sau. Cách tạo skill xem trang [Skills](06-skills.md).
@@ -286,6 +286,18 @@ Khi cộng sự nộp kết quả, Javis kiểm chính sản phẩm (file) theo 
 - Có tiêu chí chưa rõ hay cần bạn xác nhận: chat hiện thẻ **Nghiệm thu sản phẩm** với **Đạt, chốt việc** hoặc **Chưa đạt, trả lại** (kèm ghi chú). File đã đổi sau lần kiểm thì không chốt được, phải kiểm lại.
 
 Sửa yêu cầu của việc làm bằng chứng cũ hết hiệu lực. Sau khi đã nghiệm thu, sửa file sản phẩm thì thẻ ghi "Sản phẩm đã đổi sau lần kiểm". Điểm học của cộng sự chỉ được cộng khi nghiệm thu đạt hay bạn xác nhận, mỗi việc một lần.
+
+## Giao việc cho Team ngay từ chat (từ 0.357.0)
+
+Bạn không cần mở trang Nhóm để giao việc. Cứ nói với Javis ở khung chat web, Telegram hay Zalo, ví dụ "giao cho Phòng nội dung viết 3 bài về nước mắm", Javis chọn đúng Team của brain đang mở và giao **một việc** vào Team đó. Việc chạy y như khi bạn tự giao ở trang Nhóm: trưởng nhóm điều phối, có hàng đợi, nghiệm thu và lịch sử của Team.
+
+- **Kết quả tự báo về đúng khung chat đã giao**: khi việc xong, bị huỷ, bị chặn hay đang chờ bạn quyết. Mỗi trạng thái báo một lần, và luôn có một bản trong hòm thư.
+- **XONG khác ĐẠT**: tin báo nói rõ việc đã qua nghiệm thu chưa. Team không bật nghiệm thu thì Javis nói thẳng là chưa ai xác nhận đạt.
+- **Cổng duyệt vẫn là của bạn**: việc cần bạn duyệt hay xác nhận nghiệm thu vẫn dừng ở thẻ việc trên trang Nhóm. Javis chỉ báo, không bấm duyệt thay.
+- **Không giao trùng**: Javis lỡ gọi lại cùng yêu cầu thì vẫn chỉ có một việc. Trong khung chat nhóm, tin giao việc có nhãn "qua Javis Core".
+- Hỏi "việc đó tới đâu rồi" thì Javis đọc lại trạng thái, kết quả và nghiệm thu của việc.
+
+Chỉ chủ (hoặc việc nền chủ đã lên lịch) mới giao được. Bot chăm khách, Team của brain khác hay một bước việc của chính Team đều bị từ chối trước khi có việc nào được tạo.
 
 ## Thao tác nhanh và khắc phục sự cố
 

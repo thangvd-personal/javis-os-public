@@ -1,0 +1,507 @@
+{
+  "version": 1,
+  "label": "synthetic/current-native-enforcement-only",
+  "production_billing": false,
+  "platform": "win32",
+  "profile_version": "claude-isolated-roles-v2",
+  "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
+  "source_hashes": {
+    "improvement_claude.py": "d16e53c2a3213a0f215d3fea05c7daf376e00b01d1607e74c50cc923d4ee37d1",
+    "improvement_sandbox.py": "3a319550fe40f62f1bc9a17ef855cdd739c1cc5c186c834cb4cf4e9bc6e95bb9",
+    "improvement_worker.py": "f846e736507688a1f4a4039d3dcf75caf20c135715f9d9a902151390372fc065",
+    "claude_sdk_engine.py": "6b13f5b77f78e0dfe3ffc1268e46ef70d8d800324e8dd2664f793f0b8df49906",
+    "improvement_native_transport.py": "29b34bdfbbbaf6702ea7370a623110e1b5bf9a6fb48755f56b4fcfef54dd5927",
+    "improvement_operation_adapter.py": "ca771aa7d7ce82d1be94eece3cee3d54dfe1df1ff85671d47bcee2afa950c021",
+    "improvement_operation_worker.py": "3da7d208f0bf93a93ccab12ff3f3fe8977c130fcc288b1bc424a0e0c111c6cbc",
+    "improvement_operation_profile.py": "551b2420b45ba0911fb851b862efe1087fa04147e9f6a60e1db4eba5b6b8f534",
+    "improvement_operation_workspace.py": "8317b1a958062d7e3bcfd36c5f5ccc4f0c73d73e5f94102018270c43b9f04f51",
+    "improvement_operation_protocol.py": "5cca76867faaebc0096cf618643def2749c5406dfd952807b2d4ffc3efbd8bd4",
+    "improvement_operation_execution.py": "c6934000343fe196d399392244f9cfa754a7e821f81d190cf9167b7bb6a095fb",
+    "improvement_operation_evidence.py": "145e70c5cdbd68dfaf91334e6b3a5125285843663cad740889908c575f5b7e56",
+    "improvement_trial_evidence.py": "aca5906576ce9ecfd2cb6671cb7da7577c961aeb947a8b9f4186f15e0a819373",
+    "improvement_operation_checks.py": "d02125284d72339121b6fb65a7b2a976da34b80475dbd1ee753d355e9b5a7a1c",
+    "improvement_operation_results.py": "58adf6b13bd67c587fd405235ece13f2bbc2eabddf5b9f43f043e0baae625389",
+    "improvement_trial_checks.py": "06f04ee1764968c2ed477c9db402d48308a51db555089ef8bb2162f4c399e10e",
+    "improvement_operation_runner.py": "828a86b13930a5da6883d49e62a66d7c345f63edf33aa477b4f98a1afde088a1",
+    "improvement_operation_tasks.py": "b3f39697914070342ad9953fe21956b9264b8ccc2839ecb3e01f65bdb6a98106",
+    "improvement_operation_recovery.py": "7139f70cbe1b846effb16a3f6ebfe83acd979cec0789f695b1e206c05b7201e4",
+    "improvement_operation_retry.py": "7a69f760df6949588cb4802c6de39ab66508453545b26b147d2f741616028fcd",
+    "improvement_operation_schema.py": "53bcada765678337712051b950b26cbb285b548c66c30e07526471f808530512",
+    "improvement_operation_records.py": "57d755666f93278551aa2b655b383e2aa58bdc5b2aa600f5c0f92a1137aa3e3d",
+    "improvement_improver_inputs.py": "e8159a538599691d8d01dbbd7d24a58a3e0d23cb7a1359567ef6b24940fb7192",
+    "improvement_generation_protocol.py": "247824007fe4860079d1a3ec5d7ffde47b63337a1a78fc7b6a01830e9e9d0bbe",
+    "improvement_comparison_plans.py": "607eb439db944a119ed06d1f854333690f828dbe57486c0095ad86e58415c50e",
+    "improvement_proposals.py": "59a5dec3e118a78719f3ba82041d70e12d28a1c9cee7f2ea4b56f2cbc6cc4f72",
+    "improvement_skill_candidates.py": "881d402a3df0629aacfecac590b25f667043b1e7d6e0ef5cd7b6ba09c4886c9e",
+    "improvement_role_workflow.py": "f29affd5dc98564fc7389536ecf5317d4b10daf7493cee3af439a9d2261af9c2",
+    "improvement_semantic_review.py": "852a31995a118943c8c98ee8a6901320416a75c6db544b3093fe32f5e2d280c1",
+    "improvement_semantic_protocol.py": "4fe16034f9461cc15f624c3bfa8574b0de68dcdfe18d62b37b9e5a4fff684a98",
+    "improvement_semantic_records.py": "7fb620313eacc8f4548e371face9c0698012cf7f48cca277a2aff34b6a6a0b79",
+    "improvement_dependency_evidence.py": "08df1576dfe0e146c5bdcb12cafc1e769c737565b1b49938e35aa7e7957dff09",
+    "improvement_execution_limits.py": "1b1830df34b295408ffca49e5ea1f446c6a334d49d085ea79932bf3aa829c6cc",
+    "improvement_native_lifetime.py": "bd9cd7cda7883814c22cbed2e6866adf097cefce923a22595eaa34d0722f415b"
+  },
+  "cli_version": "2.1.308",
+  "cli_hash": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+  "sdk_version": "0.2.116",
+  "model": "claude-opus-5-5",
+  "requested_reasoning": "medium",
+  "observed_reasoning": "unknown",
+  "observed_asset_use": "unknown",
+  "business_proof": false,
+  "auth_readiness_proof": false,
+  "live_activation_granted": false,
+  "constraints": [
+    "Exact listed runtime and full profile source hashes only.",
+    "Local fake provider and dummy authentication; no actual account inference.",
+    "Real typed solver/proposer/repair/reviewer profiles; no production CallLedger feasibility claim.",
+    "Host-death recovery uses durable native fences; supervisor death remains fail-closed.",
+    "Incomplete process-generation inventory cannot grant cleanup."
+  ],
+  "raw_evidence_sha256": {
+    "task9-final-native-solver-evidence.json": "d004f3ca8277238e223bb531dcf5f03b6b26d8d2873d8641f8cf82270e9b3aba",
+    "task9-final-native-roles-evidence.json": "3a9de7adc8778d4477455037bbed13e3018cd80f95131da59bf68a744c92ca12"
+  },
+  "logs_sha256": {
+    "task9-final-native-solver.log": "86196c83ee0c0e1f402251384616dfd37bc01bda9a126220715c5f11d04e7c8f",
+    "task9-final-native-roles.log": "425a086db7cb153a4d94dea4fc313facc1a586719f04223263ddcc9bf04fb16d",
+    "task9-final-supervisor-faults.log": "7d304bb750bd7bc370a39021bc9cd778c0cb60545ed4f8dfc3fedd5178272d2a"
+  },
+  "test_commands": [
+    "python tests/python/test_improvement_runtime_qualification.py -v",
+    "python tests/python/test_improvement_role_qualification.py -v",
+    "python tests/python/test_improvement_worker_quiescence.py -v"
+  ],
+  "scenarios": [
+    {
+      "scenario": "synthetic/native-pending-query-cancellation",
+      "elapsed_s": 3.844,
+      "production_billing": false,
+      "query_count": 1,
+      "owned_process_count": 5,
+      "all_owned_processes_closed": true,
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "requests": [
+        "/v1/messages"
+      ],
+      "usage_coverage": "unknown: cancelled before synthetic response",
+      "retry_count": 0
+    },
+    {
+      "scenario": "synthetic/native-local-fake-provider",
+      "elapsed_s": 4.515,
+      "production_billing": false,
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "sdk_spawn_flags": [
+        134217728,
+        134217728
+      ],
+      "worker_has_console": false,
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "model": "claude-opus-5-5",
+          "method": "POST",
+          "dummy_auth_only": true,
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "fast_requested": false,
+          "ambient_markers": [],
+          "results": {
+            "bad-bash": true,
+            "bad-read": true,
+            "bad-web": true,
+            "bad-mcp": true,
+            "hit": false,
+            "miss": true,
+            "bad-agent": true,
+            "bad-task": true,
+            "bad-skill": true,
+            "bad-search": true,
+            "bad-deferred": true
+          }
+        }
+      ],
+      "tool_denials": [
+        "bad-agent",
+        "bad-task",
+        "bad-skill",
+        "bad-search",
+        "bad-deferred"
+      ],
+      "fixture_statuses": [
+        "fixture_hit",
+        "fixture_miss"
+      ],
+      "ambient_plugin_hook_ran": false,
+      "session_transcripts_persisted": false,
+      "coverage": {
+        "model": "observed",
+        "reasoning": "unknown",
+        "asset_use": "unknown"
+      },
+      "sdk_children_closed": true
+    },
+    {
+      "scenario": "typed-role-pending-query-cancellation",
+      "kind": "propose",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "all_owned_processes_closed": true,
+      "query_count": 1,
+      "scope": "Actual owned native profile process tree; no production ledger or auth claim."
+    },
+    {
+      "scenario": "typed-role-pending-query-cancellation",
+      "kind": "repair",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "all_owned_processes_closed": true,
+      "query_count": 1,
+      "scope": "Actual owned native profile process tree; no production ledger or auth claim."
+    },
+    {
+      "scenario": "typed-role-pending-query-cancellation",
+      "kind": "semantic",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "all_owned_processes_closed": true,
+      "query_count": 1,
+      "scope": "Actual owned native profile process tree; no production ledger or auth claim."
+    },
+    {
+      "scenario": "actual-guardian-death-fail-closed",
+      "kind": "semantic",
+      "production_billing": false,
+      "both_recovery_fences_retained": true,
+      "native_processes_exited": true,
+      "automatic_recovery_granted": false
+    },
+    {
+      "scenario": "actual-native-owner-death-observation",
+      "kind": "propose",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "process_images": [
+        "python.exe",
+        "conhost.exe",
+        "conhost.exe",
+        "python.exe",
+        "claude.exe"
+      ],
+      "states_at_barrier_release": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "states_after_owner_exit": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_exited_before_barrier_release": true
+    },
+    {
+      "scenario": "actual-native-owner-death",
+      "kind": "propose",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "all_exited_before_barrier_release": true
+    },
+    {
+      "scenario": "actual-native-owner-death-observation",
+      "kind": "semantic",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "process_images": [
+        "python.exe",
+        "conhost.exe",
+        "conhost.exe",
+        "python.exe",
+        "claude.exe"
+      ],
+      "states_at_barrier_release": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "states_after_owner_exit": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "all_exited_before_barrier_release": true
+    },
+    {
+      "scenario": "actual-native-owner-death",
+      "kind": "semantic",
+      "production_billing": false,
+      "owned_process_count": 5,
+      "all_exited_before_barrier_release": true
+    },
+    {
+      "scenario": "typed-role-local-enforcement",
+      "kind": "propose",
+      "production_billing": false,
+      "cache_path_lengths": [
+        306
+      ],
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {
+            "bash": true,
+            "read": true,
+            "web": true,
+            "mcp": true,
+            "fixture": true,
+            "traversal": true,
+            "agent": true,
+            "task": true,
+            "skill": true,
+            "search": true,
+            "deferred": true
+          }
+        }
+      ],
+      "spawns": [
+        {
+          "kind": "version",
+          "pid": 25020,
+          "creationflags": 134217728
+        },
+        {
+          "kind": "query",
+          "pid": 25132,
+          "creationflags": 134217728
+        }
+      ],
+      "plaintext_cleaned": true,
+      "ambient_hooks_ran": false,
+      "session_transcripts_persisted": false,
+      "input_markers_persisted_after_cleanup": false,
+      "model_coverage": "observed",
+      "actual_reasoning": "unknown",
+      "actual_input_use": "unknown",
+      "scope": "Native typed-profile enforcement only; no auth readiness or actual worker/CallLedger feasibility claim.",
+      "owned_before_close_count": 1,
+      "alive_immediately_after_close_count": 0
+    },
+    {
+      "scenario": "typed-role-local-enforcement",
+      "kind": "repair",
+      "production_billing": false,
+      "cache_path_lengths": [
+        305
+      ],
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {
+            "bash": true,
+            "read": true,
+            "web": true,
+            "mcp": true,
+            "fixture": true,
+            "traversal": true,
+            "agent": true,
+            "task": true,
+            "skill": true,
+            "search": true,
+            "deferred": true
+          }
+        }
+      ],
+      "spawns": [
+        {
+          "kind": "version",
+          "pid": 21416,
+          "creationflags": 134217728
+        },
+        {
+          "kind": "query",
+          "pid": 16972,
+          "creationflags": 134217728
+        }
+      ],
+      "plaintext_cleaned": true,
+      "ambient_hooks_ran": false,
+      "session_transcripts_persisted": false,
+      "input_markers_persisted_after_cleanup": false,
+      "model_coverage": "observed",
+      "actual_reasoning": "unknown",
+      "actual_input_use": "unknown",
+      "scope": "Native typed-profile enforcement only; no auth readiness or actual worker/CallLedger feasibility claim.",
+      "owned_before_close_count": 1,
+      "alive_immediately_after_close_count": 0
+    },
+    {
+      "scenario": "typed-role-local-enforcement",
+      "kind": "semantic",
+      "production_billing": false,
+      "cache_path_lengths": [
+        307
+      ],
+      "profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
+      "runtime": {
+        "version": "2.1.308",
+        "sha256": "c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53",
+        "sdk": "0.2.116"
+      },
+      "requests": [
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {}
+        },
+        {
+          "path": "/v1/messages",
+          "method": "POST",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "tools": [
+            "mcp__fixture__fixture_read"
+          ],
+          "dummy_auth_only": true,
+          "ambient_markers": [],
+          "authorized_data_present": true,
+          "fast_requested": false,
+          "results": {
+            "bash": true,
+            "read": true,
+            "web": true,
+            "mcp": true,
+            "fixture": true,
+            "traversal": true,
+            "agent": true,
+            "task": true,
+            "skill": true,
+            "search": true,
+            "deferred": true
+          }
+        }
+      ],
+      "spawns": [
+        {
+          "kind": "version",
+          "pid": 6076,
+          "creationflags": 134217728
+        },
+        {
+          "kind": "query",
+          "pid": 9300,
+          "creationflags": 134217728
+        }
+      ],
+      "plaintext_cleaned": true,
+      "ambient_hooks_ran": false,
+      "session_transcripts_persisted": false,
+      "input_markers_persisted_after_cleanup": false,
+      "model_coverage": "observed",
+      "actual_reasoning": "unknown",
+      "actual_input_use": "unknown",
+      "scope": "Native typed-profile enforcement only; no auth readiness or actual worker/CallLedger feasibility claim.",
+      "owned_before_close_count": 1,
+      "alive_immediately_after_close_count": 0
+    }
+  ]
+}

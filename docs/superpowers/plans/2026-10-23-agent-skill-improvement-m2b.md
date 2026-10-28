@@ -304,10 +304,19 @@ refs/byte bounds; exact statistical boundary and multiple-test correction.
 
 ## Task 6 — owner API, stopping/recovery, qualification and release
 
-- [ ] Reproduce the named behavioral RED cases.
-- [ ] Implement this unit and inspect its exact source/authority boundaries.
-- [ ] Run named GREEN/regression checks, record actual evidence and commit the unit.
+- [x] Reproduce the named behavioral RED cases.
+- [x] Implement this unit and inspect its exact source/authority boundaries.
+- [x] Run named GREEN/regression checks, record actual evidence and commit the unit.
 
+Published engineering evidence: Task6 checkpoints69a91832/2fe944ae; fixed-source
+nine-script regression9/9 GREEN251s, native exact-profile qualification5/5
+GREEN14.845s. Fresh whole-B review's one recovery-scope finding reproduced RED
+and fixed; independent original diagnostic plus3 recovery checks pass, no open
+Important/Critical. Exact-head LinuxCI39880551488 SUCCESS on2fe944ae. PR800 squash
+merged47f50f70/0.293.0 with identical reviewed tree4e53048721ca658f620a73361b4281326852e3b6;
+actual GHCR publication39882926274/Build & push SUCCESS. Task6 acceptance audit
+and task-done recorded. Task4 positive allocation/consumption still requires C+D;
+the complete six-unit/full-M2 acceptance checkbox remains open deliberately.
 
 New improvement_experiment_api.py/tests; concrete service/main lifetime wiring;
 intentional route snapshot, runbook/status/vi-en errors. Full prep/navigation is F.
@@ -414,8 +423,8 @@ final-CAS and repeated cancellation of stop tests.
   semantic use are not promoted to pass. Later C/D changes may stale B contexts.
 - [ ] Complete six units with meaningful RED/GREEN, current-source qualification
   and required scope/migration/lifetime regressions.
-- [ ] Fresh independent whole-branch review; fix reproduced findings and verify.
-- [ ] Final exact-head Linux CI; fresh main/version/head checks; straight merge
+- [x] Fresh independent whole-branch review; fix reproduced findings and verify.
+- [x] Final exact-head Linux CI; fresh main/version/head checks; straight merge
   and actual build/publication success. Continue C on integrated source.
 
 No mock-only result, planned matrix, manual edit approval or technical statistic

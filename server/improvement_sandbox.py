@@ -82,10 +82,20 @@ def _manifest(value):
     manifest = _frozen(value)
     if redact(manifest) != manifest:
         raise ValueError("insufficient_source: trial_input_contains_credentials")
-    _fields(manifest, {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
-                       "baseline_context", "public_contract", "assets", "case", "learning_origin"})
-    if type(manifest["version"]) is not int or manifest["version"] != 1:
+    required = {"version", "brain_id", "bundle_hash", "engine_config_hash", "contract_hash", "grant_hash",
+                "baseline_context", "public_contract", "assets", "case", "learning_origin"}
+    if type(manifest.get('version')) is int and manifest['version'] in (2, 3, 4):
+        required.add('effective_view')
+    _fields(manifest, required)
+    if type(manifest["version"]) is not int or manifest["version"] not in (1, 2, 3, 4, 5):
         raise ValueError("unsupported_trial_input")
+    if manifest['version'] in (2, 3, 4):
+        view = manifest['effective_view']
+        _fields(view, {'view_id', 'view_hash', 'binding_hash'})
+        if type(view['view_id']) is not str or not _IDENTITY.fullmatch(view['view_id']):
+            raise ValueError('invalid_trial_view')
+        _digest(view['view_hash'])
+        _digest(view['binding_hash'])
     _text(manifest["brain_id"], 1000)
     for field in ("bundle_hash", "engine_config_hash", "contract_hash", "grant_hash"):
         _digest(manifest[field])
@@ -107,6 +117,9 @@ def _manifest(value):
     assets = manifest["assets"]
     if not isinstance(assets, list) or not assets or len(assets) > 100:
         raise ValueError("invalid_trial_assets")
+    if manifest['version'] in (2, 3, 4) and (len(assets) != 1 or type(assets[0]) is not dict
+            or type(assets[0].get('path')) is not str or not assets[0]['path'].startswith('skills/')):
+        raise ValueError('invalid_trial_view_assets')
     paths, identities = set(), set()
     for asset in assets:
         _fields(asset, {"id", "path", "hash", "content"})
@@ -151,8 +164,16 @@ def _private_directory(path: Path):
 
 def trial_system_prompt(input_manifest):
     manifest = _manifest(input_manifest)
+    if manifest['version'] in (3, 4):
+        asset, view = manifest['assets'][0], manifest['effective_view']
+        args = {'view_id': view['view_id'], 'view_hash': view['view_hash'],
+                'asset_id': asset['id'], 'content_hash': asset['hash']}
+        assets = ('Read the selected skill using mcp__skill__skill_asset_read with these exact arguments:\n'
+                  + _json(args) + '\nUse the returned pinned instructions for this task.')
+    else:
+        assets = _json(manifest['assets'])
     prompt = (manifest["baseline_context"]["content"] + "\n\n<effective_assets>\n"
-              + _json(manifest["assets"]) + "\n</effective_assets>\n\n<public_acceptance>\n"
+              + assets + "\n</effective_assets>\n\n<public_acceptance>\n"
               + _json(manifest["public_contract"]["content"]) + "\n</public_acceptance>")
     if len(prompt.encode("utf-8")) > MAX_ASSET_BYTES:
         raise ValueError("insufficient_source: trial_system_prompt_too_large")
@@ -160,8 +181,11 @@ def trial_system_prompt(input_manifest):
 
 
 def _effective_hash(manifest):
-    return _hash({"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
-                  "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]})
+    value = {"context": manifest["baseline_context"]["hash"], "bundle": manifest["bundle_hash"],
+             "assets": [{key: asset[key] for key in ("id", "path", "hash")} for asset in manifest["assets"]]}
+    if manifest['version'] in (2, 3, 4):
+        value['effective_view'] = manifest['effective_view']
+    return _hash(value)
 
 
 def _atomic(path, content):
@@ -176,6 +200,67 @@ def _atomic(path, content):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _try_workspace_lifetime_lock(root, namespace, key):
+    """Shared OS primitive; the caller supplies its actual ownership namespace."""
+    _private_directory(root)
+    directory = root / namespace
+    check_ancestry(directory)
+    directory.mkdir(exist_ok=True)
+    path = directory / (_bytes_hash(key.encode()) + ".lock")
+    check_ancestry(path)
+    handle = open(path, "a+b", buffering=0)
+    try:
+        if not handle.seek(0, os.SEEK_END):
+            handle.write(b"\0")
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        from improvement_native_lifetime import fence_busy
+        if fence_busy(path):
+            handle.close()
+            return None
+    except OSError as error:
+        handle.close()
+        if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+            return None
+        raise
+    except BaseException:
+        handle.close()
+        raise
+    return handle
+
+
+@contextlib.contextmanager
+def _workspace_mutation_lock(root, key):
+    _private_directory(root)
+    lock_root = root / ".locks"
+    lock_root.mkdir(exist_ok=True)
+    lock = lock_root / (_bytes_hash(key.encode()) + ".lock")
+    check_ancestry(lock)
+    with open(lock, "a+b", buffering=0) as handle:
+        if not handle.seek(0, os.SEEK_END):
+            handle.write(b"\0")
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 class TrialWorkspace:
@@ -195,32 +280,7 @@ class TrialWorkspace:
 
     def _try_lifetime_lock(self, namespace, key):
         """An OS-held lock disappears on host death, unlike the durable journal."""
-        _private_directory(self.root)
-        directory = self.root / namespace
-        check_ancestry(directory)
-        directory.mkdir(exist_ok=True)
-        path = directory / (_bytes_hash(key.encode()) + ".lock")
-        check_ancestry(path)
-        handle = open(path, "a+b", buffering=0)
-        try:
-            if not handle.seek(0, os.SEEK_END):
-                handle.write(b"\0")
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            handle.close()
-            if error.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
-                return None
-            raise
-        except BaseException:
-            handle.close()
-            raise
-        return handle
+        return _try_workspace_lifetime_lock(self.root, namespace, key)
 
     @staticmethod
     def release_execution(handles):
@@ -313,29 +373,8 @@ class TrialWorkspace:
 
     @contextlib.contextmanager
     def _lock(self, trial_id, attempt):
-        _private_directory(self.root)
-        lock_root = self.root / ".locks"
-        lock_root.mkdir(exist_ok=True)
-        lock = lock_root / (_bytes_hash(f"{trial_id}:{attempt}".encode()) + ".lock")
-        check_ancestry(lock)
-        with open(lock, "a+b", buffering=0) as handle:
-            if not handle.seek(0, os.SEEK_END):
-                handle.write(b"\0")
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(handle, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                if os.name == "nt":
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    fcntl.flock(handle, fcntl.LOCK_UN)
+        with _workspace_mutation_lock(self.root, f"{trial_id}:{attempt}"):
+            yield
 
     def prepare(self, trial_id, attempt, input_manifest):
         manifest = _manifest(input_manifest)

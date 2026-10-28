@@ -122,7 +122,7 @@ def _bo_dau(s: str) -> str:
     return "".join(out)
 
 
-def tag_ten_trong_cau(text: str, danh_ba, bo_qua=()) -> list:
+def tag_ten_trong_cau(text: str, danh_ba, bo_qua=(), chiem=()) -> list:
     """`[(pos, uid, len)]` (UTF-16 units) for every "@Name" in `text` that names someone in `danh_ba`.
 
     Field report 2026-10-14: a bot told to tag "@Minh Quý" and "@Phạm Đại" wrote both names, but only
@@ -130,7 +130,10 @@ def tag_ten_trong_cau(text: str, danh_ba, bo_qua=()) -> list:
     one. `danh_ba` is `[{uid, name}]` (conversations.group_speakers: everyone who has written in the
     group). Longest names are tried first ("@Minh Quý Phạm" beats "@Minh Quý"), case and diacritics
     are ignored ("@minh quy" still tags), a name must end on a word boundary, and `bo_qua` holds uids
-    already tagged (the person being answered) or never to tag (the account itself)."""
+    already tagged (the person being answered) or never to tag (the account itself).
+
+    `chiem` holds `(pos, len)` stretches that already carry a tag (the person being answered). An "@" inside one is
+    skipped: "@Tuan Fernel" must not also become "@Tuan" for another member (0.331.0, see `_khong_chong`)."""
     import re as _re
     ten = []
     for d in danh_ba or []:
@@ -145,6 +148,9 @@ def tag_ten_trong_cau(text: str, danh_ba, bo_qua=()) -> list:
     ra, da_tag = [], set(bo_qua)
     for m in _re.finditer("@", text):
         i = m.start() + 1
+        at = _utf16_len(text[:m.start()])
+        if any(p <= at < p + n_ for p, n_ in chiem):
+            continue
         for key, uid, n in ten:
             if uid in da_tag or chuan[i:i + n] != key:
                 continue
@@ -155,6 +161,19 @@ def tag_ten_trong_cau(text: str, danh_ba, bo_qua=()) -> list:
             da_tag.add(uid)
             break
     return ra
+
+
+def _khong_chong(specs) -> list:
+    """`[(pos, uid, len)]` with no two tags over the same text, sorted by position. The first claim wins.
+
+    Field report 2026-10-26: the reply tag covered "@Tuan Fernel" and the name finder also tagged "@Tuan" at the same
+    spot for another member. Zalo on a computer drew one tag; Zalo on a phone laid the second tag over the markup
+    of the first and showed `@Tuannntion href="zm://Profile/..._mention">@Tuan Fernel</a_mention>` as text."""
+    giu = []
+    for pos, uid, ln in specs:
+        if all(pos + ln <= p or p + n <= pos for p, _u, n in giu):
+            giu.append((pos, uid, ln))
+    return sorted(giu)
 
 
 def _danh_ba_nhom(conn_id: str, chat_id: str) -> list:
@@ -211,12 +230,13 @@ async def _send_tagged(conn: dict, chat_id: str, text: str, mention) -> Optional
     if uid:
         final, pos, ln = tagged_text(text, name)
         specs.append((pos, uid, ln))
-    # Every other "@Name" the message carries (0.123.0), never the account itself.
+    # Every other "@Name" the message carries (0.123.0), never the account itself, never inside the reply tag.
     minh = str((zc._ID_MINH.get(cid) or {}).get("uid") or "")
-    specs += tag_ten_trong_cau(final, _danh_ba_nhom(cid, chat_id), bo_qua={u for u in (uid, minh) if u})
+    specs += tag_ten_trong_cau(final, _danh_ba_nhom(cid, chat_id), bo_qua={u for u in (uid, minh) if u},
+                               chiem=[(p, n) for p, _u, n in specs])
     if not specs:
         return None
-    specs.sort()
+    specs = _khong_chong(specs)
     # Tiếng vọng của tin có tag mang cả "@Tên": nhớ luôn bản này, không thì vòng đọc tưởng chủ vừa tự tay nhắn và bot im 10 phút.
     zc.ghi_da_gui(cid, chat_id, final)
     ok, _data, err = await zalo_cli.run_cli(
@@ -333,6 +353,29 @@ async def _gui_mot(conn: dict, chat_id: str, text: str, chat_type: str, mention=
     if isinstance(d, dict) and d.get("success") is True and "messageId" in d and not d.get("messageId"):
         return False, localefmt.chu("Zalo không xác nhận đã nhận tin (không có mã tin)",
                                     "Zalo did not confirm the message (no message id)")
+    return True, ""
+
+
+async def send_reaction(tk: dict, chat_id: str, msg_id: str, name: str, chat_type: str = "private",
+                      cli_msg_id: str = ""):
+    """Put an emoji reaction on one message (0.334.0, javis-zalo >= 1.7.0 `zalo_add_reaction`). `(ok, error)`.
+
+    `cli_msg_id` is optional: the MCP looks it up from its buffer or history when it is missing."""
+    import zalo_personal_channel
+    conn = zalo_personal_channel.ket_noi_theo_id(str(tk.get("id") or tk.get("external_id") or ""))
+    if not conn:
+        return False, localefmt.chu("tài khoản Zalo này không còn ở trang Kết nối (hoặc đang tắt)",
+                                     "this Zalo account is no longer on the Connections page (or is turned off)")
+    args = {"threadId": str(chat_id), "threadType": 1 if str(chat_type or "") == "group" else 0, "msgId": str(msg_id),
+            "reaction": str(name)}
+    if cli_msg_id:
+        args["cliMsgId"] = str(cli_msg_id)
+    try:
+        d = await zalo_personal_channel._goi(conn, "zalo_add_reaction", args)
+    except Exception as e:
+        return False, str(e)[:300]
+    if isinstance(d, dict) and d.get("success") is False:
+        return False, str(d.get("error") or d.get("message") or localefmt.chu("Zalo từ chối", "Zalo refused"))[:300]
     return True, ""
 
 
@@ -530,7 +573,8 @@ class Transport:
             saved, why = await zalo_attachments.fetch_file(att, inbox)
             if saved:
                 da_tai.append(saved)
-                text += "\n" + zalo_attachments.turn_text(saved)
+                # Off the event loop: a long PDF takes a moment to turn into text (0.336.0).
+                text += "\n" + await asyncio.to_thread(zalo_attachments.turn_text, saved)
             else:
                 text += "\n[Không tải được file Zalo: " + why + ". Không suy đoán nội dung.]"
         if zc._BOTS.get(self.conn_id) is not self:
@@ -565,9 +609,12 @@ class Transport:
         vao_nhom = md0.get("member_join")
         if vao_nhom and loai != "group":
             return
-        if loai not in ("private", "group") or (kieu not in ("text", "image", "file") and not vao_nhom):
+        if loai not in ("private", "group") or (kieu not in ("text", "image", "file", "reaction") and not vao_nhom):
             return
         nhom = loai == "group"
+        # A customer's emoji reaction (0.334.0) reaches the bot as its describing line. Nothing here decides whether it
+        # deserves an answer: the judge does in a group ("Tự đánh giá"), the Agent everywhere else.
+        is_reaction = kieu == "reaction"
         # File khách gửi (một tin file, hoặc các file đi theo lượt gộp chat riêng của `zc.gop_tin`).
         # Rào chặt: sai tài khoản, không phải khách, thiếu người gửi, chat riêng mà người gửi không phải
         # chủ cuộc chat, hoặc không có precheck thì KHÔNG tải. Lượt chỉ có file thì bỏ cả lượt; lượt có
@@ -652,7 +699,14 @@ class Transport:
             "user_name": str(ev.get("sender_name") or ""), "username": "",
             "message_id": str(ev.get("external_message_id") or ""),
             "account_id": self.conn_id,
+            # The message a reaction from the bot would go on (0.334.0): this one, or the last real message of a merged
+            # private turn. Never a reaction.
+            "react_to": (str(md0.get("react_to") or "") if md0.get("gop")
+                         else "" if is_reaction else str(ev.get("external_message_id") or "")),
+            "react_to_cli": str((md0.get("react_to_cli") if md0.get("gop") else md0.get("cliMsgId")) or ""),
         }
+        if is_reaction:
+            meta["reaction"] = True
         # Labels the owner put on this chat in the Zalo app (0.281.0, javis-zalo 1.6.0): the bot can skip chats tagged
         # e.g. "Gia đình" (`chatbot_runtime._ly_do_im`) and sees the tags in its prompt. Cached per connection, so this
         # await costs nothing on most messages; any failure leaves the list empty and the turn runs as before.
@@ -667,7 +721,7 @@ class Transport:
             meta["image_url"] = str((ev.get("metadata") or {}).get("image_url") or "")
             if not nhom:
                 zc.nho_anh_rieng(self.conn_id, thread, meta["image_url"])
-        elif not vao_nhom:
+        elif not vao_nhom and not is_reaction:
             # 0.141.0: a message that QUOTES a photo ("@bot xem ảnh này" as a reply to it) shows the bot that photo.
             # Checked BEFORE the remembered private photo (0.172.0): a quoted photo is the one the person means, the
             # latest photo is only a guess.
@@ -710,6 +764,15 @@ class Transport:
                     pol = None
                     print(f"[zalo-personal bot {self.conn_id}] bộ phán xử lỗi: {type(e).__name__}: {e}", file=sys.stderr)
                 duoc_goi = duoc_goi or bool(meta.get("mentioned"))
+        if nhom and not vao_nhom and not is_reaction:
+            # Files in a group (0.336.0, see `zc.remember_bare_file`): a file nobody addressed to the bot waits for its
+            # sender's next call; a call that quotes a file, or comes right after the sender's bare file, gets it.
+            nguoi = str(ev.get("sender_id") or "")
+            if chi_file and files and not duoc_goi and self._che_do_nhom() != "always":
+                zc.remember_bare_file(self.conn_id, thread, nguoi, files[0], float(ev.get("created_at") or 0))
+            elif (duoc_goi and not files and nguoi and ev.get("sender_type") == "customer" and self.precheck_fn
+                  and str(ev.get("account_id") or "") == self.conn_id):
+                files = zc.quoted_file(self.conn_id, thread, md0) or zc.take_bare_files(self.conn_id, thread, nguoi)
         try:
             if self.precheck_fn:
                 r = self.precheck_fn(text, meta)
@@ -727,7 +790,8 @@ class Transport:
                     # Bộ phán xử thay cửa từ khoá: tin hiển nhiên không đáng đã được ghi vết và bỏ ở `prepare`.
                     if pol.get("action") == "drop":
                         return
-                elif not chatbot_tu_dong.nhin_nhu_cau_hoi(text)[0]:
+                elif is_reaction or not chatbot_tu_dong.nhin_nhu_cau_hoi(text)[0]:
+                    # Without the judge, "auto" only answers what looks like a question; a reaction never is one.
                     return
                 # Chờ TRƯỚC khi cầm khoá cuộc chat: khoá là của các lượt được tag, đừng bắt chúng
                 # xếp hàng sau một lượt đang ngủ.
@@ -772,6 +836,8 @@ class Transport:
                             f.unlink(missing_ok=True)
                         zc.bo_do_gui(self.conn_id, thread, list(cu.get("texts") or []) + [chu_khach], int(cu.get("n") or 0) + 1)
                         return
+                    if out.get("reaction") and zc._BOTS.get(self.conn_id) is self:
+                        await self._react(thread, loai, meta, str(out["reaction"]))
                     if out.get("im_lang"):
                         return
                     cau = str(out.get("text") or "").strip()
@@ -793,6 +859,23 @@ class Transport:
             self.last_error = f"{type(e).__name__}: {e}"[:300]
             print(f"[zalo-personal bot {self.conn_id}] lượt hỏng: {self.last_error}",
                   file=sys.stderr)
+
+    async def _react(self, thread: str, chat_type: str, meta: dict, name: str) -> None:
+        """Put the reaction the judge or the Agent chose on the customer's message (0.334.0). No target (a turn made
+        only of reactions) or an unknown name: nothing. A failure only shows on the bot card, the turn goes on."""
+        import bot_reaction
+        import zalo_personal_channel as zc
+        target = str((meta or {}).get("react_to") or "")
+        if not target or name not in bot_reaction.NAMES:
+            return
+        bot_name = str(((self.cfg_fn() if self.cfg_fn else {}) or {}).get("name") or "")
+        # Remembered BEFORE sending: the echo may reach the read loop in the very next round.
+        zc.remember_bot_reaction(self.conn_id, thread, target, name, bot_name)
+        ok, err = await send_reaction({"id": self.conn_id}, thread, target, name, chat_type,
+                                      str((meta or {}).get("react_to_cli") or ""))
+        if not ok:
+            self.last_error = localefmt.chu(f"Thả cảm xúc Zalo lỗi: {err}", f"Zalo reaction failed: {err}")[:300]
+            print(f"[zalo-personal bot {self.conn_id}] {self.last_error}", file=sys.stderr)
 
     async def _gui(self, thread: str, cau: str, chat_type: str = "private", meta: Optional[dict] = None):
         import zalo_personal_channel as zc

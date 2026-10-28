@@ -40,6 +40,7 @@ import channel_accounts
 import channels
 import chatbot_doc_tools
 import bot_images
+import bot_reaction
 import bot_split
 import bot_linked_docs
 import chatbot_grounding
@@ -417,6 +418,9 @@ def build_bot_prompt(bot: dict) -> str:
     # The channel of THIS turn sends several short messages (0.281.0): the Agent may split its answer, see bot_split.
     if (bot or {}).get("_kenh_luot") in bot_split.SPLIT_CHANNELS:
         phan.append(bot_split.PROMPT_HINT)
+    # The channel of THIS turn can put an emoji reaction on the customer's message (0.334.0, bot_reaction).
+    if (bot or {}).get("_kenh_luot") in bot_reaction.CHANNELS:
+        phan.append(bot_reaction.PROMPT_HINT)
     # Lượt Tự đánh giá do _make_answer_fn gắn. Cờ chứ không suy từ meta: prompt được dựng ở đây,
     # nơi không có meta của lượt.
     if (bot or {}).get("_tu_dong"):
@@ -937,7 +941,9 @@ def _rp_event(cfg: dict, profile, text: str, meta: dict, owner_typing: bool = Fa
         sender_role=chatbot_reply_policy.sender_role(profile, uid), mentioned=bool((meta or {}).get("mentioned")),
         reply_to_bot=bool((meta or {}).get("reply_to_bot")),
         window=chatbot_reply_policy.window_of(bot_id, chat_id, now),
-        bot_last_spoke_ts=last, last_bot_addressee=addressee, owner_typing=bool(owner_typing))
+        bot_last_spoke_ts=last, last_bot_addressee=addressee, owner_typing=bool(owner_typing),
+        is_reaction=bool((meta or {}).get("reaction")),
+        can_react=bool((meta or {}).get("react_to")) and _tai_khoan_cua(cfg, meta or {})[1] in bot_reaction.CHANNELS)
 
 
 def _rp_named_meta(cfg: dict, text: str, meta) -> dict:
@@ -948,7 +954,8 @@ def _rp_named_meta(cfg: dict, text: str, meta) -> dict:
     callback không truyền sang callback kia; mỗi chỗ dùng tự gọi hàm này.
     """
     m = dict(meta or {})
-    if not _rp_is_group(m) or m.get("mentioned") or m.get("reply_to_bot"):
+    # A reaction's line quotes the message it was put on (0.334.0): the bot's name in that quote is not a call.
+    if not _rp_is_group(m) or m.get("mentioned") or m.get("reply_to_bot") or m.get("reaction"):
         return m
     try:
         profile = _rp_profile(cfg, m, with_role=False)
@@ -1013,7 +1020,8 @@ def _rp_collect(cfg: dict) -> tuple:
     except Exception as e:      # noqa: BLE001
         print(f"[reply_policy] đọc link Google của Agent lỗi: {type(e).__name__}", file=sys.stderr)
     try:
-        _RP_HAS_DOCS[str(cfg.get("id") or "")] = bool(linked) or bool(chatbot_grounding.chi_muc(root).get("manh"))
+        _RP_HAS_DOCS[str(cfg.get("id") or "")] = (bool(linked) or bool(chatbot_grounding.chi_muc(root).get("manh"))
+                                                   or chatbot_grounding.has_scoped_docs(root))
     except Exception as e:      # noqa: BLE001 - chưa biết thì giữ luật chặt (phải có căn cứ)
         print(f"[reply_policy] đếm tài liệu lỗi: {type(e).__name__}", file=sys.stderr)
     return _rp_agent_text(cfg), [d["title"] for d in linked] + chatbot_reply_policy.list_doc_titles(root)
@@ -1066,6 +1074,10 @@ class PolicyHooks:
         profile = _rp_profile(cfg, meta, with_role=(rpc["mode"] != "off"))
         ev = _rp_event(cfg, profile, text, meta, owner_typing)
         addr = chatbot_reply_policy.detect_address(ev, profile)
+        if meta.get("reaction") and addr.level == "certain":
+            # A reaction's line quotes the message it was put on (0.334.0): the bot's name in that quote is not a call,
+            # so the judge still weighs it like any message nobody addressed.
+            addr = chatbot_reply_policy.AddressResult("possible", list(addr.evidence) + ["reaction"])
         if addr.level == "certain":
             meta["mentioned"] = True
             ev.mentioned = True
@@ -1109,7 +1121,7 @@ class PolicyHooks:
         try:
             await chatbot_reply_policy.decide(
                 ev, profile, store=chatbot_reply_policy_store, ask=chatbot_reply_policy.ask_fn(),
-                doc_search=lambda t: _tra_cho_phan_xu(self.bot_id, cfg, t), commit=False, mode="shadow")
+                doc_search=lambda t: _tra_cho_phan_xu(self.bot_id, cfg, t, ev.chat_id), commit=False, mode="shadow")
         except Exception as e:      # noqa: BLE001
             print(f"[reply_policy {self.bot_id}] chạy thử lỗi: {type(e).__name__}: {e}", file=sys.stderr)
         finally:
@@ -1497,14 +1509,17 @@ def ghi_tin_bot(cfg: dict, meta: dict, text: str, loi: str = "", files=None) -> 
         print(f"[chatbot conversations] {type(e).__name__}: {e}", file=sys.stderr)
 
 
-async def _tra_tai_lieu(bot_id: str, cfg: dict, text: str) -> dict:
+async def _tra_tai_lieu(bot_id: str, cfg: dict, text: str, chat_id: str = "") -> dict:
     """Tra brain của bot cho MỘT câu hỏi. Quét đĩa + chấm điểm là việc CHẶN, đẩy sang thread để
-    không chẹn event loop (poller của các bot khác và của cả Javis đều chạy chung một loop)."""
+    không chẹn event loop (poller của các bot khác và của cả Javis đều chạy chung một loop).
+
+    `chat_id` (0.338.0): the chat of the message, from the channel, so that chat's scoped documents join the search
+    (see `chatbot_grounding.scoped_docs`). "" searches the shared documents only."""
     tl = {"co": False, "khoi": "", "nguon": []}
     try:
         root = _deps["brain_root"](cfg["brain"])
         linked = await asyncio.to_thread(_linked_docs, cfg)
-        tl = await asyncio.to_thread(chatbot_grounding.thu_thap, root, text, 4, linked["docs"])
+        tl = await asyncio.to_thread(chatbot_grounding.thu_thap, root, text, 4, linked["docs"], chat_id)
         if linked["warnings"]:
             # The answer still goes out; the owner sees why a linked file was left out on the bot card.
             tl = dict(tl, canh_bao_link=" · ".join(linked["warnings"])[:500])
@@ -1531,16 +1546,16 @@ def _linked_docs(cfg: dict) -> dict:
     return bot_linked_docs.collect(links)
 
 
-async def _tra_cho_phan_xu(bot_id: str, cfg: dict, text: str) -> dict:
+async def _tra_cho_phan_xu(bot_id: str, cfg: dict, text: str, chat_id: str = "") -> dict:
     """`doc_search` của bộ phán xử. Như `_tra_tai_lieu`, cộng MỤC LỤC tài liệu khi bot ở mức "Đọc tài
     liệu" mà khớp chữ trượt: bot đó tự mở được tài liệu, nên "khách gõ khác chữ" không còn là lý do
     để im (xem `chatbot_reply_policy.decide`). Mức khác giữ nguyên luật cũ."""
-    tl = await _tra_tai_lieu(bot_id, cfg, text)
+    tl = await _tra_tai_lieu(bot_id, cfg, text, chat_id)
     if tl.get("co") or str(cfg.get("muc_quyen") or "").strip().lower() != chatbot_doc_tools.MODE:
         return tl
     try:
         root = _deps["brain_root"](cfg["brain"])
-        ml = await asyncio.to_thread(chatbot_doc_tools.table_of_contents, root)
+        ml = await asyncio.to_thread(chatbot_doc_tools.table_of_contents, root, chatbot_doc_tools.INDEX_MAX, chat_id)
     except Exception as e:
         print(f"[chatbot {bot_id}] dựng mục lục lỗi: {e}", file=sys.stderr)
         ml = ""
@@ -1625,18 +1640,19 @@ def _make_answer_fn(bot_id: str):
                     return {"text": "", "files": [], "im_lang": True}
                 dec = await chatbot_reply_policy.decide(
                     ev, profile, store=chatbot_reply_policy_store, ask=chatbot_reply_policy.ask_fn(),
-                    doc_search=lambda t: _tra_cho_phan_xu(bot_id, cfg, t))
+                    doc_search=lambda t: _tra_cho_phan_xu(bot_id, cfg, t, chat_id))
             except Exception as e:      # noqa: BLE001 - hỏng thì IM, không tự mở miệng
                 print(f"[reply_policy {bot_id}] {type(e).__name__}: {e}", file=sys.stderr)
                 return {"text": "", "files": [], "im_lang": True}
             if dec.verdict != "reply":
-                return {"text": "", "files": [], "im_lang": True}
+                # The judge may still put a reaction on the message while staying quiet (0.334.0).
+                return {"text": "", "files": [], "im_lang": True, "reaction": dec.reaction or None}
             rp_dec = dec
-            tl = dec.doc or await _tra_tai_lieu(bot_id, cfg, text)
+            tl = dec.doc or await _tra_tai_lieu(bot_id, cfg, text, chat_id)
         elif tu_dong:
             if not chatbot_tu_dong.nhin_nhu_cau_hoi(text)[0]:
                 return {"text": "", "files": [], "im_lang": True}
-            tl = await _tra_tai_lieu(bot_id, cfg, text)
+            tl = await _tra_tai_lieu(bot_id, cfg, text, chat_id)
             ma = "" if tl.get("co") else "khong_co_tai_lieu"
             if ma:
                 _ghi_bo_qua(bot_id, cfg, meta, text, ma, tl)
@@ -1656,7 +1672,7 @@ def _make_answer_fn(bot_id: str):
         # Tra tài liệu TRƯỚC rồi nhét vào prompt, thay vì trông vào việc model tự chịu mở file.
         # Lượt Tự đánh giá đã tra ở trên rồi, dùng lại kết quả đó chứ không quét đĩa lần hai.
         if tl is None:
-            tl = await _tra_tai_lieu(bot_id, cfg, text)
+            tl = await _tra_tai_lieu(bot_id, cfg, text, chat_id)
         cfg["_tai_lieu"] = tl
         cfg["_kenh_luot"] = kenh_luot
         cfg["_tu_dong"] = tu_dong
@@ -1725,6 +1741,18 @@ def _make_answer_fn(bot_id: str):
             out = {"text": "", "files": []}
 
         dap = (out or {}).get("text") or ""
+        # The Agent's own reaction (0.334.0, `[CAM_XUC:<name>]`): the marker always leaves the text, so it never reaches a
+        # customer; the reaction is kept only where the channel can put one. Rides along with every outcome below except
+        # a reply dropped as stale.
+        reaction = None
+        if not loi_ky_thuat and dap:
+            dap, reaction = bot_reaction.pick(dap)
+            out = dict(out or {})
+            out["text"] = dap
+        if not loi_ky_thuat and not reaction and rp_dec is not None:
+            reaction = rp_dec.reaction or None       # the judge chose one when it let the bot speak
+        if kenh_luot not in bot_reaction.CHANNELS:
+            reaction = None
         # Bot TỰ QUYẾT im lặng (được dạy ở Zalo cá nhân và ở lượt Tự đánh giá, xem _CAU_ZALO_CA_NHAN
         # và _CAU_NHOM_TU_DONG). Đây không phải lượt "bí" và cũng không phải lượt lỗi: bot hiểu
         # tin nhắn và chọn không nhân danh chủ trả lời. Ghi vào nhật ký để chủ soi lại được, nhưng
@@ -1744,7 +1772,7 @@ def _make_answer_fn(bot_id: str):
                 "chuyen_nguoi": rang, "bi": False,
                 "muc_quyen": cfg.get("muc_quyen") or "suggest",
             })
-            return {"text": "", "files": [], "im_lang": True, "bao_chu": True}
+            return {"text": "", "files": [], "im_lang": True, "bao_chu": True, "reaction": reaction}
         if not loi_ky_thuat and IM_LANG.lower() in dap.lower():
             _rp_retract(rp_dec, "agent_silent")
             _BI_LIEN_TIEP[(bot_id, chat_id)] = 0
@@ -1756,7 +1784,20 @@ def _make_answer_fn(bot_id: str):
                 "chuyen_nguoi": False, "bi": False,
                 "muc_quyen": cfg.get("muc_quyen") or "suggest",
             })
-            return {"text": "", "files": [], "im_lang": True}
+            return {"text": "", "files": [], "im_lang": True, "reaction": reaction}
+        if not loi_ky_thuat and reaction and not dap.strip() and not (out or {}).get("files"):
+            # Only a reaction, no words (0.334.0): the customer gets the reaction, nothing else is sent.
+            _rp_retract(rp_dec, "agent_silent")
+            _BI_LIEN_TIEP[(bot_id, chat_id)] = 0
+            chatbot_log.ghi(bot_id, {
+                "chat_id": chat_id, "chat_type": (meta or {}).get("chat_type"),
+                "user_name": (meta or {}).get("user_name"), "hoi": text,
+                "dap": f"(bot chỉ thả cảm xúc {bot_reaction.emoji_of(reaction)})", "loi": "", "bo_qua": "bot_reacted_only",
+                "co_tai_lieu": bool(tl.get("co")), "nguon": tl.get("nguon"),
+                "chuyen_nguoi": False, "bi": False,
+                "muc_quyen": cfg.get("muc_quyen") or "suggest",
+            })
+            return {"text": "", "files": [], "im_lang": True, "reaction": reaction}
         # Zalo chat riêng: khách đã nhắn thêm chữ trong lúc bot soạn thì câu này là CŨ (0.172.0). Không gửi, không vào
         # Hộp thư như lời bot nói; lượt kế tiếp đọc cả tin mới lẫn tin của lượt này và trả lời một lần.
         if not loi_ky_thuat and dap and _luot_cu(meta):
@@ -1844,6 +1885,9 @@ def _make_answer_fn(bot_id: str):
                                    f"Latest: {str(text)[:200]}"))
         if loi_ky_thuat:
             return {"text": "", "files": [], "im_lang": True}
+        if reaction:
+            out = dict(out or {})
+            out["reaction"] = reaction
         return out
     return _answer
 
@@ -1923,7 +1967,7 @@ async def manual_answer(conv: dict, msgs: list, draft: bool = False) -> dict:
             print(f"[chatbot {bot_id}] đọc phiên cho bản nháp lỗi: {type(e).__name__}", file=sys.stderr)
     try:
         text = chu_khach
-        tl = await _tra_tai_lieu(bot_id, cfg, text)
+        tl = await _tra_tai_lieu(bot_id, cfg, text, meta["chat_id"])
         _aid, kenh = _tai_khoan_cua(cfg, meta)
         cfg["_tai_lieu"], cfg["_kenh_luot"], cfg["_tu_dong"] = tl, kenh, False
         cfg["_ngu_canh_nhom"] = ngu_canh_nhom(meta, kenh, _aid)

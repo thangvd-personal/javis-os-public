@@ -63,6 +63,10 @@
   var _items = [], _stats = {}, _dauVet = "";
   var _kenhLoc = "", _botLoc = "", _tkLoc = "", _q = "";
   var _statusLoc = "", _typeLoc = "";   // bộ lọc dropdown (0.65.3), lưu ở trình duyệt qua JavisConvFilters
+  var _tagLoc = "";         // 2026-10-25: tag filter (tag id), saved the same way
+  var _contactLoc = "";     // 2026-10-25: "1" = only chats where the customer left a phone number or email
+  var _tags = [];           // the owner's inbox tags [{id, name, color, count}], from the list endpoint
+  var _tagPop = false, _tagEdit = 0, _tagNewColor = "green", _tagErr = "";   // thread tag picker: open, tag being edited, new tag colour, last error
   var _facets = null, _botList = [];    // số đếm cho dropdown và các bot có hội thoại (server cấp, toàn hòm thư)
   var _chon = null;         // id hội thoại đang mở
   var _msgs = [], _conv = null, _dauVetTin = "", _silence = null;   // _silence: vì sao bot im ở tin khách cuối
@@ -147,6 +151,7 @@
     veTabs();
     veTab();
     nhip();
+    watchTagOutside();
   }
 
   function veTabs() {
@@ -178,6 +183,7 @@
   function veTab() {
     var body = _host && _host.querySelector(".ht-tab-body");
     if (!body) return;
+    closeRowMenu(false);
     body.innerHTML = "";
     if (_tab === "bot") return renderBot(body);
     return renderInbox(body);
@@ -186,7 +192,7 @@
   function nhip() {
     if (_timer) clearInterval(_timer);
     _timer = setInterval(function () {
-      if (!_host || !document.body.contains(_host)) { clearInterval(_timer); _timer = null; return; }
+      if (!_host || !document.body.contains(_host)) { clearInterval(_timer); _timer = null; closeRowMenu(false); return; }
       if (document.hidden || document.querySelector(".ht-modal")) return;
       if (_tab === "inbox") {
         tai(true);
@@ -232,21 +238,31 @@
       // Mở từ nơi khác (nút trên thẻ bot, mục Kênh chưa có bot): lọc đúng thứ được chỉ, bỏ tình trạng và loại đã lưu để
       // khỏi giấu mất hội thoại người ta muốn xem.
       _botLoc = _cho.bot_id || ""; _kenhLoc = _cho.channel || ""; _tkLoc = _cho.account_key || "";
-      _statusLoc = ""; _typeLoc = "";
+      _statusLoc = ""; _typeLoc = ""; _tagLoc = ""; _contactLoc = ""; _q = "";
       _cho = null;
       saveFilters();
     } else if (window.JavisConvFilters) {
       var saved = window.JavisConvFilters.load();
       _botLoc = saved.bot; _statusLoc = saved.status; _typeLoc = saved.type; _kenhLoc = saved.channel;
+      _tagLoc = saved.tag; _contactLoc = saved.contact;
     }
     body.innerHTML =
       '<div class="ht-wrap">' +
         '<div class="ht-bar">' +
           '<input class="ht-search" placeholder="' + esc(window.t("ht.tim_ph")) + '">' +
+          // Phones: the filters fold behind this one button so the chat list keeps the screen (owner, 2026-10-25).
+          // Wide screens never show it; there the panel below is just part of the row (display: contents).
+          '<button type="button" class="ht-fbtn" aria-expanded="false">' + ic("sliders-horizontal") + ' ' +
+            esc(window.t("ht.f_btn")) + '<span class="ht-fbtn-n" hidden></span></button>' +
+          '<div class="ht-fpanel">' +
           '<select class="ht-f ht-f-bot" aria-label="' + esc(window.t("ht.f_aria_bot")) + '"></select>' +
           '<select class="ht-f ht-f-status" aria-label="' + esc(window.t("ht.f_aria_status")) + '"></select>' +
           '<select class="ht-f ht-f-type" aria-label="' + esc(window.t("ht.f_aria_type")) + '"></select>' +
           '<select class="ht-f ht-f-channel" aria-label="' + esc(window.t("ht.f_aria_kenh")) + '" hidden></select>' +
+          '<select class="ht-f ht-f-tag" aria-label="' + esc(window.t("ht.f_aria_tag")) + '" hidden></select>' +
+          '<button type="button" class="ht-f ht-f-contact" aria-pressed="false">' + ic("phone") +
+            '<span class="ht-f-contact-t"></span></button>' +
+          '</div>' +
         '</div>' +
         '<div class="ht-body">' +
           // Dòng đếm và chip lọc nằm ngay trên danh sách mà chúng nói về, không chiếm cả một hàng suốt bề ngang (0.65.10).
@@ -263,19 +279,38 @@
         '</div>' +
       '</div>';
     var s = body.querySelector(".ht-search");
+    // The query lives in `_q`, which outlives this box: the inbox is rebuilt on every tab or page switch. Put it back in
+    // the new box, or the list stays filtered by a search nobody can see and "clearing" the empty box does nothing
+    // (owner, 2026-10-25: "1 hội thoại" stuck after searching).
+    s.value = _q;
     s.oninput = function () { _q = s.value.trim(); tai(); };
     body.querySelector(".ht-f-bot").onchange = function (e) { _botLoc = e.target.value; onFilterChange(); };
     body.querySelector(".ht-f-status").onchange = function (e) { _statusLoc = e.target.value; onFilterChange(); };
     body.querySelector(".ht-f-type").onchange = function (e) { _typeLoc = e.target.value; onFilterChange(); };
     body.querySelector(".ht-f-channel").onchange = function (e) { _kenhLoc = e.target.value; onFilterChange(); };
+    body.querySelector(".ht-f-tag").onchange = function (e) { _tagLoc = e.target.value; onFilterChange(); };
+    body.querySelector(".ht-f-contact").onclick = function () { _contactLoc = _contactLoc ? "" : "1"; onFilterChange(); };
+    var fbtn = body.querySelector(".ht-fbtn"), fpanel = body.querySelector(".ht-fpanel");
+    function setPanel(open) {
+      fpanel.classList.toggle("open", open);
+      fbtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    fbtn.onclick = function () { setPanel(!fpanel.classList.contains("open")); };
+    // A tap anywhere outside the bar (the list, a chat) folds the panel away again.
+    body.addEventListener("click", function (e) {
+      if (fpanel.classList.contains("open") && !body.querySelector(".ht-bar").contains(e.target)) setPanel(false);
+    });
     body.querySelector(".ht-fclear").onclick = function () {
-      _botLoc = _statusLoc = _typeLoc = _kenhLoc = _tkLoc = "";
+      _botLoc = _statusLoc = _typeLoc = _kenhLoc = _tkLoc = _tagLoc = _contactLoc = "";
       onFilterChange();
     };
+    attachListResize(body);
     taiTK(false).catch(function () {}).then(function () { tai(); if (_chon) taiTin(false); });
   }
 
-  function filterState() { return { bot: _botLoc, status: _statusLoc, type: _typeLoc, channel: _kenhLoc }; }
+  function filterState() {
+    return { bot: _botLoc, status: _statusLoc, type: _typeLoc, channel: _kenhLoc, tag: _tagLoc, contact: _contactLoc };
+  }
   function saveFilters() { if (window.JavisConvFilters) window.JavisConvFilters.save(filterState()); }
   function onFilterChange() { saveFilters(); tai(); }
 
@@ -339,8 +374,9 @@
       _stats = d.stats || {};
       _facets = d.facets || null;
       _botList = d.bots || [];
+      if (d.tags) _tags = d.tags;
       if (d.channels) _kenhDS = d.channels;
-      var vet = JSON.stringify([_items, _stats, _facets, _botList, _conDS]);
+      var vet = JSON.stringify([_items, _stats, _facets, _botList, _conDS, _tags]);
       if (im && vet === _dauVet) return;
       _dauVet = vet;
     } catch (e) {
@@ -381,7 +417,7 @@
 
   // Bộ lọc dropdown (0.65.3): một hàng chung với ô tìm, số đếm nằm trong từng lựa chọn (chip chiếm quá nhiều chỗ khi
   // chạy nhiều bot). Phần dựng chuỗi <option> nằm ở conversations-filters.js.
-  var FILTER_SEL = { bot: ".ht-f-bot", status: ".ht-f-status", type: ".ht-f-type", channel: ".ht-f-channel" };
+  var FILTER_SEL = { bot: ".ht-f-bot", status: ".ht-f-status", type: ".ht-f-type", channel: ".ht-f-channel", tag: ".ht-f-tag" };
 
   function paintFilters() {
     var F = window.JavisConvFilters;
@@ -392,6 +428,7 @@
       status: F.statusOptions(_facets, st.status),
       type: F.typeOptions(_facets, st.type),
       channel: F.channelOptions(_stats.theo_kenh || {}, st.channel, nhanKenh),
+      tag: F.tagOptions(_tags, st.tag),
     };
     Object.keys(FILTER_SEL).forEach(function (k) {
       var sel = _host.querySelector(FILTER_SEL[k]);
@@ -407,7 +444,19 @@
     // Kênh chỉ đáng có khi hòm thư có từ 2 kênh (hoặc đang lọc theo một kênh).
     var ch = _host.querySelector(FILTER_SEL.channel);
     if (ch) ch.hidden = Object.keys(_stats.theo_kenh || {}).length < 2 && !st.channel;
+    // Tag dropdown only once the owner has made a tag (they make them from a conversation's tag button).
+    var tg = _host.querySelector(FILTER_SEL.tag);
+    if (tg) tg.hidden = !_tags.length && !st.tag;
+
+    var ct = _host.querySelector(".ht-f-contact");
+    if (ct) {
+      ct.querySelector(".ht-f-contact-t").textContent = F.contactLabel(_facets);
+      ct.setAttribute("aria-pressed", st.contact ? "true" : "false");
+      ct.classList.toggle("on", !!st.contact);
+    }
     var active = F.activeCount(st) + (_tkLoc ? 1 : 0);
+    var fn = _host.querySelector(".ht-fbtn-n");
+    if (fn) { fn.textContent = String(active); fn.hidden = !active; }
     var cnt = _host.querySelector(".ht-fcount");
     if (cnt) cnt.textContent = window.t(active ? "ht.f_count_f" : "ht.f_count",
       { n: _items.length + (_conDS ? "+" : ""), f: active });
@@ -428,9 +477,10 @@
     var box = _host.querySelector(".ht-list");
     if (!box) return;
     if (!_items.length) {
+      closeRowMenu(false);
       var coNguon = _tk.some(function (a) { return a.ghi; });
       box.innerHTML = '<div class="ht-empty">' + ic("messages-square") +
-        '<b>' + esc(_q || _kenhLoc || _botLoc || _tkLoc || _statusLoc || _typeLoc ? window.t("ht.khong_khop") : window.t("ht.chua_co")) +
+        '<b>' + esc(_q || _kenhLoc || _botLoc || _tkLoc || _statusLoc || _typeLoc || _tagLoc || _contactLoc ? window.t("ht.khong_khop") : window.t("ht.chua_co")) +
           (!coNguon ? infoBtn() : "") + '</b>' +
         // Where messages come from opens from (i); the button to add an account stays visible (0.214.0).
         (!coNguon ? infoBody(esc(window.t("ht.chua_co_goi_y"))) +
@@ -441,6 +491,13 @@
       return;
     }
     var F = window.JavisConvFilters;
+    // The redraw (5-second refresh, a menu action) must not drop the keyboard focus: note which row and which control
+    // held it, put it back afterwards.
+    var ae = document.activeElement, keep = null;
+    if (ae && box.contains(ae) && ae.closest) {
+      var fr = ae.closest(".ht-item");
+      if (fr) keep = { id: fr.dataset.id, sel: ae.classList.contains("ht-rmore") ? ".ht-rmore" : ae.classList.contains("ht-pin") ? ".ht-pin" : "" };
+    }
     box.innerHTML = _items.map(function (c) {
       var ten = c.title || c.customer_name || c.external_chat_id;
       var ai = c.last_sender_type === "ai" ? window.t("ht.bot") + ": "
@@ -453,14 +510,28 @@
       if (c.mode === "human") tags.push('<span class="ht-mode">' + esc(window.t("ht.mode_human")) + '</span>');
       else if (c.need_reply) tags.push('<span class="ht-need">' + esc(window.t("ht.tag_need")) + '</span>');
       // Nút ghim (0.223.0) là <span role=button>: cả hàng đã là một <button>, nút lồng trong nút là HTML sai.
+      // Since the row menu (2026-10-25) pinning lives in "...": only a PINNED row shows its pin (click it to unpin), so
+      // unpinned rows stay clean like Zalo's. The "..." is a <span role=button> for the same reason as the pin.
+      // The owner's tags (2026-10-25): their own line under the preview, two chips then "+N" (Pancake's list row).
+      var userTags = (F && c.tags && c.tags.length) ? '<span class="ht-item-utags">' + F.tagChips(c.tags, 2) + '</span>' : "";
       return '<button type="button" class="ht-item' + (c.id === _chon ? " on" : "") +
-          (c.unread_count ? " unread" : "") + (c.pinned ? " ghim" : "") + '" data-id="' + c.id + '">' +
+          (c.unread_count ? " unread" : "") + (c.pinned ? " ghim" : "") + (c.hidden ? " hid" : "") +
+          (_rm && _rm.id === c.id ? " menu-on" : "") + '" data-id="' + c.id + '">' +
         '<span class="ht-item-ic">' + (c.chat_type === "group" ? ic("users") : ic("user-round")) + '</span>' +
+        // Only shown while the column is dragged into a strip (.ht-mini): the first letter, and a dot for unread.
+        '<span class="ht-item-ava" aria-hidden="true">' + esc(String(ten || "?").trim().charAt(0).toUpperCase() || "?") +
+          (c.unread_count ? '<span class="ht-item-ava-dot"></span>' : "") + '</span>' +
         '<span class="ht-item-text">' +
           '<span class="ht-item-top"><strong>' + esc(ten) + '</strong>' +
+            (c.contact ? '<span class="ht-has-contact" title="' + esc(window.t("ht.contact_left", { v: c.contact })) + '">' +
+              ic(c.contact.indexOf("@") > 0 ? "mail" : "phone") + '</span>' : "") +
+            (c.hidden ? '<span class="ht-hid-mark" title="' + esc(window.t("ht.rm_hidden_mark")) + '">' + ic("eye-off") + '</span>' : "") +
+            (c.pinned ? '<span class="ht-pin on" role="button" tabindex="0" title="' + esc(window.t("proj.pin_off")) + '" aria-label="' +
+              esc(window.t("proj.pin_off")) + '">' + ic("pin") + '</span>' : "") +
             '<small class="ht-item-time">' + esc(gio(c.last_message_at)) + '</small>' +
-            '<span class="ht-pin' + (c.pinned ? " on" : "") + '" role="button" tabindex="0" title="' +
-              esc(c.pinned ? window.t("proj.pin_off") : window.t("sess.pin_top")) + '">' + ic("pin") + '</span></span>' +
+            '<span class="ht-rmore" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="' + !!(_rm && _rm.id === c.id) +
+              '" aria-label="' + esc(window.t("ht.rm_more", { name: ten })) + '" title="' + esc(window.t("ht.rm_more_short")) + '">' +
+              ic("ellipsis") + '</span></span>' +
           (tags.length ? '<span class="ht-item-tags">' + tags.join("") + '</span>' : "") +
           '<span class="ht-item-sub">' + logoKenh(c.channel) +
             '<small>' + esc(ai + (window.JavisHtMedia ? window.JavisHtMedia.tomTat(c.last_message || "", window.t)
@@ -470,18 +541,30 @@
               esc(window.t("sess.msgs", { count: c.message_count })) + '</span>' : "") +
             (c.unread_count ? '<span class="ht-badge" title="' + esc(window.t("ht.chua_doc_title", { count: c.unread_count })) + '">' +
               c.unread_count + '</span>' : "") +
-          '</span>' +
+          '</span>' + userTags +
         '</span></button>';
     }).join("") + (_conDS ? '<div class="ht-more"><button type="button" class="s-btn-ghost ht-more-b">' +
                             esc(window.t("ht.xem_them")) + '</button></div>' : "");
     box.querySelectorAll(".ht-item").forEach(function (x) {
       x.onclick = function (e) {
         if (e.target && e.target.closest && e.target.closest(".ht-pin")) { e.stopPropagation(); ghim(x); return; }
+        // The "..." opens the row menu and never the conversation.
+        if (e.target && e.target.closest && e.target.closest(".ht-rmore")) { e.stopPropagation(); toggleRowMenu(x, false); return; }
         mo(parseInt(x.dataset.id, 10));
       };
       var p = x.querySelector(".ht-pin");
       if (p) p.onkeydown = function (e) {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); ghim(x); }
+      };
+      var more = x.querySelector(".ht-rmore");
+      if (more) more.onkeydown = function (e) {
+        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); toggleRowMenu(x, true); }
+      };
+      // Right click (and a long press, where the phone browser reports it as a context menu) opens the same menu.
+      x.oncontextmenu = function (e) { e.preventDefault(); openRowMenu(x, false); };
+      // Keyboard: the context-menu key or Shift+F10 on a focused row.
+      x.onkeydown = function (e) {
+        if (e.target === x && (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); openRowMenu(x, true); }
       };
     });
     // Còn trang sau: nút Xem thêm ở cuối, và tự tải khi cuộn gần tới đáy. Dùng sự kiện cuộn chứ không dùng IntersectionObserver: callback của
@@ -490,6 +573,13 @@
     if (them) them.querySelector(".ht-more-b").onclick = taiThem;
     box.onscroll = function () { if (_conDS && box.scrollHeight - box.scrollTop - box.clientHeight < 240) taiThem(); };
     if (_conDS && box.clientHeight > 0 && box.scrollHeight <= box.clientHeight + 40) taiThem();       // 40 dòng chưa đủ cao để cuộn (màn rất cao): tải tiếp; clientHeight 0 = đang ẩn, chưa đo được
+    if (keep) {
+      var kr = box.querySelector('.ht-item[data-id="' + keep.id + '"]');
+      var kt = kr && (keep.sel ? kr.querySelector(keep.sel) : kr);
+      if (kt) { try { kt.focus({ preventScroll: true }); } catch (e) { kt.focus(); } }
+    }
+    // An open row menu survives the redraw; its row may have left the list (hidden on another device): then it closes.
+    if (_rm) { if (!rmAnchor()) closeRowMenu(false); else placeRowMenu(); }
   }
 
   // Ghim một cuộc chat lên đầu hòm thư (0.223.0). Server xếp cuộc đã ghim trước, nên chỉ cần tải lại danh sách.
@@ -503,8 +593,278 @@
     tai(true);
   }
 
+  // ---------------------------------------------------------------- the "..." menu of a row (2026-10-25)
+  // Owner, from Zalo's row menu: mark unread/read, pin/unpin, tags, who replies (bot or me), hide/unhide, and copy the
+  // phone or email the customer left, all without opening the chat. Desktop: a small menu anchored under the row's
+  // "..."; phones (<= 640px): a bottom sheet with large rows. One element on <body>, so the list's own scrolling does not
+  // clip it and the 5-second refresh, which redraws the rows, never closes it (the row keeps .menu-on across redraws).
+  // What the menu offers is pure data in conversations-filters.js (rowMenuItems / rowMenuHtml / tagMenuHtml).
+  var _rm = null;           // open menu: {id, view: "main" | "tags" | "copy", done, err, kb}
+  var PHONE_MQ = "(max-width: 640px)";
+  function isPhone() { try { return window.matchMedia(PHONE_MQ).matches; } catch (e) { return false; } }
+  function rmItem(id) { return _items.filter(function (k) { return k.id === id; })[0] || (_conv && _conv.id === id ? _conv : null); }
+  function rmEl() { return document.getElementById("htRowMenu"); }
+  function rmAnchor() {
+    var row = _host && _rm && _host.querySelector('.ht-item[data-id="' + _rm.id + '"]');
+    return row ? (row.querySelector(".ht-rmore") || row) : null;
+  }
+
+  function toggleRowMenu(row, kb) {
+    var id = parseInt(row.dataset.id, 10);
+    if (_rm && _rm.id === id) return closeRowMenu(true);
+    openRowMenu(row, kb);
+  }
+
+  function openRowMenu(row, kb) {
+    var id = parseInt(row.dataset.id, 10);
+    if (!rmItem(id)) return;
+    closeRowMenu(false);
+    _rm = { id: id, view: "main", done: "", err: "", kb: !!kb };
+    markRowMenu();
+    paintRowMenu(true);
+    watchRowMenuOutside();
+  }
+
+  // `refocus`: put the keyboard back on the row's "..." (Escape, or the "..." clicked again).
+  function closeRowMenu(refocus) {
+    var m = rmEl(), bg = document.getElementById("htRowMenuBg");
+    if (m) m.parentNode.removeChild(m);
+    if (bg) bg.parentNode.removeChild(bg);
+    if (!_rm) return;
+    var a = refocus ? rmAnchor() : null;
+    _rm = null;
+    markRowMenu();
+    if (a && a.focus) a.focus();
+  }
+
+  // The open row keeps its "..." showing (and its time hidden) while the menu is open.
+  function markRowMenu() {
+    if (!_host) return;
+    _host.querySelectorAll(".ht-item").forEach(function (x) {
+      var on = !!(_rm && String(_rm.id) === x.dataset.id);
+      x.classList.toggle("menu-on", on);
+      var b = x.querySelector(".ht-rmore");
+      if (b) b.setAttribute("aria-expanded", String(on));
+    });
+  }
+
+  function paintRowMenu(focusFirst) {
+    var F = window.JavisConvFilters, c = _rm && rmItem(_rm.id);
+    if (!F || !c) return closeRowMenu(false);
+    var phone = isPhone();
+    var m = rmEl();
+    if (!m) {
+      m = document.createElement("div");
+      m.id = "htRowMenu";
+      m.addEventListener("click", onRowMenuClick);
+      m.addEventListener("keydown", onRowMenuKey);
+      document.body.appendChild(m);
+    }
+    if (phone && !document.getElementById("htRowMenuBg")) {
+      var bg = document.createElement("div");
+      bg.id = "htRowMenuBg";
+      bg.className = "ht-rsheet-bg";
+      bg.onclick = function () { closeRowMenu(false); };
+      document.body.insertBefore(bg, m);
+    }
+    var ten = c.title || c.customer_name || c.external_chat_id || "";
+    var body;
+    if (_rm.view === "tags") body = F.tagMenuHtml(_tags, c.tags || [], ic);
+    else if (_rm.view === "copy") {
+      // No clipboard access (plain http on a VPS address): show the value selected, ready to copy by hand.
+      body = '<div class="ht-rm-copy"><div>' + esc(window.t("ht.rm_copy_manual")) + '</div>' +
+        '<input class="ht-rm-copyval" readonly value="' + esc(c.contact || "") + '" aria-label="' + esc(window.t(String(c.contact || "").indexOf("@") > 0 ? "ht.rm_copy_email" : "ht.rm_copy_phone")) + '"></div>';
+    } else body = F.rowMenuHtml(F.rowMenuItems(c), ic, _rm.done);
+    m.className = "ht-rmenu" + (phone ? " ht-rsheet" : "");
+    m.setAttribute("role", "menu");
+    m.setAttribute("aria-label", window.t("ht.rm_menu", { name: ten }));
+    m.innerHTML = (phone ? '<div class="ht-rsheet-h"><span class="ht-rsheet-grip" aria-hidden="true"></span><b>' + esc(ten) + '</b></div>' : "") +
+      body + (_rm.err ? '<div class="ht-rm-err" role="alert">' + ic("triangle-alert") + ' <span>' + esc(_rm.err) + '</span></div>' : "");
+    placeRowMenu();
+    var cv = m.querySelector(".ht-rm-copyval");
+    if (cv) { cv.focus(); cv.select(); return; }
+    if (focusFirst) {
+      var first = m.querySelector(".ht-rm-it");
+      // A mouse click leaves the focus where it is (no ring on the first row); keyboard and phones move into the menu.
+      if (first && (_rm.kb || phone)) first.focus();
+      else if (m.focus) { m.tabIndex = -1; m.focus(); }
+    }
+  }
+
+  // Desktop: under the "...", right edges aligned; flips above when there is no room below; always inside the window.
+  function placeRowMenu() {
+    var m = rmEl();
+    if (!m || !_rm) return;
+    if (m.classList.contains("ht-rsheet")) { m.style.left = m.style.top = ""; return; }
+    var a = rmAnchor();
+    if (!a) return;
+    var r = a.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight;
+    var w = m.offsetWidth, h = m.offsetHeight;
+    var left = Math.max(8, Math.min(r.right - w, vw - w - 8));
+    var top = r.bottom + 4;
+    if (top + h > vh - 8 && r.top - h - 4 >= 8) top = r.top - h - 4;
+    top = Math.max(8, Math.min(top, vh - h - 8));
+    m.style.left = left + "px";
+    m.style.top = top + "px";
+  }
+
+  var _rmOutside = false;
+  function watchRowMenuOutside() {
+    if (_rmOutside) return;
+    _rmOutside = true;
+    document.addEventListener("mousedown", function (ev) {
+      if (!_rm) return;
+      var m = rmEl();
+      if (m && m.contains(ev.target)) return;
+      // The same row's "..." toggles it shut through its own click.
+      var more = ev.target.closest && ev.target.closest(".ht-rmore");
+      if (more && more.closest(".ht-item") && more.closest(".ht-item").dataset.id === String(_rm.id)) return;
+      if (ev.target.id === "htRowMenuBg") return;
+      closeRowMenu(false);
+    }, true);
+    // The list scrolls under a desktop menu: keep it on its row. A resize may switch between menu and sheet.
+    document.addEventListener("scroll", function () { if (_rm) placeRowMenu(); }, true);
+    window.addEventListener("resize", function () { if (_rm) paintRowMenu(false); });
+  }
+
+  function onRowMenuKey(e) {
+    var m = rmEl();
+    if (!m) return;
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); return closeRowMenu(true); }
+    if (e.key === "Tab") { closeRowMenu(false); return; }
+    var its = [].slice.call(m.querySelectorAll(".ht-rm-it"));
+    if (!its.length) return;
+    var i = its.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); its[(i + 1) % its.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); its[(i - 1 + its.length) % its.length].focus(); }
+    else if (e.key === "Home") { e.preventDefault(); its[0].focus(); }
+    else if (e.key === "End") { e.preventDefault(); its[its.length - 1].focus(); }
+    else if (e.key === "ArrowRight" && document.activeElement && document.activeElement.dataset.act === "tags") { e.preventDefault(); document.activeElement.click(); }
+    else if (e.key === "ArrowLeft" && _rm && _rm.view === "tags") { e.preventDefault(); _rm.view = "main"; _rm.kb = true; paintRowMenu(true); }
+  }
+
+  function onRowMenuClick(e) {
+    var b = e.target.closest && e.target.closest(".ht-rm-it");
+    if (!b || !_rm) return;
+    e.stopPropagation();
+    var act = b.dataset.act, id = _rm.id;
+    _rm.err = "";
+    if (act === "tags") { _rm.view = "tags"; _rm.kb = true; return paintRowMenu(true); }
+    if (act === "back") { _rm.view = "main"; _rm.kb = true; return paintRowMenu(true); }
+    if (act === "tag") return menuToggleTag(id, parseInt(b.dataset.tag, 10), b);
+    if (act === "tag_new") return menuNewTag(id);
+    if (act === "copy") return menuCopy(id);
+    runRowAction(id, act);
+  }
+
+  function menuFail(id, err) {
+    if (!_rm || _rm.id !== id) return;
+    _rm.err = window.t("ht.rm_err", { err: err });
+    paintRowMenu(false);
+  }
+
+  // Every change updates the row in place first (no flicker), then the list reloads quietly for order and counts.
+  async function runRowAction(id, act) {
+    var c = rmItem(id);
+    if (!c) return closeRowMenu(false);
+    try {
+      if (act === "read") {
+        await api("/conversations/" + id + "/read", { method: "POST" });
+        c.unread_count = 0;
+      } else if (act === "unread") {
+        await api("/conversations/" + id + "/unread", { method: "POST" });
+        c.unread_count = Math.max(1, c.unread_count || 0);
+      } else if (act === "pin" || act === "unpin") {
+        await api("/conversations/" + id + "/pin", { method: "POST", body: fd({ pinned: act === "pin" ? "1" : "0" }) });
+        c.pinned = act === "pin" ? 1 : 0;
+      } else if (act === "hide" || act === "unhide") {
+        await api("/conversations/" + id + "/hide", { method: "POST", body: fd({ hidden: act === "hide" ? "1" : "0" }) });
+        c.hidden = act === "hide" ? 1 : 0;
+        // Leaves the list it no longer belongs to: hidden out of the normal list, unhidden out of the "Hidden" filter.
+        // A search shows both, so there the row stays and only its eye mark changes.
+        if (!_q) _items = _items.filter(function (k) { return k.id !== id || (_statusLoc === "hidden") === !!k.hidden; });
+      } else if (act === "mode_ai" || act === "mode_human") {
+        var mode = act === "mode_ai" ? "ai" : "human";
+        if ((c.mode === "human") === (mode === "human")) return closeRowMenu(true);
+        await api("/conversations/" + id + "/mode", { method: "POST", body: fd({ mode: mode }) });
+        c.mode = mode;
+        if (_conv && _conv.id === id) { _conv.mode = mode; _dauVetTin = ""; taiTin(false); }
+      } else return;
+    } catch (e) { return menuFail(id, e.message); }
+    closeRowMenu(!!(_rm && _rm.kb));       // keyboard users land back on the row's "..."
+    _dauVet = "";
+    veDanhSach();
+    tai(true);
+  }
+
+  async function menuToggleTag(convId, tagId, btn) {
+    var c = rmItem(convId);
+    if (!c || !tagId) return;
+    var on = !(c.tags || []).some(function (g) { return g.id === tagId; });
+    try {
+      var d = await api("/conversations/" + convId + "/tags", { method: "POST", body: fd({ tag_id: tagId, on: on ? "1" : "0" }) });
+      _items.forEach(function (it) { if (it.id === convId) it.tags = d.tags || []; });
+      if (_conv && _conv.id === convId) { _conv.tags = d.tags || []; _vetMeta = metaSig(); veTagRow(); }
+    } catch (e) { return menuFail(convId, e.message); }
+    // Several tags in a row: the menu stays open on the same row, keyboard focus too.
+    if (_rm && _rm.id === convId) {
+      var tag = btn && btn.dataset.tag;
+      paintRowMenu(false);
+      var again = tag && rmEl() && rmEl().querySelector('.ht-rm-tag[data-tag="' + tag + '"]');
+      if (again) again.focus();
+    }
+    _dauVet = "";
+    veDanhSach();
+    tai(true);
+  }
+
+  // New tags are made in the conversation's own Tag picker (name + colour): open the chat with the picker showing.
+  async function menuNewTag(convId) {
+    closeRowMenu(false);
+    await mo(convId);
+    _tagPop = true; _tagEdit = 0; _tagErr = "";
+    veTagRow();
+    var n = _host && _host.querySelector(".ht-tagpop-nname");
+    if (n) n.focus();
+  }
+
+  // Clipboard API first (needs https or localhost), then the old select + execCommand path, then the value shown
+  // selected so it can be copied by hand.
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+    } catch (e) { /* fall through */ }
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;font-size:16px;";
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      var ok = !!(document.execCommand && document.execCommand("copy"));
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  async function menuCopy(id) {
+    var c = rmItem(id);
+    if (!c || !c.contact) return;
+    var ok = await copyText(String(c.contact));
+    if (!_rm || _rm.id !== id) return;
+    if (!ok) { _rm.view = "copy"; return paintRowMenu(false); }
+    _rm.done = "copy";
+    paintRowMenu(false);
+    var b = rmEl() && rmEl().querySelector('.ht-rm-it[data-act="copy"]');
+    if (b) b.focus();
+    setTimeout(function () { if (_rm && _rm.id === id && _rm.done === "copy") closeRowMenu(true); }, 1100);
+  }
+
   // ---------------------------------------------------------------- một hội thoại
   async function mo(id) {
+    closeRowMenu(false);
+    if (id !== _chon) { _tagPop = false; _tagEdit = 0; _tagErr = ""; }
     _chon = id;
     _dauVetTin = "";
     _actNote = null;
@@ -567,6 +927,7 @@
   function metaSig() {
     var c = _conv || {}, u = _msgs[_msgs.length - 1] || {};
     return JSON.stringify([c.id, c.mode, c.bot_id, c.bot_name, c.title, c.customer_name, c.channel, c.chat_type, c.account_name,
+      c.tags || [], c.contact || "",
       _silence, _running, u.sender_type, _msgs.some(function (m) { return m.sender_type === "customer" && (m.text || "").trim(); })]);
   }
 
@@ -656,11 +1017,13 @@
             '</div>'
           : "") +
       '</div>' +
+      '<div class="ht-tagrow"></div>' +
       '<div class="ht-msgs">' + nutTinCu() + _msgs.map(veTin).join("") + renderSilenceLine(c) + '</div>' +
       (laBot ? renderStatusLine(c, human) + renderActions(c, human, guiDuoc) : "") +
       (guiDuoc ? veCompose(c, laBot, human) :
         '<div class="ht-foot">' + esc(window.t("ht.kenh_khong_gui", { kenh: nhanKenh(c.channel) })) + '</div>');
     box.querySelector(".ht-back").onclick = dongThread;
+    veTagRow();
     box.querySelectorAll(".ht-seg-b").forEach(function (b) {
       b.onclick = function () { if (b.dataset.m !== (human ? "human" : "ai")) doiMode(c.id, b.dataset.m); };
     });
@@ -683,6 +1046,237 @@
       };
       box.querySelector(".ht-send").onclick = function () { gui(c); };
     }
+  }
+
+  // ---------------------------------------------------------------- tags on a conversation (2026-10-25)
+  // Owner: "thêm tag khách hàng", like Pancake's coloured chips. Under the thread header: the phone/email the customer
+  // left (if any), this conversation's tags (x takes one off) and a "Tag" button opening the picker, where the owner puts
+  // tags on or off, makes a new one (name + colour from the fixed palette) and renames, recolours or deletes one. The
+  // row redraws on its own, so ticking several tags keeps the picker open.
+  function palette(cur) {
+    var F = window.JavisConvFilters;
+    return '<span class="ht-sws" role="group" aria-label="' + esc(window.t("ht.tag_colors")) + '">' + (F ? F.TAG_COLORS : []).map(function (k, i) {
+      return '<button type="button" class="ht-sw' + (k === cur ? " on" : "") + '" data-c="' + k + '" aria-pressed="' + (k === cur) +
+        '" aria-label="' + esc(window.t("ht.tag_color", { n: i + 1 })) + '"></button>';
+    }).join("") + '</span>';
+  }
+
+  function tagPopHtml(on) {
+    var F = window.JavisConvFilters;
+    var rows = _tags.map(function (g) {
+      if (_tagEdit === g.id) {
+        return '<div class="ht-tagpop-edit" data-id="' + g.id + '">' +
+          '<input class="ht-tagpop-ename" maxlength="40" value="' + esc(g.name) + '" aria-label="' + esc(window.t("ht.tag_name")) + '">' +
+          palette(_tagEditColor || g.color) +
+          '<span class="ht-tagpop-eacts">' +
+            '<button type="button" class="s-btn ht-tag-save">' + esc(window.t("common.save")) + '</button>' +
+            '<button type="button" class="s-btn-ghost ht-tag-cancel">' + esc(window.t("common.cancel")) + '</button>' +
+            '<button type="button" class="s-btn-ghost ht-tag-del">' + ic("trash-2") + ' ' + esc(window.t("common.delete")) + '</button>' +
+          '</span></div>';
+      }
+      return '<div class="ht-tagpop-row">' +
+        '<button type="button" class="ht-tag-pick' + (on[g.id] ? " on" : "") + '" data-id="' + g.id + '" aria-pressed="' + !!on[g.id] + '">' +
+          '<span class="ht-tag-check">' + (on[g.id] ? ic("check") : "") + '</span>' + F.tagChip(g) + '</button>' +
+        '<button type="button" class="ht-tag-edit" data-id="' + g.id + '" aria-label="' + esc(window.t("ht.tag_edit", { name: g.name })) +
+          '" title="' + esc(window.t("ht.tag_edit", { name: g.name })) + '">' + ic("pencil") + '</button></div>';
+    }).join("");
+    return '<div class="ht-tagpop" role="dialog" aria-label="' + esc(window.t("ht.tag_title")) + '">' +
+      '<div class="ht-tagpop-h"><b>' + esc(window.t("ht.tag_title")) + '</b>' + infoBtn() +
+        '<button type="button" class="ht-tag-close" aria-label="' + esc(window.t("common.close")) + '">' + ic("x") + '</button></div>' +
+      infoBody(esc(window.t("ht.tag_info"))) +
+      (rows ? '<div class="ht-tagpop-list">' + rows + '</div>' : '<div class="ht-tagpop-none">' + esc(window.t("ht.tag_none")) + '</div>') +
+      '<div class="ht-tagpop-new">' +
+        '<input class="ht-tagpop-nname" maxlength="40" placeholder="' + esc(window.t("ht.tag_new_ph")) + '" aria-label="' + esc(window.t("ht.tag_new_ph")) + '">' +
+        palette(_tagNewColor) +
+        '<button type="button" class="s-btn ht-tag-create">' + ic("plus") + ' ' + esc(window.t("ht.tag_add")) + '</button>' +
+      '</div>' +
+      (_tagErr ? '<div class="ht-tagpop-err">' + ic("triangle-alert") + ' <span>' + esc(_tagErr) + '</span></div>' : "") +
+    '</div>';
+  }
+
+  var _tagEditColor = "", _tagNewText = "", _tagEditText = null;   // picker colour being edited, and what is typed (kept across redraws)
+  function veTagRow() {
+    var row = _host && _host.querySelector(".ht-thread .ht-tagrow");
+    var F = window.JavisConvFilters;
+    if (!row || !_conv || !F) return;
+    var c = _conv, on = {};
+    (c.tags || []).forEach(function (g) { on[g.id] = true; });
+    var nOld = row.querySelector(".ht-tagpop-nname");
+    var focusNew = !!(nOld && document.activeElement === nOld);
+    row.innerHTML =
+      (c.contact ? '<span class="ht-contact" title="' + esc(window.t("ht.contact_left", { v: c.contact })) + '">' +
+        ic(c.contact.indexOf("@") > 0 ? "mail" : "phone") + ' <span>' + esc(c.contact) + '</span></span>' : "") +
+      (c.tags || []).map(function (g) {
+        return '<span class="ht-tag ht-tag-on" data-c="' + F.tagColor(g.color) + '" title="' + esc(g.name) + '"><span class="ht-tag-name">' +
+          esc(g.name) + '</span>' +
+          '<button type="button" class="ht-tag-x" data-id="' + g.id + '" aria-label="' + esc(window.t("ht.tag_remove", { name: g.name })) +
+          '" title="' + esc(window.t("ht.tag_remove", { name: g.name })) + '">' + ic("x") + '</button></span>';
+      }).join("") +
+      '<button type="button" class="ht-tag-add' + (_tagPop ? " on" : "") + '" aria-expanded="' + _tagPop + '">' + ic("tag") + ' <span>' +
+        esc(window.t("ht.tag_btn")) + '</span></button>' +
+      (_tagPop ? tagPopHtml(on) : "");
+    // What is typed lives in _tagNewText / _tagEditText, so the 5-second refresh redrawing the thread does not wipe it.
+    var n = row.querySelector(".ht-tagpop-nname");
+    if (n) { n.value = _tagNewText; n.oninput = function () { _tagNewText = n.value; }; if (focusNew) n.focus(); }
+    var e = row.querySelector(".ht-tagpop-ename");
+    if (e) { if (_tagEditText != null) e.value = _tagEditText; e.oninput = function () { _tagEditText = e.value; }; }
+    if (n) n.onkeydown = function (ev) {
+      if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); createTag(c.id); }
+    };
+    if (e) e.onkeydown = function (ev) {
+      if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); saveTag(_tagEdit); }
+    };
+    row.onkeydown = function (ev) { if (ev.key === "Escape" && _tagPop) { closeTagPop(); } };
+    row.onclick = function (ev) {
+      var b = ev.target.closest && ev.target.closest("button");
+      if (!b || !row.contains(b)) return;
+      var id = parseInt(b.dataset.id || "0", 10);
+      if (b.classList.contains("ht-tag-add")) { _tagPop = !_tagPop; _tagEdit = 0; _tagErr = ""; veTagRow(); }
+      else if (b.classList.contains("ht-tag-close")) closeTagPop();
+      else if (b.classList.contains("ht-tag-x")) setTag(c.id, id, false);
+      else if (b.classList.contains("ht-tag-pick")) setTag(c.id, id, !on[id]);
+      else if (b.classList.contains("ht-tag-edit")) {
+        var g = _tags.filter(function (x) { return x.id === id; })[0];
+        _tagEdit = id; _tagEditColor = g ? g.color : ""; _tagEditText = null; _tagErr = ""; veTagRow();
+        var en = row.querySelector(".ht-tagpop-ename"); if (en) en.focus();
+      }
+      else if (b.classList.contains("ht-tag-cancel")) { _tagEdit = 0; _tagErr = ""; veTagRow(); }
+      else if (b.classList.contains("ht-tag-save")) saveTag(_tagEdit);
+      else if (b.classList.contains("ht-tag-del")) deleteTag(_tagEdit);
+      else if (b.classList.contains("ht-tag-create")) createTag(c.id);
+      else if (b.classList.contains("ht-sw")) {
+        if (b.closest(".ht-tagpop-edit")) _tagEditColor = b.dataset.c; else _tagNewColor = b.dataset.c;
+        b.parentNode.querySelectorAll(".ht-sw").forEach(function (x) {
+          x.classList.toggle("on", x === b); x.setAttribute("aria-pressed", String(x === b));
+        });
+      }
+    };
+  }
+
+  function closeTagPop() {
+    _tagPop = false; _tagEdit = 0; _tagErr = "";
+    veTagRow();
+    var b = _host && _host.querySelector(".ht-tag-add");
+    if (b) b.focus();
+  }
+
+  // A click anywhere outside the tag row closes the picker (one listener for the page's life).
+  var _tagOutside = false;
+  function watchTagOutside() {
+    if (_tagOutside) return;
+    _tagOutside = true;
+    document.addEventListener("mousedown", function (ev) {
+      if (!_tagPop || !_host) return;
+      var row = _host.querySelector(".ht-thread .ht-tagrow");
+      if (row && !row.contains(ev.target)) { _tagPop = false; _tagEdit = 0; _tagErr = ""; veTagRow(); }
+    });
+  }
+
+  // After the tag list changed (made, renamed, recoloured, deleted): the open conversation's chips follow the new names
+  // and colours, the list reloads for the row chips and counts.
+  function tagsChanged(tags) {
+    _tags = tags || _tags;
+    var by = {};
+    _tags.forEach(function (g) { by[g.id] = g; });
+    if (_conv && _conv.tags) {
+      _conv.tags = _conv.tags.filter(function (g) { return by[g.id]; }).map(function (g) {
+        return { id: g.id, name: by[g.id].name, color: by[g.id].color };
+      });
+    }
+    if (_tagLoc && !by[_tagLoc]) { _tagLoc = ""; saveFilters(); }
+    _vetMeta = metaSig();
+    veTagRow();
+    tai(true);
+  }
+
+  async function setTag(convId, tagId, on) {
+    _tagErr = "";
+    try {
+      var d = await api("/conversations/" + convId + "/tags", { method: "POST", body: fd({ tag_id: tagId, on: on ? "1" : "0" }) });
+      if (_conv && _conv.id === convId) { _conv.tags = d.tags || []; _vetMeta = metaSig(); }
+      _items.forEach(function (it) { if (it.id === convId) it.tags = d.tags || []; });
+    } catch (e) { _tagErr = e.message; }
+    veTagRow();
+    veDanhSach();
+    tai(true);
+  }
+
+  async function createTag(convId) {
+    var n = _host && _host.querySelector(".ht-tagpop-nname");
+    var name = n ? n.value.trim() : "";
+    if (!name) { _tagErr = window.t("ht.tag_need_name"); veTagRow(); return; }
+    _tagErr = "";
+    try {
+      var d = await api("/conversations/tags", { method: "POST", body: fd({ name: name, color: _tagNewColor }) });
+      _tagNewText = "";
+      _tags = d.tags || _tags;
+      await setTag(convId, d.tag.id, true);     // made from a conversation's picker: it goes on that conversation
+      var n2 = _host && _host.querySelector(".ht-tagpop-nname");
+      if (n2) n2.focus();
+    } catch (e) { _tagErr = e.message; veTagRow(); }
+  }
+
+  async function saveTag(id) {
+    var e = _host && _host.querySelector(".ht-tagpop-ename");
+    if (!id || !e) return;
+    _tagErr = "";
+    try {
+      var d = await api("/conversations/tags/" + id, { method: "POST", body: fd({ name: e.value.trim(), color: _tagEditColor }) });
+      _tagEdit = 0;
+      tagsChanged(d.tags);
+    } catch (err) { _tagErr = err.message; veTagRow(); }
+  }
+
+  async function deleteTag(id) {
+    var g = _tags.filter(function (x) { return x.id === id; })[0];
+    if (!g || !confirm(window.t("ht.tag_del_confirm", { name: g.name, n: g.count }))) return;
+    _tagErr = "";
+    try {
+      var d = await api("/conversations/tags/" + id, { method: "DELETE" });
+      _tagEdit = 0;
+      tagsChanged(d.tags);
+    } catch (err) { _tagErr = err.message; veTagRow(); }
+  }
+
+  // ---------------------------------------------------------------- drag the list column (2026-10-25)
+  // Owner: "ở màn chatbot cũng đang chưa kéo được navbar gọn vào theo kiểu kéo thả", like the Partners and Chat pages:
+  // the shared col-resize.js handle on the list's right edge, width remembered, double-click resets; dragged past the
+  // fold point it snaps into a strip of initials (.ht-mini) whose hover card names the conversation. Wide screens only
+  // (console.css hides the handle and ignores the width below 901px).
+  var LIST_MIN_W = 260, LIST_MINI_W = 72;
+  function attachListResize(body) {
+    var CR = window.JavisColResize, wrap = body.querySelector(".ht-wrap"), col = body.querySelector(".ht-listcol");
+    if (!CR || !wrap || !col) return;
+    var inner = wrap.querySelector(".ht-body");
+    var o = { host: wrap, varName: "--ht-list-w", key: "javis_ht_list_w", min: LIST_MIN_W, max: 560, edge: "right",
+      label: "ht.resize_list", keep: 420, total: function () { return inner ? inner.clientWidth : 0; },
+      snap: { below: CR.FOLD_AT(LIST_MIN_W), to: LIST_MINI_W, onSnap: function (on) {
+        wrap.classList.toggle("ht-mini", !!on);
+        if (!on) CR.miniTip.hide();
+      } } };
+    CR.apply(o);
+    CR.attach(col, o);
+    var list = col.querySelector(".ht-list");
+    var card = function (row) {
+      if (!wrap.classList.contains("ht-mini")) return;
+      var txt = function (sel) { var x = row.querySelector(sel); return x ? x.textContent.trim() : ""; };
+      var badge = row.querySelector(".ht-item-sub .ht-badge");
+      CR.miniTip.show(row, { ava: '<span class="ht-item-ava">' + esc(txt(".ht-item-ava").charAt(0)) + '</span>',
+        name: txt(".ht-item-top strong"), time: txt(".ht-item-time"), sub: txt(".ht-item-sub small"),
+        stText: badge ? badge.getAttribute("title") : "", st: badge ? "need" : "" });
+    };
+    var hide = function () { CR.miniTip.hide(); };
+    list.addEventListener("mouseover", function (e) {
+      var row = e.target.closest && e.target.closest(".ht-item");
+      if (row && !row.contains(e.relatedTarget)) card(row);
+    });
+    list.addEventListener("mouseout", function (e) {
+      var row = e.target.closest && e.target.closest(".ht-item");
+      if (row && !row.contains(e.relatedTarget)) hide();
+    });
+    list.addEventListener("focusin", function (e) { if (e.target.classList && e.target.classList.contains("ht-item")) card(e.target); });
+    list.addEventListener("focusout", hide);
+    list.addEventListener("click", hide);
   }
 
   // Một dòng nói ai đang trực cuộc chat này. Đứng riêng (không nhét vào ô nhập) để hai nút hành động ở lát sau có chỗ
@@ -824,15 +1418,19 @@
     var ai = t.sender_type === "customer" ? (t.sender_name || "")
            : t.sender_type === "ai" ? (t.sender_name || window.t("ht.bot"))
            : t.sender_type === "human" ? window.t("ht.ban") : "";
+    if (t.message_type === "reaction") return renderReaction(t, lop, ai);
     var than;
     // Ảnh và file khách gửi (0.171.0, ht-media.js): ảnh hiện thẳng trong bong bóng, file thành thẻ bấm tải về. Chỉ còn chú
     // thích thật của khách đi kèm; dòng "đã tải về: <đường dẫn máy chủ>" và link ảnh trần không hiện ra nữa.
-    var media = (t.sender_type === "customer" && window.JavisHtMedia) ? window.JavisHtMedia.phanTich(t, t.conversation_id) : null;
+    // Owner, 2026-10-25: a photo the owner (or the bot) sends must show as a photo too, so they can check what went out;
+    // it used to read "image https://...zdn.vn/....jpg". Any non-text message goes through the same parser.
+    var wantMedia = t.sender_type === "customer" || (t.message_type && t.message_type !== "text");
+    var media = (wantMedia && window.JavisHtMedia) ? window.JavisHtMedia.phanTich(t, t.conversation_id) : null;
     var coMedia = !!(media && (media.anh || media.file));
-    if (t.sender_type === "ai" && window.mdToHtml) {
-      try { than = window.mdToHtml(t.text || "", ""); } catch (e) { than = esc(t.text || ""); }
-    } else if (coMedia) {
+    if (coMedia) {
       than = window.JavisHtMedia.html(media, esc, ic, window.t) + (media.chu ? '<div class="ht-chu-thich">' + esc(media.chu) + '</div>' : "");
+    } else if (t.sender_type === "ai" && window.mdToHtml) {
+      try { than = window.mdToHtml(t.text || "", ""); } catch (e) { than = esc(t.text || ""); }
     } else {
       than = esc(t.text || "");
     }
@@ -844,6 +1442,23 @@
     return '<div class="ht-msg ' + lop + '">' +
       '<div class="ht-msg-h">' + esc(ai) + (ai ? ' · ' : '') + esc(gio(t.created_at)) + '</div>' +
       '<div class="ht-bubble">' + loai + than + '</div>' + loi +
+    '</div>';
+  }
+
+  // An emoji reaction (0.334.0): one small line beside the side that reacted, the emoji and what it was put on, instead
+  // of a bubble that would read as something they wrote.
+  function renderReaction(t, lop, ai) {
+    var r = (t.metadata && t.metadata.reaction) || {};
+    var bieu = r.emoji || r.code || "";
+    var quote = String(r.target_text || "").replace(/\s+/g, " ").trim();
+    if (quote.length > 80) quote = quote.slice(0, 79) + "…";
+    var who = ai || window.t("ht.bot");
+    var cau = r.removed ? window.t("ht.react_off", { who: who })
+            : quote ? window.t("ht.react_on", { who: who, quote: "\u201c" + quote + "\u201d" })
+            : window.t("ht.react_any", { who: who });
+    return '<div class="ht-msg ht-react ' + lop + (r.removed ? " off" : "") + '">' +
+      '<div class="ht-react-row"><span class="ht-react-emoji">' + esc(bieu) + '</span>' +
+      '<span class="ht-react-txt">' + esc(cau) + ' · ' + esc(gio(t.created_at)) + '</span></div>' +
     '</div>';
   }
 

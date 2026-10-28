@@ -146,7 +146,7 @@ Pick the brain on the **Models** page and change it whenever you like. Javis sup
 Every brain can call your connected MCP servers, read and write the brain, run skills, queue Kanban work, and create agents, workflows, loops and reminders. The CLI engines additionally run **shell commands**, **fetch and search the web**, and **spawn parallel sub-agents**.
 
 > [!WARNING]
-> **Read this before letting a subscription run background work.** Anthropic scopes Claude Pro/Max to **ordinary personal use** of Claude Code. Continuous background execution (loops, reminders, Kanban jobs, chatbots), running on a VPS, or several people sharing one account all fall outside that scope, and accounts **have been suspended** over it. Javis never reads your login token: it runs the real `claude` binary, but that does not make round-the-clock background use legitimate. To be safe, set Claude Code to run on an **API key** on the Models page, or point the **background-work model** at another provider. The same caution applies to the xAI plan. See `server/claude_auth.py`.
+> **A note before letting a subscription run background work.** Anthropic scopes Claude Pro/Max to **ordinary personal use** of Claude Code. Continuous background execution (loops, reminders, Kanban jobs, chatbots), running on a VPS, or several people sharing one account fall outside that scope, so there is a risk of the account **being locked**, although Javis has no reported case so far. If it happens to you, please tell the developer through [Issues](https://github.com/blogminhquy/javis-os/issues/new/choose). Javis never reads your login token: it runs the real `claude` binary, but that does not make round-the-clock background use legitimate. To be safe, set Claude Code to run on an **API key** on the Models page, or point the **background-work model** at another provider. The same caution applies to the xAI plan. See `server/claude_auth.py`.
 
 ---
 
@@ -258,7 +258,7 @@ Set `DOMAIN_NAME` so Hostinger's Traefik issues HTTPS:
 - **Free link** (no domain purchase): `DOMAIN_NAME=javis.<vps-hostname>.hstgr.cloud` (hostname under hPanel → VPS, e.g. `javis.srv1562015.hstgr.cloud`).
 - **Your own domain:** `DOMAIN_NAME=example.com` and point an A record at the VPS IP.
 
-Wait 1-3 minutes for the certificate, then open `https://<DOMAIN_NAME>`.
+Wait 1-3 minutes for the certificate, then open `https://<DOMAIN_NAME>`. No Traefik on the VPS (a plain Ubuntu 26 image)? Use the same link: the bundled `javis-gateway` (Caddy) issues the certificate itself when ports 80/443 are free.
 
 **Three one-time steps:**
 1. **Make the GHCR image Public:** GitHub → repo → **Packages** → `javis-os` → *Package settings* → Visibility = **Public**.
@@ -299,7 +299,7 @@ chmod +x install.sh && ./install.sh
 
 The script installs Python, Node and the CLI brains, creates a venv, registers a service that starts at boot, and prints the address.
 
-🍎 **macOS, open it like an app:** double-click `JAVIS OS.app` (or `Start JAVIS OS.command`). Start at login: `./bin/javis-autostart.sh install`. Details: [bin/README.md](bin/README.md).
+🍎 **macOS, open it like an app:** double-click `JAVIS OS.app` (or `Start JAVIS OS.command`). Since 0.306.0 `./install.sh` makes Javis start at login and open the dashboard (turn off: `./bin/javis-autostart.sh uninstall`). Details: [bin/README.md](bin/README.md).
 
 </details>
 
@@ -320,7 +320,7 @@ Stop:                                  stop-javis.bat
 Dashboard:                             http://localhost:7777
 ```
 
-🪟 **Open it like an app:** after the first run, double-click **`JAVIS OS.bat`**. The server starts in the background and the dashboard opens in **its own window** with its own taskbar entry. Start at login: `javis-autostart.bat install` (remove: `uninstall`).
+🪟 **Open it like an app:** after the first run, double-click **`JAVIS OS.bat`**. The server starts in the background and the dashboard opens in **its own window** with its own taskbar entry. Since 0.306.0 the installer makes Javis start at login and open the dashboard (turn off: `javis-autostart.bat uninstall` or the button in Settings).
 
 </details>
 
@@ -350,13 +350,12 @@ Open Javis and the setup wizard walks you through it, in your browser's language
 
 ## 📖 Using Javis
 
-The left rail groups the pages into **6 groups**. Every page has a guide in [docs/en/](docs/en/README.md).
+The left rail groups the pages into **5 groups**. Every page has a guide in [docs/en/](docs/en/README.md).
 
 | Group | Pages | Guides |
 |---|---|---|
 | **Brain** | Graph, Chat, Files, Self-learning | [Chat and voice](docs/en/02-chat-and-voice.md) · [Knowledge graph](docs/en/03-knowledge-graph.md) · [Sessions](docs/en/04-sessions.md) · [File manager](docs/en/05-file-manager.md) · [Self-learning](docs/en/22-self-learning.md) |
-| **Code** | Terminal, Coding | [Code terminal](docs/en/27-code-terminal.md) |
-| **Capabilities** | Partners (agents and workflows), Chatbot, Skills, Plugins | [Agents and workflows](docs/en/07-agents-and-workflows.md) · [Chatbots](docs/en/25-chatbots.md) · [Customer conversations](docs/en/28-customer-conversations.md) · [Skills](docs/en/06-skills.md) · [Plugins](docs/en/20-plugins.md) |
+| **Capabilities** | Partners (agents and workflows), Chatbot, Skills, Plugins, Terminal | [Agents and workflows](docs/en/07-agents-and-workflows.md) · [Chatbots](docs/en/25-chatbots.md) · [Customer conversations](docs/en/28-customer-conversations.md) · [Skills](docs/en/06-skills.md) · [Plugins](docs/en/20-plugins.md) · [Terminal](docs/en/27-code-terminal.md) |
 | **Work** | Tasks, Scheduled | [Tasks (Kanban)](docs/en/21-kanban-work.md) · [Recurring jobs and reminders](docs/en/08-recurring-jobs.md) |
 | **Connections** | Connections, Javis Store, Channels, Models | [Connections and business data](docs/en/09-connections-and-business-data.md) · [Telegram](docs/en/11-telegram.md) · [Zalo](docs/en/12-zalo-agent-mcp.md) · [Models and engines](docs/en/10-models-and-engines.md) |
 | **System** | Settings, Share links, Account | [Getting started](docs/en/01-getting-started.md) · [Security and accounts](docs/en/14-security-and-accounts.md) · [Usage and cost](docs/en/23-usage-and-cost.md) · [Javis CLI](docs/en/24-cli.md) |

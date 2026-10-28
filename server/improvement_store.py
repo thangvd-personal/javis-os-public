@@ -17,7 +17,7 @@ from pathlib import Path
 
 from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 17
 _SOURCE = re.compile(r"(?:skills/[a-z0-9][a-z0-9_-]*/SKILL\.md|agents/[a-z0-9][a-z0-9_-]*\.md)")
 _SCHEMA = (
     "CREATE TABLE improvement_schema(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)",
@@ -91,7 +91,7 @@ def _schema_version(store) -> int:
         if not row:
             return 0
         version = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone()
-        if not version or version["version"] not in (1, 2, 3, 4, SCHEMA_VERSION):
+        if not version or version["version"] not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, SCHEMA_VERSION):
             raise SchemaError("unsupported_improvement_schema")
         return version["version"]
 
@@ -104,6 +104,7 @@ class _ReadDatabase:
     """Read the existing shared file without running GoalStore initialization."""
 
     def __init__(self, path: Path):
+        self.path = path.absolute()
         self.uri = path.resolve().as_uri() + "?mode=ro"
 
     def _conn(self):
@@ -112,28 +113,205 @@ class _ReadDatabase:
         return connection
 
 
-def read_existing(path: Path, blobs: RevisionBlobs):
+def read_existing(path: Path, blobs: RevisionBlobs, *, qualification_anchor=None):
     """Return metadata access only when an installed compatible schema exists."""
     if not path.is_file():
         return None
     database = _ReadDatabase(path)
-    return ImprovementStore(database, blobs) if has_schema(database) else None
+    return ImprovementStore(database, blobs, qualification_anchor=qualification_anchor) if has_schema(database) else None
 
 
 def ensure(store) -> None:
     installed = _schema_version(store)
+    from improvement_compose_schema import assert_historical, assert_installed as assert_compose, migrate, migration_transaction
+    from improvement_recipe_schema import _assert_absent, assert_installed as assert_recipes, migrate as migrate_recipes
+    from improvement_recipe_view_schema import assert_installed as assert_recipe_views, migrate as migrate_recipe_views
+    from improvement_activation_schema import assert_installed as assert_activations, migrate as migrate_activations
+    from improvement_canary_schema import assert_installed as assert_canaries, migrate as migrate_canaries
+    from improvement_routing_schema import assert_installed as assert_routing, migrate as migrate_routing
+    from improvement_agent_schema import assert_installed as assert_agents, migrate as migrate_agents
+    from improvement_bundle_schema import assert_installed as assert_bundles, migrate as migrate_bundles
+    from improvement_team_schema import assert_installed as assert_team, migrate as migrate_team
+    from improvement_library_schema import assert_installed as assert_library, migrate as migrate_library
     if installed == SCHEMA_VERSION:
+        with closing(store._conn()) as connection:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            assert_agents(connection)
+            assert_bundles(connection)
+            assert_team(connection)
+            assert_library(connection)
         return
-    with store._Tx(store) as connection:
+    with migration_transaction(store) as connection:
         exists = connection.execute("SELECT name FROM sqlite_master WHERE name='improvement_schema'").fetchone()
         installed = connection.execute("SELECT version FROM improvement_schema WHERE id=1").fetchone() if exists else None
-        if exists and (not installed or installed["version"] not in (1, 2, 3, 4, SCHEMA_VERSION)):
+        if exists and (not installed or installed["version"] not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, SCHEMA_VERSION)):
             raise SchemaError("unsupported_improvement_schema")
         if installed and installed["version"] == SCHEMA_VERSION:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            assert_agents(connection)
+            assert_bundles(connection)
+            assert_team(connection)
+            assert_library(connection)
             return
+        if installed and installed["version"] == 16:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            assert_agents(connection)
+            assert_bundles(connection)
+            assert_team(connection)
+            store._backup_before("improvement_refinements", ".pre-improvement-m8-library.bak")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 15:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            assert_agents(connection)
+            assert_bundles(connection)
+            store._backup_before("improvement_team_pins", ".pre-improvement-m7-team.bak")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 14:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            assert_agents(connection)
+            store._backup_before("improvement_bundle_activations", ".pre-improvement-m6-bundles.bak")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 13:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            assert_routing(connection)
+            store._backup_before("improvement_agent_procedures", ".pre-improvement-m5-agents.bak")
+            migrate_agents(connection)
+            connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 12:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            assert_canaries(connection)
+            store._backup_before("improvement_routing_candidates", ".pre-improvement-m4-routing.bak")
+            migrate_routing(connection)
+            connection.execute("UPDATE improvement_schema SET version=13 WHERE id=1")
+            migrate_agents(connection)
+            connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 11:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            assert_activations(connection)
+            store._backup_before("improvement_canaries", ".pre-improvement-m3-canaries.bak")
+            migrate_canaries(connection)
+            connection.execute("UPDATE improvement_schema SET version=12 WHERE id=1")
+            migrate_routing(connection)
+            connection.execute("UPDATE improvement_schema SET version=13 WHERE id=1")
+            migrate_agents(connection)
+            connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 10:
+            assert_compose(connection)
+            assert_recipe_views(connection)
+            store._backup_before("improvement_activations", ".pre-improvement-m2-activations.bak")
+            migrate_activations(connection)
+            connection.execute("UPDATE improvement_schema SET version=11 WHERE id=1")
+            migrate_canaries(connection)
+            connection.execute("UPDATE improvement_schema SET version=12 WHERE id=1")
+            migrate_routing(connection)
+            connection.execute("UPDATE improvement_schema SET version=13 WHERE id=1")
+            migrate_agents(connection)
+            connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        if installed and installed["version"] == 9:
+            assert_compose(connection)
+            assert_recipes(connection)
+            # The exact authenticated namespace reserves this absent marker;
+            # no authority table is created for a trigger-only backup.
+            store._backup_before("improvement_recipe_view_scope", ".pre-improvement-m2-recipe-views.bak")
+            migrate_recipe_views(connection)
+            connection.execute("UPDATE improvement_schema SET version=10 WHERE id=1")
+            migrate_activations(connection)
+            connection.execute("UPDATE improvement_schema SET version=11 WHERE id=1")
+            migrate_canaries(connection)
+            connection.execute("UPDATE improvement_schema SET version=12 WHERE id=1")
+            migrate_routing(connection)
+            connection.execute("UPDATE improvement_schema SET version=13 WHERE id=1")
+            migrate_agents(connection)
+            connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+            migrate_bundles(connection)
+            connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+            migrate_team(connection)
+            connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+            migrate_library(connection)
+            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            return
+        _assert_absent(connection)
+        if installed and installed["version"] == 8:
+            assert_compose(connection)
+        if installed and installed["version"] == 7:
+            # Unknown same-number drafts must refuse before even the backup.
+            assert_historical(connection)
         # Serialize the backup with the migration; two first writers otherwise race on its .tmp file.
-        if exists:
-            store._backup_before("improvement_experiments", ".pre-improvement-m2-experiments.bak")
+        if installed and installed["version"] == 8:
+            store._backup_before("improvement_recipes", ".pre-improvement-m2-recipes.bak")
+        elif exists:
+            store._backup_before("improvement_compositions", ".pre-improvement-m2-compose.bak")
+            if installed["version"] < 5:
+                store._backup_before("improvement_experiments", ".pre-improvement-m2-experiments.bak")
+            if installed["version"] < 6:
+                store._backup_before("improvement_preparations", ".pre-improvement-m2-generated.bak")
+            store._backup_before("improvement_effective_views", ".pre-improvement-m2-views.bak")
         else:
             store._backup_before("improvement_schema", ".pre-improvement-m0.bak")
         if not exists:
@@ -161,10 +339,39 @@ def ensure(store) -> None:
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
+        if not installed or installed["version"] < 6:
+            from improvement_operation_schema import SCHEMA, IMMUTABLE
+            for statement in SCHEMA:
+                connection.execute(statement)
+            _immutable_triggers(connection, IMMUTABLE)
+        if not installed or installed["version"] < 7:
+            from improvement_view_schema import SCHEMA, IMMUTABLE
+            for statement in SCHEMA:
+                connection.execute(statement)
+            _immutable_triggers(connection, IMMUTABLE)
+        if not installed or installed["version"] < 8:
+            migrate(connection)
+        migrate_recipes(connection)
         if exists:
-            connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
+            connection.execute("UPDATE improvement_schema SET version=9 WHERE id=1")
         else:
-            connection.execute("INSERT INTO improvement_schema(id,version) VALUES(1,?)", (SCHEMA_VERSION,))
+            connection.execute("INSERT INTO improvement_schema(id,version) VALUES(1,9)")
+        migrate_recipe_views(connection)
+        connection.execute("UPDATE improvement_schema SET version=10 WHERE id=1")
+        migrate_activations(connection)
+        connection.execute("UPDATE improvement_schema SET version=11 WHERE id=1")
+        migrate_canaries(connection)
+        connection.execute("UPDATE improvement_schema SET version=12 WHERE id=1")
+        migrate_routing(connection)
+        connection.execute("UPDATE improvement_schema SET version=13 WHERE id=1")
+        migrate_agents(connection)
+        connection.execute("UPDATE improvement_schema SET version=14 WHERE id=1")
+        migrate_bundles(connection)
+        connection.execute("UPDATE improvement_schema SET version=15 WHERE id=1")
+        migrate_team(connection)
+        connection.execute("UPDATE improvement_schema SET version=16 WHERE id=1")
+        migrate_library(connection)
+        connection.execute("UPDATE improvement_schema SET version=? WHERE id=1", (SCHEMA_VERSION,))
 
 
 def _immutable_triggers(connection, tables):
@@ -175,9 +382,18 @@ def _immutable_triggers(connection, tables):
 
 
 class ImprovementStore:
-    def __init__(self, goal_store, blobs: RevisionBlobs):
+    def __init__(self, goal_store, blobs: RevisionBlobs, *, qualification_anchor=None):
+        if qualification_anchor is not None:
+            from improvement_native_protocol import _digest
+            _digest(qualification_anchor)
+        self._qualification_anchor = qualification_anchor
         self.store = goal_store
         self.blobs = blobs
+
+    @property
+    def qualification_anchor(self):
+        """Expected engineering run identity supplied by its trusted factory."""
+        return self._qualification_anchor
 
     @staticmethod
     def _replay(connection, brain: str, key: str, operation: str, payload):
@@ -213,7 +429,10 @@ class ImprovementStore:
         brain = _brain(principal)
         if mode not in ("off", "suggest") or type(expected_version) is not int or expected_version < 0:
             raise ValueError("unsupported_improvement_policy")
-        ensure(self.store)
+        # Turning improvement off must work even when a later guard drifted: an installed current
+        # schema skips the full definition audit (policy rows touch no guarded table).
+        if _schema_version(self.store) != SCHEMA_VERSION:
+            ensure(self.store)
         payload = {"mode": mode, "expected_version": expected_version}
         with self.store._Tx(self.store) as connection:
             replay = self._replay(connection, brain, event_key, "policy", payload)

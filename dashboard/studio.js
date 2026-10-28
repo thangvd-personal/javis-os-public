@@ -527,8 +527,10 @@
     const box = document.getElementById("editorBox");
     box.classList.remove("agent-editor");
     const steps = w ? JSON.parse(JSON.stringify(w.steps || [])) : [{ agent: agentsCache[0].slug, task: "" }];
-    const opts = (sel) => agentsCache.map(a => `<option value="${a.slug}" ${a.slug === sel ? "selected" : ""}>${esc(a.name)}</option>`).join("");
-    const optsV = (sel) => `<option value="">${esc(t("studio.no_verify"))}</option>` + agentsCache.map(a => `<option value="${a.slug}" ${a.slug === sel ? "selected" : ""}>${esc(a.name)}</option>`).join("");
+    // data-desc feeds the searchable agent picker (agent-picker.js) that replaces these selects on screen.
+    const agOpt = (a, sel) => `<option value="${a.slug}" ${a.slug === sel ? "selected" : ""} data-desc="${esc(a.role || "")}">${esc(a.name)}</option>`;
+    const opts = (sel) => agentsCache.map(a => agOpt(a, sel)).join("");
+    const optsV = (sel) => `<option value="">${esc(t("studio.no_verify"))}</option>` + agentsCache.map(a => agOpt(a, sel)).join("");
     const agentName = (slug) => { const a = agentsCache.find(x => x.slug === slug); return a ? a.name : (slug || "?"); };
     // Bước gập lại để thấy toàn cảnh; bấm vào bước nào thì mở bước đó ra sửa. Workflow mới
     // chỉ có 1 bước nên mở sẵn. Các ô input VẪN nằm trong DOM khi gập (chỉ ẩn bằng CSS) -
@@ -598,6 +600,10 @@
           render();
         };
         sl.appendChild(row);
+        if (window.JavisAgentPicker) {
+          window.JavisAgentPicker.enhance(row.querySelector(".st-agent"), { title: t("ap.title_step") });
+          window.JavisAgentPicker.enhance(row.querySelector(".st-verify-agent"), { title: t("ap.title_verify") });
+        }
       });
       box.querySelector("#addStep").onclick = () => { captureSteps(); steps.push({ agent: agentsCache[0].slug, task: "" }); openIdx = steps.length - 1; render(); };
       box.querySelector("#cancelEd").onclick = () => editor.classList.remove("open");
@@ -794,8 +800,30 @@
       <label for="agReasoning">${esc(t("studio.reasoning"))}${JI ? JI.btn(t("info.more")) : ""}</label>
       <select id="agReasoning">${REASONING.map(([v, k]) => `<option value="${v}"${v === curReason ? " selected" : ""}>${esc(t(k))}</option>`).join("")}</select>
       ${infoBody(`<div class="dim" style="font-size:12px">${esc(t("studio.reasoning_hint"))}</div>`)}
-      <div class="editor-actions"><button class="s-btn-ghost" id="cancelEd"${opts.host ? ' style="display:none"' : ""}>${esc(t("common.cancel"))}</button><button class="s-btn" id="saveAg">${esc(t("common.save"))}</button></div>`;
-    if (window.JavisAvatar) window.JavisAvatar.picker(box.querySelector("#agAvatar"), avatar, v => { avatar = v; });
+      <div class="editor-actions ag-save-bar" id="agSaveBar"><span class="ag-save-state" id="agSaveState" aria-live="polite"></span><button class="s-btn-ghost" id="cancelEd"${opts.host ? ' style="display:none"' : ""}>${esc(t("common.cancel"))}</button><button class="s-btn ag-save-btn" id="saveAg" title="${esc(t("studio.save_hint"))}">${ic("save")} ${esc(a ? t("studio.save_changes") : t("studio.create_agent"))}</button></div>`;
+    // 0.298.0 (owner 23/10: "nút lưu trong cài đặt agent nữa cũng không thể hiện rõ"): the bar stays pinned at the bottom
+    // of the form, says when something is unsaved, confirms "Saved" in place (the form beside the chat stays open after a
+    // save, so a silent save looked like nothing happened), and Ctrl/Cmd+S saves.
+    const saveState = box.querySelector("#agSaveState"), saveBar = box.querySelector("#agSaveBar");
+    let dirty = false, savedTimer = 0;
+    const datTrangThai = (kind) => {
+      clearTimeout(savedTimer);
+      saveBar.classList.toggle("dirty", kind === "dirty");
+      saveBar.classList.toggle("saved", kind === "saved");
+      saveState.textContent = kind === "dirty" ? t("studio.unsaved") : kind === "saving" ? t("studio.saving")
+        : kind === "saved" ? t("studio.saved_ok") : "";
+      if (kind === "saved") savedTimer = setTimeout(() => { if (!dirty) datTrangThai(""); }, 4000);
+    };
+    const danhDau = () => { if (!dirty) { dirty = true; datTrangThai("dirty"); } };
+    box.addEventListener("input", (e) => { if (!e.target.closest("#spSearch")) danhDau(); });
+    box.addEventListener("change", (e) => { if (!e.target.closest("#spSearch")) danhDau(); });
+    box.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) { e.preventDefault(); box.querySelector("#saveAg").click(); }
+    });
+    // The picker reports its starting value once while it draws; only later changes are edits.
+    let avatarSan = false;
+    if (window.JavisAvatar) window.JavisAvatar.picker(box.querySelector("#agAvatar"), avatar, v => { avatar = v; if (avatarSan) danhDau(); });
+    avatarSan = true;
     // TÀI LIỆU & LINK của trợ lý: mở ĐÚNG ngăn kéo mà project và cuộc trò chuyện đang dùng
     // (sessions-ui.js), không dựng bản thứ hai ở đây. Trợ lý chưa lưu thì chưa có slug để gắn
     // vào, nên nút đứng im kèm một câu nói vì sao - ẩn nút đi thì người dùng tưởng không có.
@@ -858,6 +886,7 @@
         mProv = it.dataset.prov || ""; mModel = it.dataset.model || "";
         box.querySelector("#agModel").value = mModel ? val(mProv, mModel) : "";
         box.querySelector("#agModelTxt").textContent = nhanModel();
+        danhDau();
         dongPop();
         return;
       }
@@ -872,7 +901,11 @@
       // So bằng CHÍNH phần tử, không phải closest("#agModelPick"): trang Cộng sự có thể đang
       // mở form trong cột phải trong khi Studio bật thêm form trong modal, tức hai khung cùng
       // id trên một trang - so theo id là bấm vào khung này lại không đóng khung kia.
-      if (!mPop.hidden && !(mPick && mPick.contains(e.target))) dongPop();
+      // 0.348.0: follow the click's path, not e.target. Clicking a provider name redraws the list right away
+      // (veModelPop), so by the time this runs the clicked row has left the DOM, contains() says "outside" and the
+      // list closed instead of opening that provider (owner, 27/10/2026). Same fix as chat-goal.js.
+      const duong = e.composedPath ? e.composedPath() : [e.target];
+      if (!mPop.hidden && !(mPick && duong.indexOf(mPick) >= 0)) dongPop();
     };
     const escKhung = (e) => {
       if (!mPop || !mPop.isConnected) { document.removeEventListener("keydown", escKhung); return; }
@@ -903,6 +936,7 @@
       const mName = cut === -1 ? raw : raw.slice(cut + MODEL_SEP.length);
       const saveButton = box.querySelector("#saveAg");
       saveButton.disabled = true;
+      datTrangThai("saving");
       try {
         // KHÔNG gửi `group`: form không còn ô nhóm, mà gửi một giá trị đoán ra là ghi đè nhóm
         // người dùng vừa đổi ở cột trái. Server thấy thiếu field là giữ nguyên nhóm đang có.
@@ -910,10 +944,12 @@
           prompt: box.querySelector("#agPrompt").value, skills: sk, model: mName, model_provider: mProv,
           reasoning: (box.querySelector("#agReasoning") || {}).value || "medium",
           slug: a ? a.slug : "", brain: brain(), ...(avatar ? window.JavisAvatar.formFields(avatar) : {}) }) });
-        if (!saved.ok) { alert(loiLuu(saved.error)); return; }
+        if (!saved.ok) { datTrangThai(dirty ? "dirty" : ""); alert(loiLuu(saved.error)); return; }
+        dirty = false;
+        datTrangThai("saved");
         moDong(false);
         if (opts.onSaved) await opts.onSaved(saved); else loadAgents();
-      } catch (err) { alert(t("ws.save_failed")); }
+      } catch (err) { datTrangThai(dirty ? "dirty" : ""); alert(t("ws.save_failed")); }
       finally { saveButton.disabled = false; }
     };
     moDong(true);

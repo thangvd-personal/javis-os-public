@@ -80,32 +80,42 @@ check("đăng nhập ChatGPT xong thì cho phép hỏi lại (bộ nhớ 'đã h
 # ============================================================
 # 2. Rỗng thì phải nói VÌ SAO, và nói được câu dùng được
 # ============================================================
-_m = c.read_settings()["model"]
-_ly_do = main._vi_sao_khong_co_model("openai-oauth", _m)
-check("đã kết nối + không thấy Codex CLI -> chỉ đúng việc phải làm",
-      "Codex" in _ly_do and ("npm i -g @openai/codex" in _ly_do),
-      _ly_do)
-check("và nhắc được cả lối thoát cho máy cài chỗ lạ", "JAVIS_CODEX_BIN" in _ly_do)
-
-_cu = main.openai_oauth.valid_creds
+import codex_models
+_cu_fc = main.find_codex_cli
+_cu_cfc = claude_cli.find_codex_cli
+_cu_mfc = codex_models.find_codex_cli
 try:
-    main.openai_oauth.valid_creds = lambda: {}
-    _ly_do2 = main._vi_sao_khong_co_model("openai-oauth", _m)
+    main.find_codex_cli = claude_cli.find_codex_cli = codex_models.find_codex_cli = lambda: None
+    _m = c.read_settings()["model"]
+    _ly_do = main._vi_sao_khong_co_model("openai-oauth", _m)
+    check("đã kết nối + không thấy Codex CLI -> chỉ đúng việc phải làm",
+          "Codex" in _ly_do and ("npm i -g @openai/codex" in _ly_do),
+          _ly_do)
+    check("và nhắc được cả lối thoát cho máy cài chỗ lạ", "JAVIS_CODEX_BIN" in _ly_do)
+
+    _cu = main.openai_oauth.valid_creds
+    try:
+        main.openai_oauth.valid_creds = lambda: {}
+        _ly_do2 = main._vi_sao_khong_co_model("openai-oauth", _m)
+    finally:
+        main.openai_oauth.valid_creds = _cu
+    check("chưa kết nối thì nói chưa kết nối, không đổ cho Codex",
+          "Chưa kết nối ChatGPT" in _ly_do2 and "npm i" not in _ly_do2, _ly_do2)
+
+    check("provider API thiếu key -> nói thiếu key",
+          "API key" in main._vi_sao_khong_co_model("openrouter", {}))
+    check("không có gì để nói thì im, không bịa lý do",
+          main._vi_sao_khong_co_model("anthropic-cli", _m) == "")
+
+    # Lý do phải ĐI RA TỚI người dùng, không dừng ở server.
+    _r = asyncio.get_event_loop().run_until_complete(
+        main.provider_models_index("openai-oauth", refresh=True))
+    check("/provider/models trả kèm lý do khi danh sách rỗng",
+          _r.get("live") is False and bool(_r.get("error")), _r)
 finally:
-    main.openai_oauth.valid_creds = _cu
-check("chưa kết nối thì nói chưa kết nối, không đổ cho Codex",
-      "Chưa kết nối ChatGPT" in _ly_do2 and "npm i" not in _ly_do2, _ly_do2)
-
-check("provider API thiếu key -> nói thiếu key",
-      "API key" in main._vi_sao_khong_co_model("openrouter", {}))
-check("không có gì để nói thì im, không bịa lý do",
-      main._vi_sao_khong_co_model("anthropic-cli", _m) == "")
-
-# Lý do phải ĐI RA TỚI người dùng, không dừng ở server.
-_r = asyncio.get_event_loop().run_until_complete(
-    main.provider_models_index("openai-oauth", refresh=True))
-check("/provider/models trả kèm lý do khi danh sách rỗng",
-      _r.get("live") is False and bool(_r.get("error")), _r)
+    main.find_codex_cli = _cu_fc
+    claude_cli.find_codex_cli = _cu_cfc
+    codex_models.find_codex_cli = _cu_mfc
 check("hộp chọn model hiện đúng lý do đó thay vì câu chung chung",
       "error: (res && res.error)" in _console
       and "liveCache[selProv].error" in _console)

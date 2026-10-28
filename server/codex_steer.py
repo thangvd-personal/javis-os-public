@@ -239,7 +239,8 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
     from claude_sdk_engine import tran_watchdog
 
     sid = steer_inbox.current_sid()
-    overrides = profile_overrides(cli.profile, cc._codex_home())
+    _acct_home = getattr(cli, "codex_home", None)   # extra ChatGPT account (plan_accounts, 0.353.0)
+    overrides = profile_overrides(cli.profile, Path(_acct_home) if _acct_home else cc._codex_home())
     args = [cli.cli_path]
     for c in overrides + list(cli.extra_config or []):
         args += ["-c", c]
@@ -265,7 +266,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cli.cwd, text=True,
             encoding="utf-8", errors="replace", bufsize=1,
             creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),
-            start_new_session=(os.name != "nt"), env=cc.codex_env())
+            start_new_session=(os.name != "nt"), env=cc.codex_env(_acct_home))
     except Exception as e:
         raise Fallback(f"spawn: {type(e).__name__}: {e}")
     with cc._PROC_LOCK:
@@ -309,7 +310,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
         last = time.monotonic()
         busy = 0
         final_text = ""
-        tok_in = tok_out = 0
+        tok_in = tok_out = tok_cache = 0
         error_msg = ""
         sandbox_broken = False
         steering: Dict[int, list] = {}   # steer request id -> inbox items, put back if Codex refuses
@@ -391,10 +392,17 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                     yield {"type": "tool_call", "name": cc._codex_tool_name(ei), "item": ei, "id": ei["id"]}
                 elif t and t not in _QUIET_TYPES:
                     yield {"type": "item", "item": exec_item(it)}
+            elif method == "account/rateLimits/updated":
+                try:   # 0.329.0: the plan's 5-hour and weekly meters, for the composer ring
+                    import plan_limits
+                    plan_limits.ghi_codex(p)
+                except Exception:  # noqa: BLE001
+                    pass
             elif method == "thread/tokenUsage/updated" and p.get("turnId") == turn_id:
                 lu = ((p.get("tokenUsage") or {}).get("last") or {})
                 tok_in += int(lu.get("inputTokens") or 0)
                 tok_out += int(lu.get("outputTokens") or 0)
+                tok_cache += int(lu.get("cachedInputTokens") or 0)   # 0.345.0: đã nằm trong inputTokens
             elif method == "error":
                 e = p.get("error") or {}
                 msg = str(e.get("message") or "")
@@ -420,7 +428,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                     except Exception as e:
                         print(f"[anh codex] {type(e).__name__}: {e}", file=sys.stderr)
                     yield {"type": "final", "content": final_text, "session_id": thread_id,
-                           "tokens_in": tok_in, "tokens_out": tok_out}
+                           "tokens_in": tok_in, "tokens_cache_read": tok_cache, "tokens_out": tok_out}
                 elif status == "failed":
                     msg = str(((turn.get("error") or {}).get("message")) or error_msg or "turn failed")
                     yield {"type": "error", "content": "Codex: " + msg,

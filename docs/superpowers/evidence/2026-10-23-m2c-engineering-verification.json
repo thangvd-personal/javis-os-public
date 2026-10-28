@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "label": "M2C engineering verification; final CI and publication are separate gates",
+  "regression_source_commit": "001118ae022e5d5d4f2a244dd729464c56dc77ef",
+  "regression_source_scope_sha256": "39cfa8a253df4513ec5dcaff4656eb43b25548ca8a5802f8c2deb22a7f00f748",
+  "regression_source_stable": true,
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "sdk": "0.2.116",
+  "regression_segments": [
+    {
+      "reused_successful_scripts": 15,
+      "original_scope_sha256": "d6d1a17a38086ebf2b680fe358d3972744f3578895dc9dca50543dcc4ff58263",
+      "original_evidence_sha256": "364bec10f9e13bbb5d9ec2d7849e92c84cad0d46538f6b7dfbcc91fb0ed618d1",
+      "changed_files": [
+        "tests\\python\\test_improvement_experiment_task_drain.py"
+      ],
+      "reason": "Only the previously failing standalone task-drain test changed to synchronize actual completion instead of sampling30ms. No other test imports it; production and all passed scripts/helper bytes are unchanged. Passed source-qualified results are reused; failed and remaining scripts run on the new frozen scope."
+    }
+  ],
+  "tests": [
+    {
+      "test": "test_improvement_claude.py",
+      "exit_code": 0,
+      "seconds": 2.0,
+      "log_sha256": "aee2df74a9bbe65a025da87cba0ca019ed15eeab51f6ae348ff1de6172ba7462"
+    },
+    {
+      "test": "test_improvement_trial_selection.py",
+      "exit_code": 0,
+      "seconds": 4.109,
+      "log_sha256": "7cf2e392a622ee5fc70d25f64ea8585d8020d4f2c57b37cc4b579c9a9f7573e9"
+    },
+    {
+      "test": "test_improvement_preparation_protocol.py",
+      "exit_code": 0,
+      "seconds": 0.219,
+      "log_sha256": "aba9af03c700237c4ff2340f1a3fa54749398ab5bb9b8c74b52f9e2a9af73f64"
+    },
+    {
+      "test": "test_improvement_preparation.py",
+      "exit_code": 0,
+      "seconds": 20.906,
+      "log_sha256": "77808232fd8ae928d337a11d43b4c088489ccb42e45a80b8a2f9a8e7ce777f3c"
+    },
+    {
+      "test": "test_improvement_preparation_execution.py",
+      "exit_code": 0,
+      "seconds": 23.594,
+      "log_sha256": "a7eaac192369c37f541a6fd2352e6bc81c39718a3b06e96bef13354f937c8212"
+    },
+    {
+      "test": "test_improvement_preparation_ownership.py",
+      "exit_code": 0,
+      "seconds": 26.578,
+      "log_sha256": "891ef5fb15a3d933eb86fe624973b81feaee1b831fc86d41c066f5802bf04fe7"
+    },
+    {
+      "test": "test_improvement_dependencies.py",
+      "exit_code": 0,
+      "seconds": 0.61,
+      "log_sha256": "660cbe4d5c460b9df50d92397f0a115d1b1d53cf8eda5550d9dbaa017a608f62"
+    },
+    {
+      "test": "test_improvement_dependency_identity.py",
+      "exit_code": 0,
+      "seconds": 0.875,
+      "log_sha256": "6d898ac4dcbe078c47d4c88feede655e8611c529f1926f2aea3ff87990d2f7f0"
+    },
+    {
+      "test": "test_improvement_semantic_review.py",
+      "exit_code": 0,
+      "seconds": 164.703,
+      "log_sha256": "fe559de9ba534721483ce35cb07ed69fcf79b76737645e4e48dba399bce518c5"
+    },
+    {
+      "test": "test_improvement_improver_inputs.py",
+      "exit_code": 0,
+      "seconds": 50.734,
+      "log_sha256": "3f1ba97b09975f4172e53afc23d2120d956aaf2dce0ca51f938d957f197757d6"
+    },
+    {
+      "test": "test_improvement_proposals.py",
+      "exit_code": 0,
+      "seconds": 166.875,
+      "log_sha256": "be52435bbc1a5297cee246c2ca5de499d4f71af12a567a580a05d941426d1f8c"
+    },
+    {
+      "test": "test_improvement_workflow_admission.py",
+      "exit_code": 0,
+      "seconds": 69.859,
+      "log_sha256": "04a0e153be4d2348b8606f3593a08d085dc765d4306cb87b186f1ac381cce118"
+    },
+    {
+      "test": "test_improvement_workflow_api.py",
+      "exit_code": 0,
+      "seconds": 51.187,
+      "log_sha256": "20f7cc26167d63ddaf02d713acc179d8f07d91977fad772ec61f2d5eb7d0d97d"
+    },
+    {
+      "test": "test_improvement_experiment_c_stop.py",
+      "exit_code": 0,
+      "seconds": 57.453,
+      "log_sha256": "050b8f3229d2bf54b64a3b9b7f5f958a965ec04b90b8c5ae62e2822285ebdeb9"
+    },
+    {
+      "test": "test_improvement_experiment_main.py",
+      "exit_code": 0,
+      "seconds": 5.578,
+      "log_sha256": "addabdd5edad3054f333562ad0d4b38badc4dde830a1694a7ba6c54869d2a143"
+    },
+    {
+      "test": "test_improvement_experiment_task_drain.py",
+      "exit_code": 0,
+      "seconds": 7.36,
+      "log_sha256": "5fcf3a6f1b286f690dd2a473a341c9030bb29b7778d1cf3e952d2a1f36a80982"
+    },
+    {
+      "test": "test_improvement_experiment_cleanup.py",
+      "exit_code": 0,
+      "seconds": 3.812,
+      "log_sha256": "65b71bf1aa10b335b57b35bb4a980b362fe83508ebda9a4f382fc11fc29caa75"
+    },
+    {
+      "test": "test_node_security.py",
+      "exit_code": 0,
+      "seconds": 2.156,
+      "log_sha256": "bb0c98308b9524f95bc786e207a2b9b571c09cfaf83175bdfbeff9443b4ae75d"
+    },
+    {
+      "test": "test_route_table.py",
+      "exit_code": 0,
+      "seconds": 2.125,
+      "log_sha256": "b615c1c8f4b202c25edd32d0cdddec5a387818dd4662bf864f3d35f023c387b7"
+    },
+    {
+      "test": "test_windows_no_console.py",
+      "exit_code": 0,
+      "seconds": 0.453,
+      "log_sha256": "bab7e2851996ad0d44f957cf7ddcb64c64932a958fb4ed8ab3280410b3c46246"
+    },
+    {
+      "test": "test_nhat_ky_song_ngu.py",
+      "exit_code": 0,
+      "seconds": 2.265,
+      "log_sha256": "970ceeeee067cf845fb2a231d3df473bd9dce792309f9673239f2a708b958e86"
+    }
+  ],
+  "elapsed_seconds": 663.451,
+  "native_profile_hash": "9dcf718470e70957d07454bb8b50fbde79575a3b23d8c06e24cc9b749051116b",
+  "native_evidence_sha256": "98ee4e8c406091ee84db2862cbf80b11a5f15cf88f7d4d96188d5e2360822ea7",
+  "native_results": [
+    {
+      "test": "test_improvement_runtime_qualification.py",
+      "exit_code": 0,
+      "seconds": 11.344
+    },
+    {
+      "test": "test_improvement_role_qualification.py",
+      "exit_code": 0,
+      "seconds": 43.031
+    }
+  ],
+  "cleanup_fault_tests": 9,
+  "readiness_model_calls": 0,
+  "real_feasibility_sha256": "7481b74bc614cd0890f5f22b07da43d4b2efc518caa81be94df42dc71658a7b0",
+  "real_feasibility_is_historical": true,
+  "review": {
+    "range": "47f50f70..ddec90ad",
+    "critical": 0,
+    "important_found": 2,
+    "important_open": 0,
+    "reviewer": "independent whole-C reviewer; same reviewer performed scoped correction checks",
+    "fixes": [
+      "actual brain lock plus prior-cell/result SQL fences",
+      "exact typed declaring-file dependency identity"
+    ],
+    "final_scoped_approval": [
+      "main Node security integration",
+      "preparation fixture ACL-only commands and caller-entry barrier",
+      "bilingual changelogs",
+      "task-drain completion synchronization with unrelated reservation held"
+    ]
+  },
+  "qualified_reuse": {
+    "task8_recorded_files": 64,
+    "unchanged_files": 51,
+    "changed_files": [
+      "server/improvement_claude.py",
+      "server/improvement_dependency_evidence.py",
+      "server/improvement_native_transport.py",
+      "server/improvement_operation_adapter.py",
+      "server/improvement_preparation.py",
+      "server/improvement_sandbox.py",
+      "server/improvement_semantic_review.py",
+      "server/improvement_worker.py",
+      "server/main.py",
+      "tests/python/test_improvement_experiment_task_drain.py",
+      "tests/python/test_improvement_operation_worker.py",
+      "tests/python/test_improvement_preparation.py",
+      "tests/python/test_improvement_preparation_execution.py"
+    ],
+    "reason": "Unchanged storage, migration, usage, ledger, learning and Team components retain earlier source-qualified evidence. Changed native lifetime has separate actual qualification and affected worker/lifetime regression. Changed preparation/dependency/semantic/main consumers are in this final regression. Mandatory full Linux CI remains required."
+  },
+  "gates": {
+    "business_acceptance": false,
+    "changed_candidate_execution": false,
+    "live_activation": false,
+    "final_ci": "pending exact final head",
+    "publication": "pending"
+  },
+  "limitations": [
+    "Real feasibility proves historical actual role/call execution, not current-source model quality or a business win.",
+    "Native registration is exact Windows runtime/profile only; other runtimes remain unsupported.",
+    "M2D-F, full M2 and M3-M8 are not complete."
+  ]
+}

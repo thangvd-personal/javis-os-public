@@ -50,3 +50,45 @@ def trial_usage(experiment_id, trial_id=None):
         result["requests"] = None
     result.update(experiment_id=experiment_id, trial_id=trial_id)
     return result
+
+
+def _operation_references(experiment_id, operation_id):
+    path = usage_store._PATH.parent / "resonance.sqlite3"
+    if not path.is_file():
+        return set(), [], 0
+    connection = None
+    try:
+        connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
+        rows = connection.execute("SELECT attempt FROM agent_calls WHERE context_ref=? "
+            "AND purpose IN ('improve_propose','improve_evaluate','improve_compose') AND engine_at IS NOT NULL AND mirror_ref=?",
+            ("improvement:" + experiment_id, "improvement_operation:" + operation_id))
+        return {("improvement_operation:" + operation_id, row[0]) for row in rows}, ["resonance.sqlite3"], 0
+    except (OSError, sqlite3.Error):
+        return set(), ["resonance.sqlite3"], 1
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def operation_usage(experiment_id, operation_id):
+    """One genuine operation; never mix these roles into the legacy solver view."""
+    if type(operation_id) is not str or not operation_id:
+        raise ValueError("operation_usage_identity_required")
+    try:
+        events, details = usage_index.improvement_events(experiment_id, operation_id=operation_id)
+        result = _aggregate(events, details, usage_store.operation_telemetry_errors(experiment_id, operation_id))
+    except Exception:
+        events = []
+        result = _aggregate([], telemetry_errors=1)
+    references, sources, errors = _operation_references(experiment_id, operation_id)
+    observed = {(event.get("execution", {}).get("execution_id"), event.get("execution", {}).get("attempt")) for event in events}
+    missing = references - observed
+    coverage = result["coverage"]
+    coverage.update(execution_sources=sources, execution_reference_errors=errors)
+    if missing or errors:
+        result["attempts"] += len(missing)
+        coverage["unobserved_attempts"] += len(missing)
+        coverage.update(status="partial", tokens_complete=False, money_complete=False, requests_complete=False)
+        result["requests"] = None
+    result.update(experiment_id=experiment_id, operation_id=operation_id)
+    return result

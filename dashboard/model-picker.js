@@ -29,7 +29,7 @@
     return { supported: false, note: "fast.none" };
   }
   // FAST_NOTE_END
-  let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off", fast: false };
+  let state = { providers: [], main: { provider: "", model: "" }, reasoning: "off", fast: false, defaults: {} };
   let agentEff = null;   // { slug, level } while the chat in front is an assistant's (0.193.0)
   let sessionPin = null;   // {provider, model} phiên đang mở đã ghim; null = theo mặc định chung
   let pinBroken = false;   // phiên có ghim nhưng ghim HỎNG (provider mất key) - server đang chạy mặc định chung
@@ -43,7 +43,12 @@
   const provShort = (lbl) => (lbl || "").split(" ")[0];
   // Chip text: the model name alone. No model set means the provider's own default, so the provider name stands in
   // ("Claude") rather than a bare "Default".
-  const chipLabel = (eff, p) => (eff.model ? prettyModel(eff.model) : (p ? provShort(p.label) : "Model"));
+  // 0.355.0: when the server knows which model "default" stands for, the chip names it.
+  const chipLabel = (eff, p) => (eff.model ? prettyModel(eff.model)
+    : (state.defaults || {})[eff.provider] ? prettyModel(state.defaults[eff.provider]) : (p ? provShort(p.label) : "Model"));
+  const defText = (pid) => (state.defaults || {})[pid] ? window.t("models.mp_default_is", { m: state.defaults[pid] })
+    : ["anthropic-cli", "openai-oauth", "grok-cli", "antigravity-cli"].indexOf(pid) >= 0
+      ? window.t("models.mp_default_cli") : window.t("models.mp_default");
   // "claude-opus-4-8-20260101" -> "Opus 4.8", "gpt-5.1-codex" -> "GPT-5.1 codex", "openai/gpt-4o" -> "GPT-4o",
   // "gemini-2.5-pro" -> "Gemini 2.5 pro". Pure, so the node test can run it.
   function prettyModel(id) {
@@ -94,6 +99,7 @@
       state.main = m.main || { provider: "anthropic-cli", model: "" };
       state.reasoning = m.reasoning || "off";
       state.fast = m.fast === true;
+      state.defaults = (m.routing || {}).defaults || {};
     } catch (e) {}
   }
 
@@ -127,7 +133,7 @@
       // 0.180.0 (owner): the chip shows the model name only, like "Opus 5.5" in the Claude app. The provider moves to
       // the tooltip; the pin state shows as an icon (below).
       mt.textContent = chipLabel(eff, p);
-      mt.title = (p ? p.label + " · " + (eff.model || window.t("models.mp_default")) + "\n" : "") + (sessionPin
+      mt.title = (p ? p.label + " · " + (eff.model || defText(eff.provider)) + "\n" : "") + (sessionPin
         ? window.t("mpick.pin_title")
         : pinBroken
           ? window.t(pinLimited ? "mpick.pin_limited_title" : "mpick.pin_broken_title")
@@ -165,17 +171,23 @@
     renderFast();
   }
 
-  function renderFast() {
-    const fb = $("fastBtn");
-    if (!fb) return;
+  // 0.329.0: the bolt sits in the Effort popover (effort-slider.js) and the composer button became the plan usage
+  // ring (plan-limit.js). The Effort chip carries a small bolt while Fast mode is on, so it stays visible.
+  function fastTitle(on) {
     const eff = effective();
     const n = fastNote(eff.provider, eff.model);
-    fb.setAttribute("aria-pressed", n.supported && state.fast ? "true" : "false");
-    fb.setAttribute("aria-disabled", n.supported ? "false" : "true");
     // 0.164.0: the last real state this brain reported (cooldown, provider refusal) as an extra line.
     const st = fastStates[eff.provider];
-    const key = n.supported && state.fast ? fastStateKey(st) : "";
-    fb.title = "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key, { reason: (st && st.reason) || "" }) : "");
+    const key = n.supported && on ? fastStateKey(st) : "";
+    return "Fast mode\n" + window.t(n.note) + (key ? "\n" + window.t(key, { reason: (st && st.reason) || "" }) : "");
+  }
+  function renderFast() {
+    const eff = effective();
+    const on = fastNote(eff.provider, eff.model).supported && state.fast;
+    const fi = $("effFast");
+    if (fi) fi.hidden = !on;
+    if (effSlider && effSlider.refreshFast) effSlider.refreshFast();
+    try { if (window.JavisPlanLimit) window.JavisPlanLimit.setProvider(eff.provider); } catch (e) {}
   }
   // FAST_STATE_BEGIN
   // Tooltip line for the last Fast mode state a brain reported (server: fast_mode.states()).
@@ -220,6 +232,7 @@
       short,
       mark: (p) => (p.is_main ? " " + ic("check", { cls: "ic-ok" }) : ""),
       noWait: true,
+      connectedOnly: true,   // 0.350.0: providers not connected are not listed in the chat picker
     };
     let html = await window.JavisModelList.render(o);
     if (luot !== luotVe || pop.hidden) return;
@@ -247,7 +260,7 @@
   function open() {
     const pop = $("mbPop");
     if (!pop) return;
-    effClose(); closePlus();
+    effClose(); closePlus(); closeLimit();
     // Đang gõ trong ô chat mà bấm chip model: hạ bàn phím xuống trước, kẻo bàn phím che bảng.
     if (camUng()) {
       const a = document.activeElement;
@@ -263,13 +276,19 @@
   function effOpen() {
     const pop = $("effPop"), btn = $("effBtn");
     if (!pop || !window.JavisEffortSlider) return;
-    close(); closePlus();
+    close(); closePlus(); closeLimit();
     const eff = effective();
     pop.hidden = false;
     const locked = window.JavisEffortSlider.isLocked(eff.provider, eff.model);
     if (btn) btn.setAttribute("aria-expanded", "true");
+    const fn = fastNote(eff.provider, eff.model);
     effSlider = window.JavisEffortSlider.mount(pop, {
       value: agentEff ? agentEff.level : state.reasoning,
+      fast: {
+        supported: fn.supported, on: state.fast, title: fastTitle,
+        onHover: () => { if (state.fast) refreshFastState(); },
+        onToggle: async (on) => { state.fast = on; renderFast(); await saveModel({ fast: state.fast }); },
+      },
       locked: locked,
       lockedValue: locked ? window.JavisEffortSlider.lockedLevel(eff.model) : "",
       onChange: async (v) => {
@@ -291,6 +310,7 @@
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
   function effIsOpen() { const pop = $("effPop"); return pop && !pop.hidden; }
+  function closeLimit() { try { if (window.JavisPlanLimit) window.JavisPlanLimit.close(); } catch (e) {} }
   function closePlus() { try { if (window.JavisComposerMenu) window.JavisComposerMenu.close(); } catch (e) {} }
 
   // Chọn một model: ghi mặc định chung (chat mới sau này theo cái vừa chọn) + GHIM cho phiên
@@ -341,22 +361,9 @@
     return { kind: "none" };
   }
 
-  // Hovering or focusing the bolt refreshes its tooltip with the brain's last real Fast mode state.
-  ["mouseover", "focusin"].forEach((t) => document.addEventListener(t, (e) => {
-    if (e.target && e.target.closest && e.target.closest("#fastBtn") && state.fast) refreshFastState();
-  }));
-
   document.addEventListener("click", async (e) => {
     if (e.target.closest("#mbOpen")) { isOpen() ? close() : open(); return; }
     if (e.target.closest("#effBtn")) { effIsOpen() ? effClose() : effOpen(); return; }
-    if (e.target.closest("#fastBtn")) {
-      const eff = effective();
-      if (!fastNote(eff.provider, eff.model).supported) return;
-      state.fast = !state.fast;
-      renderFast();
-      await saveModel({ fast: state.fast });
-      return;
-    }
     if (!e.target.closest("#effPop") && effIsOpen()) effClose();
     if (!e.target.closest("#mbPop") && !e.target.closest("#mbOpen")) { if (isOpen()) close(); return; }
 
@@ -420,6 +427,7 @@
     },
     fastNote: fastNote,
     prettyModel: prettyModel,
+    closeAll: function () { close(); effClose(); closePlus(); },
     hienTai: function () {
       const eff = effective();
       const p = state.providers.find((x) => x.id === eff.provider);

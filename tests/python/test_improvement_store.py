@@ -173,6 +173,46 @@ class ImprovementStoreTests(unittest.TestCase):
         with self.assertRaises(IM.AssetUnavailable):
             self.store.read_revision(self.owner, first["revision_id"])
 
+    def test_blob_publish_sharing_conflict_reuses_only_verified_winner(self):
+        raw = b"Same authorized content from concurrent publishers.\r\n"
+        digest = hashlib.sha256(raw).hexdigest()
+        path = self.blobs._path(self.owner.brain_id, digest)
+        winner = []
+
+        def published_by_competitor(temporary, destination):
+            self.assertEqual(Path(destination), path)
+            ciphertext = Path(temporary).read_bytes()
+            path.write_bytes(ciphertext)
+            winner.append(ciphertext)
+            raise PermissionError("Synthetic Windows sharing conflict at atomic replace")
+
+        with patch("improvement_blobs.os.replace", side_effect=published_by_competitor):
+            self.assertEqual(self.blobs.write(self.owner.brain_id, raw), digest)
+        self.assertEqual(self.blobs.read(self.owner.brain_id, digest), raw)
+        self.assertEqual(path.read_bytes(), winner[0])
+        self.assertEqual(list(path.parent.glob(".write-*")), [])
+
+    def test_blob_publish_conflict_never_accepts_or_overwrites_corrupt_winner(self):
+        raw = b"Corrupt competitor must remain unavailable."
+        path = self.blobs._path(self.owner.brain_id, hashlib.sha256(raw).hexdigest())
+
+        def corrupt_competitor(temporary, destination):
+            path.write_bytes(b"enc:corrupt-competing-history")
+            raise PermissionError("Synthetic Windows sharing conflict")
+
+        with patch("improvement_blobs.os.replace", side_effect=corrupt_competitor), self.assertRaises(IM.AssetUnavailable):
+            self.blobs.write(self.owner.brain_id, raw)
+        self.assertEqual(path.read_bytes(), b"enc:corrupt-competing-history")
+        self.assertEqual(list(path.parent.glob(".write-*")), [])
+
+    def test_blob_publish_permission_denial_without_winner_still_fails(self):
+        raw = b"No existing content means permission denial is not success."
+        path = self.blobs._path(self.owner.brain_id, hashlib.sha256(raw).hexdigest())
+        with patch("improvement_blobs.os.replace", side_effect=PermissionError("Synthetic denial")), self.assertRaises(PermissionError):
+            self.blobs.write(self.owner.brain_id, raw)
+        self.assertFalse(path.exists())
+        self.assertEqual(list(path.parent.glob(".write-*")), [])
+
     def test_empty_revision_rejects_decryption_failure(self):
         first = self.capture(content=b"")
         self.assertEqual(self.store.read_revision(self.owner, first["revision_id"]), b"")

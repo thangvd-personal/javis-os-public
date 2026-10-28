@@ -31,11 +31,13 @@
       // miễn nhiễm với bất kỳ luật full-width nào của trang chủ quản sau này.
       // KHÔNG đặt align-items:center: ở màn hẹp hàng này xoay thành cột, mà center thì con
       // co về bề ngang nội dung thay vì giãn hết hàng - ô nhập lại bé. Để mặc định stretch.
+      // margin-top:0 on the buttons: .gcard-btn carries a 14px top margin for stacked cards, which here
+      // dropped the Save button 14px below the field it belongs to.
       ".dom-field{display:flex;gap:6px}" +
       ".dom-field input{flex:1 1 auto;min-width:0;width:auto;background:var(--field-bg);" +
       "border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 10px;font-size:14px}" +
       ".dom-field input:focus{outline:none;border-color:var(--accent)}" +
-      ".dom-field .gcard-btn{flex:0 0 auto;width:auto;white-space:nowrap}" +
+      ".dom-field .gcard-btn{flex:0 0 auto;width:auto;white-space:nowrap;margin-top:0}" +
       ".dom-status{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}" +
       ".dom-badge{font-size:12.5px;padding:3px 10px;border-radius:20px;border:1px solid var(--hairline);background:var(--surface-2);color:var(--text2);white-space:nowrap}" +
       ".dom-badge.ok{background:var(--ok-wash);border-color:var(--green);color:var(--green)}" +
@@ -44,7 +46,7 @@
       // Hai nút chia đôi hàng: phải khai flex CHO CẢ HAI (trước đây bỏ sót nút ghost nên nó
       // nuốt hàng còn nút kia teo). Một selector là đủ vì cả hai nay cùng họ .gcard-btn.
       ".dom-ssl{display:flex;gap:6px;margin-top:9px}" +
-      ".dom-ssl .gcard-btn{flex:1 1 0;width:auto;white-space:nowrap}" +
+      ".dom-ssl .gcard-btn{flex:1 1 0;width:auto;white-space:nowrap;margin-top:0}" +
       ".dom-guide{margin-top:10px;font-size:13px;line-height:1.55;color:var(--text);display:flex;flex-direction:column;gap:8px}" +
       ".dom-step{display:grid;grid-template-columns:25px minmax(0,1fr);gap:8px;padding:9px 10px;background:var(--surface-1);border:1px solid var(--hairline);border-radius:9px}" +
       ".dom-step.done{border-color:var(--ok-line);background:var(--ok-wash)}" +
@@ -145,6 +147,38 @@
       if (sslRow) sslRow.style.display = "none";
       if (guide) guide.style.display = "none";
       setStatus("domainStatus", window.t("brand.no_domain"), false);
+      // 0.302.0: on a Hostinger VPS the server reads the free srv<id>.hstgr.cloud name from reverse DNS and offers the
+      // exact DOMAIN_NAME line. Without it, hPanel's Open button only reaches http://<ip>:7777 (owner report 24/10).
+      var sg = j && j.suggested_domain;
+      var gw = (j && j.gateway) || {};
+      var gwNames = (gw.names || []).join(", ");
+      // 0.304.0: on Ubuntu 26 the gateway serves the VPS link itself. Say which step it is at instead of always asking
+      // for DOMAIN_NAME: the link works (open it), the certificate is still coming (ports 80/443), or Traefik has the ports.
+      if (j && j.auto_url && guide) {
+        guide.innerHTML = '<div class="dom-step done"><span class="dom-step-num">' + ic("check") + '</span><div><b>' +
+          window.t("brand.auto_ok_title") + '</b><p>' + window.t("brand.auto_ok_desc") + '</p></div></div>' +
+          '<a class="dom-open" href="' + esc(j.auto_url) + '" target="_blank" rel="noopener">' + window.t("brand.open") + ' ' +
+          esc(j.auto_url) + ' ↗</a>';
+        guide.style.display = "block";
+        setStatus("domainStatus", window.t("brand.https_running", { domain: j.auto_url.replace(/^https:\/\//, "") }), false);
+        return;
+      }
+      if (gw.state === "serving" && gwNames && guide) {
+        guide.innerHTML = '<div class="dom-step warn"><span class="dom-step-num">' + ic("lightbulb") + '</span><div><b>' +
+          window.t("brand.gw_wait_title") + '</b><p>' + window.t("brand.gw_wait_desc") + '</p><code>' + esc(gwNames) +
+          '</code></div></div>';
+        guide.style.display = "block";
+        return;
+      }
+      if (sg && guide) {
+        var line = "DOMAIN_NAME=" + sg;
+        var di = $("setDomain"); if (di && !di.value) di.placeholder = sg;
+        guide.innerHTML = '<div class="dom-step warn"><span class="dom-step-num">' + ic("lightbulb") + '</span><div><b>' +
+          window.t("brand.suggest_title") + '</b><p>' + window.t("brand.suggest_desc") + '</p><code>' + esc(line) +
+          '</code><br><button class="dom-copy" type="button" data-copy="' + esc(line) + '">' + window.t("brand.copy_env") +
+          '</button></div></div>';
+        guide.style.display = "block";
+      }
       return;
     }
     if (row) row.style.display = "flex";
@@ -254,7 +288,8 @@
       var b = j.branding || {};
       _logoCustom = !!b.logo_ext;
       setStatus("brandLogoStatus", _logoCustom ? window.t("brand.using_custom_image") : window.t("brand.using_default_image"), false);
-      if (dom) checkDomain(); else renderDomainStatus({ domain: "" });
+      // No domain: still ask the server once, it may offer this VPS's free Hostinger name (0.302.0).
+      if (dom) checkDomain(); else { renderDomainStatus({ domain: "" }); checkDomain(); }
     } catch (e) { /* im lặng */ }
   }
 

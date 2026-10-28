@@ -41,7 +41,14 @@ def note_telemetry_error(execution=None) -> None:
     try:
         import turn_context
         ex = execution or (turn_context.current() or {}).get("execution") or {}
-        if ex.get("team_id"):
+        if "operation_id" in ex:
+            ex = turn_context.execution_metadata(ex)
+            if ex is None:
+                return
+            key = ("improvement_operation", ex["experiment_id"], ex["operation_id"], ex["execution_id"])
+            with _LOCK:
+                _TELEMETRY_ERRORS[key] = _TELEMETRY_ERRORS.get(key, 0) + 1
+        elif ex.get("team_id"):
             key = (ex["team_id"], ex.get("task_id"), ex.get("execution_id") or ex.get("turn_id"))
             with _LOCK:
                 _TELEMETRY_ERRORS[key] = _TELEMETRY_ERRORS.get(key, 0) + 1
@@ -64,6 +71,13 @@ def improvement_telemetry_errors(experiment_id, trial_id=None, execution_id=None
     with _LOCK:
         return sum(n for key, n in _TELEMETRY_ERRORS.items() if len(key) == 4 and key[0] == "improvement"
                    and key[1] == experiment_id and (trial_id is None or key[2] == trial_id)
+                   and (execution_id is None or key[3] == execution_id))
+
+
+def operation_telemetry_errors(experiment_id, operation_id, execution_id=None) -> int:
+    with _LOCK:
+        return sum(n for key, n in _TELEMETRY_ERRORS.items() if len(key) == 4 and key[0] == "improvement_operation"
+                   and key[1] == experiment_id and key[2] == operation_id
                    and (execution_id is None or key[3] == execution_id))
 
 

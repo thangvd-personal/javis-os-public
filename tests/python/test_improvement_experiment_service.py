@@ -276,5 +276,48 @@ class ExperimentServiceTests(unittest.IsolatedAsyncioTestCase):
 
 
 
+    async def test_stop_joins_an_owned_synchronous_report_before_releasing_experiment(self):
+        from improvement_comparison_results import ComparisonResults
+        entered, release = threading.Event(), threading.Event()
+        create = ComparisonResults.create
+        arrived = threading.Event()
+        finish = self.service._finish_stop
+
+        def observed_finish(*args):
+            arrived.set()
+            return finish(*args)
+
+        def delayed(*args, **kwargs):
+            entered.set()
+            if not release.wait(10):
+                raise AssertionError('Comparison report thread was not released')
+            return create(*args, **kwargs)
+
+        with patch.object(ComparisonResults, 'create', new=delayed), \
+             patch.object(self.service, '_finish_stop', side_effect=observed_finish):
+            report = asyncio.create_task(self.service.control(self.owner, 'association-experiment', 'report',
+                {'comparison_id': self.h.comparison['id'], 'expected_generation': self.h.frozen['generation'],
+                 'event_key': 'report-thread-before-experiment-stop'}))
+            stopped = None
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 10))
+                stopped = asyncio.create_task(self.cancel())
+                for _ in range(200):
+                    if self.current()['phase'] == 'stopping':
+                        break
+                    await asyncio.sleep(.005)
+                self.assertEqual(self.current()['phase'], 'stopping')
+                self.assertFalse(await asyncio.to_thread(arrived.wait, 2),
+                    'Stop reached the final cleanup/CAS before the owned report thread settled')
+                self.assertFalse(stopped.done(), 'Stop released capacity before the owned report thread settled')
+                release.set()
+                with self.assertRaises((IM.ConflictError, PermissionError)):
+                    await report
+                self.assertEqual((await stopped)['current']['phase'], 'cancelled')
+            finally:
+                release.set()
+                await asyncio.gather(report, *([] if stopped is None else [stopped]), return_exceptions=True)
+
+
 if __name__ == "__main__":
     unittest.main()

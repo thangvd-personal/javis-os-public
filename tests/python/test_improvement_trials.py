@@ -268,7 +268,19 @@ class TrialStoreTests(unittest.TestCase):
         with self.rs._conn() as connection:
             contract = connection.execute("SELECT id FROM improvement_contracts").fetchone()[0]
             # Construct a real schema2 fixture, without leaving later experiment tables behind.
-            for table in ("improvement_experiment_trial_links", "improvement_comparison_reports", "improvement_experiment_selections",
+            connection.execute("DROP TRIGGER improvement_preparation_arm_fence")
+            connection.execute("DROP TRIGGER improvement_legacy_trial_view_fence")
+            # Later add-only families first (canaries 12, activations 11, recipes 9, compose 8), so the fixture is a real schema2 store.
+            for table in ("improvement_imports", "improvement_refinements", "improvement_transfers", "improvement_team_trials", "improvement_team_pins", "improvement_bundle_members", "improvement_bundle_activations", "improvement_agent_overlays", "improvement_agent_procedures", "improvement_routing_overlays", "improvement_routing_candidates", "improvement_canary_verdicts", "improvement_canary_exposures", "improvement_canaries",
+                          "improvement_auto_scopes", "improvement_activations", "improvement_recipe_trial_refs", "improvement_recipe_states",
+                          "improvement_recipes", "improvement_compositions", "improvement_compose_grants",
+                          "improvement_compose_authorizations"):
+                connection.execute("DROP TABLE " + table)
+            for table in ("improvement_view_qualification_links", "improvement_view_trial_links", "improvement_comparison_views", "improvement_effective_view_assets", "improvement_effective_views",
+                          "improvement_semantic_receipts", "improvement_generated_candidates", "improvement_proposal_publications",
+                          "improvement_operation_results", "improvement_operation_observations", "improvement_operation_attempts",
+                          "improvement_operations", "improvement_preparation_trial_links", "improvement_preparations",
+                          "improvement_experiment_trial_links", "improvement_comparison_reports", "improvement_experiment_selections",
                           "improvement_comparisons", "improvement_experiment_arms", "improvement_experiments",
                           "improvement_skill_candidates", "improvement_candidate_authority_grants", "improvement_candidate_authorities",
                           "improvement_trial_context_grants", "improvement_trial_contexts", "improvement_trial_results", "improvement_trial_owner_decisions", "improvement_trial_artifacts", "improvement_trial_receipts", "improvement_trial_observations",

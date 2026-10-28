@@ -27,7 +27,7 @@ On narrow screens, use the list and details buttons to open the side drawers. Sw
 
 1. Choose **Agents**, then select an agent in the left column.
 2. Send a message in the centre. Replies use the agent's configured role, instructions and private memory.
-3. Edit its name, role, instructions, skills or model on the right and click **Save**.
+3. Edit its name, role, instructions, skills or model on the right and click **Save changes** (or Ctrl+S). The save bar stays at the bottom of the form: it says "Unsaved changes" with a yellow dot while something is unsaved, and "Saved" after.
 4. Use the new conversation button to start a separate chat with the same agent. Each agent can have several conversations; reopen recent conversations on the right to continue.
 
 Partner conversations are separate from Javis's main chat history. Returning to a partner resumes its most recent conversation.
@@ -71,7 +71,7 @@ A tag is **not** a chat group: tagging adds the agent to no group chat. It also 
 | **Skills** | The skills available in the vault; tick the ones the agent may use. | Pick skills matching the role |
 | **Model** | A picker with 8 options, see the table below. | Sonnet for balance, Opus for deep reasoning, Haiku for fast and cheap |
 
-4. Click **Save**. If you forget the Name, Javis says "Enter a name".
+4. Click **Create agent** (for an existing agent the button says **Save changes**). If you forget the Name, Javis says "Enter a name".
 5. The new agent card appears in the list with a 🤖 icon, the model name and the assigned skill labels. With no skills assigned, the card reads "no skills assigned".
 
 A note on the Skills field: the list comes from the vault's skill folder. If the vault has no skills, the panel says so and notes that you can create the agent now and assign skills later. Creating skills is covered on the [Skills](06-skills.md) page.
@@ -106,7 +106,7 @@ To be clear: this memory belongs to **one agent**; Javis's shared memory about y
 
 ### Editing or deleting an agent
 
-- **Edit**: select the agent, change its settings on the right and click **Save**.
+- **Edit**: select the agent, change its settings on the right and click **Save changes**.
 - **⤓ Export**: package the agent (with its skills) into a `.zip` to share, see "Sharing" at the end of this page.
 - **Delete**: click **Delete** and confirm in the "Delete agent ...?" dialog. Note: if a workflow uses that agent, its step will point at an agent that no longer exists, so check related workflows afterwards. Deleting an agent does **not** delete `memory/agents/<slug>/`, so its old memory and logs remain on disk.
 
@@ -269,6 +269,18 @@ When a member hands in the result, Javis checks the product itself (the files) a
 - A criterion is unclear or needs your confirmation: the chat shows a **Product acceptance** card with **Passes, close the job** or **Not yet, send back** (with a note). A file that changed after the check cannot be accepted until it is checked again.
 
 Editing the job voids the old evidence. After acceptance, editing a product file shows "The product changed after the check" on the card. A member's learning score only goes up from a passed acceptance or your confirmation, once per job.
+
+## Give a Team a job straight from chat (from 0.357.0)
+
+You do not need to open the Teams page to give a Team a job. Tell Javis in the web chat, Telegram or Zalo, for example "have the Content team write 3 posts about fish sauce", and Javis picks the right Team of the open brain and gives it **one job**. The job runs exactly as if you had given it on the Teams page: the leader coordinates, with the Team's queue, acceptance and history.
+
+- **The result comes back to the chat you asked in**: when the job is done, cancelled, blocked or waiting for your decision. One message per state, and always a copy in the inbox.
+- **DONE is not PASSED**: the message says whether the job passed acceptance. When the Team has no acceptance check, Javis says plainly that nobody confirmed a pass.
+- **Approvals stay yours**: a job that needs your approval or acceptance still stops on the job card in Teams. Javis only reports, it never approves for you.
+- **No duplicates**: if Javis repeats the same request, there is still one job. In the team chat that message carries a "via Javis Core" label.
+- Ask "how is that job going" and Javis reads back the job's state, result and acceptance.
+
+Only the owner (or background work the owner scheduled) can give a Team a job. Customer bots, a Team of another brain, or a step of the Team's own job are refused before any job is created.
 
 ## Quick actions and troubleshooting
 

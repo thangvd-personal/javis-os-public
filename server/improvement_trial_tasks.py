@@ -22,7 +22,7 @@ class TrialTasks:
         self.trials, self.runner = trials, runner
         self._loop = None
         self._operations = set()
-        self._reservation_brains = {}
+        self._reservations = {}
         self._tasks = {}
         self._started = set()
         self._leases = {}
@@ -50,15 +50,15 @@ class TrialTasks:
             raise values[0]
         return values[0]
 
-    async def _operation(self, coroutine, *, reservation_brain=None):
+    async def _operation(self, coroutine, *, reservation=None):
         task = asyncio.create_task(coroutine)
         self._operations.add(task)
-        if reservation_brain is not None:
-            self._reservation_brains[task] = reservation_brain
+        if reservation is not None:
+            self._reservations[task] = reservation
 
         def finished(completed):
             self._operations.discard(completed)
-            self._reservation_brains.pop(completed, None)
+            self._reservations.pop(completed, None)
             self._consume(completed)
 
         task.add_done_callback(finished)
@@ -71,7 +71,8 @@ class TrialTasks:
         if self._closed:
             raise RuntimeError("trial_tasks_closed")
         request = IC._frozen(request)
-        return await self._operation(self._reserve_and_start(principal, brain, request, event_key), reservation_brain=brain)
+        reservation = (brain, IM._hash(request))
+        return await self._operation(self._reserve_and_start(principal, brain, request, event_key), reservation=reservation)
 
     async def _reserve_and_start(self, principal, brain, request, event_key):
         row = await _settled_call(self.trials.reserve, principal, request, event_key=event_key)
@@ -174,7 +175,8 @@ class TrialTasks:
         """
         self._bind()
         brain = IM._brain(principal)
-        if (type(trial_ids) is not list or len(trial_ids) > 12000
+        from improvement_execution_limits import MAX_TRIALS
+        if (type(trial_ids) is not list or len(trial_ids) > MAX_TRIALS
                 or any(type(identifier) is not str or not IC._ID.fullmatch(identifier) for identifier in trial_ids)
                 or len(set(trial_ids)) != len(trial_ids)):
             raise ValueError("invalid_trial_drain_selection")
@@ -183,9 +185,11 @@ class TrialTasks:
         async def drain():
             # Authenticate the complete selection before cancelling any owned
             # task; one foreign ID cannot partly drain a valid selection.
+            selected = set()
             for identifier in identifiers:
-                await asyncio.to_thread(self.trials.get, principal, identifier)
-            pending = tuple(task for task in self._operations if self._reservation_brains.get(task) == brain)
+                row = await asyncio.to_thread(self.trials.get, principal, identifier)
+                selected.add((brain, IM._hash(row['request'])))
+            pending = tuple(task for task in self._operations if self._reservations.get(task) in selected)
             if pending:
                 await _drain(asyncio.gather(*pending, return_exceptions=True))
             for identifier in identifiers:

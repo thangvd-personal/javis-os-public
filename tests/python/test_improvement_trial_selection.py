@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import sys
 import tempfile
 import types
@@ -341,6 +342,16 @@ class SDKResolverTests(unittest.TestCase):
             "ProgramFiles(x86)": str(self.root / "programs86"), "ProgramData": str(self.root / "programdata"),
             "NVM_HOME": str(self.root / "nvm"), "NVM_SYMLINK": str(self.root / "nvm-link")}).start()
         patch.object(self.cli, "_BIN_NHO", {"data": None}).start()
+        _real_which = shutil.which
+        def _safe_which(cmd, mode=os.F_OK | os.X_OK, path=None):
+            res = _real_which(cmd, mode=mode, path=path)
+            if res and os.path.islink(res):
+                if path:
+                    parts = [p for p in path.split(os.pathsep) if not (Path(p) / cmd).is_symlink()]
+                    return _real_which(cmd, mode=mode, path=os.pathsep.join(parts))
+                return None
+            return res
+        patch("shutil.which", side_effect=_safe_which).start()
         patch("subprocess.run", side_effect=AssertionError("No native execution permitted")).start()
         patch("subprocess.Popen", side_effect=AssertionError("No native execution permitted")).start()
         patch("config.read_settings", side_effect=AssertionError("No decrypted settings permitted")).start()

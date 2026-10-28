@@ -128,6 +128,7 @@ body.in-console .hud-actions { display: none; }
 .js-input {
   width: 100%; background: var(--sunken); border: 1px solid var(--glass-brd);
   color: var(--text); border-radius: 9px; padding: 9px 11px; font-size: 15px; margin-bottom: 4px;
+  min-height: var(--ctl-h);   /* same height as a .gcard-btn placed beside it */
 }
 .js-input:focus { outline: none; border-color: var(--accent); }
 .js-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 15px; }
@@ -136,8 +137,8 @@ body.in-console .hud-actions { display: none; }
    style="background:transparent" ngay trên thẻ: style inline thắng cả rule :hover,
    nên nền giữ nguyên trong suốt còn chữ đổi sang var(--on-accent) - chữ tàng hình ở
    cả tông tối lẫn tông sáng. */
-.gcard-btn.ghost { background: transparent; border-color: var(--glass-brd); color: var(--text2); }
-.gcard-btn.ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--text2); }
+.gcard-btn.ghost { background: transparent; border-color: var(--btn-line); color: var(--text2); }
+.gcard-btn.ghost:hover { background: var(--btn-fill-hover); color: var(--text); border-color: var(--text2); }
 .gcard-btn { width: auto; padding: 9px 16px; }
 .gcard .gcard-btn { width: 100%; }   /* nút trong card model vẫn full-width */
 .js-actions .gcard-btn { width: auto; }
@@ -161,6 +162,103 @@ body.in-console .hud-actions { display: none; }
 .prov-status.on { color: var(--green); }
 .prov-badge { font-family: var(--font); font-size: 16px; letter-spacing: 0.5px; color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 2px 6px; }
 .prov-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+/* 0.351.0 usage order (models-order.js). The top card is MAIN; a fallback card chat runs on right now turns green. */
+.ord-card.ord-inuse:not(.main) { border-color: var(--green); box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 45%, transparent); }
+.ord-head { cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.ord-badges { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: none; }
+.ord-pos { font-size: 16px; color: var(--text3); white-space: nowrap; }
+.prov-badge.ord-live { color: var(--green); border-color: var(--green); }
+.ord-grip { flex: none; width: 34px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text3); cursor: grab; touch-action: none; margin-right: -6px; }
+.ord-grip:hover { color: var(--text); background: var(--bg3); }
+.ord-chips { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.ord-chips .mb-chip, .ord-chips .cp-eff { font-size: 15px; padding: 6px 13px; min-height: 36px; }
+.ord-chips .mb-chip { max-width: 100%; }
+.ord-mtxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ord-chips .mb-pop { left: 0; width: min(340px, calc(100vw - 32px)); }
+.ord-chips .eff-pop { left: 0; }
+.ord-chips .mb-item, .ord-chips .mb-search { font-size: 15px; }
+.aux-now-act.ord-chips { margin-top: 0; flex-wrap: nowrap; }
+.aux-now-act.ord-chips .mb-pop, .aux-now-act.ord-chips .eff-pop { left: auto; right: 0; }
+.ord-swap-row { display: flex; justify-content: center; margin: -4px 0; }
+.ord-swap { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--bg2); color: var(--text2); font: inherit; font-size: 15px; cursor: pointer; }
+.ord-swap:hover { border-color: var(--accent); color: var(--accent-ink); }
+.ord-accts { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ord-acct { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 6px 6px 8px; border-radius: 22px;
+  border: 1px solid var(--border); background: var(--bg2); font-size: 16px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.ord-acct.off { opacity: .55; }
+.ord-acct.inuse { border-color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.ord-acct.inuse-bg { border-color: var(--accent2-ink); background: var(--accent2-wash); }
+.ord-acct .ord-grip { width: 28px; height: 34px; margin: 0 -6px 0 -2px; }
+.ord-num { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--border);
+  background: var(--bg3); font-size: 14px; font-weight: 600; }
+.ord-acct.inuse .ord-num { background: var(--green); border-color: var(--green); color: #fff; }
+.ord-acct.inuse-bg .ord-num { background: var(--accent2-ink); border-color: var(--accent2-ink); color: #fff; }
+.ord-atxt { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
+.ord-aname { font-weight: 600; overflow-wrap: anywhere; }
+.ord-dot { font-size: 12px; }
+.ord-dot.ready { color: var(--green); } .ord-dot.rest { color: var(--warn-ink); } .ord-dot.off { color: var(--text3); }
+.ord-ast { color: var(--text3); }
+.ord-pill { font-weight: 600; overflow-wrap: anywhere; }
+.ord-pill.chat { color: var(--green); }
+.ord-pill.bg { color: var(--accent2-ink); }
+.ord-actl { display: flex; gap: 4px; flex: none; margin-left: auto; }
+.ord-ib { width: 36px; height: 36px; border-radius: 50%; border: 0; background: transparent; color: var(--text2); display: grid; place-items: center; cursor: pointer; }
+.ord-ib:hover:not(:disabled) { background: var(--bg3); color: var(--text); }
+.ord-ib:disabled { opacity: .3; cursor: not-allowed; }
+.ord-menu { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 4px 4px 38px; }
+.ord-menu[hidden], .ord-rekey[hidden], .ord-addbox[hidden], .ord-off[hidden] { display: none; }
+.ord-menu .danger { color: var(--red); }
+.ord-rekey { flex-basis: 100%; display: flex; gap: 8px; }
+.ord-rekey .js-input { flex: 1; min-width: 0; }
+.ord-add, .ord-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 8px 14px; border-radius: 22px;
+  border: 1px dashed var(--border); background: transparent; color: var(--text2); font: inherit; font-size: 16px; cursor: pointer; }
+.ord-add:hover, .ord-more:hover { background: var(--bg3); color: var(--text); }
+.ord-more { margin: 0 0 10px; }
+.ord-addbox { border: 1px dashed var(--accent-line); background: var(--accent-wash); border-radius: 12px; padding: 12px; margin-top: 8px;
+  display: flex; flex-direction: column; gap: 10px; }
+.ord-dragging { position: relative; z-index: 5; box-shadow: var(--shadow-3) !important; cursor: grabbing; transition: none; }
+.ord-drop-line { position: fixed; height: 4px; border-radius: 4px; background: var(--accent); z-index: 70; pointer-events: none; }
+.ord-drop-line[hidden] { display: none; }
+body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user-select: none; }
+.ord-pressing { outline: 2px dashed var(--accent-line); outline-offset: 3px; }
+.ord-badges-m { display: none; }
+/* 0.353.0: the accounts of a plan card (ChatGPT, Grok, Claude Code). */
+.ord-pacct { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ord-pacct .prov-auth-title { margin-bottom: 2px; }
+.ord-plink { overflow-wrap: anywhere; font-size: 16px; }
+.ord-pcode { font-size: 20px; letter-spacing: 1px; padding: 2px 8px; }
+.ord-pstep:empty { display: none; }
+.ord-pstep { display: flex; flex-direction: column; gap: 8px; font-size: 16px; }
+.prov-card.ord-raise, .gcard.ord-raise { position: relative; z-index: 70; }
+/* Phone pickers (0.352.0): a bottom sheet with a title and a close button instead of a popover over the card. */
+.ord-sheet-back { position: fixed; inset: 0; z-index: 900; background: rgba(0, 0, 0, .5); }
+.ord-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 901; display: flex; flex-direction: column;
+  max-height: min(78vh, 680px); background: var(--bg2); border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 18px 18px 0 0; box-shadow: var(--shadow-3); padding: 6px 16px calc(16px + env(safe-area-inset-bottom)); }
+.ord-sheet-grab { width: 40px; height: 4px; border-radius: 4px; background: var(--border); margin: 4px auto 8px; }
+.ord-sheet-head { display: flex; align-items: center; gap: 10px; padding: 0 0 10px; font-size: 17px; }
+.ord-sheet-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ord-sheet-x { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: var(--bg3); color: var(--text); cursor: pointer; }
+.ord-sheet-body { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; min-height: 0; }
+.ord-sheet .mb-search { position: sticky; top: 0; z-index: 1; font-size: 16px; padding: 12px 14px; margin-bottom: 8px; border-radius: 12px; }
+.ord-sheet .mb-item { font-size: 16px; min-height: 48px; padding: 12px; border-radius: 10px; }
+.ord-sheet .mb-prov { font-size: 14px; padding: 14px 8px 6px; }
+.ord-sheet .eff-head { font-size: 16px; }
+.ord-sheet .eff-track { height: 36px; }
+.ord-mname { min-width: 0; overflow-wrap: anywhere; }
+.ord-msec { cursor: default; border-top: 1px solid var(--border); margin-top: 6px; }
+@media (max-width: 600px) {
+  .ord-menu { padding-left: 4px; }
+  /* Name, kind label and status get the whole head; the MAIN / Fallback badge moves to the end of the chip row. */
+  .ord-head .ord-badges { display: none; }
+  .ord-chips .ord-badges-m { display: flex; flex-direction: row; align-items: center; gap: 6px; margin-left: auto; }
+  .ord-head .prov-status { overflow-wrap: anywhere; }
+  .aux-now { flex-wrap: wrap; }
+  .aux-now-act.ord-chips { width: 100%; justify-content: flex-end; }
+}
 /* Messages under the buttons of a provider card. They used to sit INSIDE the flex row of buttons,
    so a long CLI message became a narrow column and stretched the buttons to its height (owner's
    screenshot 2026-10-17). Here they get the full width of the card and vanish when empty. */
@@ -171,6 +269,10 @@ body.in-console .hud-actions { display: none; }
 .prov-help summary { cursor: pointer; color: var(--text2); }
 .prov-help > div { margin-top: 4px; color: var(--text2); }
 .prov-action .js-input { margin-bottom: 0; flex: 1; }
+/* Claude sign-in code (0.308.0): the box takes the row, at least 240px before the button wraps under it on a phone;
+   16px so iOS does not zoom in, monospace so a mistyped character is easy to spot. */
+.prov-code { margin-top: 6px; max-width: 560px; }
+.prov-code .js-input { flex: 1 1 240px; min-width: 0; font-size: 16px; font-family: var(--mono, ui-monospace, monospace); }
 .prov-action .gcard-btn { width: auto; flex: 0 0 auto; margin-top: 0; font-size: 16px; }
 .prov-note { font-size: 16px; line-height: 1.55; color: var(--text3); margin-top: 8px; overflow-wrap: anywhere; }
 /* Warning box on a provider card (missing CLI, a vendor cutting off a plan). Something the user
@@ -277,12 +379,18 @@ body.in-console .hud-actions { display: none; }
 .mp-model.sel { background: var(--accent-wash-2); border-color: var(--accent); }
 .mp-cur { float: right; font-size: 11px; color: var(--accent2); letter-spacing: 1px; }
 .mp-empty { color: var(--text3); font-size: 14px; padding: 16px; }
-.mp-foot { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-top: 1px solid var(--glass-brd); }
-.mp-foot .mp-note { max-height: 84px; overflow-y: auto; }   /* lỗi dài không làm footer phình đẩy nút ra ngoài */
+/* Buttons sit on the right in every footer. space-between used to push a lone Close button to the LEFT
+   and split Cancel and Save to opposite corners when the footer had no note; the note now takes the slack. */
+.mp-foot { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; row-gap: 8px;
+  padding: 14px 20px; border-top: 1px solid var(--glass-brd); }
+.mp-foot .mp-note { max-height: 84px; overflow-y: auto; margin-right: auto; padding-right: 8px; }   /* lỗi dài không làm footer phình đẩy nút ra ngoài */
+.mp-foot > div { display: flex; align-items: center; }
 .mp-note { font-size: 13px; color: var(--text3); }
-.mp-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 18px; border-radius: 9px; cursor: pointer; font-size: 15px; margin-left: 8px; }
+.mp-btn { background: var(--bg3); border: 1px solid var(--btn-line); color: var(--text); padding: 8px 18px; min-height: var(--ctl-h); border-radius: 9px; cursor: pointer; font-size: 16px; font-weight: 500; line-height: 1.25; margin-left: 8px; }
+.mp-btn:hover { background: var(--btn-fill-hover); }
 .mp-btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); font-weight: 600; }
-.mp-btn.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.mp-btn.primary:hover { filter: brightness(1.06); }
+.mp-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
 /* Nút phá huỷ (gỡ, xoá). Đã có `.mp-btn.danger` trong HTML từ lâu mà chưa bao giờ có luật CSS,
    nên nút Gỡ xưa nay hiện y hệt nút Huỷ đứng ngay cạnh - hai việc trái ngược, một hình dạng. */
 .mp-btn.danger { border-color: var(--danger-ink, #b3261e); color: var(--danger-ink, #b3261e);
@@ -429,18 +537,21 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 }
 .tk-docs a, .tk-doclink { font-size: 12.5px; color: var(--link-ink); text-decoration: none; }
 .tk-docs a:hover, .tk-doclink:hover { text-decoration: underline; }
+/* Owner report 25/10/2026 (buttons looked faint): the edge was --glass-brd (--hairline, 1.2:1 against
+   the card) at 14px regular, so the button blurred into the card. Now a visible --btn-line edge, a faint
+   --btn-fill body, 16px medium text, and min-height --ctl-h so it matches a .js-input beside it. */
 .gcard-btn {
-  margin-top: 14px; width: 100%; padding: 9px; border-radius: 10px; cursor: pointer;
-  background: var(--surface-2); border: 1px solid var(--glass-brd); color: var(--text);
-  font-family: var(--font); font-size: 14px; transition: all 0.18s;
+  margin-top: 14px; width: 100%; padding: 8px 16px; min-height: var(--ctl-h); border-radius: 10px; cursor: pointer;
+  background: var(--btn-fill); border: 1px solid var(--btn-line); color: var(--text);
+  font-family: var(--font); font-size: 16px; font-weight: 500; line-height: 1.25; transition: all 0.18s;
 }
 .gcard-btn:hover { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
 /* Nút đang bận/khoá: giữ nguyên bộ mặt thường, không tô cam khi rê chuột (tô cam
    xong chữ đổi sang var(--on-accent) trong khi opacity hạ xuống là đọc không ra). */
 .gcard-btn:disabled { cursor: not-allowed; }
-.gcard-btn:disabled:hover { background: var(--surface-2); border-color: var(--glass-brd); color: var(--text); }
+.gcard-btn:disabled:hover { background: var(--btn-fill); border-color: var(--btn-line); color: var(--text); }
 .gcard-btn.ghost:disabled:hover { background: transparent; color: var(--text2); }
-.gcard.current .gcard-btn { background: var(--accent-wash-2); border-color: var(--accent); color: var(--accent); }
+.gcard.current .gcard-btn { background: var(--accent-wash-2); border-color: var(--accent); color: var(--accent-ink); }
 
 .cview-section { margin-bottom: 28px; }
 .cview-section h3 {
@@ -762,7 +873,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   /* Không còn chừa 56px đáy cho rail; chat chiếm hết */
   body.has-rail .hud {
     margin-left: 0; width: 100%;
-    height: 100vh; height: 100dvh;
+    height: 100vh; height: var(--app-h, 100dvh);
   }
   .cview { left: 0; bottom: 0; }
   .cview-body { padding: 16px 14px; }
@@ -778,7 +889,8 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   html, body { width: 100%; height: 100%; overflow: hidden; }
   body.in-console .hud-body { visibility: hidden; }   /* trang quản lý: giấu quả cầu cockpit phía sau */
   .hud {
-    height: 100vh; height: 100dvh;
+    /* --app-h: chiều cao vùng nhìn thấy lúc không gõ (mobile-chat.js, 0.359.0); 100dvh của app cài trên iPhone có khi lệch. */
+    height: 100vh; height: var(--app-h, 100dvh);
     grid-template-rows: minmax(0, 1fr) auto auto;
     padding-top: calc(46px + env(safe-area-inset-top, 0px));
   }  /* header fixed; ba hàng còn lại = body + đính kèm + ô nhập */
@@ -990,6 +1102,18 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .amb-details summary::-webkit-details-marker { display: none; }
 .amb-details summary h3::before { content: "▸ "; opacity: .6; }
 .amb-details[open] summary h3::before { content: "▾ "; }
+/* Connected tab search and the built-in CLI sources (0.312.0) */
+.conn-search { max-width: 420px; font-size: 16px; margin: 10px 0 6px; }
+.amb-card .prov-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.amb-host { color: var(--text3); overflow-wrap: anywhere; }
+.amb-hidden { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 4px;
+  padding: 10px 14px; border: 1px dashed var(--glass-brd); border-radius: 12px; font-size: 16px; color: var(--text2); }
+.amb-hidden span { flex: 1; min-width: 200px; }
+.amb-off-list { display: grid; gap: 10px; margin-top: 10px; }
+.amb-off-list[hidden], #connNone[hidden] { display: none; }
+#mcpTabDaNoi.searching .conn-guide, #mcpTabDaNoi.searching #ambWrap .mp-empty, #mcpTabDaNoi.searching #ambWrap .amb-hidden { display: none !important; }
+#mcpMessenger:not(:empty) { margin-top: 18px; }
+.amb-off { opacity: .7; }
 @media (max-width: 700px) {
   .cat-grid { grid-template-columns: 1fr; }
   .conn-accounts { flex-wrap: wrap; }
@@ -1389,6 +1513,9 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 
 .pkm-than { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 4px;
   display: flex; flex-direction: column; gap: 14px; }
+/* Children keep their height and the body scrolls. Without it a tall facts table (a plugin zip
+   lists tools, files and the install path) shrank and its overflow:hidden clipped the last rows. */
+.pkm-than > * { flex-shrink: 0; }
 .pkm-mota { margin: 0; font-size: 14px; line-height: 1.55; }
 
 /* Bảng SỰ THẬT: mỗi ô một câu hỏi người cài thật sự hỏi. Nền là đường kẻ, các ô đè lên trên
@@ -1724,10 +1851,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ws-id small, .ws-id .ws-err { font-size: 12px; color: var(--text3); }
 .ws-id .ws-err { color: #ff8b8b; }
 .ws-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 8px;
-  border: 1px solid var(--border); background: none; color: var(--text2); cursor: pointer;
+  border: 1px solid var(--btn-line); background: none; color: var(--text2); cursor: pointer;
   font-family: var(--font); font-size: 13px; }
 .ws-btn:hover { color: var(--accent); border-color: var(--accent); }
-.ws-btn.primary { color: var(--accent); border-color: #7d532d; background: rgba(255, 122, 60, .14); }
+/* --accent-ink, not --accent: orange text on its own wash was 3.0:1 on paper. The edge was a fixed dark brown. */
+.ws-btn.primary { color: var(--accent-ink); border-color: var(--accent-line); background: var(--accent-wash-2); }
 .ws-btn.danger:hover { color: #ff8b8b; border-color: #ff8b8b; }
 .ws-ico { background: none; border: 1px solid var(--border); color: var(--text2); border-radius: 8px;
   padding: 4px 9px; cursor: pointer; line-height: 1; }
@@ -1921,6 +2049,25 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .agent-editor .sp-g-body .sp span { min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5; }
 .agent-editor .editor-actions { position:sticky; bottom:-20px; background:var(--bg2); padding:12px 0; border-top:1px solid var(--border); z-index:1; }
 .agent-editor .editor-actions button { min-height:36px; }
+/* 0.298.0: the agent's save bar. A filled primary button with an icon and a clear label, a line that says
+   "Unsaved changes" while something is unsaved and "Saved" after, pinned at the bottom of the form. */
+.agent-editor .ag-save-bar { display:flex; align-items:center; gap:10px; }
+.agent-editor .ag-save-state { flex:1 1 auto; min-width:0; font-size:14px; color:var(--text3); display:flex; align-items:center; gap:7px; }
+.agent-editor .ag-save-bar.dirty .ag-save-state { color:var(--warn-ink); font-weight:600; }
+.agent-editor .ag-save-bar.dirty .ag-save-state::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
+.agent-editor .ag-save-bar.saved .ag-save-state { color:var(--green, #3fb27f); font-weight:600; }
+.agent-editor .ag-save-bar.saved .ag-save-state::before, #voiceCard .vc-saved.on:not(.bad)::before {
+  content:""; width:1em; height:1em; flex:none; display:inline-block; vertical-align:-0.14em; margin-right:4px; background-color:currentColor;
+  -webkit-mask:var(--ic-check) center/contain no-repeat; mask:var(--ic-check) center/contain no-repeat; }
+.agent-editor .ag-save-btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:9px 18px;
+  background:var(--accent-solid); color:var(--on-accent); border:none; border-radius:10px; font-size:15px; font-weight:600; }
+.agent-editor .ag-save-btn .ic { width:17px; height:17px; }
+.agent-editor .ag-save-bar.dirty .ag-save-btn { box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.agent-editor .ag-save-btn:disabled { opacity:.6; cursor:default; }
+.agent-editor .ag-save-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (max-width:860px) { .agent-editor .ag-save-btn { min-height:44px; } }
+/* Beside the chat (Cộng sự page) the column has no modal padding to hide under: pin the bar to the very bottom. */
+#wsAgentForm.agent-editor .editor-actions { bottom:0; }
 .ws-workflow-head { padding-bottom:20px; margin-bottom:22px; border-bottom:1px solid var(--border); }
 .ws-workflow-head > .ic { width:30px; height:30px; color:var(--accent); }
 .ws-workflow-head h3 { margin:12px 0 8px; font-size:20px; line-height:1.35; color:var(--text); }
@@ -2056,9 +2203,15 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   color: var(--text); font-size: 16px; min-width: 0; flex: 1 1 200px; }
 /* Bộ lọc dropdown (0.65.3): một hàng chung với ô tìm. Đang lọc thì dropdown sáng màu nhấn để nhìn là biết. */
 .ht-f { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
-  font-size: 14px; min-width: 0; max-width: 100%; }
+  font-size: 16px; min-width: 0; max-width: 100%; }
 .ht-f.on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-wash); }
 .ht-f[hidden], .ht-fclear[hidden] { display: none; }
+/* "Has phone/email" is an on/off filter of its own (combines with a status), drawn like the dropdowns next to it. */
+.ht-f-contact { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.ht-f-contact svg { width: 16px; height: 16px; flex: none; }
+/* Wide screens: the filter panel is just part of the row and the Filters button is never shown. */
+.ht-fpanel { display: contents; }
+.ht-fbtn { display: none; }
 .ht-fsum { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text3);
   min-height: 20px; padding: 0 4px; }
 /* 0.216.0: kết quả hỏi Zalo khi ô tìm là một số điện thoại. */
@@ -2076,11 +2229,110 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ht-bot-tag.c2 { background: var(--ok-wash); color: var(--green); }
 .ht-bot-tag.c3 { background: var(--accent-wash); color: var(--accent-ink); }
 .ht-need { background: var(--warn-wash); color: var(--warn-ink); }
+/* 2026-10-25 (owner: "thêm tag khách hàng", Pancake-style chips): the owner's tags, one colour each from a fixed palette
+   (conversations.TAG_COLORS). Tint, ink and border are mixed from one hue so a chip reads in light and dark themes. */
+.ht-tag { --tc: #8b8f98; display: inline-block; vertical-align: middle; min-width: 0; max-width: 140px; padding: 0 8px;
+  border-radius: 999px; font-size: 16px; line-height: 1.45; font-weight: 600; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; background: color-mix(in srgb, var(--tc) 16%, transparent);
+  color: color-mix(in srgb, var(--tc) 72%, var(--text)); border: 1px solid color-mix(in srgb, var(--tc) 42%, transparent); }
+.ht-tag[data-c="red"], .ht-sw[data-c="red"] { --tc: #e5484d; }
+.ht-tag[data-c="orange"], .ht-sw[data-c="orange"] { --tc: #f76b15; }
+.ht-tag[data-c="yellow"], .ht-sw[data-c="yellow"] { --tc: #d6a400; }
+.ht-tag[data-c="green"], .ht-sw[data-c="green"] { --tc: #30a46c; }
+.ht-tag[data-c="teal"], .ht-sw[data-c="teal"] { --tc: #12a594; }
+.ht-tag[data-c="blue"], .ht-sw[data-c="blue"] { --tc: #3e7bfa; }
+.ht-tag[data-c="purple"], .ht-sw[data-c="purple"] { --tc: #8e4ec6; }
+.ht-tag[data-c="pink"], .ht-sw[data-c="pink"] { --tc: #d6409f; }
+.ht-item-utags { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; margin-top: 2px; }
+.ht-item-utags .ht-tag { flex: 0 1 auto; }
+.ht-tag-more { flex: none; font-size: 16px; line-height: 1.45; padding: 0 7px; border-radius: 999px; color: var(--text2);
+  background: var(--surface-2); border: 1px solid var(--border); }
+.ht-has-contact { flex: none; display: inline-flex; color: var(--green); }
+.ht-has-contact svg { width: 14px; height: 14px; }
+.ht-item-ava { display: none; }
+/* Wide screens: one filter row when it fits (owner: no wall of buttons). Every control keeps its full text; when the
+   page is too narrow for all of them the row wraps instead of cutting words, and the search box takes what is left. */
+@media (min-width: 901px) {
+  .ht-bar { flex-wrap: wrap; }
+  .ht-bar .ht-search { flex: 1 1 220px; min-width: 200px; }
+  .ht-bar .ht-f { flex: 0 0 auto; }
+  /* The tag dropdown is as wide as its longest tag name; capped so one long tag does not squeeze the rest. */
+  .ht-bar .ht-f-tag { max-width: 170px; }
+}
+/* Thread: phone/email the customer left, this chat's tags, the Tag button and its picker. */
+.ht-tagrow { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px;
+  border-bottom: 1px solid var(--hairline); font-size: 16px; }
+.ht-tagrow:empty { display: none; }
+.ht-contact { display: inline-flex; align-items: center; gap: 5px; color: var(--text); font-size: 16px; user-select: all; }
+.ht-contact svg { width: 16px; height: 16px; color: var(--green); }
+.ht-tag-on { display: inline-flex; align-items: center; gap: 2px; max-width: 240px; padding-right: 2px; }
+.ht-tag-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ht-tag-x { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border: 0; border-radius: 50%; background: none; color: inherit; cursor: pointer; opacity: .7; padding: 0; }
+.ht-tag-x:hover { opacity: 1; background: color-mix(in srgb, var(--tc) 22%, transparent); }
+.ht-tag-x svg { width: 14px; height: 14px; }
+.ht-tag-add { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border); background: none; color: var(--text2); font-size: 16px; }
+.ht-tag-add:hover, .ht-tag-add.on { color: var(--accent); border-color: var(--accent); }
+.ht-tag-add svg { width: 15px; height: 15px; }
+.ht-tagpop { position: absolute; top: calc(100% + 4px); left: 12px; z-index: 30; width: min(380px, calc(100% - 24px));
+  max-height: min(70vh, 480px); overflow-y: auto; padding: 10px 12px; border-radius: 12px; background: var(--bg2);
+  border: 1px solid var(--border); box-shadow: 0 10px 30px rgba(0, 0, 0, .18); display: flex; flex-direction: column;
+  gap: 8px; font-size: 16px; }
+.ht-tagpop-h { display: flex; align-items: center; gap: 6px; }
+.ht-tagpop-h b { color: var(--text); }
+.ht-tag-close { margin-left: auto; display: inline-flex; border: 0; background: none; color: var(--text3); cursor: pointer;
+  padding: 4px; border-radius: 6px; }
+.ht-tag-close:hover { color: var(--text); background: var(--surface-2); }
+.ht-tagpop .info-body { font-size: 16px; }
+.ht-tagpop-list { display: flex; flex-direction: column; gap: 2px; }
+.ht-tagpop-row { display: flex; align-items: center; gap: 4px; }
+.ht-tag-pick { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border: 0;
+  border-radius: 8px; background: none; cursor: pointer; text-align: left; }
+.ht-tag-pick:hover { background: var(--surface-2); }
+.ht-tag-pick .ht-tag { max-width: 100%; }
+.ht-tag-check { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 5px; color: var(--accent); }
+.ht-tag-pick.on .ht-tag-check { border-color: var(--accent); background: var(--accent-wash); }
+.ht-tag-check svg { width: 14px; height: 14px; }
+.ht-tag-edit { flex: none; display: inline-flex; border: 0; background: none; color: var(--text3); cursor: pointer;
+  padding: 6px; border-radius: 6px; }
+.ht-tag-edit:hover { color: var(--text); background: var(--surface-2); }
+.ht-tag-edit svg { width: 15px; height: 15px; }
+.ht-tagpop-edit, .ht-tagpop-new { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px;
+  border-radius: 10px; background: var(--surface-1); border: 1px solid var(--hairline); }
+.ht-tagpop-new { border-style: dashed; }
+.ht-tagpop-edit input, .ht-tagpop-new input { flex: 1 1 100%; min-width: 0; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 16px; }
+.ht-tagpop-eacts { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.ht-tagpop-eacts .s-btn, .ht-tagpop-eacts .s-btn-ghost, .ht-tag-create { font-size: 16px; }
+.ht-tag-del { margin-left: auto; color: var(--red, #e5484d); }
+.ht-tagpop-none { color: var(--text3); font-size: 16px; }
+.ht-tagpop-err { display: flex; align-items: flex-start; gap: 6px; color: var(--red, #e5484d); font-size: 16px; }
+.ht-sws { display: inline-flex; flex-wrap: wrap; gap: 6px; flex: 1 1 auto; }
+.ht-sw { --tc: #8b8f98; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; padding: 0; background: var(--tc);
+  border: 2px solid var(--bg2); box-shadow: 0 0 0 1px var(--border); }
+.ht-sw.on { box-shadow: 0 0 0 2px var(--text); }
 @media (max-width: 640px) {
-  /* Điện thoại: ô tìm và dropdown Bot mỗi cái một hàng, Tình trạng và Loại chia đôi hàng thứ ba (cỡ chữ 16px nên
-     ba ô một hàng bị cắt mất chữ). */
+  /* Phones (owner, 2026-10-25: the filters took half the screen): search and a Filters button share one row; the
+     filters open below them on demand, two per row, Bot and Channel full width. The button shows how many are on. */
+  .ht-bar { flex-wrap: nowrap; }
+  .ht-search { flex: 1 1 auto; }
+  .ht-fbtn { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 8px 12px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 16px; cursor: pointer; }
+  .ht-fbtn svg { width: 16px; height: 16px; }
+  .ht-fbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent-ink); }
+  .ht-fbtn-n { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--accent);
+    color: var(--on-accent, #fff); font-size: 16px; line-height: 22px; text-align: center; }
+  .ht-fbtn-n[hidden] { display: none; }
+  .ht-fpanel { display: none; }
+  .ht-fpanel.open { display: flex; flex-wrap: wrap; gap: 8px; position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+    z-index: 30; padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
+  .ht-wrap .ht-bar { position: relative; }
   .ht-f { flex: 1 1 42%; font-size: 16px; }
-  .ht-search, .ht-f-bot, .ht-f-channel { flex-basis: 100%; }
+  .ht-f-bot, .ht-f-channel, .ht-f-contact { flex-basis: 100%; }
+  .ht-f-contact { justify-content: center; }
 }
 /* Từ 0.65.10 vùng làm việc lấp đầy phần còn lại của khung (trước là calc(100vh - 300px), thấp hơn thật khoảng 90px nên cả trang phải cuộn
    và khung tin bị đẩy xuống). Cột trái = dòng đếm + danh sách; danh sách và khung tin tự cuộn bên trong. */
@@ -2106,15 +2358,68 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   white-space: nowrap; text-overflow: ellipsis; }
 .ht-item.unread .ht-item-top strong { color: var(--text); }
 .ht-item-time { flex: none; font-size: 11.5px; color: var(--text3); }
-/* Nút ghim của hòm thư (0.223.0): hiện khi rê chuột, luôn hiện ở hàng đã ghim và trên màn cảm ứng. */
+/* Nút ghim của hòm thư (0.223.0). Since the row menu (2026-10-25) only a PINNED row draws it (click to unpin); pinning
+   an unpinned chat is in the "..." menu, so unpinned rows stay clean. */
 .ht-pin { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
-  margin: -4px -4px -4px 0; border-radius: 6px; color: var(--text3); opacity: 0; cursor: pointer; }
+  margin: -4px 0; border-radius: 6px; color: var(--text3); cursor: pointer; }
 .ht-pin svg { width: 14px; height: 14px; }
-.ht-item:hover .ht-pin, .ht-pin:focus-visible { opacity: .8; }
-.ht-pin:hover { background: var(--surface-2); color: var(--text); opacity: 1; }
-.ht-pin.on { opacity: 1; color: var(--accent); }
+.ht-pin:hover { background: var(--surface-2); color: var(--text); }
+.ht-pin.on { color: var(--accent); }
 .ht-item.ghim { box-shadow: inset 3px 0 0 var(--accent); }
-@media (hover: none) { .ht-pin { opacity: .6; width: 32px; height: 32px; } .ht-pin.on { opacity: 1; } }
+/* Row menu "..." (owner, 2026-10-25, like Zalo's). Touch screens and phones: always shown, after the time. A mouse on a
+   wide screen: it takes the time's place while the row is hovered or focused, or while its menu is open. */
+.ht-item-top { position: relative; }
+.ht-rmore { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 26px;
+  margin: -5px -5px -5px 0; border-radius: 7px; color: var(--text2); cursor: pointer; }
+.ht-rmore svg { width: 18px; height: 18px; }
+.ht-rmore:hover, .ht-item.menu-on .ht-rmore { background: var(--surface-2); color: var(--text); }
+.ht-rmore:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (hover: hover) and (min-width: 641px) {
+  .ht-rmore { position: absolute; right: -2px; top: 50%; margin: 0; transform: translateY(-50%); opacity: 0;
+    background: var(--surface-1); border: 1px solid var(--border); }
+  .ht-item:hover .ht-rmore, .ht-item:focus-within .ht-rmore, .ht-item.menu-on .ht-rmore { opacity: 1; }
+  .ht-item:hover .ht-item-time, .ht-item:focus-within .ht-item-time, .ht-item.menu-on .ht-item-time { visibility: hidden; }
+}
+.ht-item.menu-on { background: var(--surface-2); color: var(--text); }
+.ht-item.hid { opacity: .75; }
+.ht-hid-mark { flex: none; display: inline-flex; color: var(--text3); }
+.ht-hid-mark svg { width: 14px; height: 14px; }
+/* The menu itself: one element on <body> (position: fixed), so the list's scrolling never clips it. */
+.ht-rmenu { position: fixed; z-index: 3150; width: 300px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);
+  overflow-y: auto; padding: 6px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .22); display: flex; flex-direction: column; gap: 1px; font-size: 16px; outline: none; }
+.ht-rm-it { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 7px 10px; border: 0;
+  border-radius: 8px; background: none; color: var(--text); font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.ht-rm-it:hover, .ht-rm-it:focus-visible { background: var(--surface-2); outline: none; }
+.ht-rm-ic { flex: none; display: inline-flex; color: var(--text2); }
+.ht-rm-ic svg, .ht-rm-end svg { width: 18px; height: 18px; }
+.ht-rm-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.ht-rm-t > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ht-rm-t small { font-size: 16px; line-height: 1.3; color: var(--text3); overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.ht-rm-end { flex: none; display: inline-flex; color: var(--text3); }
+.ht-rm-it.on .ht-rm-end, .ht-rm-it.on .ht-rm-ic { color: var(--accent); }
+.ht-rm-it.done { color: var(--green); }
+.ht-rm-it.done .ht-rm-ic { color: var(--green); }
+.ht-rm-tag .ht-tag { max-width: 100%; }
+.ht-rm-sep { height: 1px; margin: 4px 6px; background: var(--hairline); flex: none; }
+.ht-rm-h { padding: 2px 10px 2px; font-size: 16px; font-weight: 600; color: var(--text3); }
+.ht-rm-none { padding: 6px 10px; font-size: 16px; color: var(--text3); }
+.ht-rm-err { display: flex; align-items: flex-start; gap: 6px; padding: 6px 10px; font-size: 16px; color: var(--red, #e5484d); }
+.ht-rm-err svg { width: 16px; height: 16px; flex: none; margin-top: 3px; }
+.ht-rm-copy { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; font-size: 16px; color: var(--text2); }
+.ht-rm-copyval { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--accent); background: var(--bg3);
+  color: var(--text); font-size: 16px; }
+/* Phones: the same menu as a bottom sheet with large rows, over a dimmed page. */
+.ht-rsheet-bg { position: fixed; inset: 0; z-index: 3140; background: var(--scrim, rgba(0, 0, 0, .45)); }
+.ht-rmenu.ht-rsheet { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 80vh;
+  border-radius: 16px 16px 0 0; border-bottom: 0; padding: 4px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.ht-rsheet .ht-rm-it { min-height: 52px; padding: 10px 12px; }
+.ht-rsheet .ht-rm-ic svg, .ht-rsheet .ht-rm-end svg { width: 20px; height: 20px; }
+.ht-rsheet-h { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 12px 8px; font-size: 16px;
+  color: var(--text); }
+.ht-rsheet-h b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ht-rsheet-grip { width: 40px; height: 4px; border-radius: 999px; background: var(--border); }
 .ht-item-sub { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .ht-item-sub small { flex: 1 1 auto; min-width: 0; font-size: 12.5px; color: var(--text3); overflow: hidden;
   white-space: nowrap; text-overflow: ellipsis; }
@@ -2186,6 +2491,9 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ht-msg.hethong .ht-bubble { background: none; border-style: dashed; color: var(--text3); font-size: 12.5px; }
 .ht-bubble p { margin: 0 0 .5em; } .ht-bubble p:last-child { margin: 0; }
 .ht-loai { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text3); margin-right: 6px; }
+.ht-react-row { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text3); line-height: 1.4; }
+.ht-react-emoji { font-size: 20px; line-height: 1; }
+.ht-react.off .ht-react-emoji { opacity: .45; }
 .ht-msg-loi { font-size: 11.5px; color: var(--warn-ink); margin: 3px 4px 0; display: inline-flex; gap: 4px; align-items: center; }
 .ht-foot { padding: 8px 12px; border-top: 1px solid var(--hairline); font-size: 12.5px; color: var(--text3); }
 .ht-empty { text-align: center; color: var(--text3); padding: 40px 16px; display: flex; flex-direction: column;
@@ -2217,6 +2525,23 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ht-warn { color: var(--warn-ink); }
 .ht-switch { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); cursor: pointer; }
 .ht-form-acts { display: flex; justify-content: flex-end; margin-top: 14px; }
+/* Drag the list column (2026-10-25), wide screens only: width from --ht-list-w (col-resize.js), handle in the 12px gap
+   right of the list; snapped into a strip (.ht-mini) the rows show only an initial, with a dot for unread. */
+@media (min-width: 901px) {
+  .ht-listcol { width: var(--ht-list-w, 320px); position: relative; }
+  .ht-listcol > .col-resize { display: block; position: absolute; top: 0; bottom: 0; right: -10px; width: 8px; z-index: 6;
+    cursor: col-resize; touch-action: none; }
+  .ht-mini .ht-fsum, .ht-mini .ht-sdt, .ht-mini .ht-item-text, .ht-mini .ht-item-ic, .ht-mini .ht-more { display: none; }
+  .ht-mini .ht-list { padding: 6px 4px; align-items: center; }
+  .ht-mini .ht-item { justify-content: center; padding: 6px 0; width: 52px; }
+  .ht-mini .ht-item-ava { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px;
+    height: 40px; border-radius: 50%; background: var(--accent-wash); color: var(--accent-ink); font-size: 18px; font-weight: 700; }
+  .ht-mini .ht-item.on .ht-item-ava { box-shadow: 0 0 0 2px var(--accent); }
+  .ht-item-ava-dot { position: absolute; top: 0; right: 0; width: 11px; height: 11px; border-radius: 50%; background: var(--accent);
+    border: 2px solid var(--surface-1); }
+}
+.ws-mini-tip-ava > .ht-item-ava { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--accent-wash); color: var(--accent-ink); font-weight: 700; }
 @media (max-width: 900px) {
   .ht-body { height: auto; min-height: 0; flex: 1 1 auto; }
   .ht-listcol { width: 100%; }
@@ -2442,10 +2767,43 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .v2-voice-row select { flex: 1; min-width: 0; }
 /* Nút Nghe thử chỉ rộng theo chữ: .gcard-btn trong thẻ cài đặt mặc định tràn ngang, đứng cạnh ô
    chọn thì nó nuốt hết chỗ của ô chọn giọng. */
-.v2-voice-row > .gcard-btn { flex: none; width: auto; white-space: nowrap; }
+.v2-voice-row > .gcard-btn { flex: none; width: auto; white-space: nowrap; margin-top: 0; }
+/* Owner screenshot 25/10/2026: "Nghe thử" sat lower than the voice select and was a different height. The
+   button kept the stacked-card margin-top: 14px and the select kept the form margin-bottom: 4px. In a row
+   both drop those margins and share --ctl-h, so they line up top and bottom. */
+.v2-voice-row > select, .v2-voice-row > .js-input { margin: 0; min-height: var(--ctl-h); }
 /* Thẻ Giọng nói ẩn/hiện từng hàng bằng thuộc tính hidden theo đường gọi (renderVoiceCard), nhưng
    .qs-field và .gcard-btn tự đặt display nên đè mất hidden; luật này trả lại nghĩa cho hidden. */
 #voiceCard [hidden] { display: none !important; }
+/* 0.298.0: what you will hear, stated up front, and each field saying what it is for. The "saved" mark sits
+   right beside the field that changed (it used to be one line at the bottom of the card, out of sight). */
+#voiceCard .vc-now {
+  display: flex; flex-direction: column; gap: 4px; margin: 8px 0 12px; padding: 10px 12px;
+  border-radius: 10px; background: var(--bg2); border: 1px solid var(--border);
+  font-size: 15px; line-height: 1.45; color: var(--text);
+}
+#voiceCard .vc-now:empty { display: none; }
+#voiceCard .vc-now .vc-now-why { font-size: 13px; color: var(--text3); }
+#voiceCard .vc-field { align-items: flex-start; }
+#voiceCard .vc-lblcol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 8px; }
+#voiceCard .vc-lblcol .qs-lbl { font-weight: 600; color: var(--text); }
+#voiceCard .vc-sub { font-size: 13px; line-height: 1.4; color: var(--text3); }
+#voiceCard .vc-sub:empty { display: none; }
+#voiceCard .vc-field > .v2-voice-row { flex-wrap: wrap; }
+#voiceCard .vc-saved {
+  flex-basis: 100%; min-height: 18px; font-size: 13px; color: var(--green, #3fb27f);
+  opacity: 0; transition: opacity .2s;
+}
+#voiceCard .vc-saved:not(.on) { display: none; }
+#voiceCard .vc-saved.on { opacity: 1; }
+#voiceCard .vc-saved.bad { color: var(--red); }
+#voiceCard .vc-mismatch {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 10px; padding: 10px 12px;
+  border-radius: 10px; border: 1px solid var(--warn-line); background: var(--warn-wash); color: var(--warn-ink);
+  font-size: 14px; line-height: 1.45;
+}
+#voiceCard .vc-mismatch .gcard-btn { width: auto; flex: none; }
+@media (prefers-reduced-motion: reduce) { #voiceCard .vc-saved { transition: none; } }
 
 /* ---- Trang Kênh Admin (0.85.0): mỗi kênh một tab ----
    Một cột, rộng tối đa 620px: đây là trang cài đặt, phải đọc được trên điện thoại. Thanh tab cuộn
@@ -3825,3 +4183,42 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 .tm-task-quality { flex-basis: 100%; min-width: 0; width: 100%; }
 .tm-filterbar:has(.tm-task-quality) { flex-wrap: wrap; }
 .tm-task-quality .tm-sec { overflow-wrap: anywhere; }
+
+/* 0.358.0 (owner, 27/10/2026: "uxui nhìn điện thoại trong phần team loạn lắm"): a calmer Team chat on a phone. Fewer
+   boxes and lines, more width for the words, rich answers read as a chat message instead of a document. Text stays 16px. */
+@media (max-width: 760px) {
+  /* Header: one slim row of plain icon buttons, no boxed borders. */
+  .tm-chat-head { min-height: 48px; padding: 2px 4px; gap: 2px; }
+  .tm-chat-head .ws-btn.tm-icon, .tm-chat-head .tm-back { border-color: transparent; background: none; box-shadow: none; }
+  .tm-chat-head .tm-ava, .tm-chat-head .tm-gava { flex: none; }
+  /* Messages: no outline around an assistant's message, tighter spacing, more room for the text. */
+  .tm-msgs { padding: 8px 8px 12px; gap: 4px; }
+  .tm-msg-agent { margin-bottom: 6px; }
+  .tm-msg-agent .tm-bubble { border-color: transparent; }
+  .tm-msg-agent .tm-col { max-width: calc(100% - 34px); }
+  .tm-msg-owner .tm-col { max-width: 88%; }
+  .tm-bubble { padding: 7px 11px; }
+  .tm-mdwrap.msg-javis .bubble { line-height: 1.5; }
+  .tm-text { line-height: 1.5; }
+  .tm-msg-agent .tm-who { font-size: 16px; }
+  /* Headings inside a message are bold lines of the same size; tables stay compact and scroll sideways. */
+  .tm-bubble h1, .tm-bubble h2, .tm-bubble h3, .tm-bubble h4, .tm-bubble h5, .tm-bubble h6 { font-size: 16px; line-height: 1.4;
+    margin: 6px 0 2px; }
+  .tm-bubble table { display: block; max-width: 100%; overflow-x: auto; font-size: 16px; }
+  .tm-bubble th, .tm-bubble td { padding: 4px 8px; white-space: nowrap; }
+  .tm-bubble p { margin: 4px 0; }
+  .tm-bubble ul, .tm-bubble ol { margin: 4px 0; padding-left: 20px; }
+  .tm-chat-head .tm-title strong { font-size: 17px; }
+  .tm-chat-head .tm-sub { font-size: 16px; }
+  /* Team list: the title on the left, Create and Import together on the right at the same height. */
+  .tm-list-bar { flex-wrap: wrap; gap: 8px; }
+  .tm-list-bar .tm-new { margin-left: auto; }
+  .tm-list-bar .ws-btn { min-height: 44px; font-size: 16px; }
+  /* Side panel: one text size (16px) everywhere, section titles in plain case at the same size, room between sections. */
+  .tm-side, .tm-side .tm-tab, .tm-side .ws-btn, .tm-side label, .tm-side .tm-level, .tm-side .tm-radio, .tm-side .tm-rs,
+  .tm-side .tm-field, .tm-side .tm-sub, .tm-side .tm-mhead, .tm-side input, .tm-side select, .tm-side textarea { font-size: 16px; }
+  .tm-side .tm-qhead { font-size: 16px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text2);
+    margin-top: 18px; }
+  .tm-side .tm-add-open { margin-bottom: 4px; }
+  .tm-side .tm-close { border-color: transparent; background: none; }
+}

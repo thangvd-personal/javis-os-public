@@ -8,6 +8,377 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.367.0] - 2026-10-28
+### Improved
+- **The GitHub and Messenger cards on the Connections page are compact.** Each card shows one row with the number of repos or Pages; "View details" opens the full list in a popup, like the bot cards on the Chatbot page. Many repos or Pages no longer stretch the whole page.
+
+### Fixed
+- **The Connections page counts GitHub.** The "Connected" heading used to say "0 accounts" while GitHub was connected. GitHub and Facebook Pages now add into the same number, and whichever card loads last no longer wipes out the other's count.
+
+## [0.366.0] - 2026-10-28
+### Added
+- **A second engine reviews before merging.** After green CI the diff goes to an engine from a different vendor than the one that wrote it (code written with Claude is read by ChatGPT, for example). Findings must name a concrete failure path, go back to the author to verify and fix, and hold the merge until handled. With only one vendor connected, Javis notes on the PR that it was not cross-reviewed.
+- **Javis learns per repo:** a CI failure it later fixed or a check command that failed becomes one lesson line (at most 30), recalled on the next turn.
+- **Numbers per engine and model** on the GitHub card: first push green, fix rounds, review findings, minutes to merge.
+- **A user guide for GitHub inside chat** (Vietnamese and English) in the docs.
+
+## [0.365.0] - 2026-10-28
+### Added
+- **Green CI means Javis merges the PR by itself**, with an on/off switch per repo on the GitHub card. A flagged change, open review findings, a repo without CI or an unmet repo requirement never merges on its own. A person can still press Merge in the detail panel.
+- **Every conversation shows a GitHub status icon** next to its name in the chat list: working, ready, merged, needs a person. Tap it to see the branch, the PR, the check results and why it is stuck.
+- **Next jobs wait in line:** a new job starts only after the previous PR is merged and the checks after merging are green. A branch behind main is updated by GitHub first, and a conflict becomes a fix round.
+
+## [0.364.0] - 2026-10-28
+### Added
+- **Javis pushes to GitHub and opens a draft PR by itself** after a chat turn that changed a repo and passed the checks. Commits carry the connected account's name, and nothing is ever force-pushed.
+- **Javis follows the CI of every commit.** Green is reported in the chat and the PR is marked ready. Red starts a fix turn in that same chat with the error log (secrets hidden), up to 3 rounds, then it stops and asks a person.
+- **It knows when a failure is not its own:** a red main branch means stop, a broken CI runner gets exactly one re-run, and a repo without CI is reported as unverified.
+- A restart halfway through never pushes or opens a PR twice.
+
+## [0.363.0] - 2026-10-28
+### Added
+- **Javis checks the code after every turn that changed a GitHub repo.** It runs the repo's own CI commands on this machine (read from the repo's workflows folder, leaving out steps that install into the machine, need secrets or deploy) and reports in the same conversation.
+- **Stopped before pushing:** a diff that looks like it holds a password or token is not committed; skipping tests, deleting tests or editing workflows to get green CI is flagged for a person before merging.
+- **Every engine reads the repo's rules** (AGENTS.md, CLAUDE.md, CONTRIBUTING.md), not only Claude Code. Each repo's check commands are editable on the GitHub card of the Connections page.
+
+## [0.362.0] - 2026-10-28
+### Added
+- **GitHub is built into the Connections page.** Paste a token once, or reuse the brain-backup token with one click. Nothing to install.
+- **Attach GitHub repos to a conversation:** press plus, pick GitHub repo, tick one or more repos. Javis downloads them to this machine (outside the brain folder), and each conversation works on its own branch and folder, so two chats editing the same repo never overwrite each other.
+- **Removing a repo from the brain** deletes only the local copy; the repo on GitHub stays as it is. Javis refuses while there are unsaved edits or commits not pushed yet.
+- This release does not push code to GitHub yet. Checking, pushing, opening a PR and watching CI come in the next releases.
+
+## [0.361.0] - 2026-10-27
+### Improved
+- **Internal:** the pet emotion test no longer fails at random on CI. The pet blinks at random moments, and about 1 run in 400 the test looked at the eyes during a blink frame. The test now lets the blink finish before it looks. The pet in the app is unchanged.
+
+## [0.360.0] - 2026-10-27
+### Improved
+- **The design for "GitHub inside chat" is settled.** Soon you pick GitHub repos from the chat's plus button, give a task in words, and Javis edits on its own branch, checks its work, opens a PR, watches CI and merges when green (switchable per repo). This release only adds the design document, no new feature yet.
+- The GitHub connection will be built into the Connections page, with nothing extra to install.
+
+## [0.359.0] - 2026-10-27
+### Fixed
+- **The chat on an iPhone home-screen app no longer loses its top or leaves a gap under the composer.** With the keyboard closed the chat takes the exact height of the visible screen, and a page iOS left scrolled after the keyboard closes is pulled back. The status bar looks the same as before. Thanks to hwangrin for the report and the proposal in PR #850.
+
+## [0.358.0] - 2026-10-27
+### Fixed
+- **A message you just sent in a Team always shows.** It sometimes seemed to vanish after sending, for 3 reasons, all fixed:
+  - On a phone, the keyboard or a taller composer pushed the newest message under the composer. The chat now keeps the last message in view (the main chat too).
+  - A reload that failed or came back late could remove the bubble of the message just sent. The bubble now stays until the server's copy shows, and says "Sent" meanwhile.
+  - Sending while one job is filtered now goes back to the whole chat, where the message lands.
+
+### Improved
+- **Team members talk like a chat message**: usually 1 to 3 sentences, no greetings, no headings or tables. Long products go into a file, and the chat only says which file plus the main point. The final summary step is short too and does not retell each step.
+- **Swipe between pictures in a chat**: the picture viewer now holds every picture of the same chat, with a "2 of 4" counter like a phone's photo viewer. On a computer use the side arrows or the ← → keys. It works in every chat: the main chat, Team chat, the Team info panel and customer Conversations.
+- **A tidier Teams page on a phone**: the chat header buttons lose their boxes, an assistant's message loses its outline and gets more room for text, headings inside a message are the text size, tables are compact and scroll sideways. The Team settings panel uses one 16px text size with even section titles. Create team and Import team sit on one row.
+
+## [0.357.0] - 2026-10-27
+### Added
+- **Give a Team a job straight from chat.** Tell Javis "have the Content team write 3 posts" and it gives that Team exactly one job, coordinated by the Team as if you had given it on the Teams page. When it is done, blocked or needs your decision, the result comes back to the chat you asked in (web, Telegram, Zalo) and to the inbox.
+- The message says whether the job is **DONE** or **PASSED acceptance**. A job that needs your approval still stops on your card; Javis never approves for you. Repeating the same request never makes a second job. Only the owner can give jobs; a Team of another brain is refused before any job exists (issue #826).
+
+## [0.356.0] - 2026-10-27
+### Fixed
+- **Image generation on a ChatGPT plan no longer dies on "Tool choice image_generation not found".** When a ChatGPT model has no image tool, Javis moves to another model of the account, as it does when a model is refused (issue #854).
+- **Google Workspace sign-in with Javis in Docker on a computer.** Clicking Allow used to end on "cannot connect to localhost:8000". Javis now handles the inside of the container; you open port 8000 once with docker-compose.google.yml (to that computer only), and the first Connect tells you the exact command. Updating with update.sh keeps the port (issue #855).
+
+## [0.355.0] - 2026-10-27
+### Improved
+- **"Default" model now says which model it is.** On the Models page, the model chip and the model list show for example "default (llama-3.3-70b-versatile)" instead of a bare "default", so you know what a card runs when you have not picked a model. A plan card (Claude Code, ChatGPT, Grok) with no model set says "CLI default (picked by your plan)". The chat composer's model chip names that model too.
+- **Clearer hint for naming a plan account.** The name box when adding an account now suggests names like "Pro plan 2" or "Max 200 plan".
+### Fixed
+- **Several accounts on one plan behave more reliably.** Two chats at once no longer rest the wrong account (the one that rests is the one that ran out). A background job asking for a model the plan lacks no longer rests that account for chat; only a real quota error does. An account you switched off is never used, even when every other account is resting.
+- **Sign in again no longer finishes at once.** Re-signing a second Grok or Claude account used to report success within seconds because the old login file was still there; now the new sign-in has to finish.
+- **No lost account when the Models page is open in two places.** Reordering or switching an account on an older page (opened before an account was added) no longer deletes the new account; only Remove deletes.
+- **An extra Claude account sees the MCP servers you connected in Claude Code**, like account 1. On Linux and Windows a Claude account counts as signed in only when its login file exists.
+
+## [0.354.0] - 2026-10-27
+### Improved
+- **Out of quota, chat reruns on the next route by itself.** When the running model reports it is out of quota before writing a word or calling a tool, Javis asks the same question again right away on the next account or key of the same provider, then on the next provider in the usage order. The chat shows a line such as "Using ChatGPT because Claude Code is out of quota." and you do not have to send it again. Telegram does the same.
+- **Out of quota halfway, a Run again now button.** The answer stops where it got to; the button asks again on a model that still has quota. Javis never reruns by itself after a tool call, so nothing gets sent or posted twice.
+
+## [0.353.0] - 2026-10-27
+### Added
+- **Several accounts on one subscription plan.** The ChatGPT, Grok Build and Claude Code cards on the Models page now list their accounts. Tap Add account and sign in with a link and a code right on the page (works on a VPS too). Account 1 is the one the machine already uses. When one runs out of quota the next takes over, and all accounts of a card are used before the next card. A resting account comes back on its own once its reset time passes. Drag or use the arrows to reorder, switch off or remove any account.
+- Using several accounts on the same plan carries a risk of the provider locking them, though Javis has no reported case so far. If it happens, please tell the developer.
+
+## [0.352.0] - 2026-10-27
+### Improved
+- **Gentler wording for the account lock risk.** Running background work on a subscription plan (Claude Pro/Max, the xAI plan) still carries a risk of the provider locking the account, but Javis has no reported case so far. If it happens to you, please tell the developer so everyone knows.
+- **Easier model picking on a phone.** On the Models page, the model chip, the Effort chip and the background model's "Change model" now open a sheet that slides up from the bottom, with a title, a close button and large rows. The keyboard only comes up when you tap the search box. The model list is tidier: "default" first, the model in use next, the rest A to Z. The MAIN or Fallback label moves to the chip row so the provider name no longer breaks across lines.
+- **The "What the bot answers from" choice is gone from the chatbot form.** Every bot answers from its Agent and documents, so there is nothing to pick. An older bot set to "Documents only" keeps it until you edit and save it; to keep a bot to its documents, write that rule into its Agent file.
+### Fixed
+- **The model picker is no longer hidden behind the next card.** On a computer, a model or Effort picker opening downward was covered by the next provider card and could not be clicked. It now always sits on top.
+
+## [0.351.0] - 2026-10-27
+### Improved
+- **New Models page: one Usage order list.** Only signed-in providers show, the top card is the main model (MAIN), the next ones are Fallback 1, 2... Drag a card (on a phone hold the 6-dot handle or press and hold the card) or press Swap to reorder. Each card has its own model chip and Effort chip, like the chat composer. A fallback card running chat in place of MAIN lights up IN USE.
+- **Several API keys per provider.** API cards show a numbered key list: add a key, name it, move it up or down, turn it off, change it, remove it. The key in use is highlighted, a key out of quota shows when it comes back.
+- **The background model sits right under the Usage order**, with its own Effort chip. On a phone its picker looks like the chat composer's and opens upward. The picker lists connected providers only. When the background model is out of quota, a line says what background work runs on for now.
+- **Tidier:** providers not connected wait behind Connect another provider; the Main Model, Telegram model and global Reasoning boxes are gone (Telegram follows MAIN, type /model in a chat to pin that chat).
+
+## [0.350.0] - 2026-10-27
+### Improved
+- **Background work follows a clear order.** It runs on the background model first; when that is out of quota it moves through the fallback providers (each on its own default setup) and uses the main model last. Javis no longer slips in Claude or free OpenRouter when you have not connected them.
+- **Nothing is done twice.** An engine that already used a tool (sent a message, posted an article...) and then broke stops the job with a clear error instead of running it again on another engine. That is why jobs at Full access now get a fallback too.
+- **Chat steps around a provider that is out of quota.** When the main model is known to be out of quota, the chat turn starts on the next provider that still has quota, and the next turn tries the main model again. A provider with several API keys skips the keys that are out of quota. The model picker in the chat lists connected providers only.
+- **Telegram pins per chat.** Typing `/model` in a Telegram chat now pins that chat only and no longer changes the model on the web; other chats keep following the main model. An old shared Telegram pin turns into a pin for each chat.
+
+## [0.349.0] - 2026-10-27
+### Improved
+- **Rewind a chat to one of your questions.** Under each question you asked there is now a ↺ Rewind button, replacing Send again and Edit. Press it, confirm, and Javis deletes that question and everything below it, then puts the question back in the message box to edit or resend. The chat goes on from there, and the chatting brain forgets the deleted part too. While Javis is answering, press Stop first.
+
+## [0.348.0] - 2026-10-27
+### Fixed
+- **Picking an assistant's model: clicking a provider name opens its models.** On the Partners page, clicking a provider (Claude Code, ChatGPT...) in the Model list used to close the whole list, so only the provider already open could be picked from.
+
+## [0.347.0] - 2026-10-27
+### Improved
+- **A leaner sidebar: the Code group is gone and Terminal moves into Capabilities.** Every chat can now attach a folder and write code, so a separate Code area is no longer needed. The old Coding page still opens from old links or voice commands, it just is not on the sidebar. Saying "open the code group" now opens Capabilities, where Terminal lives.
+### Fixed
+- **A call no longer hangs up when you switch screens.** Opening the Partners page, switching to another conversation or a dropped ChatGPT Live line all used to end the call. The call now stays with the conversation it started in, and after a drop it waits for you to speak, then reconnects. To hang up, press Hang up or tap the mascot.
+- **Long calls no longer lose the mic.** After several minutes the browser's listener could freeze: Javis stopped hearing, and calling again said "mic not closed yet" until a page reload. Javis now notices a frozen listener and rebuilds it at once.
+
+## [0.346.0] - 2026-10-27
+### Added
+- **Javis reads and edits pinned notes in Zalo groups.** Ask Javis what a group has pinned and you get its notes, pinned messages and polls, with who created and last edited each one and when, including notes staff or customers edited by hand on their phones. Ask Javis to update a note and it edits that same note instead of adding a new one on top. Needs the Store pack "Zalo extras" 1.5.0.
+### Fixed
+- **Editing a note no longer unpins it.** Editing a pinned note without saying "pin" used to make Zalo take it off the pin bar. The pin now stays as it was and comes off only when you ask.
+
+## [0.345.0] - 2026-10-27
+### Improved
+- **Greetings and thanks cost almost no tokens.** A message that is only a greeting or a thanks now gets its answer through the fast path on every brain, at every saving level. On Claude Code, "hi" dropped from about 60,800 tokens to about 2,100.
+- **Regular questions on Claude Code are about 23% lighter.** Claude Code no longer reads Javis's rules twice (regular installs), and the rules got leaner: the guides for creating plugins, assistants and workflows load only when needed. Measured: from 60,800 down to 46,600 tokens. Every other brain also saves about 1,900 tokens per turn.
+- **Long chats on Claude Code no longer grow to nearly a million tokens per turn.** Claude Code now summarizes the thread at about 180 thousand tokens instead of 980 thousand, so late in a long chat each message costs up to 5 times less while Javis keeps the thread.
+- **The token line under each answer now shows only new tokens.** Context sent earlier is read back from cache by the provider at a far lower price, so it is no longer added in: a second chat turn on Claude Code shows about 4.5k tokens instead of 53k. Hover the line to see the cache share, for example "45k cached tokens". Applies to Claude Code and ChatGPT (Codex).
+### Fixed
+- **Asking the time in the middle of a long chat on Claude Code now gives the right time.** Javis could answer with the time of the first message in the chat.
+
+## [0.344.0] - 2026-10-27
+### Improved
+- **The automatic checks before each release are much faster.** Every code change used to wait about 68 minutes while nearly 1,000 tests ran one after another. Now the tests are split across 2 machines that each run 4 at a time, so fixes reach you sooner. The same tests still run, none were dropped.
+
+## [0.343.0] - 2026-10-27
+### Improved
+- **Learning from chat costs far less.** Reviewing chat turns, writing test questions, grading and writing the revision now run on the background model (set on the Models page). Only the test work itself still runs on your main brain, so the result shows whether the new version helps the model that actually answers you. For the lowest cost, pick a light model as the background model.
+- **Stops early once the result is clear.** When the new version clearly wins, or does not beat the old one, in the first round, Javis skips the second comparison round.
+
+## [0.341.0] - 2026-10-26
+### Added
+- **Javis learns from your chats on its own, nothing to approve.** While you chat, Javis reviews the turns that used a skill, an assistant or a workflow and spots mistakes from your next message (say "wrong, you forgot the VAT"). After the same mistake three times it writes its own test questions, revises the instructions, compares with the current version and applies the change only when it is clearly better and breaks nothing the current version got right.
+- **Safe and bounded.** Learning is text only, with no tools, so it cannot send messages or place orders. At most 40 reviews and one change a day, on the brain you selected. An assistant only gains a learned procedure; the assistant file you wrote stays as it is. The old version is always kept: see and undo changes under "Javis learns from your chats" in the skill improvement panel. Everything follows the Learning page: turning on Learning plus Skill, Role and Step chain is all it takes (Auto-write applies on its own, Suggest waits for you to press Apply, Dry run only records). Skills learn by default; Role and Step chain are switched on on the same page.
+
+## [0.340.0] - 2026-10-26
+### Improved
+- **Store update notices no longer scan in the background.** Javis used to check the Store every 6 hours, even when nobody was using it. Now nothing runs on its own: Javis looks for new versions only when you open it, at most once every 6 hours, and reads a saved copy, so it costs next to nothing. When a new version exists the bell still rings as before, once per version.
+
+## [0.339.0] - 2026-10-26
+### Fixed
+- **Dictation works on phones again.** On an iPhone, pressing the record button ran the timer but no words ever appeared. A phone lets only one thing use the microphone at a time, and this button opened two at once, so neither heard anything. On a phone it now uses one path only: with a Groq or OpenAI API key it records and the text appears when you press stop; without a key it uses the browser's own listener. When no words were heard, Javis now says so instead of staying silent.
+- **A voice call picks up again after waiting.** After about 30 quiet seconds a voice call goes on hold; on an iPhone, speaking again left Javis unable to hear you or make a sound. The call now keeps the audio it opened when you pressed call, so speaking again carries on the conversation. Hanging up releases it.
+
+## [0.338.0] - 2026-10-26
+### Added
+- **Per-group private documents for bots.** A bot that answers many customer groups now reads the whole file of the customer in the chat it is answering (contract, deposit, appointments) and never sees another customer's file, not even its name. Put the files under `rieng-theo-nhom/<group id>/` in the bot's brain, or add a `chat_scope: <group id>` line at the top of a file. It applies to the pre-turn search, the three lookup tools of the Read documents level and the reply judge, the same on every brain. Files are read in full, no longer cut to 900 characters. Thanks to Ho Hung Son (SOHO Wedding) for the proposal.
+
+## [0.336.0] - 2026-10-26
+### Fixed
+- **The personal Zalo bot reads PDF, Word and Excel files customers send.** It used to read only plain text files (.txt, .csv...); a PDF was downloaded but not read, so the bot said it could not read PDFs. The text of a PDF, Word or Excel file now goes straight into the turn, so every brain can read it. A scanned (image-only) or broken file is reported as unreadable, never guessed.
+- **In a group, sending a file and then calling the bot works.** A file nobody addressed to the bot is kept for 10 minutes; when its sender calls the bot next (tag or name), the bot reads it. Replying to a message that carries a file and calling the bot works too.
+
+## [0.335.0] - 2026-10-26
+### Added
+- **The bell tells you when a Javis Store pack has a new version.** Javis checks every 6 hours. When a pack you installed has a newer version in the Store, the bell gets one notice naming the pack, the version you run and the new one; pressing it opens the Javis Store to update. Each new version is announced once, and Javis never updates on its own: a new version still goes through the confirm screen, like an install.
+### Fixed
+- **An overloaded model (like Gemini's 503 "high demand") now says what is going on.** The chat used to paste Google's whole JSON block. It now shows only the provider's sentence, explains that the provider is overloaded rather than anything being wrong on your side, and says what to do: send again in a few minutes or switch models with the model chip. Javis also waits longer between retries (a few seconds instead of one), so a short spike often passes on its own.
+
+## [0.334.0] - 2026-10-26
+### Added
+- **Customers' reactions on personal Zalo are read.** When a customer hearts, likes or laughs at a message, the inbox shows one small line: who, which emoji, and on which message (the bot's own replies included). Taking a reaction back is recorded too.
+- **The bot decides whether a reaction deserves an answer, and learns it.** A customer's reaction reaches the judge (groups on "Auto-judge") or the Agent (private chats) like a message. Javis has no fixed rule: marking the judge's call right or wrong in its log steers the next one.
+- **The bot can react to customers' messages.** The judge or the Agent may put a heart, a like and so on on the customer's message, with an answer or on its own. The bot never reacts to a reaction. Javis in chat can react too when you ask.
+
+## [0.333.0] - 2026-10-26
+### Added
+- **Javis improves a skill on its own when you ask.** Press "Let Javis improve it": Javis proposes fixes from two angles, test-runs them against the current version, combines what works and picks the best on a sealed question set. The current version stays unless the new one is clearly better, and applying is still your call. The skill needs an examples file with answers (at least 13; you can ask Javis to write it in chat). Nothing to install: it uses the brain you already selected (Claude Code, Codex or an API brain).
+
+## [0.332.0] - 2026-10-26
+### Fixed
+- **Viewing a PDF on a phone always has a close button.** On an iPhone the PDF frame stretched to the whole document, so scrolling through it carried the toolbar (with its close button) off the top. The PDF now scrolls in its own box, and on a phone a round X button floats in the bottom right corner, reachable however far you scroll.
+- **Chatting with Claude Code no longer ends in a "(nothing came back)" bubble.** Now and then Claude ended a turn without writing a word (it thought, then stopped), so a plain question got an empty bubble. Javis now asks Claude once more in the same conversation thread and shows the answer; a turn that reported an error or a plan limit is not asked again.
+### Improved
+- **Facebook Messenger is back in its proper place on the Connections page.** It is no longer a stray section under the list: Messenger is now a card in the "Available connections" tab like Zalo, Connect opens its form in the same dialog as every other service, and connected Pages sit right in the "Connected" list.
+
+## [0.331.0] - 2026-10-26
+### Fixed
+- **Tagging someone in a Zalo group no longer shows as code on a phone.** When the bot answered someone (say "@Tuan Fernel") in a group that also has a member with a shorter name ("Tuan"), Javis added a second tag on top of the first. Zalo on a computer still looked right, while a phone showed a chunk of `href="zm://..."` code. Each stretch of text now carries one tag, and a "Tuan" written separately elsewhere in the message is still tagged correctly.
+
+## [0.330.0] - 2026-10-26
+### Added
+- **One button to pause every improvement in a brain.** It removes every skill fix, assistant procedure, routing description and bundle in use; assistants go back to the original. Different from turning self-improvement off, which keeps what you applied.
+- **Improvement stays bounded and needs a real reason.** Each failure family gets at most two refinement steps in a row; the next needs new evidence or your say; three steps with no change stop it. Exports carry only the procedures you choose, secrets masked; imported packages always arrive untested.
+
+## [0.329.0] - 2026-10-26
+### Added
+- **The Usage page has a new "Last 24 hours" section**, right under the three top boxes:
+  - **The 5-hour window hour by hour:** whether it is rising or falling, a dashed mark at your declared cap (or the highest you ever reached), a colour change as it nears the mark, and one line saying there is room or heavy work should wait.
+  - **Tokens per hour:** which hours this morning burned the most, split by Claude, ChatGPT and API.
+  - **When AI works hardest over 7 days:** a less-to-more colour strip for the 24 hours of the day, with the quiet hours suggested for background work.
+- **A plan usage ring next to the Effort chip**, for Claude Code signed in to Pro/Max and for ChatGPT through Codex:
+  - Green with plenty left, amber from 50%, **red from 80% of either the 5-hour session or the week**, whichever is closer.
+  - Click it to see the "5-hour session" and "Weekly" bars with their reset times, like Claude's plan usage panel.
+  - The header names the plan in use, such as "Claude · Max" or "ChatGPT · Plus".
+  - The numbers come straight from Claude Code and Codex after each chat turn; Javis never reads your sign-in token. Models on an API key show no ring.
+  - **Grok Build and Antigravity** report no percentage, so their ring stays grey and turns red only when they refuse a turn for plan quota, with the reset time when one is given.
+### Improved
+- **The lightning bolt (Fast mode) moved to the top-right corner of the Effort popover.** With it on, light particles run along the effort bar; off, the bar is a still gradient. The Effort chip shows a small bolt while Fast mode is on.
+- **The tokens-per-day chart** now spans the full width with larger, readable day numbers (it used to sit squeezed in a corner with tiny labels).
+- **The "Give a star" button at the bottom left is tidier:** it is now its own full-width button under the version number, always on one line (it used to wrap onto two). With the sidebar collapsed, it shows just the star.
+
+## [0.327.0] - 2026-10-26
+### Added
+- **Fair improvement trials for a whole team.** Javis snapshots the roster, roles, models and acceptance criteria of each trial; two trials that differ beyond the one thing being tested are not compared. Results go into the record only and never mark real work as done or send anything.
+- **Experience moved to another assistant, team or engine is always marked "untested"** until it is tried again there.
+
+## [0.325.0] - 2026-10-26
+### Added
+- **Apply a skill fix and an assistant procedure as one bundle.** Both turn on and off together: if one part breaks or is removed, the whole bundle stops and the assistant goes back to the original, never half new.
+
+## [0.324.0] - 2026-10-26
+### Added
+- **An invitation to give Javis a star on GitHub**, shown at happy moments: the first time you heart an answer, when Javis just finished a job for you, at 50 or 100 chats, after a month with Javis, or right after an update. Each moment has its own greeting, with Javis's orange star as the mascot.
+- **A 3-step picture guide** for people who have never used GitHub: it points at the exact Star button on a computer or a phone, and GitHub sign-in takes one tap with Gmail. The real star count comes from GitHub with the next milestone, so it stays current by itself.
+- **No nagging:** closing it asks again in 3 days, "Later" in 7 days, at most 6 times; giving a star or "Don't ask again" ends it for good, on every device. To give a star any time, use the "Give a star" button under the version number or the "Support Javis" card on the Updates page.
+
+## [0.323.0] - 2026-10-26
+### Added
+- **A procedure of your own for each assistant.** Write how it should work (check sources first, compare with last period, how to hand off) and choose where it applies: private chat, team, Kanban jobs or workflow steps. The assistant file, your rules, model and permissions stay as they are, and you can remove it any time.
+
+## [0.322.0] - 2026-10-25
+### Added
+- **Install a plugin from a .zip file.** The Plugins page has an "Install from .zip" button: pick the file and Javis shows its name, version, tools with the permission level of each, and the files inside before anything is installed. A new plugin always arrives turned off, so you review it and switch it on yourself. A store pack zip (one with javis-pack.yaml) opens the pack install flow instead.
+- **Ask Javis to make a plugin and it installs it in place**, no more downloading a file and uploading it again. Javis can also read and edit plugins you already have. A plugin Javis creates, or whose code it changes, stays off until you turn it on in the Plugins page; an edit with a syntax error is refused and the old version stays.
+### Fixed
+- **Pressing "Add" for a link in an assistant's, project's or chat's documents now always answers.** Pasting a link that was already in the list, or pressing with an empty box, used to clear the URL box and say nothing, so the button looked broken. Javis now says "This link is already in the list" and highlights that row, asks for a URL when the box is empty, and says "Added" when done. A link pasted without https:// (like docs.google.com/...) gets it added automatically.
+### Security
+- Plugin zips get the same checks as store packs: odd paths, symlinks, oversized files and compiled code (.pyc, .so) are refused. An existing plugin is only replaced when you choose to, and the app's built-in plugins cannot be overwritten.
+
+## [0.320.0] - 2026-10-25
+### Added
+- **Test a skill description before changing it.** You write a new description and sample questions (should pick this skill, should pick none, should pick another skill); Javis shows how many more it routes correctly and whether any become wrong. A version that causes wrong picks is rejected.
+
+## [0.318.0] - 2026-10-25
+### Added
+- **Every chat in the bot inbox has a "..." button** that acts right away without opening the chat: mark unread to come back later, pin to the top, tag, choose whether the bot replies or "I handle it", and copy the phone number or email the customer left.
+- **Hide chats to keep the list tidy**, and see them again under "Hidden" in the Status filter. A new message from the customer brings the chat back, so no customer is missed. On a phone the "..." opens a large, easy-to-tap sheet at the bottom of the screen.
+### Fixed
+- **Photos you send show as photos in the bot inbox.** Only customers' photos used to show; a photo you (or the bot) sent read "image https://...jpg". Every photo now shows right in the bubble and opens large on click, so you can check what went out to the customer.
+### Improved
+- **Buttons are clearer, no longer faint.** Secondary buttons have a visible edge and bolder 16px text, easy to read in both light and dark themes. Red buttons (delete, turn off) and the "Reload" button on the new-version banner read better too.
+- **Buttons next to a field now match its height and line up**, such as "Preview" next to the voice picker, the domain save button and the "..." on bot cards. Buttons at the bottom of dialogs sit together on the right.
+
+## [0.316.0] - 2026-10-25
+### Added
+- **Trial by share (canary).** When applying an improved skill to an assistant you can pick 10%, 25% or 50% of its chats: each chat stays in one group, and the rest keeps the original as the control group.
+- **Your Pass / Fail verdicts are the measure.** The canary panel lists the times the assistant used the skill in both groups for you to judge; emoji do not count. Two chats on the new version marked Fail pause it at once.
+- **Promotion to all chats only after enough observation:** at least 7 days and 10 verdicts in the new version group, and you still click it. You can let one assistant open a 10% canary by itself when a candidate passes full qualification, and revoke that at any time.
+
+## [0.314.0] - 2026-10-25
+### Added
+- **Try an improved skill with one assistant.** In Studio, open Improve on a skill, review the exact edit, then pick an assistant: the new version is used only in that assistant's own chat. The skill file is never touched, and **Revert to original** switches new work back at once.
+- A trial version **pauses itself** when you edit the skill, turn it off or revoke the edit permission; it never merges edits or turns a disabled skill back on. A version a comparison judged worse cannot be applied.
+- The label states the real evidence: "Manual trial, not proven better" until a full qualification passes. For now the trial only affects brains that run through an API; Claude Code, Codex, Grok and Antigravity keep the original.
+
+## [0.313.0] - 2026-10-25
+### Added
+- **Coloured tags on each chat** in the bot inbox, like Pancake: create, rename, recolour and delete tags right in the chat. Tags show as coloured chips in the list (the first 2, the rest as "+N") and can be used as a filter.
+- **Filter customers who left a phone number or email.** Javis picks up numbers and emails customers type in their messages (0912..., +84..., with or without spaces), older chats included. "Has phone/email" is a filter of its own, so it combines with others, such as "Needs reply" and has a phone number. The number or email shows at the top of the chat, ready to copy.
+- **On phones the filters fold into one "Filters" button** next to the search box (with the number of filters on), so the chat list gets almost the whole screen. On a computer the filters keep their full text and wrap to a second line instead of being cut.
+- **Customers waiting longest for a reply come first** with "Waiting longest" in the Status filter.
+- **The conversation list column can be dragged** wider or narrower on a computer. Drag it all the way in to leave only initials; double-click to reset.
+### Fixed
+- **Someone opening Javis on another machine no longer shows "Connection lost" on every open page.** Each page load looked up the server's public IP and its domain right on the main loop; on a server with slow outbound network that froze it for 12 to 24 seconds and every other browser dropped. The lookups now run on their own, and a failed one is remembered for two minutes so the next visitor does not wait again.
+- **Bot inbox: clearing a search brings the list back.** After searching and switching tabs, the search box came back empty while the list stayed filtered, with nothing to clear. The box now keeps the text that filters the list, and clearing it shows every chat again.
+
+## [0.312.0] - 2026-10-25
+### Improved
+- **Connections are easier to find.** The Connected tab has a search box: type a service or account name to filter right away, built-in Claude Code sources included.
+- **Built-in Claude Code and Codex sources list only the working ones.** Sources not signed in yet sit in one "N sources not signed in are hidden" line with a Show button. Names are shorter ("Meta ADS" instead of "claude.ai Meta ADS").
+- The green "ChatGPT runs through Codex CLI" note at the top of the Connections page is gone. The yellow warning for an engine that cannot call tools stays.
+- **Picking an agent has a search box.** In the bot form and in each workflow step, the agent field opens a clean list: the full name with a short description under it, and searching without Vietnamese accents still finds a match. On a phone the list slides up from the bottom.
+
+## [0.311.0] - 2026-10-25
+### Added
+- **A Facebook Messenger card on the Connections page.** Paste the Page ID, App ID, App secret and any token from Graph API Explorer, and Javis swaps it for a Page token that never expires, registers the webhook and subscribes the Page to the app. No more pasting a user token by mistake and hitting error 100 or 210. Thanks @adiagri09-code.
+- **A step-by-step checklist** after connecting: token, permissions, App secret, webhook, Page subscribed, bot on duty. Every red row shows how to fix it right below. Each Page has Check, Auto-fix and Change token buttons.
+- When a Messenger bot goes quiet, ask Javis: any brain can check it with the `messenger_check` tool and fix it with `messenger_repair`.
+### Fixed
+- **A skill you turn off stays off.** A skill that was turned off came back in the list, and still loaded, when an old copy sat in `.claude/skills` or `.agents`. It is now off everywhere: in the skill list, when a brain loads it by name and when Javis picks a skill on its own. Javis also refuses a skill file that changes while being read, points outside the brain or is larger than 1 MB.
+- **Workflows no longer let a failed verification step through.** A verifier that answered "PASS" and then reported an error still counted as a pass and the next step ran. Any error now stops the run, the same as for a main step. Thanks @hwangrin.
+
+## [0.310.0] - 2026-10-25
+### Added
+- **Google Analytics (GA4) joins the connection store.** Connect with your Google account and Javis can read your website numbers: visits, traffic sources, top pages, realtime reports. Read only, nothing in Analytics is changed. Thanks @congsang1294.
+### Fixed
+- **Team: saving the acceptance criteria again really rechecks.** When a task was marked "does not meet the criteria" and you saved the criteria in Acceptance to check it once more, it stayed on "Rechecking the product against the new criteria" forever and no check ran. The recheck now runs right away and records a new result.
+
+## [0.309.0] - 2026-10-25
+### Added
+- **What bots and assistants learn now lives in the brain.** The judge's lessons, eagerness, per-group thresholds and role profile, plus each assistant's lessons, learned presentation and own judge, are written to the brain's `Javis/learned/` folder, one file per bot and per assistant. Copy the brain to another machine or restore it from GitHub and Javis loads them back into the bot and assistant with the same name.
+- Cases learned from customer messages sit in a separate `.private.json` file: it travels with the brain folder but never goes to GitHub. "Forget everything" and deleting a bot remove these files too.
+### Fixed
+- **Bot cards are tidy again, nothing runs out of them.** Errors, warnings and groups waiting for approval now sit in one "Status" row with counts on the card. Press View to read everything in a popup (long text wraps) and Allow or Ignore right there.
+- **Zalo messages no longer show tag code on phones.** A bot sometimes sent `href="zm://Profile/...">@Name</a_mention>` along with its reply: Zalo on a computer hid it but Zalo on a phone showed it as is. Javis now removes this markup, broken pieces included, on every way a Zalo message is sent, and two names that end up side by side keep a space between them.
+- **The Import old messages button is easy to find.** It used to hide inside the Zalo account chip on the bot card, where hardly anyone noticed it. The bot card's "..." menu now has an Import old messages item (about the last 2 weeks go into the Inbox).
+
+## [0.308.0] - 2026-10-24
+### Fixed
+- **The code box when signing in to Claude is no longer squashed.** The send button took the whole row, leaving the code box about 24px wide. Now the box takes the row with readable 16px text, and on a phone the button moves below. After opening the link the cursor lands in the box, Enter sends, and stray spaces from pasting are removed.
+### Improved
+- **The Anthropic Compatible card no longer asks you to type a model name.** Enter the Base URL and API key and press Connect; Javis reads the gateway's model list so you pick one under Main model. Only a gateway that does not list its models opens a model box, with the usual Claude names ready to pick.
+
+## [0.306.0] - 2026-10-24
+### Improved
+- **Installing on Windows or macOS starts Javis with the computer and opens the browser.** The dashboard opens right after install, and from then on every login starts Javis and opens the dashboard with nothing to click. Before, you had to turn this on yourself, and then Javis only ran hidden, so after starting the computer you could not see it.
+- To stop it: on Windows press Turn off on the Start with the computer card (Settings) or run `javis-autostart.bat uninstall`; on macOS run `./bin/javis-autostart.sh uninstall`.
+- A Windows machine that already had auto-start keeps running hidden as before; turn it off and on once to add the dashboard opening.
+
+## [0.304.0] - 2026-10-24
+### Fixed
+- **A Hostinger Ubuntu 26 VPS gets HTTPS with nothing to fill in, and this time it works.** 0.302.0 picked the wrong name: the HTTPS gateway got a certificate for one link while Javis checked another, so Open stayed on the IP page with no HTTPS. The gateway now serves both `javis.srvXXXX.hstgr.cloud` and `srvXXXX.hstgr.cloud`, and Javis tries exactly those two.
+### Improved
+- **Settings, Domain says which step the VPS link is at:** working (with an open button), waiting for its certificate (with a reminder to open ports 80, 443 in hPanel's Firewall), or a VPS with Traefik that needs the `DOMAIN_NAME` line.
+
+## [0.302.0] - 2026-10-24
+### Fixed
+- **Hostinger's Open button no longer opens localhost.** Without `DOMAIN_NAME`, Open now goes to `http://<vps-ip>:7777` and reaches Javis right away. The install file used to put `localhost` where the domain goes, so Open pointed at the clicker's own computer.
+### Added
+- **Open goes straight to the VPS link after install.** On a Hostinger VPS without Traefik (Ubuntu 26) there is nothing to fill in: Javis reads the VPS name, issues HTTPS for `https://javis.srvXXXX.hstgr.cloud`, and a page opened by IP moves there once it works. Like an app installed from Hostinger's Catalog.
+### Improved
+- **Javis suggests the Hostinger VPS's free link.** In Settings, Domain, Javis finds the VPS's `srvXXXX.hstgr.cloud` name and shows the line `DOMAIN_NAME=javis.srvXXXX.hstgr.cloud` with a copy button. Paste it into Environment and Redeploy for HTTPS and the right Open link.
+
+## [0.300.0] - 2026-10-24
+### Fixed
+- **One Hostinger install link works on both Ubuntu 24 and Ubuntu 26.** A plain Ubuntu 26 image has no Traefik, so pasting the link used to give a running Javis whose domain never got HTTPS. The link now carries an HTTPS gateway (Caddy) that turns itself on when there is no Traefik and issues the certificate for `DOMAIN_NAME`; on a VPS with Traefik it stays out of the way.
+### Improved
+- The install docs say it plainly: Traefik only provides HTTPS, updates are done by the bundled Watchtower, so the **Update now** button works the same on every Ubuntu release.
+
+## [0.298.0] - 2026-10-23
+### Fixed
+- **A voice picked on one device now applies everywhere.** The reading voice used to live only in the open browser, so picking a female voice on the laptop left the phone on its old voice however many times you saved. It is now saved in Javis, so every device and the voice notes sent through Telegram and Zalo use it.
+### Improved
+- **The Voice card says which voice you will hear.** Every voice says Female or Male (ChatGPT Live voices like Juniper and Cove too). The top of the card says which voice the call uses and which reads answers.
+- **Two clearly separate voice fields:** Call voice and Answer reading voice. When they differ in gender, a warning offers a one-tap switch.
+- **Saved shows right under the field you changed**, not at the bottom of the card.
+- **A clearer agent Save button:** an orange button with an icon that says Save changes, pinned at the bottom of the form, saying "Unsaved changes" and "Saved". Ctrl+S saves too.
+
+## [0.296.0] - 2026-10-23
+### Improved
+- **Generate skill proposals from tuning evidence.** Owners can run the baseline on authorized data, seal its results, and ask the model for up to two patches to review.
+- **Assess meaning and dependencies separately.** Each patch has an independent assessment record; missing evidence stays unknown and owner approval remains separate.
+- **Stronger experiment stop and recovery.** Retain data and active work until cleanup is verified, including abrupt host termination on Windows. Changed-candidate execution and live activation remain disabled.
+
 ## [0.295.0] - 2026-10-23
 ### Security
 - **Node.js 2026-10-21 security fixes.** Node.js disclosed 10 vulnerabilities, the worst a Brotli flaw that allows remote code execution. The new Docker image runs the patched Node.js 22.23.4, so Docker installs only need to update Javis.
@@ -16,7 +387,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 
 ## [0.293.0] - 2026-10-23
 ### Improved
-- **Prepare controlled comparisons.** Reserve experiment management, paired baseline/proposal trials and result reports. Final scope will be recorded after verification; changed-candidate execution and live activation remain disabled.
+- **Manage controlled skill experiments.** Freeze experiments, chosen edit authority and paired schedules; reports retain exact published results and complete trial coverage. Owners can safely stop or recover experiments with active work. Changed-candidate execution, final qualification and live activation remain disabled.
 
 ## [0.292.0] - 2026-10-23
 ### Added

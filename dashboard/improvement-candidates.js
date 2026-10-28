@@ -19,7 +19,13 @@
   }
   function close() {
     if (!active) return;
-    active.version++; clearInterval(active.watch); active.panel.remove(); active = null; epoch++;
+    invalidate(active); clearInterval(active.watch); active.panel.remove(); active = null; epoch++;
+  }
+  function invalidate(s) {
+    s.version++;
+    if (s.experiments) { s.experiments.dispose(); s.experiments = null; }
+    for (const controller of s.requests) controller.abort(); s.requests.clear();
+    s.review?.replaceChildren(); s.form?.replaceChildren(); s.applied?.replaceChildren();
   }
   function info(parent, text) {
     const toggle = button(tr("explanation"), "explanation", null);
@@ -37,6 +43,7 @@
     const version = s.version;
     const suffix = (path.includes("?") ? "&" : "?") + "brain=" + encodeURIComponent(s.brain);
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 30000);
+    s.requests.add(controller);
     try {
       const response = await fetch(path + suffix, {credentials:"same-origin", signal:controller.signal,
         ...(body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)})});
@@ -44,7 +51,7 @@
       if (!alive(s, version)) throw Error("stale_panel");
       if (!response.ok || value.ok !== true) { const error = Error("request_unavailable"); error.status = response.status; throw error; }
       return value;
-    } finally { clearTimeout(timer); }
+    } finally { clearTimeout(timer); s.requests.delete(controller); }
   }
   function event(s, operation, payload) {
     const fingerprint = operation + JSON.stringify(payload);
@@ -93,11 +100,316 @@
       s.list.append(card);
     }
     if (!s.rows.length) s.list.append(node("p", tr("no_candidates")));
+    await activations(s);
     return s.rows;
+  }
+  // M2E: pointers that apply a candidate to one assistant chat. Labels come from server state.
+  async function activations(s) {
+    const version = s.version;
+    const data = await request(s, "/improvement-activations?target_id=" + encodeURIComponent(s.context.target_id));
+    if (!alive(s, version) || !Array.isArray(data.activations)) return;
+    s.applied.replaceChildren(node("h3", tr("activations_title")));
+    for (const row of data.activations) {
+      const card = node("div", null, "activation-" + row.activation_id);
+      const who = (row.selector && (row.selector.agent_slug || row.selector.agent_key)) || "";
+      card.append(node("p", `${who} · ${tr("state_" + row.state)}`));
+      card.append(node("p", tr(row.evidence_level === "qualified" ? "qualified" : "manual_trial")));
+      if (row.state === "suspended") card.append(node("p", tr("reason_" + row.reason)));
+      if (row.canary) {
+        card.append(node("p", `${tr("canary")} ${row.canary.allocation_pct}% · ${tr("canary_state_" + row.canary.state)}`));
+        if (row.canary.state === "canary") card.append(button(tr("canary_open"), "canary-" + row.activation_id, () => canary(s, row, card)));
+      }
+      if (row.state === "active") {
+        const revert = button(tr("revert"), "revert-" + row.activation_id, async () => {
+          if (!alive(s, version) || revert.disabled) return;
+          revert.disabled = true;
+          try {
+            await write(s, "/improvement-activations/" + encodeURIComponent(row.activation_id) + "/revert",
+              {expected_generation:row.generation}, "revert-" + row.activation_id);
+            s.status.textContent = tr("reverted_ok");
+            await activations(s);
+          } catch (error) { failure(s, error); revert.disabled = false; }
+        });
+        card.append(revert);
+      }
+      s.applied.append(card);
+    }
+    if (!data.activations.length) s.applied.append(node("p", tr("no_activations")));
+    await grants(s, version);
+    await routing(s, version);
+    await procedures(s, version);
+    await governance(s, version);
+  }
+  // M8: pause every live improvement of the brain at once (skill fixes, procedures, descriptions, bundles).
+  async function governance(s, version) {
+    const data = await request(s, "/improvement-governance");
+    if (!alive(s, version)) return;
+    const live = data.live || [];
+    const box = node("div", null, "governance"); box.append(node("h3", tr("governance_title")));
+    info(box, tr("governance_hint"));
+    box.append(node("p", tr("governance_live").replace("{n}", String(live.length)), "governance-count"));
+    const pause = button(tr("governance_pause"), "governance-pause", async () => {
+      if (!alive(s, version) || pause.disabled || !live.length) return;
+      pause.disabled = true;
+      try {
+        const result = await write(s, "/improvement-governance/suspend-all", {}, "governance-pause-" + live.length);
+        s.status.textContent = tr(result.remaining && result.remaining.length ? "governance_partial" : "governance_done");
+        await activations(s);
+      } catch (error) { failure(s, error); pause.disabled = false; }
+    });
+    pause.disabled = !live.length;
+    box.append(pause);
+    s.applied.append(box);
+  }
+  // M4: a description candidate is measured against intent cases with Javis's own router, then
+  // applied to the brain's main chat (API engines). Each case line: kind | expected skill | question.
+  async function routing(s, version) {
+    const data = await request(s, "/improvement-routing?target_id=" + encodeURIComponent(s.context.target_id));
+    if (!alive(s, version)) return;
+    const box = node("div", null, "routing"); box.append(node("h3", tr("routing_title")));
+    info(box, tr("routing_hint"));
+    for (const overlay of (data.overlays || []).filter(x => x.state === "active")) {
+      const line = node("div", null, "routing-overlay-" + overlay.overlay_id);
+      line.append(node("p", tr("routing_active") + ": " + overlay.description));
+      line.append(button(tr("revert"), "routing-revert-" + overlay.overlay_id, async () => {
+        try { await write(s, "/improvement-routing-overlays/" + encodeURIComponent(overlay.overlay_id) + "/revert",
+          {expected_generation: overlay.generation}, "routing-revert-" + overlay.overlay_id); await activations(s); }
+        catch (error) { failure(s, error); }
+      }));
+      box.append(line);
+    }
+    const description = field(box, "routing_description"); description.rows = 2;
+    const cases = field(box, "routing_cases"); cases.rows = 6;
+    const result = node("div", null, "routing-result");
+    box.append(button(tr("routing_evaluate"), "routing-evaluate", async () => {
+      if (!alive(s, version)) return;
+      try {
+        // Split on the first two bars only, so a question may itself contain "|".
+        const parsed = cases.value.split(/\r?\n/).map(line => line.split("|")).filter(x => x.length >= 3)
+          .map(([kind, expected, ...rest]) => ({kind: kind.trim(), expected: kind.trim() === "negative" ? "" : expected.trim(), query: rest.join("|").trim()}))
+          .filter(x => x.query);
+        const value = (await write(s, "/improvement-routing/evaluate", {target_id: s.context.target_id,
+          description: description.value, cases: parsed}, "routing-evaluate")).routing;
+        const report = value.report, o = report.outcomes;
+        result.replaceChildren(node("p", `${tr("routing_verdict")}: ${tr("routing_verdict_" + value.verdict)}`),
+          node("p", `${tr("routing_wins")}: ${o.win} · ${tr("routing_losses")}: ${o.loss} · ${tr("routing_ties")}: ${o.tie}`),
+          node("p", tr("routing_cli_not_measured")));
+        if (value.verdict !== "rejected") result.append(button(tr("routing_apply"), "routing-apply", async () => {
+          try { await write(s, "/improvement-routing/" + encodeURIComponent(value.candidate_id) + "/apply", {}, "routing-apply-" + value.candidate_id); await activations(s); }
+          catch (error) { failure(s, error); }
+        }));
+      } catch (error) { failure(s, error); }
+    }));
+    box.append(result);
+    s.applied.append(box);
+  }
+  // M5: an owner-approved procedure added to one assistant's prompt on the surfaces the owner ticks.
+  // The text is shown back exactly; applying needs the owner's own confirmation box.
+  const SURFACES = ["dm", "team", "kanban", "workflow"];
+  async function procedures(s, version) {
+    const box = node("div", null, "procedures"); box.append(node("h3", tr("procedure_title")));
+    info(box, tr("procedure_hint"));
+    const label = node("label", tr("apply_agent")), choose = node("select", null, "procedure-agent");
+    label.append(choose); box.append(label);
+    const agents = (await request(s, "/agents?prompt=0")).agents || [];
+    if (!alive(s, version)) return;
+    for (const agent of agents) { const option = node("option", agent.name || agent.slug); option.value = agent.slug; choose.append(option); }
+    const current = node("div", null, "procedure-current");
+    const text = field(box, "procedure_text"); text.rows = 5;
+    const ticks = {};
+    for (const surface of SURFACES) {
+      const tick = node("label", tr("procedure_surface_" + surface)), input = node("input", null, "procedure-surface-" + surface);
+      input.type = "checkbox"; input.checked = surface === "dm"; ticks[surface] = input; tick.prepend(input); box.append(tick);
+    }
+    const confirmLabel = node("label", tr("procedure_confirm")), confirm = node("input", null, "procedure-confirm");
+    confirm.type = "checkbox"; confirmLabel.prepend(confirm); box.append(confirmLabel);
+    // M6: apply together with the skill fix under review, as one bundle (private chat only).
+    const bundleLabel = node("label", tr("bundle_with_skill")), together = node("input", null, "procedure-bundle");
+    together.type = "checkbox"; bundleLabel.prepend(together); box.append(bundleLabel);
+    async function load() {
+      current.replaceChildren();
+      if (!choose.value) return;
+      const data = await request(s, "/improvement-agent-procedures?agent=" + encodeURIComponent(choose.value));
+      const packs = (await request(s, "/improvement-agent-bundles?agent=" + encodeURIComponent(choose.value))).bundles || [];
+      if (!alive(s, version)) return;
+      const bundled = new Set(packs.filter(x => x.state === "active").flatMap(x => x.members.map(m => m.pointer_id)));
+      for (const pack of packs.filter(x => x.state === "active" || x.state === "suspended")) {
+        const line = node("div", null, "bundle-" + pack.bundle_id);
+        line.append(node("p", `${tr("bundle_title")} · ${tr("state_" + pack.state)}`));
+        if (pack.state === "suspended") line.append(node("p", tr("bundle_reason_" + pack.reason)));
+        if (pack.state === "active") line.append(button(tr("revert"), "bundle-revert-" + pack.bundle_id, async () => {
+          try { await write(s, "/improvement-agent-bundles/" + encodeURIComponent(pack.bundle_id) + "/revert",
+            {expected_generation: pack.generation}, "bundle-revert-" + pack.bundle_id); s.status.textContent = tr("reverted_ok"); await load(); }
+          catch (error) { failure(s, error); }
+        }));
+        current.append(line);
+      }
+      for (const overlay of (data.overlays || []).filter(x => x.state !== "reverted")) {
+        const procedure = (data.procedures || []).find(x => x.procedure_id === overlay.procedure_id);
+        const line = node("div", null, "procedure-overlay-" + overlay.overlay_id);
+        line.append(node("p", `${tr("state_" + overlay.state)} · ${overlay.surfaces.map(x => tr("procedure_surface_" + x)).join(", ")}`));
+        if (overlay.state === "suspended") line.append(node("p", tr("procedure_reason_" + overlay.reason)));
+        if (procedure) line.append(node("pre", procedure.text, "procedure-overlay-text-" + overlay.overlay_id));
+        if (overlay.state === "active" && !bundled.has(overlay.overlay_id)) line.append(button(tr("revert"), "procedure-revert-" + overlay.overlay_id, async () => {
+          try { await write(s, "/improvement-agent-overlays/" + encodeURIComponent(overlay.overlay_id) + "/revert",
+            {expected_generation: overlay.generation}, "procedure-revert-" + overlay.overlay_id); s.status.textContent = tr("reverted_ok"); await load(); }
+          catch (error) { failure(s, error); }
+        }));
+        current.append(line);
+      }
+      // Saved candidates never applied (owner drafts, learned additions held while a procedure is active).
+      const used = new Set((data.overlays || []).map(x => x.procedure_id));
+      for (const procedure of (data.procedures || []).filter(x => !used.has(x.procedure_id)).slice(0, 5)) {
+        const line = node("div", null, "procedure-staged-" + procedure.procedure_id);
+        line.append(node("p", tr("procedure_source_" + procedure.source)), node("pre", procedure.text));
+        line.append(button(tr("procedure_use_draft"), "procedure-staged-draft-" + procedure.procedure_id, () => { text.value = procedure.text; }));
+        current.append(line);
+      }
+      // Self-review ideas outside what review may change itself: the owner can start from one, then edits and confirms.
+      for (const proposal of data.review_proposals || []) {
+        const line = node("div", null, "procedure-proposal-" + proposal.id);
+        line.append(node("p", tr("procedure_proposal")), node("pre", proposal.text));
+        line.append(button(tr("procedure_use_draft"), "procedure-draft-" + proposal.id, () => { text.value = proposal.text; }));
+        current.append(line);
+      }
+    }
+    choose.onchange = () => load().catch(error => failure(s, error));
+    const apply = button(tr("procedure_apply"), "procedure-apply", async () => {
+      const surfaces = SURFACES.filter(x => ticks[x].checked);
+      if (!alive(s, version) || apply.disabled || !choose.value || !surfaces.length || !confirm.checked) return;
+      apply.disabled = true;
+      try {
+        if (together.checked && (!s.bundleCandidate || surfaces.join() !== "dm")) {
+          s.status.textContent = tr(s.bundleCandidate ? "bundle_dm_only" : "bundle_needs_skill"); apply.disabled = false; return;
+        }
+        const staged = (await write(s, "/improvement-agent-procedures", {agent: choose.value, text: text.value},
+          "procedure-stage-" + choose.value)).procedure;
+        if (together.checked) {
+          const manifest = {members: [{key: "skill", kind: "skill", candidate_id: s.bundleCandidate},
+            {key: "procedure", kind: "procedure", procedure_id: staged.procedure_id, surfaces}], depends_on: {procedure: ["skill"]}};
+          await write(s, "/improvement-agent-bundles", {agent: choose.value, manifest, owner_confirmed: true},
+            "bundle-apply-" + staged.procedure_id + "-" + s.bundleCandidate);
+          together.checked = false;
+        } else {
+          await write(s, "/improvement-agent-procedures/" + encodeURIComponent(staged.procedure_id) + "/apply",
+            {surfaces, owner_confirmed: true}, "procedure-apply-" + staged.procedure_id);
+        }
+        confirm.checked = false; s.status.textContent = tr("applied_ok"); await load();
+      } catch (error) { failure(s, error); }
+      apply.disabled = false;
+    });
+    apply.disabled = !agents.length;
+    box.append(apply, current);
+    s.applied.append(box);
+    await load();
+  }
+  // M3: observation of one canary. Only explicit owner verdicts count; the server decides sufficiency.
+  async function canary(s, row, card) {
+    const version = s.version;
+    const value = (await request(s, "/improvement-canaries/" + encodeURIComponent(row.activation_id))).canary;
+    if (!alive(s, version)) return;
+    card.querySelector('[data-action="canary-panel-' + row.activation_id + '"]')?.remove();
+    const box = node("div", null, "canary-panel-" + row.activation_id); card.append(box);
+    const o = value.observation, arms = o.arms;
+    box.append(node("p", `${tr("canary_days")}: ${o.days} / ${o.required.days}`));
+    box.append(node("p", `${tr("canary_arm_canary")}: ${arms.canary.pass} ${tr("verdict_pass")} · ${arms.canary.fail} ${tr("verdict_fail")} · ${arms.canary.exposures} ${tr("canary_exposures")}`));
+    box.append(node("p", `${tr("canary_arm_control")}: ${arms.control.pass} ${tr("verdict_pass")} · ${arms.control.fail} ${tr("verdict_fail")} · ${arms.control.exposures} ${tr("canary_exposures")}`));
+    box.append(node("p", tr(o.sufficient ? "canary_sufficient" : "canary_insufficient")));
+    for (const exposure of value.exposures.filter(x => !x.verdict).slice(0, 20)) {
+      const line = node("div", null, "exposure-" + exposure.session_id + "-" + exposure.message_id);
+      line.append(node("span", new Date(exposure.at * 1000).toLocaleString() + " · " + tr("canary_arm_" + exposure.arm)));
+      for (const verdict of ["pass", "fail"]) {
+        line.append(button(tr("verdict_" + verdict), "verdict-" + verdict + "-" + exposure.session_id + "-" + exposure.message_id, async () => {
+          try {
+            await write(s, "/improvement-canaries/" + encodeURIComponent(row.activation_id) + "/verdicts",
+              {session_id: exposure.session_id, message_id: exposure.message_id, verdict}, "verdict-" + row.activation_id + exposure.session_id + exposure.message_id);
+            await activations(s);
+          } catch (error) { failure(s, error); }
+        }));
+      }
+      box.append(line);
+    }
+    const promote = button(tr("canary_promote"), "promote-" + row.activation_id, async () => {
+      if (!alive(s, version) || promote.disabled) return;
+      promote.disabled = true;
+      try {
+        await write(s, "/improvement-canaries/" + encodeURIComponent(row.activation_id) + "/promote",
+          {expected_generation: value.generation}, "promote-" + row.activation_id);
+        await activations(s);
+      } catch (error) { failure(s, error); promote.disabled = false; }
+    });
+    promote.disabled = !o.sufficient || value.state !== "canary";
+    box.append(promote);
+  }
+  async function grants(s, version) {
+    const data = await request(s, "/improvement-auto-scopes?target_id=" + encodeURIComponent(s.context.target_id));
+    if (!alive(s, version)) return;
+    for (const grant of (data.grants || []).filter(x => x.status === "active")) {
+      const line = node("div", null, "grant-" + grant.grant_id);
+      line.append(node("p", `${tr("auto_scope")}: ${grant.selector.agent_slug || grant.selector.agent_key} · ${grant.allocation_pct}%`));
+      line.append(button(tr("auto_scope_revoke"), "revoke-grant-" + grant.grant_id, async () => {
+        try { await write(s, "/improvement-auto-scopes/" + encodeURIComponent(grant.grant_id) + "/revoke", {expected_generation: grant.generation}, "revoke-grant-" + grant.grant_id); await activations(s); }
+        catch (error) { failure(s, error); }
+      }));
+      s.applied.append(line);
+    }
+  }
+  async function applyBlock(s, current, version) {
+    const authority = current.edit_authority;
+    s.bundleCandidate = null; // set again below only for an exact approved candidate now on screen
+    if (current.keep_base || !authority || authority.status !== "active" || authority.kind !== "exact_diff") return;
+    s.bundleCandidate = current.candidate_id; // M6: the skill half of an assistant bundle
+    const box = node("div", null, "apply"); box.append(node("h4", tr("apply_title")));
+    info(box, tr("apply_hint"));
+    const label = node("label", tr("apply_agent")), choose = node("select", null, "apply-agent");
+    label.append(choose); box.append(label);
+    const shareLabel = node("label", tr("apply_share")), share = node("select", null, "apply-share");
+    for (const value of [100, 10, 25, 50]) { const option = node("option", value === 100 ? tr("apply_share_all") : tr("canary") + " " + value + "%"); option.value = String(value); share.append(option); }
+    share.value = "100"; // Default: the assistant's whole chat, the M2E manual apply.
+    shareLabel.append(share); box.append(shareLabel);
+    const agents = (await request(s, "/agents?prompt=0")).agents || [];
+    if (!alive(s, version)) return;
+    for (const agent of agents) {
+      const option = node("option", agent.name || agent.slug); option.value = agent.slug;
+      if (agent.description) option.setAttribute("data-desc", agent.description);
+      option.setAttribute("data-name", agent.name || agent.slug);
+      choose.append(option);
+    }
+    const apply = button(tr("apply_button"), "apply-candidate", async () => {
+      if (!alive(s, version) || apply.disabled || !choose.value) return;
+      apply.disabled = true;
+      try {
+        const pct = Number(share.value) || 100;
+        await write(s, "/improvement-activations", {candidate_id:current.candidate_id, agent_slug:choose.value,
+          ...(pct < 100 ? {allocation_pct: pct} : {})}, "apply-" + current.candidate_id + "-" + choose.value + "-" + pct);
+        s.status.textContent = tr("applied_ok");
+        await activations(s);
+      } catch (error) { failure(s, error); }
+      apply.disabled = false;
+    });
+    apply.disabled = !agents.length;
+    box.append(apply);
+    const grant = button(tr("auto_scope_grant"), "grant-auto", async () => {
+      if (!alive(s, version) || grant.disabled || !choose.value) return;
+      grant.disabled = true;
+      try {
+        await write(s, "/improvement-auto-scopes", {target_id: s.context.target_id, agent_slug: choose.value, allocation_pct: 10},
+          "grant-" + s.context.target_id + "-" + choose.value);
+        await activations(s);
+      } catch (error) { failure(s, error); }
+      grant.disabled = false;
+    });
+    grant.disabled = !agents.length;
+    box.append(grant);
+    info(box, tr("auto_scope_hint"));
+    if (!agents.length) box.append(node("p", tr("no_agents")));
+    s.review.append(box);
+    if (window.JavisAgentPicker) window.JavisAgentPicker.enhance(choose, {title: t("ap.title")});
   }
   async function review(s, candidateId) {
     const version = s.version;
     s.review.replaceChildren(); s.status.textContent = tr("loading");
+    s.bundleCandidate = null; // a bundle only ever takes the candidate on screen
     try {
       const value = (await request(s, "/improvement-candidates/" + encodeURIComponent(candidateId) + "/review", {})).review;
       const before = await exact(value.before), after = await exact(value.after);
@@ -135,6 +447,8 @@
         });
         s.review.append(revoke);
       }
+      await applyBlock(s, current, version);
+      if (!alive(s, version)) return;
       s.status.textContent = tr(current.edit_authority ? (current.edit_authority.status === "active" ? "edit_authorized" : "edit_revoked") : "proposal");
     } catch (error) { if (alive(s, version)) { s.review.replaceChildren(); failure(s, error); } }
   }
@@ -223,9 +537,17 @@
       }
       s.choose.value = "0";
       const change = async () => {
-        s.version++; s.review.replaceChildren(); s.form.replaceChildren(); s.context = s.contexts[Number(s.choose.value)];
+        invalidate(s); s.context = s.contexts[Number(s.choose.value)];
+        const version = s.version;
         s.prepare.disabled = !contextActive(s);
         if (s.context) await rows(s); else s.list.replaceChildren();
+        if (!alive(s, version)) return;
+        if (s.context && window.JavisImprovementExperiments) {
+          s.experiments = window.JavisImprovementExperiments.mount({parent:s.experimentArea,brain:s.brain,context:s.context,
+            isCurrent:()=>alive(s, version),review:id=>review(s,id),refreshCandidates:()=>rows(s)});
+          await s.experiments.ready;
+          if (!alive(s, version)) return;
+        }
         s.status.textContent = tr(!s.context ? "no_contexts" : !contextActive(s) ? "stale" : "semantic_pending");
       };
       s.choose.onchange = async () => { try { await change(); } catch (error) { failure(s, error); } };
@@ -246,7 +568,7 @@
     close();
     const panel = node("section"); panel.className = "improvement-candidate-panel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-label", tr("title"));
-    const s = {brain,slug,isCurrent,panel,version:++epoch,events:new Map(),rows:[]}; active = s;
+    const s = {brain,slug,isCurrent,panel,version:++epoch,events:new Map(),rows:[],requests:new Set()}; active = s;
     panel.append(node("h2", tr("title")), button(tr("close"), "close", close));
     info(panel, tr("scope_hint"));
     s.status = node("p", tr("loading"), "status"); s.status.setAttribute("role", "status"); panel.append(s.status);
@@ -265,17 +587,121 @@
     s.status.tabIndex = -1; s.status.focus();
     return s;
   }
+  // Self-learning run for this skill: examples next to the skill, Javis proposes, tests and picks; the owner applies.
+  // Independent of the context section below, whose reloads bump s.version: it only checks that the panel lives.
+  async function selfLearning(s) {
+    let data;
+    try { data = await request(s, "/improvement-loops?slug=" + encodeURIComponent(s.slug)); }
+    catch (error) {
+      if (error && error.status) return; // older server or refused: no section
+      if (alive(s)) setTimeout(() => { if (alive(s)) selfLearning(s); }, 5000); // aborted by a context reload: retry
+      return;
+    }
+    if (!alive(s)) return;
+    const box = s.loop; box.replaceChildren(node("h3", tr("loop_title")));
+    info(box, tr("loop_hint"));
+    const run = (data.runs || [])[0];
+    const running = run && run.state === "running";
+    if (data.protected) box.append(node("p", tr("loop_protected"), "loop-protected"));
+    else if (!data.examples.ok) box.append(node("p", tr(data.examples.reason === "examples_need_fresh_sealed"
+      ? "loop_examples_fresh" : "loop_examples_missing"), "loop-examples"));
+    else box.append(node("p", tr("loop_examples").replace("{t}", data.examples.tuning).replace("{q}", data.examples.qualification)
+      .replace("{n}", data.examples.estimated_calls), "loop-examples"));
+    const start = button(tr("loop_start"), "loop-start", async () => {
+      if (!alive(s) || start.disabled) return;
+      start.disabled = true;
+      try { await write(s, "/improvement-loops", {slug: s.slug}, "loop-start-" + s.slug); }
+      catch (error) { failure(s, error); }
+      await selfLearning(s);
+    });
+    start.disabled = !!(data.protected || !data.examples.ok || running);
+    box.append(start);
+    if (!run) return;
+    if (running) {
+      const last = (run.progress || []).slice(-1)[0];
+      box.append(node("p", tr(run.cancel_requested ? "loop_stopping" : "loop_running") +
+        (last && last.version ? " · " + last.version : ""), "loop-state"));
+      if (!run.cancel_requested) box.append(button(tr("loop_cancel"), "loop-cancel", async () => {
+        try { await write(s, "/improvement-loops/" + encodeURIComponent(run.run_id) + "/cancel", {}, "loop-cancel-" + run.run_id);
+          await selfLearning(s); }
+        catch (error) { failure(s, error); }
+      }));
+      setTimeout(() => { if (alive(s)) selfLearning(s); }, 5000);
+      return;
+    }
+    if (run.state === "failed" || run.state === "cancelled") {
+      box.append(node("p", tr(run.state === "cancelled" ? "loop_cancelled" : String(run.error || "").startsWith("engine_unavailable")
+        ? "loop_engine_unavailable" : "loop_failed"), "loop-state"));
+      return;
+    }
+    const result = run.result || {}, report = result.report || {};
+    box.append(node("p", tr(report.reason === "sealed_set_reused" ? "loop_sealed_reused" : "loop_verdict_" + (report.verdict || "keep_base")), "loop-state"));
+    if (report.outcomes) {
+      box.append(node("p", tr("loop_outcomes").replace("{w}", report.outcomes.win).replace("{t}", report.outcomes.tie)
+        .replace("{l}", report.outcomes.loss).replace("{b}", Math.round(100 * report.base_pass_rate))
+        .replace("{c}", Math.round(100 * report.candidate_pass_rate)), "loop-outcomes"));
+    }
+    if (result.chosen && result.chosen !== "base" && report.verdict === "helped" && !run.applied_at) {
+      box.append(node("pre", result.chosen_text, "loop-text"));
+      const apply = button(tr("loop_apply"), "loop-apply", async () => {
+        if (!alive(s) || apply.disabled) return;
+        apply.disabled = true;
+        try { await write(s, "/improvement-loops/" + encodeURIComponent(run.run_id) + "/apply", {}, "loop-apply-" + run.run_id);
+          s.status.textContent = tr("loop_applied"); await selfLearning(s); }
+        catch (error) { failure(s, error); apply.disabled = false; }
+      });
+      box.append(apply);
+    } else if (run.applied_at) box.append(node("p", tr("loop_applied"), "loop-applied"));
+  }
+  // Automatic learning from chat (0.341.0): what Javis changed on its own, brain-wide, with undo. Nothing to start.
+  async function autoLearned(s) {
+    let data;
+    try { data = await request(s, "/auto-learning"); }
+    catch (error) { return; } // older server or refused: no section
+    if (!alive(s)) return;
+    const box = s.auto; box.replaceChildren(node("h3", tr("auto_title")));
+    info(box, tr("auto_hint"));
+    const stats = data.stats || {};
+    const open = Object.values(stats.mistakes || {}).reduce((a, b) => a + b, 0);
+    box.append(node("p", tr("auto_stats").replace("{p}", String(stats.pending || 0)).replace("{m}", String(open)), "auto-stats"));
+    const rows = (data.history || []).slice(0, 10);
+    if (!rows.length) { box.append(node("p", tr("auto_empty"), "auto-empty")); return; }
+    for (const row of rows) {
+      const line = node("div", null, "auto-run-" + row.id);
+      const what = tr("auto_kind_" + row.kind) + " " + row.slug + (row.kind === "workflow" ? " #" + (row.step + 1) : "");
+      const state = row.undone_at ? "auto_undone" : row.applied ? "auto_applied" : row.proposed ? "auto_proposed" : row.state === "running" ? "auto_running"
+        : row.state === "failed" ? "auto_failed" : row.state === "skipped" ? "auto_skipped" : "auto_kept";
+      line.append(node("p", new Date(row.started_at * 1000).toLocaleString() + " · " + what + " · " + tr(state)));
+      if (row.proposed) line.append(button(tr("auto_apply"), "auto-apply-" + row.id, async () => {
+        try { await write(s, "/auto-learning/" + encodeURIComponent(row.id) + "/apply", {}, "auto-apply-" + row.id);
+          s.status.textContent = tr("auto_apply_done"); await autoLearned(s); }
+        catch (error) { failure(s, error); }
+      }));
+      if (row.applied && !row.undone_at) line.append(button(tr("auto_undo"), "auto-undo-" + row.id, async () => {
+        try { await write(s, "/auto-learning/" + encodeURIComponent(row.id) + "/undo", {}, "auto-undo-" + row.id);
+          s.status.textContent = tr("auto_undo_done"); await autoLearned(s); }
+        catch (error) { failure(s, error); }
+      }));
+      box.append(line);
+    }
+  }
   async function open({brain, slug, isCurrent}) {
     const s = shell(brain, slug, isCurrent);
+    s.auto = node("div", null, "auto-learning"); s.panel.append(s.auto);
+    await autoLearned(s);
+    s.loop = node("div", null, "self-learning"); s.panel.append(s.loop);
+    await selfLearning(s);
     const contextLabel = node("label", tr("context")); s.choose = node("select", null, "context"); contextLabel.append(s.choose); s.panel.append(contextLabel);
     s.prepare = button(tr("load_baseline"), "load-baseline", () => baseline(s)); s.prepare.disabled = true; s.panel.append(s.prepare);
     s.panel.append(button(tr("capture"), "capture", async () => {
       if (!alive(s)) return;
-      s.version++; s.prepare.disabled = true; s.form.replaceChildren(); s.review.replaceChildren();
+      invalidate(s); s.prepare.disabled = true;
       try { await write(s, "/improvement-targets/capture", {kind:"skill",slug:s.slug}, "capture"); await load(s); }
       catch (error) { failure(s, error); }
     }));
-    s.list = node("div"); s.form = node("div"); s.review = node("div"); s.panel.append(s.list, s.form, s.review);
+    s.list = node("div"); s.form = node("div"); s.review = node("div"); s.applied = node("div", null, "activations");
+    s.panel.append(s.list, s.applied, s.form, s.review);
+    s.experimentArea = node("div"); s.panel.append(s.experimentArea);
     const artifacts = node("details"); artifacts.append(node("summary", tr("artifact")));
     const trial = field(artifacts, "trial_id", "input"); trial.type = "text";
     const attempt = field(artifacts, "attempt", "input"); attempt.value = "1"; attempt.min = "1";

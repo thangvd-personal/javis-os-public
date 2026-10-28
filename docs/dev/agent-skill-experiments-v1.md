@@ -2,10 +2,25 @@
 
 This boundary stores proposed experiment identity and immutable comparison
 lineage in the existing resonance database. It is not a new Goal, monetary
-ledger, execution grant or production activation pointer. M2B is being implemented
-in six units; this document records the implemented storage unit first.
+ledger, execution grant or production activation pointer. Its supported engineering
+boundary was published as0.293.0/PR800; positive final execution still requires
+genuine C+D semantic/effective-view support and the full M2 gates remain open.
 
 ## Schema5 and recovery
+
+M2C engineering checkpoint (unreleased): schema6 adds typed preparation schedules
+and genuine proposer/reviewer operation metadata. Known1–5 upgrade with a separate
+serialized `.pre-improvement-m2-generated.bak`; earlier backups/history are retained.
+Actual released0.293.0 refuses schema6 before writes. Metadata cannot call a model,
+declare native completion or activate a proposal. Public preparation controls,
+role execution, semantic evidence and complete shared stop ownership remain gated
+by the subsequent C tasks. The Task2 private engineering path now freezes real
+tuning membership, admits baseline-only v3 requests through the existing solver,
+and seals exact stored results after the actual brain lock and cleanup proofs.
+There is no candidate/arm placeholder and no paired/qualification report inferred
+from those preparation results. Public owner controls and shared experiment stop
+integration are still pending Task8. Goal section12 governs impact-based verification;
+early Linux and final exact-head CI remain required.
 
 Known improvement schemas1–4 upgrade transactionally to5. Only absent schema
 blocks run: schema3 trial DDL and schema4 candidate DDL/triggers are not replayed.
@@ -244,5 +259,7 @@ The current four-file native profile is qualified separately in
 `agent-skill-runtime-2.1.308-qualification.json`: five passing technical checks,
 dummy auth HOME/config and localhost fake inference only. That result does not
 replace the historical real-smoke profile, prove actual effort/asset use, or
-establish candidate/business/activation eligibility. Whole-B review, exact-head
-Linux CI and publication are still required for this engineering continuation.
+establish candidate/business/activation eligibility. Whole-B independent review
+approved the scoped-recovery fix; exact-head LinuxCI39880551488 passed on2fe944ae,
+merged tree47f50f70 is identical, and publication39882926274 succeeded. Complete
+M2/business/rollout acceptance remains separate and open.
