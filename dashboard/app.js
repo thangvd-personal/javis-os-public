@@ -4555,6 +4555,7 @@ async function initAuthGate() {
       if (pass) { pass.required = true; swap(pass, "data-i18n-ph", "wz.pass_ph_req"); }
     }
     wz.classList.add("open");
+    kiemTraCongCuBrowser();
   } else {
     authOverlay.classList.add("open");
   }
@@ -4848,8 +4849,19 @@ async function loadOrModels(saved, force) {
   }
 }
 
-// ---- Bộ cài đặt lần đầu ----
-function _fd(obj) { const f = new FormData(); Object.entries(obj).forEach(([k, v]) => f.append(k, v)); return f; }
+// Công cụ tuỳ chọn trong trình hướng dẫn: chỉ HỎI khi máy thật sự thiếu. Máy cá nhân
+// thường đã có sẵn Chrome, mời họ tải thêm cả trăm MB là mời một việc vô nghĩa.
+async function kiemTraCongCuBrowser() {
+  try {
+    const d = await (await fetch("/tools/optional")).json();
+    const ct = ((d && d.tools) || []).find(x => x.id === "browser");
+    if (ct && ct.trang_thai === "chua_cai") {
+      const o = document.getElementById("wzCongCu");
+      if (o) o.style.display = "";
+    }
+  } catch (e) {}
+}
+
 async function initSetup() {
   try {
     const s = await (await fetch("/settings")).json();
@@ -4857,22 +4869,11 @@ async function initSetup() {
     if (s.setup_done || (s.auth && s.auth.has_password) || s.auth_required) return false;
     document.getElementById("wzWsName").value = s.workspace_name || "";
     document.getElementById("setupWizard").classList.add("open");
+    kiemTraCongCuBrowser();
     return true;
   } catch (e) { return false; }
 }
 if (document.getElementById("wzFinish")) {
-  // Công cụ tuỳ chọn trong trình hướng dẫn: chỉ HỎI khi máy thật sự thiếu. Máy cá nhân
-  // thường đã có sẵn Chrome, mời họ tải thêm cả trăm MB là mời một việc vô nghĩa.
-  (async () => {
-    try {
-      const d = await (await fetch("/tools/optional")).json();
-      const ct = ((d && d.tools) || []).find(x => x.id === "browser");
-      if (ct && ct.trang_thai === "chua_cai") {
-        const o = document.getElementById("wzCongCu");
-        if (o) o.style.display = "";
-      }
-    } catch (e) {}
-  })();
   document.getElementById("wzFinish").addEventListener("click", async () => {
     const err = document.getElementById("wzErr"); err.textContent = "";
     const ws = document.getElementById("wzWsName").value.trim();

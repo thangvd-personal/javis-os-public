@@ -16,29 +16,30 @@ trình duyệt: người dùng Javis trên cả máy tính lẫn điện thoại
 Module này không biết gì về FastAPI: mọi hàm nhận thời điểm `now` và dữ liệu đầu vào, để test
 gọi thẳng. Route nằm ở routes/star_nudge.py.
 """
+
 import json
 import time
 import urllib.request
 from pathlib import Path
 
-REPO = "blogminhquy/javis-os"
+REPO = "thangvd-personal/javis-os-public"
 REPO_URL = "https://github.com/" + REPO
 API_URL = "https://api.github.com/repos/" + REPO
 
 NGAY = 86400
-TUOI_TOI_THIEU = 7 * NGAY      # cài (lượt chat đầu tiên) từ 7 ngày trở lên
-SO_NGAY_DUNG = 3               # dùng ít nhất 3 ngày khác nhau
-SO_LUOT = 20                   # khoảng 20 lượt chat của người dùng
-HOAN = 7 * NGAY                # "Để sau" = hỏi lại sau 7 ngày
-HOAN_DONG = 3 * NGAY           # đóng bằng X (không chọn gì) = hỏi lại sau 3 ngày
-TOI_DA_HOAN = 6                # hoãn (Để sau hoặc X) đủ 6 lần là thôi hẳn
-CACH_LAN_HIEN = 20 * 3600      # hiện rồi thì không hiện lại trong ~1 ngày (trừ khi tự mở)
+TUOI_TOI_THIEU = 7 * NGAY  # cài (lượt chat đầu tiên) từ 7 ngày trở lên
+SO_NGAY_DUNG = 3  # dùng ít nhất 3 ngày khác nhau
+SO_LUOT = 20  # khoảng 20 lượt chat của người dùng
+HOAN = 7 * NGAY  # "Để sau" = hỏi lại sau 7 ngày
+HOAN_DONG = 3 * NGAY  # đóng bằng X (không chọn gì) = hỏi lại sau 3 ngày
+TOI_DA_HOAN = 6  # hoãn (Để sau hoặc X) đủ 6 lần là thôi hẳn
+CACH_LAN_HIEN = 20 * 3600  # hiện rồi thì không hiện lại trong ~1 ngày (trừ khi tự mở)
 
-SAO_TTL_OK = NGAY              # số sao: đọc lại mỗi ngày
-SAO_TTL_LOI = 3600             # GitHub lỗi: thử lại sau 1 giờ, không gọi mỗi lần mở thẻ
+SAO_TTL_OK = NGAY  # số sao: đọc lại mỗi ngày
+SAO_TTL_LOI = 3600  # GitHub lỗi: thử lại sau 1 giờ, không gọi mỗi lần mở thẻ
 
-MOC_LUOT = (50, 100, 200, 500, 1000, 2000, 5000)       # tròn N lượt chat
-MOC_NGAY = (30, 100, 365, 730, 1095)                  # tròn N ngày từ lượt chat đầu tiên
+MOC_LUOT = (50, 100, 200, 500, 1000, 2000, 5000)  # tròn N lượt chat
+MOC_NGAY = (30, 100, 365, 730, 1095)  # tròn N ngày từ lượt chat đầu tiên
 
 LY_DO = ("heart", "work", "load", "manual")
 HANH_DONG = ("opened", "later", "dismiss", "never", "done")
@@ -64,19 +65,28 @@ def trang_thai(cfg_block) -> dict:
             return 0.0
 
     tt = b.get("state") if b.get("state") in ("done", "never") else ""
-    return {"state": tt, "later_until": so("later_until"), "later_count": int(so("later_count")),
-            "shown_at": so("shown_at"), "opened_at": so("opened_at"),
-            "seen_version": str(b.get("seen_version") or ""),
-            "turns_seen": int(so("turns_seen")), "days_seen": int(so("days_seen"))}
+    return {
+        "state": tt,
+        "later_until": so("later_until"),
+        "later_count": int(so("later_count")),
+        "shown_at": so("shown_at"),
+        "opened_at": so("opened_at"),
+        "seen_version": str(b.get("seen_version") or ""),
+        "turns_seen": int(so("turns_seen")),
+        "days_seen": int(so("days_seen")),
+    }
 
 
 def du_lau(dung: dict, now: float) -> bool:
     """Đã dùng thật chưa. `dung` = {"turns", "first_ts", "days"} đếm từ kho hội thoại."""
     try:
         t0 = float(dung.get("first_ts") or 0)
-        return (t0 > 0 and now - t0 >= TUOI_TOI_THIEU
-                and int(dung.get("days") or 0) >= SO_NGAY_DUNG
-                and int(dung.get("turns") or 0) >= SO_LUOT)
+        return (
+            t0 > 0
+            and now - t0 >= TUOI_TOI_THIEU
+            and int(dung.get("days") or 0) >= SO_NGAY_DUNG
+            and int(dung.get("turns") or 0) >= SO_LUOT
+        )
     except (TypeError, ValueError):
         return False
 
@@ -89,8 +99,11 @@ def _moc_dat(gia_tri, cac_moc) -> int:
 
 def _con_cho(st: dict, now: float) -> bool:
     """Đang trong thời gian không được làm phiền."""
-    return (st["state"] in ("done", "never") or st["later_until"] > now
-            or now - st["shown_at"] < CACH_LAN_HIEN)
+    return (
+        st["state"] in ("done", "never")
+        or st["later_until"] > now
+        or now - st["shown_at"] < CACH_LAN_HIEN
+    )
 
 
 def chon_khoanh_khac(st: dict, ly_do: str, dung: dict, phien_ban: str, now: float):
@@ -158,8 +171,10 @@ def ap_hanh_dong(st: dict, hanh_dong: str, now: float) -> dict:
 def _hoi_github(timeout: float = 5.0) -> int:
     """Gọi API công khai của GitHub (không cần đăng nhập, 60 lượt/giờ mỗi IP - dư cho một lần
     mỗi ngày). urllib tự đi qua HTTPS_PROXY của máy nếu có."""
-    req = urllib.request.Request(API_URL, headers={
-        "Accept": "application/vnd.github+json", "User-Agent": "javis-os"})
+    req = urllib.request.Request(
+        API_URL,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "javis-os"},
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         n = json.loads(r.read().decode("utf-8")).get("stargazers_count")
     if not isinstance(n, int) or n < 0:
@@ -181,7 +196,7 @@ def so_sao(cache_path: Path, now: float, hoi=_hoi_github):
         return n
     try:
         n = hoi()
-    except Exception:            # noqa: BLE001 - mất mạng, GitHub chặn, JSON lạ: đều là "không có số"
+    except Exception:  # noqa: BLE001 - mất mạng, GitHub chặn, JSON lạ: đều là "không có số"
         n = None
     try:
         Path(cache_path).write_text(json.dumps({"n": n, "at": now}), encoding="utf-8")
@@ -213,11 +228,16 @@ def dem_dung(read, now: float = None) -> dict:
         rows = read(
             "SELECT COUNT(*) AS n, MIN(m.ts) AS t0, COUNT(DISTINCT CAST(m.ts / 86400 AS INTEGER)) AS d "
             "FROM messages m JOIN sessions s ON s.id = m.session_id "
-            "WHERE m.role = 'user' AND s.channel IN ('web', 'dashboard')")
+            "WHERE m.role = 'user' AND s.channel IN ('web', 'dashboard')"
+        )
         if rows:
             r = rows[0]
-            v = {"turns": int(r["n"] or 0), "first_ts": float(r["t0"] or 0), "days": int(r["d"] or 0)}
-    except Exception:            # noqa: BLE001 - kho lỗi thì coi như chưa đủ lâu, không mời
+            v = {
+                "turns": int(r["n"] or 0),
+                "first_ts": float(r["t0"] or 0),
+                "days": int(r["d"] or 0),
+            }
+    except Exception:  # noqa: BLE001 - kho lỗi thì coi như chưa đủ lâu, không mời
         pass
     _DUNG_CACHE.update(at=now, v=v)
     return v
