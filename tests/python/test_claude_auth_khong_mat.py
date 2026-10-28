@@ -20,15 +20,16 @@ Hai thứ phải tách bạch, và đó là toàn bộ nội dung file này:
 Cộng thêm hai thứ giảm hẳn số lần rơi vào ca đó: nhớ kết quả 90 giây (khỏi đẻ tiến trình mỗi
 lần vẽ trang), và hỏi hỏng thì trả lại bản nhớ kèm `stale` thay vì một câu đoán bừa.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import subprocess
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-cauth-")
 
-import claude_cli   # noqa: E402
+import claude_cli
 
 _fails = []
 

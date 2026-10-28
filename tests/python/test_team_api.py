@@ -5,11 +5,12 @@
 Không gọi model: engine của lượt nhóm được thay bằng engine giả; việc nền (lượt trả lời, điều phối) gom lại rồi chạy
 trong test thay vì tạo task nền.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-api-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-api-brain-"))
@@ -20,8 +21,8 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh"), ("hoa", "Hoa")):
                                               encoding="utf-8", newline="\n")
 (BR2 / "agents").mkdir()
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -250,7 +251,8 @@ c.post(f"/teams/{TID}/members{Q}", json={"slug": "minh"})
 c.post("/agents/delete", data={"slug": "minh", "brain": str(BR)})
 mem = c.get(f"/teams/{TID}{Q}").json()["team"]["members"]
 check("xoá agent: không còn là thành viên", keys["minh"] not in {m["agent_key"] for m in mem})
-import agent_avatar  # noqa: E402
+import agent_avatar
+
 old_ava = agent_avatar.for_agent({}, "minh")   # Minh cũ không chọn ảnh: ảnh mặc định suy từ slug
 new_shape = next(s for s in agent_avatar.SHAPES if s != old_ava["shape"])
 new_pal = next(p for p in ("ruby", "jade") if p != old_ava["palette"])
@@ -387,8 +389,10 @@ check("T4 route tìm: câu quá ngắn 400, brain khác 404", c.get(f"/teams/{T3
       and c.get(f"/teams/{T3ID}/search?brain={BR2}&q=ra%20mat").status_code == 404)
 
 # Vòng nền: cài mới (chưa có team.sqlite3 lúc khởi động) thì KHÔNG chạy phục hồi về sau, kẻo chặn nhầm việc đang chạy.
-import dataclasses  # noqa: E402
-import team_api  # noqa: E402
+import dataclasses
+
+import team_api
+
 fresh_path = Path(tempfile.mkdtemp(prefix="team-fresh-")) / "team.sqlite3"
 api2 = team_api.TeamApi(dataclasses.replace(api.deps, store_path=fresh_path, spawn=spawned.append))
 api2.prime()

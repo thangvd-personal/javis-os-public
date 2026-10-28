@@ -20,7 +20,6 @@ import os
 import re
 import time
 
-
 # Đuôi file VĂN BẢN mà máy dọn không bao giờ đụng (khi keep_md=True). Tri thức là chữ, không
 # phải ảnh; .txt đứng cạnh .md vì đó là định dạng văn bản mặc định của chủ repo.
 DUOI_VAN_BAN = (".md", ".txt")
@@ -95,9 +94,7 @@ def media_dirs(brain_root, attachments=True):
                 except OSError:
                     continue
                 ten = d.name.strip()
-                if ten.lower() == "inbox":
-                    ra.append(d.path)
-                elif attachments and re.match(_ATTACH_RE, ten, re.IGNORECASE):
+                if ten.lower() == "inbox" or attachments and re.match(_ATTACH_RE, ten, re.IGNORECASE):
                     ra.append(d.path)
     except OSError:
         pass

@@ -1,12 +1,11 @@
 """Actual SDK116 builder/owned transport with fake capture/IO, no native child."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import os
 import sys
 import unittest
 
 import test_improvement_native_sdk as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 @unittest.skipUnless(os.name == 'nt' and sys.flags.isolated,

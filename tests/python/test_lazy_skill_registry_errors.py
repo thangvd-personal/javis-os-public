@@ -4,13 +4,12 @@ AdaptiveContext reads an exception as "restore the legacy skill router". Swallow
 `database is locked` into SkillSelection('none') would drop the whole skill index for that turn.
 Only a bound task scope may answer 'none' on storage errors (it must not fall back to live disk).
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
 from lazy_skill_runtime import LazySkillSource
 
 

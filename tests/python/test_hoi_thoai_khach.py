@@ -15,12 +15,13 @@ ba lớp:
 3. **Zalo cá nhân** (`zalo_personal_channel`): tin của MCP về đúng khuôn chung, chat riêng lấy
    tên từ bảng thread, tin do chính chủ gửi là tin người thật, cursor được lưu và gửi lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _STATE = tempfile.mkdtemp(prefix="javis-hoithoai-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -30,10 +31,10 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_personal_channel as zp  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zp
 
 _fails = []
 
@@ -252,7 +253,8 @@ check("bật một id không tồn tại bị từ chối", zp.bat("khong_co", T
 # ============================================================
 # 4. Đường vào giao diện: trang, bí danh, route
 # ============================================================
-import ui_targets  # noqa: E402
+import ui_targets
+
 check("trang conversations có trong PAGES", "conversations" in ui_targets.PAGES)
 check("bí danh 'hộp thư khách' về trang conversations, 'hội thoại' trần vẫn là chat",
       ui_targets.ALIASES.get("hop thu khach") == "conversations"
@@ -266,7 +268,8 @@ check("ui-actions.js và console.js cùng biết trang conversations",
 check("index.html nạp conversations.js TRƯỚC console.js",
       _html.find("/static/conversations.js") > 0
       and _html.find("/static/conversations.js") < _html.find("/static/console.js?v="))
-import routes.conversations as rc  # noqa: E402
+import routes.conversations as rc
+
 _src = (SERVER / "routes" / "conversations.py").read_text(encoding="utf-8")
 check("router có đủ đường: danh sách, tin, đã đọc, chế độ, kênh, bật Zalo",
       all(x in _src for x in ('"/conversations"', '"/conversations/{conv_id}/messages"',

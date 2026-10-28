@@ -15,7 +15,6 @@ only read `.md`/`.txt` files of the brain. What this file pins down:
 4. That the linked text reaches the bot through the same keyword search as brain files, and that two bots
    on one brain with different Agents never see each other's links.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import io
 import os
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-bld-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -32,11 +33,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import bot_linked_docs as bld  # noqa: E402
-import chatbot_grounding  # noqa: E402
-import chatbot_runtime  # noqa: E402
+import bot_linked_docs as bld
+import chatbot_grounding
+import chatbot_runtime
+import httpx
 
 _fails = []
 
@@ -114,7 +114,7 @@ def _google(request: httpx.Request) -> httpx.Response:
                                   content=DOC_MD.encode("utf-8"))
         if request.url.path == "/csv":
             return httpx.Response(200, headers={"content-type": "text/csv; charset=utf-8"},
-                                  content="Tên,Giá\nỐc vít M6,2.000đ\n".encode("utf-8"))
+                                  content="Tên,Giá\nỐc vít M6,2.000đ\n".encode())
         return httpx.Response(200, headers={"content-type": "application/vnd.oasis.opendocument.spreadsheet"},
                               content=SHEET_ODS)
     if host == "accounts.google.com":
@@ -215,7 +215,8 @@ with bld._lock:
         c["err_at"] -= bld.FRESH_S + 1
 STATE["down"] = True
 bld.collect(links2)                      # schedules the background refresh, answers from the old copy
-import threading  # noqa: E402
+import threading
+
 for t in [t for t in threading.enumerate() if t.name == "bot-linked-doc-refresh"]:
     t.join(5)
 r3 = bld.collect(links2)

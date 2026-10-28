@@ -39,8 +39,8 @@ import sqlite3
 import threading
 import time
 import uuid
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Optional
 
 SCHEMA_VERSION = 7
 MiB = 1024 * 1024
@@ -310,7 +310,7 @@ def spec_delivery_state(status: str) -> str:
     return SPEC_DELIVERY.get(status, status)
 
 
-def spec_event_state(status: str, deliveries: Optional[list] = None) -> str:
+def spec_event_state(status: str, deliveries: list | None = None) -> str:
     """The event's state in the spec's words (§7): ignored, quarantined, processing, waiting, done, partial_failed,
     failed, cancelled."""
     if status in ("filtered", "duplicate"):
@@ -557,7 +557,7 @@ class Store:
                                     " ORDER BY created_at, id", (brain,) if brain else ()).fetchall()
         return [self._hook_row(r) for r in rows]
 
-    def hook_get(self, hid: str) -> Optional[dict]:
+    def hook_get(self, hid: str) -> dict | None:
         with self._read():
             r = self._db.execute("SELECT * FROM hooks WHERE id=?", (hid,)).fetchone()
         return self._hook_row(r) if r else None
@@ -566,7 +566,7 @@ class Store:
         with self._read():
             return int(self._db.execute("SELECT COUNT(*) FROM hooks").fetchone()[0])
 
-    def hook_revision(self, hid: str, rev: int) -> Optional[dict]:
+    def hook_revision(self, hid: str, rev: int) -> dict | None:
         with self._read():
             r = self._db.execute("SELECT config FROM hook_revisions WHERE hook_id=? AND revision=?", (hid, rev)).fetchone()
         return _loads(r["config"], {}) if r else None
@@ -585,7 +585,7 @@ class Store:
         # The id lives again (re-imported after a rollback): its tombstone would refuse every dispatch.
         self._db.execute("DELETE FROM meta WHERE k=?", (f"deleted:{hook['id']}",))
 
-    def hook_insert(self, hook: dict, max_hooks: int = 0, now: Optional[float] = None, by: str = "owner") -> int:
+    def hook_insert(self, hook: dict, max_hooks: int = 0, now: float | None = None, by: str = "owner") -> int:
         """A new hook at revision 1. Returns 1; raises ValueError('too_many') past `max_hooks`."""
         now = time.time() if now is None else now
         with self._write():
@@ -594,7 +594,7 @@ class Store:
             self._insert_hook(dict(hook, revision=1), now, by)
         return 1
 
-    def hook_update(self, hook: dict, expected: Optional[int] = None, now: Optional[float] = None,
+    def hook_update(self, hook: dict, expected: int | None = None, now: float | None = None,
                     by: str = "owner") -> int:
         """Save a changed hook as a NEW revision (the old one stays readable for events that arrived under it).
         `expected` = the revision the caller edited: a different current revision raises Conflict (two tabs). Returns
@@ -621,7 +621,7 @@ class Store:
             self._unblock(hook["id"], now)
         return rev
 
-    def unblock(self, hid: str, now: Optional[float] = None) -> int:
+    def unblock(self, hid: str, now: float | None = None) -> int:
         """The owner fixed the cause OUTSIDE the hook (plugin switched back on, receiver key fixed, Apps Script
         redeployed): run the blocked deliveries of this hook again. Nothing acted for them (a block is decided before
         the receiver did anything), so this cannot double an effect. Audited. Returns events re-queued."""
@@ -675,7 +675,7 @@ class Store:
                                    tuple(cols.values()) + (time.time(), hid))
             return cur.rowcount == 1
 
-    def hook_ran(self, hid: str, status: str, now: Optional[float] = None) -> None:
+    def hook_ran(self, hid: str, status: str, now: float | None = None) -> None:
         now = time.time() if now is None else now
         with self._write():
             self._db.execute("UPDATE hooks SET runs=runs+1, last_at=?, last_status=? WHERE id=?", (now, status, hid))
@@ -685,7 +685,7 @@ class Store:
             cur = self._db.execute("DELETE FROM hooks WHERE id=?", (hid,))
             return cur.rowcount == 1
 
-    def import_hooks(self, hooks: list, now: Optional[float] = None) -> int:
+    def import_hooks(self, hooks: list, now: float | None = None) -> int:
         """Migration from webhooks.json (spec §13), idempotent: a hook already here keeps its rows; one changed in the
         JSON since (a rollback to an older build, then an upgrade again) becomes a new revision. Legacy seen keys stay
         duplicates. The marker is written in the same transaction. Returns hooks imported or updated."""
@@ -740,7 +740,7 @@ class Store:
             self._db.execute("DELETE FROM meta WHERE k='rollback_state'")
         return n
 
-    def hold_for_rollback(self, ids: list, now: Optional[float] = None) -> int:
+    def hold_for_rollback(self, ids: list, now: float | None = None) -> int:
         """The rollback tool exported these unsettled events for the owner to reconcile: they become unknown (the owner
         decides: Mark done or Retry), so an upgrade later never runs them on its own beside a manual resend."""
         now = time.time() if now is None else now
@@ -758,7 +758,7 @@ class Store:
                     n += 1
         return n
 
-    def import_legacy_keys(self, hook_id: str, keys: Iterable[str], now: Optional[float] = None) -> int:
+    def import_legacy_keys(self, hook_id: str, keys: Iterable[str], now: float | None = None) -> int:
         """Keys a pre-0.274.0 hook kept in webhooks.json stay duplicates after the upgrade (bounded tombstones: they
         go after DEDUP_KEEP_DAYS). They point at no event (the old runs were never stored)."""
         now = time.time() if now is None else now
@@ -773,7 +773,7 @@ class Store:
         return n
 
     # ── space ──
-    def make_room(self, need: int = 0, now: Optional[float] = None) -> int:
+    def make_room(self, need: int = 0, now: float | None = None) -> int:
         """Near the cap: free space from SETTLED events the owner has already been told about, oldest first: ignored
         ones first, then bodies of finished runs, then whole rows. Never an open event (received, queued, running,
         unknown, waiting, blocked: spec §11, never drop pending work to make room), never a failed or dead one (its body
@@ -820,8 +820,8 @@ class Store:
             self._db.execute(f"DELETE FROM events WHERE id IN ({q})", chunk)
 
     # ── receive ──
-    def ingest(self, hook: dict, body: bytes, content_type: str, idem_key: str = "", now: Optional[float] = None,
-               source: str = "http", meta: Optional[dict] = None) -> tuple:
+    def ingest(self, hook: dict, body: bytes, content_type: str, idem_key: str = "", now: float | None = None,
+               source: str = "http", meta: dict | None = None) -> tuple:
         """Store one authenticated event, BEFORE any rule is applied (spec §4.2). `idem_key` is the stored form
         (`idem_storage_key`). `meta`: headers (the allowed ones), verified_at, key_version, provider_id, event (the
         provider's normalised event), correlation. Returns (code, info):
@@ -917,7 +917,7 @@ class Store:
         _crash("after_commit")
         return 202, {"event_id": eid}
 
-    def _quota(self, hid: str, lim: dict, now: float, size: int) -> Optional[dict]:
+    def _quota(self, hid: str, lim: dict, now: float, size: int) -> dict | None:
         """Inside ingest's transaction. None, or the refusal with a Retry-After in seconds."""
         per_min = int(lim.get("per_minute") or INGRESS_PER_MIN)
         burst = int(lim.get("burst") or INGRESS_BURST)
@@ -958,7 +958,7 @@ class Store:
             pass                                   # a receipt is evidence, never a reason to refuse the duplicate
 
     # ── triage (spec §5-6: rules after the commit) ──
-    def triage_candidates(self, limit: int = 50, now: Optional[float] = None) -> list:
+    def triage_candidates(self, limit: int = 50, now: float | None = None) -> list:
         """Received events waiting for their rules, oldest first, of hooks not paused."""
         now = time.time() if now is None else now
         with self._read():
@@ -984,7 +984,7 @@ class Store:
         base = f"ns:{bk['shared']}" if bk.get("shared") else f"hook:{hid}"
         return ("test:" if source == "test" else "") + f"{base}:v{int(bk.get('policy') or 1)}"
 
-    def triage_commit(self, eid: str, pre: dict, deliveries: list, now: Optional[float] = None) -> str:
+    def triage_commit(self, eid: str, pre: dict, deliveries: list, now: float | None = None) -> str:
         """Write the triage decision of a received event in ONE transaction, only if it is still `received` (another
         worker may have decided first). `pre` = webhook_rules.evaluate() (decision run/filtered/invalid), `deliveries`
         = rows to create when it runs: {"action_id", "kind", "delivery_id", "status", "detail", "safe", "deadline",
@@ -1032,7 +1032,7 @@ class Store:
             _crash("triage_before_commit")
             return "queued"
 
-    def triage_defer(self, eid: str, delay: float, why: str, now: Optional[float] = None) -> None:
+    def triage_defer(self, eid: str, delay: float, why: str, now: float | None = None) -> None:
         """The hook's configuration could not be read right now: decide later (never drop or guess)."""
         now = time.time() if now is None else now
         with self._write():
@@ -1063,7 +1063,7 @@ class Store:
             self._db.execute("DELETE FROM biz_keys WHERE event_id=?", (eid,))
 
     # ── work ──
-    def claim(self, worker: str, now: Optional[float] = None, avoid: Optional[list] = None) -> Optional[dict]:
+    def claim(self, worker: str, now: float | None = None, avoid: list | None = None) -> dict | None:
         """Take the oldest runnable event whose hook has nothing else running and is not paused. Returns the row with
         the new `fence`, or None. One event per hook at a time (spec §11: concurrency 1 per hook). `avoid`: hooks not
         to take an event of now (the worker keeps a slot for code-only hooks)."""
@@ -1088,7 +1088,7 @@ class Store:
         d.update(status="running", lease_owner=worker, fence=fence, tries=tries)
         return d
 
-    def heartbeat(self, eid: str, fence: int, now: Optional[float] = None) -> bool:
+    def heartbeat(self, eid: str, fence: int, now: float | None = None) -> bool:
         """Renew. While the event is still `running` at our fence it is ours (claim() never takes a running row)."""
         now = time.time() if now is None else now
         with self._write():
@@ -1096,7 +1096,7 @@ class Store:
                                    (now + LEASE_S, eid, fence))
             return cur.rowcount == 1
 
-    def mark_dispatched(self, eid: str, fence: int, now: Optional[float] = None) -> bool:
+    def mark_dispatched(self, eid: str, fence: int, now: float | None = None) -> bool:
         """Event-level dispatch mark, committed BEFORE a run as a whole (a run without deliveries, older callers).
         Renews the lease. False = this worker lost the event (or its lease ran out): do NOT run it."""
         now = time.time() if now is None else now
@@ -1106,7 +1106,7 @@ class Store:
             return cur.rowcount == 1
 
     def finish(self, eid: str, fence: int, status: str, result: str = "", error: str = "",
-               now: Optional[float] = None) -> bool:
+               now: float | None = None) -> bool:
         """Final state for this attempt (an event that ends without its deliveries: hook deleted). False = a newer
         owner holds the event."""
         assert status in FINAL
@@ -1127,7 +1127,7 @@ class Store:
                                  (now, "late:" + status, str(result or error or "")[:4000], eid, fence))
         return ok
 
-    def requeue_before_dispatch(self, eid: str, fence: int, error: str, now: Optional[float] = None) -> str:
+    def requeue_before_dispatch(self, eid: str, fence: int, error: str, now: float | None = None) -> str:
         """A failure before anything was dispatched: safe to try again. Back off, or `dead` after MAX_AUTO_TRIES."""
         now = time.time() if now is None else now
         with self._write():
@@ -1160,7 +1160,7 @@ class Store:
         r = self._db.execute("SELECT generation FROM events WHERE id=?", (eid,)).fetchone()
         return int(r["generation"]) if r else 1
 
-    def branches_init(self, eid: str, fence: int, actions: list, delivery_of) -> Optional[list]:
+    def branches_init(self, eid: str, fence: int, actions: list, delivery_of) -> list | None:
         """The delivery rows of this event's current generation (created at triage; created here for an event queued
         by an older build). Returns all rows, or None if this worker no longer owns the event."""
         with self._write():
@@ -1175,14 +1175,14 @@ class Store:
             return [dict(r) for r in self._db.execute(
                 f"SELECT {_DELIVERY_COLS} FROM deliveries WHERE event_id=? AND generation=? ORDER BY rowid", (eid, gen))]
 
-    def branches(self, eid: str, gen: Optional[int] = None) -> list:
+    def branches(self, eid: str, gen: int | None = None) -> list:
         with self._read():
             g = self._gen(eid) if gen is None else gen
             return [dict(r) for r in self._db.execute(
                 f"SELECT {_DELIVERY_COLS} FROM deliveries WHERE event_id=? AND generation=? ORDER BY rowid", (eid, g))]
 
     def branch_dispatch(self, eid: str, fence: int, aid: str, worker: str = "", safe: bool = False,
-                        request_sha: str = "", ai: bool = False, now: Optional[float] = None) -> bool:
+                        request_sha: str = "", ai: bool = False, now: float | None = None) -> bool:
         """Committed BEFORE the delivery's effect starts, with its attempt row. False = do NOT run it (lost the event,
         or the delivery is not runnable any more). `safe` = a lost lease may resend it (the receiver dedups)."""
         now = time.time() if now is None else now
@@ -1211,9 +1211,9 @@ class Store:
                                  " id=?", (now, eid))
         return True
 
-    def branch_finish(self, eid: str, fence: int, aid: str, status: str, detail: str = "", receipt: Optional[dict] = None,
-                      result: str = "", next_at: float = 0.0, now: Optional[float] = None, http_status: int = 0,
-                      maybe_acted: Optional[bool] = None) -> bool:
+    def branch_finish(self, eid: str, fence: int, aid: str, status: str, detail: str = "", receipt: dict | None = None,
+                      result: str = "", next_at: float = 0.0, now: float | None = None, http_status: int = 0,
+                      maybe_acted: bool | None = None) -> bool:
         """Outcome of one delivery (also one closed before dispatch: a permission, a missing plugin). `retry` keeps it
         runnable from `next_at`. False = a newer owner holds the event (the caller keeps the outcome with
         branch_late)."""
@@ -1237,7 +1237,7 @@ class Store:
                  fence))
         return True
 
-    def branch_late(self, eid: str, aid: str, status: str, detail: str, receipt: Optional[dict], result: str) -> None:
+    def branch_late(self, eid: str, aid: str, status: str, detail: str, receipt: dict | None, result: str) -> None:
         """The event was taken over while this delivery was still running (lease lost): its real outcome is not written
         as the state (the owner reconciles that), but it is kept next to it."""
         note = f"late outcome: {status}" + (f" ({detail[:300]})" if detail else "")
@@ -1333,7 +1333,7 @@ class Store:
             return "waiting", 0.0
         return st, nxt
 
-    def settle(self, eid: str, fence: int, text_of, now: Optional[float] = None) -> tuple:
+    def settle(self, eid: str, fence: int, text_of, now: float | None = None) -> tuple:
         """End of a run over deliveries, in ONE write: read them as they are NOW (an approval may have landed), then
         requeue the event if one can still run, or write its final state. Returns (status, next_at), or ("", 0) if this
         worker no longer owns the event."""
@@ -1361,7 +1361,7 @@ class Store:
                              (now, status, str(error or "")[:500], eid, fence))
             return status, 0.0
 
-    def approve(self, eid: str, aid: str, decision: str, now: Optional[float] = None) -> tuple:
+    def approve(self, eid: str, aid: str, decision: str, now: float | None = None) -> tuple:
         """The owner approves or rejects ONE delivery waiting for approval. Approve: it runs at the next pass (the
         current permissions are checked again then). Reject: it is cancelled. Returns (ok, error_code)."""
         if decision not in ("approve", "reject"):
@@ -1396,7 +1396,7 @@ class Store:
                                  (st, now, now, eid))
         return True, ""
 
-    def recover(self, now: Optional[float] = None) -> dict:
+    def recover(self, now: float | None = None) -> dict:
         """Expired leases (a worker died or hung). Per delivery: one dispatched and never finished becomes `unknown`
         (it may have acted), unless it was marked retry-safe, which is tried again (spec §7: retry when proven safe).
         If some never started, the event goes back to the queue for those. Returns counts."""
@@ -1468,7 +1468,7 @@ class Store:
                                  (now, outcome, r["id"], r["fence"]))
         return {"requeued": back, "unknown": unknown}
 
-    def has_claimable(self, now: Optional[float] = None) -> bool:
+    def has_claimable(self, now: float | None = None) -> bool:
         """Is there work this or another worker could take right now (an event to triage or to run)?"""
         now = time.time() if now is None else now
         with self._read():
@@ -1480,7 +1480,7 @@ class Store:
                 " SELECT 1 FROM events r WHERE r.hook_id=e.hook_id AND r.status='running') AND NOT EXISTS ("
                 " SELECT 1 FROM hooks h WHERE h.id=e.hook_id AND h.paused=1) LIMIT 1", (now,)).fetchone() is not None
 
-    def mark_notified(self, eid: str, fence: Optional[int] = None, now: Optional[float] = None) -> None:
+    def mark_notified(self, eid: str, fence: int | None = None, now: float | None = None) -> None:
         now = time.time() if now is None else now
         with self._write():
             if fence is None:
@@ -1498,8 +1498,8 @@ class Store:
 
     # ── notifications outbox (spec §4.1, §12: a failed notice is retried alone, never the action) ──
     def notify_enqueue(self, dkey: str, kind: str, text: str, *, hook_id: str = "", event_id: str = "",
-                       chat_id: str = "", brain: str = "", web: str = "", viec: Optional[dict] = None,
-                       mark_event: Optional[tuple] = None, now: Optional[float] = None) -> bool:
+                       chat_id: str = "", brain: str = "", web: str = "", viec: dict | None = None,
+                       mark_event: tuple | None = None, now: float | None = None) -> bool:
         """Queue one notice under its dedup key (a second enqueue of the same key is a no-op). `mark_event` =
         (event_id, fence): the event is marked told in the SAME transaction, so a crash can neither lose the notice nor
         queue it twice. Returns True when it was new."""
@@ -1518,13 +1518,13 @@ class Store:
                     self._db.execute("UPDATE events SET notified_at=? WHERE id=? AND fence=?", (now, eid, fence))
             return cur.rowcount == 1
 
-    def notify_due(self, now: Optional[float] = None, limit: int = 50) -> list:
+    def notify_due(self, now: float | None = None, limit: int = 50) -> list:
         now = time.time() if now is None else now
         with self._read():
             return [dict(r) for r in self._db.execute(
                 "SELECT * FROM notifications WHERE status='pending' AND next_at<=? ORDER BY id LIMIT ?", (now, limit))]
 
-    def notify_result(self, nid: int, ok: bool, error: str = "", now: Optional[float] = None) -> None:
+    def notify_result(self, nid: int, ok: bool, error: str = "", now: float | None = None) -> None:
         now = time.time() if now is None else now
         with self._write():
             if ok:
@@ -1563,7 +1563,7 @@ class Store:
                 " LIMIT ?", (hook_id, hook_id, limit))]
 
     # ── owner actions ──
-    def retry(self, eid: str, now: Optional[float] = None, window_s: float = 0.0) -> tuple:
+    def retry(self, eid: str, now: float | None = None, window_s: float = 0.0) -> tuple:
         """The owner asks to run an event again (failed, unknown, dead, blocked), after reconciling. Only deliveries that
         failed, are unknown or blocked run again, with the SAME delivery ids and the same snapshot; a delivery that
         succeeded never does. Returns (ok, error_code)."""
@@ -1607,8 +1607,8 @@ class Store:
             self._audit(now, "retry", row["hook_id"], eid)
         return True, ""
 
-    def replay(self, eid: str, deliveries: list, now: Optional[float] = None, revision: int = 0,
-               bk: Optional[dict] = None) -> tuple:
+    def replay(self, eid: str, deliveries: list, now: float | None = None, revision: int = 0,
+               bk: dict | None = None) -> tuple:
         """"Process with the new configuration" (spec §7): a NEW generation of deliveries (new delivery ids) built by
         the caller from the hook's current revision, after the owner saw the simulation. The event keeps its business
         identity (its key is not dropped). Returns (ok, error_code)."""
@@ -1645,7 +1645,7 @@ class Store:
             self._audit(now, "replay", row["hook_id"], eid, f"generation {gen}, revision {revision or 'kept'}")
         return True, ""
 
-    def resolve(self, eid: str, outcome: str, note: str = "", now: Optional[float] = None) -> tuple:
+    def resolve(self, eid: str, outcome: str, note: str = "", now: float | None = None) -> tuple:
         """Reconcile an `unknown` event after checking the outside system (done: it happened; failed: it did not, and
         can be retried). Also closes a `waiting` or `blocked` event the owner has dealt with, and settles a receiver
         that only ACCEPTED (queued) the work: done counts it finished, so actions waiting for it run; failed cancels
@@ -1690,7 +1690,7 @@ class Store:
                              (final, note, str(note)[:1000], now, now, eid))
         return True, ""
 
-    def close_failed(self, hook_id: str, now: Optional[float] = None) -> int:
+    def close_failed(self, hook_id: str, now: float | None = None) -> int:
         """Settle every failed or dead event of a hook as given up (cancelled, audited), without resending: the way out
         when kept failed bodies fill the hook's byte quota."""
         now = time.time() if now is None else now
@@ -1705,7 +1705,7 @@ class Store:
                 self._audit(now, "close_failed", hook_id, "", f"{len(ids)} events")
         return len(ids)
 
-    def delete_event(self, eid: str, now: Optional[float] = None) -> tuple:
+    def delete_event(self, eid: str, now: float | None = None) -> tuple:
         """The owner deletes one event that is not being processed (spec §11: a failed body is kept until the owner
         settles or deletes it). Its delivery key goes too, so a resend from the source is received again; the business
         key is given back. Audited. Returns (ok, error_code)."""
@@ -1742,7 +1742,7 @@ class Store:
             self._audit(now, "delete_event", row["hook_id"], eid, row["status"])
         return True, ""
 
-    def expire(self, hid: str, max_age_s: float, now: Optional[float] = None) -> int:
+    def expire(self, hid: str, max_age_s: float, now: float | None = None) -> int:
         """Business expiry (spec §11), only when the hook configured it: an event of this hook that has not run after
         `max_age_s` is not sent days late; it becomes dead with the reason, audited, and the owner is told."""
         now = time.time() if now is None else now
@@ -1759,7 +1759,7 @@ class Store:
         return len(ids)
 
     # ── reading ──
-    def get(self, eid: str, with_body: bool = False) -> Optional[dict]:
+    def get(self, eid: str, with_body: bool = False) -> dict | None:
         with self._read():
             row = self._db.execute("SELECT * FROM events WHERE id=?", (eid,)).fetchone()
             if row is None:
@@ -1800,7 +1800,7 @@ class Store:
 
     def page(self, hook_id: str = "", status: str = "", limit: int = 20, before: str = "",
              ran_only: bool = False, since: float = 0.0, until: float = 0.0, q: str = "",
-             hooks: Optional[list] = None) -> dict:
+             hooks: list | None = None) -> dict:
         """Newest first, keyset pagination: `before` is the `next` cursor of the previous page. Filters: hook (or a
         list of hooks: one brain's), statuses, `ran_only` (leave out the ignored ones), received time range, and `q`
         (exact correlation id, delivery key or event id)."""
@@ -1852,7 +1852,7 @@ class Store:
         cur = f"{rows[-1]['received_at']}|{rows[-1]['id']}" if more and rows else ""
         return {"items": rows, "next": cur}
 
-    def biz_key_holder(self, brain: str, scope: str, bkey: str, now: Optional[float] = None) -> str:
+    def biz_key_holder(self, brain: str, scope: str, bkey: str, now: float | None = None) -> str:
         """Read only: the event holding this business key as ingest and replay judge it (a key past its TTL still holds
         while its event has not run), or ''."""
         now = time.time() if now is None else now
@@ -1860,7 +1860,7 @@ class Store:
             row = self._live_key(brain, scope, bkey, now)
         return str(row["event_id"]) if row else ""
 
-    def biz_key_lookup(self, brain: str, scope: str, bkey: str, now: Optional[float] = None) -> Optional[dict]:
+    def biz_key_lookup(self, brain: str, scope: str, bkey: str, now: float | None = None) -> dict | None:
         """Read only (simulation): the live event holding this business key, or None."""
         now = time.time() if now is None else now
         with self._read():
@@ -1874,7 +1874,7 @@ class Store:
                                     (hook_id,)).fetchall()
         return {r["status"]: r["n"] for r in rows}
 
-    def health(self, hook_id: str = "", now: Optional[float] = None, window: float = 86400) -> dict:
+    def health(self, hook_id: str = "", now: float | None = None, window: float = 86400) -> dict:
         """Spec §12 health: received / matched / ignored / duplicate, backlog, age of the oldest open event, latency of
         processing, retry / dead / unknown, AI calls, errors by target, SQL busy, DB and WAL size."""
         now = time.time() if now is None else now
@@ -1916,7 +1916,7 @@ class Store:
                 "unknown": dstat.get("unknown", 0), "blocked": dstat.get("blocked", 0), "ai_calls": int(ai),
                 "errors_by_target": errs, "sql_busy": self.busy_count, **self.space_state()}
 
-    def last(self, hook_id: str) -> Optional[dict]:
+    def last(self, hook_id: str) -> dict | None:
         with self._read():
             row = self._db.execute("SELECT status, finished_at, received_at FROM events WHERE hook_id=?"
                                    " ORDER BY received_at DESC, id DESC LIMIT 1", (hook_id,)).fetchone()
@@ -1946,7 +1946,7 @@ class Store:
             self._db.execute("DELETE FROM dedup WHERE hook_id=?", (hook_id,))
             self._db.execute("DELETE FROM hooks WHERE id=?", (hook_id,))
 
-    def prune(self, now: Optional[float] = None, keep_days: Optional[dict] = None) -> int:
+    def prune(self, now: float | None = None, keep_days: dict | None = None) -> int:
         """Settled events past their retention (KEEP_DAYS, or the hook's own), and past the per-hook row caps; bodies
         of settled events after BODY_KEEP_DAYS, with their mapped fields (customer data does not outlive the body);
         delivery keys after DEDUP_KEEP_DAYS. Open events (unknown, waiting, blocked included) and FAILED or DEAD ones
@@ -2040,14 +2040,14 @@ class Store:
         return bool(r) and r["hook_id"] in longer and r["finished_at"] >= now - longer[r["hook_id"]] * 86400
 
     # ── breakers, AI budget, meta, export ──
-    def breaker_open_until(self, hook_id: str, action_id: str, now: Optional[float] = None) -> float:
+    def breaker_open_until(self, hook_id: str, action_id: str, now: float | None = None) -> float:
         now = time.time() if now is None else now
         with self._read():
             r = self._db.execute("SELECT open_until FROM breakers WHERE hook_id=? AND action_id=?",
                                  (hook_id, action_id)).fetchone()
         return float(r["open_until"]) if r and float(r["open_until"]) > now else 0.0
 
-    def breaker_record(self, hook_id: str, action_id: str, ok: bool, now: Optional[float] = None) -> str:
+    def breaker_record(self, hook_id: str, action_id: str, ok: bool, now: float | None = None) -> str:
         """One outcome of a target. Returns "opened" when this failure opened the breaker, "closed" when a success closed
         an open or failing one, else ""."""
         now = time.time() if now is None else now
@@ -2079,7 +2079,7 @@ class Store:
             else:
                 self._db.execute("DELETE FROM breakers WHERE hook_id=?", (hook_id,))
 
-    def breakers(self, hook_id: str, now: Optional[float] = None) -> list:
+    def breakers(self, hook_id: str, now: float | None = None) -> list:
         now = time.time() if now is None else now
         with self._read():
             return [dict(r) for r in self._db.execute("SELECT action_id, fails, open_until, opens FROM breakers WHERE"
@@ -2099,7 +2099,7 @@ class Store:
                                  (hook_id, hook_id, since)).fetchone()
         return float(r[0] or 0)
 
-    def ai_record(self, hook_id: str, event_id: str, now: Optional[float] = None) -> None:
+    def ai_record(self, hook_id: str, event_id: str, now: float | None = None) -> None:
         """A model call outside a delivery (incident triage when the hook enabled it): it counts in the same ledger."""
         now = time.time() if now is None else now
         with self._write():
@@ -2136,7 +2136,7 @@ class Store:
         return out
 
     def export_rows(self, hook_id: str = "", since: float = 0.0, until: float = 0.0, with_body: bool = False,
-                    batch: int = 200, hooks: Optional[list] = None):
+                    batch: int = 200, hooks: list | None = None):
         """Every event of a hook (or of a list of hooks, or all), oldest first, in batches (keyset on received_at, id).
         Bodies only when asked. Never the hook configuration."""
         last_ts, last_id = float(since or 0), ""
@@ -2177,7 +2177,7 @@ class Store:
                 "SELECT id, hook_id, status, received_at, generation, error FROM events WHERE status IN ('received',"
                 "'queued','running','unknown','waiting','blocked') ORDER BY received_at")]
 
-    def live_leases(self, now: Optional[float] = None) -> int:
+    def live_leases(self, now: float | None = None) -> int:
         now = time.time() if now is None else now
         with self._read():
             return int(self._db.execute("SELECT COUNT(*) FROM events WHERE status='running' AND lease_until>?",

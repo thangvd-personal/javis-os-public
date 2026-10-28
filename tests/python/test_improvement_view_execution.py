@@ -1,19 +1,18 @@
 """Real Runner/ledger/products/cleanup with a clearly simulated engine adapter."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import unittest
 from unittest.mock import patch
 
-from agent_ledger import CallLedger
 import improvement_claude as native
 import improvement_sandbox as SB
 import improvement_store as IM
-from improvement_trial_runner import TrialRunner
-from improvement_comparison_results import _NATIVE_CHECKS, ComparisonResults
-import test_improvement_view_sources as sources
 import test_improvement_view_next as next_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
+from improvement_comparison_results import _NATIVE_CHECKS, ComparisonResults
+from improvement_trial_runner import TrialRunner
 
 
 class ViewExecutionTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

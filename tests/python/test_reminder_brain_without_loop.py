@@ -14,7 +14,6 @@ Covers:
 Run:
     python tests/python/test_reminder_brain_without_loop.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import asyncio
 import json
 import os
@@ -22,13 +21,15 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
+
 # BRAINS_DIR and STATE_DIR must point at temp folders BEFORE main is imported (read at import).
 _STATE = tempfile.mkdtemp(prefix="javis-rem-noloop-state-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-rem-noloop-brains-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ["BRAINS_DIR"] = _BRAINS
 
-import main  # noqa: E402
+import main
 
 fails = []
 

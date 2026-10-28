@@ -20,7 +20,6 @@ VIỄN, không exception. Check này chạy sync_brain trên luồng daemon vớ
 hết-giờ thành một dòng FAIL rõ tên, không phải một lần chạy treo CI. Kèm 1 kiểm AST tĩnh độc
 lập (không chạy code, chỉ đọc token) soát đúng 3 hàm đó không nhắc tên _LOCK.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import ast
 import os
 import shutil
@@ -29,9 +28,11 @@ import tempfile
 import threading
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-synctest-"))
 
-import system_sync  # noqa: E402
+import system_sync
 
 _fails = []
 

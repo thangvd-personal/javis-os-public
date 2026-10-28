@@ -7,7 +7,6 @@ localhost), plugin nạp đủ 5 tool + đúng min_mode (đọc readonly, đăng
 nối, chọn Trang (1 Trang tự lấy, nhiều Trang bắt chỉ rõ), đăng bài dùng token Trang, trả lời
 bình luận, đọc bình luận suy Trang từ post_id, và fb_pages_list KHÔNG lộ access_token của Trang.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import importlib.util
 import json
@@ -15,6 +14,8 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-metapages-"))
 

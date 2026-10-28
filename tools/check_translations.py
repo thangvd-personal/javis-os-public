@@ -48,7 +48,7 @@ FLAG_LABEL = {
     "de": "In {n} Sprachen verfügbar", "fr": "Disponible en {n} langues", "id": "Tersedia dalam {n} bahasa",
 }
 FLAGS_START, FLAGS_END = "<!-- flags:start -->", "<!-- flags:end -->"
-FLAGS_BLOCK = re.compile(re.escape(FLAGS_START) + r".*?" + re.escape(FLAGS_END), re.S)
+FLAGS_BLOCK = re.compile(re.escape(FLAGS_START) + r".*?" + re.escape(FLAGS_END), re.DOTALL)
 MARKER = re.compile(r"<!--\s*translated-from:\s*(\S+)\s+sha256:([0-9a-f]{6,64})\s*-->")
 
 
@@ -61,7 +61,7 @@ def lists_languages(line: str) -> bool:
 def source_hash(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     # The flag row and the blank line it brought along, so a file reads as it did before.
-    text = re.sub(FLAGS_BLOCK.pattern + r"\n\n", "", text, flags=re.S)
+    text = re.sub(FLAGS_BLOCK.pattern + r"\n\n", "", text, flags=re.DOTALL)
     kept = "\n".join(line for line in text.split("\n") if not lists_languages(line))
     return hashlib.sha256(kept.encode("utf-8")).hexdigest()[:12]
 

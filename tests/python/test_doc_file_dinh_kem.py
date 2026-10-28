@@ -18,10 +18,11 @@ Test khoá ba việc:
   2. Không mở kèm đường nào khác - `..`, thư mục cha của staging, chỗ khác trên ổ đĩa.
   3. Ghi vẫn khoá trong vault, và bot chuyên trách (không truyền cờ) vẫn không thấy staging.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _TMP = tempfile.mkdtemp(prefix="javis-dinhkem-")
 os.environ.setdefault("JAVIS_STATE_DIR", _TMP)
@@ -31,12 +32,12 @@ try:
 except Exception:
     pass
 
-import asyncio  # noqa: E402
 import ast
-import inspect  # noqa: E402
-from pathlib import Path  # noqa: E402
+import asyncio
+import inspect
+from pathlib import Path
 
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 _fails = []
 

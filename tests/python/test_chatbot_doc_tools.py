@@ -20,13 +20,14 @@ Plus the two behaviours the level exists for: the bot is told to look things up 
 keyword search misses, and the reply judge sees the table of contents instead of silencing the bot
 just because the customer used different words.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-doctools-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -35,12 +36,12 @@ try:
 except Exception:
     pass
 
-import chatbot_doc_tools as dt  # noqa: E402
-import chatbot_grounding  # noqa: E402
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
-import chatbot_store  # noqa: E402
-import mcp_hub  # noqa: E402
+import chatbot_doc_tools as dt
+import chatbot_grounding
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
+import chatbot_store
+import mcp_hub
 
 _fails = []
 
@@ -219,7 +220,7 @@ check("over HTTP with a broken header: no tools", _http_tools("/khong/co/thu/muc
 # ============================================================
 # 4. The prompt: told to look things up itself, not to give up
 # ============================================================
-import chatbot_runtime  # noqa: E402
+import chatbot_runtime
 
 base = {"name": "Bot", "agent": {"slug": "cskh", "brain": "shop"}, "nguon_tra_loi": "tai_lieu",
         "_tai_lieu": {"co": False, "khoi": "", "nguon": []}}

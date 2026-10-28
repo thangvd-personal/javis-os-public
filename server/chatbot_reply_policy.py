@@ -29,9 +29,10 @@ import time
 import unicodedata
 import weakref
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import bot_reaction
 import chatbot_grounding
@@ -90,7 +91,7 @@ _KW_DEFAULT = {
     "rejection": ["dung chen", "ai hoi bot", "im di"],
     "thanks": ["cam on", "thanks", "ok roi"],
 }
-_cache: Dict[str, Any] = {}
+_cache: dict[str, Any] = {}
 
 
 def _load_json(name: str, fallback: Any) -> Any:
@@ -105,12 +106,12 @@ def _load_json(name: str, fallback: Any) -> Any:
     return data
 
 
-def keywords() -> Dict[str, List[str]]:
+def keywords() -> dict[str, list[str]]:
     d = _load_json("keywords_vi.json", _KW_DEFAULT)
     return {k: list(d.get(k) or _KW_DEFAULT[k]) for k in _KW_DEFAULT}
 
 
-def mechanics() -> List[dict]:
+def mechanics() -> list[dict]:
     d = _load_json("mechanics_vi.json", [])
     return d if isinstance(d, list) else []
 
@@ -118,9 +119,9 @@ def mechanics() -> List[dict]:
 # ============================================================
 # Chuẩn hoá chữ
 # ============================================================
-_PUNCT = re.compile(r"[^\w@\s]", re.U)
+_PUNCT = re.compile(r"[^\w@\s]", re.UNICODE)
 # Thẻ bọc dữ liệu chat: bắt cả biến thể có khoảng trắng, hoa thường, thiếu ngoặc đóng ("</chat_data >", "< /chat_data").
-_MARKERS = re.compile(r"\[IM_LANG\]|\[BAO_CHU\]|\[TACH_TIN\]|\[\s*CAM_XUC[^\]\n]{0,20}\]|JAVIS_[A-Z_]+|<\s*/?\s*chat[_\s-]*data\b[^>\n]{0,40}>?", re.I)
+_MARKERS = re.compile(r"\[IM_LANG\]|\[BAO_CHU\]|\[TACH_TIN\]|\[\s*CAM_XUC[^\]\n]{0,20}\]|JAVIS_[A-Z_]+|<\s*/?\s*chat[_\s-]*data\b[^>\n]{0,40}>?", re.IGNORECASE)
 _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 # Ký tự hiện ra là KHÔNG CÓ GÌ: model đọc được, chủ xem hộp thư thì không thấy, nên người lạ giấu lệnh vào đó
 # (0.83.2, ý lấy từ the-security-guide của repo ECC). Gồm: zero-width, đánh dấu và ghi đè hướng chữ (đảo thứ tự chủ
@@ -129,9 +130,9 @@ _CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 # gỡ cả chuỗi liền nhau. Gỡ HẲN chứ không thay bằng khoảng trắng: marker bị chèn zero-width ở giữa được nối lại
 # rồi `_MARKERS` bắt được, thay vì lọt qua thành hai nửa.
 _HIDDEN = re.compile(
-    "[­ᅟᅠ᠎​-‏‪-‮⁠-⁤⁦-⁯ㅤ︀-︍"
+    "[­ᅟᅠ᠎\u200b-‏‪-‮⁠-⁤⁦-⁯ㅤ︀-︍"
     "﻿ﾠ￹-￻\U000e0000-\U000e007f\U000e0100-\U000e01ef]|[︎️]{2,}")
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 
 
 def norm(text: Any) -> str:
@@ -140,7 +141,7 @@ def norm(text: Any) -> str:
     return " ".join(_PUNCT.sub(" ", t).split())
 
 
-def raw_tokens(text: Any) -> List[str]:
+def raw_tokens(text: Any) -> list[str]:
     """Token chữ thường GIỮ DẤU, tách y như `norm`, để so từng chữ với bản bỏ dấu theo vị trí. Cần vì bỏ dấu làm
     "này" (gọi) và "nay" (hôm nay) thành một chữ, nên chữ mở đầu phải xét trên bản còn dấu."""
     t = unicodedata.normalize("NFC", str(text or "")).lower()
@@ -171,7 +172,7 @@ def clean_block(text: Any, limit: int = 3000) -> str:
     return "\n".join(l for l in (" ".join(x.split()) for x in t.split("\n")) if l)[:limit]
 
 
-def _has_phrase(text_n: str, phrases: List[str]) -> bool:
+def _has_phrase(text_n: str, phrases: list[str]) -> bool:
     padded = " " + text_n + " "
     return any((" " + p + " ") in padded for p in phrases if p)
 
@@ -185,7 +186,7 @@ def jaccard(a: set, b: set) -> float:
 # ============================================================
 # Cấu hình của bot
 # ============================================================
-def _clean_str_list(v: Any, max_items: int, max_len: int) -> List[str]:
+def _clean_str_list(v: Any, max_items: int, max_len: int) -> list[str]:
     out, seen = [], set()
     for x in (v if isinstance(v, (list, tuple)) else []):
         s = " ".join(str(x or "").split())[:max_len]
@@ -225,19 +226,19 @@ def normalize_config(raw: Any) -> dict:
 class BotProfile:
     bot_id: str
     name: str = ""
-    aliases: List[str] = field(default_factory=list)         # do chủ khai: không bị luật độ dài
-    auto_aliases: List[str] = field(default_factory=list)    # nhãn kết nối, tên hiển thị của nick
+    aliases: list[str] = field(default_factory=list)         # do chủ khai: không bị luật độ dài
+    auto_aliases: list[str] = field(default_factory=list)    # nhãn kết nối, tên hiển thị của nick
     mode: str = MODE_DEFAULT
     eagerness: str = EAGERNESS_DEFAULT
     guidelines: str = ""
     grounding: str = GROUNDING_DEFAULT
     learning_enabled: bool = False
-    trainer_ids: List[str] = field(default_factory=list)
+    trainer_ids: list[str] = field(default_factory=list)
     role_text: str = ""                                       # hồ sơ vai (máy soạn) hoặc vai thô của Agent
     consider_tagged: bool = False                             # 0.77.0: tin "@người khác" vẫn được xét (nút do AI vặn)
 
     @classmethod
-    def from_bot(cls, cfg: dict, auto_aliases=(), role_text: str = "", has_docs: Optional[bool] = None) -> "BotProfile":
+    def from_bot(cls, cfg: dict, auto_aliases=(), role_text: str = "", has_docs: bool | None = None) -> BotProfile:
         """`has_docs`: bot có tài liệu để tra không. Có (hoặc chưa biết) thì lời TỰ NÓI phải có căn cứ trong tài liệu;
         biết chắc là không có tài liệu nào thì dựa vào vai, kẻo bot không bao giờ tự nói được."""
         rp = normalize_config((cfg or {}).get("reply_policy"))
@@ -247,7 +248,7 @@ class BotProfile:
                    grounding="role" if has_docs is False else "docs", learning_enabled=rp["learning_enabled"],
                    trainer_ids=rp["trainer_ids"], role_text=role_text)
 
-    def alias_pairs(self) -> List[Tuple[str, bool]]:
+    def alias_pairs(self) -> list[tuple[str, bool]]:
         """(tên đã chuẩn hoá, do chủ khai). Tên tự suy phải dài từ 4 ký tự; tên của chủ thì không."""
         out, seen = [], set()
         for a in self.aliases:
@@ -286,8 +287,8 @@ class Event:
     sender_role: str = "new"             # owner | known | new
     mentioned: bool = False
     reply_to_bot: bool = False
-    window: List[Message] = field(default_factory=list)
-    bot_last_spoke_ts: Optional[float] = None
+    window: list[Message] = field(default_factory=list)
+    bot_last_spoke_ts: float | None = None
     last_bot_addressee: str = ""
     owner_typing: bool = False
     # 0.334.0: the message is a customer's emoji reaction (its describing line is `text`), and whether the bot can put
@@ -299,9 +300,9 @@ class Event:
 # ============================================================
 # Cửa sổ trò chuyện trong bộ nhớ (kênh nào cũng đẩy tin vào đây)
 # ============================================================
-_WIN: Dict[Tuple[str, str], deque] = {}
-_BOTCTX: Dict[Tuple[str, str], dict] = {}
-_KNOWN: Dict[Tuple[str, str], float] = {}
+_WIN: dict[tuple[str, str], deque] = {}
+_BOTCTX: dict[tuple[str, str], dict] = {}
+_KNOWN: dict[tuple[str, str], float] = {}
 _MAX_CHATS = 2000
 _MAX_KNOWN = 20000          # trần thô cho các bảng nhớ theo người; quên bớt còn hơn phình mãi
 
@@ -315,7 +316,7 @@ def push_message(bot_id: str, chat_id: str, msg: Message) -> None:
                       clean_chat_text(msg.text, WINDOW_TEXT_MAX)))
 
 
-def note_bot_reply(bot_id: str, chat_id: str, addressee_id: str, text: str, ts: Optional[float] = None) -> None:
+def note_bot_reply(bot_id: str, chat_id: str, addressee_id: str, text: str, ts: float | None = None) -> None:
     """Bot vừa nói trong cuộc chat: nhớ giờ và người được trả lời (cho tín hiệu `follow_up`)."""
     ts = time.time() if ts is None else ts
     key = (str(bot_id), str(chat_id))
@@ -330,7 +331,7 @@ def note_bot_reply(bot_id: str, chat_id: str, addressee_id: str, text: str, ts: 
     push_message(bot_id, chat_id, Message(ts, "__bot__", "bot", True, text))
 
 
-def window_of(bot_id: str, chat_id: str, now: Optional[float] = None) -> List[Message]:
+def window_of(bot_id: str, chat_id: str, now: float | None = None) -> list[Message]:
     now = time.time() if now is None else now
     dq = _WIN.get((str(bot_id), str(chat_id)))
     if not dq:
@@ -338,7 +339,7 @@ def window_of(bot_id: str, chat_id: str, now: Optional[float] = None) -> List[Me
     return [m for m in dq if now - m.ts <= WINDOW_TTL_S][-WINDOW_MAX:]
 
 
-def bot_context(bot_id: str, chat_id: str, now: Optional[float] = None) -> Tuple[Optional[float], str]:
+def bot_context(bot_id: str, chat_id: str, now: float | None = None) -> tuple[float | None, str]:
     c = _BOTCTX.get((str(bot_id), str(chat_id)))
     if not c or (now if now is not None else time.time()) - c["ts"] > WINDOW_TTL_S:
         return None, ""
@@ -367,7 +368,7 @@ def reset_runtime_state() -> None:
 @dataclass
 class AddressResult:
     level: str = "none"                     # certain | possible | none
-    evidence: List[str] = field(default_factory=list)
+    evidence: list[str] = field(default_factory=list)
 
 
 _RANK = {"none": 0, "possible": 1, "certain": 2}
@@ -422,7 +423,7 @@ def detect_address(ev: Event, profile: BotProfile) -> AddressResult:
 # ============================================================
 # T: tín hiệu (sổ đăng ký, cắm thêm được)
 # ============================================================
-_SIGNALS: Dict[str, Callable[..., dict]] = {}
+_SIGNALS: dict[str, Callable[..., dict]] = {}
 
 
 def signal(name: str):
@@ -483,7 +484,7 @@ def _sig_alias_mid(ev: Event, profile: BotProfile, ctx: dict) -> dict:
     return {"value": bool(a and a.level == "possible" and "mid_sentence" in a.evidence), "evidence": ""}
 
 
-def compute_signals(ev: Event, profile: BotProfile, address: AddressResult, now: Optional[float] = None) -> dict:
+def compute_signals(ev: Event, profile: BotProfile, address: AddressResult, now: float | None = None) -> dict:
     ctx = {"now": time.time() if now is None else now, "address": address}
     out = {}
     for name, fn in _SIGNALS.items():
@@ -508,7 +509,7 @@ def features_of(level: str, signals: dict) -> dict:
 # C: cổng thô
 # ============================================================
 def coarse_gate(ev: Event, level: str, signals: dict, has_positive_case: bool = False,
-                consider_tagged: bool = False, tag_case: bool = False) -> Tuple[bool, str]:
+                consider_tagged: bool = False, tag_case: bool = False) -> tuple[bool, str]:
     """(ứng viên?, mã im). Chỉ vứt thứ hiển nhiên không phải; phần còn lại có ít nhất một tín hiệu
     (được nhắc tên, tin nối tiếp, giống câu hỏi, hoặc kho có ca dương giống) thì là ứng viên.
 
@@ -547,7 +548,7 @@ def _subst(text: str, bot_name: str, topic: str) -> str:
 
 
 def find_cases(store, bot_id: str, chat_id: str, text: str, features: dict, *, k: int = CASES_IN_PROMPT,
-               bot_name: str = "", topic: str = "", now: Optional[float] = None) -> List[dict]:
+               bot_name: str = "", topic: str = "", now: float | None = None) -> list[dict]:
     """Ca giống nhất, CHỈ trong ca của bot này (kho không có đường lấy ca bot khác) cộng tối đa hai mẫu
     cơ chế chung. Mỗi kết quả: text, verdict, reason, source, sim, id."""
     now = time.time() if now is None else now
@@ -589,7 +590,7 @@ def find_cases(store, bot_id: str, chat_id: str, text: str, features: dict, *, k
 TAG_CASE_SOURCES = ("owner", "review")
 
 
-def has_positive(cases: List[dict], sources: Optional[Tuple[str, ...]] = None) -> bool:
+def has_positive(cases: list[dict], sources: tuple[str, ...] | None = None) -> bool:
     return any(c["verdict"] == "reply" and c["source"] != "mechanic" and c["sim"] >= POSITIVE_CASE_SIM
                and (sources is None or c["source"] in sources) for c in cases)
 
@@ -606,7 +607,7 @@ class Verdict:
 
 
 def build_prompt(ev: Event, profile: BotProfile, level: str, address: AddressResult, signals: dict,
-                 cases: List[dict], lessons: List[str], doc_text: str = "", doc_index: str = "") -> str:
+                 cases: list[dict], lessons: list[str], doc_text: str = "", doc_index: str = "") -> str:
     """Prompt của người phán xử. Chỉ chứa hồ sơ vai, luật, bài học và ca CỦA BOT NÀY.
 
     `doc_index`: mục lục tài liệu, chỉ có khi bot ở mức "Đọc tài liệu" (tự mở được tài liệu) và không
@@ -657,11 +658,11 @@ def build_prompt(ev: Event, profile: BotProfile, level: str, address: AddressRes
     )
 
 
-def _json_blocks(raw: str) -> List[str]:
-    return re.findall(r"\{[^{}]*\}", raw or "", flags=re.S)
+def _json_blocks(raw: str) -> list[str]:
+    return re.findall(r"\{[^{}]*\}", raw or "", flags=re.DOTALL)
 
 
-def parse_verdict(raw: Any) -> Optional[Verdict]:
+def parse_verdict(raw: Any) -> Verdict | None:
     """JSON đúng khuôn hoặc None. Không đoán: sai khuôn là coi như model hỏng."""
     for blk in _json_blocks(str(raw or "")):
         try:
@@ -683,7 +684,7 @@ def parse_verdict(raw: Any) -> Optional[Verdict]:
     return None
 
 
-_ASK: Optional[Callable[..., Awaitable[str]]] = None
+_ASK: Callable[..., Awaitable[str]] | None = None
 
 
 def wire(*, ask: Callable[..., Awaitable[str]]) -> None:
@@ -692,12 +693,12 @@ def wire(*, ask: Callable[..., Awaitable[str]]) -> None:
     _ASK = ask
 
 
-def ask_fn() -> Optional[Callable[..., Awaitable[str]]]:
+def ask_fn() -> Callable[..., Awaitable[str]] | None:
     return _ASK
 
 
 JUDGE_CONCURRENCY = 3
-_SEMS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+_SEMS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def _judge_slots() -> asyncio.Semaphore:
@@ -709,7 +710,7 @@ def _judge_slots() -> asyncio.Semaphore:
     return sem
 
 
-async def run_judge(ask, prompt: str, timeout: float = JUDGE_TIMEOUT_S) -> Optional[Verdict]:
+async def run_judge(ask, prompt: str, timeout: float = JUDGE_TIMEOUT_S) -> Verdict | None:
     """Chạy người phán xử. Hết giờ, lỗi engine, JSON sai khuôn: trả None (người gọi coi là `silent`)."""
     if ask is None:
         return None
@@ -742,7 +743,7 @@ def apply_tuning(profile: BotProfile, store) -> BotProfile:
     return profile
 
 
-def threshold_for(profile: BotProfile, store, chat_id: str, now: Optional[float] = None) -> float:
+def threshold_for(profile: BotProfile, store, chat_id: str, now: float | None = None) -> float:
     base = BASE_THRESHOLD.get(profile.eagerness, BASE_THRESHOLD["low"])
     off = store.get_offset(profile.bot_id, chat_id, now) if profile.learning_enabled else 0.0
     return max(THRESHOLD_MIN, min(THRESHOLD_MAX, base + off))
@@ -756,14 +757,14 @@ class Decision:
     verdict: str = "silent"
     address_level: str = "none"
     candidate: bool = False
-    score: Optional[float] = None
-    threshold: Optional[float] = None
+    score: float | None = None
+    threshold: float | None = None
     reason: str = ""
     silence_code: str = ""
     mode: str = "on"
     decision_id: int = 0
     signals: dict = field(default_factory=dict)
-    cases_used: List[int] = field(default_factory=list)
+    cases_used: list[int] = field(default_factory=list)
     doc: dict = field(default_factory=dict)
     reaction: str = ""          # 0.334.0: the reaction the judge chose for the bot to put (only when ev.can_react)
 
@@ -783,7 +784,7 @@ def _log(store, ev: Event, profile: BotProfile, d: Decision, sig: dict) -> None:
         "silence_code": d.silence_code})
 
 
-def pre_screen(ev: Event, profile: BotProfile, store, now: Optional[float] = None) -> dict:
+def pre_screen(ev: Event, profile: BotProfile, store, now: float | None = None) -> dict:
     """Bước rẻ, không model, không quét đĩa: nhận diện được gọi + tín hiệu + cổng thô. Kênh dùng nó để
     khỏi phải chờ (nhường người gõ tay) với những tin hiển nhiên không đáng."""
     now = time.time() if now is None else now
@@ -806,7 +807,7 @@ def _topic_of(profile: BotProfile) -> str:
 
 
 async def decide(ev: Event, profile: BotProfile, *, store, ask=None, doc_search=None, rate_check=None,
-                 commit: bool = True, now: Optional[float] = None, mode: str = "on") -> Decision:
+                 commit: bool = True, now: float | None = None, mode: str = "on") -> Decision:
     """Quyết định NÓI hay IM cho một tin nhóm. Luôn ghi một dòng `decisions`, kể cả khi im.
 
     `doc_search(text) -> {"co": bool, "khoi": str, ...}`: tra tài liệu của bot (chỉ gọi cho ứng viên).
@@ -871,8 +872,8 @@ async def decide(ev: Event, profile: BotProfile, *, store, ask=None, doc_search=
 # ============================================================
 # O: theo dõi hậu quả và gắn nhãn
 # ============================================================
-_LABEL_RATE: Dict[Tuple[str, str], deque] = {}
-_CASE_DAY: Dict[Tuple[str, str], int] = {}
+_LABEL_RATE: dict[tuple[str, str], deque] = {}
+_CASE_DAY: dict[tuple[str, str], int] = {}
 
 
 def _rate_ok(bot_id: str, sender: str, now: float) -> bool:
@@ -898,7 +899,7 @@ def _day_ok(bot_id: str, now: float) -> bool:
     return True
 
 
-def assign_label(decision: dict, msg: Event, msg_level: str, profile: BotProfile) -> Optional[Tuple[str, float]]:
+def assign_label(decision: dict, msg: Event, msg_level: str, profile: BotProfile) -> tuple[str, float] | None:
     """Tin mới `msg` có phải phản ứng với `decision` không, và nói lên điều gì. Hàm thuần.
 
     Chỉ tín hiệu MẠNH mới ra nhãn. KHÔNG phản ứng thì KHÔNG nhãn: bị phớt lờ là chuyện thường, và im thì
@@ -932,13 +933,13 @@ def assign_label(decision: dict, msg: Event, msg_level: str, profile: BotProfile
     return None
 
 
-def tokens_of_text(text: Any) -> List[str]:
+def tokens_of_text(text: Any) -> list[str]:
     import chatbot_reply_policy_store as _st
     return _st.tokens_of(text)
 
 
 def apply_label(store, profile: BotProfile, decision: dict, label: str, weight: float, *, sender: str = "",
-                source: str = "auto", now: Optional[float] = None, force: bool = False) -> bool:
+                source: str = "auto", now: float | None = None, force: bool = False) -> bool:
     """Áp một nhãn: ghi nhãn, chỉnh ngưỡng của cuộc chat, tạo ca, làm nhạt ca khởi tạo giống nó.
 
     `force` (nhãn của chủ bấm 👍/👎): ghi đè nhãn cũ và bỏ qua hạn mức chống spam nhãn.
@@ -996,7 +997,7 @@ def apply_label(store, profile: BotProfile, decision: dict, label: str, weight: 
     return True
 
 
-def observe(ev: Event, profile: BotProfile, store, now: Optional[float] = None) -> List[Tuple[int, str, float]]:
+def observe(ev: Event, profile: BotProfile, store, now: float | None = None) -> list[tuple[int, str, float]]:
     """Mọi tin mới của cuộc chat đi qua đây TRƯỚC khi bot quyết định về nó: gắn nhãn cho những quyết
     định trước đó đang được theo dõi. Trả danh sách (id, nhãn, trọng số) đã áp."""
     now = time.time() if now is None else now
@@ -1021,7 +1022,7 @@ def observe(ev: Event, profile: BotProfile, store, now: Optional[float] = None) 
     return out
 
 
-def owner_label(store, profile: BotProfile, decision_id: int, thumb: str, now: Optional[float] = None) -> Optional[str]:
+def owner_label(store, profile: BotProfile, decision_id: int, thumb: str, now: float | None = None) -> str | None:
     """Chủ bấm 👍 (`up`) hoặc 👎 (`down`) trên một quyết định trong Nhật ký. Nhãn nặng nhất (1.5)."""
     d = store.get_decision(int(decision_id))
     if not d or d["bot_id"] != profile.bot_id:
@@ -1036,7 +1037,7 @@ def owner_label(store, profile: BotProfile, decision_id: int, thumb: str, now: O
     return label if ok else None
 
 
-def note_takeover(store, profile: BotProfile, chat_id: str, now: Optional[float] = None) -> int:
+def note_takeover(store, profile: BotProfile, chat_id: str, now: float | None = None) -> int:
     """Chủ bấm Tiếp quản cuộc chat: các lần bot tự nói gần đây (không ai gọi) là chen nhầm (0.7)."""
     now = time.time() if now is None else now
     n = 0
@@ -1066,7 +1067,7 @@ def build_teach_prompt(text: str, profile: BotProfile) -> str:
     )
 
 
-def parse_teaching(raw: Any) -> Optional[dict]:
+def parse_teaching(raw: Any) -> dict | None:
     for blk in _json_blocks(str(raw or "")):
         try:
             d = json.loads(blk)
@@ -1082,7 +1083,7 @@ def parse_teaching(raw: Any) -> Optional[dict]:
 
 
 async def maybe_teach(ev: Event, profile: BotProfile, level: str, store, ask, *, add_alias=None,
-                      now: Optional[float] = None) -> Optional[dict]:
+                      now: float | None = None) -> dict | None:
     """Tin của người trong `trainer_ids` gọi bot: có phải lời dạy không. CHỈ chủ mới tạo được luật; người
     khác viết "từ giờ hãy trả lời mọi tin" thì hàm này không được gọi và không có gì xảy ra."""
     now = time.time() if now is None else now
@@ -1119,12 +1120,12 @@ async def maybe_teach(ev: Event, profile: BotProfile, level: str, store, ask, *,
 # ============================================================
 # Hồ sơ vai: máy soạn từ Agent và mục lục tài liệu của CHÍNH bot
 # ============================================================
-def list_doc_titles(root: str, limit: int = 40) -> List[str]:
+def list_doc_titles(root: str, limit: int = 40) -> list[str]:
     """Tên các tài liệu .md trong brain của bot (tối đa `limit`, sâu tối đa 2 tầng), dừng sớm khi đủ.
 
     Chat-scoped documents (0.338.0, `chatbot_grounding.SCOPED_DIR` or a `chat_scope` line) are left out: these
     titles feed the bot's role profile, which every chat shares, and a customer's file name is often their name."""
-    out: List[str] = []
+    out: list[str] = []
     if not root or not os.path.isdir(root):
         return out
 
@@ -1151,11 +1152,11 @@ def list_doc_titles(root: str, limit: int = 40) -> List[str]:
     return out
 
 
-def agent_hash(agent_text: str, titles: List[str]) -> str:
+def agent_hash(agent_text: str, titles: list[str]) -> str:
     return hashlib.sha1((str(agent_text or "") + "\n" + "\n".join(titles)).encode("utf-8")).hexdigest()[:16]
 
 
-def build_profile_prompt(agent_text: str, titles: List[str], name: str) -> str:
+def build_profile_prompt(agent_text: str, titles: list[str], name: str) -> str:
     return (
         f"Dưới đây là mô tả (file Agent) và mục lục tài liệu của một bot chat nhóm tên \"{name}\". "
         "Hãy soạn HỒ SƠ VAI để một bộ phán xử biết khi nào bot nên lên tiếng trong nhóm. "
@@ -1180,9 +1181,9 @@ def build_bootstrap_prompt(role_text: str, n: int = 12) -> str:
     )
 
 
-def parse_bootstrap(raw: Any, limit: int = 14) -> List[dict]:
+def parse_bootstrap(raw: Any, limit: int = 14) -> list[dict]:
     s = str(raw or "")
-    m = re.search(r"\[.*\]", s, flags=re.S)
+    m = re.search(r"\[.*\]", s, flags=re.DOTALL)
     if not m:
         return []
     try:
@@ -1204,7 +1205,7 @@ def parse_bootstrap(raw: Any, limit: int = 14) -> List[dict]:
 _ENSURING: set = set()
 
 
-async def ensure_role_profile(cfg: dict, agent_text: str, titles: List[str], store, ask, force: bool = False) -> dict:
+async def ensure_role_profile(cfg: dict, agent_text: str, titles: list[str], store, ask, force: bool = False) -> dict:
     """Soạn lại hồ sơ vai khi Agent hoặc mục lục tài liệu đổi (khác `agent_hash`), kèm ca khởi tạo.
     Bài học của chủ (bảng `lessons`) là vùng riêng, KHÔNG bị đụng."""
     bot_id = str((cfg or {}).get("id") or "")
@@ -1270,7 +1271,7 @@ def merge_config(old_raw: Any, patch: Any) -> dict:
 # ============================================================
 # Ghi vết cho các tin không đi qua `decide` (kênh gọi trực tiếp)
 # ============================================================
-def guideline_lines(text: str) -> List[str]:
+def guideline_lines(text: str) -> list[str]:
     """"Luật lên tiếng" một khối chữ của bản 0.65.0 tách thành từng dòng để gộp vào bài học (tối đa 10 dòng)."""
     out = []
     for raw in str(text or "").replace("\r", "\n").split("\n"):

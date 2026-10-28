@@ -1,6 +1,4 @@
 """SQL/blob view lineage is history, never native or current source authority."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib
 import importlib.util
@@ -10,10 +8,11 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_view_schema as schema_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 from improvement_experiment_protocol import comparison_hash, matrix_cell
-import test_improvement_view_sources as sources
-import test_improvement_view_schema as schema_fixtures
 
 
 class ViewLineageTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

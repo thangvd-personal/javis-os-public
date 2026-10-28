@@ -2,12 +2,13 @@
 
     python tests/run.py team_perf_bench -v
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 out = Path(tempfile.mkdtemp(prefix="team-bench-")) / "r.json"
 p = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tools" / "team_perf_bench.py"), "--teams", "2", "--messages",

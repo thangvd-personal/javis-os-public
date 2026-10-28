@@ -14,14 +14,14 @@ Codex 0.160 thật: lệnh `ping` 5 giây có `item.started` ở giây 8,8, `ite
      bước xong thành `tool_result` (đánh dấu xong), không thành bước đôi.
   3. Bước không có `item.started` (bản CLI cũ) vẫn hiện như trước, một `tool_call` lúc xong.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
 import tempfile
 import time
 
-import test_luot_chat_codex as harness   # dựng WebSocket giả + đẩy một lượt qua websocket_endpoint
+import test_luot_chat_codex as harness  # dựng WebSocket giả + đẩy một lượt qua websocket_endpoint
+from _paths import ROOT, SERVER  # noqa: F401
 from claude_cli import CodexCLI
 
 try:

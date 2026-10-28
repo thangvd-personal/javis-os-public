@@ -1,19 +1,17 @@
-from _paths import SERVER  # noqa: E402,F401
-
 import asyncio
 import inspect
 import json
 import sqlite3
 import time
 
-from cryptography.fernet import Fernet
-
 import engine
+from _paths import SERVER
 from capability_executor import CapabilityExecutor
 from capability_registry import CapabilityRegistry
 from capability_resolver import DeterministicResolver
 from context_compiler import ContextCompiler, DeterministicQualityGate
 from context_runtime import ObserveRuntime
+from cryptography.fernet import Fernet
 from evidence_store import EvidenceStore
 from readonly_orchestrator import ReadonlyOrchestrator
 

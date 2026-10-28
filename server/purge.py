@@ -44,8 +44,8 @@ import sys
 import time
 from pathlib import Path
 
-from config import STATE_DIR
 import localefmt
+from config import STATE_DIR
 
 TRASH_DIR = STATE_DIR / "purge-trash"
 HOME_DIR = STATE_DIR / "connector-home"

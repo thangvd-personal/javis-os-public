@@ -23,9 +23,9 @@ import secrets
 import sqlite3
 import sys
 import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
-from typing import Callable
 
 import improvement_store as IM
 

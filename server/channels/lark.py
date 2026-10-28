@@ -12,9 +12,9 @@ made on one platform does not exist on the other and the owner rarely knows whic
 from __future__ import annotations
 
 import httpx
+import localefmt
 
 from channels import KenhSpec
-import localefmt
 
 SPEC = KenhSpec(
     id="lark", nhan="Lark", kind="bot", logo="lark", mau="#3370FF",

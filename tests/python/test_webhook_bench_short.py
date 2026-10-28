@@ -6,11 +6,12 @@ The full target (60 s, 20 req/s, 5 hooks, 10 KiB, p95 ACK under 250 ms) is run b
 docs/webhook-platform/README.md. Here, in CI: the same rate and payload for a few seconds, the same targets, slow
 actions at the receiver (ingress must not wait for them), and a negative control proving the model guard counts.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 sys.path.insert(0, str(ROOT / "tools"))
-import webhook_bench as wb  # noqa: E402
+import webhook_bench as wb
 
 fails = []
 

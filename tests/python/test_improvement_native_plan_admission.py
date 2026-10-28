@@ -1,15 +1,14 @@
 """Actual frozen-plan admission/current SQL with engineering native verification."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-from contextlib import closing
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
-from improvement_claude import ClaudeTrialAdapter
 import test_improvement_experiment_admission as experiment_fixture
 import test_improvement_preparation as preparation_fixture
 import test_improvement_view_sources as view_fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_claude import ClaudeTrialAdapter
 
 
 class PlanAuthorityAssertions:

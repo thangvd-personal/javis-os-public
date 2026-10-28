@@ -8,11 +8,12 @@ _skill_router_block gọi list_enabled_meta (vốn là list_skills lọc lại),
 xuống. Rủi ro của kiểu tối ưu này là im lặng đổi nội dung system prompt, nên test khoá
 chặt hai điều: ĐẾM số lần quét, và ĐỐI CHIẾU nội dung sinh ra phải y hệt đường cũ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-scanonce-"))
 
@@ -21,8 +22,8 @@ try:
 except Exception:
     pass
 
-import main            # noqa: E402
-import skill_router    # noqa: E402
+import main
+import skill_router
 
 _fails = []
 

@@ -11,7 +11,15 @@ import json
 import secrets
 from dataclasses import replace
 
-from improvement_native_protocol import _canonical, _parse, _fields, _digest, _uint, _identity, MAX_PRIVATE_BYTES
+from improvement_native_protocol import (
+    MAX_PRIVATE_BYTES,
+    _canonical,
+    _digest,
+    _fields,
+    _identity,
+    _parse,
+    _uint,
+)
 
 
 def _copy(value): return _parse(_canonical(value))
@@ -65,10 +73,14 @@ class NativeProfileBinding:
 
     @classmethod
     def from_qualification_worker(cls, owner, *, kind, identity, data_hash, user_prompt, query_policy):
-        from improvement_native_worker import NativeWorkerSessionV2
-        from improvement_qualification_protocol import validate_startup3, worker_binding3
-        from improvement_qualification_environment import validate_dummy_environment
         import os
+
+        from improvement_native_worker import NativeWorkerSessionV2
+        from improvement_qualification_environment import validate_dummy_environment
+        from improvement_qualification_protocol import (
+            validate_startup3,
+            worker_binding3,
+        )
         if (cls is not NativeProfileBinding or type(owner) is not NativeWorkerSessionV2
                 or not owner._qualification or kind != 'trial' or owner._namespace != kind
                 or not owner._adopted or owner._closing or owner._closed or owner._failed):

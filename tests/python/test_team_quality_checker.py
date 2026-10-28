@@ -1,11 +1,12 @@
 """An unisolated command cannot automatically certify a Quality job."""
-from _paths import SERVER  # noqa: F401
-from pathlib import Path
-from types import SimpleNamespace
 import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
 import team_acceptance
 import team_runner
+from _paths import SERVER  # noqa: F401
 
 
 class CheckerIsolation(unittest.TestCase):

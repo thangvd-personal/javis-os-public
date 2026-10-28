@@ -22,14 +22,13 @@ biết mình bị chấm theo thước nào.
 """
 from __future__ import annotations
 
-import re
-import unicodedata
-from pathlib import Path
-from typing import Optional
 import hashlib
 import os
+import re
 import stat
+import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 import fastyaml
 from skill_asset_io import open_skill_source
@@ -78,17 +77,17 @@ _DESC_BOILERPLATE_RE = re.compile(
     r"|skill\s+này\s+(dùng|được\s+dùng)"
     r"|use\s+this\s+skill\s+when"
     r"|activate\s+when)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
-def validate_description(desc) -> Optional[str]:
+def validate_description(desc) -> str | None:
     """None = hợp lệ. Chuỗi = lý do từ chối (tiếng Việt, hiện thẳng cho user).
     Hàm THUẦN (không I/O) nên vẫn đúng hợp đồng read-only của module."""
     d = (desc or "").strip()
     if not d:
         return None    # rỗng là hợp lệ: POST /skills có body-fallback lo
-    import localefmt   # lười: module này giữ import mức module ở stdlib + fastyaml
+    import localefmt  # lười: module này giữ import mức module ở stdlib + fastyaml
     if len(d) > SKILL_DESC_MAX:
         return localefmt.chu(
             f"description dài {len(d)} ký tự, vượt trần {SKILL_DESC_MAX}. Router cắt "
@@ -178,7 +177,7 @@ def valid_file_slug(slug: str) -> bool:
     return bool(slug) and ".." not in slug and bool(_FILE_SLUG_RE.match(slug))
 
 
-def resolve_skill_file(root, slug: str) -> Optional[Path]:
+def resolve_skill_file(root, slug: str) -> Path | None:
     """Path SKILL.md của 1 skill ĐANG BẬT, tìm theo thứ tự canonical → .claude → .agents.
     None nếu slug không hợp lệ hoặc không tồn tại. slug đã validate (1 đoạn, không '..') nên
     join base/slug không thoát ra ngoài base."""
@@ -220,7 +219,7 @@ def _skill_stamp(info) -> tuple:
     return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns)
 
 
-def read_skill_asset(root, slug: str, max_bytes: int = SKILL_ASSET_MAX_BYTES) -> Optional[SkillAsset]:
+def read_skill_asset(root, slug: str, max_bytes: int = SKILL_ASSET_MAX_BYTES) -> SkillAsset | None:
     """Read enabled source once; refuse drift, external links and unbounded content."""
     if type(max_bytes) is not int or not 0 < max_bytes <= SKILL_ASSET_MAX_BYTES:
         return None
@@ -321,9 +320,10 @@ def _iter_skill_dirs(base: Path):
 
 def _task_metadata(root, lang):
     """Frozen private task projection, or None only for an unbound caller."""
-    from improvement_task_skill_scope import current, ScopeUnavailable
-    from improvement_blobs import AssetUnavailable
     import sqlite3
+
+    from improvement_blobs import AssetUnavailable
+    from improvement_task_skill_scope import ScopeUnavailable, current
     try:
         scope = current(root)
         if scope is None:

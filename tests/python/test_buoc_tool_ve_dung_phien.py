@@ -18,7 +18,6 @@ Giữ file này lại vì nó khoá NGUYÊN chuỗi cho đúng engine người d
 sự kiện tool -> nhánh antigravity trong `_do_turn` -> khung ra WebSocket -> đủ trường để
 dashboard dựng được mạch bước. Một khâu đứt ở bất kỳ đâu trong chuỗi đó là test này đỏ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -26,13 +25,14 @@ import sys
 import tempfile
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-agy-"))
 
-from fastapi import WebSocketDisconnect  # noqa: E402
-
-import main  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
-from sessions import SessionStore  # noqa: E402
+import main
+from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
+from sessions import SessionStore
 
 _fails = []
 

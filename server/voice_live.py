@@ -47,7 +47,8 @@ import sys
 import tempfile
 import time
 import unicodedata
-from typing import Any, AsyncIterator, Dict, List, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 import localefmt
 
@@ -180,7 +181,7 @@ class LiveProvider:
     name = ""
 
     def __init__(self, api_key: str, model: str = "", voice: str = "", system: str = SYSTEM_PROMPT,
-                 tools: Optional[List[dict]] = None, recognition_lang: str = "vi-VN",
+                 tools: list[dict] | None = None, recognition_lang: str = "vi-VN",
                  proactive: bool = False, turn: str = "normal"):
         self.api_key = api_key
         self.model = model or PROVIDERS[self.name]["default_model"]
@@ -198,7 +199,7 @@ class LiveProvider:
     def url(self) -> str:  # pragma: no cover
         raise NotImplementedError
 
-    def headers(self) -> List[tuple]:
+    def headers(self) -> list[tuple]:
         return []
 
     def setup_message(self) -> dict:  # pragma: no cover
@@ -210,29 +211,29 @@ class LiveProvider:
     def text_message(self, text: str) -> dict:  # pragma: no cover
         raise NotImplementedError
 
-    def tool_result_messages(self, call_id: str, name: str, result: str) -> List[dict]:  # pragma: no cover
+    def tool_result_messages(self, call_id: str, name: str, result: str) -> list[dict]:  # pragma: no cover
         raise NotImplementedError
 
-    def tool_running_messages(self, call_id: str, name: str) -> List[dict]:
+    def tool_running_messages(self, call_id: str, name: str) -> list[dict]:
         """Báo cho model biết việc đang chạy (chỉ nhà cung cấp nào có kênh cho việc đó)."""
         return []
 
-    def context_messages(self, text: str) -> List[dict]:
+    def context_messages(self, text: str) -> list[dict]:
         """Ngữ cảnh giao diện (trang đang mở, đoạn bôi đen) vào phiên, nếu nhà cung cấp có kênh im lặng."""
         return []
 
-    def truncate_messages(self, played_ms: int) -> List[dict]:
+    def truncate_messages(self, played_ms: int) -> list[dict]:
         """Bị ngắt lời sau khi đã phát `played_ms`: cắt ngữ cảnh đúng chỗ đã nghe (nếu hãng cần)."""
         return []
 
-    def after_translate_messages(self) -> List[dict]:
+    def after_translate_messages(self) -> list[dict]:
         """Thông điệp phải gửi ngay sau khi dịch xong một khung server (vd response.create đã xếp hàng)."""
         return []
 
-    def interrupt_messages(self) -> List[dict]:
+    def interrupt_messages(self) -> list[dict]:
         return []
 
-    def close_messages(self) -> List[dict]:
+    def close_messages(self) -> list[dict]:
         return []
 
     def supports_async_tools(self) -> bool:
@@ -263,7 +264,7 @@ class LiveProvider:
             await asyncio.sleep(0.1)
         return True
 
-    def late_result_messages(self, text: str) -> List[dict]:
+    def late_result_messages(self, text: str) -> list[dict]:
         return []
 
     async def send_late_result(self, text: str):
@@ -274,7 +275,7 @@ class LiveProvider:
         A tagged text turn works on Gemini and OpenAI Realtime; GPT-Live and ChatGPT Live override it."""
         await self.send_text(readback_text(text))
 
-    def translate(self, msg: dict) -> List[dict]:  # pragma: no cover
+    def translate(self, msg: dict) -> list[dict]:  # pragma: no cover
         raise NotImplementedError
 
     # ---- mạng ----
@@ -292,7 +293,7 @@ class LiveProvider:
         if self.ws is not None:
             await self.ws.send(json.dumps(obj))
 
-    async def _send_all(self, msgs: List[dict]):
+    async def _send_all(self, msgs: list[dict]):
         for m in msgs:
             await self._send(m)
 
@@ -302,7 +303,7 @@ class LiveProvider:
     async def send_text(self, text: str):
         await self._send(self.text_message(text))
 
-    async def restore_history(self, messages: List[dict]):
+    async def restore_history(self, messages: list[dict]):
         """Bounded transcript context after focus sleep; never a request to generate speech."""
         history, budget = [], 8000
         for message in reversed(messages[-12:]):
@@ -318,7 +319,7 @@ class LiveProvider:
         if history:
             await self._send_all(self.history_messages(history))
 
-    def history_messages(self, history: List[dict]) -> List[dict]:
+    def history_messages(self, history: list[dict]) -> list[dict]:
         return []
 
     async def send_tool_running(self, call_id: str, name: str):
@@ -378,7 +379,7 @@ class GeminiLive(LiveProvider):
     name = "gemini"
     SETUP_TIMEOUT = 10
 
-    def history_messages(self, history: List[dict]) -> List[dict]:
+    def history_messages(self, history: list[dict]) -> list[dict]:
         # https://ai.google.dev/gemini-api/docs/live-api/capabilities#incremental-updates
         return [{"clientContent": {"turns": [
             {"role": "model" if m["role"] == "assistant" else "user",
@@ -391,7 +392,7 @@ class GeminiLive(LiveProvider):
         super().__init__(*a, **kw)
         self.resume_handle = ""   # từ sessionResumptionUpdate, dùng khi nối lại
         self._setup_ready = asyncio.Event()
-        self._initial_events: List[dict] = []
+        self._initial_events: list[dict] = []
         # Preview fields (proactive audio, turn tuning) are dropped for the rest of the call when
         # the server refuses a setup that carries them; see connect().
         self.optional_fields = True
@@ -495,7 +496,7 @@ class GeminiLive(LiveProvider):
         return {"clientContent": {"turns": [{"role": "user", "parts": [{"text": f"{tag}\n{text}"}]}],
                                   "turnComplete": True}}
 
-    def late_result_messages(self, text: str) -> List[dict]:
+    def late_result_messages(self, text: str) -> list[dict]:
         return [self._tagged_turn(LATE_RESULT_TAG, str(text or "").strip() or "(không có nội dung)")]
 
     async def say_status(self, text: str) -> bool:
@@ -506,7 +507,7 @@ class GeminiLive(LiveProvider):
 
     def setup_message(self) -> dict:
         model = self.model if self.model.startswith("models/") else f"models/{self.model}"
-        setup: Dict[str, Any] = {
+        setup: dict[str, Any] = {
             "model": model,
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
@@ -542,15 +543,15 @@ class GeminiLive(LiveProvider):
     def text_message(self, text: str) -> dict:
         return {"clientContent": {"turns": [{"role": "user", "parts": [{"text": text}]}], "turnComplete": True}}
 
-    def tool_result_messages(self, call_id: str, name: str, result: str) -> List[dict]:
-        resp: Dict[str, Any] = {"output": result}
+    def tool_result_messages(self, call_id: str, name: str, result: str) -> list[dict]:
+        resp: dict[str, Any] = {"output": result}
         if self.supports_async_tools():
             # WHEN_IDLE: nói xong câu đang nói rồi mới thuật kết quả, không cắt ngang chính mình.
             resp["scheduling"] = "WHEN_IDLE"
         return [{"toolResponse": {"functionResponses": [{"id": call_id, "name": name, "response": resp}]}}]
 
-    def translate(self, msg: dict) -> List[dict]:
-        out: List[dict] = []
+    def translate(self, msg: dict) -> list[dict]:
+        out: list[dict] = []
         if "setupComplete" in msg:
             return [{"type": "ready"}]
         sru = msg.get("sessionResumptionUpdate")
@@ -612,7 +613,7 @@ class GeminiLive(LiveProvider):
 
 
 class OpenAIRealtime(LiveProvider):
-    def history_messages(self, history: List[dict]) -> List[dict]:
+    def history_messages(self, history: list[dict]) -> list[dict]:
         return [{"type": "conversation.item.create", "item": {
             "type": "message", "role": m["role"], "content": [{
                 "type": "output_text" if m["role"] == "assistant" else "input_text",
@@ -638,7 +639,7 @@ class OpenAIRealtime(LiveProvider):
     def url(self) -> str:
         return f"wss://api.openai.com/v1/realtime?model={self.model}"
 
-    def headers(self) -> List[tuple]:
+    def headers(self) -> list[tuple]:
         # API GA không cần header OpenAI-Beta; gửi kèm là rơi về khuôn beta cũ và session.type bị từ chối.
         return [("Authorization", f"Bearer {self.api_key}")]
 
@@ -671,7 +672,7 @@ class OpenAIRealtime(LiveProvider):
         return {"type": "conversation.item.create", "item": {"type": "message", "role": "user",
                                                              "content": [{"type": "input_text", "text": text}]}}
 
-    def tool_result_messages(self, call_id: str, name: str, result: str) -> List[dict]:
+    def tool_result_messages(self, call_id: str, name: str, result: str) -> list[dict]:
         msgs = [{"type": "conversation.item.create",
                  "item": {"type": "function_call_output", "call_id": call_id, "output": result}}]
         if self.response_active:
@@ -680,22 +681,22 @@ class OpenAIRealtime(LiveProvider):
             msgs.append({"type": "response.create"})
         return msgs
 
-    def after_translate_messages(self) -> List[dict]:
+    def after_translate_messages(self) -> list[dict]:
         if self._pending_create and not self.response_active:
             self._pending_create = False
             return [{"type": "response.create"}]
         return []
 
-    def truncate_messages(self, played_ms: int) -> List[dict]:
+    def truncate_messages(self, played_ms: int) -> list[dict]:
         if not self.last_audio_item or played_ms < 0:
             return []
         return [{"type": "conversation.item.truncate", "item_id": self.last_audio_item,
                  "content_index": 0, "audio_end_ms": int(played_ms)}]
 
-    def interrupt_messages(self) -> List[dict]:
+    def interrupt_messages(self) -> list[dict]:
         return [{"type": "response.cancel"}]
 
-    def translate(self, msg: dict) -> List[dict]:
+    def translate(self, msg: dict) -> list[dict]:
         t = str(msg.get("type") or "")
         if t in ("session.created", "session.updated"):
             return [{"type": "ready"}]
@@ -743,7 +744,7 @@ class GPTLive(LiveProvider):
     name = "gpt-live"
 
     def __init__(self, api_key: str, model: str = "", voice: str = "", system: str = GPT_LIVE_PROMPT,
-                 tools: Optional[List[dict]] = None, recognition_lang: str = "vi-VN", **_ignored):
+                 tools: list[dict] | None = None, recognition_lang: str = "vi-VN", **_ignored):
         # **_ignored: proactive/turn from make_provider. GPT-Live decides turn-taking itself.
         super().__init__(api_key, model=model, voice=voice, system=system, tools=tools, recognition_lang=recognition_lang)
         self._user_buf = ""       # chữ người dùng đang nói (chưa chốt)
@@ -754,7 +755,7 @@ class GPTLive(LiveProvider):
     def url(self) -> str:
         return "wss://api.openai.com/v1/live/sessions"
 
-    def headers(self) -> List[tuple]:
+    def headers(self) -> list[tuple]:
         return [("Authorization", f"Bearer {self.api_key}")]
 
     def supports_async_tools(self) -> bool:
@@ -776,15 +777,15 @@ class GPTLive(LiveProvider):
                 "content": "Người dùng vừa GÕ chữ (không nói): \"" + text[:GPT_LIVE_APPEND_MAX]
                            + "\". Trả lời câu đó bằng lời."}
 
-    def tool_running_messages(self, call_id: str, name: str) -> List[dict]:
+    def tool_running_messages(self, call_id: str, name: str) -> list[dict]:
         return [{"type": "session.thinking.append", "delegation_id": call_id or None,
                  "content": "Bộ não chính đang xử lý, chưa có kết quả. Chưa được nói là đã làm xong."}]
 
-    def tool_result_messages(self, call_id: str, name: str, result: str) -> List[dict]:
+    def tool_result_messages(self, call_id: str, name: str, result: str) -> list[dict]:
         return [{"type": "session.commentary.append", "delegation_id": call_id or None,
                  "content": (result or "(không có nội dung)")[:GPT_LIVE_APPEND_MAX]}]
 
-    def context_messages(self, text: str) -> List[dict]:
+    def context_messages(self, text: str) -> list[dict]:
         if not text:
             return []
         return [{"type": "session.thinking.append", "delegation_id": None, "content": text[:GPT_LIVE_APPEND_MAX]}]
@@ -801,7 +802,7 @@ class GPTLive(LiveProvider):
         self._user_last = text
         await super().send_text(text)
 
-    def history_messages(self, history: List[dict]) -> List[dict]:
+    def history_messages(self, history: list[dict]) -> list[dict]:
         prefix = ("Lịch sử trước lúc chờ, chỉ làm ngữ cảnh, không thực hiện lại yêu cầu cũ. "
                   "Đợi lượt mới của người dùng.\n")
         frames = []
@@ -817,17 +818,17 @@ class GPTLive(LiveProvider):
             frames.extend(self.context_messages(prefix + encoded))
         return frames
 
-    def close_messages(self) -> List[dict]:
+    def close_messages(self) -> list[dict]:
         return [{"type": "session.close"}]
 
-    def _flush_user(self) -> List[dict]:
+    def _flush_user(self) -> list[dict]:
         if not self._user_buf.strip():
             return []
         self._user_last = self._user_buf.strip()
         self._user_buf = ""
         return [{"type": "transcript", "role": "user", "text": self._user_last, "final": True}]
 
-    def translate(self, msg: dict) -> List[dict]:
+    def translate(self, msg: dict) -> list[dict]:
         t = str(msg.get("type") or "")
         if t == "session.started":
             self.session_id = str(((msg.get("session") or {}).get("id")) or "")
@@ -840,7 +841,7 @@ class GPTLive(LiveProvider):
                 pass
             return out
         if t == "session.input_transcript.delta":
-            out: List[dict] = []
+            out: list[dict] = []
             if self._asst_open:
                 self._asst_open = False
                 out.append({"type": "turn_done"})
@@ -938,12 +939,7 @@ def readback_text(result: str) -> str:
     return (f"{LATE_RESULT_TAG}\nỨng dụng gửi kết quả của bộ não chính cho file người dùng vừa gửi trong khung "
             "chat; đây không phải người dùng nói. Thuật lại thật ngắn bằng ngôn ngữ người dùng đang nói, không đọc "
             "nhãn ra, không gọi ask_javis.\n\n" + (speakable(result) or "(không có nội dung)"))
-_ACK_WORDS = frozenset("""
-ok oke okie okay ừ ừm ờ ừa vâng dạ được rồi nhé nha nhá nhỉ nghen thế vậy thì là xong xem kiểm tra
-báo lại cho anh em chị mình tôi tớ bạn biết đi cảm ơn cám chờ đợi tí chút xíu nhanh lên cứ làm khi nào
-có kết quả đó đấy nghe hiểu ạ à nhớ giúp hộ với luôn sau javis jarvis
-sure yes yeah yep thanks thank you let me know when done fine great cool alright got it please
-""".split())
+_ACK_WORDS = frozenset(["ok", "oke", "okie", "okay", "ừ", "ừm", "ờ", "ừa", "vâng", "dạ", "được", "rồi", "nhé", "nha", "nhá", "nhỉ", "nghen", "thế", "vậy", "thì", "là", "xong", "xem", "kiểm", "tra", "báo", "lại", "cho", "anh", "em", "chị", "mình", "tôi", "tớ", "bạn", "biết", "đi", "cảm", "ơn", "cám", "chờ", "đợi", "tí", "chút", "xíu", "nhanh", "lên", "cứ", "làm", "khi", "nào", "có", "kết", "quả", "đó", "đấy", "nghe", "hiểu", "ạ", "à", "nhớ", "giúp", "hộ", "với", "luôn", "sau", "javis", "jarvis", "sure", "yes", "yeah", "yep", "thanks", "thank", "you", "let", "me", "know", "when", "done", "fine", "great", "cool", "alright", "got", "it", "please"])
 _ACK_MAX_WORDS = 16
 
 
@@ -965,7 +961,7 @@ def is_same_request(previous: str, followup: str) -> bool:
     return bool(new) and bool(old) and f" {new} " in f" {old} "
 
 
-def parallel_request(running: List[str], followup: str) -> str:
+def parallel_request(running: list[str], followup: str) -> str:
     """Yêu cầu gửi bộ não chính cho câu nói thêm, chạy SONG SONG với các việc đang chạy.
 
     Báo rõ các việc kia CHƯA xong: bộ não không được coi kết quả của chúng là đã có, cũng không được
@@ -1037,7 +1033,7 @@ def _spoken_step(step: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"^[^\w]+", "", str(step or ""))).strip().rstrip(".… ")[:80]
 
 
-def status_line(jobs: List[dict], now: float) -> str:
+def status_line(jobs: list[dict], now: float) -> str:
     """Câu đọc to cho biết các việc đang chạy: làm gì, bao lâu rồi, tới bước nào.
 
     `jobs`: {"request", "started", "step"}; `now` cùng đồng hồ với `started`. Chỉ dùng số liệu thật
@@ -1065,7 +1061,7 @@ def speakable(text: str, limit: int = SPEAK_MAX) -> str:
     trước `limit` để câu nói ra không cụt giữa chừng.
     """
     s = str(text or "")
-    s = re.sub(r"```.*?```", " ", s, flags=re.S)
+    s = re.sub(r"```.*?```", " ", s, flags=re.DOTALL)
     s = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", s)
     s = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", s)
     lines = []
@@ -1110,7 +1106,7 @@ class ChatGPTLive(LiveProvider):
     SPEECH_STALL = 4.0         # giây không có chữ mới thì coi lượt nói đã dừng (bị chen ngang, mất done)
 
     def __init__(self, api_key: str = "", model: str = "", voice: str = "", system: str = CHATGPT_LIVE_PROMPT,
-                 tools: Optional[List[dict]] = None, recognition_lang: str = "vi-VN", memory_index: str = "",
+                 tools: list[dict] | None = None, recognition_lang: str = "vi-VN", memory_index: str = "",
                  app_server_getter=None):
         super().__init__(api_key, model=model, voice=voice, system=system, tools=tools, recognition_lang=recognition_lang)
         if self.voice not in CHATGPT_VOICES:
@@ -1122,23 +1118,23 @@ class ChatGPTLive(LiveProvider):
         self._get_server = app_server_getter
         self.srv = None
         self.thread_id = ""
-        self.queue: Optional[asyncio.Queue] = None
-        self.initial_items: List[dict] = []
+        self.queue: asyncio.Queue | None = None
+        self.initial_items: list[dict] = []
         self._cwd = ""
-        self._sdp: Optional[asyncio.Future] = None
+        self._sdp: asyncio.Future | None = None
         self._closing = False
         self._user_buf = ""
         self._user_last = ""
         self._user_last_at = 0.0
-        self._interrupt_turns: List[str] = []
-        self._held: List[dict] = []   # lời Javis tới lúc người dùng còn đang nói, chờ câu người dùng chốt
+        self._interrupt_turns: list[str] = []
+        self._held: list[dict] = []   # lời Javis tới lúc người dùng còn đang nói, chờ câu người dùng chốt
         self._bg: set = set()
         self._speaking = False        # model đang có một lượt nói chưa xong (theo transcript)
         self._last_delta_at = 0.0
         self._quiet_since = 0.0       # lúc lượt nói gần nhất xong
         self._pushed_at = 0.0         # lúc vừa đẩy appendSpeech mà model chưa mở lời
-        self._speech_q: List[str] = []
-        self._speech_task: Optional[asyncio.Task] = None
+        self._speech_q: list[str] = []
+        self._speech_task: asyncio.Task | None = None
 
     async def connect(self):
         self._closing = False
@@ -1161,7 +1157,7 @@ class ChatGPTLive(LiveProvider):
         raise RuntimeError(localefmt.chu("ChatGPT Live đã ngắt, hãy bấm gọi lại.",
                                           "ChatGPT Live disconnected, press call again."))
 
-    async def restore_history(self, messages: List[dict]):
+    async def restore_history(self, messages: list[dict]):
         items, budget = [], HISTORY_CHARS
         for message in reversed((messages or [])[-HISTORY_ITEMS:]):
             role = message.get("role")
@@ -1200,11 +1196,11 @@ class ChatGPTLive(LiveProvider):
         await self.srv.request("thread/realtime/start", self.start_params(sdp), timeout=30)
         try:
             return await asyncio.wait_for(self._sdp, 25)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise RuntimeError(localefmt.chu("ChatGPT Live không trả lời bắt tay sau 25 giây.",
                                               "ChatGPT Live did not answer the handshake after 25 seconds."))
 
-    def _flush_user(self) -> List[dict]:
+    def _flush_user(self) -> list[dict]:
         if not self._user_buf.strip():
             return []
         text = self._user_buf.strip()
@@ -1229,7 +1225,7 @@ class ChatGPTLive(LiveProvider):
             return (recent + " " + req).strip()
         return req or recent or "(không rõ yêu cầu, hãy hỏi lại người dùng)"
 
-    def translate(self, msg: dict) -> List[dict]:
+    def translate(self, msg: dict) -> list[dict]:
         method = str(msg.get("method") or "")
         p = msg.get("params") or {}
         if method == "thread/realtime/sdp":
@@ -1264,7 +1260,7 @@ class ChatGPTLive(LiveProvider):
             if p.get("role") == "user":
                 text = str(p.get("text") or "").strip() or self._user_buf.strip()
                 self._user_buf = ""
-                out: List[dict] = []
+                out: list[dict] = []
                 if text:
                     self._user_last, self._user_last_at = text, time.monotonic()
                     out.append({"type": "transcript", "role": "user", "text": text, "final": True})

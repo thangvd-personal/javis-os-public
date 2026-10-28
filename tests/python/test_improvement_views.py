@@ -1,12 +1,11 @@
 """Pure view identity only; these metadata fixtures grant no runtime authority."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib
 import importlib.util
 import unittest
 
 import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def manifest(variant='baseline'):

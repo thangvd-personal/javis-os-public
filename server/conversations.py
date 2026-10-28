@@ -36,7 +36,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from config import STATE_DIR
 
@@ -45,7 +45,7 @@ DB_PATH = STATE_DIR / "customer_conversations.sqlite3"
 # Kênh mà kho hiểu. Adapter mới chỉ cần chuẩn hoá về sự kiện chung và dùng một giá trị ở đây.
 # Kênh kho hiểu = SỔ ĐĂNG KÝ KÊNH (server/channels). Trước 0.61.0 danh sách này chép tay ở đây
 # (kèm vài kênh "chừa chỗ" chưa có adapter); nay thêm kênh là thêm một module ở sổ, kho tự nhận.
-import channels as _channels   # noqa: E402  (nhẹ: sổ không kéo httpx hay MCP lúc import)
+import channels as _channels
 
 KENH = _channels.ids()
 KENH_NHAN = _channels.nhan_theo_id()
@@ -144,8 +144,8 @@ CREATE INDEX IF NOT EXISTS ix_conv_tag ON conversation_tags(tag_id, conversation
 """
 
 _lock = threading.RLock()
-_db: Optional[sqlite3.Connection] = None
-_db_path: Optional[Path] = None
+_db: sqlite3.Connection | None = None
+_db_path: Path | None = None
 
 
 # ============================================================
@@ -531,7 +531,7 @@ def cat_nhom_cu(giu: int = GIU_TIN_NHOM) -> dict:
     return out
 
 
-def tin_gan_day(channel: str, account_id: str, external_chat_id: str, limit: int = 30) -> List[dict]:
+def tin_gan_day(channel: str, account_id: str, external_chat_id: str, limit: int = 30) -> list[dict]:
     """`limit` tin MỚI NHẤT của một cuộc chat theo khoá kênh, cũ trước mới sau. Chưa có hội thoại thì rỗng.
 
     Dùng làm NGỮ CẢNH cho bot trả lời trong nhóm (0.65.12). Không ném: lỗi kho thì bot trả lời không có ngữ cảnh, không hỏng lượt."""
@@ -675,7 +675,7 @@ BOT_KHONG_CO = "-"      # giá trị `bot_id` của bộ lọc để chỉ lấy
 def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str = "",
               mode: str = "", limit: int = 50, offset: int = 0, status: str = "", chat_type: str = "",
               hesitant=None, tag: int = 0, has_contact: bool = False, sort: str = "",
-              hidden: str = "") -> List[dict]:
+              hidden: str = "") -> list[dict]:
     """Danh sách hội thoại, ĐÃ GHIM rồi tới MỚI NHẤT TRƯỚC, kèm tên khách và kênh.
 
     `q` tìm theo tên khách, tiêu đề, id chat, tin cuối (LIKE, không phân biệt hoa thường).
@@ -793,13 +793,13 @@ def dem_bo_loc(hesitant=None) -> dict:
     return out
 
 
-def cuoc_chat_cua_tai_khoan(channel: str, account_id: str, q: str = "", limit: int = 80) -> List[dict]:
+def cuoc_chat_cua_tai_khoan(channel: str, account_id: str, q: str = "", limit: int = 80) -> list[dict]:
     """Các cuộc chat ĐÃ BIẾT của một tài khoản kênh (theo id NGOÀI của tài khoản, như
     `channel_accounts` giữ), mới nhất trước. Cho ô chọn người/nhóm của form bot."""
     return danh_sach(account_id=_tai_khoan_id(channel, account_id), q=q, limit=limit)
 
 
-def group_speakers(account_key: str, chat_id: str, limit: int = 300) -> List[dict]:
+def group_speakers(account_key: str, chat_id: str, limit: int = 300) -> list[dict]:
     """Người ĐÃ NHẮN trong một cuộc chat: `[{uid, name, ts}]`, mới nhất trước, tên là tên ở tin gần nhất của người đó.
 
     Dùng để đổi "@minhquy" thành ID Zalo thật khi tag người trong nhóm (plugin `zalo-group`): kho này có sẵn, tức thì, không
@@ -818,7 +818,7 @@ def group_speakers(account_key: str, chat_id: str, limit: int = 300) -> List[dic
     return [{"uid": str(r["uid"]), "name": str(r["name"]), "ts": float(r["ts"] or 0)} for r in rows]
 
 
-def chi_tiet(conversation_id: int) -> Optional[dict]:
+def chi_tiet(conversation_id: int) -> dict | None:
     with _lock:
         r = _conn().execute(
             "SELECT c.*, a.channel AS channel, a.display_name AS account_name,"
@@ -835,7 +835,7 @@ def chi_tiet(conversation_id: int) -> Optional[dict]:
     return d
 
 
-def tin_nhan(conversation_id: int, limit: int = 100, before_id: int = 0, after_id: int = 0) -> List[dict]:
+def tin_nhan(conversation_id: int, limit: int = 100, before_id: int = 0, after_id: int = 0) -> list[dict]:
     """Tin của một hội thoại, CŨ TRƯỚC MỚI SAU trong cửa sổ trả về (cửa sổ lấy từ cuối lên).
 
     `before_id` > 0: lấy các tin CŨ HƠN id đó (cuộn ngược để xem thêm).
@@ -931,7 +931,7 @@ def _tag_color(color: Any) -> str:
     return c if c in TAG_COLORS else TAG_COLORS[0]
 
 
-def list_tags() -> List[dict]:
+def list_tags() -> list[dict]:
     """Every inbox tag in the owner's order, with how many conversations carry it: `[{id, name, color, count}]`."""
     with _lock:
         rows = _conn().execute(
@@ -996,7 +996,7 @@ def delete_tag(tag_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def set_conversation_tag(conversation_id: int, tag_id: int, on: bool = True) -> Optional[List[dict]]:
+def set_conversation_tag(conversation_id: int, tag_id: int, on: bool = True) -> list[dict] | None:
     """Put a tag on a conversation (`on`) or take it off. Returns the conversation's tags after the change, or None when
     the conversation or the tag does not exist."""
     cid, tid = int(conversation_id), int(tag_id)
@@ -1014,7 +1014,7 @@ def set_conversation_tag(conversation_id: int, tag_id: int, on: bool = True) -> 
     return conversation_tags([cid]).get(cid, [])
 
 
-def conversation_tags(conversation_ids) -> Dict[int, List[dict]]:
+def conversation_tags(conversation_ids) -> dict[int, list[dict]]:
     """`{conversation_id: [{id, name, color}]}` for the given conversations, tags in the owner's order."""
     ids = [int(x) for x in (conversation_ids or [])][:MAX_DANH_SACH * 5]
     if not ids:
@@ -1024,7 +1024,7 @@ def conversation_tags(conversation_ids) -> Dict[int, List[dict]]:
             "SELECT ct.conversation_id AS cid, t.id, t.name, t.color FROM conversation_tags ct"
             " JOIN inbox_tags t ON t.id=ct.tag_id WHERE ct.conversation_id IN (" + ",".join("?" * len(ids)) + ")"
             " ORDER BY t.position, t.id", ids).fetchall()
-    out: Dict[int, List[dict]] = {}
+    out: dict[int, list[dict]] = {}
     for r in rows:
         out.setdefault(int(r["cid"]), []).append({"id": int(r["id"]), "name": r["name"], "color": _tag_color(r["color"])})
     return out
@@ -1139,7 +1139,7 @@ def thong_ke(bot_id: str = "", channel: str = "", account_id: str = "") -> dict:
     }
 
 
-def tai_khoan() -> List[dict]:
+def tai_khoan() -> list[dict]:
     """Các tài khoản kênh đã từng có tin, kèm số hội thoại và số chưa đọc."""
     with _lock:
         rows = _conn().execute(
@@ -1268,7 +1268,7 @@ def _khach_public(r: dict) -> dict:
 
 
 def danh_sach_khach(channel: str = "", tag: str = "", q: str = "", days: int = 0,
-                    limit: int = 100, offset: int = 0) -> List[dict]:
+                    limit: int = 100, offset: int = 0) -> list[dict]:
     """Khách đã nhắn, MỚI HOẠT ĐỘNG TRƯỚC. Lọc theo kênh, tag (khớp nguyên từ), chữ (tên, id
     trên kênh, ghi chú) và số ngày gần đây."""
     n = max(1, min(int(limit or 100), 1000))
@@ -1295,13 +1295,13 @@ def danh_sach_khach(channel: str = "", tag: str = "", q: str = "", days: int = 0
     return [_khach_public(_row(r)) for r in rows]
 
 
-def khach(customer_id: int) -> Optional[dict]:
+def khach(customer_id: int) -> dict | None:
     with _lock:
         r = _conn().execute(_SQL_KHACH + " WHERE k.id=?", (int(customer_id),)).fetchone()
     return _khach_public(_row(r)) if r else None
 
 
-def hoi_thoai_cua_khach(customer_id: int) -> List[dict]:
+def hoi_thoai_cua_khach(customer_id: int) -> list[dict]:
     """Mọi hội thoại có mặt khách này: chat riêng của họ và các nhóm họ đã nhắn."""
     cid = int(customer_id)
     with _lock:
@@ -1318,9 +1318,9 @@ def hoi_thoai_cua_khach(customer_id: int) -> List[dict]:
     return [_conv_public(_row(r)) for r in rows]
 
 
-def chuan_hoa_tag(tags) -> List[str]:
+def chuan_hoa_tag(tags) -> list[str]:
     """Bỏ trùng, cắt khoảng trắng, giới hạn số lượng và độ dài. Giữ nguyên hoa thường."""
-    out: List[str] = []
+    out: list[str] = []
     for t in (tags or []):
         t = " ".join(str(t or "").split())[:MAX_TAG_CHU]
         if t and t not in out:
@@ -1328,7 +1328,7 @@ def chuan_hoa_tag(tags) -> List[str]:
     return out[:MAX_TAG]
 
 
-def dat_tag_khach(customer_id: int, tags) -> Optional[List[str]]:
+def dat_tag_khach(customer_id: int, tags) -> list[str] | None:
     """Thay cả danh sách tag của khách. Trả danh sách đã chuẩn hoá, None nếu không có khách."""
     sach = chuan_hoa_tag(tags)
     with _lock:
@@ -1367,7 +1367,7 @@ def sdt_84(phone: str) -> str:
     return "84" + p[1:] if p else ""
 
 
-def bien_the_sdt(q: Any) -> List[str]:
+def bien_the_sdt(q: Any) -> list[str]:
     """Các cách viết của một (phần) số điện thoại để tìm bằng LIKE: chính dãy số, và dạng 0 <-> 84 tương ứng.
 
     Chỉ khi `q` toàn số (cho phép dấu cách, chấm, gạch, ngoặc, dấu + đầu) và từ 4 chữ số trở lên; còn lại trả [] để chữ
@@ -1407,7 +1407,7 @@ def find_contact(text: Any) -> str:
 def _backfill_contact(db: sqlite3.Connection) -> int:
     """Fill `conversations.contact` from customer messages already stored (once, when the column is added). The newest
     message with a contact wins, the same as on write. Returns how many conversations got one."""
-    found: Dict[int, str] = {}
+    found: dict[int, str] = {}
     rows = db.execute("SELECT conversation_id, text FROM messages WHERE sender_type='customer'"
                       " AND (text LIKE '%@%' OR text GLOB '*[0-9][0-9][0-9]*') ORDER BY id").fetchall()
     for r in rows:
@@ -1419,7 +1419,7 @@ def _backfill_contact(db: sqlite3.Connection) -> int:
     return len(found)
 
 
-def gan_sdt_khach(channel: str, account_id: str, external_user_id: str, phone: str, name: str = "") -> Optional[int]:
+def gan_sdt_khach(channel: str, account_id: str, external_user_id: str, phone: str, name: str = "") -> int | None:
     """Gắn số điện thoại cho khách `external_user_id` của tài khoản kênh (`account_id` là id NGOÀI, như sự kiện mang).
 
     Có cuộc chat riêng với người đó mà chưa có khách (chỉ chủ nhắn đi, khách chưa nhắn lại) thì tạo khách và nối vào
@@ -1461,7 +1461,7 @@ def dat_ghi_chu_khach(customer_id: int, note: str) -> bool:
     return cur.rowcount > 0
 
 
-def tim_tin(q: str, channel: str = "", limit: int = 50) -> List[dict]:
+def tim_tin(q: str, channel: str = "", limit: int = 50) -> list[dict]:
     """Tìm chữ trong MỌI tin (khách lẫn bot), mới nhất trước, kèm hội thoại chứa tin."""
     q = str(q or "").strip()
     if not q:
@@ -1484,7 +1484,7 @@ def tim_tin(q: str, channel: str = "", limit: int = 50) -> List[dict]:
     return [_row(r) for r in rows]
 
 
-def cho_tra_loi(hours: float = 2.0, limit: int = 100) -> List[dict]:
+def cho_tra_loi(hours: float = 2.0, limit: int = 100) -> list[dict]:
     """Hội thoại mà câu CUỐI là của khách và đã quá `hours` giờ chưa ai (bot hay người) trả
     lời, cũ nhất trước. Bỏ hội thoại đã đóng."""
     moc = _now() - max(0.0, float(hours or 0)) * 3600
@@ -1518,8 +1518,8 @@ def thong_ke_khach(days: int = 7, channel: str = "") -> dict:
     except Exception:
         tz = None
     moc = _now() - n * 86400
-    theo_ngay: Dict[str, int] = {}
-    theo_tag: Dict[str, int] = {}
+    theo_ngay: dict[str, int] = {}
+    theo_tag: dict[str, int] = {}
     for r in rows:
         ts = float(r["created_at"] or 0)
         if ts >= moc:

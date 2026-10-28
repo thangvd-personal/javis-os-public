@@ -15,11 +15,10 @@ import re
 import tempfile
 from pathlib import Path
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
-
-import cron_util  # noqa: E402
-import reminders  # noqa: E402
-import self_improve  # noqa: E402
+import cron_util
+import reminders
+import self_improve
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 CONSOLE = (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8")
 PLUGIN = (ROOT / "system" / "plugins" / "javis-schedule" / "plugin.py").read_text(encoding="utf-8")
@@ -72,7 +71,7 @@ def make_feature(notify_ready=None):
         build_system_prompt=lambda _b: "",
         aux_model=lambda: None,
         safe_tools=[], readonly_tools=[],
-        scheduler_brains=lambda: [],
+        scheduler_brains=list,
         notify_ready=notify_ready,
     )
     return reminders.RemindersFeature(deps), str(brain)

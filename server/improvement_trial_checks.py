@@ -10,10 +10,22 @@ import hashlib
 from pathlib import Path
 
 from improvement_blobs import MAX_ASSET_BYTES
-from improvement_cases import CaseStore, _ID, _contract, _digest, _fields, _frozen, public_contract
+from improvement_cases import (
+    _ID,
+    CaseStore,
+    _contract,
+    _digest,
+    _fields,
+    _frozen,
+    public_contract,
+)
 from improvement_sandbox import _effective_hash, _manifest, trial_system_prompt
+from improvement_skill_asset_proof import (
+    OBSERVATION_TYPE,
+    TOOL_NAME,
+    correlate_asset_reads,
+)
 from improvement_store import _hash
-from improvement_skill_asset_proof import OBSERVATION_TYPE, TOOL_NAME, correlate_asset_reads
 
 _TOOLS = ["mcp__fixture__fixture_read"]
 _EVENTS = {"native_system", "observation", "usage", "artifact", "installation_receipt", "terminal", "tool_call",
@@ -166,7 +178,7 @@ def _inventory(receipt, inits, tools_expected=_TOOLS):
 
 def _asset_use(manifest, workspace, events, receipt):
     if manifest['version'] == 4:
-        from improvement_read_outcome_proof import correlate_read_outcomes, SKILL_TOOL
+        from improvement_read_outcome_proof import SKILL_TOOL, correlate_read_outcomes
         result = correlate_read_outcomes(manifest, workspace, events)
         if receipt is None:
             return _row('asset_observed_use', 'unknown', 'read_outcome_receipt_unavailable')
@@ -242,9 +254,7 @@ def _effects(events, complete, inventory, *, tools=_TOOLS, asset_reads=False, re
         elif kind == "tool_result":
             identifier = event.get("id")
             if (not isinstance(identifier, str) or identifier in results or (type(event.get("is_error")) is not bool
-                    and not (read_outcomes and 'is_error' in event and event['is_error'] is None))):
-                uncertain = True
-            elif identifier not in calls:
+                    and not (read_outcomes and 'is_error' in event and event['is_error'] is None))) or identifier not in calls:
                 uncertain = True
             else:
                 results[identifier] = event["is_error"]

@@ -5,20 +5,21 @@ Code, and a source on every new memory.
 
 Owner, 16/10/2026, after reviewing 0.185.0-0.187.0: "làm luôn nhé" for the four picked improvements.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-core-follow-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 
-import claude_sdk_engine  # noqa: E402
-import inbox  # noqa: E402
-import main  # noqa: E402
-import memory_control as MC  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import claude_sdk_engine
+import inbox
+import main
+import memory_control as MC
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -45,7 +46,8 @@ inbox.add("Báo cáo của brain khác", kind="report", session_id=sid, brain=ma
 it = client.get("/inbox").json()["items"][0]
 check("a bell item carries the picker value of its brain", it.get("brain_ui") == f"path:{main._brain_key(str(OTHER))}", it)
 src = (ROOT / "server" / "main.py").read_text(encoding="utf-8")
-import json  # noqa: E402
+import json
+
 got = []
 with client.websocket_connect("/ws", headers={"host": "127.0.0.1:7777", "origin": "http://127.0.0.1:7777"}) as ws:
     ws.send_text(json.dumps({"message": "chào", "brain": "brain", "session_id": sid}))

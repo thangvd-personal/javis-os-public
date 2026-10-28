@@ -7,8 +7,8 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 MAX_ASSET_BYTES = 1024 * 1024
 _DIGEST = re.compile(r"[0-9a-f]{64}")

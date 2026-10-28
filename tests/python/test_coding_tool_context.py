@@ -11,7 +11,6 @@ Phép thử quan trọng nhất KHÔNG phải "repo đọc được", mà là **
 chút nào**. Nới rào là việc dễ làm quá tay; thay đổi này chỉ được có tác dụng đúng trong
 phiên coding.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import subprocess
@@ -19,12 +18,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-codingctx-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_store  # noqa: E402
-import coding_ctx  # noqa: E402
-import mcp_hub  # noqa: E402
+import coding_ctx
+import coding_store
+import mcp_hub
 
 _fails = []
 

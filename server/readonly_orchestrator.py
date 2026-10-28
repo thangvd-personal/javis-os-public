@@ -14,20 +14,20 @@ import math
 import re
 import time
 import unicodedata
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from typing import Any
 
 import capability_resolver
 import context_compiler
 import context_runtime
+import engine
+import fast_path_runtime
 import lang as lang_mod
 import lang_registry
 import lexicon
-import engine
-import fast_path_runtime
 import secrets_store
 from capability_executor import CapabilityExecutor
-
 
 ORCHESTRATOR_POLICY_VERSION = "readonly-orchestrator-v1"
 STATE_SCHEMA_VERSION = 1
@@ -123,7 +123,7 @@ class OrchestratorPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "OrchestratorPolicy":
+    def from_settings(cls, settings: dict) -> OrchestratorPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         raw = runtime.get("orchestrator_canary")
         raw = raw if isinstance(raw, dict) else {}
@@ -187,7 +187,7 @@ class OrchestratorPolicy:
             version=str(raw.get("policy_version") or ORCHESTRATOR_POLICY_VERSION)[:120],
         )
 
-    def capability_profile(self, capability: dict) -> Optional[dict]:
+    def capability_profile(self, capability: dict) -> dict | None:
         matches = []
         for item in self.capability_profiles:
             if not fnmatch.fnmatchcase(
@@ -212,7 +212,7 @@ class OrchestratorPolicy:
         ))
         return dict(matches[0])
 
-    def quota_rule(self, provider: str, model: str) -> Optional[dict]:
+    def quota_rule(self, provider: str, model: str) -> dict | None:
         matches = []
         for index, item in enumerate(self.quota_profiles):
             if str(item.get("provider") or "").lower() != str(provider or "").lower():
@@ -254,7 +254,7 @@ class OrchestratorAdmission:
     action: str
     reason: str
     execution_path: str = "unassigned"
-    bucket: Optional[int] = None
+    bucket: int | None = None
     trace: context_runtime.TurnTrace | None = None
     objective: str = ""
     brain: str = ""
@@ -774,7 +774,9 @@ class ReadonlyOrchestrator:
         # NGOÀI khối try bên dưới một cách CỐ Ý: chỗ gọi validate bắt `except Exception`, nên
         # để import trong đó là một bản cài thiếu jsonschema biến thành "planner_schema_
         # validation" - nhìn như model trả sai schema, trong khi thật ra chưa kiểm gì cả.
-        from jsonschema import Draft202012Validator     # nạp lười, xem capability_executor.py
+        from jsonschema import (
+            Draft202012Validator,  # nạp lười, xem capability_executor.py
+        )
         used = set(state["used_capability_ids"])
         candidates = [x for x in plan.candidates if x["capability_id"] not in used]
         remaining_slots = plan.policy.max_total_steps - len(state["steps"])

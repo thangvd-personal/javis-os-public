@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
 
 import localefmt
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from improvement_assets import capture_source
 from improvement_blobs import AssetUnavailable
 from improvement_store import ConflictError, SchemaError

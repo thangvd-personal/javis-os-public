@@ -4,15 +4,14 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 
-from fastapi import Request
-from fastapi.responses import JSONResponse, Response
-
 import improvement_store as IM
 import localefmt
 from evidence_store import redact
+from fastapi import Request
+from fastapi.responses import JSONResponse, Response
+from improvement_experiment_requests import WORKFLOW_CONTROLS, validate
 from improvement_experiments import ExperimentRecords, _identifier
-from improvement_experiment_requests import validate, WORKFLOW_CONTROLS
-from improvement_trial_requests import read_json, TrialRequestError
+from improvement_trial_requests import TrialRequestError, read_json
 from improvement_trial_runner import _settled_call
 from resonance_store import Principal
 
@@ -150,6 +149,7 @@ def register(app, deps):
     async def view_history(request: Request, experiment_id: str, comparison_id: str, brain: str = 'brain'):
         async def action(principal, data):
             from contextlib import closing
+
             from improvement_view_history import metadata
             store = await assets()
             if IM._schema_version(store.store) < 7:

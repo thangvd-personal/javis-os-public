@@ -10,17 +10,18 @@ basis point, một công tắc mode) ra cho người dùng tự ráp.
 Nguyên tắc của file này: mức phải THẬT SỰ đổi được trạng thái, và chỉ gồm những đường chạy
 được với cấu hình mặc định - bật một đường sẽ fail-closed chỉ tạo cảm giác đã bật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-preset-")
 
-import config as cfg  # noqa: E402
-import main  # noqa: E402
+import config as cfg
+import main
 
 _fails = []
 

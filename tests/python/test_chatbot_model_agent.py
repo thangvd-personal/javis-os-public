@@ -13,10 +13,11 @@ Dáng đã chốt, cùng luật rơi-về với ghim phiên web và ghim kênh T
   - Agent cũ chỉ lưu tên model (chưa có model_provider) -> suy nhà từ chính tên model.
   - Nhà đã gỡ / key đã xoá -> lui về model chính, KHÔNG để bot chết câm trước mặt khách.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-botmodel-"))
 # Brain RIÊNG cho test: mặc định BRAINS_DIR trỏ vào `brains/` thật của repo, nên không đặt
@@ -27,8 +28,8 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import main  # noqa: E402
+import config as cfgmod
+import main
 
 _fails = []
 

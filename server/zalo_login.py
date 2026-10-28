@@ -14,13 +14,12 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import threading
 import time
 import uuid
 
-import mcp_store
 import localefmt
+import mcp_store
 import winproc
 from config import STATE_DIR
 

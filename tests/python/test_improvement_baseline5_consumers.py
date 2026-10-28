@@ -1,28 +1,26 @@
 """Native baseline5 consumers with synthetic captures, no native/provider use."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import json
 import unittest
 from contextlib import closing
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import improvement_store as IM
 import improvement_trial_checks as checks
-from improvement_sandbox import trial_system_prompt, _effective_hash, FixtureBroker
-from improvement_native_trace_checks import validate_native_trace
-from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
-from improvement_trial_evidence import TrialEvidence
-from improvement_trial_results import TrialResults
-from improvement_claude import TrialProfile
-from improvement_blobs import AssetUnavailable
+import test_improvement_native_runner_evidence as R
 import test_improvement_native_trace_checks as N
 import test_improvement_trial_checks as C
 import test_improvement_trial_profile4 as P
 import test_improvement_trials as T
-import test_improvement_native_runner_evidence as R
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
+from improvement_claude import TrialProfile
+from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+from improvement_native_trace_checks import validate_native_trace
+from improvement_sandbox import FixtureBroker, _effective_hash, trial_system_prompt
+from improvement_trial_evidence import TrialEvidence
+from improvement_trial_results import TrialResults
 
 
 def baseline_trace(workspace, pin, system_prompt, events=None):
@@ -127,7 +125,7 @@ class BaselineResultTests(unittest.TestCase):
         self.results = TrialResults(self.trials)
 
     def prepare_trace(self, persist=True):
-        from claude_agent_sdk import SystemMessage, AssistantMessage, ResultMessage
+        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
         provisional = baseline_trace(self.workspace, self.pin, self.profile.system_prompt)
         self.profile._native_binding.delivery = N.delivery('trial', self.workspace, provisional, self.prompt, self.workspace['input_hash'])
         self.content = '{"value":"baseline 日本語"}\r\n'

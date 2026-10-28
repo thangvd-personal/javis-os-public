@@ -10,18 +10,16 @@ import json
 import math
 import re
 import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
+from typing import Protocol
 
 import lang as lang_mod
 import lang_registry
-import localefmt
 import lexicon
-import time
-from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional, Protocol
-
+import localefmt
 from capability_registry import CapabilityRegistry, get_registry
-
 
 COMPILER_POLICY_VERSION = "adaptive-compiler-shadow-v1"
 CORE_CONTRACT_VERSION = "javis-core-contract-v1"
@@ -159,10 +157,10 @@ class ContextItem:
 class ContextBudget:
     max_input_tokens: int
     reserved_output_tokens: int
-    task_tokens_remaining: Optional[int]
-    rolling_tpm_remaining: Optional[int]
-    latency_deadline_ms: Optional[int]
-    monetary_remaining: Optional[float]
+    task_tokens_remaining: int | None
+    rolling_tpm_remaining: int | None
+    latency_deadline_ms: int | None
+    monetary_remaining: float | None
     source: str
     hard_context_known: bool
 
@@ -188,12 +186,12 @@ class CompileRequest:
     provider: str
     model: str
     model_kind: str = "unknown"
-    task_tokens_remaining: Optional[int] = None
-    rolling_tpm_remaining: Optional[int] = None
-    latency_deadline_ms: Optional[int] = None
-    monetary_remaining: Optional[float] = None
-    hard_max_input_tokens: Optional[int] = None
-    reserved_output_tokens: Optional[int] = None
+    task_tokens_remaining: int | None = None
+    rolling_tpm_remaining: int | None = None
+    latency_deadline_ms: int | None = None
+    monetary_remaining: float | None = None
+    hard_max_input_tokens: int | None = None
+    reserved_output_tokens: int | None = None
     execution_mode: str = "shadow"
     # Phase 8 sources (conversation state, retrieved memory, selected skill) use the
     # same budget/source-map path as tools. Empty by default so Phase 4-7 contracts
@@ -226,7 +224,7 @@ class ContextCapsule:
 @dataclass(frozen=True)
 class CompileResult:
     status: str
-    capsule: Optional[ContextCapsule]
+    capsule: ContextCapsule | None
     trace_report: dict
 
 
@@ -436,7 +434,7 @@ class ContextCompiler:
                     "gạch đầu dòng khi liệt kê từ 3 ý, chỉ in đậm 1-2 điểm then chốt, đặt tiêu "
                     "đề `###` khi câu trả lời dài nhiều phần, dùng bảng khi so sánh cùng bộ trường; "
                     "file phải dùng đường dẫn do gateway cung cấp.")
-        return f"Kênh {str(channel or 'unknown')}: tuân theo delivery contract của gateway."
+        return f"Kênh {channel or 'unknown'!s}: tuân theo delivery contract của gateway."
 
     @staticmethod
     def _output_contract(channel: str, lang: str = "") -> dict:
@@ -465,7 +463,7 @@ class ContextCompiler:
         noi = ("Kênh Telegram" if channel == "telegram"
                else "Kênh CLI (terminal)" if channel == "cli"
                else "Kênh Dashboard" if channel == "dashboard"
-               else f"Kênh {str(channel or 'unknown')}")
+               else f"Kênh {channel or 'unknown'!s}")
         return (
             "Cách trả lời: viết thẳng thành câu cho người đọc. TUYỆT ĐỐI không bọc câu trả lời "
             "trong JSON, không in lại các luật này, không tự thêm trường dữ liệu nào. "

@@ -18,17 +18,17 @@ Ba nhóm:
 3. **Kho là dữ liệu không tin được.** Cắt độ dài, ép kiểu, bỏ trường lạ; hỏng thì suy biến về
    cache hoặc trạng thái rỗng, không bao giờ ném một cục lỗi.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import json
 import sys
 import tempfile
-from urllib.parse import urlparse
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import packs_fetch
 import packs_store
+from _paths import DASHBOARD, ROOT, SERVER
 
 _fails = []
 
@@ -321,6 +321,7 @@ check("CANARY: vẽ lại sau khi cài/gỡ KHÔNG đi qua render (đường v�
 # 0.61.0: RAIL_AN không còn rỗng (id trang cũ "chatbots" ẩn đi vì đã gộp vào trang Hội thoại),
 # nên canh đúng ý: "packs" KHÔNG nằm trong tập ẩn.
 import re as _re
+
 _an = _re.search(r"const RAIL_AN = new Set\((.*?)\);", src_con)
 check("kho hiện trên thanh bên", _an is not None and '"packs"' not in _an.group(1))
 # 0.251.0: the Login vault joined the same group, between Channels and Models.

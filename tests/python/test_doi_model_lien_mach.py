@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Đổi bộ não giữa chừng thì hội thoại phải LIỀN MẠCH.
 
     python tests/run.py doi_model
@@ -23,14 +22,15 @@ khi một lượt do engine khác xử lý, mạch của mọi engine còn lại
 Không chạm mạng, không cần engine thật: kiểm trên chính kho phiên (SQLite) cộng vài bất biến
 cấu trúc của main.py.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-mach-test-"))
 
-from sessions import SessionStore  # noqa: E402
+from sessions import SessionStore
 
 _fails = []
 

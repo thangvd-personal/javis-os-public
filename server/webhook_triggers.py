@@ -40,14 +40,12 @@ import sys
 import threading
 import time
 import uuid
-from decimal import Decimal
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable, Optional
-
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from typing import Any
 
 import localefmt
 import webhook_actions
@@ -56,7 +54,9 @@ import webhook_rules
 import webhook_secrets
 import webhook_store
 import webhook_worker
-from webhook_auth import hash_token, new_token, token_from_request  # noqa: F401  (older imports)
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+from webhook_auth import hash_token, new_token, token_from_request
 
 BODY_MAX_BYTES = webhook_store.BODY_DEFAULT     # a hook's default body cap (spec §11: 256 KiB)
 BODY_CEILING = webhook_store.BODY_CEILING       # the hard ceiling a hook may raise its cap to (2 MiB)
@@ -122,20 +122,20 @@ class WebhookDeps:
     send: Callable
     # (request) -> "https://host"
     base_url: Callable[[Any], str]
-    workflow_exists: Optional[Callable[[str, str], bool]] = None
-    atomic_write_text: Optional[Callable[[Any, str], None]] = None
+    workflow_exists: Callable[[str, str], bool] | None = None
+    atomic_write_text: Callable[[Any, str], None] | None = None
     # (source, ref, brain=, title=, error=, request=) -> report a broken run to Javis Core (incident_desk.py)
-    incident_hook: Optional[Callable] = None
+    incident_hook: Callable | None = None
     # (brain, plugin slug, handler name) -> {"handler", "ctx", "min_mode", "schema", "ai", "idempotent"} | None
-    plugin_handler: Optional[Callable] = None
+    plugin_handler: Callable | None = None
     # httpx transport for HTTP / Apps Script actions (tests pass a MockTransport); None = the real network
     http_transport: Any = None
     # host -> [ip, ...] for the private-address check (tests pass a fake); None = DNS
-    resolve: Optional[Callable] = None
+    resolve: Callable | None = None
     # async call_tool(brain, level, tool_name, args) -> str, through the hub dispatcher; None = tool actions blocked
-    call_tool: Optional[Callable] = None
+    call_tool: Callable | None = None
     # (brain) -> bool: does the hook's brain folder still exist? None = not checked (tests)
-    brain_exists: Optional[Callable] = None
+    brain_exists: Callable | None = None
 
 
 def payload_text(body: bytes, content_type: str, compact: bool = False) -> str:
@@ -162,8 +162,8 @@ def payload_text(body: bytes, content_type: str, compact: bool = False) -> str:
     return text
 
 
-def event_prompt(hook: dict, payload: str, received_at: float, fields: Optional[dict] = None,
-                 ids: Optional[dict] = None) -> str:
+def event_prompt(hook: dict, payload: str, received_at: float, fields: dict | None = None,
+                 ids: dict | None = None) -> str:
     """What the engine receives. Prompt text stays Vietnamese (docs/dev/them-mot-ngon-ngu.md). The fence markers are
     neutralised inside the payload so it cannot close its own block. `ids` (event, delivery) tie the run to the log."""
     body = payload or "(không có dữ liệu)"
@@ -478,7 +478,7 @@ def mask_row(r: dict, corr_key: str = "") -> dict:
     return r
 
 
-def evaluate_closed(rules: dict, body: bytes, content_type: str, event: Optional[dict] = None,
+def evaluate_closed(rules: dict, body: bytes, content_type: str, event: dict | None = None,
                     reveal: bool = False) -> dict:
     """webhook_rules.evaluate, FAILING CLOSED: if evaluation itself breaks, the event is `invalid` (quarantined, never
     run). `event` (the provider's normalised event) is readable by the rules as `_event`, always set by Javis."""
@@ -504,7 +504,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
     def __init__(self, deps: WebhookDeps):
         self.deps = deps
         self._io = asyncio.Lock()
-        self._store: Optional[webhook_store.Store] = None
+        self._store: webhook_store.Store | None = None
         self._store_lock = __import__("threading").Lock()
         self.worker_id = f"{__import__('socket').gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
         self._worker_init()
@@ -565,10 +565,10 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         """The hooks (from the store). Raises if the store cannot be read: callers back off and try again."""
         return {"hooks": self.store().hooks_all()}
 
-    def _find(self, data: dict, hid: str) -> Optional[dict]:
+    def _find(self, data: dict, hid: str) -> dict | None:
         return next((h for h in data.get("hooks", []) if h.get("id") == hid), None)
 
-    def _find_hook(self, hid: str) -> Optional[dict]:
+    def _find_hook(self, hid: str) -> dict | None:
         return self.store().hook_get(hid)
 
     # ── views ──
@@ -1003,7 +1003,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         self.store().hook_set(hid, token_hash=hash_token(token))
         return self.store().hook_get(hid), token
 
-    def pause(self, hid: str, paused: bool) -> Optional[dict]:
+    def pause(self, hid: str, paused: bool) -> dict | None:
         """Pause processing (still receives and stores within the quotas) or resume it. Different from `enabled`,
         which stops RECEIVING (spec §12: two switches)."""
         if not self.store().hook_set(hid, paused=1 if paused else 0):
@@ -1083,7 +1083,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         else:
             raw = p.get("payload", "")
             body = (raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)).encode("utf-8")
-        cap = int(((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024)) * 1024
+        cap = int((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024) * 1024
         if len(body) > cap:
             return 413, {"ok": False, "error": f"body larger than {cap} bytes"}
         # A logged event holds customer data: its values are revealed only for the audited raw view (spec §12).
@@ -1184,7 +1184,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
             out["_bk"] = bk
         return 200, out
 
-    def replay_confirm(self, eid: str, revision: Optional[int] = None) -> tuple:
+    def replay_confirm(self, eid: str, revision: int | None = None) -> tuple:
         """`revision`: the revision the owner saw in the preview. The hook changed since -> 409 (preview again)."""
         code, prev = self.replay_preview(eid, _internal=True)
         if code != 200:
@@ -1270,7 +1270,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
             return None, "off"
         return h, ("token" if good else "signature")
 
-    def authenticate(self, hid: str, token: str = "", headers: Any = None, query: str = "") -> Optional[dict]:
+    def authenticate(self, hid: str, token: str = "", headers: Any = None, query: str = "") -> dict | None:
         """The hook, if it exists, receives, and the token matches. `headers`/`query` given: the token is read from
         them under the hook's own rules (its header; ?token= only for an older hook)."""
         h = self._find_hook(hid)
@@ -1292,7 +1292,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         return await self.accept_body(h, body, content_type, idem_key, headers)
 
     async def accept_body(self, h: dict, body: bytes, content_type: str, idem_key: str = "", headers: Any = None) -> tuple:
-        cap = int(((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024)) * 1024
+        cap = int((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024) * 1024
         if len(body) > cap:
             return 413, {"ok": False, "error": f"body larger than {cap} bytes"}
         hid = h["id"]
@@ -1327,8 +1327,8 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         return await self._ingest(h, body, content_type, idem_key, source="http", meta=meta, kind=kind)
 
     async def _ingest(self, h: dict, body: bytes, content_type: str, idem_key: str = "", source: str = "http",
-                      now: Optional[float] = None, meta: Optional[dict] = None, kind: str = "header",
-                      event: Optional[dict] = None) -> tuple:
+                      now: float | None = None, meta: dict | None = None, kind: str = "header",
+                      event: dict | None = None) -> tuple:
         if self._store is None:
             await asyncio.to_thread(self.store)
         if event and not (meta or {}).get("event"):
@@ -1368,7 +1368,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         return h
 
     # ── routes ──
-    def _hooks_of(self, brain: str) -> Optional[list]:
+    def _hooks_of(self, brain: str) -> list | None:
         return [h["id"] for h in self.store().hooks_all(brain)] if brain else None
 
     def _make_router(self) -> APIRouter:
@@ -1406,7 +1406,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
                 # Without a token the body must be read to check the signature: an address that keeps failing is
                 # not read again for a while.
                 return js({"ok": False, "error": "too many failed attempts, retry later", "retry_after": 60}, 429)
-            cap = int(((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024)) * 1024
+            cap = int((h.get("limits") or {}).get("body_kb") or BODY_MAX_BYTES // 1024) * 1024
             try:
                 if int(request.headers.get("content-length") or 0) > cap:
                     return JSONResponse({"ok": False, "error": f"body larger than {cap} bytes"}, status_code=413)
@@ -1646,7 +1646,7 @@ class WebhookFeature(webhook_worker.WebhookWorker):
             eid = str((payload or {}).get("id") or "")
             ev = await asyncio.to_thread(self.store().get, eid)
             h = await asyncio.to_thread(self._find_hook, ev["hook_id"]) if ev else None
-            win = float((((h or {}).get("retry") or {}).get("deadline_h") or 24)) * 3600
+            win = float(((h or {}).get("retry") or {}).get("deadline_h") or 24) * 3600
             ok, why = await asyncio.to_thread(self.store().retry, eid, None, win)
             if not ok:
                 return JSONResponse({"ok": False, "error": why}, status_code=404 if why == "not_found" else 409)

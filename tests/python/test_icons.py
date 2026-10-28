@@ -25,7 +25,7 @@ import bisect
 import json
 import re
 
-from _paths import ROOT  # noqa: E402,F401
+from _paths import ROOT
 
 DASH = ROOT / "dashboard"
 MANIFEST = json.loads((DASH / "icons.manifest.json").read_text(encoding="utf-8"))
@@ -338,7 +338,7 @@ def scan_x_text_icon():
     for path in SCAN:
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for m in re.finditer(r'x-text="([^"]*)"', line):
-                if re.search(r"icon", m.group(1), re.I):
+                if re.search(r"icon", m.group(1), re.IGNORECASE):
                     hits.append((path.name, lineno, line.strip()[:90]))
     return hits
 
@@ -356,7 +356,7 @@ def scan_emoji():
 
 # --- 1. Bộ icon đã vendor khớp manifest --------------------------------------
 want = sorted({n for group in MANIFEST["groups"].values() for n in group})
-have = sorted(set(re.findall(r'^\s*"([a-z0-9-]+)":\s*"', VENDOR, re.M)))
+have = sorted(set(re.findall(r'^\s*"([a-z0-9-]+)":\s*"', VENDOR, re.MULTILINE)))
 
 check(f"manifest có icon ({len(want)} tên)", len(want) > 50)
 check("vendor có đủ mọi icon trong manifest", set(want) <= set(have))
@@ -431,7 +431,7 @@ check("biến CSS nạp TRƯỚC style.css (style.css tham chiếu chúng)",
 
 # --- 5b. Sáu reaction (chat nhóm và chat riêng) còn đủ, và chỉ nằm trong bảng EMOJI của reactions.js ---
 REACT_JS = (DASH / "reactions.js").read_text(encoding="utf-8")
-_tbl = re.search(r"var EMOJI = \[(.*?)\];", REACT_JS, re.S)
+_tbl = re.search(r"var EMOJI = \[(.*?)\];", REACT_JS, re.DOTALL)
 check("reactions.js giữ đủ sáu reaction chức năng 👍 ❤️ 😂 😮 😢 😡 (luật cấm emoji không được làm mất chúng)",
       bool(_tbl) and all(e in _tbl.group(1) for e in REACTION_EMOJI))
 _outside = [ln for ln in (REACT_JS.replace(_tbl.group(0), "") if _tbl else REACT_JS).splitlines()

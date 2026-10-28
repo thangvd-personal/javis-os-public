@@ -10,9 +10,15 @@ from pathlib import Path
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_experiment_protocol import _id
 from improvement_operation_protocol import operation_materialization
-from improvement_sandbox import (TrialWorkspace, _private_directory, _atomic, _bytes_hash,
-                                  _try_workspace_lifetime_lock, _workspace_mutation_lock)
-from improvement_store import _json, _hash
+from improvement_sandbox import (
+    TrialWorkspace,
+    _atomic,
+    _bytes_hash,
+    _private_directory,
+    _try_workspace_lifetime_lock,
+    _workspace_mutation_lock,
+)
+from improvement_store import _hash, _json
 
 _RECEIPT = {"operation_id", "attempt", "role", "purpose", "path", "input_path", "output_root", "input_hash", "request_hash"}
 

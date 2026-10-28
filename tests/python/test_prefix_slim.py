@@ -19,19 +19,19 @@ Ba việc test này phủ:
 3. CLAUDE.md không còn ôm mẫu file dài (đã dời vào skill javis-builder) nhưng GIỮ NGUYÊN
    mọi luật an toàn và luật hành vi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import re
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-prefix-")
 
-import yaml  # noqa: E402
-
-import system_sync as ss  # noqa: E402
-import skill_router       # noqa: E402
+import skill_router
+import system_sync as ss
+import yaml
 
 fails = []
 
@@ -43,13 +43,13 @@ def check(name, cond):
 
 
 def desc_of(text):
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     fm = yaml.safe_load(m.group(1)) if m else {}
     return (fm or {}).get("description") or ""
 
 
 def body_of(text):
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
+    m = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     return text[m.end():] if m else text
 
 
@@ -72,7 +72,7 @@ for k, src in cases.items():
     check(f"  '{k}': description <= {CAP}", len(desc_of(out)) <= CAP)
     check(f"  '{k}': than skill NGUYEN VEN", body_of(out).strip() == body_of(src).strip())
     check(f"  '{k}': group con nguyen", desc_of(out) and yaml.safe_load(
-        re.match(r"^---\n(.*?)\n---\n", out, re.S).group(1)).get("group") == "G")
+        re.match(r"^---\n(.*?)\n---\n", out, re.DOTALL).group(1)).get("group") == "G")
 
 check("mo ta ngan thi KHONG dung toi",
       ss._cap_desc("---\nname: E\ndescription: Ngan gon.\ngroup: G\n---\nT", CAP) is None)
@@ -98,7 +98,7 @@ check("file khac trong package van duoc chep",
       (root / ".claude" / "skills" / "dai-dong" / "references" / "them.md").is_file())
 
 # ---- 2. trần cho chỉ mục bộ nhớ ----
-import main  # noqa: E402
+import main
 
 ITEM = "- [Ky uc so {i}](facts/ky-uc-{i}.md) - " + "mo ta rat dai de test tran chi muc " * 4
 mem = "# Bộ nhớ - Index\n\n" + "\n".join(ITEM.format(i=i) for i in range(60))

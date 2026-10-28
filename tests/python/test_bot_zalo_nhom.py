@@ -19,13 +19,14 @@ Bốn thứ file này canh, mỗi thứ một kiểu hỏng:
   4. KHÔNG THÀNH MÁY PHÁT THANH. Chờ để nhường người đang nhắn tay, giới hạn số lần tự trả lời
      mỗi nhóm/mỗi người, và tin bị bỏ qua không được làm lệch thống kê của bot.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpnhom-")
 # Từ 0.65.1 chế độ Tự đánh giá do BỘ PHÁN XỬ quyết. File này khoá LUẬT CŨ (cửa từ khoá, hạn mức, mã bỏ qua) mà
@@ -36,12 +37,12 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402
-import chatbot_log  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import channels
+import chatbot_log
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zc
 
 _fails = []
 
@@ -122,7 +123,7 @@ chatbot_runtime.wire(answer=_engine, brain_root=lambda b: str(BRAIN),
 # ============================================================
 # 0. Bộ đánh giá tầng 1: một hàm thuần, thử trực tiếp
 # ============================================================
-import chatbot_tu_dong as td  # noqa: E402
+import chatbot_tu_dong as td
 
 CAU_HOI = [
     "Javis báo lỗi cổng 7777 đang bị dùng thì làm sao ạ?",

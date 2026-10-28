@@ -20,17 +20,21 @@ import hashlib
 import math
 import re
 import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 import capability_resolver
 import context_compiler
 import context_runtime
 import fast_path_runtime
 from capability_executor import (
-    CapabilityExecutor, CapabilityLease, arguments_hash, idempotency_key, resource_lock_key,
+    CapabilityExecutor,
+    CapabilityLease,
+    arguments_hash,
+    idempotency_key,
+    resource_lock_key,
 )
-
 
 WRITE_POLICY_VERSION = "write-single-step-v1"
 Discoverer = Callable[[str, str], Awaitable[tuple[list[dict], dict]]]
@@ -102,7 +106,7 @@ class WritePolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "WritePolicy":
+    def from_settings(cls, settings: dict) -> WritePolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         runtime = runtime if isinstance(runtime, dict) else {}
         raw = runtime.get("write_canary")
@@ -140,7 +144,7 @@ class WritePolicy:
             version=str(raw.get("policy_version") or WRITE_POLICY_VERSION)[:120],
         )
 
-    def profile_for(self, capability: dict) -> Optional[dict]:
+    def profile_for(self, capability: dict) -> dict | None:
         """Allowlist theo connector/group. Không khớp profile nào = không được write."""
         source = str(capability.get("source_type") or "")
         source_id = str((capability.get("metadata") or {}).get("source_id") or "")
@@ -173,7 +177,7 @@ class WritePlan:
     action: str            # not_applicable | legacy | reject | propose | execute
     reason: str
     execution_path: str = "unassigned"
-    bucket: Optional[int] = None
+    bucket: int | None = None
     messages: tuple[dict, ...] = ()
     tool_spec: dict | None = None
     lease: CapabilityLease | None = None
@@ -208,7 +212,7 @@ class WritePathCanary:
 
     @staticmethod
     def _plan(action: str, reason: str, policy: WritePolicy,
-              bucket: Optional[int] = None, path: str = "unassigned",
+              bucket: int | None = None, path: str = "unassigned",
               rejection: str = "", **extra) -> WritePlan:
         return WritePlan(action, reason, path, bucket=bucket,
                          policy_version=policy.version, rejection_message=rejection,
@@ -473,7 +477,7 @@ class WritePathCanary:
         try:
             result = await asyncio.wait_for(
                 route_call(args), timeout=max(1.0, float(timeout_seconds or 30)))
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             self.runtime.finish_write_invocation(
                 trace, invocation_id, lease_id, "UNKNOWN", error_code="write_timeout")
             return {"status": "UNKNOWN", "error_code": "write_timeout",
@@ -516,7 +520,7 @@ class WritePathCanary:
                     "error_code": f"evidence_store_failed:{type(exc).__name__}"}
         self.runtime.finish_write_invocation(
             trace, invocation_id, lease_id, "SUCCEEDED", evidence_id=evidence.id,
-            provider_request_id=str((invocation.get("capability_id") or ""))[:200])
+            provider_request_id=str(invocation.get("capability_id") or "")[:200])
         return {"status": "SUCCEEDED", "invocation_id": invocation_id, "evidence": evidence}
 
     async def reconcile_unknown(self, trace, invocation: dict, brain: str,

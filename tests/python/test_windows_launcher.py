@@ -10,8 +10,9 @@ start-javis.vbs - vì vbs đó LUÔN kill instance cũ trước khi bật. Thi�
 là double-click lần hai (mở lại cửa sổ) thành restart server, giết sạch việc nền
 đang chạy dở. Đó là loại lỗi bấm thấy chạy được ngay nên không ai nghi ngờ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

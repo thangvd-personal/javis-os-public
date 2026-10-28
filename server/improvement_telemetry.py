@@ -1,14 +1,14 @@
 """Host-side native telemetry into the existing usage pipeline; never a model or billing ledger."""
 from __future__ import annotations
 
-import math
 import json
+import math
 import sqlite3
 from contextlib import closing
 
 import turn_context
-import usage_store
 import usage_index
+import usage_store
 
 
 def _count(value):

@@ -7,7 +7,6 @@ Node.js security release of 2026-10-21 (CVE-2026-111497 Brotli RCE and 9 more) f
 so three places carry that floor: the Docker image pin, install.sh and server/node_security.py.
 This test keeps them in step and checks the News item only appears on an unpatched machine.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -15,8 +14,10 @@ import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-node-sec-"))
-import node_security  # noqa: E402
+import node_security
 
 _fails = []
 
@@ -64,7 +65,7 @@ for mode in ("docker", "windows", "native"):
 
 # --- the three pins agree -----------------------------------------------------------------------
 dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-m = re.search(r"^FROM node:(\d+)\.(\d+)\.(\d+)-", dockerfile, re.M)
+m = re.search(r"^FROM node:(\d+)\.(\d+)\.(\d+)-", dockerfile, re.MULTILINE)
 pin = tuple(int(x) for x in m.groups()) if m else None
 check("Dockerfile pins an exact Node.js release (a floating tag can come from a stale cache)", bool(pin), m)
 check("Dockerfile Node.js pin is patched", bool(pin) and ns.classify(pin) == "ok", pin)
@@ -79,7 +80,7 @@ ids = [a.get("id") for a in ann.get("announcements", [])]
 check("ANNOUNCEMENTS.json carries the broadcast for older installs", ns.ADVISORY_ID in ids, ids)
 
 # --- the feed replaces the broadcast with the machine's own result ------------------------------
-import main  # noqa: E402
+import main
 
 
 async def _feed(version):

@@ -28,7 +28,8 @@ Cơ chế chỉ chữ theo provider:
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import aux_engine
 
@@ -106,7 +107,7 @@ def codex_text_only(cc: Any) -> Any:
     return cc
 
 
-def build(spec: dict, base: Any, tag: str, settings: Optional[dict] = None) -> Any:
+def build(spec: dict, base: Any, tag: str, settings: dict | None = None) -> Any:
     """Engine chỉ chữ cho `spec`. `base` là engine Claude hộp cát (thư mục trống, MCP rỗng, cổng từ chối mọi công cụ)
     mà caller đã dựng với lời nhắc hệ thống của trợ lý. Ném TeamEngineUnavailable khi không dựng được."""
     prov = str(spec.get("provider") or CLAUDE)
@@ -134,8 +135,8 @@ def build(spec: dict, base: Any, tag: str, settings: Optional[dict] = None) -> A
         "Đổi model của trợ lý ở trang Cộng sự sang Claude, ChatGPT (Codex) hay một model API", prov)
 
 
-def build_tools(spec: dict, base: Any, tag: str, settings: Optional[dict] = None, mode: str = "full",
-                codex_profile: Optional[Callable[[], Any]] = None) -> Any:
+def build_tools(spec: dict, base: Any, tag: str, settings: dict | None = None, mode: str = "full",
+                codex_profile: Callable[[], Any] | None = None) -> Any:
     """Engine CÓ công cụ cho lượt Làm/Hỗ trợ của việc nhóm (0.194.0, chủ 17/10/2026: "team phải đầy đủ các quyền thì mới
     làm việc được"). `base` là engine Claude caller đã dựng như chat riêng: cwd là thư mục làm việc của nhóm (hay bộ não),
     hub MCP gắn ở mức `mode`, `javis_vault` là bộ não. Provider khác Claude dựng bằng đúng các builder của việc nền

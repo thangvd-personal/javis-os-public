@@ -1,6 +1,4 @@
 """Actual sealed preparation and native role products publish atomic A drafts."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -11,12 +9,13 @@ from contextlib import aclosing, closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_improver_inputs as inputs
+import test_improvement_operation_runner as native
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_execution import OperationExecution
 from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
 from improvement_trial_service import OwnerTrialService
-import test_improvement_improver_inputs as inputs
-import test_improvement_operation_runner as native
 
 
 class ProposalTests(unittest.IsolatedAsyncioTestCase):
@@ -350,7 +349,10 @@ class GenerationJsonTests(unittest.TestCase):
             parse_generation_output(raw, {})
 
     def test_proposer_and_repair_receive_the_complete_closed_body_patch_contract(self):
-        from improvement_generation_protocol import render_proposer_input, render_repair_input
+        from improvement_generation_protocol import (
+            render_proposer_input,
+            render_repair_input,
+        )
         original = {'version': 1, 'kind': 'authorized_tuning', 'candidate_limit': 2}
         contract = json.loads(render_proposer_input(original))['output_contract']
         required = contract['patch_manifest']['required']

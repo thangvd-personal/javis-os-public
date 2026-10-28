@@ -30,7 +30,8 @@ import re
 import sys
 import time
 import uuid
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
 import chatbot_reply_policy as rp
 
@@ -66,10 +67,10 @@ REVIEWABLE_CODES = ("addressed_other", "no_grounding", "no_signal", "judge_silen
 # ============================================================
 # Wiring
 # ============================================================
-_ASK: Optional[Callable[[str], Awaitable[str]]] = None
-_NOTIFY: Optional[Callable[[str], Awaitable[Any]]] = None
-_WRITE_FEEDBACK: Optional[Callable[[dict, str], Any]] = None
-_GET_BOT: Optional[Callable[[str], Optional[dict]]] = None
+_ASK: Callable[[str], Awaitable[str]] | None = None
+_NOTIFY: Callable[[str], Awaitable[Any]] | None = None
+_WRITE_FEEDBACK: Callable[[dict, str], Any] | None = None
+_GET_BOT: Callable[[str], dict | None] | None = None
 _RUNNING: set = set()
 _LAST_TICK = [0.0]
 
@@ -90,7 +91,7 @@ def _store():
     return chatbot_reply_policy_store
 
 
-def _get_bot(bot_id: str) -> Optional[dict]:
+def _get_bot(bot_id: str) -> dict | None:
     if _GET_BOT is not None:
         return _GET_BOT(bot_id)
     try:
@@ -142,18 +143,18 @@ def describe(ch: dict) -> str:
 # ============================================================
 # Applying and undoing changes (shared by the review and the hub tool)
 # ============================================================
-def _fail(msg: str) -> Tuple[bool, str, Optional[int]]:
+def _fail(msg: str) -> tuple[bool, str, int | None]:
     return False, msg, None
 
 
-def _int(v: Any) -> Optional[int]:
+def _int(v: Any) -> int | None:
     try:
         return int(v)
     except (TypeError, ValueError):
         return None
 
 
-_URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.I)
+_URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 
 
 def untrusted_text(text: Any, limit: int) -> str:
@@ -201,7 +202,7 @@ def _owner_holds(store, bot_id: str, target: str) -> bool:
     return False
 
 
-def _evidence(change: dict) -> List[int]:
+def _evidence(change: dict) -> list[int]:
     ev = change.get("evidence")
     if isinstance(ev, (int, str)):
         ev = [ev]
@@ -213,8 +214,8 @@ def _evidence(change: dict) -> List[int]:
     return out[:20]
 
 
-def apply_change(store, bot_id: str, change: dict, *, actor: str, review_id: Optional[str] = None,
-                 valid_evidence: Optional[Iterable[int]] = None, now: Optional[float] = None) -> Tuple[bool, str, Optional[int]]:
+def apply_change(store, bot_id: str, change: dict, *, actor: str, review_id: str | None = None,
+                 valid_evidence: Iterable[int] | None = None, now: float | None = None) -> tuple[bool, str, int | None]:
     """Validate and apply one change. Returns (ok, message, change_id). Never raises on bad input.
 
     `actor="review"`: only REVIEW_OPS, evidence required and every id must be in `valid_evidence` (decision ids of
@@ -345,7 +346,7 @@ def apply_change(store, bot_id: str, change: dict, *, actor: str, review_id: Opt
 SUPERSEDED = "superseded"
 
 
-def _undo(store, ch: dict, now: float) -> Tuple[bool, str]:
+def _undo(store, ch: dict, now: float) -> tuple[bool, str]:
     """Restore the `before` state. Knobs and offsets are only restored while they still hold the value this change
     set: if the owner (or the judge's own learning) has moved them since, undoing would wipe a newer decision, so
     the change is marked superseded instead."""
@@ -388,7 +389,7 @@ def _undo(store, ch: dict, now: float) -> Tuple[bool, str]:
 
 
 def revert_change(store, change_id: int, *, bot_id: str = "", status: str = "reverted",
-                  now: Optional[float] = None) -> Tuple[bool, str]:
+                  now: float | None = None) -> tuple[bool, str]:
     """Undo one applied change. `bot_id`, when given, must match (the hub tool passes it so a change id typed for
     one bot can never undo another bot's change)."""
     now = time.time() if now is None else now
@@ -409,7 +410,7 @@ def revert_change(store, change_id: int, *, bot_id: str = "", status: str = "rev
 
 
 def revert_review(store, review_id: str, *, bot_id: str = "", status: str = "reverted",
-                  now: Optional[float] = None) -> Tuple[int, List[str]]:
+                  now: float | None = None) -> tuple[int, list[str]]:
     """Undo every still-applied change of one review, newest first. Returns (count, lines)."""
     lines, n = [], 0
     for ch in store.list_changes(bot_id, limit=50, review_id=review_id):
@@ -425,7 +426,7 @@ def revert_review(store, review_id: str, *, bot_id: str = "", status: str = "rev
 # ============================================================
 # When to review
 # ============================================================
-def due_bots(store, now: Optional[float] = None) -> List[str]:
+def due_bots(store, now: float | None = None) -> list[str]:
     """Bots with enough new evidence since their last review, oldest review first."""
     now = time.time() if now is None else now
     out = []
@@ -453,15 +454,15 @@ def _fmt_dec(d: dict) -> str:
             f" lý do=\"{rp.clean_chat_text(d.get('reason'), 100)}\"\n    tin: \"{rp.clean_chat_text(d.get('text'), 220)}\"")
 
 
-def build_report(store, bot_id: str, *, since: float, now: Optional[float] = None,
-                 bot_name: str = "", max_window_s: float = WINDOW_MAX_S) -> Tuple[str, set]:
+def build_report(store, bot_id: str, *, since: float, now: float | None = None,
+                 bot_name: str = "", max_window_s: float = WINDOW_MAX_S) -> tuple[str, set]:
     """(report text, decision ids shown). Everything typed by chat members is cleaned and fenced in <chat_data>.
     `max_window_s`: the background review looks back at most 7 days; the owner's hub tool may ask for up to 30."""
     now = time.time() if now is None else now
     since = max(float(since), now - float(max_window_s))
     s = store.summary_between(bot_id, since, now)
     wrong = store.decisions_between(bot_id, since, now, labeled_wrong=True, limit=SAMPLES_WRONG)
-    silent: List[dict] = []
+    silent: list[dict] = []
     per_code = max(3, SAMPLES_SILENT // len(REVIEWABLE_CODES))
     for code in REVIEWABLE_CODES:
         silent += store.decisions_between(bot_id, since, now, code=code, limit=per_code)
@@ -538,7 +539,7 @@ def build_review_prompt(report: str) -> str:
     )
 
 
-def parse_review(raw: Any) -> Optional[dict]:
+def parse_review(raw: Any) -> dict | None:
     """The model's JSON, or None. Tolerates a code fence and text around the object; nothing else."""
     s = str(raw or "").strip()
     s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s)
@@ -566,8 +567,8 @@ def _recently_reverted(store, bot_id: str, change: dict, now: float) -> bool:
 # ============================================================
 # One review
 # ============================================================
-async def run_review(bot_id: str, *, store=None, ask=None, now: Optional[float] = None,
-                     write_feedback=None, bot_cfg: Optional[dict] = None) -> dict:
+async def run_review(bot_id: str, *, store=None, ask=None, now: float | None = None,
+                     write_feedback=None, bot_cfg: dict | None = None) -> dict:
     """Review one bot. Always records the review time (even on failure) so a broken model is not retried every tick.
     Returns {"ok", "review_id", "applied": [lines], "rejected": [msgs], "feedback", "summary", "error"}."""
     store = store or _store()
@@ -649,13 +650,13 @@ def review_message(res: dict) -> str:
 # ============================================================
 # Measuring a review afterwards
 # ============================================================
-def _error_rate(counts: Dict[str, int]) -> Tuple[float, int, int]:
+def _error_rate(counts: dict[str, int]) -> tuple[float, int, int]:
     n = sum(counts.values())
     err = counts.get("missed", 0) + counts.get("intruded", 0)
     return (err / n if n else 0.0), n, err
 
 
-def evaluate_due(store=None, now: Optional[float] = None) -> List[dict]:
+def evaluate_due(store=None, now: float | None = None) -> list[dict]:
     """For each review whose changes are still `applied`: compare the error rate before and after. Worse by more than
     EVAL_WORSE_BY (with at least EVAL_MIN_ERRORS errors after) undoes the whole review; enough labels and not worse,
     or too old to judge, marks it `kept`. Owner-requested changes are never judged here."""
@@ -700,7 +701,7 @@ def revert_message(ev: dict) -> str:
 # ============================================================
 # Scheduler hook
 # ============================================================
-async def tick(now: Optional[float] = None) -> None:
+async def tick(now: float | None = None) -> None:
     """Called from the server's 30-second scheduler; does real work at most every TICK_EVERY_S. Measures pending
     reviews, then starts at most ONE new review in the background (never two at once)."""
     now = time.time() if now is None else now

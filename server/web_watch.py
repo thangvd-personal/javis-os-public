@@ -35,16 +35,16 @@ import sqlite3
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 from urllib.parse import urlparse
 
+import localefmt
 from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
-
-import localefmt
 
 CONDITIONS = ("change", "contains", "price_below")
 MIN_INTERVAL = 5            # phút: nhanh hơn là làm phiền chủ trang và dễ bị chặn
@@ -229,7 +229,7 @@ def parse_prices(text: str) -> list:
     return out
 
 
-def parse_threshold(value: str) -> Optional[tuple]:
+def parse_threshold(value: str) -> tuple | None:
     """(ngưỡng, tiền tệ hoặc None). Số trơn ("1000000", "1.000.000") hợp với mọi loại tiền."""
     v = str(value or "").strip()
     found = parse_prices(v)
@@ -242,14 +242,14 @@ def parse_threshold(value: str) -> Optional[tuple]:
     return None
 
 
-def cheapest_below(text: str, threshold: tuple) -> Optional[tuple]:
+def cheapest_below(text: str, threshold: tuple) -> tuple | None:
     """Giá thấp nhất dưới ngưỡng (cùng loại tiền), hoặc None."""
     nguong, tien = threshold
     hop = [p for p in parse_prices(text) if (tien is None or p[1] == tien) and 0 < p[0] < nguong]
     return min(hop) if hop else None
 
 
-def fmt_price(value: float, cur: Optional[str]) -> str:
+def fmt_price(value: float, cur: str | None) -> str:
     if cur == "usd":
         return f"${value:,.2f}"
     return f"{int(round(value)):,}".replace(",", ".") + "đ"
@@ -304,7 +304,7 @@ def check_url(url: str) -> str:
     return p.hostname
 
 
-async def fetch(url: str, cookies: Optional[list] = None) -> tuple[str, str, str]:
+async def fetch(url: str, cookies: list | None = None) -> tuple[str, str, str]:
     """(địa chỉ cuối, tiêu đề, văn bản). Ném FetchError.
 
     `cookies` (0.251.0): a sign-in from the login vault. The Cookie header is worked out again for
@@ -403,12 +403,12 @@ class Store:
             self._db.commit()
         return self.get(row["id"])
 
-    def get(self, wid: str) -> Optional[dict]:
+    def get(self, wid: str) -> dict | None:
         with self._lock:
             r = self._db.execute("SELECT * FROM watches WHERE id=?", (wid,)).fetchone()
         return dict(r) if r else None
 
-    def update(self, wid: str, **cols) -> Optional[dict]:
+    def update(self, wid: str, **cols) -> dict | None:
         if cols:
             with self._lock:
                 self._db.execute(f"UPDATE watches SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?",
@@ -437,7 +437,7 @@ class Store:
                 "SELECT * FROM watches WHERE status='active' AND next_at<=? ORDER BY next_at", (now,)).fetchall()
         return [dict(r) for r in rows]
 
-    def find_same(self, brain: str, url: str, cond: str, value: str) -> Optional[dict]:
+    def find_same(self, brain: str, url: str, cond: str, value: str) -> dict | None:
         with self._lock:
             r = self._db.execute(
                 "SELECT * FROM watches WHERE brain=? AND url=? AND cond=? AND value=? AND status<>'stopped'",
@@ -448,7 +448,7 @@ class Store:
 # ============================================================
 # Một lượt canh: thuần (không mạng), để test được
 # ============================================================
-def observe(w: dict, title: str, text: str, url: str = "") -> tuple[dict, Optional[dict]]:
+def observe(w: dict, title: str, text: str, url: str = "") -> tuple[dict, dict | None]:
     """So trang vừa tải với lần trước. Trả (cột cần ghi, tin báo hoặc None)."""
     url = url or w["url"]
     flat = " ".join(str(text or "").split())
@@ -505,7 +505,7 @@ def observe(w: dict, title: str, text: str, url: str = "") -> tuple[dict, Option
     return cols, alert
 
 
-def after_failure(w: dict, error: str) -> tuple[dict, Optional[dict]]:
+def after_failure(w: dict, error: str) -> tuple[dict, dict | None]:
     """Lỗi tải trang: giãn lần thử 2, 4, 8... tối đa 60 phút; lỗi 5 lần liền thì dừng, báo một lần.
 
     `fail_streak` chỉ tăng, không về 0: nó là số thứ tự của chuỗi lỗi, nằm trong khoá chống báo trùng,
@@ -526,7 +526,7 @@ def after_failure(w: dict, error: str) -> tuple[dict, Optional[dict]]:
     return cols, alert
 
 
-def after_signed_out(w: dict, login_name: str, error: str) -> tuple[dict, Optional[dict]]:
+def after_signed_out(w: dict, login_name: str, error: str) -> tuple[dict, dict | None]:
     """The stored sign-in no longer works (0.251.0). Retrying cannot fix that, so pause now and say
     once what to do, instead of backing off five times first."""
     streak = int(w.get("fail_streak") or 0) + 1
@@ -554,16 +554,16 @@ class WebWatchDeps:
     # async send(owner_chat, text, viec=..., web=..., brain=..., dedup=...) -> (ok, error)
     send: Callable
     # async summarize(prompt) -> str. None = không có model nền.
-    summarize: Optional[Callable] = None
+    summarize: Callable | None = None
     # () -> (có kênh ngoài, mô tả kênh còn thiếu)
-    channels: Optional[Callable[[], tuple]] = None
+    channels: Callable[[], tuple] | None = None
 
 
 class WebWatchFeature:
     def __init__(self, deps: WebWatchDeps):
         self.deps = deps
         self.store = Store(Path(deps.state_dir()) / "web_watch.sqlite3")
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._busy: set = set()
         self.router = self._make_router()
 
@@ -663,7 +663,7 @@ class WebWatchFeature:
             await asyncio.gather(*(self.check(w["id"]) for w in due))
         return len(due)
 
-    async def check(self, wid: str) -> Optional[dict]:
+    async def check(self, wid: str) -> dict | None:
         """Canh một mục ngay. Trả tin báo đã gửi (hoặc None)."""
         if wid in self._busy:
             return None
@@ -770,10 +770,10 @@ class WebWatchFeature:
         return router
 
 
-_CURRENT: Optional[WebWatchFeature] = None
+_CURRENT: WebWatchFeature | None = None
 
 
-def current() -> Optional[WebWatchFeature]:
+def current() -> WebWatchFeature | None:
     return _CURRENT
 
 

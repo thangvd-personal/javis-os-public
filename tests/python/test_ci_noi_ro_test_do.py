@@ -25,8 +25,9 @@ lý do ghi ngay trong đó.
 
 Test này ghim cả hai, vì cả hai đều là loại rất dễ bị lặng lẽ rút gọn lại lúc dọn code.
 """
-from _paths import ROOT  # noqa: E402,F401
 import re
+
+from _paths import ROOT
 
 CI = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 TESTS = ROOT / "tests" / "python"
@@ -85,14 +86,14 @@ _tong = re.search(r"\n  test:\n([\s\S]*?)(?=\n  [\w-]+:\n)", CI)
 _tong = _tong.group(1) if _tong else ""
 check("CANARY: job tổng hợp `test` còn tồn tại", bool(_tong))
 check("CANARY: job `test` phụ thuộc mọi nhóm test", "python" in _tong and "chung" in _tong, _tong[:80])
-check("CANARY: job `test` có `if: always()`", re.search(r"^\s*if: always\(\)\s*$", _tong, re.M) is not None)
+check("CANARY: job `test` có `if: always()`", re.search(r"^\s*if: always\(\)\s*$", _tong, re.MULTILINE) is not None)
 check("CANARY: job `test` chỉ xanh khi mọi job ra `success`",
       '"$KQ_PYTHON" = "success"' in _tong and '"$KQ_CHUNG" = "success"' in _tong and "exit 1" in _tong)
 
 # `do` là TỪ KHOÁ của bash. Đặt tên biến là `do` thì tuỳ chỗ mà shell hiểu khác nhau, và lỗi
 # kiểu đó chỉ lộ ra lúc CI chạy thật chứ không lộ lúc đọc file.
 check("CANARY: không dùng `do` làm tên biến (từ khoá của bash)",
-      not re.search(r"^\s*do=", CI, re.M))
+      not re.search(r"^\s*do=", CI, re.MULTILINE))
 
 check("lý do vì sao phải in ở cuối được ghi ngay trong file",
       "phần đuôi" in CI or "cắt" in CI)

@@ -49,7 +49,8 @@ import json
 import os
 import re
 import socket
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 ACTIONS_MAX = 10              # spec §8.5
@@ -81,10 +82,10 @@ class ActionError(ValueError):
 
 class Outcome:
     """One delivery attempt's result. A plain class, not a dataclass: it is built at every start (keep it light)."""
-    __slots__ = ("status", "detail", "receipt", "retry_after", "http_status", "maybe_acted")
+    __slots__ = ("detail", "http_status", "maybe_acted", "receipt", "retry_after", "status")
 
-    def __init__(self, status: str, detail: str = "", receipt: Optional[dict] = None, retry_after: float = 0.0,
-                 http_status: int = 0, maybe_acted: Optional[bool] = None):
+    def __init__(self, status: str, detail: str = "", receipt: dict | None = None, retry_after: float = 0.0,
+                 http_status: int = 0, maybe_acted: bool | None = None):
         self.status = status                 # one of STATES
         self.detail = detail                 # short, for the owner
         self.receipt = receipt if receipt is not None else {}
@@ -289,11 +290,11 @@ def _acyclic(actions: list) -> None:
         visit(n, [])
 
 
-def effective(actions: Optional[list]) -> list:
+def effective(actions: list | None) -> list:
     return list(actions) if actions else [{"id": "main", "kind": "ai"}]
 
 
-def view(actions: Optional[list]) -> list:
+def view(actions: list | None) -> list:
     """For the dashboard: header VALUES are never shown (they are often API keys)."""
     out = []
     for a in actions or []:
@@ -304,12 +305,12 @@ def view(actions: Optional[list]) -> list:
     return out
 
 
-def sealed_names(actions: Optional[list]) -> list:
+def sealed_names(actions: list | None) -> list:
     return [v["$secret"] for a in actions or [] for v in (a.get("headers") or {}).values()
             if isinstance(v, dict) and "$secret" in v]
 
 
-def same_target(a: Optional[dict], b: Optional[dict]) -> bool:
+def same_target(a: dict | None, b: dict | None) -> bool:
     """Do two versions of an action send to the same place? A stored secret may only follow the same target."""
     if not a or not b:
         return False
@@ -386,7 +387,7 @@ def _default_resolve(host: str) -> list:
     return [i[4][0] for i in socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)]
 
 
-async def check_address(url: str, allow_private: bool, resolve: Optional[Callable] = None) -> str:
+async def check_address(url: str, allow_private: bool, resolve: Callable | None = None) -> str:
     """'' if the address may be called, else why not. Every resolved address must be public (unless allowed)."""
     host = urlsplit(url).hostname or ""
     try:
@@ -410,7 +411,7 @@ class AddressRefused(Exception):
     pass
 
 
-def _refused(why: str) -> "Outcome":
+def _refused(why: str) -> Outcome:
     """A name that did not resolve is a passing fault (DNS outage) and nothing was sent: retry. A private, local or
     malformed address stays refused for good."""
     if why.startswith("name did not resolve"):
@@ -418,7 +419,7 @@ def _refused(why: str) -> "Outcome":
     return Outcome("failed", why, maybe_acted=False)
 
 
-def _pinned_backend(allow_private: bool, resolve: Optional[Callable]):
+def _pinned_backend(allow_private: bool, resolve: Callable | None):
     """An httpcore network backend that resolves the name itself, refuses a private address, and connects to the
     address it checked (TLS still verifies the certificate for the name: httpcore passes the host as SNI). A name
     that answers a public address to the check and a private one to the connection (DNS rebinding) gets nowhere."""
@@ -522,8 +523,8 @@ def _retry_after(resp) -> float:
     except ValueError:
         pass
     try:
-        from email.utils import parsedate_to_datetime
         import time as _t
+        from email.utils import parsedate_to_datetime
         return max(0.0, min(parsedate_to_datetime(v).timestamp() - _t.time(), 86400.0))
     except Exception:
         return 0.0
@@ -543,7 +544,7 @@ async def _send(cl, method: str, url: str, **kw):
         return resp.status_code, resp.headers, buf[:RESPONSE_READ_MAX].decode("utf-8", "replace")
 
 
-def _ambiguous(action: dict, detail: str, rc: Optional[dict] = None, code: int = 0) -> Outcome:
+def _ambiguous(action: dict, detail: str, rc: dict | None = None, code: int = 0) -> Outcome:
     """It may have been done. Sent again only when the owner declared the receiver idempotent or at-least-once."""
     return Outcome("retry" if retry_safe(action) else "unknown", detail, rc or {}, http_status=code, maybe_acted=True)
 
@@ -575,7 +576,7 @@ def plugin_busy(did: str) -> bool:
     return did in _INFLIGHT
 
 
-def plugin_slot_free(slug: str, found: Optional[dict]) -> bool:
+def plugin_slot_free(slug: str, found: dict | None) -> bool:
     """May a call of this plugin start now? Checked BEFORE the delivery is dispatched, so a full pool costs it no
     attempt (and no breaker failure): it simply waits for its turn."""
     if not found or inspect.iscoroutinefunction(found.get("handler")):
@@ -584,7 +585,7 @@ def plugin_slot_free(slug: str, found: Optional[dict]) -> bool:
         return _SLUG_INFLIGHT.get(slug, 0) < PLUGIN_PER_SLUG and sum(_SLUG_INFLIGHT.values()) < PLUGIN_THREADS
 
 
-def plugin_reserve(slug: str, found: Optional[dict]) -> Optional[bool]:
+def plugin_reserve(slug: str, found: dict | None) -> bool | None:
     """Take one of this plugin's call slots right before its delivery is dispatched, so the slot check and the call
     are one step: two deliveries that both saw a free slot can no longer both be dispatched with one of them then
     refused (an attempt spent with nothing sent). None = nothing to reserve (an async handler, no plugin); True =
@@ -615,7 +616,7 @@ def _call_release(h, delivery, ctx, did, slug=""):
         _PLUGIN_SLOTS.release()
 
 
-def default_transport(allow_private: bool = False, resolve: Optional[Callable] = None):
+def default_transport(allow_private: bool = False, resolve: Callable | None = None):
     import httpx
     if os.environ.get("JAVIS_WH_NO_NETWORK") == "1":
         def refuse(request):
@@ -773,7 +774,7 @@ def envelope(ctx: dict, level: str) -> dict:
             "business_key": ctx.get("business_key") or "", "level": level}
 
 
-def plugin_precheck(action: dict, found: Optional[dict], level: str, ctx: dict) -> Optional[Outcome]:
+def plugin_precheck(action: dict, found: dict | None, level: str, ctx: dict) -> Outcome | None:
     """Before dispatch: an Outcome that closes the delivery without calling the plugin, or None to call it."""
     if not found:
         return Outcome("blocked", f"plugin handler {action['plugin']}/{action['handler']} is not installed or is off",
@@ -802,7 +803,7 @@ def plugin_precheck(action: dict, found: Optional[dict], level: str, ctx: dict) 
     return None
 
 
-async def run_plugin(action: dict, ctx: dict, found: Optional[dict], level: str, reserved: bool = False) -> Outcome:
+async def run_plugin(action: dict, ctx: dict, found: dict | None, level: str, reserved: bool = False) -> Outcome:
     """`found` = {"handler", "ctx", "min_mode", "schema", "ai", "idempotent"} of an ENABLED plugin visible to the hook's
     brain, or None. handler(envelope, plugin_ctx) -> {"status": completed | accepted | retryable_error |
     permanent_error | unknown | waiting_approval, "ref"?: job id, "detail"?: str}. `reserved` = the caller holds a
@@ -841,7 +842,7 @@ async def run_plugin(action: dict, ctx: dict, found: Optional[dict], level: str,
             res = await asyncio.wait_for(asyncio.shield(fut), PLUGIN_TIMEOUT_S)
             if inspect.isawaitable(res):
                 res = await asyncio.wait_for(res, PLUGIN_TIMEOUT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return Outcome("unknown", f"plugin did not answer in {int(PLUGIN_TIMEOUT_S)} s: it may have acted",
                        maybe_acted=True)
     except Exception as e:
@@ -869,8 +870,8 @@ def tool_args(action: dict, ctx: dict) -> dict:
     return {k: webhook_rules.render_value(v, tctx) for k, v in (action.get("args") or {}).items()}
 
 
-async def run_tool(action: dict, ctx: dict, call_tool: Optional[Callable], level: str,
-                   args: Optional[dict] = None) -> Outcome:
+async def run_tool(action: dict, ctx: dict, call_tool: Callable | None, level: str,
+                   args: dict | None = None) -> Outcome:
     """A tool through the hub dispatcher, at the hook's CURRENT level: the hub applies the same permission rules as
     for any background run (a `danger` tool needs full, the connection's own limit applies too)."""
     if not call_tool:
@@ -879,7 +880,7 @@ async def run_tool(action: dict, ctx: dict, call_tool: Optional[Callable], level
         args = tool_args(action, ctx)
     try:
         res = await asyncio.wait_for(call_tool(ctx.get("brain", ""), level, action["tool"], args), TOOL_TIMEOUT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return _ambiguous(action, f"tool did not answer in {int(TOOL_TIMEOUT_S)} s: it may have acted")
     except Exception as e:
         return _ambiguous(action, f"tool call broke ({type(e).__name__}): it may have acted")

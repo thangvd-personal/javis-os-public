@@ -16,12 +16,13 @@ Chỉ --update khi thật sự thêm/xoá/đổi tên một endpoint, và commit
 
 KHÔNG mạng. Dùng JAVIS_STATE_DIR tạm nên không đụng dữ liệu thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-routetest-"))
 
@@ -30,7 +31,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 SNAPSHOT = Path(__file__).with_name("route_table.json")
 

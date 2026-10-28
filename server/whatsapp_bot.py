@@ -38,7 +38,6 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
 import localefmt
 import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
@@ -79,7 +78,7 @@ def split_credentials(raw) -> dict:
 
 def md_to_whatsapp(text: str) -> str:
     """Markdown -> WhatsApp formatting. Code blocks are left untouched."""
-    parts = re.split(r"(```.*?```)", str(text or ""), flags=re.S)
+    parts = re.split(r"(```.*?```)", str(text or ""), flags=re.DOTALL)
     out = []
     for i, p in enumerate(parts):
         if i % 2 == 1:
@@ -87,7 +86,7 @@ def md_to_whatsapp(text: str) -> str:
             continue
         p = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1", p)
         p = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"\1 (\2)", p)
-        p = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"*\1*", p, flags=re.M)
+        p = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"*\1*", p, flags=re.MULTILINE)
         p = re.sub(r"\*\*(.+?)\*\*", r"*\1*", p)
         p = re.sub(r"__(.+?)__", r"*\1*", p)
         p = re.sub(r"~~(.+?)~~", r"~\1~", p)

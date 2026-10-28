@@ -12,12 +12,13 @@ bot would have answered still landing in the inbox for whoever is on duty in the
      group or person still reaches the approval queue with its own code.
   4. THE INBOX. A message turned away at night is still written to the inbox; the try panel reports the code.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from datetime import datetime
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-giotruc-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -26,10 +27,10 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import localefmt  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import conversations
+import localefmt
 
 _fails = []
 

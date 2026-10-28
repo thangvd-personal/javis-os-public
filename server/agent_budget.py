@@ -17,8 +17,9 @@ mục 3; tài liệu docs/dev/team-chat-t3-learn.md.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from contextlib import closing
-from typing import Any, Callable, Optional
+from typing import Any
 
 DEFAULT_DAILY = 6
 RESERVED = 2
@@ -40,7 +41,7 @@ _READY: set = set()
 _STORE: list = [None]
 
 
-def wire(store_fn: Optional[Callable[[], Any]]) -> None:
+def wire(store_fn: Callable[[], Any] | None) -> None:
     """`main.py` nối kho resonance mặc định (hàm trả kho hay None) cho lời gọi `try_spend(agent_key, purpose)` của P và J."""
     _STORE[0] = store_fn
 
@@ -73,7 +74,7 @@ def day_tag(at: float) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(at))
 
 
-def get_cap(store, agent_key: str) -> Optional[int]:
+def get_cap(store, agent_key: str) -> int | None:
     """Trần ngày của agent: số, hay None khi chủ chọn "Không giới hạn". Chưa đặt: mặc định 6."""
     ensure(store)
     with closing(store._conn()) as c:
@@ -85,7 +86,7 @@ def get_cap(store, agent_key: str) -> Optional[int]:
     return int(r["daily_calls"]) if r["daily_calls"] is not None else DEFAULT_DAILY
 
 
-def set_cap(store, agent_key: str, value: Any, by: str = "owner", at: Optional[float] = None) -> Optional[int]:
+def set_cap(store, agent_key: str, value: Any, by: str = "owner", at: float | None = None) -> int | None:
     """Chủ đặt trần ngày: số 0..200, hay "unlimited"/None là Không giới hạn. Người gọi khác chủ bị từ chối
     (PermissionError): học, phản hồi, trưởng nhóm hay Toàn quyền không nâng được trần này."""
     if str(by) != "owner":
@@ -115,7 +116,7 @@ def _counted_where() -> str:
             f"(purpose='judge_batch' AND context_ref LIKE 'dm:%'))")
 
 
-def usage(store, agent_key: str, at: Optional[float] = None) -> dict:
+def usage(store, agent_key: str, at: float | None = None) -> dict:
     """Hạn mức hôm nay: {cap, used, reserved_used, left, by_purpose, day_start}. `cap` None là Không giới hạn."""
     t = time.time() if at is None else float(at)
     ensure(store)
@@ -146,8 +147,8 @@ def _purpose_of(purpose: str) -> str:
     return p if p in PRIORITY else "proactive"
 
 
-def try_spend(agent_key: str, purpose: str, at: Optional[float] = None, *, store: Any = None,
-              reason_ref: Optional[str] = None, units: int = 1) -> tuple:
+def try_spend(agent_key: str, purpose: str, at: float | None = None, *, store: Any = None,
+              reason_ref: str | None = None, units: int = 1) -> tuple:
     """Có được chạy thêm MỘT lượt tự phát `purpose` hôm nay không: (True, "") hay (False, lý do). Gọi TRƯỚC khi giữ chỗ sổ
     lượt. `reason_ref` (`wr:<id>`): lý do đã từng chờ hạn mức thì qua ngày chỉ được một lượt mỗi ngày. `units`: số lượt
     cần còn trống (lượt xem xét reaction ở chat riêng cần 2: lượt xem xét và lượt phán xử tin mới, review T3 L P2-1). Chưa nối kho hay
@@ -185,7 +186,7 @@ def try_spend(agent_key: str, purpose: str, at: Optional[float] = None, *, store
     return False, "agent_daily_calls"
 
 
-def note_wait(store, agent_key: str, reason_ref: str, at: Optional[float] = None) -> None:
+def note_wait(store, agent_key: str, reason_ref: str, at: float | None = None) -> None:
     """Ghi lý do đã phải chờ hạn mức hôm nay (để qua ngày không bù hàng loạt). Dọn mốc cũ hơn 7 ngày."""
     t = time.time() if at is None else float(at)
     ensure(store)
@@ -200,10 +201,10 @@ def sort_by_priority(reasons: list) -> list:
     return sorted(reasons or [], key=lambda r: (PRIORITY.get(str(r.get("code") or ""), 9), int(r.get("id") or 0)))
 
 
-def limits_row(store: Any = None, agent_key: Optional[str] = None) -> dict:
+def limits_row(store: Any = None, agent_key: str | None = None) -> dict:
     """Dòng của bảng giới hạn T1 (nhóm "owner"): mặc định 6, có lựa chọn Không giới hạn; chủ chỉnh từng trợ lý ở bảng
     Bài học và hạn mức."""
-    value: Optional[int] = DEFAULT_DAILY
+    value: int | None = DEFAULT_DAILY
     if store is not None and agent_key:
         try:
             value = get_cap(store, agent_key)

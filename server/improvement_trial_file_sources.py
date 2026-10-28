@@ -18,7 +18,8 @@ import improvement_cases as IC
 import improvement_store as IM
 from evidence_store import redact
 from improvement_blobs import MAX_ASSET_BYTES
-from improvement_trial_selection import _identity as _read_identity, _read_stable
+from improvement_trial_selection import _identity as _read_identity
+from improvement_trial_selection import _read_stable
 from improvement_trial_sources import validate_inventory
 from resonance_store import Principal
 

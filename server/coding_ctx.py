@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import coding_store
 
@@ -79,7 +78,7 @@ class CodingToolContext:
         return self.permission_mode in (AUTO, FULL)
 
     @classmethod
-    def from_session(cls, session_id: str) -> "CodingToolContext":
+    def from_session(cls, session_id: str) -> CodingToolContext:
         """Dựng từ kho `coding_store`. Không phải phiên coding thì trả bản rỗng.
 
         Nuốt mọi lỗi của kho: một phiên chat không được chết chỉ vì sổ repo hỏng.
@@ -160,7 +159,7 @@ def for_session(session_id: str) -> CodingToolContext:
     return CodingToolContext.from_session(session_id)
 
 
-def workspace_root_cua_phien(session_id: str) -> Optional[str]:
+def workspace_root_cua_phien(session_id: str) -> str | None:
     """Gốc thư mục làm việc CHÍNH của phiên, hoặc None. Chỗ chỉ cần mỗi một đường dẫn."""
     ctx = CodingToolContext.from_session(session_id)
     return ctx.workspace_root or None

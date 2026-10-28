@@ -3,14 +3,15 @@
 Files land in the bot brain's inbox/khach like every other bot channel, ride along with the
 private-chat batch (zc.gop_tin, 0.128.0), and a downloaded file is removed when its turn is dropped.
 """
-from _paths import ROOT, SERVER
 import asyncio
 import os
 import tempfile
+
 os.environ['JAVIS_STATE_DIR'] = tempfile.mkdtemp(prefix='zalo-file-state-')
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
 import httpx
 import zalo_attachments as za
 import zalo_personal_channel as zc
@@ -230,7 +231,8 @@ class IntakeTests(unittest.IsolatedAsyncioTestCase):
         fetch.assert_awaited_once();answer.assert_awaited_once()
 
     async def test_real_audience_and_group_precheck(self):
-        import chatbot_runtime, chatbot_store
+        import chatbot_runtime
+        import chatbot_store
         for cfg,meta in [({'audience':'chon','people':['owner']},{'chat_type':'private','chat_id':'stranger'}),
                          ({'groups':['allowed'],'reply_when':'always'},{'chat_type':'group','chat_id':'blocked','user_id':'u'})]:
             cfg.update(id='test',muc_quyen='auto')

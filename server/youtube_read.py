@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """youtube_read.py - Đọc NỘI DUNG một video YouTube (phụ đề/transcript) để Javis tóm tắt được.
 
 Vì sao có file này: người dùng dán link YouTube vào khung chat và mong Javis tóm tắt. Trước đây
@@ -38,10 +37,9 @@ import os
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
-
 from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import httpx
 
@@ -111,14 +109,14 @@ _UA_MWEB = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/
 #
 # Cả điểm mạnh của yt-dlp là nó CẬP NHẬT danh sách đó theo từng đợt YouTube siết. Ghim cứng
 # là tự tay vứt đúng cái mình đi mua. Để mặc định, nó tự chọn (2026: visionos đứng đầu).
-_YTDLP_CLIENTS: List[str] = []
+_YTDLP_CLIENTS: list[str] = []
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 # Bắt link YouTube nằm LẪN trong câu văn ("tóm tắt hộ mình video này https://... nhé").
 _URL_RE = re.compile(
     r"(?:https?://)?(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)/[^\s<>\"'\]\)]*",
-    re.I)
-_XML_TEXT_RE = re.compile(r'<text\b[^>]*\bstart="([\d.]+)"[^>]*>(.*?)</text>', re.S)
+    re.IGNORECASE)
+_XML_TEXT_RE = re.compile(r'<text\b[^>]*\bstart="([\d.]+)"[^>]*>(.*?)</text>', re.DOTALL)
 _TAG_RE = re.compile(r"<[^>]+>")
 # `ytInitialPlayerResponse = {...};` trong HTML trang watch. Không dùng regex để cân dấu ngoặc
 # (regex không làm được việc đó); chỉ bắt điểm bắt đầu rồi quét thủ công ở _cat_json.
@@ -128,7 +126,7 @@ _PLAYER_MARKERS = ("ytInitialPlayerResponse = ", 'ytInitialPlayerResponse=')
 # ============================================================
 # Tách mã video khỏi mọi kiểu link
 # ============================================================
-def parse_video_id(raw: Any) -> Optional[str]:
+def parse_video_id(raw: Any) -> str | None:
     """Mã video 11 ký tự, lấy từ bất kỳ dạng link nào (hoặc chính mã video).
 
     Nuốt được: watch?v=, youtu.be/, /shorts/, /live/, /embed/, /v/, m. và music.,
@@ -237,17 +235,17 @@ _CLIENT_SPECS = [
 _URL_NHUNG = "https://www.reddit.com/"
 
 
-def _clients(visitor: str = "") -> List[Tuple[str, dict, dict]]:
+def _clients(visitor: str = "") -> list[tuple[str, dict, dict]]:
     """(tên, payload, headers) của từng client InnerTube, xếp theo thứ tự đáng thử."""
-    ra: List[Tuple[str, dict, dict]] = []
+    ra: list[tuple[str, dict, dict]] = []
     for ten, ctx_goc, cnum, nhung in _CLIENT_SPECS:
         # hl/timeZone/utcOffsetMinutes: y hệt _extract_context của yt-dlp. Ghim UTC để mọi
         # request giống nhau bất kể máy chủ đặt múi giờ nào. KHÔNG gửi `gl`, cũng theo yt-dlp.
-        ctx: Dict[str, Any] = dict(ctx_goc)
+        ctx: dict[str, Any] = dict(ctx_goc)
         ctx.update({"hl": HL_HOI, "timeZone": "UTC", "utcOffsetMinutes": 0})
         if visitor:
             ctx["visitorData"] = visitor
-        payload: Dict[str, Any] = {"videoId": "", "contentCheckOk": True, "racyCheckOk": True,
+        payload: dict[str, Any] = {"videoId": "", "contentCheckOk": True, "racyCheckOk": True,
                                    "context": {"client": ctx}}
         if nhung:
             payload["context"]["thirdParty"] = {"embedUrl": _URL_NHUNG}
@@ -278,7 +276,7 @@ _VISITOR_TTL = 6 * 3600
 _RE_VISITOR = re.compile(r'"visitorData"\s*:\s*"([^"]{10,})"')
 
 
-async def _visitor_data(client: httpx.AsyncClient, notes: List[str]) -> str:
+async def _visitor_data(client: httpx.AsyncClient, notes: list[str]) -> str:
     """visitorData dùng chung, lấy từ trang chủ YouTube. Hỏng thì trả "" và đi tiếp."""
     if _VISITOR["gia_tri"] and time.monotonic() < _VISITOR["han"]:
         return str(_VISITOR["gia_tri"])
@@ -298,7 +296,7 @@ async def _visitor_data(client: httpx.AsyncClient, notes: List[str]) -> str:
     return ""
 
 
-def _cat_json(txt: str, start: int) -> Optional[dict]:
+def _cat_json(txt: str, start: int) -> dict | None:
     """Cắt đúng một object JSON bắt đầu tại `start` bằng cách đếm ngoặc, có nhớ chuỗi/escape."""
     depth, in_str, esc = 0, False, False
     for i in range(start, len(txt)):
@@ -325,7 +323,7 @@ def _cat_json(txt: str, start: int) -> Optional[dict]:
     return None
 
 
-def _tracks_of(player: Any) -> List[dict]:
+def _tracks_of(player: Any) -> list[dict]:
     """Danh sách đường phụ đề trong một playerResponse (rỗng nếu video không có phụ đề)."""
     try:
         tr = player["captions"]["playerCaptionsTracklistRenderer"]["captionTracks"]
@@ -334,7 +332,7 @@ def _tracks_of(player: Any) -> List[dict]:
     return [t for t in tr if isinstance(t, dict) and t.get("baseUrl")]
 
 
-def _dich_duoc(player: Any) -> List[str]:
+def _dich_duoc(player: Any) -> list[str]:
     """Các thứ tiếng YouTube nhận dịch phụ đề sang (tham số tlang)."""
     try:
         ds = player["captions"]["playerCaptionsTracklistRenderer"]["translationLanguages"]
@@ -344,10 +342,10 @@ def _dich_duoc(player: Any) -> List[str]:
 
 
 async def _player_response(client: httpx.AsyncClient, vid: str,
-                           notes: List[str], chan_doan: List[Tuple[str, str]],
+                           notes: list[str], chan_doan: list[tuple[str, str]],
                            han: float = 0.0,
-                           thong_ke: Optional[Dict[str, int]] = None
-                           ) -> Tuple[Optional[dict], str]:
+                           thong_ke: dict[str, int] | None = None
+                           ) -> tuple[dict | None, str]:
     """(playerResponse DÙNG ĐƯỢC, tên nguồn), hoặc (None, "") khi mọi đường đều thua.
 
     ĐIỂM QUAN TRỌNG, và cũng là chỗ bản đầu tiên sai: một client trả về "phải đăng nhập"
@@ -358,7 +356,7 @@ async def _player_response(client: httpx.AsyncClient, vid: str,
     Chỉ nhận một playerResponse khi nó VỪA xem được VỪA có phụ đề. Mọi lý do từ chối được
     cất vào `chan_doan` để nếu cuối cùng không đường nào chạy thì còn cái mà báo cho đúng.
     """
-    du_phong: Tuple[Optional[dict], str] = (None, "")
+    du_phong: tuple[dict | None, str] = (None, "")
     tk = thong_ke if thong_ke is not None else {}
     tk.setdefault("da_ket_noi", 0)
     visitor = await _visitor_data(client, notes)
@@ -390,7 +388,7 @@ async def _player_response(client: httpx.AsyncClient, vid: str,
                 # Đây là bằng chứng đắt nhất mà người sửa lỗi (vốn không mở được YouTube) có
                 # trong tay. Bản trước chỉ ghi mỗi mã phân loại cho ca `robot`, tức vứt đúng
                 # chuỗi đã gây ra cả sự cố 22/08.
-                tt_tho = str(((data.get("playabilityStatus") or {}).get("status") or "?"))
+                tt_tho = str((data.get("playabilityStatus") or {}).get("status") or "?")
                 ly_tho = str((data.get("playabilityStatus") or {}).get("reason") or "")
                 notes.append(f"innertube/{ten}: status={tt_tho} -> {ma}"
                              + (f' | reason="{ly_tho}"' if ly_tho else ""))
@@ -517,7 +515,7 @@ class _LangCam:
     client ghim cứng đã chết. Nay warning được gom vào một list để `_ytdlp` đưa lên `notes`.
     """
 
-    def __init__(self, thu: Optional[List[str]] = None):
+    def __init__(self, thu: list[str] | None = None):
         self.thu = thu if thu is not None else []
 
     def debug(self, msg): pass
@@ -539,7 +537,7 @@ def _tu_ytdlp_info(info: Any) -> dict:
     lạ, thiếu url) và là chỗ đáng test nhất, mà test thì không được chạm mạng.
     """
     info = info if isinstance(info, dict) else {}
-    tracks: List[dict] = []
+    tracks: list[dict] = []
     for kho, la_asr in ((info.get("subtitles") or {}, False),
                         (info.get("automatic_captions") or {}, True)):
         for ma, ds in (kho or {}).items():
@@ -579,7 +577,7 @@ def _tu_ytdlp_info(info: Any) -> dict:
     }
 
 
-def _ytdlp_sync(url: str, canh_bao: Optional[List[str]] = None) -> dict:
+def _ytdlp_sync(url: str, canh_bao: list[str] | None = None) -> dict:
     """CHẠY CHẶN (gọi qua asyncio.to_thread). Trả {tracks, meta, translations}, hoặc ném lỗi."""
     import yt_dlp
 
@@ -614,18 +612,18 @@ def _ytdlp_sync(url: str, canh_bao: Optional[List[str]] = None) -> dict:
         return _tu_ytdlp_info(ydl.extract_info(url, download=False))
 
 
-async def _ytdlp(url: str, notes: List[str], timeout_s: float = 75.0) -> Optional[dict]:
+async def _ytdlp(url: str, notes: list[str], timeout_s: float = 75.0) -> dict | None:
     """Nhánh yt-dlp, đã bọc kín: thiếu thư viện hay lỗi gì cũng chỉ ghi note rồi trả None."""
     try:
         import yt_dlp  # noqa: F401
     except Exception:
         notes.append("yt-dlp: chưa cài trên máy này (chạy lại pip install -r requirements.txt)")
         return None
-    canh_bao: List[str] = []
+    canh_bao: list[str] = []
     try:
         kq = await asyncio.wait_for(asyncio.to_thread(_ytdlp_sync, url, canh_bao),
                                     timeout=timeout_s)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         notes.extend(canh_bao)
         notes.append(f"yt-dlp: quá {int(timeout_s)}s không xong")
         return None
@@ -652,7 +650,7 @@ def _is_asr(track: dict) -> bool:
         str(track.get("vssId") or "").startswith("a.")
 
 
-def pick_track(tracks: List[dict], prefer: Optional[str] = None) -> Optional[dict]:
+def pick_track(tracks: list[dict], prefer: str | None = None) -> dict | None:
     """Chọn một đường phụ đề: ngôn ngữ người dùng xin > vi > en > bất kỳ.
 
     Trong cùng một ngôn ngữ luôn ưu tiên bản NGƯỜI làm trước bản máy nghe: bản người có dấu
@@ -665,7 +663,7 @@ def pick_track(tracks: List[dict], prefer: Optional[str] = None) -> Optional[dic
     sach = [t for t in tracks if not _can_pot(str(t.get("baseUrl") or ""))]
     if sach:
         tracks = sach
-    uu: List[str] = []
+    uu: list[str] = []
     if prefer:
         uu.append(str(prefer).split("-")[0].lower())
     for m in ("vi", "en"):
@@ -694,7 +692,7 @@ def track_label(track: dict) -> str:
     return f"{nhan or ma} ({ma}, {kieu})"
 
 
-def can_translate(codes: List[str], lang: str) -> bool:
+def can_translate(codes: list[str], lang: str) -> bool:
     """YouTube có nhận dịch phụ đề sang `lang` không (tham số tlang)."""
     ma = str(lang or "").split("-")[0].lower()
     return any(str(c or "").split("-")[0].lower() == ma for c in (codes or []))
@@ -703,9 +701,9 @@ def can_translate(codes: List[str], lang: str) -> bool:
 # ============================================================
 # Đọc và ghép lời thoại
 # ============================================================
-def parse_json3(data: Any) -> List[Tuple[float, str]]:
+def parse_json3(data: Any) -> list[tuple[float, str]]:
     """[(giây, câu)] từ định dạng json3 của timedtext."""
-    out: List[Tuple[float, str]] = []
+    out: list[tuple[float, str]] = []
     if not isinstance(data, dict):
         return out
     for ev in (data.get("events") or []):
@@ -726,13 +724,13 @@ def parse_json3(data: Any) -> List[Tuple[float, str]]:
     return out
 
 
-def parse_xml(txt: str) -> List[Tuple[float, str]]:
+def parse_xml(txt: str) -> list[tuple[float, str]]:
     """[(giây, câu)] từ định dạng XML cũ của timedtext.
 
     Phải unescape HAI lần: YouTube escape nội dung rồi mới nhét vào XML, nên dấu nháy đơn về
     tới đây ở dạng `&amp;#39;`. Một lần chỉ ra `&#39;`, người đọc vẫn thấy rác.
     """
-    out: List[Tuple[float, str]] = []
+    out: list[tuple[float, str]] = []
     for m in _XML_TEXT_RE.finditer(txt or ""):
         try:
             t = float(m.group(1))
@@ -752,23 +750,23 @@ def _hms(giay: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def format_transcript(lines: List[Tuple[float, str]], timestamps: bool = True,
+def format_transcript(lines: list[tuple[float, str]], timestamps: bool = True,
                       start_s: float = 0.0, max_chars: int = MAX_CHARS_DEFAULT) -> dict:
     """Gom [(giây, câu)] thành văn bản có mốc thời gian, cắt theo trần ký tự.
 
     Trả {text, truncated, next_start_s, last_s}. `next_start_s` là chỗ để lần gọi sau đọc
     tiếp (tham số start_min), nhờ vậy video dài đọc được thành nhiều khúc mà không lặp.
     """
-    dung: List[str] = []
+    dung: list[str] = []
     tong = 0
     truncated = False
     next_start = 0.0
     last_s = 0.0
-    khoi_t: Optional[float] = None
-    khoi: List[str] = []
+    khoi_t: float | None = None
+    khoi: list[str] = []
     truoc = ""
 
-    def xa() -> Optional[str]:
+    def xa() -> str | None:
         if not khoi:
             return None
         than = " ".join(khoi)
@@ -853,7 +851,7 @@ _DAU_TUOI = ("confirm your age", "age-restricted", "inappropriate for some users
 _DAU_RIENG_TU = ("private video", "is private", "riêng tư")
 
 
-def _khong_xem_duoc(player: dict) -> Tuple[str, str]:
+def _khong_xem_duoc(player: dict) -> tuple[str, str]:
     """(mã lý do, câu tiếng Việt). ("", "") khi video xem được bình thường.
 
     Mã: robot | tuoi | rieng_tu | dang_nhap | da_go | khac.
@@ -907,7 +905,7 @@ def _khong_xem_duoc(player: dict) -> Tuple[str, str]:
 _UU_TIEN_LY_DO = ["da_go", "rieng_tu", "tuoi", "khac", "robot", "dang_nhap"]
 
 
-def _ly_do_chinh(chan_doan: List[Tuple[str, str]]) -> Tuple[str, str]:
+def _ly_do_chinh(chan_doan: list[tuple[str, str]]) -> tuple[str, str]:
     for ma in _UU_TIEN_LY_DO:
         for m, ly_do in chan_doan:
             if m == ma:
@@ -916,7 +914,7 @@ def _ly_do_chinh(chan_doan: List[Tuple[str, str]]) -> Tuple[str, str]:
 
 
 async def _tai_loi_thoai(client: httpx.AsyncClient, base: str, tlang: str, hl: str,
-                         notes: List[str], ten_client: str = "") -> List[Tuple[float, str]]:
+                         notes: list[str], ten_client: str = "") -> list[tuple[float, str]]:
     """Tải một đường phụ đề: thử json3 trước, hỏng thì lui về XML cũ."""
     if _can_pot(base):
         notes.append("timedtext: đường phụ đề này bị YouTube bắt token chứng thực (exp=xpe/xpv)")
@@ -939,10 +937,10 @@ async def _tai_loi_thoai(client: httpx.AsyncClient, base: str, tlang: str, hl: s
     return []
 
 
-async def read(url: str, lang: Optional[str] = None, timestamps: bool = True,
+async def read(url: str, lang: str | None = None, timestamps: bool = True,
                start_min: float = 0.0, max_chars: int = MAX_CHARS_DEFAULT,
                timeout_s: float = 25.0, cho_phep_ytdlp: bool = True,
-               client: Optional[httpx.AsyncClient] = None) -> Dict[str, Any]:
+               client: httpx.AsyncClient | None = None) -> dict[str, Any]:
     """Đọc phụ đề một video YouTube. Không ném lỗi ra ngoài - luôn trả dict có `ok` và `code`.
 
     Thứ tự các đường, nhanh trước chậm sau: sáu client InnerTube -> cào trang watch -> yt-dlp.
@@ -969,18 +967,18 @@ async def read(url: str, lang: Optional[str] = None, timestamps: bool = True,
     # `hl` ở đây CHỈ dùng cho Accept-Language lúc tải phụ đề. Câu hỏi gửi InnerTube luôn
     # bằng HL_HOI (tiếng Anh) để chuỗi lý do ổn định - xem ghi chú ở HL_HOI.
     hl = (str(lang).split("-")[0].lower() if lang else _ngon_ngu_ui()) or "vi"
-    notes: List[str] = []
-    chan_doan: List[Tuple[str, str]] = []
+    notes: list[str] = []
+    chan_doan: list[tuple[str, str]] = []
     canonical = f"https://www.youtube.com/watch?v={vid}"
     han = time.monotonic() + TONG_TIMEOUT_S
     tu_tao = client is None
     if tu_tao:
         client = httpx.AsyncClient(timeout=httpx.Timeout(timeout_s, connect=10.0),
                                    follow_redirects=True, proxy=_proxy() or None)
-    goc: Dict[str, Any] = {"ok": False, "code": "fetch_failed", "video_id": vid,
+    goc: dict[str, Any] = {"ok": False, "code": "fetch_failed", "video_id": vid,
                            "url": canonical, "notes": notes}
     try:
-        thong_ke: Dict[str, int] = {}
+        thong_ke: dict[str, int] = {}
         player, nguon = await _player_response(client, vid, notes, chan_doan, han, thong_ke)
         goc["da_ket_noi"] = thong_ke.get("da_ket_noi", 0)
         tracks = _tracks_of(player) if player else []
@@ -1115,7 +1113,7 @@ async def read(url: str, lang: Optional[str] = None, timestamps: bool = True,
                 pass
 
 
-def _cau_ytdlp(res: Dict[str, Any]) -> str:
+def _cau_ytdlp(res: dict[str, Any]) -> str:
     """Câu khuyên khớp với việc quân dự bị yt-dlp THẬT SỰ đã chạy hay chưa.
 
     Bản trước gắn cứng câu "đã thử đủ sáu kiểu trình phát lẫn yt-dlp", và câu đó SAI trong ba
@@ -1137,11 +1135,11 @@ def _cau_ytdlp(res: Dict[str, Any]) -> str:
     return "Thử lại sau thường là được, hoặc dán thẳng bản chép lời vào chat."
 
 
-def render(res: Dict[str, Any]) -> str:
+def render(res: dict[str, Any]) -> str:
     """Biến kết quả read() thành văn bản cho engine đọc. Thất bại cũng phải nói rõ vì sao."""
     tieu_de = str(res.get("title") or "")
     kenh = str(res.get("author") or "")
-    dau: List[str] = []
+    dau: list[str] = []
     if tieu_de:
         dau.append(f"Tiêu đề: {tieu_de}")
     if kenh:
@@ -1225,7 +1223,7 @@ async def _thu_mot_client(client: httpx.AsyncClient, vid: str, ten: str, payload
                           headers: dict) -> dict:
     """Thử một client, trả về dữ kiện thô để in ra. Không ném lỗi."""
     t0 = time.monotonic()
-    kq: Dict[str, Any] = {"ten": ten, "ms": 0, "http": 0, "status": "", "reason": "",
+    kq: dict[str, Any] = {"ten": ten, "ms": 0, "http": 0, "status": "", "reason": "",
                           "tracks": 0, "phan_loai": "", "loi": "", "data": None}
     try:
         r = await client.post(f"{INNERTUBE_URL}?prettyPrint=false", json=payload, headers=headers)
@@ -1244,14 +1242,14 @@ async def _thu_mot_client(client: httpx.AsyncClient, vid: str, ten: str, payload
     return kq
 
 
-async def tu_kiem(url: str, client: Optional[httpx.AsyncClient] = None,
+async def tu_kiem(url: str, client: httpx.AsyncClient | None = None,
                   in_dan: bool = False) -> str:
     """Thử TỪNG đường một rồi in kết quả từng đường, không dừng ở đường đầu tiên hỏng.
 
     `client` chỉ để test bơm httpx.MockTransport vào; chạy thật thì để None.
     `in_dan` = in ngay từng dòng khi chạy từ dòng lệnh, để treo giữa chừng vẫn còn bằng chứng.
     """
-    d: List[str] = []
+    d: list[str] = []
 
     def p(s: str = "") -> None:
         d.append(s)
@@ -1260,10 +1258,10 @@ async def tu_kiem(url: str, client: Optional[httpx.AsyncClient] = None,
 
     han = time.monotonic() + TU_KIEM_TIMEOUT_S
     vid = parse_video_id(url)
-    nguon_track: List[dict] = []
+    nguon_track: list[dict] = []
     ket = "KHONG_RO"
     da_ket_noi = 0
-    doi_chung_ok: Optional[bool] = None
+    doi_chung_ok: bool | None = None
 
     p("=" * 72)
     p("JAVIS - TU KIEM DOC PHU DE YOUTUBE")
@@ -1354,7 +1352,7 @@ async def tu_kiem(url: str, client: Optional[httpx.AsyncClient] = None,
             p("  (bo qua: het thoi gian cho phep)")
             yt = None
         else:
-            ghi_chu: List[str] = []
+            ghi_chu: list[str] = []
             t0 = time.monotonic()
             yt = await _ytdlp(f"https://www.youtube.com/watch?v={vid}", ghi_chu,
                               timeout_s=max(10.0, min(60.0, han - time.monotonic())))
@@ -1375,7 +1373,7 @@ async def tu_kiem(url: str, client: Optional[httpx.AsyncClient] = None,
         if not tr:
             p("  Khong co duong phu de nao de thu.")
         else:
-            ghi2: List[str] = []
+            ghi2: list[str] = []
             lines = await _tai_loi_thoai(client, _bo_fmt(str(tr.get("baseUrl") or "")),
                                          "", HL_HOI, ghi2)
             p(f"  track {track_label(tr)} -> {len(lines)} dong"

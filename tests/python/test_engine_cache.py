@@ -8,14 +8,16 @@ Không cần API key, không chạm mạng - chỉ test logic đánh dấu cache
 - _or_mark_system: đánh dấu system OpenRouter (model Claude), không mutate or_messages.
 - _is_claude_model: nhận diện model họ Claude.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import sys
-import os
 
-
-from engine import (_anthropic_mark_last, _apply_anthropic_cache,   # noqa: E402
-                    _is_claude_model, _or_mark_system)
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+from engine import (
+    _anthropic_mark_last,
+    _apply_anthropic_cache,
+    _is_claude_model,
+    _or_mark_system,
+)
 
 _fails = []
 

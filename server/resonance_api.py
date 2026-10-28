@@ -16,16 +16,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
+from typing import Any
 
 import localefmt
 import resonance as R
 import resonance_store as RS
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 
 @dataclass
@@ -39,10 +39,10 @@ class ResonanceApiDeps:
     agents_meta: Callable[[str], list] = lambda root: []
     agent_file: Callable[[str, str], Any] = lambda root, slug: None
     # T0 nhóm chat team: phát một gói tới mọi tab đang mở (ChatRuntime.publish) để tải lại trạng thái Cộng hưởng.
-    broadcast: Optional[Callable[[dict], Any]] = None
+    broadcast: Callable[[dict], Any] | None = None
 
 
-async def _announce_agents(deps: "ResonanceApiDeps") -> None:
+async def _announce_agents(deps: ResonanceApiDeps) -> None:
     """Báo mọi tab rằng trạng thái Cộng hưởng của trợ lý vừa đổi. Gói phụ: lỗi thì bỏ qua, không làm hỏng lệnh của chủ."""
     if deps.broadcast is None:
         return
@@ -127,8 +127,8 @@ def register(app, deps: ResonanceApiDeps):
         return {"ok": True, "enabled": R.enabled_for(root)}
 
     @app.get("/resonance/goals")
-    async def resonance_goals(brain: str = "brain", session_id: Optional[str] = None,
-                              agent_key: Optional[str] = None, unassigned: int = 0):
+    async def resonance_goals(brain: str = "brain", session_id: str | None = None,
+                              agent_key: str | None = None, unassigned: int = 0):
         """Mục tiêu đang mở. `agent_key`: của một trợ lý (khung "Mục tiêu của trợ lý"); `unassigned=1`: mục "Chờ gán"."""
         root, owner, err = _manage(brain)
         if err:
@@ -291,7 +291,7 @@ def register_agents(app, deps: ResonanceApiDeps):
                 if reg else 0,
                 "reviewer": _reviewer_of(store, root, reg)}
 
-    def _reviewer_of(store, root: str, reg: Optional[dict]) -> Optional[dict]:
+    def _reviewer_of(store, root: str, reg: dict | None) -> dict | None:
         """A5: người review đang chọn cho agent làm này (theo mã bền), hay None. Không suy từ tag hay slug."""
         if reg is None or not hasattr(store, "team_pair"):
             return None
@@ -336,7 +336,7 @@ def register_agents(app, deps: ResonanceApiDeps):
                 "unassigned": len(store.list_open(owner, unassigned=True)), "legacy_brain_switch": R.enabled_for(root),
                 "session": _session_state(store, root, slug, session_id, pin=False) if slug and session_id else None}
 
-    def _session_state(store, root: str, slug: str, session_id: str, pin: bool = True) -> Optional[str]:
+    def _session_state(store, root: str, slug: str, session_id: str, pin: bool = True) -> str | None:
         """Phiên đang mở dùng được mã hiện tại của trợ lý không (review A1 vòng 2, P2). Cùng hàm phân giải với
         run_turn (`session_agent`), nên câu trả lời đúng với lượt kế tiếp. Không tự chuyển phiên cũ sang mã mới."""
         if not session_id:
@@ -444,6 +444,7 @@ def register_learning(app, deps: ResonanceApiDeps):
     không đổi lịch, không gọi model (thiết kế A3 mục 4)."""
     import asyncio
     import hashlib
+
     import resonance_learning as L
 
     def _ctx(brain: str):
@@ -562,7 +563,7 @@ def register_learning(app, deps: ResonanceApiDeps):
             return {"ok": True, **res}
         return await asyncio.to_thread(work)
 
-    def _preview(store, owner, ls: dict) -> Optional[dict]:
+    def _preview(store, owner, ls: dict) -> dict | None:
         """Bản xem trước của đề xuất làn P: câu cũ và câu mới của CÙNG một tin, dựng bằng mẫu cố định (0 model)."""
         if ls.get("lane") != "presentation":
             return None

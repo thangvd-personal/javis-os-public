@@ -33,8 +33,9 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 import turn_context
 
@@ -62,8 +63,8 @@ UNKNOWN_NOTE = ("ERROR: Thao tác này có thể ĐÃ được thực hiện ở
 BUSY_NOTE = "ERROR: Đúng thao tác này đang được gọi ở một nhánh khác của việc, chờ nó xong, đừng gọi lại."
 
 _lock = threading.RLock()
-_db: Optional[sqlite3.Connection] = None
-_path: Optional[Path] = None
+_db: sqlite3.Connection | None = None
+_path: Path | None = None
 _inflight: set = set()
 
 
@@ -142,7 +143,7 @@ def _set(fp: str, **cols) -> None:
     _conn().commit()
 
 
-async def run(tool: str, args: Any, call: Callable[[Any], Awaitable[Any]], job: Optional[str] = None) -> Any:
+async def run(tool: str, args: Any, call: Callable[[Any], Awaitable[Any]], job: str | None = None) -> Any:
     """Gọi `call(args)` đúng một lần cho mỗi (việc, tool, tham số). Ngoài việc nền thì gọi thẳng."""
     job = current_job() if job is None else job
     if not job:

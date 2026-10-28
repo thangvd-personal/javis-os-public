@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Terminal thật cho tab Code của dashboard.
 
 Vì sao có file này
@@ -53,8 +52,8 @@ import time
 import uuid
 from pathlib import Path
 
-import winproc
 import localefmt
+import winproc
 
 IS_WINDOWS = os.name == "nt"
 
@@ -620,9 +619,7 @@ class Kho:
     def don(self):
         """Dọn phiên đã chết và phiên không ai xem quá lâu."""
         for p in list(self._phien.values()):
-            if not p.song() and not p._khach:
-                self._bo(p)
-            elif p.roi_luc and (time.time() - p.roi_luc) > REAP_GIAY:
+            if not p.song() and not p._khach or p.roi_luc and (time.time() - p.roi_luc) > REAP_GIAY:
                 self._bo(p)
 
     def _bo(self, p: Phien):

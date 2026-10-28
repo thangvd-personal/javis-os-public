@@ -8,7 +8,6 @@ Phần lớn ca dựng kho tổng hợp (bảng nhỏ, cột dấu thật) để
 mã nhánh này nâng (tạo snapshot thật), công cụ hạ, mã 0.151.0 mở lại được. Không gọi model. Máy không có lịch sử git của
 commit đó thì ca cuối in SKIP; trên CI (biến CI) thì ĐỎ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import io
 import os
@@ -20,11 +19,13 @@ from contextlib import closing, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ta-restore-")
 TEMP = Path(tempfile.mkdtemp(prefix="ta-restore-"))
 
 sys.path.insert(0, str(ROOT / "tools"))
-import team_adaptive_restore_pre as RT  # noqa: E402
+import team_adaptive_restore_pre as RT
 
 fails = []
 

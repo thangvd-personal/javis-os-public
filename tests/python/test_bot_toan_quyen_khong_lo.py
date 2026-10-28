@@ -8,10 +8,11 @@ A bot at "Toàn quyền" runs the owner's own engine path (0.85.3). Two pieces o
   2. When the model was not in the Codex catalog, the turn "self-healed" by writing the owner's MAIN model. For a bot
      that model is the Agent's, so a customer bot changed the owner's own brain.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-toanquyen-")
 try:
@@ -19,7 +20,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

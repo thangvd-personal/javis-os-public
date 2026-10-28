@@ -9,21 +9,21 @@ gọi nó chạy ngầm, nên máy đứng ở 2.1.232 (14/08) suốt sáu tuầ
 cache gha giữ nguyên lớp `npm install -g @anthropic-ai/claude-code@latest` vì chuỗi lệnh
 không đổi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
-import subprocess
 import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-claude-upd-")
 
-import claude_cli  # noqa: E402
-import claude_update as cu  # noqa: E402
-import config as cfgmod  # noqa: E402
-import deploy_info  # noqa: E402
-import main  # noqa: E402
+import claude_cli
+import claude_update as cu
+import config as cfgmod
+import deploy_info
+import main
 
 _fails = []
 
@@ -107,7 +107,7 @@ check("mặc định bật", cu.bat())
 
 # 7b. On/off switch on the Models page (customer report 0.270, code 18). The env var stays an
 #     override that can only force the updater OFF.
-import json  # noqa: E402
+import json
 
 check("the switch defaults to on in config", cfgmod._DEFAULT["model"].get(cu.SETTING_KEY) is True)
 cfgmod.update_settings({"model": {cu.SETTING_KEY: False}})

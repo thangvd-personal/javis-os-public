@@ -16,7 +16,6 @@ Gói dựng ngay trong test chứ không đọc từ đĩa. Trước 0.55.30 nó
 gói thật đã dọn sang repo kho riêng (`thangvd-personal/javis-store-public`) - và một test của Javis OS thì
 không được phụ thuộc vào nội dung một repo khác, càng không phụ thuộc vào mạng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import io
 import json
@@ -30,6 +29,7 @@ import pack_install
 import pack_vault
 import packs
 import plugins_host
+from _paths import ROOT, SERVER  # noqa: F401
 
 PACK_ID = "javis.tinh-gia"
 TOOL = "javis_tinh_gia_ban"
@@ -182,7 +182,7 @@ with tempfile.TemporaryDirectory() as td:
               isinstance(loi, str) and loi.startswith("ERROR:"))
 
         # --------------- 4. Gỡ khi người dùng ĐÃ SỬA kỹ năng: phải giữ lại ---------------
-        sk.write_bytes(sk.read_bytes() + "\n\nGhi chú riêng của tôi.\n".encode("utf-8"))
+        sk.write_bytes(sk.read_bytes() + "\n\nGhi chú riêng của tôi.\n".encode())
         ke = pack_install.ke_hoach_go(PACK_ID)
         check("hộp gỡ báo TRƯỚC là sẽ giữ mục đã sửa",
               [x["slug"] for x in (ke.get("vault") or {}).get("giu") or []] == ["dat-gia-ban"])

@@ -43,9 +43,9 @@ if MODE == "dry":
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / "server"))
 os.chdir(str(ROOT / "server"))
-import _a5_pilot_ledger as PL  # noqa: E402
-import main  # noqa: E402
-import resonance as R  # noqa: E402
+import _a5_pilot_ledger as PL
+import main
+import resonance as R
 
 LED = PL.RoleLedger(LEDGER, CAPS)
 
@@ -110,5 +110,6 @@ R.GoalDeps._ask = PL.wrap_ask(R.GoalDeps._ask, LED)
 
 print(f"[a5-pilot] mode={MODE} caps={CAPS} sổ đã gắn", file=sys.stderr)
 
-import uvicorn  # noqa: E402
+import uvicorn
+
 uvicorn.run(main.app, host="127.0.0.1", port=int(os.environ.get("JAVIS_PORT", "7793")), reload=False)

@@ -16,7 +16,14 @@ from improvement_operation_retry import native_transient
 from improvement_operation_schema import TERMINAL
 from improvement_operation_workspace import OperationWorkspaceCleanupError
 from improvement_telemetry import NativeUsageRecorder
-from improvement_trial_runner import _RunFailure, _drain, _settled_call, _synchronous, _runner_body, _NativeRunnerEvidence
+from improvement_trial_runner import (
+    _drain,
+    _NativeRunnerEvidence,
+    _RunFailure,
+    _runner_body,
+    _settled_call,
+    _synchronous,
+)
 
 HEARTBEAT_SECONDS = 20
 LEASE_SECONDS = 60

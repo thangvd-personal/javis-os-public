@@ -1,6 +1,4 @@
 """Real isolated dashboard inputs compose protected context without live builders."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import atexit
 import contextlib
 import hashlib
@@ -11,9 +9,11 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 # A user-home temp directory inherits real ancestor .claude/settings.json.
 # Use a disposable drive-root fixture so no real owner instructions enter tests.
@@ -26,6 +26,7 @@ for key, child in {"JAVIS_STATE_DIR": "boot-state", "BRAINS_DIR": "boot-brains",
     os.environ[key] = str(SCRATCH / child)
 
 import main as H
+
 # main eagerly opens scratch databases. Release their native
 # lifetimes before TemporaryDirectory's cleanup (Windows forbids deleting open
 # DBs). A previously imported main may belong to another fixture; never close it.
@@ -38,11 +39,10 @@ _boot_sessions = H.sessions._store
 if _boot_sessions is not None and _boot_sessions.db_path == SCRATCH / "boot-sessions.db":
     atexit.register(_boot_sessions.close)
 import packs
-import turn_context
 from evidence_store import redact
-from resonance_store import Principal
-from improvement_trial_sql_context import SQLiteContextProjection, ExistingSQLiteSource
 from improvement_trial_plugins import PluginCapabilityProjection
+from improvement_trial_sql_context import ExistingSQLiteSource, SQLiteContextProjection
+from resonance_store import Principal
 
 if importlib.util.find_spec("improvement_trial_dashboard"):
     import improvement_trial_dashboard as D
@@ -136,7 +136,7 @@ class DashboardTests(unittest.TestCase):
         self.stack.enter_context(patch.object(H.system_sync, "_MIRROR_SIG", {str(self.brain): H.system_sync._mirror_signature(self.brain / "skills")}))
         self.stack.enter_context(patch.object(H.system_sync, "_MIRROR_RETRY", {}))
         H.plugins_host._load_all(str(self.brain))
-        self.frozen_now = datetime(2026, 10, 23, 3, 15, tzinfo=timezone.utc)
+        self.frozen_now = datetime(2026, 10, 23, 3, 15, tzinfo=UTC)
 
     def save_settings(self):
         (self.state / "settings.json").write_text(json.dumps(self.settings), encoding="utf-8")
@@ -210,7 +210,7 @@ class DashboardTests(unittest.TestCase):
     def test_revalidate_freezes_only_clock_and_usage(self):
         self.write(self.state, "usage.json", '{"days":{"2026-10-23":{"anthropic-cli|sonnet":{"in":10,"out":3,"turns":1,"cost":0}}},"total":{}}')
         first = self.capture()
-        self.frozen_now = datetime(2030, 1, 2, tzinfo=timezone.utc)
+        self.frozen_now = datetime(2030, 1, 2, tzinfo=UTC)
         self.write(self.state, "usage.json", '{"days":{},"total":{}}')
         self.assertEqual(first, self.capture(frozen=first))
         self.write(self.state, "user_profile.md", "A new current owner rule.")
@@ -288,8 +288,9 @@ class DashboardTests(unittest.TestCase):
                 self.capture(frozen=first)
 
     def test_actual_prewarmed_main_parity_below_caps_with_real_sql_and_frozen_volatiles(self):
-        import workflow_runs
         from zoneinfo import ZoneInfo
+
+        import workflow_runs
         self.write(self.brain, "rules/pinned.md", "Pinned owner rule.")
         self.store._conn.execute("INSERT INTO session_files(id,session_id,path,name,pinned,added_at) VALUES(?,?,?,?,?,?)",
                                  ("file-1", "session-1", "rules/pinned.md", "Pinned", 1, 1))

@@ -12,16 +12,17 @@ path có KHOẢNG TRẮNG vẫn là JSON chuỗi hợp lệ; recipe send-file KH
 → không có field brain (giữ tương thích) và có ghi chú cảnh báo rơi về Brain Default; có gợi ý dùng
 tool javis_schedule.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-chanbrain-"))
 
-import channel_context as cc  # noqa: E402
+import channel_context as cc
 
 _fails = []
 BRAIN = "/brains/My Bullet Journal"   # có KHOẢNG TRẮNG - kiểm JSON quoting

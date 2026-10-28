@@ -5,203 +5,250 @@ Kiến trúc: Voice (browser) ⇄ FastAPI WebSocket ⇄ Claude Code CLI subproce
 Javis KHÔNG gọi Anthropic API trực tiếp. Mọi reasoning + tool calling đi qua
 `claude` CLI đã cài trên máy → tự kế thừa MCP, skills, auth.
 """
-import brain_seed_i18n   # file hạt giống của brain mới theo ngôn ngữ người dùng
-import brain_label   # tên hiển thị của brain, tách khỏi thư mục (0.219.0)
-import localefmt   # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
-import html as html_mod   # escape lời báo lỗi OAuth trên trang callback (biến cục bộ `html` che tên module)
-import posixpath
-import os
+import asyncio
+import binascii
+import dataclasses
+import hashlib
+import html as html_mod  # escape lời báo lỗi OAuth trên trang callback (biến cục bộ `html` che tên module)
 import json
 import math
-import asyncio
-import dataclasses
-import glob
-import hashlib
+import os
+import posixpath
+import re
+import secrets
+import shutil
+
 # `sys` phải nằm ở ĐẦU file: rải rác trong file có chỗ `import sys` cục bộ, nhưng cũng có chỗ
 # dùng sys.stderr mà quên import - và vì chúng nằm trong nhánh `except` (đường ghi log lỗi),
 # chúng chỉ nổ đúng lúc đã có sự cố khác, biến một lỗi lẽ ra chỉ cần ghi log thành NameError
 # phá cả luồng. Import một lần ở đây thì mọi chỗ dùng đều an toàn.
 import sys
+import time
+import types as _types  # object tạm cho _apply_antigravity_hub ở endpoint kiểm tra
+import urllib.parse
 import uuid
 from pathlib import Path
-import binascii
-import re
-import urllib.parse
-import secrets
-import shutil
-import time
-import types as _types   # object tạm cho _apply_antigravity_hub ở endpoint kiểm tra
-import yaml
+
+import brain_label  # tên hiển thị của brain, tách khỏi thư mục (0.219.0)
+import brain_seed_i18n  # file hạt giống của brain mới theo ngôn ngữ người dùng
 import fastyaml
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Form, Request, Body, Header
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse, Response, RedirectResponse, PlainTextResponse
+import localefmt  # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
+import yaml
+
 # edge_tts CỐ TÌNH không import ở đây mà nạp lười trong _tts_edge và /tts/voices.
 # Nó chiếm 944ms trong 2.263ms nạp main (41%), và kéo theo cả chuỗi aiohttp 212ms vào
 # đường khởi động, trong khi TTS là tính năng TUỲ CHỌN mà đa số phiên không đụng tới.
 # Khởi động chậm không chỉ khó chịu: trên VPS nó ăn vào cửa sổ healthcheck lúc deploy.
 from dotenv import load_dotenv
+from fastapi import (
+    Body,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 # 0.197.1: no WebSocket compression, whatever started uvicorn (ws_compat explains the Safari drops it prevents).
-import ws_compat  # noqa: E402
+import ws_compat
+
 ws_compat.disable_deflate()
 
-from claude_cli import CodexCLI, claude_engine, find_claude_cli, find_codex_cli, cancel_all, _empty_mcp_file, auth_status as claude_auth_status, auth_login as claude_auth_login, auth_logout as claude_auth_logout, auth_login_ui_start, auth_login_ui_code, mcp_native_add, mcp_native_remove, mcp_native_status, mcp_open_auth_terminal, mcp_native_list, codex_mcp_native_list, codex_mcp_native_add, codex_mcp_native_remove, codex_mcp_native_status, codex_mcp_open_login_terminal
-import claude_cli   # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
-import codex_models   # thang effort mà CHÍNH Codex khai cho từng model (model/list)
-import fast_mode   # composer Fast mode bolt: per-turn choice and per-brain parameters (0.164.0)
+import claude_cli  # binary `claude`: tìm đường, auth, và danh mục model nhúng sẵn trong CLI
+import codex_models  # thang effort mà CHÍNH Codex khai cho từng model (model/list)
 import config as cfgmod
+import fast_mode  # composer Fast mode bolt: per-turn choice and per-brain parameters (0.164.0)
 import update_state
+from claude_cli import (
+    CodexCLI,
+    _empty_mcp_file,
+    auth_login_ui_code,
+    auth_login_ui_start,
+    cancel_all,
+    claude_engine,
+    codex_mcp_native_add,
+    codex_mcp_native_list,
+    codex_mcp_native_remove,
+    codex_mcp_native_status,
+    codex_mcp_open_login_terminal,
+    find_claude_cli,
+    find_codex_cli,
+    mcp_native_add,
+    mcp_native_list,
+    mcp_native_remove,
+    mcp_native_status,
+    mcp_open_auth_terminal,
+)
+from claude_cli import auth_login as claude_auth_login
+from claude_cli import auth_logout as claude_auth_logout
+from claude_cli import auth_status as claude_auth_status
+
 _ver_tuple = update_state.ver_tuple
 _ver_newer = update_state.ver_newer
 _read_update_state = update_state.read_state
 _write_update_state = update_state.write_state
 _record_boot_version = update_state.record_boot_version
 _update_outcome = update_state.update_outcome
-import git_brain
+import agy_update  # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
+import antigravity_cli  # bộ não thứ 10: Antigravity CLI (`agy`) - bản Google chỉ định thay Gemini CLI
+import aux_engine  # engine việc nền: Claude / Codex / API rẻ
+import borrowed_eyes  # mắt mượn: bộ não khác xem hộ ảnh khi model của bot không xem được (0.94.0)
+import claude_auth  # gói Claude Code xác thực bằng gì: phiên subscription hay API key
+import claude_models  # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
+import claude_update  # tự chạy `claude update` hằng ngày để model mới hiện ra
+import coding_store  # trang Coding: phiên gắn repo nào, nhánh nào, worktree nào, mức quyền nào
+import connect_health  # sức khoẻ kết nối: vòng check nền + phân loại lỗi tiếng người
+import core_off  # năng lực MẶC ĐỊNH gỡ được: trạng thái ghi ở STATE_DIR, không sửa cây code
+import cred_exchange  # đổi credential hộ user (vd App Password -> Google master token) khi đấu
 import engine
-import vision_input
-import borrowed_eyes   # mắt mượn: bộ não khác xem hộ ảnh khi model của bot không xem được (0.94.0)
+import git_brain
+import grok_cli  # bộ não thứ 11: Grok Build CLI (`grok`) - gói SuperGrok / X Premium+
+import image_gen  # tạo ảnh bằng gói ChatGPT (OAuth) - Codex Responses + tool image_generation
 import image_vision
-import openai_oauth
-import claude_update   # tự chạy `claude update` hằng ngày để model mới hiện ra
-import agy_update      # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
-import claude_models   # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
-import winproc         # chạy lệnh con câm lặng trên Windows (không nháy console đen)
-import md_repair       # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
-import terminal        # tab Code: pseudo-terminal thật trong dashboard (pty trên POSIX, ống trên Windows)
-import coding_store    # trang Coding: phiên gắn repo nào, nhánh nào, worktree nào, mức quyền nào
-import antigravity_cli   # bộ não thứ 10: Antigravity CLI (`agy`) - bản Google chỉ định thay Gemini CLI
-import grok_cli          # bộ não thứ 11: Grok Build CLI (`grok`) - gói SuperGrok / X Premium+
-import totp            # xác thực 2 lớp (TOTP) cho cổng đăng nhập - thuần toán, không đụng cấu hình
-import claude_auth     # gói Claude Code xác thực bằng gì: phiên subscription hay API key
-import aux_engine   # engine việc nền: Claude / Codex / API rẻ
-import model_routing   # 0.350.0: provider order, per-card model/effort, several accounts per provider
-import plan_accounts   # 0.353.0: several accounts on one subscription plan card (Codex, Grok, Claude Code)
-import mcp_store
-import mcp_client
+import inbox  # hòm thư: mọi kết quả chạy nền để lại một mẩu thư bền ở server
+import luot_dang_chay  # sổ lượt chat đang chạy theo brain: tool giao việc tự biết khung chat nào hỏi
 import mcp_catalog
+import mcp_client
 import mcp_hub
-from improvement_task_skill_turn import TaskSkillTurn
-import connect_health   # sức khoẻ kết nối: vòng check nền + phân loại lỗi tiếng người
-import purge          # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
-import core_off       # năng lực MẶC ĐỊNH gỡ được: trạng thái ghi ở STATE_DIR, không sửa cây code
-import packs          # GÓI mở rộng: thả thư mục vào STATE_DIR/packs là có thêm connector
-import cred_exchange   # đổi credential hộ user (vd App Password -> Google master token) khi đấu
-import plugins_host   # hệ PLUGIN: thư mục Python thả vào, tự thêm tool/hook cho mọi engine qua hub
-import web_security   # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
-import image_gen      # tạo ảnh bằng gói ChatGPT (OAuth) - Codex Responses + tool image_generation
-import media_gc       # dọn vùng cache media (attachments/ + inbox/) theo hạn tuổi + trần dung lượng
-import inbox         # hòm thư: mọi kết quả chạy nền để lại một mẩu thư bền ở server
-import webpush       # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
-import stt            # nghe tin thoại (Whisper qua Groq) -> chữ, cho kênh Telegram/Zalo
-import luot_dang_chay # sổ lượt chat đang chạy theo brain: tool giao việc tự biết khung chat nào hỏi
-import tool_label     # một dòng mô tả lệnh gọi công cụ (lệnh nào, file nào) cho khối tiến trình
-import nghe_sua       # sửa chữ nghe nhầm theo ngữ cảnh (David -> Javis) + hotwords cho Whisper
-import phien_am       # từ tiếng Anh -> cách đọc kiểu Việt (đọc loa + so âm câu nghe được)
+import mcp_store
+import md_repair  # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
+import media_gc  # dọn vùng cache media (attachments/ + inbox/) theo hạn tuổi + trần dung lượng
+import model_routing  # 0.350.0: provider order, per-card model/effort, several accounts per provider
+import nghe_sua  # sửa chữ nghe nhầm theo ngữ cảnh (David -> Javis) + hotwords cho Whisper
+import openai_oauth
+import phien_am  # từ tiếng Anh -> cách đọc kiểu Việt (đọc loa + so âm câu nghe được)
+import plan_accounts  # 0.353.0: several accounts on one subscription plan card (Codex, Grok, Claude Code)
+import plugins_host  # hệ PLUGIN: thư mục Python thả vào, tự thêm tool/hook cho mọi engine qua hub
+import purge  # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
+import stt  # nghe tin thoại (Whisper qua Groq) -> chữ, cho kênh Telegram/Zalo
+import terminal  # tab Code: pseudo-terminal thật trong dashboard (pty trên POSIX, ống trên Windows)
+import tool_label  # một dòng mô tả lệnh gọi công cụ (lệnh nào, file nào) cho khối tiến trình
+import totp  # xác thực 2 lớp (TOTP) cho cổng đăng nhập - thuần toán, không đụng cấu hình
+import vision_input
 import voice_privacy
+import web_security  # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
+import webpush  # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
+import winproc  # chạy lệnh con câm lặng trên Windows (không nháy console đen)
+
 voice_privacy.install()
-import zalo_login
-import oauth_mcp
-import system_sync   # tầng năng lực HỆ THỐNG (skill/loop mặc định) - update theo phiên bản app
-import agent_rules   # mục Luật chủ dặn / Bổ sung (tự học) + chốt chặn giữ dòng của chủ
-import skill_router   # nguồn chân lý khám phá skill (canonical <brain>/skills) dùng chung mọi engine
-import skill_usage     # telemetry: đếm skill nào THẬT SỰ được dùng qua javis_use_skill (tín hiệu DƯƠNG một chiều)
-import share_bundle   # xuất/nhập gói agent/skill/workflow (.zip) để chia sẻ giữa brain/người dùng
-import share_store    # link CHIA SẺ CÔNG KHAI của một file trong brain (/s/<token>)
-import share_render   # dựng trang xem cho link chia sẻ (markdown -> html, khung trang)
-import usage_store   # đếm token/chi phí Javis tự đo (đa nhà cung cấp)
-import usage_index   # dashboard token: index log thô Claude+Codex + query summary/insights
-import usage_parsers as up_parsers   # bảng giá + khớp model, dùng chung với indexer
-import usage_saving   # tiết kiệm đối chứng ngược, mốc sự kiện, dự báo, ngân sách
-import context_runtime   # Phase 0-8: trace + Registry/Resolver/Compiler + canary paths
-import turn_context      # who is talking in this turn, for tool hooks (`turn` in pre/post_tool_call)
-import capability_registry   # Phase 2: registry dẫn xuất, không phải nguồn sự thật
-import capability_resolver   # Phase 3: resolver deterministic chỉ chạy shadow
-import context_compiler      # Phase 4: capsule + quota preflight + quality gate shadow
-import fast_path_runtime     # Phase 5: dashboard API canary, hard quota + single model call
-import evidence_store        # Phase 6: encrypted provenance/artifact store
-import capability_executor   # Phase 6: one-use read lease + schema validation
-import readonly_path_runtime # Phase 6: exact-schema, two-round read-only canary
-import readonly_orchestrator # Phase 7: checkpointed multi-round read-only DAG
-import adaptive_context_runtime # Phase 8: state + sourced memory + lazy skill canaries
-import agent_runtime           # Phase 11: agent = workflow có quyền replan trong quyền đã cấp
-import resonance               # Javis Resonance MVP: một lượt engine chỉ chữ + receipt do host quan sát
-import resonance_store         # Javis Resonance MVP: kho mục tiêu SQLite có revision (M2)
-import resonance_api           # Javis Resonance MVP: API thẻ mục tiêu và phản hồi (M4)
-import limit_learner          # học hạn mức từ chính lỗi nhà cung cấp trả về
-import limit_resume           # tự chạy lại lượt chat khi gói thuê bao mở lại hạn mức
-import quota_scheduler        # sổ cái TPM dùng chung (Việc 6)
-import model_limits           # hạn mức GỢI Ý theo provider, để khai quota profile cho canary
-import model_router           # Phase 12: chọn model theo từng bước, lọc năng lực trước
-import workflow_graph          # Phase 10: workflow -> capability graph (thuần dữ liệu)
-import workflow_runtime        # Phase 10: chạy graph có checkpoint/resume
-import write_path_runtime    # Phase 9: write có xác nhận, idempotency và reconcile
-from telegram_bot import TelegramBot, parse_chat_ids as tg_parse_ids
-import zalo_bot   # kênh Zalo Bot của chủ (API chính thức) - cùng khế ước với TelegramBot
-import owner_channels   # owner's control channels on Slack and WhatsApp (0.71.0)
-import whatsapp_bot     # WhatsApp transport + webhook router (0.71.0)
-import messenger_bot    # Messenger transport + webhook router (0.134.0)
-import messenger_setup  # Messenger connect wizard and health check (0.311.0)
-import channel_context   # metadata kênh + gom file trả về kênh chat (port gateway hermes-agent)
-import lang as lang_mod   # chốt ngôn ngữ trả lời cho một lượt
-import lang_registry      # sổ đăng ký: mọi thứ về một ngôn ngữ nằm đúng một chỗ
-import background_status  # việc nền còn sống của một khung chat + bắt lời hứa "xong em báo"
-import tien_trinh_nen     # lệnh chạy ngầm engine bỏ lại: nhận theo dõi, xong tự báo + làm tiếp
-import chatbot_log       # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
-import chatbot_runtime   # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
+import adaptive_context_runtime  # Phase 8: state + sourced memory + lazy skill canaries
+import agent_assets  # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
 import agent_avatar
-import avatar_upload   # ảnh đại diện tự tải lên của trợ lý và nhóm (0.176.0)
-import agent_tags   # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
-import cli_autoinstall   # trạng thái agy/grok do container Docker tự cài (0.85.1)
-import agent_assets      # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
-import workflow_chat     # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
-import javis_core        # Javis Core (0.185.0): system assistant pinned in every brain
-import main_prompt_rendering  # pure shared prompt blocks; no live reads
-import main_attachment_rendering  # pure shared attachment templates; no live reads
-import memory_control    # 0.188.0: list/edit/forget memories, learning switch, person profile
-import memory_chat       # 0.190.0: the same, plus agent lessons, from chat (tool javis_memory)
-import memory_receipt    # 0.190.0: the "Đã nhớ · Hoàn tác" line under an answer, and no empty "đã quên"
-import chatbot_cuoc_chat  # danh sách cuộc chat cho ô chọn người/nhóm của form bot
-import chatbot_reply_policy        # bộ phán xử hội thoại nhóm (0.65.0): bot tự quyết nói hay im
-import chatbot_reply_policy_store  # kho quyết định, ca đã học, ngưỡng theo cuộc chat
-import chatbot_reply_policy_review  # vòng tự soát bộ phán xử bằng bộ não chính (0.77.0)
-import chatbot_store     # kho bản ghi bot + token qua secrets_store
-import channel_accounts  # tài khoản kênh dạng token (0.61.0), bot chỉ trỏ tới
-import brain_ident       # one brain, many spellings ("brain", absolute path), #716
-import channels          # sổ đăng ký kênh của Hộp thư hội thoại (0.61.0)
-import conversations     # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
-import zalo_personal_channel   # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
-import deploy_info              # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
-import node_security            # News item when this machine's Node.js misses a security release
-import ollama_catalog           # danh mục model để gợi ý + tìm kiếm
-import ollama_local             # dò/tải/gỡ model trên máy chạy Ollama
-import sessions                  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
-import reaction_values           # T2: khuôn reaction R của hợp đồng (chat riêng)
-import feedback_projector        # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
-import agent_lessons             # T3 phần L: kho bài học có phạm vi (team:/dm:/*) và góp ý của đồng đội
-import agent_budget              # T3 phần L: hạn mức lượt tự phát mỗi trợ lý mỗi ngày (agent_daily_calls)
-import agent_review              # T3 phần L: lượt xem xét reaction, tự rà soát có tự áp và quay lại
-import agent_ledger              # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
-from sessions import get_store   # kho phiên hội thoại (sqlite + fts5): list/resume/search
-import compaction   # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
-import lenh_he_thong   # lõi dùng chung của lệnh "/" hệ thống (web + Telegram): /plan /compact /usage...
-from chat_runtime import ChatRuntime
-import ui_bridge   # tool javis_ui bảo dashboard mở trang/file/việc rồi đợi trình duyệt đáp
-import ui_targets   # đổi lời nói ("mở trang công cụ") thành id trang dashboard hiểu
-import voice_turn_protocol
-import voice_brain   # Voice V2: bộ não giọng nói riêng (Antigravity sống lâu / Groq / Gemini...)
-import voice_live    # Voice V2: nghe nói thẳng qua Gemini Live / OpenAI Realtime
-import voice_ear     # tai nghe lại: model đa ngôn ngữ nghe âm thanh rồi mới chốt chữ (0.65.15)
+import agent_budget  # T3 phần L: hạn mức lượt tự phát mỗi trợ lý mỗi ngày (agent_daily_calls)
+import agent_ledger  # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
+import agent_lessons  # T3 phần L: kho bài học có phạm vi (team:/dm:/*) và góp ý của đồng đội
 import agent_notify  # 0.205.0: unread and mute for private partner chats
-import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
-import codex_steer  # 0.213.0: Codex chat turns on app-server take those messages mid-way
+import agent_review  # T3 phần L: lượt xem xét reaction, tự rà soát có tự áp và quay lại
+import agent_rules  # mục Luật chủ dặn / Bổ sung (tự học) + chốt chặn giữ dòng của chủ
+import agent_runtime  # Phase 11: agent = workflow có quyền replan trong quyền đã cấp
+import agent_tags  # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
+import avatar_upload  # ảnh đại diện tự tải lên của trợ lý và nhóm (0.176.0)
+import background_status  # việc nền còn sống của một khung chat + bắt lời hứa "xong em báo"
+import brain_ident  # one brain, many spellings ("brain", absolute path), #716
+import capability_executor  # Phase 6: one-use read lease + schema validation
+import capability_registry  # Phase 2: registry dẫn xuất, không phải nguồn sự thật
+import capability_resolver  # Phase 3: resolver deterministic chỉ chạy shadow
+import channel_accounts  # tài khoản kênh dạng token (0.61.0), bot chỉ trỏ tới
+import channel_context  # metadata kênh + gom file trả về kênh chat (port gateway hermes-agent)
+import channels  # sổ đăng ký kênh của Hộp thư hội thoại (0.61.0)
+import chatbot_cuoc_chat  # danh sách cuộc chat cho ô chọn người/nhóm của form bot
+import chatbot_log  # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
+import chatbot_reply_policy  # bộ phán xử hội thoại nhóm (0.65.0): bot tự quyết nói hay im
+import chatbot_reply_policy_review  # vòng tự soát bộ phán xử bằng bộ não chính (0.77.0)
+import chatbot_reply_policy_store  # kho quyết định, ca đã học, ngưỡng theo cuộc chat
+import chatbot_runtime  # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
+import chatbot_store  # kho bản ghi bot + token qua secrets_store
+import cli_autoinstall  # trạng thái agy/grok do container Docker tự cài (0.85.1)
 import codex_realtime  # ChatGPT Live: một Codex app-server sống lâu, realtime trên gói ChatGPT (0.65.17)
-import voice_call     # nút mic là gọi Javis: tự chọn ChatGPT Live / Live API / Cơ bản (0.65.18)
+import codex_steer  # 0.213.0: Codex chat turns on app-server take those messages mid-way
+import compaction  # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
+import context_compiler  # Phase 4: capsule + quota preflight + quality gate shadow
+import context_runtime  # Phase 0-8: trace + Registry/Resolver/Compiler + canary paths
+import conversations  # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
+import deploy_info  # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
+import evidence_store  # Phase 6: encrypted provenance/artifact store
+import fast_path_runtime  # Phase 5: dashboard API canary, hard quota + single model call
+import feedback_projector  # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
+import javis_core  # Javis Core (0.185.0): system assistant pinned in every brain
+import lang as lang_mod  # chốt ngôn ngữ trả lời cho một lượt
+import lang_registry  # sổ đăng ký: mọi thứ về một ngôn ngữ nằm đúng một chỗ
+import lenh_he_thong  # lõi dùng chung của lệnh "/" hệ thống (web + Telegram): /plan /compact /usage...
+import limit_learner  # học hạn mức từ chính lỗi nhà cung cấp trả về
+import limit_resume  # tự chạy lại lượt chat khi gói thuê bao mở lại hạn mức
+import main_attachment_rendering  # pure shared attachment templates; no live reads
+import main_prompt_rendering  # pure shared prompt blocks; no live reads
+import memory_chat  # 0.190.0: the same, plus agent lessons, from chat (tool javis_memory)
+import memory_control  # 0.188.0: list/edit/forget memories, learning switch, person profile
+import memory_receipt  # 0.190.0: the "Đã nhớ · Hoàn tác" line under an answer, and no empty "đã quên"
+import messenger_bot  # Messenger transport + webhook router (0.134.0)
+import messenger_setup  # Messenger connect wizard and health check (0.311.0)
+import model_limits  # hạn mức GỢI Ý theo provider, để khai quota profile cho canary
+import model_router  # Phase 12: chọn model theo từng bước, lọc năng lực trước
+import node_security  # News item when this machine's Node.js misses a security release
+import oauth_mcp
+import ollama_catalog  # danh mục model để gợi ý + tìm kiếm
+import ollama_local  # dò/tải/gỡ model trên máy chạy Ollama
+import owner_channels  # owner's control channels on Slack and WhatsApp (0.71.0)
+import quota_scheduler  # sổ cái TPM dùng chung (Việc 6)
+import reaction_values  # T2: khuôn reaction R của hợp đồng (chat riêng)
+import readonly_orchestrator  # Phase 7: checkpointed multi-round read-only DAG
+import readonly_path_runtime  # Phase 6: exact-schema, two-round read-only canary
+import resonance  # Javis Resonance MVP: một lượt engine chỉ chữ + receipt do host quan sát
+import resonance_api  # Javis Resonance MVP: API thẻ mục tiêu và phản hồi (M4)
+import resonance_store  # Javis Resonance MVP: kho mục tiêu SQLite có revision (M2)
+import sessions  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
+import share_bundle  # xuất/nhập gói agent/skill/workflow (.zip) để chia sẻ giữa brain/người dùng
+import share_render  # dựng trang xem cho link chia sẻ (markdown -> html, khung trang)
+import share_store  # link CHIA SẺ CÔNG KHAI của một file trong brain (/s/<token>)
+import skill_router  # nguồn chân lý khám phá skill (canonical <brain>/skills) dùng chung mọi engine
+import skill_usage  # telemetry: đếm skill nào THẬT SỰ được dùng qua javis_use_skill (tín hiệu DƯƠNG một chiều)
+import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
+import system_sync  # tầng năng lực HỆ THỐNG (skill/loop mặc định) - update theo phiên bản app
+import tien_trinh_nen  # lệnh chạy ngầm engine bỏ lại: nhận theo dõi, xong tự báo + làm tiếp
+import turn_context  # who is talking in this turn, for tool hooks (`turn` in pre/post_tool_call)
+import ui_bridge  # tool javis_ui bảo dashboard mở trang/file/việc rồi đợi trình duyệt đáp
+import ui_targets  # đổi lời nói ("mở trang công cụ") thành id trang dashboard hiểu
+import usage_index  # dashboard token: index log thô Claude+Codex + query summary/insights
+import usage_parsers as up_parsers  # bảng giá + khớp model, dùng chung với indexer
+import usage_saving  # tiết kiệm đối chứng ngược, mốc sự kiện, dự báo, ngân sách
+import usage_store  # đếm token/chi phí Javis tự đo (đa nhà cung cấp)
+import voice_brain  # Voice V2: bộ não giọng nói riêng (Antigravity sống lâu / Groq / Gemini...)
+import voice_call  # nút mic là gọi Javis: tự chọn ChatGPT Live / Live API / Cơ bản (0.65.18)
+import voice_ear  # tai nghe lại: model đa ngôn ngữ nghe âm thanh rồi mới chốt chữ (0.65.15)
+import voice_live  # Voice V2: nghe nói thẳng qua Gemini Live / OpenAI Realtime
+import voice_turn_protocol
+import whatsapp_bot  # WhatsApp transport + webhook router (0.71.0)
+import workflow_chat  # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
+import workflow_graph  # Phase 10: workflow -> capability graph (thuần dữ liệu)
+import workflow_runtime  # Phase 10: chạy graph có checkpoint/resume
+import write_path_runtime  # Phase 9: write có xác nhận, idempotency và reconcile
+import zalo_bot  # kênh Zalo Bot của chủ (API chính thức) - cùng khế ước với TelegramBot
+import zalo_login
+import zalo_personal_channel  # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
+from chat_runtime import ChatRuntime
+from sessions import (
+    get_store,  # kho phiên hội thoại (sqlite + fts5): list/resume/search
+)
+from telegram_bot import TelegramBot
+from telegram_bot import parse_chat_ids as tg_parse_ids
 
 app = FastAPI(title="Javis OS")
 _CHAT_RUNTIME = ChatRuntime()
@@ -245,6 +292,7 @@ _REGISTRY_SHADOW_TASKS = set()
 # Nén gzip câu trả lời trọn một cục của API (0.225.0, xem nen_phan_hoi.py). Gắn ĐẦU TIÊN để nằm trong cùng: các
 # middleware gắn sau bọc response thành stream, đứng ngoài chúng thì không còn thấy câu trả lời nào là một cục.
 import nen_phan_hoi
+
 app.add_middleware(nen_phan_hoi.NenPhanHoi)
 # CORS KHÔNG dùng '*' nữa: dashboard cùng-origin (không cần CORS). Chỉ mở cross-origin cho localhost
 # (tiện dev). Chống trang web độc ĐỌC API qua trình duyệt; phần chống GHI/CSRF ở _csrf_guard bên dưới.
@@ -392,6 +440,7 @@ def _token_ok(request, path: str) -> bool:
 DASHBOARD_PATH = Path(__file__).parent.parent / "dashboard"
 # Windows/mimetypes không biết .webp -> StaticFiles trả text/plain; khai rõ để logo webp đúng kiểu ảnh.
 import mimetypes
+
 mimetypes.add_type("image/webp", ".webp")
 app.mount("/static", StaticFiles(directory=str(DASHBOARD_PATH)), name="static")
 
@@ -968,7 +1017,7 @@ def build_system_prompt(brain: str = "brain", include_memory: bool = True,
 # thay vì theo một danh sách khối biết trước, vì danh sách biết trước sẽ lạc hậu đúng vào lúc
 # cần nhất: ai đó thêm một khối mới, bảng phân bổ vẫn xanh và vẫn im lặng cộng khối mới vào
 # khối đứng ngay trước nó. Tách theo tiêu đề thì khối mới tự hiện ra với tên của nó.
-_RE_TIEU_DE_KHOI = re.compile(r"^# === (.+?) ===[ \t]*$", re.M)
+_RE_TIEU_DE_KHOI = re.compile(r"^# === (.+?) ===[ \t]*$", re.MULTILINE)
 
 
 def do_phan_bo_prompt(brain: str = "brain") -> dict:
@@ -1069,7 +1118,7 @@ def build_adaptive_source_prompt(brain: str = "brain", include_memory: bool = Fa
     return "\n\n".join(x for x in parts if str(x).strip())
 
 # Redaction patterns: chuyển sang secret_redact.py ở 0.256.0 (terminal của engine API dùng chung).
-from secret_redact import redact_secrets as _redact_secrets  # noqa: E402
+from secret_redact import redact_secrets as _redact_secrets
 
 # Cap kích thước mỗi message khi ghi conversation log - port head/tail truncation
 # từ hermes-agent/agent/prompt_builder.py::_truncate_content. conversations/*.md là
@@ -1092,7 +1141,6 @@ def _clip_for_log(text: str, max_chars: int = _LOG_MSG_MAX_CHARS) -> str:
 def log_conversation(brain: str, user_msg: str, javis_msg: str):
     """Ghi log hội thoại vào Memory của vault đang chọn (nguyên liệu để học)."""
     try:
-        from datetime import datetime, timezone, timedelta
         now = localefmt.now()
         conv = _brain_memory_dir(brain) / "conversations"
         f = conv / f"{now.strftime('%Y-%m-%d')}.md"
@@ -5179,7 +5227,7 @@ def _companion_packs() -> list:
 
 # Trang Gói: xem, cài từ .zip, bật tắt, gỡ. Router riêng vì main.py đã quá dài; xem
 # server/routes/packs.py. Lời gọi phải nằm ĐÚNG chỗ này - route_table.json khoá thứ tự.
-import routes.packs as packs_routes   # noqa: E402
+import routes.packs as packs_routes
 
 packs_routes.register(app, packs_routes.PacksDeps(
     # Trang này đòi PHIÊN THẬT, không phụ thuộc `gate_active()`: hàm đó trả False trên bản
@@ -5196,7 +5244,7 @@ packs_routes.register(app, packs_routes.PacksDeps(
 
 # Công cụ TUỲ CHỌN (trình duyệt cho Javis tự kiểm thử giao diện). Đăng ký NGAY SAU trang Gói vì
 # cùng một họ: cả hai đều mang thứ mới về máy, nên dùng chung đúng một luật xác thực.
-import routes.tools as tools_routes   # noqa: E402
+import routes.tools as tools_routes
 
 tools_routes.register(app, tools_routes.ToolsDeps(
     co_phien=lambda r: cfgmod.valid_session(r.cookies.get("javis_session", "")),
@@ -5652,7 +5700,7 @@ async def connect_oauth_callback(state: str = Query(""), code: str = Query(""), 
                                 "<h2>✓ Connected successfully</h2><p>Close this tab, go back to Javis and click Refresh on the Connections page.</p>")
                 + "</body></html>")
     else:
-        html = (f"<html><body style='font-family:sans-serif;background:#111;color:#eee;text-align:center;padding-top:80px'>"
+        html = ("<html><body style='font-family:sans-serif;background:#111;color:#eee;text-align:center;padding-top:80px'>"
                 + localefmt.chu("<h2>⚠ Kết nối thất bại</h2>", "<h2>⚠ Connection failed</h2>")
                 # Lời báo có thể mang error_description do nhà cung cấp (qua URL) gửi về: escape, không chèn HTML thô.
                 + f"<p>{html_mod.escape(str(res.get('error', '')))}</p></body></html>")
@@ -6051,7 +6099,7 @@ async def settings_set(section: str = Form(...), data: str = Form("{}")):
         # picked on the laptop never reached the phone (it kept its old voice) nor the voice notes.
         if "edge_voice" in patch and voice_note.valid_edge_voice(patch.get("edge_voice")):
             v["edge_voice"] = str(patch["edge_voice"]).strip()
-        import tts_eleven   # 0.255.0: only a model the settings page offers
+        import tts_eleven  # 0.255.0: only a model the settings page offers
         if str(patch.get("elevenlabs_model") or "").strip() in tts_eleven.MODELS:
             v["elevenlabs_model"] = str(patch["elevenlabs_model"]).strip()
         # Chỉ ghi khi có key mới THẬT: client lỡ gửi lại giá trị che "••••abcd" (lấy từ GET
@@ -6741,7 +6789,8 @@ async def health():
 # Lời gọi register PHẢI nằm đúng chỗ này - Starlette khớp route theo thứ tự đăng ký và
 # tests/python/route_table.json khoá cả thứ tự, nên dời lên/xuống là test bảng route đỏ.
 # _default_brain_dir truyền dưới dạng lambda vì nó được định nghĩa BÊN DƯỚI dòng này.
-import routes.graph as graph_routes   # noqa: E402
+import routes.graph as graph_routes
+
 graph_routes.register(app, graph_routes.GraphDeps(
     default_brain_dir=lambda: _default_brain_dir(),
     vault_path=lambda: OBSIDIAN_VAULT_PATH,
@@ -6768,7 +6817,8 @@ IMG_EXTS = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
 # vì trong container code tree /app là read-only + chạy user non-root → makedirs ném
 # PermissionError → HTTP 500 khi upload. (config.py cùng nguyên tắc cho settings/branding.)
 STAGING = cfgmod.STATE_DIR / ".staging"
-from urllib.parse import quote as urlquote   # dựng URL /upload/raw cho tên file có dấu
+from urllib.parse import quote as urlquote  # dựng URL /upload/raw cho tên file có dấu
+
 
 def _default_brain_dir() -> Path:
     """Brain mặc định = <BRAINS_DIR>/Brain Default. BRAINS_DIR = thư mục CHA chứa mọi brain
@@ -6788,7 +6838,7 @@ brain_ident.set_default_dir(_default_brain_dir)
 def _brain_root(brain: str) -> str:
     if not brain or brain == "brain":
         return str(_default_brain_dir())
-    b = brain[5:] if brain.startswith("path:") else brain
+    b = brain.removeprefix("path:")
     return b if os.path.isdir(b) else str(_default_brain_dir())
 
 
@@ -7030,7 +7080,8 @@ async def upload(file: UploadFile = File(...), brain: str = Form("")):
                 "url": "/upload/raw?name=" + urlquote(os.path.basename(staged)),
                 "sources": sources, "attachments": attachments}
     except Exception as e:
-        import sys, traceback
+        import sys
+        import traceback
         traceback.print_exc(file=sys.stderr)
         return {"ok": False, "error": localefmt.chu(f"Không lưu được file tạm: {e}", f"Could not save the temporary file: {e}")}
 
@@ -7800,7 +7851,6 @@ def _log_agent_run(brain, slug, task, out):
     try:
         d = _brain_memory_dir(brain) / "agents" / slug / "runs"
         d.mkdir(parents=True, exist_ok=True)
-        from datetime import datetime, timezone, timedelta
         now = localefmt.now()
         with open(d / f"{now.strftime('%Y-%m-%d')}.md", "a", encoding="utf-8") as fh:
             # Cắt CẢ task: prompt bước workflow sau vòng retry có thể ôm cả kết quả cũ
@@ -8181,7 +8231,7 @@ async def agent_assets_add_link(slug: str, url: str = Form(...), label: str = Fo
     u = (url or "").strip()
     # Chỉ nhận http/https, cùng rào với link của project: `javascript:` hay `file:` lọt vào
     # danh sách là thành một liên kết bấm được ngay trong giao diện.
-    if not re.match(r"^https?://", u, re.I):
+    if not re.match(r"^https?://", u, re.IGNORECASE):
         return JSONResponse({"error": localefmt.chu("URL phải bắt đầu bằng http:// hoặc https://", "The URL must start with http:// or https://")},
                             status_code=400)
     lid, loi = await asyncio.to_thread(_agent_assets_sua, brain, slug, lambda m: agent_assets.them_link(m, u, label))
@@ -9019,6 +9069,7 @@ async def zip_dir_response(brain: str, path: str, probe: bool = False):
     Zip dựng ra file TẠM trong threadpool (không chặn event loop) rồi gửi; file tạm xoá
     sau khi gửi xong qua BackgroundTask."""
     import tempfile
+
     from starlette.background import BackgroundTask
     from starlette.concurrency import run_in_threadpool
     try:
@@ -9129,8 +9180,7 @@ def _ung_vien_tai_nguyen(duong_dan_file: str, p: str):
     thêm ứng viên ở đây không mở rộng thêm thứ gì đọc được.
     """
     raw = (p or "").replace("\\", "/").strip().lstrip("/")
-    if raw.startswith("./"):
-        raw = raw[2:]
+    raw = raw.removeprefix("./")
     if not raw:
         return []
     thu_muc = posixpath.dirname((duong_dan_file or "").replace("\\", "/"))
@@ -9595,7 +9645,6 @@ _MDINDEX_SKIP_DIRS = {".git", "node_modules", "__pycache__", ".obsidian", ".tras
 _MDINDEX_CAP = 20000
 
 
-from typing import List as _List, Optional as _Optional
 
 
 def _mdindex_collect(broot: Path, prefixes):
@@ -9658,8 +9707,8 @@ def _mdindex_collect(broot: Path, prefixes):
 
 @app.get("/files/mdindex")
 async def files_mdindex(brain: str = Query("brain"),
-                        path: _Optional[_List[str]] = Query(None),
-                        if_none_match: _Optional[str] = Header(None)):
+                        path: list[str] | None = Query(None),
+                        if_none_match: str | None = Header(None)):
     """Chỉ mục note .md trong GỐC BRAIN cho khối ```dataview trên dashboard. `path` =
     tiền tố thư mục (tương đối gốc brain) để thu hẹp phạm vi quét, truyền được NHIỀU
     lần (?path=A&path=B) - dataview.js tự suy từ mệnh đề FROM. Trả kèm `etag` (đặt cả
@@ -10618,7 +10667,6 @@ async def _bao_cao_tuan_neu_toi_gio() -> bool:
     Dấu đã-gửi lưu trong nhật ký mốc theo tuần ISO, nên máy khởi động lại giữa sáng thứ Hai
     cũng không gửi hai lần.
     """
-    from datetime import datetime, timedelta, timezone
     mcfg = cfgmod.read_settings().get("model", {}) or {}
     dich = str(mcfg.get("bao_cao_tuan") or "").strip()
     if not dich:
@@ -12613,15 +12661,15 @@ tasks_feature.deps.learn_hook = learn_feature.enqueue_job
 # Javis tự đặt qua POST /reminders (localhost), scheduler nền đánh thức đúng giờ → bắn Telegram.
 # mode notify = nhắn lại · mode task = chạy engine (đọc MCP, ghi nháp) rồi báo. KHÔNG tiền/đơn.
 # ============================================================
-import reminders as reminders_mod
-import webhook_lazy  # the webhook routes; the platform itself loads at startup (keeps `import main` light)
-import incident_desk as incident_desk_mod
-import sentinel
-import change_receipt
-import team_bundle
-import chat_recall
-import voice_note
 import cache_keepwarm
+import change_receipt
+import chat_recall
+import incident_desk as incident_desk_mod
+import reminders as reminders_mod
+import sentinel
+import team_bundle
+import voice_note
+import webhook_lazy  # the webhook routes; the platform itself loads at startup (keeps `import main` light)
 
 
 def _notify_ready() -> tuple:
@@ -12834,7 +12882,7 @@ watch_feature = web_watch.register(app, web_watch.WebWatchDeps(
 
 # 0.251.0: login vault (login_vault.py). The owner's sign-in cookies, encrypted, reused by javis_login and by
 # page watches. Its routes need a real dashboard session: an API token can neither read nor add a sign-in.
-import login_vault  # noqa: E402
+import login_vault
 
 login_vault.register(app, login_vault.LoginVaultDeps(
     state_dir=lambda: cfgmod.STATE_DIR,
@@ -13737,8 +13785,9 @@ def _dong_lan_chay_gan_nhat(brain) -> str:
     Nhờ dòng này, hỏi "quy trình chạy gần nhất ra sao" ở khung chat chính là Javis biết ngay
     có gì để tra và tra bằng tool nào."""
     try:
-        import workflow_runs
         from datetime import datetime
+
+        import workflow_runs
         ds = workflow_runs.get_store().gan_nhat(_brain_key(brain), limit=1)
     except Exception:
         return ""
@@ -14121,7 +14170,7 @@ async def _start_scheduler():
             kq = conversations.cat_nhom_cu()
             if kq.get("da_xoa") or kq.get("loi"):
                 print("[conversations] cắt nhóm cũ: " + json.dumps(kq, ensure_ascii=False))
-        import threading as _threading      # main.py không import threading ở đầu file
+        import threading as _threading  # main.py không import threading ở đầu file
         _threading.Thread(target=_cat_nhom_cu_nen, daemon=True, name="cat-nhom-cu").start()
     except Exception as e:
         print(f"[conversations cắt nhóm] {type(e).__name__}: {e}", file=__import__('sys').stderr)
@@ -14622,8 +14671,8 @@ async def _watchtower_update(token: str, started_at: str):
     """Gọi Watchtower rồi, nếu nó trả lời mà không thay container này, nhả trạng thái "restarting"
     ngay kèm lý do. Trước 0.65.27 trạng thái đó nằm nguyên 15 phút và mọi lần bấm lại đều bị chặn
     "Đang cập nhật rồi, chờ chút"."""
-    import sys as _sys
     import datetime as _dt
+    import sys as _sys
     try:
         status, body = await _watchtower_post(token)
     except Exception as e:
@@ -14644,9 +14693,9 @@ async def _watchtower_update(token: str, started_at: str):
 async def do_update():
     """Cập nhật lên bản mới nhất. Git checkout (windows/native) → spawn updater.py TÁCH RỜI
     (stop/pull/pip/start/health/rollback). Docker → Watchtower nếu có, không thì hướng dẫn Redeploy."""
-    import sys as _sys
-    import subprocess
     import datetime as _dt
+    import subprocess
+    import sys as _sys
     now = lambda: _dt.datetime.now().isoformat(timespec="seconds")
 
     st = _read_update_state()
@@ -14992,7 +15041,7 @@ def _parse_announcements(raw: str):
             cta["label"] = label
         if action == "changelog":
             cta["action"] = action
-        if re.match(r"^https?://", url, flags=re.I):
+        if re.match(r"^https?://", url, flags=re.IGNORECASE):
             cta["url"] = url
         out.append({
             "id": item_id,
@@ -15690,7 +15739,10 @@ async def branding_logo_reset():
 
 # Tên miền riêng + HTTPS (Caddy On-Demand TLS) đã bóc sang routes/domain.py ở 0.9.243.
 # Vị trí lời gọi register quyết định thứ tự route - xem routes/__init__.py.
-import routes.domain as domain_routes   # noqa: E402
+from datetime import UTC
+
+import routes.domain as domain_routes
+
 domain_routes.register(app, domain_routes.DomainDeps(deploy_mode=lambda: _deploy_mode()))
 
 
@@ -15707,7 +15759,7 @@ def _rate_to_speed(rate: str) -> float:
 
 
 async def _tts_edge(text: str, voice: str, rate: str) -> bytes:
-    import edge_tts   # lazy - xem ghi chú ở đầu file
+    import edge_tts  # lazy - xem ghi chú ở đầu file
     communicate = edge_tts.Communicate(text, voice, rate=rate)
     buf = bytearray()
     async for chunk in communicate.stream():
@@ -15725,7 +15777,7 @@ async def _tts_edge_stream(text: str, voice: str, rate: str):
     StreamingResponse đã gửi header 200 rồi thì không đổi được nữa. Nên đợi CHO ĐƯỢC khúc đầu
     trước khi trả response, lỗi thì nổ ở đây, còn các khúc sau mới stream.
     """
-    import edge_tts   # lazy - xem ghi chú ở đầu file
+    import edge_tts  # lazy - xem ghi chú ở đầu file
     communicate = edge_tts.Communicate(text, voice, rate=rate)
     it = communicate.stream()
     first = b""
@@ -15764,7 +15816,7 @@ async def _tts_openai(text: str, rate: str, cfg: dict) -> bytes:
 
 
 async def _tts_elevenlabs(text: str, cfg: dict) -> bytes:
-    import tts_eleven   # 0.255.0: model that speaks Vietnamese, shared with voice notes
+    import tts_eleven  # 0.255.0: model that speaks Vietnamese, shared with voice notes
     return await tts_eleven.synth(text, cfg)
 
 
@@ -15776,6 +15828,7 @@ async def tts(
 ):
     """Sinh audio đúng nhà cung cấp đã chọn; lỗi không được âm thầm đổi giọng."""
     import sys
+
     from fastapi import HTTPException, Response
     if voice == "auto":
         # "Auto by language" is resolved per chunk in the browser (voice-lang.js); a page cached
@@ -16570,7 +16623,7 @@ async def tts_voices(lang: str = Query("")):
     thì ô chọn giọng vẫn chỉ hiện giọng Việt - và một câu tiếng Anh đọc bằng giọng Việt thì
     nghe như máy hỏng. Danh sách ngôn ngữ lấy từ sổ đăng ký chứ không khai lại ở đây.
     """
-    import edge_tts   # lazy - xem ghi chú ở đầu file
+    import edge_tts  # lazy - xem ghi chú ở đầu file
     ma = lang_registry.chuan_hoa(lang) or localefmt.ngon_ngu_tra_loi()
     # Tiền tố locale suy từ giọng mặc định của ngôn ngữ đó ("vi-VN-HoaiMyNeural" -> "vi-VN"),
     # để thêm ngôn ngữ vẫn chỉ là thêm một dòng trong sổ đăng ký.
@@ -18701,7 +18754,7 @@ async def websocket_endpoint(ws: WebSocket):
                     _voice_ask_javis(request, conv_sid, brain, key=khoa_mach, call_lang=call_lang),
                     timeout=VOICE_BG_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 out = (f"Chạy quá {int(VOICE_BG_TIMEOUT // 60)} phút mà chưa xong nên em dừng lại. "
                        "Anh thử giao lại, hoặc hỏi thẳng ở khung chat để chạy trực tiếp.")
                 viec["status"] = "timeout"
@@ -19684,7 +19737,7 @@ async def sessions_add_link(session_id: str, url: str = Form(...), label: str = 
     u = (url or "").strip()
     # Chỉ nhận http/https, cùng lý do như route link của project: không rào thì `javascript:`
     # hay `file:` lọt vào danh sách rồi hiện thành liên kết bấm được ngay trong giao diện.
-    if not re.match(r"^https?://", u, re.I):
+    if not re.match(r"^https?://", u, re.IGNORECASE):
         return JSONResponse({"error": localefmt.chu("URL phải bắt đầu bằng http:// hoặc https://",
                                                     "URL must start with http:// or https://")},
                             status_code=400)
@@ -19726,8 +19779,8 @@ async def sessions_delete(session_id: str):
     # 0.256.0: terminal của engine API giữ tiến trình nền, thư mục và biến môi trường theo phiên,
     # kho mốc khôi phục giữ ref theo phiên. Phiên mất thì dọn theo, kẻo dev server chạy mãi.
     try:
-        import coding_terminal
         import coding_checkpoint
+        import coding_terminal
         await asyncio.to_thread(coding_terminal.don_phien, session_id)
         await asyncio.to_thread(coding_checkpoint.don_phien, session_id)
     except Exception:
@@ -19964,7 +20017,7 @@ async def projects_add_link(project_id: str, url: str = Form(...), label: str = 
     u = (url or "").strip()
     # Chỉ nhận http/https. Không rào thì `javascript:` hay `file:` lọt vào danh sách rồi hiện
     # thành liên kết bấm được ngay trong giao diện.
-    if not re.match(r"^https?://", u, re.I):
+    if not re.match(r"^https?://", u, re.IGNORECASE):
         return JSONResponse({"error": localefmt.chu("URL phải bắt đầu bằng http:// hoặc https://",
                                                     "URL must start with http:// or https://")},
                             status_code=400)
@@ -20136,8 +20189,7 @@ async def openai_compat_connect(request: Request):
     import httpx
     data = await request.json()
     base = str(data.get("base") or "").strip().rstrip("/")
-    if base.endswith("/chat/completions"):
-        base = base[: -len("/chat/completions")]
+    base = base.removesuffix("/chat/completions")
     if not base.lower().startswith(("http://", "https://")):
         return {"ok": False, "error": localefmt.chu("Base URL phải bắt đầu bằng http:// hoặc https://",
                                                     "Base URL must start with http:// or https://")}
@@ -21188,9 +21240,9 @@ def _ky_ten_muc(runtime_cfg: dict, level: str) -> dict:
     Gọi từ MỌI endpoint đổi mức tiết kiệm, kể cả đổi tay từng đường: người vào tận phần Nâng
     cao chỉnh allocation rõ ràng là người có ý kiến riêng, đừng nâng của họ lên sau lưng.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
     dau = {"level": str(level or ""), "source": "user",
-           "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+           "at": datetime.now(UTC).isoformat(timespec="seconds")}
     runtime_cfg["preset_choice"] = dau
     return dau
 
@@ -23931,7 +23983,7 @@ def _tg_agent_mention(text, rows, bot_username=""):
     s = str(text or "")
     st = s.lstrip()
     if bot_username:
-        m = re.match(r"@" + re.escape(str(bot_username)) + r"(?![A-Za-z0-9_])[\s,:]*", st, re.I)
+        m = re.match(r"@" + re.escape(str(bot_username)) + r"(?![A-Za-z0-9_])[\s,:]*", st, re.IGNORECASE)
         if m:
             st = st[m.end():]
     if len(st) < 2 or st[0] != "@" or not st[1].isalnum():
@@ -25053,8 +25105,8 @@ async def chatbots_delete(bot_id: str):
 # Hộp thư hội thoại khách (Chatbot V2): kho `conversations` gom tin của bot chuyên trách
 # (Telegram, Zalo Bot) và tài khoản Zalo cá nhân về một chỗ. Đăng ký NGAY SAU khối Chatbot vì
 # cùng một họ: đây là mặt "đọc lại hội thoại" của chính những bot ở trên.
-import routes.channels as channels_routes   # noqa: E402
-import routes.conversations as conversations_routes   # noqa: E402
+import routes.channels as channels_routes
+import routes.conversations as conversations_routes
 
 # Kênh và tài khoản kênh (0.61.0): một API cho mọi kênh, đọc sổ đăng ký `channels`.
 channels_routes.register(app, channels_routes.ChannelsDeps(
@@ -25075,7 +25127,8 @@ conversations_routes.register(app, conversations_routes.ConversationsDeps(
 # Trang Coding (0.63.0): sổ repo, ràng buộc phiên, worktree, điểm hồi. Không có deps - kho
 # `coding_store` đứng một mình, không cần gì từ main. Chiều phụ thuộc ngược lại thì có:
 # đường chat gọi `coding_store.cwd_cua_phien` để biết engine phải chạy ở thư mục nào.
-import routes.coding as coding_routes   # noqa: E402
+import routes.coding as coding_routes
+
 coding_routes.register(app, coding_routes.CodingDeps(
     brain_keys=_brain_keys,
     resolve_path=lambda b, rel: str(_safe_serve_path(b, rel)),
@@ -25083,9 +25136,11 @@ coding_routes.register(app, coding_routes.CodingDeps(
 
 # GitHub inside chat (0.362.0, docs/dev/2026-10-github-trong-chat-spec.md): the built-in GitHub connection, repo
 # clones per brain (outside the brain tree) and the repos attached to a conversation.
-import routes.github as github_routes   # noqa: E402
+import routes.github as github_routes
+
 github_routes.register(app, github_routes.GitHubDeps(brain_root=lambda b: str(_brain_root(b))))
-import github_work   # noqa: E402
+import github_work
+
 # 0.363.0: the gate result (and from G3 the PR and CI news) lands in the chat that owns the repo, plus the inbox.
 github_work.configure(notify=lambda sid, text, ok: _notify_owner(
     f"{WEB_CHAT_PREFIX}{sid}", text, label="GitHub", source="github", quiet=bool(ok)))
@@ -25938,10 +25993,10 @@ resonance_api.register_a5(app, _RESONANCE_API_DEPS)
 
 
 # ── Nhóm chat team (T1, spec docs/superpowers/specs/2026-10-13-team-chat-design.md) ──
-import team_api  # noqa: E402
-import team_runner  # noqa: E402
-import team_engine  # noqa: E402
-import team_gate  # noqa: E402
+import team_api
+import team_engine
+import team_gate
+import team_runner
 
 
 def _team_agent_info(root, agent_key, surface=None):
@@ -26347,8 +26402,8 @@ def _feedback_projector():
 
 
 # ── Bộ phán xử theo agent (T3 phần J, 0.156.0; docs/dev/team-chat-t3-judge.md) ──
-import agent_judge  # noqa: E402
-import agent_judge_store  # noqa: E402
+import agent_judge
+import agent_judge_store
 
 _AGENT_JUDGE = [None]
 _AGENT_JUDGE_STORE = [None]
@@ -26369,7 +26424,7 @@ def _agent_judge_store(create=True):
 
 # ── Learned-knowledge mirror (owner request 2026-10-25): what bots and agents learned also lives in the brain folder
 #    (`Javis/learned/`), so a copied, moved or GitHub-restored brain keeps it. See server/learned_mirror.py. ──
-import learned_mirror  # noqa: E402
+import learned_mirror
 
 
 def _learned_resonance(create: bool):
@@ -27086,8 +27141,9 @@ async def _feedback_pulse_startup():
 
 
 # ── Tab Công việc của trợ lý (0.142.0): gom việc theo agent_key từ nhóm, chat riêng và Auto ──
-import agent_jobs  # noqa: E402
-import job_marks  # noqa: E402
+import agent_jobs
+import job_marks
+
 job_marks.configure(Path(cfgmod.STATE_DIR) / "job_marks.sqlite3")
 
 
@@ -27411,8 +27467,8 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
 
 
 # ── Nhịp thích nghi lớp 3 (T3, 0.156.0; thiết kế 2026-10-15 mục 5, 6, 10; hợp đồng docs/dev/team-chat-t3-contract.md) ──
-import agent_pulse  # noqa: E402
-import agent_pulse_host  # noqa: E402
+import agent_pulse
+import agent_pulse_host
 
 _PULSE_HOST = [None]
 _PULSE_TICK_BUSY = [False]
@@ -28115,7 +28171,7 @@ async def share_chat_of(session_id: str = Query(...)):
 
 # ── Event loop watchdog (0.194.0, owner 17/10/2026: "Mất kết nối tới máy chủ" more and more often) ──
 # Synchronous work on the event loop freezes every socket at once; the watchdog names the code (loop_watch.py).
-import loop_watch  # noqa: E402
+import loop_watch
 
 
 @app.on_event("startup")
@@ -28145,7 +28201,8 @@ async def diag_ws_drops(body: dict = Body(...)):
 
 # Remote access through the built-in Cloudflare Tunnel (0.242.0): routes/remote_access.py, remote_tunnel.py.
 # Registered at the end of the file so the route table only grows at the end.
-import routes.remote_access as remote_access_routes  # noqa: E402
+import routes.remote_access as remote_access_routes
+
 remote_access_routes.register(app, remote_access_routes.RemoteAccessDeps(browser_session_error=_doi_phien_that))
 
 
@@ -28166,9 +28223,10 @@ async def voice_elevenlabs_voices():
 
 
 # Improvement M0 is metadata-only: importing or reading status never starts a trial.
-import improvement_api  # noqa: E402
-from improvement_blobs import RevisionBlobs  # noqa: E402
-from improvement_store import ImprovementStore, read_existing as _read_improvement_existing  # noqa: E402
+import improvement_api
+from improvement_blobs import RevisionBlobs
+from improvement_store import ImprovementStore
+from improvement_store import read_existing as _read_improvement_existing
 
 
 def _improvement_write_store():
@@ -28190,8 +28248,8 @@ improvement_api.register(app, improvement_api.ImprovementApiDeps(
 
 # M2E manual activation: owner applies an authorized candidate to one assistant chat. Read time
 # resolves the pointer for in-process engines only; nothing here writes a canonical skill file.
-import improvement_activation  # noqa: E402
-import improvement_activation_api  # noqa: E402
+import improvement_activation
+import improvement_activation_api
 
 improvement_activation.configure(Path(cfgmod.STATE_DIR) / "resonance.sqlite3",
                                  RevisionBlobs(Path(cfgmod.STATE_DIR) / "improvement"))
@@ -28269,7 +28327,7 @@ def _improvement_text_call(system, prompt, tag, spec=None):
     async def bounded():
         try:
             return await asyncio.wait_for(run(), timeout=300)  # a hung engine must not hold the run forever
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await asyncio.to_thread(claude_cli.cancel_all, tag)
             raise
     return asyncio.run(bounded())
@@ -28600,8 +28658,8 @@ improvement_activation_api.register(app, improvement_activation_api.ActivationAp
 
 
 # Explicit owner trials are lazy; importing routes does not start or recover work.
-import improvement_trial_api  # noqa: E402
-import improvement_trial_service  # noqa: E402
+import improvement_trial_api
+import improvement_trial_service
 
 _IMPROVEMENT_TRIAL_SERVICE = None
 _IMPROVEMENT_EXPERIMENT_SERVICE = None
@@ -28687,7 +28745,7 @@ improvement_trial_api.register(app, improvement_trial_api.TrialApiDeps(
 
 
 # Candidate authoring is lazy and has no engine dependency or startup recovery.
-import improvement_candidate_api  # noqa: E402
+import improvement_candidate_api
 
 _IMPROVEMENT_CANDIDATE_OPERATIONS = None
 _IMPROVEMENT_CANDIDATE_SHUTTING_DOWN = False
@@ -28738,7 +28796,7 @@ improvement_candidate_api.register(app, improvement_candidate_api.CandidateApiDe
 
 # Append to the established route order. History does not capture sources or
 # construct services; explicit writes reuse the one actual trial dispatcher.
-import improvement_experiment_api  # noqa: E402
+import improvement_experiment_api
 
 improvement_experiment_api.register(app, improvement_experiment_api.ExperimentApiDeps(
     read_store=_improvement_read_store,
@@ -28754,7 +28812,7 @@ improvement_experiment_api.register(app, improvement_experiment_api.ExperimentAp
 # Plugins page "Install from .zip" (owner request 2026-10-25). Same auth rule as the pack routes
 # (it brings foreign code onto the machine), see server/routes/plugin_zip.py. Registered LAST so
 # route_table.json only grows at the end instead of renumbering every later route.
-import routes.plugin_zip as plugin_zip_routes   # noqa: E402
+import routes.plugin_zip as plugin_zip_routes
 
 
 def _after_plugin_install(brain: str) -> None:
@@ -28775,7 +28833,7 @@ plugin_zip_routes.register(app, plugin_zip_routes.PluginZipDeps(
 
 # Invitation to star Javis on GitHub (0.324.0, owner request 2026-10-25), see server/star_nudge.py.
 # Registered LAST so route_table.json only grows at the end.
-import routes.star_nudge as star_nudge_routes   # noqa: E402
+import routes.star_nudge as star_nudge_routes
 
 star_nudge_routes.register(app, star_nudge_routes.StarNudgeDeps(
     read_settings=cfgmod.read_settings,

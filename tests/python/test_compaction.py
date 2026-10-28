@@ -6,17 +6,15 @@ Không cần API key, không chạm mạng (api_stream giả). Phủ: trim_histo
 dẫn đầu, migration cột compact cho DB cũ, seed_messages chèn tóm tắt, maybe_compact
 nén đúng ngưỡng + gộp tóm tắt cũ + không phá khi provider lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
-import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 
-
-import compaction                      # noqa: E402
-from sessions import SessionStore     # noqa: E402
+import compaction
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+from sessions import SessionStore
 
 _fails = []
 

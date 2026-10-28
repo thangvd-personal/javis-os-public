@@ -1,14 +1,14 @@
 """Closed child observations reuse qualification; never launch CLI or an engine."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-from contextlib import contextmanager
 import copy
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix='observed-verify-'))
 for key, name in {'JAVIS_STATE_DIR': 'state', 'BRAINS_DIR': 'brains', 'OBSIDIAN_VAULT_PATH': 'vault',

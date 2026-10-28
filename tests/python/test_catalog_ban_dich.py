@@ -7,20 +7,21 @@ Catalog gốc viết tiếng Việt; bản tiếng Anh là file lớp phủ, ph�
 một ô nhập hay một bước wizard vào bản gốc mà quên bản dịch thì người đọc tiếng Anh thấy chữ Việt
 lọt vào giữa trang. Test này bắt đúng những chỗ đó, cộng một lượt chạy thật qua public_catalog.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-cat-"))
-import catalog_i18n  # noqa: E402
-import localefmt  # noqa: E402
-import mcp_catalog  # noqa: E402
+import catalog_i18n
+import localefmt
+import mcp_catalog
 
 _fails = []
-DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.I)
+DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.IGNORECASE)
 
 
 def check(ten, ok, chi_tiet=""):
@@ -81,7 +82,8 @@ check("tiếng Anh: không còn chữ Việt trong chữ hiển thị của conn
            and DAU_VIET.search(json.dumps({k: c.get(k) for k in ("name", "description", "group_line", "guide", "risk", "fields", "steps", "setup")}, ensure_ascii=False))])
 # Thứ tiếng ĐÃ đăng ký nhưng chưa có mcp-catalog.<mã>.json: phải dùng bản tiếng Anh, không rơi
 # về tiếng Việt. Giả lập bằng cách cho sổ đăng ký nhận "ja" trong lúc thử.
-import lang_registry  # noqa: E402
+import lang_registry
+
 _goc_ch = lang_registry.chuan_hoa
 lang_registry.chuan_hoa = lambda m: "ja" if str(m).startswith("ja") else _goc_ch(m)
 try:

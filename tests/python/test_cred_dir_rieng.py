@@ -16,12 +16,12 @@ người dùng mắc kẹt. Kèm theo đó, mọi tài khoản dùng chung một
 Cách chữa: mỗi connection một thư mục token riêng (env `WORKSPACE_MCP_CREDENTIALS_DIR`), xoá
 kết nối thì xoá luôn thư mục đó, và có nút "Đăng nhập lại" vứt token mà giữ kết nối.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import json
 import sys
 
 import mcp_catalog
 import mcp_store
+from _paths import DASHBOARD, ROOT, SERVER
 
 _fails = []
 
@@ -88,7 +88,7 @@ check("giá trị để trống vẫn giữ key cũ như trước, không kích 
       "giá trị rỗng = giữ cũ" in than_update)
 
 # Chạy THẬT update_connection trên một store giả, không chỉ soi chuỗi trong mã nguồn.
-import secrets_store  # noqa: E402
+import secrets_store
 
 _kho = {"connections": [{"id": "cid-ws", "connector_id": "google-workspace", "slug": "ws-test",
                          "label": "ws", "enabled": True, "perm": "safe",

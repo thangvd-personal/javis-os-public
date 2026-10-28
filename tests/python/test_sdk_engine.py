@@ -9,12 +9,13 @@ KHÔNG cần Claude CLI hay đăng nhập - chỉ test phần thuần logic:
 - _permission_gate: whitelist per-call allow/deny + pattern fnmatch + ghi audit JSONL.
 (Chạy THẬT end-to-end với CLI + auth nằm ở smoke test tay, không thuộc CI.)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-sdktest-"))
 
@@ -29,10 +30,10 @@ def check(name, cond):
 
 # ---- 1. Factory: engine Claude LUÔN là SDK (nhánh Popen ClaudeCLI đã gỡ v0.9.37) ----
 os.environ.pop("JAVIS_CLAUDE_ENGINE", None)
-import claude_cli                                         # noqa: E402
-from claude_cli import claude_engine                      # noqa: E402
-import claude_sdk_engine                                  # noqa: E402
-from claude_sdk_engine import ClaudeSDK, map_message      # noqa: E402
+import claude_cli
+import claude_sdk_engine
+from claude_cli import claude_engine
+from claude_sdk_engine import ClaudeSDK, map_message
 
 eng = claude_engine(system_prompt="x", cwd=".", tag="t", allowed_tools=["Read"], model="haiku")
 check("factory: mặc định → ClaudeSDK", isinstance(eng, ClaudeSDK))
@@ -46,8 +47,15 @@ check("factory: class ClaudeCLI đã bị xoá hẳn", not hasattr(claude_cli, "
 os.environ.pop("JAVIS_CLAUDE_ENGINE", None)
 
 # ---- 2. map_message: parity hợp đồng event ----
-from claude_agent_sdk import (AssistantMessage, UserMessage, SystemMessage, ResultMessage,  # noqa: E402
-                              TextBlock, ToolUseBlock, ToolResultBlock)
+from claude_agent_sdk import (
+    AssistantMessage,
+    ResultMessage,
+    SystemMessage,
+    TextBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
 
 evs, sid = map_message(SystemMessage(subtype="init", data={"session_id": "abc123"}))
 check("map: init → bắt session_id, không event", evs == [] and sid == "abc123")
@@ -141,7 +149,7 @@ async def gate_prefix_tests():
 asyncio.run(gate_prefix_tests())
 
 # ---- 4. Phase 3: plugin in-process + hub bỏ nhóm plugin ----
-import plugins_host                                       # noqa: E402
+import plugins_host
 
 
 async def _fake_call(args):
@@ -196,7 +204,7 @@ finally:
 # phải nạp lại toàn bộ ngữ cảnh nên lâu, im lúc đó không phải treo - người dùng thật báo
 # "chat dài là dính 'Claude không phản hồi 180s'". Im lặng SAU khi đã có chữ thì vẫn ngắt
 # ở IDLE như cũ, nếu không thì mất luôn tác dụng chống treo.
-import claude_agent_sdk  # noqa: E402
+import claude_agent_sdk
 
 
 def _fake_client(messages_gen):
@@ -327,7 +335,7 @@ finally:
 # ---- 6. System prompt DÀI đẩy qua FILE, không nhét vào argv (lỗi CLINotFound trên Windows) ----
 # Gốc lỗi: SDK để --append-system-prompt <prompt> trên dòng lệnh; > 32767 ký tự thì Windows
 # CreateProcess chết -> FileNotFoundError bị dán nhãn "Claude Code not found at ...\\_bundled\\claude.exe".
-from pathlib import Path as _Path6  # noqa: E402
+from pathlib import Path as _Path6
 
 _big = "Bạn là Javis.\n" + ("- một dòng hướng dẫn dài để độn kích thước prompt. " * 900)
 _e6 = ClaudeSDK(system_prompt=_big, tag="t6")
@@ -345,7 +353,8 @@ _e6._cleanup_tmp()
 check("options: dọn file tạm sau khi xong", bool(_pf6) and not _Path6(_pf6).exists())
 
 # SDK không có extra_args (bản cũ) → fallback nhét inline, vẫn chạy (chỉ hợp prompt ngắn)
-import claude_agent_sdk as _casdk6  # noqa: E402
+import claude_agent_sdk as _casdk6
+
 if "extra_args" not in getattr(_casdk6.ClaudeAgentOptions, "__dataclass_fields__", {}):
     _e6b = ClaudeSDK(system_prompt="ngắn", tag="t6b")
     _o6b = _e6b._options()

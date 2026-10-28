@@ -2,12 +2,13 @@
 
     python tests/run.py reply_policy_review      (no network, no model: `ask` is a fake)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-review-")
 try:
@@ -15,9 +16,8 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_review as rv  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
+import chatbot_reply_policy_review as rv
+import chatbot_reply_policy_store as st
 
 _fails = []
 

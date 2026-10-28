@@ -10,10 +10,14 @@ Test này có 2 tầng: (1) kiểm env _git truyền cho subprocess - có răng 
 bản dịch vi (macOS dev) và pass trivially ở CI không có catalog vi. Chạy:
     python tests/run.py bootstrap_locale
 Cần git trong PATH. KHÔNG mạng thật."""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, subprocess, tempfile
+import os
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
-import git_brain as gb  # noqa: E402
+
+import git_brain as gb
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 def check(name, cond):

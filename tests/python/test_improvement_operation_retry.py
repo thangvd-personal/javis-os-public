@@ -1,6 +1,4 @@
 """One genuine infrastructure retry; never retry model output for a better answer."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
 import sqlite3
@@ -8,10 +6,11 @@ import unittest
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_operation_runner import OperationRunner
-from improvement_operation_adapter import ClaudeOperationAdapter
 import test_improvement_operation_execution as F
 import test_improvement_operation_results as P
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_operation_adapter import ClaudeOperationAdapter
+from improvement_operation_runner import OperationRunner
 
 
 class OperationRetryTests(unittest.TestCase):

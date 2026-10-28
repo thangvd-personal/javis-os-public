@@ -5,10 +5,11 @@
 Chủ dự án chạy nhiều bot lĩnh vực không liên quan (Javis Vũ, Nhi Mai, Ngọc Thu). Điều file này canh
 nặng nhất: ca học ở bot này không bao giờ được tra ra ở bot kia, kể cả khi tin y hệt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-store-")
 try:
@@ -16,8 +17,8 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
 
 _fails = []
 

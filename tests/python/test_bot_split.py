@@ -12,12 +12,13 @@ writes a line `[TACH_TIN]` between messages; personal Zalo sends each part as it
      and tags only the first part in a group;
   6. "Reply for me" and Try bot show the joined text.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-split-")
 try:
@@ -25,12 +26,12 @@ try:
 except Exception:
     pass
 
-import bot_split  # noqa: E402
-import chatbot_log  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import bot_split
+import chatbot_log
+import chatbot_runtime
+import chatbot_store
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

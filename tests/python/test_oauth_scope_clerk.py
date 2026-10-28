@@ -11,7 +11,6 @@ File này canh:
   2. Nhận invalid_scope thì bỏ phạm vi bị từ chối, tự mở lại trang đăng nhập (có trần), không đổi code rỗng.
   3. Lỗi khác ở bước xin quyền báo đúng lỗi đó, trang báo lỗi escape chữ do nhà cung cấp gửi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -19,14 +18,16 @@ import tempfile
 import urllib.parse
 from unittest.mock import AsyncMock, patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-oauth-scope-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import oauth_mcp  # noqa: E402
-import mcp_store  # noqa: E402
+import mcp_store
+import oauth_mcp
 
 _fails = []
 
@@ -101,7 +102,7 @@ async def luong():
 asyncio.run(luong())
 
 # ---- 3. Route callback: chuyển hướng khi có retry_url, escape lời báo lỗi
-import main  # noqa: E402
+import main
 
 
 async def route():

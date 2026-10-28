@@ -16,10 +16,11 @@ là test an toàn chứ không phải test tính năng:
   4. Trang trả về phải mang header cách ly, không thì một file .html do AI viết ra, mở bởi
      chính chủ lúc đang đăng nhập, sẽ chạy cùng gốc với dashboard.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-share-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-share-brains-")
@@ -59,10 +60,9 @@ os.makedirs(os.path.join(BRAIN, "assets"), exist_ok=True)
 with open(os.path.join(BRAIN, "assets", "style.css"), "w", encoding="utf-8") as f:
     f.write("body{color:red}")
 
-from fastapi.testclient import TestClient   # noqa: E402
-import share_render                         # noqa: E402
-import share_store                          # noqa: E402
-import main                                 # noqa: E402
+import main
+import share_render
+from fastapi.testclient import TestClient
 
 _fails = []
 

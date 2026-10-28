@@ -51,7 +51,6 @@ import re
 import secrets
 import threading
 import time
-from typing import Optional
 
 HEADER = "X-Javis-Turn"
 # Codex takes per-process header overrides through `-c`. No quotes around the header name, same
@@ -70,7 +69,7 @@ class _Binding:
     # `alive` goes False in `reset`. Tasks spawned during a turn copy the context, so they still
     # hold this binding after the turn ends; a dead binding must read as "no turn" there, and
     # must not mint a fresh key for a turn that is over.
-    __slots__ = ("turn", "keys", "alive")
+    __slots__ = ("alive", "keys", "turn")
 
     def __init__(self, turn: dict):
         self.turn = turn
@@ -80,14 +79,14 @@ class _Binding:
 
 class Token:
     """What `bind` returns. Hand it back to `reset` in a `finally`."""
-    __slots__ = ("_cv", "_binding")
+    __slots__ = ("_binding", "_cv")
 
-    def __init__(self, cv_token, binding: Optional[_Binding]):
+    def __init__(self, cv_token, binding: _Binding | None):
         self._cv = cv_token
         self._binding = binding
 
 
-_CURRENT: contextvars.ContextVar[Optional[_Binding]] = contextvars.ContextVar(
+_CURRENT: contextvars.ContextVar[_Binding | None] = contextvars.ContextVar(
     "javis_turn_context", default=None)
 _KEYS: dict = {}          # key -> (turn dict, expires_at)
 _LOCK = threading.Lock()  # CLI engines build argv from worker threads too
@@ -122,7 +121,7 @@ def _int(v) -> int:
         return 0
 
 
-def _agent(a) -> Optional[dict]:
+def _agent(a) -> dict | None:
     if not isinstance(a, dict) or not str(a.get("key") or "").strip():
         return None
     return {"key": str(a["key"]).strip(), "slug": str(a.get("slug") or "").strip(),
@@ -146,7 +145,7 @@ IMPROVEMENT_EXECUTION_FIELDS = ("experiment_id", "trial_id", "case_id", "variant
                                 "execution_id", "role", "purpose", "learning_origin", "cli_session_id", "cli_session_new")
 
 
-def execution_metadata(value) -> Optional[dict]:
+def execution_metadata(value) -> dict | None:
     """Allow only host identifiers, never prompts or credentials, into usage telemetry."""
     if not isinstance(value, dict):
         return None
@@ -205,7 +204,7 @@ def from_meta(kenh, meta, la_chu: bool) -> dict:
     return make(kenh, sender, m.get("chat_type"), m.get("chat_id"), la_chu)
 
 
-def bind(turn: Optional[dict]) -> Token:
+def bind(turn: dict | None) -> Token:
     """Make `turn` the current turn until `reset`. `None` binds "no turn" on purpose: the hub
     does that for a request without a valid key, so it never inherits an ambient turn."""
     b = _Binding(_copy(turn)) if turn else None
@@ -225,12 +224,12 @@ def reset(token: Token) -> None:
     _CURRENT.reset(token._cv)
 
 
-def current() -> Optional[dict]:
+def current() -> dict | None:
     b = _CURRENT.get()
     return _copy(b.turn) if b is not None and b.alive else None
 
 
-def issue_key() -> Optional[str]:
+def issue_key() -> str | None:
     """Opaque key for the current turn, for an engine that reaches the hub over HTTP. One key per
     turn (reused if the engine queries twice, e.g. a resume retry). None when there is no turn,
     and then the engine sends no header at all."""
@@ -249,7 +248,7 @@ def issue_key() -> Optional[str]:
     return key
 
 
-def resolve_key(key) -> Optional[dict]:
+def resolve_key(key) -> dict | None:
     """The turn behind a key from the `X-Javis-Turn` header, or None for anything not issued by
     a live turn in THIS process."""
     k = str(key or "").strip()
@@ -262,7 +261,7 @@ def resolve_key(key) -> Optional[dict]:
     return _copy(ent[0])
 
 
-def codex_override() -> Optional[str]:
+def codex_override() -> str | None:
     """`-c` value carrying the current turn's key to a Codex process, or None without a turn."""
     key = issue_key()
     return f'{CODEX_HEADER_KEY}="{key}"' if key else None

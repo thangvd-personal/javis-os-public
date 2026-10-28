@@ -1,16 +1,17 @@
 """Avatar đi cùng file agent, lưu lại qua API và không mất khi client cũ sửa agent."""
-from _paths import ROOT, SERVER  # noqa: F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 state = tempfile.mkdtemp(prefix="javis-avatar-test-")
 os.environ["JAVIS_STATE_DIR"] = state
 os.environ["BRAINS_DIR"] = str(Path(state) / "brains")
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(state) / "sessions.db")
 
-import main
 import agent_avatar
+import main
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

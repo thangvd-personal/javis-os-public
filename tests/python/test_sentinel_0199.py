@@ -3,7 +3,6 @@
 Run:
     python tests/run.py sentinel
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sqlite3
@@ -13,7 +12,8 @@ import tempfile
 import time
 from pathlib import Path
 
-import sentinel  # noqa: E402
+import sentinel
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

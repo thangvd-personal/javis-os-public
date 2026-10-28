@@ -42,8 +42,8 @@ def main(argv=None) -> int:
         (brain / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                                      encoding="utf-8", newline="\n")
     sys.path.insert(0, str(ROOT / "server"))
-    import main as M  # noqa: E402
-    from fastapi.testclient import TestClient  # noqa: E402
+    import main as M
+    from fastapi.testclient import TestClient
 
     M._TEAM_API.deps.spawn = lambda coro: coro.close() if hasattr(coro, "close") else None
     c = TestClient(M.app, base_url="http://127.0.0.1:8080")

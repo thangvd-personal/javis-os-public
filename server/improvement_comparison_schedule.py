@@ -3,11 +3,11 @@ import json
 from contextlib import closing
 
 import improvement_store as IM
-from improvement_comparison_plans import ExperimentPlans
 from improvement_comparison_links import comparison_table, experiment_trial_scope
+from improvement_comparison_plans import ExperimentPlans
 from improvement_operation_schema import TERMINAL as ROLE_TERMINAL
 from improvement_trial_records import _brain
-from improvement_trials import TrialStore, TERMINAL
+from improvement_trials import TERMINAL, TrialStore
 
 
 class ComparisonSchedule:

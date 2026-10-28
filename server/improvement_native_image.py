@@ -8,13 +8,13 @@ No account configuration or model input enters here.
 from __future__ import annotations
 
 import ctypes
-from ctypes import wintypes
-from functools import lru_cache
 import hashlib
 import os
-from pathlib import Path
 import re
 import threading
+from ctypes import wintypes
+from functools import lru_cache
+from pathlib import Path
 
 
 class _FileInfo(ctypes.Structure):
@@ -163,8 +163,7 @@ def _final_path(handle):
     if not 0 < count < len(buffer):
         raise OSError('native_image_path_unavailable')
     path = buffer.value
-    if path.startswith('\\\\?\\'):
-        path = path[4:]
+    path = path.removeprefix('\\\\?\\')
     return os.path.normcase(os.path.normpath(path))
 
 

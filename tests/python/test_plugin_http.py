@@ -12,19 +12,20 @@ ranh giới lõi phải giữ hộ mọi gói, kể cả gói viết ẩu:
 4. `/.well-known/<tên>` công khai, không cookie, chỉ GET.
 5. Plugin trong BRAIN không mở được đường nào: model ghi được vào brain.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-plughttp-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"
 os.environ["JAVIS_ENABLE_USER_PLUGINS"] = "true"
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as cfg   # noqa: E402
-import main            # noqa: E402
-import plugins_host    # noqa: E402
+import config as cfg
+import main
+import plugins_host
+from fastapi.testclient import TestClient
 
 _fails = []
 

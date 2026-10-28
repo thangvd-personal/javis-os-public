@@ -21,12 +21,12 @@ File này canh ba tầng, và tầng cuối là tầng thật:
   2. Máy ĐÃ CÀI có được nới không (settings.json cũ ghim cứng ["dashboard"]).
   3. Chạy THẬT một lượt Telegram, xem nó có đi đường tắt và có dùng prompt gọn không.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
-import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-tkkn-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -37,10 +37,10 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import fast_path_runtime  # noqa: E402
-import adaptive_context_runtime  # noqa: E402
-import main  # noqa: E402
+import adaptive_context_runtime
+import config as cfgmod
+import fast_path_runtime
+import main
 
 _fails = []
 

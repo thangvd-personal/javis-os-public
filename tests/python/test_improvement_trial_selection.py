@@ -1,12 +1,10 @@
 """Read-only synthetic settings/binary fixtures; no CLI, authentication or model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import ast
 import contextlib
-import io
+import copy
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -16,6 +14,8 @@ import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="trial-selection-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",

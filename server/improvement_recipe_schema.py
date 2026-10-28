@@ -128,8 +128,8 @@ def _assert_absent(connection):
 
 
 def _assert_expected(connection, expected) -> None:
-    from improvement_store import ConflictError
     from improvement_compose_schema import _assert_statements
+    from improvement_store import ConflictError
     try:
         _assert_statements(connection, expected, error=ConflictError)
     except ConflictError as exc:
@@ -145,8 +145,8 @@ def assert_installed(connection) -> None:
 
 
 def migrate(connection) -> None:
-    from improvement_store import SchemaError
     from improvement_compose_schema import assert_installed as assert_compose
+    from improvement_store import SchemaError
     if not connection.in_transaction:
         raise SchemaError('recipe_migration_requires_owned_transaction')
     assert_compose(connection)

@@ -6,12 +6,13 @@ Spec: docs/dev/2026-10-model-routing-spec.md. The owner settled every rule on th
 the ones the server owns: migration from older settings, MAIN = top card, key rotation, the background order with each
 provider's starting config and MAIN last, and the nearest effort level.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-routing-"))
 try:
@@ -19,8 +20,8 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import model_routing as R  # noqa: E402
+import config as cfgmod
+import model_routing as R
 
 _fails = []
 
@@ -149,7 +150,7 @@ R.set_telegram_pin(m, "111", "", "")
 check("an empty provider removes the pin", R.telegram_pin(m, "111") == {})
 
 # ---- 7. main.py: settings endpoint, chat route, key lookup ------------------------------------
-import main  # noqa: E402
+import main
 
 s = cfgmod.read_settings()
 s["model"].update({"main": {"provider": "anthropic-cli", "model": "opus"}, "reasoning": "high",

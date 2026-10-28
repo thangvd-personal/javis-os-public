@@ -6,7 +6,6 @@ Trang Models và chip model ở khung chat ghi "mặc định (tên model)" khi 
 chưa chọn riêng. Tên lấy từ ĐÚNG chỗ engine dùng khi model để trống, nên test này giữ hai thứ khớp nhau:
 bảng `engine.DEFAULT_MODELS` và các giá trị dự phòng viết trong hàm engine.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
@@ -14,10 +13,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-macdinh-"))
 
-import engine  # noqa: E402
-import main  # noqa: E402
+import engine
+import main
 
 _fails = []
 
@@ -68,7 +69,7 @@ finally:
     main.cfgmod.read_settings = _old_read
 
 # ---- 3. giao diện ----
-D = lambda f: (ROOT / "dashboard" / f).read_text(encoding="utf-8")  # noqa: E731
+D = lambda f: (ROOT / "dashboard" / f).read_text(encoding="utf-8")
 JS, MP = D("console.js"), D("model-picker.js")
 VI, EN = json.loads(D("i18n/vi.json")), json.loads(D("i18n/en.json"))
 check("trang Models ghi tên model mặc định ở chip, danh sách và thẻ việc nền",

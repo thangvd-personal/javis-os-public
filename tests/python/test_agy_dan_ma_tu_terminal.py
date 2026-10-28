@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Đăng nhập `agy` trong tab Code phải CÓ CHỖ DÁN MÃ.
 
     python tests/run.py agy_dan_ma     (KHÔNG mạng)
@@ -15,10 +14,11 @@ trình duyệt lại ở máy khác, nên mã không bao giờ về tới nơi.
 Test này giữ hai điều: `_env` khai phiên từ xa khi máy chủ không có màn hình, và hướng dẫn trên
 thẻ Models nói đúng bước dán tay.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 from unittest import mock
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -34,8 +34,8 @@ def check(name, cond):
         _fails.append(name)
 
 
-import terminal  # noqa: E402
-import antigravity_cli  # noqa: E402
+import antigravity_cli
+import terminal
 
 _GIU = {k: os.environ.get(k) for k in
         ("JAVIS_TERMINAL_REMOTE", "SSH_CONNECTION", "SSH_CLIENT", "DISPLAY", "WAYLAND_DISPLAY")}

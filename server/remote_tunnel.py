@@ -49,7 +49,7 @@ SETTINGS_KEY = "remote_tunnel"
 MODES = ("quick", "token", "tailscale")
 RELEASE_BASE = "https://github.com/cloudflare/cloudflared/releases/latest/download/"
 
-QUICK_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com", re.I)
+QUICK_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com", re.IGNORECASE)
 # A tunnel token is base64 of a JSON object {"a": account, "t": tunnel id, "s": secret}, so it always starts "eyJ".
 TOKEN_RE = re.compile(r"eyJ[A-Za-z0-9+/_=-]{40,}")
 CONNECTED_MARKERS = ("Registered tunnel connection", "Connection registered")
@@ -178,8 +178,7 @@ def install_binary() -> str:
         with httpx.stream("GET", RELEASE_BASE + name, follow_redirects=True, timeout=60) as r:
             r.raise_for_status()
             with open(part, "wb") as f:
-                for chunk in r.iter_bytes(1 << 16):
-                    f.write(chunk)
+                f.writelines(r.iter_bytes(1 << 16))
         if name.endswith(".tgz"):
             with tarfile.open(part) as tf:
                 member = next((m for m in tf.getmembers() if m.isfile() and Path(m.name).name == "cloudflared"), None)
@@ -324,7 +323,7 @@ def kill_stray() -> bool:
 
 TS_SERVE_TIMEOUT = 25
 TS_ENABLE_RE = re.compile(r"https://login\.tailscale\.com/\S+")
-TS_URL_RE = re.compile(r"https://[a-z0-9-]+(?:\.[a-z0-9-]+)*\.ts\.net", re.I)
+TS_URL_RE = re.compile(r"https://[a-z0-9-]+(?:\.[a-z0-9-]+)*\.ts\.net", re.IGNORECASE)
 TS_STATUS_TTL = 10.0
 # Seconds between attempts while Tailscale is missing, signed out or waiting for HTTPS to be enabled.
 TS_RETRY_EVERY = 15

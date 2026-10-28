@@ -6,10 +6,10 @@ HTTP authorization, dispatch and lifespan registration are separate integration.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 import sys
 import types
-import asyncio
 from pathlib import Path
 
 from evidence_store import redact
@@ -17,8 +17,9 @@ from improvement_assets import capture_source
 from improvement_blobs import RevisionBlobs
 from improvement_store import ImprovementStore
 from improvement_trial_dashboard import DashboardContextCapture
-from improvement_trial_file_sources import BrainFileFixtures, _root as owner_root
-from improvement_trial_host import HostContextStore, TARGET_FIELDS
+from improvement_trial_file_sources import BrainFileFixtures
+from improvement_trial_file_sources import _root as owner_root
+from improvement_trial_host import TARGET_FIELDS, HostContextStore
 from improvement_trial_plugins import PluginCapabilityProjection
 from improvement_trial_selection import create_pin, resolve_sdk_cli
 from improvement_trial_sql_context import ExistingSQLiteSource, SQLiteContextProjection
@@ -210,9 +211,9 @@ class OwnerTrialService:
         return values[0]
 
     async def start(self, principal, value):
+        import improvement_store as IM
         from improvement_trial_records import _brain
         from improvement_trial_requests import validate_body
-        import improvement_store as IM
         self._bind()
         if self._closed:
             raise RuntimeError("trial_service_closed")
@@ -234,8 +235,8 @@ class OwnerTrialService:
         return await self._join(task)
 
     async def _abandon_unclaimed(self, principal, admitted):
-        from improvement_trial_runner import _drain, _settled_call
         import improvement_store as IM
+        from improvement_trial_runner import _drain, _settled_call
 
         async def clean():
             current = await asyncio.to_thread(self.trials.get, principal, admitted.trial_id)

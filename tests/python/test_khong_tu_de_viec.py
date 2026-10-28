@@ -19,11 +19,10 @@ Test canh cái vế vừa thêm, ở cả BA nơi model thật sự đọc:
   3. `CLAUDE.md` - system prompt gốc.
 Thiếu một trong ba thì luật hở đúng ở engine đi qua đường đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import pathlib
 import sys
 
-import channel_context  # noqa: E402
+import channel_context
+from _paths import ROOT, SERVER  # noqa: F401
 
 _loi = []
 
@@ -72,7 +71,7 @@ class _Ctx:
 
 
 sys.path.insert(0, str(ROOT / "system" / "plugins" / "javis-task"))
-import plugin as javis_task_plugin  # noqa: E402
+import plugin as javis_task_plugin
 
 try:
     javis_task_plugin.register(_Ctx())

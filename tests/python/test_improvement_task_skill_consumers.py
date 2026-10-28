@@ -1,18 +1,17 @@
 """Actual lazy/hub consumers share an owned baseline, never a mutable fallback."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import asyncio
 import ast
+import asyncio
 import copy
 import hashlib
 import unittest
 from contextlib import contextmanager
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
-import test_improvement_task_skill_scope as fixture
-from lazy_skill_runtime import LazySkillSource
 import mcp_hub
 import skill_router
+import test_improvement_task_skill_scope as fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from lazy_skill_runtime import LazySkillSource
 
 
 class TaskSkillConsumerTests(unittest.TestCase):

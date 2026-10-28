@@ -19,7 +19,6 @@ import base64
 import io
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 MAX_IMAGES = 4               # per turn; customers rarely send more, and each image costs real tokens
@@ -33,7 +32,7 @@ SUPPORTED = ("openai", "openrouter", "gemini", "groq", "deepseek", "ollama", "ol
              "anthropic-api", "anthropic", "anthropic-compat", "openai-oauth", "anthropic-cli")
 
 _MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
-_DATA_URL = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.S)
+_DATA_URL = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.DOTALL)
 
 
 def supported(prov: str) -> bool:
@@ -46,7 +45,7 @@ def is_image_path(p) -> bool:
     return Path(str(p or "")).suffix.lower() in IMAGE_EXTS
 
 
-def load(path) -> Optional[Tuple[str, str]]:
+def load(path) -> tuple[str, str] | None:
     """(mime, base64) for one image file, shrunk to `MAX_SIDE` and re-encoded when Pillow is available. None when the file is
     missing, too big, or not an image Pillow can open."""
     p = Path(str(path or ""))
@@ -90,7 +89,7 @@ def load(path) -> Optional[Tuple[str, str]]:
         return None
 
 
-def user_parts(text: str, paths) -> Optional[list]:
+def user_parts(text: str, paths) -> list | None:
     """OpenAI-shape content for one user turn: the text, then up to `MAX_IMAGES` images. None when no image could be loaded,
     so the caller keeps sending plain text."""
     imgs = [x for x in (load(p) for p in list(paths or [])[:MAX_IMAGES]) if x]
@@ -112,7 +111,7 @@ def content_text(content) -> str:
     return str(content or "")
 
 
-def _images_of(content) -> List[Tuple[str, str]]:
+def _images_of(content) -> list[tuple[str, str]]:
     out = []
     if isinstance(content, list):
         for p in content:
@@ -127,10 +126,10 @@ def has_images(messages) -> bool:
     return any(_images_of(m.get("content")) for m in (messages or []) if isinstance(m, dict))
 
 
-def split_last_images(messages) -> Tuple[list, List[Tuple[str, str]]]:
+def split_last_images(messages) -> tuple[list, list[tuple[str, str]]]:
     """(messages with every content as plain text, images of the turn). For engines that take one prompt string
     (Claude Code) and attach images on the side."""
-    imgs: List[Tuple[str, str]] = []
+    imgs: list[tuple[str, str]] = []
     out = []
     for m in messages or []:
         c = m.get("content")
@@ -164,7 +163,7 @@ def to_anthropic(content):
     return [b for b in blocks if b["type"] == "image"] + [b for b in blocks if b["type"] != "image"]
 
 
-def anthropic_blocks(text: str, imgs: List[Tuple[str, str]]) -> list:
+def anthropic_blocks(text: str, imgs: list[tuple[str, str]]) -> list:
     """Content blocks for a Claude Code turn: images first, then the prompt text."""
     return ([{"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}} for mime, b64 in imgs]
             + [{"type": "text", "text": str(text or "")}])
@@ -193,10 +192,10 @@ def to_responses(content, role: str = "user") -> list:
 _MARKER = re.compile(r"\[(?:Người dùng|The user|User) (?:gửi|sent)[^\]\n]*?(?:đã tải về|downloaded(?: to)?):\s*([^\]\n]+?)\]")
 
 
-def take_image_markers(text: str, root=None) -> Tuple[str, List[str]]:
+def take_image_markers(text: str, root=None) -> tuple[str, list[str]]:
     """(text without image-download markers, image paths). Only image files, and only inside `root` when given (a bot may
     never be shown a file outside its own brain). Non-image markers (a PDF...) stay in the text untouched."""
-    paths: List[str] = []
+    paths: list[str] = []
     base = Path(str(root)).resolve() if root else None
 
     def _sub(m):

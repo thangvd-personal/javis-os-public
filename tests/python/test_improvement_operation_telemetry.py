@@ -1,16 +1,15 @@
 """Real operation/call rows and usage storage; synthetic engine markers/events only."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from contextlib import ExitStack, closing
 from unittest.mock import patch
 
-from agent_ledger import CallLedger
-from improvement_telemetry import NativeUsageRecorder
-import usage_store as US
-import usage_index as UI
 import improvement_usage as IU
 import test_improvement_operation_calls as fixtures
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
+from improvement_telemetry import NativeUsageRecorder
 from test_improvement_operation_usage import execution
 
 

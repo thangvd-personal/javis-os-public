@@ -21,16 +21,17 @@ Hai lớp đỡ, và test này canh cả hai vì chúng đỡ hai ca khác nhau:
   - `main._effective_main` tự kiểm provider còn trong `PROVIDER_DEFS` không. Phủ được cfg do
     nơi khác DỰNG TAY (bot chuyên trách, test, người sửa file), không đi qua `read_settings`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-dago-test-")
 
-import config as cfgmod   # noqa: E402
-import main               # noqa: E402
-import aux_engine         # noqa: E402
+import aux_engine
+import config as cfgmod
+import main
 
 _fails = []
 

@@ -20,10 +20,10 @@ và model - vốn chỉ thấy "gọi tool không được" - sẽ đổ cho quy
 Bốn đường nền không chia chung một hàm dựng engine (cố ý: rào của chúng khác nhau thật), nên
 luật "full ⇒ ungated" phải được canh ở từng đường một. Đó là việc của file này.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
-import aux_engine   # noqa: E402
+import aux_engine
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -37,7 +37,7 @@ def check(name, cond):
 # ============================================================
 # 1. Việc Kanban - đường DUY NHẤT từng bỏ quên `execution_mode`
 # ============================================================
-from tasks import TasksFeature   # noqa: E402
+from tasks import TasksFeature
 
 
 class _Deps:

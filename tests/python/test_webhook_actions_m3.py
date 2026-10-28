@@ -19,7 +19,6 @@ What is proven here:
   6. an action removed since the event arrived does not run; lowering the level applies to waiting events;
   7. a hook without an AI action never calls a model, not even through incident triage.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -29,6 +28,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m3-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
@@ -37,10 +38,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -59,7 +60,7 @@ def refused(actions) -> str:
         return str(e) or "refused"
 
 
-PUBLIC = lambda host: ["93.184.216.34"]      # noqa: E731  fake DNS: every name is public
+PUBLIC = lambda host: ["93.184.216.34"]
 SCRIPT = "https://script.google.com/macros/s/AKfycbx_TEST_DEPLOYMENT_123/exec"
 
 # ---- 1. validation ----
@@ -270,7 +271,8 @@ check("plugin not installed or switched off -> blocked", asyncio.run(wa.run_plug
     {"id": "s", "kind": "plugin", "plugin": "p", "handler": "h"}, CTX, None, "full")).status == "blocked")
 
 # the real plugin host: register_webhook_handler + find_webhook_handler, scoped by brain
-import plugins_host  # noqa: E402
+import plugins_host
+
 pdir = Path(plugins_host.global_plugins_dir()) / "wh-test"
 pdir.mkdir(parents=True, exist_ok=True)
 (pdir / "plugin.yaml").write_text("name: WH test\nslug: wh-test\nenabled: true\nmin_mode: readonly\n", encoding="utf-8")

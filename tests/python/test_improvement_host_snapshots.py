@@ -1,11 +1,8 @@
 """Host snapshots use real owner files, encrypted blobs and the shared SQLite transaction."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
 import os
-import sqlite3
 import stat
 import sys
 import tempfile
@@ -17,21 +14,23 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="hs-"))
 for key, name in {"JAVIS_STATE_DIR": "boot-state", "BRAIN_PATH": "boot-brain", "BRAINS_DIR": "boot-brains",
                   "OBSIDIAN_VAULT_PATH": "boot-vault", "SOURCES_PATH": "boot-sources",
                   "JAVIS_SESSIONS_DB": "boot-sessions.sqlite3"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
+import improvement_store as IM
 from cryptography.fernet import Fernet
-from resonance_store import GoalStore, Principal
 from improvement_assets import capture_source
 from improvement_blobs import RevisionBlobs
 from improvement_cases import CaseStore
 from improvement_trial_context import ContextSource, capture_context
 from improvement_trial_file_sources import BrainFileFixtures
-from improvement_trial_host import HostContextStore, TARGET_FIELDS
-import improvement_store as IM
+from improvement_trial_host import TARGET_FIELDS, HostContextStore
+from resonance_store import GoalStore, Principal
 
 
 class HostSnapshotTests(unittest.TestCase):

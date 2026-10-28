@@ -24,11 +24,12 @@ canh đúng những chỗ mà một lần sửa ẩu là mở toang:
 6. **Lệnh là danh sách TRẮNG.** Bot chủ có /brain, /model, /status. Bot khách hàng mà kế thừa
    được một lệnh trong số đó thì khách đổi được brain của cửa hàng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-chatbot-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -38,8 +39,8 @@ try:
 except Exception:
     pass
 
-import chatbot_store  # noqa: E402
-import chatbot_runtime  # noqa: E402
+import chatbot_runtime
+import chatbot_store
 
 _fails = []
 
@@ -335,7 +336,7 @@ chatbot_store.update_bot(bid, {"groups": []})
 # Chủ gỡ 2026-10-07. Trước đó người thứ 21 trong giờ nhận "Anh chị nhắn hơi nhanh" thay vì câu trả lời.
 # Phép thử thật: một người nhắn 25 câu liền, cả 25 câu phải tới bộ não. Trần khi bot TỰ lên tiếng trong
 # nhóm (chatbot_tu_dong) là rào khác và vẫn giữ.
-import asyncio  # noqa: E402
+import asyncio
 
 _toi_nao = []
 

@@ -15,10 +15,9 @@ datetime an toàn).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, tzinfo
-from typing import Optional, Set, Tuple
+from datetime import UTC, datetime, timedelta, tzinfo
 
-import lang_registry   # tên thứ trong tuần theo ngôn ngữ
+import lang_registry  # tên thứ trong tuần theo ngôn ngữ
 
 
 def _loi(vi: str, en: str) -> str:
@@ -47,7 +46,7 @@ _BOUNDS = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)]
 _MAX_YEARS_AHEAD = 5   # cron không chạy trong 5 năm coi như bất khả thi → lỗi
 
 
-def _parse_atom(atom: str, lo: int, hi: int, names: dict) -> Tuple[Set[int], bool]:
+def _parse_atom(atom: str, lo: int, hi: int, names: dict) -> tuple[set[int], bool]:
     """1 phần (giữa các dấu phẩy). Trả (tập giá trị, is_star). Trường cron không có số âm."""
     atom = atom.strip().lower()
     if atom == "":
@@ -84,9 +83,9 @@ def _parse_atom(atom: str, lo: int, hi: int, names: dict) -> Tuple[Set[int], boo
     return vals, is_star
 
 
-def _parse_field(spec: str, lo: int, hi: int, names: dict) -> Tuple[Set[int], bool]:
+def _parse_field(spec: str, lo: int, hi: int, names: dict) -> tuple[set[int], bool]:
     """Cả trường (có thể nhiều phần ngăn bởi ','). is_star = True chỉ khi trường phủ '*'."""
-    out: Set[int] = set()
+    out: set[int] = set()
     is_star = False
     for part in (spec.strip().lower() or "*").split(","):
         vals, st = _parse_atom(part, lo, hi, names)
@@ -96,7 +95,7 @@ def _parse_field(spec: str, lo: int, hi: int, names: dict) -> Tuple[Set[int], bo
 
 
 class CronExpr:
-    __slots__ = ("minutes", "hours", "doms", "months", "dows", "dom_star", "dow_star", "raw")
+    __slots__ = ("dom_star", "doms", "dow_star", "dows", "hours", "minutes", "months", "raw")
 
     def __init__(self, expr: str):
         self.raw = expr.strip()
@@ -157,7 +156,7 @@ def validate_cron(expr: str) -> str:
     """Parse + thử tính 1 lần chạy để bắt biểu thức bất khả thi. Trả biểu thức đã chuẩn hoá
     (hạ chữ thường). Ném ValueError nếu sai."""
     ce = CronExpr(expr)
-    ce.next_after(datetime(2000, 1, 1, tzinfo=timezone.utc))
+    ce.next_after(datetime(2000, 1, 1, tzinfo=UTC))
     return ce.raw.lower()
 
 
@@ -203,7 +202,7 @@ def _ten_thu(d: int, lang: str) -> str:
     return tuan[6 if d == 0 else d - 1]
 
 
-def _is_step(vals: Set[int], lo: int, hi: int) -> Optional[int]:
+def _is_step(vals: set[int], lo: int, hi: int) -> int | None:
     """vals có đúng dạng lo, lo+n, lo+2n... phủ hết khoảng? Trả n (bước), None nếu không."""
     s = sorted(vals)
     if len(s) < 2 or s[0] != lo:

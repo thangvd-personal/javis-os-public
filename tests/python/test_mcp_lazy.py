@@ -9,17 +9,18 @@ cụm/từ khoá/namespace, query rỗng), _connector_menu, _apply_lazy (giấu 
 tắt thì nguyên vẹn) và DISPATCH qua route lazy (search trả JSON, run gọi đúng tool + giữ
 lớp _guard, các nhánh lỗi name).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-lazytest-"))
 
-import config  # noqa: E402
-import mcp_hub  # noqa: E402
+import config
+import mcp_hub
 
 _fails = []
 
@@ -185,7 +186,8 @@ set_lazy({})
 check("_ambient_enabled: mặc định bật", mcp_hub._ambient_enabled() is True)
 
 # ---- _ambient_refresh: nạp từ claude mcp list, chỉ lấy 'connected' ----
-import claude_cli  # noqa: E402
+import claude_cli
+
 _orig_native = claude_cli.mcp_native_list
 claude_cli.mcp_native_list = lambda: [
     {"name": "Google Drive", "url": "https://g", "connected": True},
@@ -346,7 +348,8 @@ _real = {t["fn"] for t in _bt}
 # Một số builtin CHỈ tồn tại trong phiên có thư mục làm việc (`javis_run_command`, 0.64).
 # Dựng thêm một bộ có workspace để rào hai chiều vẫn phủ được chúng: bỏ qua là mất đúng cái
 # bảo vệ chống gõ sai tên mà rào này sinh ra.
-import coding_ctx as _cc  # noqa: E402
+import coding_ctx as _cc
+
 _bt_ws, _ = mcp_hub._builtin_tools(
     "full", _vault, workspace_root=_vault,
     coding_ctx_cua_phien=_cc.CodingToolContext(session_id="s", workspace_root=_vault,
@@ -450,7 +453,6 @@ check("plugin thiếu mô tả vẫn hiện thành nhóm riêng", "goi-cu" in _m
 # `plugins_host.plugin_tools` phải THẬT SỰ gắn ba trường đó, nếu không thì canary trên chỉ
 # canh một fixture do chính test dựng ra.
 def _plugin_gan_nhan():
-    import plugins_host
     src = os.path.join(SERVER, "plugins_host.py")
     with open(src, encoding="utf-8") as fh:
         s = fh.read()

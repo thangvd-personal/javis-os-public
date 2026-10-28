@@ -13,7 +13,6 @@ import importlib
 import re
 from contextlib import closing, contextmanager
 
-
 REBUILT = ('improvement_operations', 'improvement_skill_candidates',
            'improvement_experiment_arms', 'improvement_experiment_selections')
 _NAME = re.compile(r'CREATE (?:UNIQUE )?(?:TABLE|INDEX|TRIGGER) "?([a-z_][a-z_0-9]*)"?')
@@ -189,8 +188,9 @@ def assert_installed(connection):
 
 def assert_roles_installed(connection):
     """Keep role authority scoped; view consumers retain their own diagnostics."""
+    from improvement_operation_schema import IMMUTABLE as ROLE_HISTORY
+    from improvement_operation_schema import SCHEMA as ROLES
     from improvement_store import ConflictError
-    from improvement_operation_schema import SCHEMA as ROLES, IMMUTABLE as ROLE_HISTORY
     expected = tuple(overlay(sql) for sql in (*ROLES, *_immutable(ROLE_HISTORY)))
     _assert_statements(connection, expected + SCHEMA + _immutable(IMMUTABLE), error=ConflictError)
 

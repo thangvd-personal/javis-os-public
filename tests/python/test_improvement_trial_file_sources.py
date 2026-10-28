@@ -1,7 +1,4 @@
 """Actual scratch brain files; no connector, model, shell or production credential access."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import hashlib
 import importlib.util
 import os
@@ -11,8 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from resonance_store import Principal
 import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
+from resonance_store import Principal
 
 if importlib.util.find_spec("improvement_trial_file_sources"):
     import improvement_trial_file_sources as files

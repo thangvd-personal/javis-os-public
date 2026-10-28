@@ -11,18 +11,19 @@ Phần lớn phép thử ở đây là phép thử RÀO:
 Và phần chạy: nhớ cwd và biến export giữa các lệnh, cắt output 40/60 kèm file đầy đủ, hết giờ
 thì dừng, xin quá 600 giây thì tự chạy nền.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-terminal-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 os.environ["OPENAI_API_KEY"] = "sk-khoa-bi-mat-khong-duoc-lo-1234567890"
 os.environ["JAVIS_TEST_SECRET"] = "KHOA-BI-MAT-KHONG-DUOC-LO"
 
-import coding_terminal as ct  # noqa: E402
+import coding_terminal as ct
 
 _fails = []
 

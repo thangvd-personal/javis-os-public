@@ -15,7 +15,7 @@ Design rules:
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -42,21 +42,21 @@ def api_base() -> str:
 class GitHub:
     """One token, one base URL. Cheap to build: make one per operation."""
 
-    def __init__(self, token: str, base: Optional[str] = None, timeout: float = TIMEOUT):
+    def __init__(self, token: str, base: str | None = None, timeout: float = TIMEOUT):
         self.token = (token or "").strip()
         self.base = (base or api_base()).rstrip("/")
         self.timeout = timeout
 
     # ---- transport ----
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         h = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
              "User-Agent": "javis-os"}
         if self.token:
             h["Authorization"] = f"Bearer {self.token}"
         return h
 
-    def request(self, method: str, path: str, *, params: Optional[dict] = None, json: Any = None,
-                accept: Optional[str] = None, raw: bool = False):
+    def request(self, method: str, path: str, *, params: dict | None = None, json: Any = None,
+                accept: str | None = None, raw: bool = False):
         url = path if path.startswith("http") else self.base + path
         headers = self._headers()
         if accept:
@@ -102,7 +102,7 @@ class GitHub:
         return self.request("PATCH", path, **kw)
 
     # ---- account ----
-    def user(self) -> Dict[str, Any]:
+    def user(self) -> dict[str, Any]:
         """The token's account. Also returns the classic-token scopes header when GitHub sends one."""
         r = self.request("GET", "/user", raw=True)
         data = r.json()
@@ -110,8 +110,8 @@ class GitHub:
         data["_scopes"] = [s.strip() for s in scopes.split(",") if s.strip()] if scopes is not None else None
         return data
 
-    def repos(self) -> List[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
+    def repos(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for page in range(1, MAX_REPO_PAGES + 1):
             batch = self.get("/user/repos", params={"per_page": 100, "page": page, "sort": "pushed",
                                                      "affiliation": "owner,collaborator,organization_member"})
@@ -122,11 +122,11 @@ class GitHub:
                 break
         return out
 
-    def repo(self, full_name: str) -> Dict[str, Any]:
+    def repo(self, full_name: str) -> dict[str, Any]:
         return self.get(f"/repos/{full_name}")
 
     # ---- pull requests ----
-    def find_pull(self, full_name: str, head_branch: str) -> Optional[Dict[str, Any]]:
+    def find_pull(self, full_name: str, head_branch: str) -> dict[str, Any] | None:
         owner = full_name.split("/", 1)[0]
         prs = self.get(f"/repos/{full_name}/pulls", params={"head": f"{owner}:{head_branch}", "state": "all",
                                                              "per_page": 10})
@@ -137,11 +137,11 @@ class GitHub:
         return None
 
     def create_pull(self, full_name: str, head: str, base: str, title: str, body: str,
-                    draft: bool = False) -> Dict[str, Any]:
+                    draft: bool = False) -> dict[str, Any]:
         return self.post(f"/repos/{full_name}/pulls", json={"head": head, "base": base, "title": title,
                                                              "body": body, "draft": draft})
 
-    def pull(self, full_name: str, number: int) -> Dict[str, Any]:
+    def pull(self, full_name: str, number: int) -> dict[str, Any]:
         return self.get(f"/repos/{full_name}/pulls/{int(number)}")
 
     def mark_ready(self, full_name: str, pull_node_id: str) -> None:
@@ -149,7 +149,7 @@ class GitHub:
         q = "mutation($id: ID!) { markPullRequestReadyForReview(input: {pullRequestId: $id}) { clientMutationId } }"
         self.post("/graphql", json={"query": q, "variables": {"id": pull_node_id}})
 
-    def merge_pull(self, full_name: str, number: int, sha: str, method: str) -> Dict[str, Any]:
+    def merge_pull(self, full_name: str, number: int, sha: str, method: str) -> dict[str, Any]:
         return self.put(f"/repos/{full_name}/pulls/{int(number)}/merge",
                         json={"sha": sha, "merge_method": method})
 
@@ -161,8 +161,8 @@ class GitHub:
         self.post(f"/repos/{full_name}/issues/{int(number)}/comments", json={"body": body})
 
     # ---- checks ----
-    def check_runs(self, full_name: str, sha: str) -> List[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
+    def check_runs(self, full_name: str, sha: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for page in range(1, 4):
             d = self.get(f"/repos/{full_name}/commits/{sha}/check-runs", params={"per_page": 100, "page": page})
             runs = (d or {}).get("check_runs") or []
@@ -171,11 +171,11 @@ class GitHub:
                 break
         return out
 
-    def statuses(self, full_name: str, sha: str) -> List[Dict[str, Any]]:
+    def statuses(self, full_name: str, sha: str) -> list[dict[str, Any]]:
         d = self.get(f"/repos/{full_name}/commits/{sha}/status")
         return list((d or {}).get("statuses") or [])
 
-    def required_checks(self, full_name: str, branch: str) -> Optional[List[str]]:
+    def required_checks(self, full_name: str, branch: str) -> list[str] | None:
         """Names of required checks on a branch, or None when the token cannot read branch protection."""
         try:
             d = self.get(f"/repos/{full_name}/branches/{branch}/protection/required_status_checks")

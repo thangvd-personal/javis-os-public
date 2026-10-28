@@ -13,7 +13,6 @@ No pytest, no network, isolated JAVIS_STATE_DIR. What must hold:
 4. A full store pack zip is reported as `kind: pack` and goes to the pack inspector.
 5. The routes need a real session.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import os
 import stat
@@ -21,14 +20,16 @@ import sys
 import tempfile
 import zipfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-pzip-")
 os.environ.pop("JAVIS_ENABLE_USER_PLUGINS", None)
 os.environ.pop("JAVIS_ENABLE_VAULT_PLUGINS", None)
 
-import fastyaml  # noqa: E402
-import pack_install  # noqa: E402
-import plugin_install  # noqa: E402
-import plugins_host  # noqa: E402
+import fastyaml
+import pack_install
+import plugin_install
+import plugins_host
 
 _fails = []
 
@@ -178,7 +179,8 @@ with zipfile.ZipFile(b, "w") as z:
     z.writestr("plugins/pz/plugin.py", "def register(ctx):\n    pass\n")
 rk = plugin_install.inspect(b.getvalue(), "pack.zip")
 check("pack zip reported as kind=pack", rk == {"ok": True, "kind": "pack"}, rk)
-import hashlib  # noqa: E402
+import hashlib
+
 check("pack zip leaves no plugin staging", not (plugin_install.STAGING / hashlib.sha256(b.getvalue()).hexdigest()).exists())
 
 # ---------- 6. JAVIS_ENABLE_USER_PLUGINS=false is reported ----------
@@ -191,9 +193,9 @@ os.environ.pop("JAVIS_ENABLE_USER_PLUGINS", None)
 
 # ---------- 7. routes: real session only, pack zips go to the pack inspector ----------
 try:
+    import routes.plugin_zip as pz
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    import routes.plugin_zip as pz
 
     refreshed = []
     app = FastAPI()

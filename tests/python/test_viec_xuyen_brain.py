@@ -13,13 +13,14 @@ Phủ 5 mảnh:
 
 KHÔNG chạm mạng: mọi test gọi hàm thuần / ghi file thư mục tạm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 # PHẢI set BRAINS_DIR + STATE_DIR sang thư mục tạm TRƯỚC khi import main (main đọc env lúc import).
 _STATE = tempfile.mkdtemp(prefix="javis-viec-state-")
@@ -28,10 +29,10 @@ os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ["BRAINS_DIR"] = _BRAINS
 sys.path.insert(0, str(ROOT / "system" / "plugins" / "javis-schedule"))
 
-import main            # noqa: E402
-import self_improve    # noqa: E402
-import reminders as reminders_mod   # noqa: E402
-import plugin as sched  # noqa: E402
+import main
+import plugin as sched
+import reminders as reminders_mod
+import self_improve
 
 _fails = []
 
@@ -105,7 +106,7 @@ _rem_deps = reminders_mod.RemindersDeps(
     build_system_prompt=lambda brain: "SYS",
     aux_model=lambda: None,
     safe_tools=[], readonly_tools=[],
-    scheduler_brains=lambda: [],
+    scheduler_brains=list,
 )
 _rf = reminders_mod.RemindersFeature(_rem_deps)
 

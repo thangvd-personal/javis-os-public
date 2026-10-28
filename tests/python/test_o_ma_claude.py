@@ -6,9 +6,10 @@ Owner screenshot 24/10/2026: the box was 24px wide. The row was a bare flex div,
 100%, declared after the narrow one) let the button take the whole row. Measured in Chromium before the fix: 24px on a
 1280px and a 390px screen; after: 425px and 328px. This file keeps the pieces that make it so.
 """
-from _paths import ROOT  # noqa: F401
 import re
 import sys
+
+from _paths import ROOT
 
 _fails = []
 

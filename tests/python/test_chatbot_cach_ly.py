@@ -30,12 +30,13 @@ C. **Cùng một trải nghiệm trên cả tám bộ não.** Hệ quả của (
    "dù là claude hay codex hay dùng api thì trải nghiệm nói chuyện với bot cũng vẫn giống
    nhau". Mục B3 chạy THẬT qua cả tám provider rồi đối chiếu payload từng con.
 """
-from _paths import ROOT, SERVER
-import json  # noqa: E402,F401  - nạp server/ vào sys.path
+import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _STATE = tempfile.mkdtemp(prefix="javis-cachly-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -45,8 +46,8 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import mcp_hub  # noqa: E402
+import chatbot_runtime
+import mcp_hub
 
 _fails = []
 
@@ -164,10 +165,9 @@ check("CANARY: brain trùng tiền tố tên cũng bị chặn (không so chuỗ
 # Bỏ tool giải cả hai bài cùng lúc: mọi engine nhận CÙNG prompt + CÙNG tài liệu + CÙNG lịch sử
 # nên trả lời như nhau, và không có tool thì không có gì để khoá - cách ly brain thành hệ quả
 # của kiến trúc chứ không phải một rào phải canh.
-import asyncio  # noqa: E402
-import types  # noqa: E402
+import asyncio
 
-import main  # noqa: E402
+import main
 
 _SRC = (SERVER / "main.py").read_text(encoding="utf-8")
 
@@ -344,7 +344,6 @@ check("lượt hỏng KHÔNG để câu hỏi treo trong lịch sử", _sess2["b
 # Cái SAI thật nằm ở báo cáo: `pin_execution_path` chỉ nhận một danh sách tên cố định, tên lạ
 # rơi hết về "legacy". Lượt bot không ghim gì nên bị xếp vào "Đầy đủ" - đường ĐẮT NHẤT - trong
 # khi nó là đường RẺ NHẤT hệ thống. Trang đo nói ngược hẳn sự thật.
-import context_runtime  # noqa: E402
 
 check("'bot' là một đường hợp lệ, không rơi về legacy",
       '"workflow", "sources", "bot"' in (SERVER / "context_runtime.py").read_text(encoding="utf-8"))
@@ -361,7 +360,7 @@ check("giao diện có nhãn tiếng Việt cho đường bot",
 
 # Đo thật: prompt của bot phải nhỏ hơn hẳn capsule của mức Siêu tiết kiệm. Đây là bằng chứng
 # cho câu "bot không cần hai tầng đó", chứ không phải lời khẳng định suông.
-import context_compiler  # noqa: E402
+import context_compiler
 
 _cc = context_compiler
 _capsule = (_cc.CORE_CONTRACT + "Runtime identity: provider=x; model=y. "

@@ -7,17 +7,18 @@ config_version, xoá rồi tạo lại cùng slug, file biến mất rồi xuấ
 dấu vết sự kiện, ghim phiên vào mã agent, bảng cũ giữ nguyên cột (để quay về 0.86.x), và bản
 `.pre-a1.bak` khi mã A1 mở một kho có từ trước. Chạy mã 0.86.1 thật trên kho đã nâng: test_resonance_a1_rollback.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a1-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance_store as RS  # noqa: E402
+import resonance_store as RS
 
 _fails = []
 
@@ -138,7 +139,7 @@ store.agent_set_enabled(OWNER, "con-co", False)
 check("tắt lặp lại không tăng version", store.agent(BRAIN, "con-co")["config_version"] == 3)
 
 # ───────────────────────────── ghim phiên vào mã agent (review PR #590, P1-1) ─────────────────────────────
-import time  # noqa: E402
+import time
 
 t_before = time.time() - 100           # phiên mở trước lần bật đầu tiên
 w1 = store.agent_set_enabled(OWNER, "writer", True)

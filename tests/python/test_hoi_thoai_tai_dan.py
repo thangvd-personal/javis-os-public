@@ -8,11 +8,12 @@ Chủ dự án (30/09/2026): khung tin tải 200 tin mỗi 5 giây rồi vẽ l�
   3. `?after=<id>` chỉ lấy tin MỚI hơn id đó (nhịp 5 giây), rỗng thì vẫn trả đủ `conversation` và `bot_silence`.
   4. Trang thứ hai của danh sách (`offset > 0`) chỉ trả các dòng, không tính lại số đếm và bộ lọc.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-taidan-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -22,9 +23,9 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import conversations
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

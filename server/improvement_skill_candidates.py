@@ -18,8 +18,8 @@ import improvement_store as IM
 from evidence_store import redact
 from improvement_blobs import AssetUnavailable
 from improvement_candidate_records import CandidateRecords, identifier
-from improvement_skill_patch import body_layout, validate_body_patch, _boundary
-from improvement_trial_file_sources import _root, _authority
+from improvement_skill_patch import _boundary, body_layout, validate_body_patch
+from improvement_trial_file_sources import _authority, _root
 from improvement_trial_records import HostContextRecords, _brain
 
 

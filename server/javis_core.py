@@ -22,8 +22,9 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import fastyaml
 
@@ -35,7 +36,7 @@ DEFINITION_PATH = PROJECT_ROOT / "system" / "agents" / f"{SLUG}.md"
 BLOCK_TITLE = "JAVIS CORE"
 
 _lock = threading.RLock()
-_def_cache: Dict[str, Any] = {"mtime": None, "value": None}
+_def_cache: dict[str, Any] = {"mtime": None, "value": None}
 
 
 def is_core_slug(slug: Any) -> bool:
@@ -46,7 +47,7 @@ def is_core_channel(channel: Any) -> bool:
     return str(channel or "") == CHANNEL
 
 
-def definition() -> Dict[str, str]:
+def definition() -> dict[str, str]:
     """The platform definition: {name, role, role_en, body}. Cached until the file changes."""
     try:
         mtime = DEFINITION_PATH.stat().st_mtime
@@ -55,7 +56,7 @@ def definition() -> Dict[str, str]:
     with _lock:
         if _def_cache["value"] is not None and _def_cache["mtime"] == mtime:
             return dict(_def_cache["value"])
-        meta: Dict[str, Any] = {}
+        meta: dict[str, Any] = {}
         body = ""
         if mtime is not None:
             try:
@@ -86,7 +87,7 @@ def prompt_block() -> str:
     return f"\n\n# === {BLOCK_TITLE} ===\n{body}" if body else ""
 
 
-def list_entry(last_chat_at: float = 0.0) -> Dict[str, Any]:
+def list_entry(last_chat_at: float = 0.0) -> dict[str, Any]:
     """The row GET /agents puts first. Same shape as a brain agent, plus the system flags. The caller picks the role
     text for the screen language (`localefmt.chu(role, role_en)`)."""
     d = definition()
@@ -106,7 +107,7 @@ def _map_path() -> Path:
     return Path(cfgmod.STATE_DIR) / "javis_core.json"
 
 
-def _read_map() -> Dict[str, str]:
+def _read_map() -> dict[str, str]:
     try:
         data = json.loads(_map_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -114,7 +115,7 @@ def _read_map() -> Dict[str, str]:
     return {str(k): str(v) for k, v in (data or {}).items() if isinstance(v, str) and v}
 
 
-def _write_map(data: Dict[str, str]) -> None:
+def _write_map(data: dict[str, str]) -> None:
     path = _map_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -122,13 +123,13 @@ def _write_map(data: Dict[str, str]) -> None:
     os.replace(tmp, path)
 
 
-def _usable(row: Optional[dict], brain_key: str, same_brain: Callable[[str, str], bool]) -> bool:
+def _usable(row: dict | None, brain_key: str, same_brain: Callable[[str, str], bool]) -> bool:
     return bool(row) and is_core_channel(row.get("channel")) and not row.get("archived") \
         and same_brain(str(row.get("brain") or ""), brain_key)
 
 
 def default_session(store: Any, brain_key: str, *, title: str = NAME,
-                    same_brain: Optional[Callable[[str, str], bool]] = None) -> str:
+                    same_brain: Callable[[str, str], bool] | None = None) -> str:
     """The id of this brain's default Javis Core chat, made when missing. Safe to call concurrently:
     the check and the create run under one lock, so two callers never make two chats."""
     brain_key = str(brain_key or "")

@@ -6,21 +6,21 @@ Không gọi model thật: engine giả cho đường framer. Bộ não quyết 
 tool `javis_goal` ngay trong lượt chat; route_request chỉ ĐỌC những gì lượt đó đã thật sự làm
 (sự kiện trong kho mục tiêu, việc Kanban đã giao), không gọi thêm model, không dò từ khoá.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
-import sqlite3
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m2-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 

@@ -31,9 +31,8 @@ import sys
 import time
 from pathlib import Path
 
-
-import winproc
 import localefmt
+import winproc
 from config import STATE_DIR
 
 # Nơi tải trình duyệt về. Playwright đọc biến môi trường này cho cả lúc tải lẫn lúc chạy, nên
@@ -420,7 +419,7 @@ async def _chay_tai(cong_cu: str) -> None:
     try:
         await asyncio.wait_for(asyncio.gather(_doc(), tt.wait()), timeout=tran_gio)
         ma = tt.returncode
-    except asyncio.TimeoutError:
+    except TimeoutError:
         try:
             tt.kill()
         except Exception:

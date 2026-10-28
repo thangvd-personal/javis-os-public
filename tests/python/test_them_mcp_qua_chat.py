@@ -11,7 +11,6 @@ Test này canh plugin bundled `javis-connect`, và canh mạnh nhất đúng cá
 thử kết nối THẤT BẠI, mục đó vẫn phải nằm lại kho để họ nhìn thấy và biết vì sao chưa chạy - khác
 hẳn `/connect/add` (xoá sạch khi validate lỗi, hợp lý cho form nhưng sai cho chat).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import importlib.util
 import json
@@ -20,6 +19,7 @@ import tempfile
 from pathlib import Path
 
 import mcp_store
+from _paths import ROOT, SERVER
 
 PLUGIN_DIR = ROOT / "system" / "plugins" / "javis-connect"
 
@@ -105,7 +105,7 @@ check("lệnh gõ nguyên cụm được tách đúng",
 check("câu trả lời chỉ đường tới trang Kết nối", "trang Kết nối" in r)
 
 # ---- http: thử kết nối OK thì bật, và mức quyền mặc định là chỉ đọc ----
-import mcp_hub  # noqa: E402  - nạp sau khi đã trỏ kho sang thư mục tạm
+import mcp_hub
 
 
 async def _val_ok(cid):

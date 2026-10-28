@@ -22,15 +22,15 @@ import time
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-from config import STATE_DIR
 import resonance as R
 import resonance_grants as G
 import resonance_heartbeat as HB
 import resonance_learning as L
+from config import STATE_DIR
 
-def call_ceiling() -> Optional[int]:
+
+def call_ceiling() -> int | None:
     """Trần TỔNG lượt engine cấp host của Resonance trên cả kho, đặt bằng biến môi trường
     JAVIS_RESONANCE_CALL_CEILING. Không đặt (mặc định) thì không có trần chung, chỉ có hạn mức từng mục tiêu.
 
@@ -453,7 +453,7 @@ AGENT_KEY_HOOKS: list = []
 
 
 def _agent_key_minted(brain_id: str, slug: str, agent_key: str) -> None:
-    for fn in list(AGENT_KEY_HOOKS):
+    for fn in AGENT_KEY_HOOKS:
         try:
             fn(brain_id, slug, agent_key)
         except Exception as e:  # noqa: BLE001 - a hook must never break agent registration
@@ -470,7 +470,7 @@ def _j(v) -> str:
 
 
 class GoalStore:
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else Path(STATE_DIR) / "resonance.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._backup_before("resonance_agents", _A1_BACKUP_SUFFIX)
@@ -621,7 +621,7 @@ class GoalStore:
                   (agent_key, "*", "off", now))
         c.execute("UPDATE agent_pulse SET state='off', updated_at=? WHERE agent_key=?", (now, agent_key))
 
-    def resumed_at(self, agent_key: str, context_ref: str = "*") -> Optional[float]:
+    def resumed_at(self, agent_key: str, context_ref: str = "*") -> float | None:
         """Mốc bật lại Cộng hưởng gần nhất của agent cho ngữ cảnh (mốc muộn nhất của dòng ngữ cảnh và dòng '*').
         None: chưa có mốc nào."""
         with closing(self._conn()) as c:
@@ -675,8 +675,8 @@ class GoalStore:
             raise PermissionError("chỉ chủ dự án mới đổi được sổ đăng ký agent")
 
     @staticmethod
-    def _agent_event(c, r, kind: str, by: str, after: Optional[int], payload: Optional[dict] = None,
-                     now: Optional[float] = None) -> None:
+    def _agent_event(c, r, kind: str, by: str, after: int | None, payload: dict | None = None,
+                     now: float | None = None) -> None:
         c.execute("INSERT INTO resonance_agent_events(agent_key,brain_id,kind,by,version_before,version_after,"
                   "payload_json,created_at) VALUES(?,?,?,?,?,?,?,?)",
                   (r["agent_key"], r["brain_id"], kind, by, int(r["config_version"]), after,
@@ -707,20 +707,20 @@ class GoalStore:
         self._agent_event(c, r, kind, by, after, payload, now)
         return self._agent(c.execute("SELECT * FROM resonance_agents WHERE agent_key=?", (r["agent_key"],)).fetchone())
 
-    def agent(self, brain_id: str, slug: str) -> Optional[dict]:
+    def agent(self, brain_id: str, slug: str) -> dict | None:
         """Dòng còn sống (`active` hay `missing`) của `(brain, slug)`, hoặc None khi chưa đăng ký hay đã nghỉ."""
         with closing(self._conn()) as c:
             r = self._live_agent_row(c, brain_id, slug)
             return self._agent(r) if r else None
 
-    def agent_by_key(self, brain_id: str, agent_key: str) -> Optional[dict]:
+    def agent_by_key(self, brain_id: str, agent_key: str) -> dict | None:
         """Đọc theo mã, chỉ trong đúng brain. Mã của brain khác coi như không có."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=? AND brain_id=?",
                           (str(agent_key or ""), brain_id)).fetchone()
             return self._agent(r) if r else None
 
-    def agent_any(self, agent_key: str) -> Optional[dict]:
+    def agent_any(self, agent_key: str) -> dict | None:
         """Dòng sổ đăng ký theo mã, không lọc brain (host dùng khi chỉ có mã do chính host ghi, vd. reaction chat riêng)."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=?", (str(agent_key or ""),)).fetchone()
@@ -741,7 +741,7 @@ class GoalStore:
                      "version_after": r["version_after"], "payload": json.loads(r["payload_json"] or "{}"),
                      "created_at": r["created_at"]} for r in rows]
 
-    def agent_set_enabled(self, p: Principal, slug: str, enabled: bool) -> Optional[dict]:
+    def agent_set_enabled(self, p: Principal, slug: str, enabled: bool) -> dict | None:
         """Chủ dự án bật hay tắt Cộng hưởng cho agent `slug` của brain. Lần bật đầu cấp mã mới.
         Tắt một agent chưa đăng ký thì không có gì để làm (trả None). Agent `missing` không bật được tới khi
         chủ dự án xác nhận (`agent_confirm`), nhưng tắt thì luôn được. Đặt lại đúng giá trị đang có không tăng version.
@@ -795,7 +795,7 @@ class GoalStore:
         _agent_key_minted(p.brain_id, slug, minted["agent_key"])
         return minted
 
-    def agent_mark_missing(self, brain_id: str, agent_key: str, by: str = "host") -> Optional[dict]:
+    def agent_mark_missing(self, brain_id: str, agent_key: str, by: str = "host") -> dict | None:
         """Host thấy file agent biến mất: dòng `active` chuyển `missing`, version tăng, mọi cổng của mã này đóng.
         Không đụng tới `enabled`: xác nhận lại thì công tắc như cũ. Gọi lặp lại không tăng version."""
         now = time.time()
@@ -808,7 +808,7 @@ class GoalStore:
                 return self._agent(r)
             return self._bump_agent(c, r, "missing", by, now, status="missing")
 
-    def agent_retire(self, p: Principal, slug: str, reason: str = "deleted") -> Optional[dict]:
+    def agent_retire(self, p: Principal, slug: str, reason: str = "deleted") -> dict | None:
         """Xoá agent qua host (hay chủ dự án cho nghỉ): dòng còn sống chuyển `retired` và tắt. Tạo lại cùng slug sau
         đó là agent MỚI, phải bật lại và nhận mã mới; mục tiêu cũ vẫn giữ mã cũ."""
         self._owner_only(p)
@@ -842,7 +842,7 @@ class GoalStore:
             return self._agent(new)
 
     def session_agent(self, brain_id: str, session_id: str, slug: str, session_created_at: float,
-                      pin: bool = True) -> Optional[dict]:
+                      pin: bool = True) -> dict | None:
         """Agent của một phiên trò chuyện `agent:<slug>`, GHIM theo phiên (review PR #590, P1-1).
 
         Slug chỉ là tên file: xoá rồi tạo lại cùng slug là agent khác với mã khác. Nên phiên đã ghim vào mã A thì
@@ -884,7 +884,7 @@ class GoalStore:
                        int(r["config_version"]), _j({"session_id": sid}), now))
             return self._agent(r)
 
-    def session_pin(self, session_id: str) -> Optional[dict]:
+    def session_pin(self, session_id: str) -> dict | None:
         """Đọc liên kết phiên → mã agent đã ghim (để xem và kiểm), None khi chưa ghim."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM session_agents WHERE session_id=?", (str(session_id or ""),)).fetchone()
@@ -909,7 +909,7 @@ class GoalStore:
     # ───────────── bản ghi ý định ─────────────
 
     def add_intent(self, p: Principal, session_id: str, message_id, text: str, constraints=(),
-                   prev_intent_id: Optional[str] = None, relation: str = "") -> dict:
+                   prev_intent_id: str | None = None, relation: str = "") -> dict:
         """Ghi nguyên văn lời người dùng. `prev_intent_id`: ý định của revision trước khi tin này cập nhật
         một mục tiêu; `relation`: "amend" (bổ sung) hay "replace" (thay chỉ dẫn đã nêu)."""
         rec = self.new_intent(p, session_id, message_id, text, constraints, prev_intent_id, relation)
@@ -918,7 +918,7 @@ class GoalStore:
         return rec
 
     def new_intent(self, p: Principal, session_id: str, message_id, text: str, constraints=(),
-                   prev_intent_id: Optional[str] = None, relation: str = "") -> dict:
+                   prev_intent_id: str | None = None, relation: str = "") -> dict:
         """Dựng bản ghi ý định CHƯA ghi; `revise(intent=...)` ghi nó cùng transaction với revision."""
         return {"id": _nid("in"), "brain_id": p.brain_id, "session_id": str(session_id or ""),
                 "message_id": message_id, "text": str(text or ""),
@@ -941,7 +941,7 @@ class GoalStore:
         return {"id": r["id"], "text": r["text"], "constraints": json.loads(r["constraints_json"] or "[]"),
                 "prev_intent_id": r["prev_intent_id"], "relation": r["relation"]}
 
-    def get_intent(self, p: Principal, intent_id: str) -> Optional[dict]:
+    def get_intent(self, p: Principal, intent_id: str) -> dict | None:
         with closing(self._conn()) as c:
             try:
                 return self._intent(c, p, intent_id)
@@ -998,17 +998,17 @@ class GoalStore:
             return None
         return r
 
-    def find_by_key(self, p: Principal, idempotency_key: str) -> Optional[R.GoalRecord]:
+    def find_by_key(self, p: Principal, idempotency_key: str) -> R.GoalRecord | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM goals WHERE brain_id=? AND idempotency_key=?",
                           (p.brain_id, idempotency_key)).fetchone()
             return self._record(c, r) if r else None
 
     def create(self, p: Principal, intent_id: str, frame: dict, idempotency_key: str, session_id: str = "",
-               output_root: Optional[str] = None, output_base: Optional[str] = None, budget_calls: int = 0,
-               message_ref: Optional[str] = None, work_due_at: Optional[float] = None,
-               handoff_owner: Optional[str] = None, agent_key: Optional[str] = None,
-               agent_version: Optional[int] = None, turn_seq: Optional[int] = None) -> tuple:
+               output_root: str | None = None, output_base: str | None = None, budget_calls: int = 0,
+               message_ref: str | None = None, work_due_at: float | None = None,
+               handoff_owner: str | None = None, agent_key: str | None = None,
+               agent_version: int | None = None, turn_seq: int | None = None) -> tuple:
         """Trả (GoalRecord, đã_tạo_mới). Cùng khoá chống trùng thì trả mục tiêu cũ, không ghi gì thêm.
 
         A1: `agent_key` gắn mục tiêu vào một agent (bảng goal_agents) trong CÙNG giao dịch, sau khi kiểm lại ngay tại
@@ -1070,12 +1070,12 @@ class GoalStore:
                 self._reason_timer(c, gid, p.brain_id, "guard_observe", now + R.GUARD_OBSERVE_S, 1, now)
             return self._record(c, row), True
 
-    def get(self, p: Principal, goal_id: str) -> Optional[R.GoalRecord]:
+    def get(self, p: Principal, goal_id: str) -> R.GoalRecord | None:
         with closing(self._conn()) as c:
             r = self._goal_row(c, p, goal_id)
             return self._record(c, r) if r else None
 
-    def get_revision(self, p: Principal, goal_id: str, revision: int) -> Optional[dict]:
+    def get_revision(self, p: Principal, goal_id: str, revision: int) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -1083,7 +1083,7 @@ class GoalStore:
                           (goal_id, int(revision))).fetchone()
             return json.loads(r["frame_json"]) if r else None
 
-    def list_open(self, p: Principal, session_id: Optional[str] = None, agent_key: Optional[str] = None,
+    def list_open(self, p: Principal, session_id: str | None = None, agent_key: str | None = None,
                   unassigned: bool = False) -> list:
         """Mục tiêu đang mở của brain. `agent_key`: chỉ của đúng agent đó. `unassigned`: chỉ mục tiêu chưa gán."""
         with closing(self._conn()) as c:
@@ -1144,10 +1144,10 @@ class GoalStore:
             return self._goal_agent(c, goal_id)
 
     def revise(self, p: Principal, goal_id: str, expected_revision: int, frame: dict, reason: str,
-               intent_id: Optional[str] = None, message_ref: str = "", relation: str = "",
-               intent: Optional[dict] = None, work_due_at: Optional[float] = None,
-               handoff_owner: Optional[str] = None, agent_key: Optional[str] = None,
-               agent_version: Optional[int] = None, turn_seq: Optional[int] = None) -> R.GoalRecord:
+               intent_id: str | None = None, message_ref: str = "", relation: str = "",
+               intent: dict | None = None, work_due_at: float | None = None,
+               handoff_owner: str | None = None, agent_key: str | None = None,
+               agent_version: int | None = None, turn_seq: int | None = None) -> R.GoalRecord:
         """A1: có `agent_key` thì mục tiêu phải thuộc đúng agent đó (ScopeError nếu không) và agent còn `active`, bật,
         đúng `agent_version`, kiểm trong cùng giao dịch (AgentStateError).
 
@@ -1241,8 +1241,8 @@ class GoalStore:
 
     # ───────────── sự kiện và outbox ─────────────
 
-    def append_event(self, p: Principal, goal_id: str, kind: str, payload: dict, idempotency_key: Optional[str] = None,
-                     revision: Optional[int] = None, source: str = "host", message_ref: str = "") -> int:
+    def append_event(self, p: Principal, goal_id: str, kind: str, payload: dict, idempotency_key: str | None = None,
+                     revision: int | None = None, source: str = "host", message_ref: str = "") -> int:
         with self._Tx(self) as c:
             if self._goal_row(c, p, goal_id) is None:
                 raise ScopeError("mục tiêu không tồn tại trong brain này")
@@ -1288,7 +1288,7 @@ class GoalStore:
 
     # ═══════════════════ M3: lịch, trạng thái chạy, sổ hành động, đánh giá, bằng chứng ═══════════════════
 
-    def get_for_host(self, goal_id: str) -> Optional[R.GoalRecord]:
+    def get_for_host(self, goal_id: str) -> R.GoalRecord | None:
         """Đọc mục tiêu theo id mà KHÔNG qua principal. Chỉ host dùng (outbox, tick), không đưa cho model."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM goals WHERE id=?", (goal_id,)).fetchone()
@@ -1313,7 +1313,7 @@ class GoalStore:
 
     @classmethod
     def _reason_event(cls, c, goal_id: str, brain_id: str, code: str, ref: str, revision: int,
-                      due_at: Optional[float] = None, wake_at: Optional[float] = None) -> bool:
+                      due_at: float | None = None, wake_at: float | None = None) -> bool:
         """Ghi một lý do sự kiện. Giao lại cùng `(code, ref)` thì bỏ qua, dù dòng đầu còn chờ hay đã phục vụ.
         Sự kiện mới đặt lịch vật lý về giờ của nó (sớm nhất), nên mục tiêu thức đúng một lần để xét, kể cả khi đang
         bị gác; lần thức đó tự tính lại lịch. `wake_at`: giờ thức khác giờ đủ điều kiện (giữ lịch tới bàn giao)."""
@@ -1329,7 +1329,7 @@ class GoalStore:
 
     @classmethod
     def _reason_timer(cls, c, goal_id: str, brain_id: str, code: str, due_at: float, revision: int,
-                      now: Optional[float] = None) -> int:
+                      now: float | None = None) -> int:
         """Ghi một hẹn giờ mới. Hẹn cũ CÙNG nghĩa vụ đang chờ thành `superseded`, trong cùng giao dịch. Lịch vật lý
         chỉ kéo sớm lại (người gọi tính lại lịch đầy đủ ở cuối lần thức)."""
         now = time.time() if now is None else float(now)
@@ -1381,8 +1381,8 @@ class GoalStore:
             else:
                 c.execute("DELETE FROM wakeups WHERE goal_id=? AND kind=?", (goal_id, kind))
 
-    def add_reason_event(self, p: Principal, goal_id: str, code: str, ref: str, due_at: Optional[float] = None,
-                         revision: Optional[int] = None) -> bool:
+    def add_reason_event(self, p: Principal, goal_id: str, code: str, ref: str, due_at: float | None = None,
+                         revision: int | None = None) -> bool:
         with self._Tx(self) as c:
             row = self._goal_row(c, p, goal_id)
             if row is None:
@@ -1413,21 +1413,21 @@ class GoalStore:
                 self._recompute_wake(c, str(goal_id))
             return n
 
-    def reason_event_state(self, goal_id: str, code: str, ref: str) -> Optional[str]:
+    def reason_event_state(self, goal_id: str, code: str, ref: str) -> str | None:
         """Trạng thái lý do sự kiện `(goal, code, ref)` của A2 (pending, served, superseded...), None khi không có."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT state FROM wake_reasons WHERE goal_id=? AND code=? AND source_ref=? AND origin='event'",
                           (str(goal_id), str(code), str(ref))).fetchone()
             return r["state"] if r else None
 
-    def goal_brain(self, goal_id: str) -> Optional[dict]:
+    def goal_brain(self, goal_id: str) -> dict | None:
         """{brain_id, status, revision} của một goal (host dùng để định tuyến reaction trên tin gắn goal)."""
         with closing(self._conn()) as c:
             r = c.execute("SELECT brain_id, status, revision FROM goals WHERE id=?", (str(goal_id),)).fetchone()
             return dict(r) if r else None
 
-    def add_timer(self, p: Principal, goal_id: str, code: str, due_at: float, now: Optional[float] = None,
-                  expect_revision: Optional[int] = None) -> int:
+    def add_timer(self, p: Principal, goal_id: str, code: str, due_at: float, now: float | None = None,
+                  expect_revision: int | None = None) -> int:
         """Hẹn giờ mới. `expect_revision`: chỉ hẹn khi mục tiêu còn active ở đúng revision đó (CAS, trả 0 nếu không)."""
         with self._Tx(self) as c:
             row = self._goal_row(c, p, goal_id)
@@ -1439,7 +1439,7 @@ class GoalStore:
             return self._reason_timer(c, goal_id, p.brain_id, code, due_at, int(row["revision"]), now)
 
     def supersede_timers(self, p: Principal, goal_id: str, slots: tuple = ("retry", "check", "observe"),
-                         now: Optional[float] = None, revision: Optional[int] = None) -> None:
+                         now: float | None = None, revision: int | None = None) -> None:
         """Bỏ hẹn đang chờ của các nghĩa vụ `slots`. `revision`: chỉ bỏ hẹn của đúng revision đó, không đụng nghĩa vụ
         của revision mới hơn."""
         now = time.time() if now is None else float(now)
@@ -1504,8 +1504,8 @@ class GoalStore:
                 return self._hb_row(c, goal_id, revision)
             return self._hb_fold(c, self._hb_row(c, goal_id, revision))
 
-    def settle_attempt(self, p: Principal, goal_id: str, revision: int, action_id: str, met_count: Optional[int],
-                       error_code: str = "", now: Optional[float] = None) -> dict:
+    def settle_attempt(self, p: Principal, goal_id: str, revision: int, action_id: str, met_count: int | None,
+                       error_code: str = "", now: float | None = None) -> dict:
         """Kết sổ MỘT lượt việc vào chuỗi. `met_count` None là lượt lỗi (`error_code`), trừ `held`: đầu ra giữ lại vì bị
         chặn trước khi đăng, chưa biết kết quả, không tính lỗi, không tính tiến bộ. Lượt đã được gấp trước đó thì bỏ
         qua (không tính hai lần). Trả chuỗi sau khi kết sổ."""
@@ -1526,8 +1526,8 @@ class GoalStore:
             self._hb_save(c, st, now)
             return st
 
-    def abort_action(self, p: Principal, action_id: str, now: Optional[float] = None, code: str = "not_run",
-                     detail: str = "", recheck_at: Optional[float] = None) -> bool:
+    def abort_action(self, p: Principal, action_id: str, now: float | None = None, code: str = "not_run",
+                     detail: str = "", recheck_at: float | None = None) -> bool:
         """Huỷ một lượt việc đã ghi ý định mà CHƯA gọi model (lần thức bị huỷ ngay sau pha chuẩn bị, hay pha chuẩn bị lỗi).
         Một giao dịch: action thành `cancelled`/`not_run`, trả lượt đã giữ, lý do lượt đó đã phục vụ trở lại `pending`,
         bỏ hẹn phục hồi của nó, đóng lượt trong chuỗi bền mà không tính lỗi hay tiến bộ, đưa trạng thái `running` về
@@ -1562,7 +1562,7 @@ class GoalStore:
                     self._recompute_wake(c, g["id"])
             return ok
 
-    def mark_engine(self, p: Principal, action_id: str, now: Optional[float] = None) -> bool:
+    def mark_engine(self, p: Principal, action_id: str, now: float | None = None) -> bool:
         """Mốc "pha chuẩn bị xong, sắp gọi engine" của một lượt việc hay review (A5, review mã vòng 1, R1). Một giao dịch:
         ghi `engine_at` vào ý định của hành động còn `running` và đưa mục tiêu sang `running` (khi còn active ở đúng
         revision của lượt). Trả False khi hành động không còn `running` (đã hoàn hay đã đóng): người gọi KHÔNG gọi engine.
@@ -1633,7 +1633,7 @@ class GoalStore:
         return True
 
     def chain_adopt(self, p: Principal, goal_id: str, revision: int, met_count: int,
-                    now: Optional[float] = None) -> dict:
+                    now: float | None = None) -> dict:
         """Bản chat tiếp nhận là LƯỢT ĐẦU của chuỗi revision (A2 mục 3)."""
         now = time.time() if now is None else float(now)
         with self._Tx(self) as c:
@@ -1642,7 +1642,7 @@ class GoalStore:
             self._hb_save(c, st, now)
             return st
 
-    def reasons(self, p: Principal, goal_id: str, state: Optional[str] = "pending") -> list:
+    def reasons(self, p: Principal, goal_id: str, state: str | None = "pending") -> list:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return []
@@ -1662,7 +1662,7 @@ class GoalStore:
                 "SELECT * FROM wake_reasons WHERE goal_id=? AND wake_kind=? AND state='pending' AND due_at<=? "
                 "ORDER BY id", (goal_id, wake_kind, float(now))).fetchall()]
 
-    def serve_reasons(self, p: Principal, goal_id: str, ids, by: str, now: Optional[float] = None) -> list:
+    def serve_reasons(self, p: Principal, goal_id: str, ids, by: str, now: float | None = None) -> list:
         ids = [int(i) for i in (ids or ())]
         if not ids:
             return []
@@ -1713,7 +1713,7 @@ class GoalStore:
                       "ORDER BY id DESC LIMIT ?)", (goal_id, goal_id, WAKE_LOG_KEEP))
             return int(cur.lastrowid)
 
-    def wake_log(self, p: Principal, goal_id: str, limit: int = WAKE_LOG_KEEP, revision: Optional[int] = None) -> list:
+    def wake_log(self, p: Principal, goal_id: str, limit: int = WAKE_LOG_KEEP, revision: int | None = None) -> list:
         """Sổ thức, cũ trước mới sau."""
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
@@ -1732,7 +1732,7 @@ class GoalStore:
             return out
 
     def observe_source(self, p: Principal, goal_id: str, path: str, sha256: str, verdict: str,
-                       now: Optional[float] = None) -> bool:
+                       now: float | None = None) -> bool:
         """Mốc QUAN SÁT file sản phẩm bị sửa ngoài Javis (thiết kế mục 5), tách khỏi mốc được phép thay file
         (`published`, không đụng tới ở đây). Trả True khi đây là hash chưa từng thấy."""
         now = time.time() if now is None else float(now)
@@ -1757,7 +1757,7 @@ class GoalStore:
                 raise ScopeError("mục tiêu không tồn tại trong brain này")
             self._wake(c, goal_id, p.brain_id, kind, due_at, reason)
 
-    def clear_wake(self, p: Principal, goal_id: str, kind: Optional[str] = None) -> None:
+    def clear_wake(self, p: Principal, goal_id: str, kind: str | None = None) -> None:
         """Xoá lịch vật lý, và cho mọi hẹn giờ đang chờ của loại đó thành `superseded` để lần tính lại không dựng
         lại lịch. Sự kiện đang chờ GIỮ NGUYÊN: đó là nghĩa vụ, không phải lịch."""
         with self._Tx(self) as c:
@@ -1846,8 +1846,8 @@ class GoalStore:
             return {"run_state": r["run_state"], "block_reason": r["block_reason"]}
 
     def set_run_state(self, p: Principal, goal_id: str, run_state: str, reason: str = "",
-                      notify: Optional[str] = None, payload: Optional[dict] = None, idem: Optional[str] = None,
-                      expect_revision: Optional[int] = None, lesson: Optional[dict] = None) -> bool:
+                      notify: str | None = None, payload: dict | None = None, idem: str | None = None,
+                      expect_revision: int | None = None, lesson: dict | None = None) -> bool:
         """Đổi trạng thái chạy; `notify` là loại tin outbox ghi CÙNG giao dịch (idem chống báo lặp).
         `expect_revision` (A2): chỉ đổi khi mục tiêu còn active ở đúng revision đó (CAS); không thì không ghi gì và trả
         False, để kết quả của một lượt thuộc revision cũ không ghi đè trạng thái của revision mới."""
@@ -1891,7 +1891,7 @@ class GoalStore:
     # ───────────── sổ hành động ─────────────
 
     def begin_action(self, p: Principal, goal_id: str, revision: int, kind: str, lease_until: float,
-                     now: Optional[float] = None, intent: Optional[dict] = None, wake: bool = True) -> Optional[dict]:
+                     now: float | None = None, intent: dict | None = None, wake: bool = True) -> dict | None:
         """Ghi Ý ĐỊNH hành động TRƯỚC khi tác động. Hành động `work` giữ một lượt gọi model trong cùng giao dịch;
         hết hạn mức thì trả None và không ghi gì. Kèm lịch phục hồi lúc hết khoá: tiến trình chết giữa chừng thì
         tick sau đối soát được, không bỏ quên mục tiêu."""
@@ -2048,9 +2048,9 @@ class GoalStore:
     # ───────────── phép thử cải thiện (M5) ─────────────
 
     def begin_experiment(self, p: Principal, goal_id: str, revision: int, baseline_ref: str, candidate_ref: str,
-                         calls: int, explore_cap: int, payload: dict, now: Optional[float] = None,
-                         agent: Optional[dict] = None, lesson_id: Optional[str] = None,
-                         wake_reasons: Optional[list] = None) -> Optional[str]:
+                         calls: int, explore_cap: int, payload: dict, now: float | None = None,
+                         agent: dict | None = None, lesson_id: str | None = None,
+                         wake_reasons: list | None = None) -> str | None:
         """Ghi phép thử và giữ chỗ TOÀN BỘ lượt gọi nó cần trong CÙNG giao dịch: trong hạn mức chung của mục tiêu và
         trong phần dành cho khám phá. Không đủ thì trả None, không ghi gì (không tạo phép thử).
 
@@ -2220,14 +2220,14 @@ class GoalStore:
                             f"brain_id=? AND block_reason IN ({marks})", (time.time(), goal_id, p.brain_id, *reasons))
             return cur.rowcount == 1
 
-    def experiment_agent(self, p: Principal, experiment_id: str) -> Optional[dict]:
+    def experiment_agent(self, p: Principal, experiment_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT x.* FROM experiment_agents x JOIN goals g ON g.id=x.goal_id WHERE x.experiment_id=? "
                           "AND g.brain_id=?", (experiment_id, p.brain_id)).fetchone()
             return {"agent_key": r["agent_key"], "agent_config_version": int(r["agent_config_version"])} if r else None
 
     def _method_change_blocked(self, c, row, revision: int, baseline_ref: str,
-                               experiment_id: Optional[str] = None) -> Optional[tuple]:
+                               experiment_id: str | None = None) -> tuple | None:
         """Lý do KHÔNG được đổi cách làm lúc này, kiểm trong giao dịch đang mở: (mã, chi tiết) hoặc None. Công tắc
         brain và guard là file, người gọi kiểm bằng cổng ngay trước; ở đây là phần SQLite, đọc TRẠNG THÁI HIỆN TẠI chứ
         không đọc cờ quan sát cũ: còn active, đúng revision, không tạm dừng, không có chốt guard, phản hồi cách hiểu
@@ -2279,7 +2279,7 @@ class GoalStore:
                 "reason": r["reason"], "calls_reserved": r["calls_reserved"], "applied": bool(r["applied"]),
                 "payload": json.loads(r["payload_json"] or "{}"), "created_at": r["created_at"]}
 
-    def experiments(self, p: Principal, goal_id: str, limit: Optional[int] = None) -> list:
+    def experiments(self, p: Principal, goal_id: str, limit: int | None = None) -> list:
         """Các phép thử của mục tiêu, mới nhất trước. `limit`: chỉ lấy chừng ấy phép thử mới nhất (thẻ chỉ hiện 3)."""
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
@@ -2315,7 +2315,7 @@ class GoalStore:
             self._set_method(c, p, row, from_ref, to_ref, int(expected_revision), experiment_id, now)
             c.execute("UPDATE experiments SET applied=1, updated_at=? WHERE id=?", (now, experiment_id))
 
-    def revert_method(self, p: Principal, goal_id: str, seen_revision: Optional[int] = None) -> str:
+    def revert_method(self, p: Principal, goal_id: str, seen_revision: int | None = None) -> str:
         """Người dùng quay về cách làm trước đó. CHỈ owner. Ref quay lại giữ ĐÚNG phạm vi nó đã được kiểm (không gán
         revision hiện tại cho nó, review M5, P1-3): nếu phạm vi đó không phải revision hiện tại thì cách làm có hiệu
         lực là mặc định. Trả cách làm có hiệu lực sau khi quay lại."""
@@ -2347,7 +2347,7 @@ class GoalStore:
 
     # ───────────── sổ lượt gọi chưa gắn mục tiêu (bộ lập mục tiêu) ─────────────
 
-    def reserve_ledger_call(self, p: Principal, kind: str, ref: str = "") -> Optional[int]:
+    def reserve_ledger_call(self, p: Principal, kind: str, ref: str = "") -> int | None:
         """Giữ chỗ MỘT lượt engine chưa gắn mục tiêu nào (bộ lập mục tiêu) TRƯỚC khi gọi, trong trần chung. Trả id
         dòng sổ, hoặc None nếu chạm trần (không ghi gì). Dòng giữ chỗ được tính ngay; chỉ hoàn khi engine không được
         gọi (release_ledger_call). Gọi rồi mà lỗi hay không ra mục tiêu vẫn tính."""
@@ -2421,7 +2421,7 @@ class GoalStore:
                 "status": r["status"], "lease_until": r["lease_until"], "intent": json.loads(r["intent_json"] or "{}"),
                 "receipt": json.loads(r["receipt_json"] or "{}"), "created_at": r["created_at"]}
 
-    def get_action(self, p: Principal, action_id: str) -> Optional[dict]:
+    def get_action(self, p: Principal, action_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT a.* FROM actions a JOIN goals g ON g.id=a.goal_id WHERE a.id=? AND g.brain_id=?",
                           (action_id, p.brain_id)).fetchone()
@@ -2437,8 +2437,8 @@ class GoalStore:
     # Đọc CÓ GIỚI HẠN cho thẻ mục tiêu (audit tốc độ 08/10/2026): thẻ chỉ cần hành động mới nhất của một loại và vài dòng
     # thời gian cuối, nên không đọc cả lịch sử rồi mới cắt. Thứ tự giống hệt actions() (created_at, seq).
 
-    def latest_action(self, p: Principal, goal_id: str, kind: str, status: Optional[str] = None,
-                      revision: Optional[int] = None) -> Optional[dict]:
+    def latest_action(self, p: Principal, goal_id: str, kind: str, status: str | None = None,
+                      revision: int | None = None) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -2480,7 +2480,7 @@ class GoalStore:
                       (goal_id, int(revision), str(action_id or ""), evidence_id, kind, str(content_hash or ""),
                        time.time()))
 
-    def evidence_for(self, p: Principal, goal_id: str, revision: int, kind: Optional[str] = None) -> list:
+    def evidence_for(self, p: Principal, goal_id: str, revision: int, kind: str | None = None) -> list:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return []
@@ -2505,7 +2505,7 @@ class GoalStore:
             return [json.loads(r["payload_json"]) for r in
                     c.execute("SELECT payload_json FROM assessments WHERE goal_id=? ORDER BY id", (goal_id,)).fetchall()]
 
-    def last_assessment_with_results(self, p: Principal, goal_id: str, revision: int) -> Optional[dict]:
+    def last_assessment_with_results(self, p: Principal, goal_id: str, revision: int) -> dict | None:
         """Đánh giá MỚI NHẤT của đúng revision có kết quả từng tiêu chí, hoặc None. Cùng kết quả với duyệt ngược
         assessments(), nhưng đọc từ cuối và dừng ở dòng đầu tiên khớp (chỉ mục assessments_goal_rev)."""
         with closing(self._conn()) as c:
@@ -2519,7 +2519,7 @@ class GoalStore:
                     return a
             return None
 
-    def published(self, p: Principal, goal_id: str, path: str) -> Optional[dict]:
+    def published(self, p: Principal, goal_id: str, path: str) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -2533,7 +2533,7 @@ class GoalStore:
 
     @staticmethod
     def _open_handoff(c, goal_id: str, revision: int, message_ref: str, owner: str, now: float,
-                      agent_key: Optional[str] = None, agent_version: Optional[int] = None) -> None:
+                      agent_key: str | None = None, agent_version: int | None = None) -> None:
         if agent_key:
             # A1: agent và version lúc mở bàn giao ở bảng riêng; bảng handoffs giữ nguyên cột để 0.86.x còn ghi được.
             c.execute("INSERT OR REPLACE INTO handoff_agents(goal_id,revision,agent_key,agent_config_version,created_at) "
@@ -2542,7 +2542,7 @@ class GoalStore:
                   "VALUES(?,?,?,?,?,?,?)",
                   (goal_id, int(revision), str(message_ref or ""), str(owner), "pending", now, now))
 
-    def handoff(self, p: Principal, goal_id: str, revision: int) -> Optional[dict]:
+    def handoff(self, p: Principal, goal_id: str, revision: int) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -2569,7 +2569,7 @@ class GoalStore:
             return "expired"
 
     def finish_handoff(self, p: Principal, goal_id: str, revision: int, message_ref: str,
-                       adopt: Optional[dict] = None, release: bool = True) -> str:
+                       adopt: dict | None = None, release: bool = True) -> str:
         """Bàn giao cuối lượt, MỘT giao dịch. Chỉ khi dòng bàn giao của đúng revision và đúng tin nhắn còn pending;
         không thì "handoff_expired" (việc nền đã nhận quyền) hay "no_handoff", và không làm gì.
 
@@ -2647,14 +2647,14 @@ class GoalStore:
             return "binding_path_not_in_scope"
         return ""
 
-    def handoff_agent(self, p: Principal, goal_id: str, revision: int) -> Optional[dict]:
+    def handoff_agent(self, p: Principal, goal_id: str, revision: int) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
             r = c.execute("SELECT * FROM handoff_agents WHERE goal_id=? AND revision=?", (goal_id, int(revision))).fetchone()
             return {"agent_key": r["agent_key"], "agent_config_version": int(r["agent_config_version"])} if r else None
 
-    def assign_goal(self, p: Principal, goal_id: str, agent_key: str, expected_revision: int) -> "R.GoalRecord":
+    def assign_goal(self, p: Principal, goal_id: str, agent_key: str, expected_revision: int) -> R.GoalRecord:
         """Chủ dự án gán MỘT LẦN một mục tiêu CHƯA gán (có trước A1, hay tạo lúc chạy bản cũ) cho một agent `active`
         cùng brain. CAS trong một giao dịch: revision đúng `expected_revision` và chưa có dòng goal_agents. Chuyển mục
         tiêu giữa hai agent chưa hỗ trợ trong A1 (thiết kế mục 5).
@@ -2743,7 +2743,7 @@ class GoalStore:
                       (goal_id, path, sha256, action_id, time.time()))
 
     def finish(self, p: Principal, goal_id: str, expected_revision: int, status: str,
-               payload: Optional[dict] = None, review_id: str = "") -> bool:
+               payload: dict | None = None, review_id: str = "") -> bool:
         """Kết thúc mục tiêu (succeeded/failed) CHỈ khi revision còn đúng revision đã được đánh giá.
         Revision đã đổi thì trả False: kết quả của revision cũ không đóng được mục tiêu mới.
 
@@ -2783,7 +2783,7 @@ class GoalStore:
             self.pulse_objective(goal_id, int(expected_revision), status == "succeeded")
         return True
 
-    def pulse_objective(self, goal_id: str, revision: int, passed: bool) -> Optional[str]:
+    def pulse_objective(self, goal_id: str, revision: int, passed: bool) -> str | None:
         """Tín hiệu kiểm khách quan (6.1) cho agent của mục tiêu ở ngữ cảnh chat riêng `dm:<agent_key>` (mục tiêu A2 có
         một tác giả sản phẩm, không có bước tổng hợp nên luật 6.5 thu về tác giả). Chỉ khi agent bật Cộng hưởng. Lỗi kho
         nhịp không bao giờ làm hỏng việc kết thúc mục tiêu (nuốt, ghi log)."""
@@ -2800,7 +2800,7 @@ class GoalStore:
             print(f"[pulse objective] {goal_id}: {type(ex).__name__}: {ex}", file=__import__("sys").stderr)
             return None
 
-    def notice(self, p: Principal, goal_id: str, kind: str, payload: dict, idem: Optional[str] = None) -> None:
+    def notice(self, p: Principal, goal_id: str, kind: str, payload: dict, idem: str | None = None) -> None:
         """Ghi một tin báo vào outbox (idem chống báo lặp). drain_outbox gửi cho người dùng."""
         with self._Tx(self) as c:
             row = self._goal_row(c, p, goal_id)
@@ -2814,7 +2814,7 @@ class GoalStore:
     FEEDBACK_KINDS = ("goal_fit_confirmed", "goal_fit_rejected", "outcome_accepted", "outcome_rejected")
 
     def record_feedback(self, p: Principal, goal_id: str, expected_revision: int, kind: str, data: dict,
-                        idempotency_key: Optional[str] = None) -> dict:
+                        idempotency_key: str | None = None) -> dict:
         """Ghi một phản hồi có nghĩa rõ (spec 4.7). CHỈ người dùng (owner): agent không tự xác nhận. Gắn đúng
         revision (CAS): thẻ cũ không xác nhận được revision mới. Cùng khoá chống trùng thì không ghi lần hai.
         Hệ quả ghi CÙNG giao dịch: "Chưa đúng ý" dừng tác động tới khi có revision mới; phản hồi khác hẹn đánh giá lại."""
@@ -2849,7 +2849,7 @@ class GoalStore:
                 self._reason_event(c, goal_id, p.brain_id, "feedback", f"fb:{cur.lastrowid}", int(expected_revision))
             return {"event_id": int(cur.lastrowid), "duplicate": False}
 
-    def _latest_feedback(self, p: Principal, goal_id: str, revision: int, kinds: tuple) -> Optional[dict]:
+    def _latest_feedback(self, p: Principal, goal_id: str, revision: int, kinds: tuple) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -2866,7 +2866,7 @@ class GoalStore:
             return "unknown"
         return "confirmed" if rows[0]["kind"] == "goal_fit_confirmed" else "rejected"
 
-    def confirmation(self, p: Principal, goal_id: str, revision: int, criterion_id: str) -> Optional[dict]:
+    def confirmation(self, p: Principal, goal_id: str, revision: int, criterion_id: str) -> dict | None:
         """Xác nhận đầu ra mới nhất của một tiêu chí ở đúng revision, hoặc None."""
         for r in self._latest_feedback(p, goal_id, revision, ("outcome_accepted", "outcome_rejected")) or []:
             if r.get("criterion_id") == criterion_id:
@@ -2874,7 +2874,7 @@ class GoalStore:
                         "by": r.get("by"), "created_at": r.get("created_at")}
         return None
 
-    def cancel(self, p: Principal, goal_id: str, seen_revision: Optional[int] = None) -> bool:
+    def cancel(self, p: Principal, goal_id: str, seen_revision: int | None = None) -> bool:
         """Người dùng huỷ mục tiêu. Luôn có hiệu lực (can thiệp của người dùng, spec 2.3); ghi revision người dùng
         đang nhìn. Tác động đã xảy ra không được mô tả là đã hoàn tác."""
         if p.kind != "owner":
@@ -2920,7 +2920,7 @@ class GoalStore:
 
     DIRECTIVE_FIELDS = ("deadline", "target", "constraint", "guard")
 
-    def drop_directive(self, p: Principal, goal_id: str, expected_revision: int, field: str, key: str) -> "R.GoalRecord":
+    def drop_directive(self, p: Principal, goal_id: str, expected_revision: int, field: str, key: str) -> R.GoalRecord:
         """ĐƯỜNG CÓ THẨM QUYỀN để bỏ một chỉ dẫn người dùng đã nêu (hạn chót, chỉ tiêu, ràng buộc) hay một guard:
         CHỈ owner, qua thao tác trên thẻ mục tiêu (M4). Bản cập nhật của bộ não không làm được việc này (M2, M3).
         Gắn revision (CAS), tạo revision mới ghi nguồn là người dùng, rồi hẹn làm tiếp theo cách hiểu mới. Bỏ guard
@@ -3028,8 +3028,8 @@ class GoalStore:
 
     def _insert_lesson(self, c, brain_id: str, agent_key: str, lane: str, key: str, from_value: str, to_value: str,
                        status: str, now: float, *, reason: str = "", scope: str = "agent", goal_id: str = "",
-                       revision: int = 0, evidence: Optional[dict] = None, base_lesson_id: str = "",
-                       expires_at: Optional[float] = None) -> Optional[str]:
+                       revision: int = 0, evidence: dict | None = None, base_lesson_id: str = "",
+                       expires_at: float | None = None) -> str | None:
         """Ghi một đề xuất hay bài học. Chỉ mục `lessons_pending_one` giữ tối đa một đề xuất chờ mỗi khoá và phạm vi:
         đã có thì không ghi (trả None), kể cả khi chạy lại sau khởi động lại."""
         lid = _nid("ls")
@@ -3121,7 +3121,7 @@ class GoalStore:
         elif why == "reverted_outside":
             self._lesson_move(c, h["lesson_id"], ("active",), "revoked", "reverted_outside", "host", now)
 
-    def _close_goal_holds(self, c, goal_id: str, why: str, now: float, revision: Optional[int] = None) -> None:
+    def _close_goal_holds(self, c, goal_id: str, why: str, now: float, revision: int | None = None) -> None:
         """Mục tiêu kết thúc, bị huỷ, hay sang revision mới: trả mọi lượt giữ còn `held` (lượt đang gắn action thì để
         đối soát sau khi action chốt), bỏ đề xuất làn M đang chờ, ghi bài học đang dùng là hết phạm vi."""
         extra, args = ("", ()) if revision is None else (" AND revision=?", (int(revision),))
@@ -3188,8 +3188,8 @@ class GoalStore:
         self._rearm_hold(c, h, now)
         return 1
 
-    def reconcile_holds(self, p: Optional[Principal] = None, goal_id: Optional[str] = None,
-                        now: Optional[float] = None) -> int:
+    def reconcile_holds(self, p: Principal | None = None, goal_id: str | None = None,
+                        now: float | None = None) -> int:
         """Đối soát lượt giữ (mục 6.8): khi mở kho (mọi dòng `held`/`attached`, gồm lúc nâng lại từ 0.88) và trong pha
         chuẩn bị của mỗi lần thức (chỉ mục tiêu đó). Không có vòng quét nền. Trả số dòng đã đổi."""
         now = time.time() if now is None else float(now)
@@ -3234,7 +3234,7 @@ class GoalStore:
 
     # ───────────── làn M: đề xuất khi bế tắc ─────────────
 
-    def _propose_method(self, c, row, lesson: dict, now: float) -> Optional[str]:
+    def _propose_method(self, c, row, lesson: dict, now: float) -> str | None:
         """Ghi đề xuất làn M trong giao dịch ghi `waiting/stalled` (mục 6.1). `trial_pending` kèm lý do thức
         `method_trial`; `skipped` chỉ để người dùng thấy vì sao không thử."""
         gkey = self._goal_agent(c, row["id"])
@@ -3250,7 +3250,7 @@ class GoalStore:
                                due_at=now)
         return lid
 
-    def method_lessons(self, p: Principal, goal_id: str, revision: Optional[int] = None) -> list:
+    def method_lessons(self, p: Principal, goal_id: str, revision: int | None = None) -> list:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return []
@@ -3260,7 +3260,7 @@ class GoalStore:
                 args.append(int(revision))
             return [self._lesson(r) for r in c.execute(q + " ORDER BY created_at", args).fetchall()]
 
-    def lesson(self, p: Principal, lesson_id: str) -> Optional[dict]:
+    def lesson(self, p: Principal, lesson_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM lessons WHERE id=? AND brain_id=?", (lesson_id, p.brain_id)).fetchone()
             return self._lesson(r) if r else None
@@ -3276,7 +3276,7 @@ class GoalStore:
                 "SELECT key, to_value FROM lessons WHERE brain_id=? AND agent_key=? AND lane='presentation' AND "
                 "status='active'", (brain_id, agent_key)).fetchall()}
 
-    def outbox_row(self, outbox_id: int) -> Optional[dict]:
+    def outbox_row(self, outbox_id: int) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT o.*, g.brain_id FROM outbox o JOIN goals g ON g.id=o.goal_id WHERE o.id=?",
                           (int(outbox_id),)).fetchone()
@@ -3322,7 +3322,7 @@ class GoalStore:
             elif not L.still_supported(dict(ls), rows, now):
                 self._lesson_move(c, ls["id"], ("proposed",), "expired", "evidence_gone", "host", now)
 
-    def _learn_presentation(self, c, brain_id: str, agent_key: str, alive, now: float) -> Optional[str]:
+    def _learn_presentation(self, c, brain_id: str, agent_key: str, alive, now: float) -> str | None:
         """Bộ học làn P chạy bằng code trong giao dịch ghi reaction. Chỉ ĐỀ XUẤT; không áp dụng, không gọi model,
         không đụng lịch. Trợ lý không active hay đang tắt thì không đề xuất."""
         rows = self._reaction_rows(c, brain_id, agent_key, alive, now)
@@ -3351,7 +3351,7 @@ class GoalStore:
                                    expires_at=float(now) + float(L.POLICY["P_PROPOSAL_TTL_S"]))
 
     def record_reaction(self, p: Principal, src: dict, value: str, reason: str, nonce: str, alive=None,
-                        now: Optional[float] = None) -> dict:
+                        now: float | None = None) -> dict:
         """Ghi reaction của owner trên MỘT tin báo do host ghi (mục 3.2, 3.3). API đặt giá trị theo từng request (không
         tự đảo); cùng `nonce` gửi lại thì không ghi gì. Không gọi `advance`, không ghi lý do thức, không đụng lịch.
 
@@ -3404,13 +3404,13 @@ class GoalStore:
             return {"reaction": {"value": value, "reason": reason, "seq": seq},
                     "proposal": self._lesson(prop) if prop is not None else None, "duplicate": False}
 
-    def reaction_of(self, p: Principal, session_id: str, message_id: int) -> Optional[dict]:
+    def reaction_of(self, p: Principal, session_id: str, message_id: int) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT value, reason, seq FROM reactions WHERE brain_id=? AND session_id=? AND message_id=? "
                           "AND responder=?", (p.brain_id, str(session_id), int(message_id), p.by)).fetchone()
             return dict(r) if r else None
 
-    def agent_lessons(self, p: Principal, agent_key: str, alive=None, now: Optional[float] = None) -> dict:
+    def agent_lessons(self, p: Principal, agent_key: str, alive=None, now: float | None = None) -> dict:
         """Bài học của một trợ lý cho trang trợ lý: đề xuất (đã ghi bù hết hạn), đang dùng, lịch sử ngắn, bằng chứng có
         đánh dấu mồ côi, thống kê reaction 30 ngày."""
         now = time.time() if now is None else float(now)
@@ -3447,8 +3447,8 @@ class GoalStore:
                                             _j({"from": row["method_ref"], "to": prev}), p.by, now))
         return prev
 
-    def lesson_decide(self, p: Principal, lesson_id: str, action: str, expected_status: Optional[str] = None,
-                      expected_updated_at: Optional[float] = None, now: Optional[float] = None,
+    def lesson_decide(self, p: Principal, lesson_id: str, action: str, expected_status: str | None = None,
+                      expected_updated_at: float | None = None, now: float | None = None,
                       alive=None) -> dict:
         """Owner quyết một bài học (mục 5.2, 6.4, 6.7). Trả {ok, lesson} hay {ok: False, conflict, lesson}.
 
@@ -3520,7 +3520,7 @@ class GoalStore:
             cur = c.execute("SELECT * FROM lessons WHERE id=?", (lesson_id,)).fetchone()
             return {"ok": True, "lesson": self._lesson(cur)}
 
-    def revision_record(self, p: Principal, goal_id: str, revision: int) -> Optional[dict]:
+    def revision_record(self, p: Principal, goal_id: str, revision: int) -> dict | None:
         """Bản ghi một revision: khung và ý định gốc (A3: dựng prompt của tình huống giữ riêng)."""
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
@@ -3551,7 +3551,7 @@ class GoalStore:
             if h is not None:
                 self._method_notice(c, h["experiment_id"], extra, time.time())
 
-    def reaction_row(self, p: Principal, reaction_id: int) -> Optional[dict]:
+    def reaction_row(self, p: Principal, reaction_id: int) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM reactions WHERE id=? AND brain_id=?", (int(reaction_id), p.brain_id)).fetchone()
             return dict(r) if r else None
@@ -3624,7 +3624,7 @@ class GoalStore:
         return int(r["config_version"]) if r else 0
 
     @staticmethod
-    def _grant(r) -> Optional[dict]:
+    def _grant(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
@@ -3633,18 +3633,18 @@ class GoalStore:
         d["source_ref"] = json.loads(d.pop("source_ref_json") or "{}")
         return d
 
-    def _active_root(self, c, goal_id: str) -> Optional[dict]:
+    def _active_root(self, c, goal_id: str) -> dict | None:
         return self._grant(c.execute("SELECT * FROM grants WHERE goal_id=? AND kind='root' AND status='active'",
                                      (goal_id,)).fetchone())
 
-    def _active_rev_grant(self, c, goal_id: str, revision: int) -> Optional[dict]:
+    def _active_rev_grant(self, c, goal_id: str, revision: int) -> dict | None:
         return self._grant(c.execute("SELECT * FROM grants WHERE goal_id=? AND kind='revision' AND revision=? AND "
                                      "status='active' ORDER BY created_at DESC LIMIT 1",
                                      (goal_id, int(revision))).fetchone())
 
     def _insert_grant(self, c, *, kind: str, row, revision: int, agent_key: str, agent_version: int, by: str,
-                      source: str, key: str, now: float, parent: Optional[dict] = None, seq: int = 0,
-                      source_ref: Optional[dict] = None) -> dict:
+                      source: str, key: str, now: float, parent: dict | None = None, seq: int = 0,
+                      source_ref: dict | None = None) -> dict:
         acts, write, read = list(G.ROOT_ACTIONS), [key], [key]
         if parent is not None:
             got, why = G.narrow(parent, {"goal_id": row["id"], "brain_id": row["brain_id"], "actions": acts,
@@ -3723,7 +3723,7 @@ class GoalStore:
                   "status IN ('live','sealed')", (now, goal_id, int(new_revision)))
 
     def _open_binding(self, c, row, revision: int, origin_kind: str, origin_ref: str, agent_key: str,
-                      agent_version: int, now: float, turn_seq: Optional[int] = None, status: str = "live") -> tuple:
+                      agent_version: int, now: float, turn_seq: int | None = None, status: str = "live") -> tuple:
         """Mở (hay trả lại) liên kết của một lượt cho đúng revision. Trả (liên kết | None, lý do).
 
         Cùng `(goal, revision, origin)` thì trả dòng có sẵn khi còn `live`; không bao giờ REPLACE (mục 4.2). Lượt chat
@@ -3806,7 +3806,7 @@ class GoalStore:
             return "revision_changed"
         return ""
 
-    def _binding_grant(self, c, b) -> Optional[dict]:
+    def _binding_grant(self, c, b) -> dict | None:
         return self._grant(c.execute("SELECT * FROM grants WHERE id=?", (b["grant_id"],)).fetchone()) \
             if b is not None and b["authority"] == "grant" else None
 
@@ -3882,7 +3882,7 @@ class GoalStore:
                           (origin_kind, str(origin_ref), p.brain_id)).fetchone()
             return "" if b is None else self._binding_block(c, b, finishing)
 
-    def turn_binding(self, p: Principal, goal_id: str, revision: int, origin_ref: str) -> Optional[dict]:
+    def turn_binding(self, p: Principal, goal_id: str, revision: int, origin_ref: str) -> dict | None:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return None
@@ -3919,25 +3919,25 @@ class GoalStore:
     # ───────────── bản nộp ─────────────
 
     @staticmethod
-    def _sub(r) -> Optional[dict]:
+    def _sub(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
         d["engine"] = json.loads(d.pop("engine_json") or "{}")
         return d
 
-    def submission(self, p: Principal, sub_id: str) -> Optional[dict]:
+    def submission(self, p: Principal, sub_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._sub(c.execute("SELECT * FROM submissions WHERE id=? AND brain_id=?",
                                        (str(sub_id), p.brain_id)).fetchone())
 
-    def submission_by_idem(self, p: Principal, goal_id: str, idem: str) -> Optional[dict]:
+    def submission_by_idem(self, p: Principal, goal_id: str, idem: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._sub(c.execute("SELECT * FROM submissions WHERE goal_id=? AND idem_key=? AND brain_id=?",
                                        (goal_id, str(idem), p.brain_id)).fetchone())
 
-    def submissions(self, p: Principal, goal_id: str, limit: int = 5, statuses: Optional[tuple] = None,
-                    revision: Optional[int] = None) -> list:
+    def submissions(self, p: Principal, goal_id: str, limit: int = 5, statuses: tuple | None = None,
+                    revision: int | None = None) -> list:
         with closing(self._conn()) as c:
             q, args = "SELECT * FROM submissions WHERE goal_id=? AND brain_id=?", [goal_id, p.brain_id]
             if statuses:
@@ -3975,7 +3975,7 @@ class GoalStore:
 
     def insert_submission(self, p: Principal, binding_id: str, *, sub_id: str, key: str, sha256: str, size: int,
                           draft_ref: str, evidence_id: str, idem: str, fingerprint: str, source: str,
-                          engine: Optional[dict] = None, em_dash: int = 0) -> dict:
+                          engine: dict | None = None, em_dash: int = 0) -> dict:
         """Bước 6 của mục 4.3: MỘT giao dịch kiểm lại `binding_accepts` và quyền rồi chèn bản nộp. Liên kết `grant`:
         quyền revision có `submit` đúng đích, trạng thái `candidate`. Liên kết `draft`: đúng đường của yêu cầu, trạng thái
         `awaiting_scope`. Cùng khoá: trả biên nhận đã có (cùng dấu vân tay) hay `submission_conflict`."""
@@ -4015,7 +4015,7 @@ class GoalStore:
                 "SELECT * FROM submissions WHERE id=?", (sub_id,)).fetchone())}
 
     def submission_from_output(self, p: Principal, action_id: str, *, key: str, sha256: str, size: int,
-                               draft_ref: str, evidence_id: str) -> Optional[dict]:
+                               draft_ref: str, evidence_id: str) -> dict | None:
         """Lượt nền đã có đầu ra (receipt): liên kết `action`/`followup` của lượt chuyển `sealed`, rồi chèn bản nộp
         `background_text` TRƯỚC bước đăng (mục 4.4). Quyền đã ghim không còn: bản nộp ghi `stale` hay `superseded`,
         không đăng. Lượt không có liên kết (mục tiêu không cần phạm vi, hay lượt có trước A4): None."""
@@ -4047,8 +4047,8 @@ class GoalStore:
             self._maybe_close_binding(c, b["id"], now)
             return self._sub(c.execute("SELECT * FROM submissions WHERE id=?", (sid,)).fetchone())
 
-    def latest_candidate(self, p: Principal, goal_id: str, revision: int, binding_id: Optional[str] = None,
-                         supersede_older: bool = False) -> Optional[dict]:
+    def latest_candidate(self, p: Principal, goal_id: str, revision: int, binding_id: str | None = None,
+                         supersede_older: bool = False) -> dict | None:
         """Bản `candidate` mới nhất của revision (hay của một liên kết). `supersede_older`: các bản cũ hơn CÙNG liên kết
         thành `superseded` (bàn giao cuối lượt chỉ đăng bản mới nhất, mục 4.4)."""
         now = time.time()
@@ -4067,7 +4067,7 @@ class GoalStore:
                         self._sub_set(c, r["id"], "superseded", "newer_submission", now)
             return self._sub(rows[0])
 
-    def republish_latest(self, p: Principal, goal_id: str) -> Optional[dict]:
+    def republish_latest(self, p: Principal, goal_id: str) -> dict | None:
         """Đăng lại (mục 4.5): file đích đã bị xoá mà revision hiện tại có bản đã đăng. Tạo bản nộp `republish` chép bản
         đã đăng mới nhất (cùng file nháp, cùng sha), dưới liên kết MỚI ghim quyền revision ĐANG hiệu lực; không dùng lại
         liên kết cũ. Không có quyền hiệu lực hay không có bản đã đăng: None. Không gọi model."""
@@ -4098,8 +4098,8 @@ class GoalStore:
 
     # ───────────── đăng của host: bốn bước (mục 4.5) ─────────────
 
-    def publish_intent(self, p: Principal, sub_id: str, rel: str, cur_sha: Optional[str], extra_intent: dict,
-                       now: Optional[float] = None) -> dict:
+    def publish_intent(self, p: Principal, sub_id: str, rel: str, cur_sha: str | None, extra_intent: dict,
+                       now: float | None = None) -> dict:
         """Bước 1: kiểm `binding_may_finish`, quyền `publish` đúng đích, tạm dừng và chốt guard; đọc baseline. `cur_sha`
         là hash đích người gọi vừa đọc (None: chưa có file). Đích đã cùng hash (nhánh `same`): ghi mốc NGAY trong giao
         dịch này, sau khi đã kiểm quyền. Đích có bytes lạ không khớp baseline: `conflict`. Đạt: ghi hành động `publish`
@@ -4222,7 +4222,7 @@ class GoalStore:
                        "hoàn tất lần đăng đã chốt")
             return {"status": "committed", "commit_at": now}
 
-    def publish_finish(self, p: Principal, action_id: str, got_sha: Optional[str]) -> dict:
+    def publish_finish(self, p: Principal, action_id: str, got_sha: str | None) -> dict:
         """Bước 4 (luật tác động đã commit): đích bằng sha bản nộp thì ghi mốc, bản nộp `published`; khác thì
         `conflict`. Không kiểm lại liên kết hay quyền: tác động đã được phép ở mốc commit."""
         now = time.time()
@@ -4280,7 +4280,7 @@ class GoalStore:
         return len(running) + int(unadopted) + int(held)
 
     @classmethod
-    def _settle_next(cls, c, goal_id: str, now: float) -> Optional[float]:
+    def _settle_next(cls, c, goal_id: str, now: float) -> float | None:
         """Giờ sớm nhất một nghĩa vụ hoàn tất còn mở tới lượt xét lại: hạn của lần đăng đã commit, hạn giữ bản nộp, hay
         ngay sau một khoảng ngắn cho bản chưa tiếp nhận. None khi không còn nghĩa vụ."""
         due = []
@@ -4372,7 +4372,7 @@ class GoalStore:
                              (goal_id, p.brain_id)).fetchall()
             return [self._action(r) for r in rows if json.loads(r["receipt_json"] or "{}").get("commit_at")]
 
-    def settle_cleanup(self, p: Principal, goal_id: str, now: Optional[float] = None) -> None:
+    def settle_cleanup(self, p: Principal, goal_id: str, now: float | None = None) -> None:
         """Cuối lần thức `settle`: hết nghĩa vụ thì bỏ lịch và gỡ gác; còn thì đặt lịch đúng giờ nghĩa vụ sớm nhất (thay
         mốc nhận lịch của tick), không thức dày khi lỗi còn kéo dài."""
         with self._Tx(self) as c:
@@ -4610,7 +4610,7 @@ class GoalStore:
             self._recompute_wake(c, goal_id)
             return {"ok": True}
 
-    def revoke_scope(self, p: Principal, goal_id: str, expected_revision: Optional[int] = None) -> dict:
+    def revoke_scope(self, p: Principal, goal_id: str, expected_revision: int | None = None) -> dict:
         """Thu hồi (mục 5.3), một giao dịch `BEGIN IMMEDIATE`: gốc `revoked` và `generation` + 1; quyền revision
         `revoked`; bản nộp `candidate`, `awaiting_scope` và `publishing` CHƯA commit thành `stale` (bản đã commit đi tiếp
         theo luật tác động đã commit); liên kết `live`/`sealed` thành `dead`; yêu cầu đang chờ `withdrawn`; tạm dừng."""
@@ -4714,7 +4714,7 @@ class GoalStore:
                        "caps": dict(TEAM_ROLE_CAPS), "max_rounds": TEAM_MAX_ROUNDS}), "host", now))
         return True
 
-    def team_pair_set(self, p: Principal, maker_key: str, reviewer_key: Optional[str]) -> Optional[dict]:
+    def team_pair_set(self, p: Principal, maker_key: str, reviewer_key: str | None) -> dict | None:
         """Chủ dự án chọn (hay bỏ chọn) người review cho một agent làm. Chỉ owner. Hai mã phải là agent `active` của brain
         và khác nhau. Mỗi lần đổi tăng `config_version` của cặp; đổi cặp KHÔNG ảnh hưởng mục tiêu đã có đội."""
         self._owner_only(p)
@@ -4745,13 +4745,13 @@ class GoalStore:
                           "updated_at=?, by=? WHERE maker_agent_key=?", (rv["agent_key"], now, p.by, mk["agent_key"]))
             return dict(c.execute("SELECT * FROM team_pairs WHERE maker_agent_key=?", (mk["agent_key"],)).fetchone())
 
-    def team_pair(self, brain_id: str, maker_key: str) -> Optional[dict]:
+    def team_pair(self, brain_id: str, maker_key: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_pairs WHERE maker_agent_key=? AND brain_id=?",
                           (str(maker_key or ""), brain_id)).fetchone()
             return dict(r) if r else None
 
-    def goal_team(self, p: Principal, goal_id: str) -> Optional[dict]:
+    def goal_team(self, p: Principal, goal_id: str) -> dict | None:
         """Đội của mục tiêu (cả khi đã tách, để thẻ và hồ sơ đọc), kèm lượt theo vai. None khi không có đội."""
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
@@ -4818,7 +4818,7 @@ class GoalStore:
             return self._bump_agent(c, r, "enabled", p.by, now, {"via": "team_reviewer_enable", "goal_id": goal_id},
                                     enabled=1)
 
-    def rearm_review_due(self, p: Principal, goal_id: str, bundle_ref: str, now: Optional[float] = None) -> bool:
+    def rearm_review_due(self, p: Principal, goal_id: str, bundle_ref: str, now: float | None = None) -> bool:
         """`review_due` của một bộ ghim CHƯA có hàng review nào mà lý do đã bị phục vụ (ví dụ lần thức trước thấy bản chưa
         đạt kiểm khách quan): đặt lại thành chờ. Có hàng review rồi thì không (một bộ ghim chỉ một lần review đầu; thử lại
         đi qua `review_retry`). Cùng (mã, ref) nên một sự kiện gửi lặp vẫn chỉ là một lý do."""
@@ -4869,7 +4869,7 @@ class GoalStore:
             return [self._review(r) for r in c.execute(
                 "SELECT * FROM reviews WHERE goal_id=? AND bundle_ref=? ORDER BY seq", (goal_id, bundle_ref)).fetchall()]
 
-    def reviews(self, p: Principal, goal_id: str, revision: Optional[int] = None, limit: int = 20) -> list:
+    def reviews(self, p: Principal, goal_id: str, revision: int | None = None, limit: int = 20) -> list:
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
                 return []
@@ -4902,7 +4902,7 @@ class GoalStore:
         return int(c.execute("SELECT COUNT(*) FROM reviews WHERE bundle_ref=? AND charged=1",
                              (bundle_ref,)).fetchone()[0])
 
-    def submission_for_publish(self, p: Principal, goal_id: str, publish_action_id: str, sha256: str) -> Optional[dict]:
+    def submission_for_publish(self, p: Principal, goal_id: str, publish_action_id: str, sha256: str) -> dict | None:
         """Bản nộp đã thành mốc đăng hiện tại (A4 `publish_action_id`, cùng sha): nguồn ảnh chụp review."""
         with closing(self._conn()) as c:
             if self._goal_row(c, p, goal_id) is None:
@@ -4936,7 +4936,7 @@ class GoalStore:
         return ""
 
     def record_review(self, p: Principal, action_id: str, out: dict, current_bundle_ref: str,
-                      now: Optional[float] = None) -> dict:
+                      now: float | None = None) -> dict:
         """Ghi kết luận của MỘT lượt review (mục 5.2, 5.4, 5.6), một giao dịch. CAS hàng `reviews` từ `running`: ghi lần
         hai cùng hành động bị bỏ qua. Kết luận lệch hành động (`review_mismatch`) hay lỗi thời so với bộ ghim hiện tại
         (`stale`) được lưu để xem lại nhưng không tính vòng, không sinh lý do sửa, không dùng để chốt. Hợp lệ thì quyết
@@ -5057,7 +5057,7 @@ class GoalStore:
                   (g["id"], notify, _j({"revision": int(g["revision"]), "reason": code, **payload}), now, idem))
 
     def review_interrupted(self, p: Principal, action_id: str, code: str = "interrupted",
-                           now: Optional[float] = None) -> dict:
+                           now: float | None = None) -> dict:
         """Đối soát lượt review dở (khởi động lại, khoá đã hết) hay bị huỷ khi engine CÓ THỂ đã chạy (mục 5.6): hàng
         `failed`, `charged` giữ 1 (vẫn tính lượt và tính lần), hành động `failed`. Chỉ code, không gọi model; SAU đó mới
         xét luật thử lại (backoff, trần, lượt còn). Chạy lặp không làm gì thêm."""

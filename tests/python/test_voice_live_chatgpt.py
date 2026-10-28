@@ -14,15 +14,16 @@ Khoá:
   - make_provider chọn chatgpt không cần key, chưa nối ChatGPT thì báo lỗi dễ hiểu;
   - nhãn hiện ra là "ChatGPT Live", không có chữ "song công".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-chatgptlive-"))
 
-import codex_realtime  # noqa: E402
-import voice_live  # noqa: E402
+import codex_realtime
+import voice_live
 
 _fails = []
 
@@ -67,7 +68,7 @@ async def collect(prov, n, timeout=2.0):
     try:
         while len(out) < n:
             out.append(await asyncio.wait_for(agen.__anext__(), timeout))
-    except (asyncio.TimeoutError, StopAsyncIteration):
+    except (TimeoutError, StopAsyncIteration):
         pass
     return out
 

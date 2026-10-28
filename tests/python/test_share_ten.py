@@ -6,11 +6,12 @@ Chủ dự án chọn 01/10: link mới tự lấy tên theo TIÊU ĐỀ file, s
 và ô tìm kiếm tìm được theo tên. Trước đó trang Chia sẻ chỉ hiện tên file, mà mỗi app nhỏ nằm
 trong thư mục riêng nên cả loạt link cùng tên "index.html", không phân biệt được.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-share-ten-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-share-ten-brains-")
@@ -35,10 +36,10 @@ ghi("notes/ghi-chu.md", "\n\n# Ghi chú họp sáng\n\nNội dung")
 ghi("notes/thuan.md", "chỉ có chữ, không có tiêu đề")
 ghi("notes/so-lieu.txt", "a,b,c")
 
-import share_render  # noqa: E402
-import share_store  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import share_render
+import share_store
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app, base_url="http://127.0.0.1")
 _loi = []

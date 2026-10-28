@@ -24,14 +24,13 @@ Tag/reply thì KHÔNG qua bộ đánh giá: gọi tên là một lời nhờ rõ
 from __future__ import annotations
 
 import re
-from typing import Tuple
 
 import chatbot_grounding
 
 MIN_CHU = 8
 MIN_TU = 3
 
-_URL = re.compile(r"(?:https?://|www\.)\S+", re.I)
+_URL = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
 # Chữ báo hiệu một lời hỏi/nhờ giúp, đã BỎ DẤU (khách gõ không dấu nhiều). Đây chỉ là cửa thô.
 _HOI = re.compile(
     r"\b(?:sao|nao|dau|gi|bao nhieu|bao gio|khi nao|luc nao|the nao|tai sao|vi sao|"
@@ -76,7 +75,7 @@ def can_danh_gia(cfg: dict, meta: dict) -> bool:
             and not meta.get("member_join"))
 
 
-def nhin_nhu_cau_hoi(text: str) -> Tuple[bool, str]:
+def nhin_nhu_cau_hoi(text: str) -> tuple[bool, str]:
     """Tầng 1: tin có giống câu hỏi/lời nhờ giúp không. Trả (đạt, lý do khi loại)."""
     t = str(text or "").strip()
     if not t:

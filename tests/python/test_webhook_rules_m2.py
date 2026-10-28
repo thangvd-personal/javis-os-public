@@ -20,7 +20,6 @@ What is proven here (spec of record: docs/superpowers/specs/2026-10-19-webhook-e
      a logged event's own body;
   8. a v1 store (M1) upgrades in place to the current schema and keeps its events.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -32,6 +31,8 @@ import threading
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m2-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
@@ -40,9 +41,9 @@ try:
 except Exception:
     pass
 
-import webhook_rules as wr  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import webhook_rules as wr
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -118,7 +119,8 @@ check("no evaluation: a code-looking value stays text, templates do not reach at
       and r["fields"]["t"] == "__import__('os').system('id') {0.__class__} {x.__class__} {__import__('os').system('id')} %s",
       r["fields"])
 src = (SERVER / "webhook_rules.py").read_text(encoding="utf-8")
-import re as _re  # noqa: E402
+import re as _re
+
 check("the rules module has no eval/exec/compile/format of payload", not any(
     x in src for x in ("eval(", "exec(", ".format(", "format_map", "__import__", "pickle", "subprocess"))
     and not _re.search(r"(?<![\w.])compile\(", src))
@@ -595,8 +597,8 @@ async def main():
           and st._db.execute("SELECT COUNT(*) FROM biz_keys").fetchone()[0] == nk_before and len(calls) == 1
           and len(sent) == 2)
 
-    from fastapi import FastAPI
     import httpx
+    from fastapi import FastAPI
     app = FastAPI()
     app.include_router(f.router)
     cl = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")

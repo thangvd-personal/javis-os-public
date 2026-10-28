@@ -53,8 +53,9 @@ import subprocess
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
 try:
     import config as _cfg
@@ -78,11 +79,11 @@ TRAN_FILE_MOI = 6
 _FILE = _STATE_DIR / "tien_trinh_nen.json"
 _KHOA = threading.Lock()
 
-_NHOM_THEO_TAG: Dict[str, List[int]] = {}      # tag lượt -> pid engine (= mã nhóm)
-_VIEC: Dict[str, dict] = {}                     # mã việc -> bản ghi
-_LOI_DAN: Dict[str, dict] = {}                  # chat_id -> {"text", "ts"} (javis_job op=then)
-_KHI_XONG: Optional[Callable[[dict], Any]] = None
-_VONG: Optional[asyncio.Task] = None
+_NHOM_THEO_TAG: dict[str, list[int]] = {}      # tag lượt -> pid engine (= mã nhóm)
+_VIEC: dict[str, dict] = {}                     # mã việc -> bản ghi
+_LOI_DAN: dict[str, dict] = {}                  # chat_id -> {"text", "ts"} (javis_job op=then)
+_KHI_XONG: Callable[[dict], Any] | None = None
+_VONG: asyncio.Task | None = None
 
 
 # ---------------------------------------------------------------------------------------
@@ -112,13 +113,13 @@ def nhom_con_song(pgid: int) -> bool:
     return (not tv) or any(m.get("state") != "Z" for m in tv)
 
 
-def _thanh_vien(pgid: int) -> List[dict]:
+def _thanh_vien(pgid: int) -> list[dict]:
     """Các tiến trình còn sống của nhóm: pid, lệnh, thư mục làm việc. Best-effort.
 
     Đọc /proc khi có (Linux, kể cả container slim không có `ps`), không có thì hỏi `ps`
     (macOS). Hỏng cả hai thì trả rỗng: mô tả là để đọc cho dễ, không phải điều kiện theo dõi.
     """
-    out: List[dict] = []
+    out: list[dict] = []
     proc = Path("/proc")
     if proc.is_dir():
         for d in proc.iterdir():
@@ -159,7 +160,7 @@ def _thanh_vien(pgid: int) -> List[dict]:
 _VO_VI = re.compile(r"^(/\S*/)?(sh|bash|zsh|dash|nohup|env|timeout|sleep)$")
 
 
-def mo_ta_lenh(members: List[dict]) -> str:
+def mo_ta_lenh(members: list[dict]) -> str:
     """Một dòng người đọc hiểu được: lệnh "thật" nhất của nhóm, bỏ qua lớp vỏ sh/nohup."""
     tot = ""
     for m in members:
@@ -173,7 +174,7 @@ def mo_ta_lenh(members: List[dict]) -> str:
     return (tot[:157] + "...") if len(tot) > 160 else tot
 
 
-def file_moi(thu_muc: str, tu_luc: float, tran: int = TRAN_FILE_MOI) -> List[str]:
+def file_moi(thu_muc: str, tu_luc: float, tran: int = TRAN_FILE_MOI) -> list[str]:
     """File được ghi SAU `tu_luc` trong thư mục làm việc (sâu 2 tầng), mới nhất trước.
 
     Bỏ file ẩn, thư mục ẩn và file tạm hay gặp của trình render. Đây là thứ người dùng cần:
@@ -188,7 +189,7 @@ def file_moi(thu_muc: str, tu_luc: float, tran: int = TRAN_FILE_MOI) -> List[str
                                         for q in d.iterdir()]:
             if p.name.startswith(".") or not p.is_file():
                 continue
-            if re.search(r"\.(tmp|part|lock|log)$", p.name, re.I):
+            if re.search(r"\.(tmp|part|lock|log)$", p.name, re.IGNORECASE):
                 continue
             try:
                 mt = p.stat().st_mtime
@@ -257,7 +258,7 @@ def _lay_loi_dan(chat_id: str) -> str:
     return str(d.get("text") or "")
 
 
-def gan_loi_dan_cho_viec_dang_chay(chat_id: str, text: str) -> Optional[dict]:
+def gan_loi_dan_cho_viec_dang_chay(chat_id: str, text: str) -> dict | None:
     """Model dặn "khi xong thì..." cho việc ĐÃ đang theo dõi (lượt sau mới nhớ ra). Gắn vào việc
     mới nhất còn chạy của khung chat này; không có thì trả None để người gọi giữ làm lời dặn."""
     cid = str(chat_id or "")
@@ -273,7 +274,7 @@ def gan_loi_dan_cho_viec_dang_chay(chat_id: str, text: str) -> Optional[dict]:
 
 
 def nhan_nuoi_theo_tag(tag: str, brain_root: str, chat_id: str, *, hua: bool = False,
-                       do_sau: int = 0) -> List[dict]:
+                       do_sau: int = 0) -> list[dict]:
     """Hết lượt: nhóm tiến trình nào của engine còn sống thì nhận theo dõi.
 
     `hua` = câu trả lời của lượt có hứa "xong em làm tiếp/gửi". Khi đó xong việc nền là mở
@@ -284,7 +285,7 @@ def nhan_nuoi_theo_tag(tag: str, brain_root: str, chat_id: str, *, hua: bool = F
     with _KHOA:
         pids = _NHOM_THEO_TAG.pop(str(tag or ""), [])
     loi_dan = _lay_loi_dan(chat_id)
-    moi: List[dict] = []
+    moi: list[dict] = []
     if not POSIX:
         return moi
     for pgid in pids:
@@ -360,10 +361,10 @@ def ngung_theo_doi(job_id: str) -> None:
 # Tiến trình phụ của chính engine (máy chủ MCP chạy stdio) có khi nán lại một nhịp sau khi
 # engine thoát. Đó không phải "việc chạy nền" của người dùng: nhận nuôi là báo nhầm một cái
 # "việc đã xong sau 3 giây: node mcp-server...". Nhóm chỉ gồm những tiến trình kiểu này thì bỏ.
-_PHU_ENGINE = re.compile(r"(\bmcp\b|mcp-server|modelcontextprotocol|mcp_hub|codex mcp)", re.I)
+_PHU_ENGINE = re.compile(r"(\bmcp\b|mcp-server|modelcontextprotocol|mcp_hub|codex mcp)", re.IGNORECASE)
 
 
-def la_phu_engine(tv: List[dict]) -> bool:
+def la_phu_engine(tv: list[dict]) -> bool:
     """Nhóm là tiến trình phụ của engine: mọi tiến trình GỐC (cha không nằm trong nhóm, tức là
     đứa bị bỏ lại khi engine thoát) đều là máy chủ MCP. Con cháu của chúng thì tên gì cũng được."""
     song = [m for m in tv if m.get("state") != "Z"]
@@ -388,7 +389,7 @@ def bo_tag(tag: str) -> None:
         _NHOM_THEO_TAG.pop(str(tag or ""), None)
 
 
-def dang_chay(chat_id: str = "", brain_root: str = "") -> List[dict]:
+def dang_chay(chat_id: str = "", brain_root: str = "") -> list[dict]:
     with _KHOA:
         ds = [dict(v) for v in _VIEC.values() if v.get("trang_thai") == "run"]
     if chat_id:
@@ -398,7 +399,7 @@ def dang_chay(chat_id: str = "", brain_root: str = "") -> List[dict]:
     return sorted(ds, key=lambda v: float(v.get("bat_dau") or 0))
 
 
-def gan_day(chat_id: str = "", tran: int = 10) -> List[dict]:
+def gan_day(chat_id: str = "", tran: int = 10) -> list[dict]:
     with _KHOA:
         ds = [dict(v) for v in _VIEC.values()]
     if chat_id:
@@ -406,7 +407,7 @@ def gan_day(chat_id: str = "", tran: int = 10) -> List[dict]:
     return sorted(ds, key=lambda v: -float(v.get("bat_dau") or 0))[:tran]
 
 
-def huy(job_id: str) -> Optional[dict]:
+def huy(job_id: str) -> dict | None:
     """Dừng một việc: TERM cả nhóm. Vòng theo dõi sẽ thấy nhóm chết và báo như thường."""
     with _KHOA:
         v = _VIEC.get(str(job_id or ""))
@@ -438,10 +439,10 @@ def dat_khi_xong(cb: Callable[[dict], Any]) -> None:
     _KHI_XONG = cb
 
 
-def kiem_mot_luot(now: float = 0.0) -> List[dict]:
+def kiem_mot_luot(now: float = 0.0) -> list[dict]:
     """Một nhịp của vòng theo dõi, tách ra để test gọi thẳng. Trả các việc vừa KẾT THÚC."""
     moc = float(now) or time.time()
-    xong: List[dict] = []
+    xong: list[dict] = []
     with _KHOA:
         chay = [v for v in _VIEC.values() if v.get("trang_thai") == "run"]
     for v in chay:

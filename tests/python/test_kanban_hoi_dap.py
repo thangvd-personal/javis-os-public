@@ -4,13 +4,12 @@ Trước bản này `[[NEEDS_INPUT]]` chặn được việc nhưng không có c
 lại từ đầu mà không ai nói cho worker câu trả lời, nên nó hỏi lại y hệt. Ý tưởng `ask_user` của
 OpenMuse: câu hỏi là một trạng thái của việc, câu trả lời được nạp vào lần chạy sau.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import importlib.util
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 from fastapi import FastAPI  # noqa: F401  - giữ cùng môi trường nạp với các test Kanban khác
-
 from task_store import TaskStore
 from tasks import TasksDeps, TasksFeature
 

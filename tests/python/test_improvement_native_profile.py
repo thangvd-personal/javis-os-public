@@ -1,6 +1,4 @@
 """Actual SDK client/transport with fake capture/IO; no native/account query."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib
@@ -8,9 +6,9 @@ import json
 import os
 import sys
 import unittest
-from unittest.mock import patch
 
 import test_improvement_native_sdk as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     profile_module = importlib.import_module('improvement_native_profile')

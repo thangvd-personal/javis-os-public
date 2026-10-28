@@ -13,7 +13,6 @@ ngay. Bốn lớp canh:
   3. GET /voice/options trả `last_error` để thẻ Giọng nói ở Cài đặt hiện lại.
   4. Tin từ mic không đi làn nhanh thì ghi log đúng MỘT lần cho mỗi cấu hình.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import json
 import os
@@ -21,11 +20,13 @@ import re
 import tempfile
 from contextlib import redirect_stderr
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-voicefb-")
 
-from fastapi.testclient import TestClient   # noqa: E402
-import voice_brain as vb   # noqa: E402
-import main                # noqa: E402
+import main
+import voice_brain as vb
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -71,7 +72,7 @@ src = (SERVER / "main.py").read_text(encoding="utf-8")
 i0 = src.index("async def run_voice_turn(")
 i1 = src.index("noi, ui = voice_brain.parse_ui(text)", i0)
 doan = src[i0:i1]
-m_exc = re.search(r"except Exception as e:(.*?)await run_turn\(", doan, re.S)
+m_exc = re.search(r"except Exception as e:(.*?)await run_turn\(", doan, re.DOTALL)
 check("nhánh except của run_voice_turn vẫn rơi về run_turn", m_exc is not None)
 than = m_exc.group(1) if m_exc else ""
 check("nhánh except NHỚ lỗi (ghi_loi_lan_nhanh)", "voice_brain.ghi_loi_lan_nhanh(" in than)

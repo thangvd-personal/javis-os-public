@@ -4,14 +4,18 @@ Real small-scope lineage/call/workspace integration is tested separately. This
 fixture isolates cardinality, bounded UNION queries, and separate class limits
 without running 18000 models or manufacturing any production Trial evidence.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 
 import improvement_store as IM
-from improvement_execution_limits import (MAX_COMPARISON_TRIALS, MAX_PREPARATION_TRIALS,
-    MAX_TRIALS, MAX_TRIAL_ATTEMPTS, MAX_ROLE_OPERATIONS)
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_execution_limits import (
+    MAX_COMPARISON_TRIALS,
+    MAX_PREPARATION_TRIALS,
+    MAX_ROLE_OPERATIONS,
+    MAX_TRIAL_ATTEMPTS,
+    MAX_TRIALS,
+)
 from improvement_experiment_service import ExperimentService
 
 

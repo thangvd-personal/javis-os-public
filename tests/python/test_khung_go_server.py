@@ -2,19 +2,20 @@
 
     python tests/run.py khung_go_server
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
-import shutil
-import uuid
 import os
+import shutil
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-khunggo-")
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

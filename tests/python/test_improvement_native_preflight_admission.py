@@ -1,6 +1,4 @@
 """Current static admission precedes any guarded native preflight command."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import tempfile
 import unittest
@@ -9,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_observed_verification as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 adapter = fixture.adapter
 

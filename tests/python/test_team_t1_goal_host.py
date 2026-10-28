@@ -9,11 +9,12 @@ dừng ngay, nên lần đổi API sau không âm thầm gọi model thật. Cá
   nhật ký by=leader; trợ lý chủ đã tắt mà nhóm không quản lý thì không bật lại được.
 - H7 (GOAL 12.1) đổi tag của trợ lý (thay cả tập, thêm, đổi tên, xoá tag) không đổi tư cách thành viên, trưởng nhóm, quyền.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-goal-host-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-goal-host-brain-"))
@@ -22,8 +23,8 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh"), ("hoa", "Hoa")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

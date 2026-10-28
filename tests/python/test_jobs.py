@@ -14,15 +14,15 @@ Phủ:
 - Các endpoint THẬT mà trang Việc dựa vào vẫn còn sống.
 - /automations/sync đã xoá: nó ghi vào chính registry vừa xoá, và là engine call ít rào nhất.
 """
-from _paths import ROOT, SERVER, moi_duong_dan  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
-from pathlib import Path
+
+from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-jobstest-"))
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

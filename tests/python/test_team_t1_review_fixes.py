@@ -10,7 +10,6 @@ Bộ chạy và kho thật trên SQLite tạm, engine GIẢ (không gọi model 
 - F4 bật Auto thành công mà đánh thức mục tiêu lỗi: vẫn có nhật ký nhóm, ghi lỗi đánh thức, không báo cả lệnh chưa áp.
 - F5 `set_caps` từ chối NaN, vô cực và kiểu sai TRƯỚC khi ghi, kể cả busy_wait_s và trần trong hộp quyền.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import math
@@ -19,14 +18,16 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-t1fix-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-t1fix-w-"))
 
-import resonance_store  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import resonance_store
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 WAIT = 10.0
@@ -362,7 +363,7 @@ reply(r, T, "Bật Auto cho Minh", "f4")
 m = last_agent(ss, T, "ag_lan")
 kinds = [e["kind"] for e in tm.events(T["team_id"])]
 check("F4 lệnh bật Auto đã gọi host đúng một lần", [c for c in admin.calls if c[0] == "resonance"] ==
-      [("resonance", "minh", True, f"leader:ag_lan")], admin.calls)
+      [("resonance", "minh", True, "leader:ag_lan")], admin.calls)
 check("F4 nhật ký nhóm có cả sự kiện bật Auto lẫn lỗi đánh thức",
       "agent_set_resonance" in kinds and "agent_wake_failed" in kinds, kinds)
 wake_ev = [e for e in tm.events(T["team_id"]) if e["kind"] == "agent_wake_failed"]

@@ -4,11 +4,12 @@
 
 Không chạy engine thật: bọc một generator giả phát đúng dãy sự kiện của execute_workflow.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-wfapi-")
 # TestClient gửi Host: testserver, không nằm trong allowlist mặc định của web_security.py
@@ -17,9 +18,9 @@ os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-wfapi-")
 # trình test, không đụng gì tới hành vi thật.
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
 
-import main  # noqa: E402
-import workflow_runs  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import workflow_runs
+from fastapi.testclient import TestClient
 
 fails = []
 

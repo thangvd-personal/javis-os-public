@@ -1,6 +1,4 @@
 """Pure SDK116 Windows query grammar, without connecting or starting a CLI."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -14,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 from improvement_claude import TrialProfile
 from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt

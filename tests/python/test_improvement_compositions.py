@@ -8,9 +8,6 @@ actual CLI, image ACK, account/model/config readiness or business improvement.
 The default UNKNOWN qualification case uses the same complete workflow without
 that predicate and must publish no composition. No product/read gate is bypassed.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
-import asyncio
 import copy
 import importlib
 import importlib.util
@@ -21,17 +18,17 @@ from contextlib import closing
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import improvement_store as IM
+import test_improvement_compose_admission as admission
+import test_improvement_native_trace_checks as N
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
 from improvement_native_trace_checks import validate_native_trace
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_profile import OperationProfile
 from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
-import usage_index as UI
-import usage_store as US
-import test_improvement_compose_admission as admission
-import test_improvement_native_trace_checks as N
 from test_improvement_operation_profile2 import EngineeringOperationBinding
 
 
@@ -93,7 +90,11 @@ class CompositionTests(unittest.IsolatedAsyncioTestCase):
                 return {'supported': True, 'capability_hash': 'c' * 64}
 
             async def execute(self, request, receipt, *, on_closing_observations=None):
-                from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
+                from claude_agent_sdk import (
+                    AssistantMessage,
+                    ResultMessage,
+                    SystemMessage,
+                )
                 manifest = workspace.validate(receipt)
                 test.assertEqual(manifest['version'], 2)
                 test.assertEqual(manifest['request']['kind'], 'compose')

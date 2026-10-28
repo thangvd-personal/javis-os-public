@@ -21,15 +21,16 @@ Phủ:
 - apply(): deps không có aux_swap (test cũ) -> rơi về cách cũ, hành vi không đổi.
 - Engine API gom nhiều mảnh 'text' thành đúng MỘT 'final' (hợp đồng việc nền đang đọc).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-aux-")
 
-import aux_engine  # noqa: E402
+import aux_engine
 
 fails = []
 
@@ -99,7 +100,7 @@ check("suggest -> read-only", aux_engine._CODEX_SANDBOX["suggest"] == "read-only
 check("auto -> workspace-write", aux_engine._CODEX_SANDBOX["auto"] == "workspace-write")
 check("full -> toan quyen (None)", aux_engine._CODEX_SANDBOX["full"] is None)
 
-from claude_cli import CodexCLI  # noqa: E402
+from claude_cli import CodexCLI
 
 cc = CodexCLI(cwd=".", model="gpt-5.5")
 check("CodexCLI mac dinh van toan quyen (khong doi hanh vi chat/workflow)", cc.sandbox is None)
@@ -173,7 +174,6 @@ check("API: final gom du cac manh text", finals[0]["content"] == "phan 1 phan 2"
 check("API: tool_call van di qua", any(e["type"] == "tool_call" for e in evs))
 
 # ---- Các nơi chạy nền đã nối vào ----
-from pathlib import Path  # noqa: E402
 
 root = SERVER
 for f, mode in (("self_improve.py", "loop"), ("tasks.py", "dispatch"),

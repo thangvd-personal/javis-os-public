@@ -14,18 +14,19 @@ Cộng: main.py thật sự truyền thư mục làm việc vào hub cho engine 
 nào truyền, nên engine API trong phiên Coding không đọc nổi file nào của repo), và cache tool
 của hub tách theo phiên (terminal giữ cwd, biến môi trường, tiến trình nền của MỘT phiên).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-quyencd-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import mcp_hub  # noqa: E402
-from coding_ctx import CodingToolContext  # noqa: E402
+import mcp_hub
+from coding_ctx import CodingToolContext
 
 _fails = []
 
@@ -103,7 +104,7 @@ check("xoá phiên thì dọn terminal và mốc", "coding_terminal.don_phien" i
       and "coding_checkpoint.don_phien" in _src_main)
 
 # Trần vòng riêng cho Coding.
-import engine  # noqa: E402
+import engine
 
 
 async def _thu():

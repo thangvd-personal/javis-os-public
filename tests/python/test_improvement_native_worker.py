@@ -1,6 +1,4 @@
 """Startup2 worker adoption; no account, CLI, SDK client, or model invocation."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import base64
 import copy
@@ -8,13 +6,15 @@ import importlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import socket
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def component(test):
@@ -23,7 +23,7 @@ def component(test):
 
 
 def packet(kind='preflight', *, scratch=r'C:\private\scratch'):
-    from improvement_native_protocol import _ENV_PATHS, _ENV_FIXED
+    from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
     environment = {**{key: scratch for key in _ENV_PATHS}, **_ENV_FIXED}
     environment.update(TEMP=scratch + r'\tmp', TMP=scratch + r'\tmp',
         JAVIS_STATE_DIR=scratch + r'\host-state', BRAINS_DIR=scratch + r'\empty-brains',
@@ -47,8 +47,8 @@ def packet(kind='preflight', *, scratch=r'C:\private\scratch'):
 
 class NativeWorkerContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_startup3_is_explicit_preflight_only_and_default_route_never_adopts_it(self):
-        from test_improvement_qualification_protocol import startup
         from improvement_qualification_protocol import encode_startup3
+        from test_improvement_qualification_protocol import startup
         m = component(self)
         value = startup('preflight')
         # A missing platform symbol is only a no-acquisition sentinel here;
@@ -206,7 +206,9 @@ class NativeWorkerWindowsTests(unittest.IsolatedAsyncioTestCase):
         component(self)
         from improvement_native_capture_win32 import backend
         from improvement_native_protocol import worker_binding
-        from improvement_private_channel import PrivateWorkerChannelV2, PrivateChannelError
+        from improvement_private_channel import (
+            PrivateWorkerChannelV2,
+        )
         api = backend()
         with tempfile.TemporaryDirectory(prefix='native-worker-') as directory:
             root = Path(directory); scratch = root / 'scratch'; scratch.mkdir()
@@ -216,9 +218,10 @@ class NativeWorkerWindowsTests(unittest.IsolatedAsyncioTestCase):
             value['environment'].update(HOME=str(login), USERPROFILE=str(login),
                 APPDATA=str(login / 'AppData/Roaming'), LOCALAPPDATA=str(login / 'AppData/Local'))
             if qualification:
-                from improvement_qualification_environment import dummy_environment
-                from improvement_native_protocol import _canonical
                 import hashlib
+
+                from improvement_native_protocol import _canonical
+                from improvement_qualification_environment import dummy_environment
                 digest=lambda item:hashlib.sha256(_canonical(item)).hexdigest()
                 value.update(version=3,type='startup3')
                 value['request']['config_pin']['profile_version']='claude-owned-images-v3'

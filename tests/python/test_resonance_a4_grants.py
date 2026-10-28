@@ -6,7 +6,6 @@ Kho SQLite thật, engine GIẢ, đồng hồ giả; không gọi model thật. 
 nghiệm thu mục 12 của docs/superpowers/specs/2026-10-10-resonance-a4-handoff-grants-design.md. Ca âm kiểm đủ ba mặt khi
 liên quan: không có gốc, không đọc đích vào prompt, không đăng, không giữ lượt nền.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -16,15 +15,17 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a4-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_grants as G  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance as R
+import resonance_grants as G
+import resonance_store as RS
+import turn_context
 
 _fails = []
 
@@ -1152,7 +1153,7 @@ check("V2-P2-1 bản nháp sai hash: không đăng bytes sai, rejected với lý
 
 w, g2, rb, h = _handoff_with_failing_replace("v2n1c")
 w.target().parent.mkdir(parents=True, exist_ok=True)
-w.target().write_bytes("anh sửa tay\n".encode("utf-8"))
+w.target().write_bytes("anh sửa tay\n".encode())
 _ticks(w, 1)
 check("V2-P2-1 đối chứng: file đích thật sự bị sửa vẫn conflict, file người dùng giữ nguyên",
       _has(w, "anh sửa tay\n") and w.store.submission(w.owner, rb["submission_id"])["status"] == "conflict")

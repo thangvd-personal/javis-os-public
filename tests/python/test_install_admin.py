@@ -12,13 +12,14 @@ File này canh đúng hai thứ dễ hỏng khi sửa shell: khối tự sinh c�
 có đọc lại được nguyên vẹn không (mật khẩu người ta gõ có thể chứa dấu nháy, gạch đứng, ký tự
 thoát - mọi thứ làm vỡ một lệnh sed viết theo lối thường gặp).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _fails = []
 

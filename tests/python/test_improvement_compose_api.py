@@ -1,17 +1,17 @@
 """Real ASGI owner routes and cold metadata, with no live factory on GET/revoke."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
-import json
 import threading
 import unittest
-from contextlib import closing, aclosing
+from contextlib import aclosing, closing
 from unittest.mock import patch
+
 import httpx
+import improvement_store as IM
+import test_improvement_compose_controls as controls
+from _paths import ROOT, SERVER  # noqa: F401
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-import improvement_store as IM
-from improvement_experiment_api import register, ExperimentApiDeps
-import test_improvement_compose_controls as controls
+from improvement_experiment_api import ExperimentApiDeps, register
 
 
 class ComposeApiTests(controls.ComposeControlsTests):

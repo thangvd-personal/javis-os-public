@@ -12,7 +12,6 @@
 Kho SQLite thật, `form_goal`, `_gate`, `R.advance` và lịch thật; chỉ engine là giả (hai vai). Request của nút dựng bằng
 `teamHtml` và `requestFor` thật (node) rồi gửi tới route FastAPI thật. Không gọi model thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,18 +19,19 @@ import sqlite3
 import subprocess
 import tempfile
 import threading
-import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a5r1-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_heartbeat as HB  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_agent as RA
+import _resonance_team as T
+import resonance as R
+import resonance_heartbeat as HB
+import resonance_store as RS
 
 _fails = []
 
@@ -282,9 +282,9 @@ check("R1w2 sau đó làm, review, succeeded; lượt maker đúng bằng số l
       (t.st(g), t.calls(g), t.work.queries))
 
 # ═════════════════════════ R2: nút Bật lại người review ghim mã bền ═════════════════════════
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import resonance_api as API  # noqa: E402
+import resonance_api as API
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 _JS = """const r=require(process.argv[1]), g=JSON.parse(process.argv[2]);
 const h=r.teamHtml(g), m=h.match(/<button[^>]*data-act="reviewer_enable"[^>]*>/);

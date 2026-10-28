@@ -13,8 +13,8 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import ROOT, World, batch, check, finish, keys_in  # noqa: E402
-import agent_judge as AJ  # noqa: E402
+import agent_judge as AJ
+from _judge_world import ROOT, World, batch, check, finish, keys_in
 
 check("_paths đặt chốt JAVIS_NO_REAL_JUDGE_ENGINE=1", os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE") == "1")
 

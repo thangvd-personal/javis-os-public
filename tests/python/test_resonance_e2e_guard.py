@@ -2,14 +2,15 @@
 
     python tests/run.py resonance_e2e_guard -v
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 sys.path.insert(0, str(Path(__file__).parent))
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_pilot_guard as G
 
 _fails = []
 
@@ -122,7 +123,7 @@ ITEMS = [{"who": "Lan", "when": "09/10", "task": "soạn kế hoạch bài viế
           "task_keys": [["kế hoạch", "bài viết"], ["kế hoạch", "tháng 11"]]},
          {"who": "Minh", "when": "10/10", "task": "kiểm lại lịch đăng", "task_keys": [["lịch đăng"], ["lịch", "đăng bài"]]},
          {"who": "Hà", "when": "12/10", "task": "gửi bảng số liệu cho cả nhóm", "task_keys": [["số liệu"]]}]
-V = lambda txt: G.content_contract(txt, ITEMS)["verdict"]  # noqa: E731
+V = lambda txt: G.content_contract(txt, ITEMS)["verdict"]
 TABLE = ("| Việc | Người | Hạn |\n|---|---|---|\n| Soạn kế hoạch bài viết tháng 11 | Lan | 09/10 |\n"
          "| Kiểm lại lịch đăng | Minh | 10/10 |\n| Gửi bảng số liệu cho cả nhóm | Hà | 12/10/2026 |\n")
 check("bảng đúng đủ việc, người, hạn: met", V(TABLE) == "met")

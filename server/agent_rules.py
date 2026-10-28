@@ -23,7 +23,7 @@ models, not identifiers.
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
 
 # Owner rules: never evicted, never rewritten by self-learning. Lives in the agent's
 # memory file (memory/agents/<slug>/MEMORY.md), which is loaded into every run of the agent.
@@ -42,7 +42,7 @@ def normalize(line: str) -> str:
     return re.sub(r"\W+", "", line or "").casefold()
 
 
-def _section_end(lines: List[str], i0: int) -> int:
+def _section_end(lines: list[str], i0: int) -> int:
     """Index just past the managed section whose header is `lines[i0]`.
 
     The section is the header, any blank lines right under it, then ONE run of contiguous
@@ -65,7 +65,7 @@ def _section_end(lines: List[str], i0: int) -> int:
     return i
 
 
-def split_section(text: str, header: str) -> Tuple[List[str], List[str], List[str]]:
+def split_section(text: str, header: str) -> tuple[list[str], list[str], list[str]]:
     """(lines before the section, bullet lines inside it, lines after it).
 
     See `_section_end` for where the section stops. Every line after it comes back in the third
@@ -84,7 +84,7 @@ def split_section(text: str, header: str) -> Tuple[List[str], List[str], List[st
 
 
 def merge_bullets(text: str, header: str, items: Iterable[str],
-                  cap: Optional[int] = None) -> str:
+                  cap: int | None = None) -> str:
     """Append `items` as bullets to the `header` section, creating it at the end if absent.
 
     Duplicates (by `normalize`) are skipped. `cap=None` keeps every bullet; a number keeps
@@ -111,7 +111,7 @@ def merge_bullets(text: str, header: str, items: Iterable[str],
     return "\n".join(out).strip()
 
 
-def extract_rules(out: str) -> Tuple[List[str], str]:
+def extract_rules(out: str) -> tuple[list[str], str]:
     """Pull `JAVIS_RULE:` lines out of an agent's output. Returns (rules, cleaned output).
 
     The marker must leave the output: it flows on into `{{prev}}` of the next workflow step,
@@ -124,7 +124,7 @@ def extract_rules(out: str) -> Tuple[List[str], str]:
     return [r for r in rules if r][:RULES_PER_TURN], cleaned
 
 
-def owner_lines(text: str, managed_headers: Sequence[str]) -> List[str]:
+def owner_lines(text: str, managed_headers: Sequence[str]) -> list[str]:
     """Non-blank lines outside every Javis-managed section, i.e. what the owner wrote.
 
     A managed section stops where `split_section` stops (see `_section_end`), so anything the
@@ -144,7 +144,7 @@ def owner_lines(text: str, managed_headers: Sequence[str]) -> List[str]:
     return out
 
 
-def missing_owner_lines(old: str, new: str, managed_headers: Sequence[str]) -> List[str]:
+def missing_owner_lines(old: str, new: str, managed_headers: Sequence[str]) -> list[str]:
     """Owner lines of `old` that `new` no longer contains. Empty list = safe to write.
 
     Compared as a multiset of normalized lines, so moving a line or retouching its

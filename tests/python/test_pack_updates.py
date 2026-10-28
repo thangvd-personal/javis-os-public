@@ -6,16 +6,17 @@ Owner 26/10/2026: "những bản plugin có phiên bản mới trong store thì 
 packs, a real newer number (numeric compare), one notice per new version, a stale catalog never used, the scheduler
 keeps its own rhythm, and the bell item opens the Store.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-pack-updates-")
 
-import pack_install  # noqa: E402
-import pack_updates as PU  # noqa: E402
-import packs_store  # noqa: E402
+import pack_install
+import pack_updates as PU
+import packs_store
 
 fails = []
 
@@ -84,7 +85,8 @@ check("the check rides on the dashboard opening (/version)",
 nj = (ROOT / "dashboard" / "notifications.js").read_text(encoding="utf-8")
 check("pressing the notice opens the Javis Store",
       'item.channel === "store:updates"' in nj and "window.JavisPacks.moKho(\"\")" in nj)
-import json  # noqa: E402
+import json
+
 vi = json.loads((ROOT / "dashboard" / "i18n" / "vi.json").read_text(encoding="utf-8"))
 en = json.loads((ROOT / "dashboard" / "i18n" / "en.json").read_text(encoding="utf-8"))
 check("noti.open_store in vi and en", vi.get("noti.open_store") and en.get("noti.open_store"))

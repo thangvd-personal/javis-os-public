@@ -16,14 +16,15 @@ lặng tuyệt đối; và không có hạn giờ nên bộ não chính treo là
 Test soi NGUỒN (những nhánh này nằm trong một hàm lồng trong endpoint WebSocket, không nhấc ra
 gọi trực tiếp được) cộng chạy thật sổ việc nền để chắc gạch tên hai lần không vỡ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-bgtask-"))
 
-import voice_brain as vb  # noqa: E402
+import voice_brain as vb
 
 _fails = []
 
@@ -38,11 +39,11 @@ src = open(os.path.join(ROOT, "server", "main.py"), encoding="utf-8").read()
 
 # ---- 1. Giữ ref mạnh cho task việc nền ----
 check("CANARY: không còn create_task thả trôi cho _voice_bg_task",
-      not re.search(r"^\s*asyncio\.create_task\(_voice_bg_task\(", src, re.M))
+      not re.search(r"^\s*asyncio\.create_task\(_voice_bg_task\(", src, re.MULTILINE))
 check("task việc nền được giao thẳng cho sổ giữ ref (không thả trôi)",
       re.search(r"_nho_viec_nen_giong\(conv_sid, asyncio\.create_task\(_voice_bg_task\(", src) is not None)
 check("_VOICE_BG_TASKS khai báo ở cấp module, gom THEO PHIÊN (để huỷ đúng phiên)",
-      re.search(r"^_VOICE_BG_TASKS: dict = \{\}", src, re.M) is not None)
+      re.search(r"^_VOICE_BG_TASKS: dict = \{\}", src, re.MULTILINE) is not None)
 check("sổ tự dọn khi task xong, không giữ ref chết",
       re.search(r"task\.add_done_callback\(_xong\)", src) is not None)
 
@@ -61,7 +62,7 @@ check("lỗi thường vẫn đẩy câu lỗi về chat (0.64.48: câu người
 check("gạch tên trong sổ việc ở finally (mọi đường ra)",
       re.search(r"finally:\s*\n\s*voice_brain\.note_task_done\(conv_sid, request\)", body) is not None)
 check("hạn giờ đặt ở cấp module, đọc được",
-      re.search(r"^VOICE_BG_TIMEOUT = ", src, re.M) is not None)
+      re.search(r"^VOICE_BG_TIMEOUT = ", src, re.MULTILINE) is not None)
 
 # ---- 3. Sổ việc nền: gạch tên hai lần không vỡ ----
 # Nhánh CancelledError gọi note_task_done rồi finally gọi lần nữa. Phải chịu được.
@@ -81,8 +82,8 @@ check("hết việc thì sổ sạch, không còn báo đang chạy",
 # Chủ dự án 15/09: "việc ngầm chạy thì cập nhật vào trang việc luôn nhé vì hiện tại đang không
 # cập nhật". Trước đó loại việc này chỉ sống trong bộ nhớ tiến trình: xong là bay hơi, không
 # để lại dấu, và trong lúc chạy không nhìn thấy ở đâu để biết còn sống hay đã chết.
-import background_status as bs  # noqa: E402
-from task_store import TaskStore  # noqa: E402
+import background_status as bs
+from task_store import TaskStore
 
 v_khong = bs.active_view([], [], [], chat_id="web:abc")
 check("chưa có việc gì: dải ẩn", v_khong["level"] == "idle" and v_khong.get("voice_count") == 0)
@@ -168,7 +169,7 @@ check("SYSTEM_PROMPT cấm giao việc để đi dừng việc",
       "KHÔNG giao việc mới" in vb.SYSTEM_PROMPT)
 
 # Sổ việc nền theo PHIÊN: huỷ đúng phiên đang nói, không đụng phiên khác.
-import asyncio  # noqa: E402
+import asyncio
 
 reg = re.search(r"def _nho_viec_nen_giong\([\s\S]*?\n    return n\n", src)
 check("nhấc được cặp hàm sổ việc nền theo phiên", reg is not None)

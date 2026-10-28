@@ -2,7 +2,6 @@
 import asyncio
 import contextlib
 import gzip
-import hashlib
 import http.server
 import importlib.metadata
 import inspect
@@ -20,10 +19,9 @@ from unittest.mock import AsyncMock, patch
 
 if "--qualification-worker" in sys.argv:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _paths import ROOT, SERVER  # noqa: F401,E402
-
 import improvement_claude as native
 import improvement_worker as worker
+from _paths import ROOT, SERVER  # noqa: F401
 
 CANDIDATE_VERSION = "2.1.310"
 CANDIDATE_HASH = "f9a3920634ae3b961ee92c2eb58d0051f5f8852b120983d0a4f57b6a5efeba61"
@@ -413,8 +411,8 @@ class CandidateNativeTests(unittest.TestCase):
 
 class QualificationEngineeringTests(unittest.TestCase):
     def test_sdk_launch_boundary_hides_version_and_query_spawns_and_restores_itself(self):
-        from claude_agent_sdk._internal.transport import subprocess_cli
         import test_improvement_worker as fixtures
+        from claude_agent_sdk._internal.transport import subprocess_cli
         original = AsyncMock(side_effect=["version", "query"])
         payload = fixtures.WorkerProcessTests().payload()
 

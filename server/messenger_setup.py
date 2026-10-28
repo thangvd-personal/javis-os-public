@@ -21,12 +21,17 @@ Nothing here prints or returns a token. Results carry ids, names, scopes and dat
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 import httpx
-
 import localefmt
-from messenger_bot import GRAPH, SUBSCRIBED_FIELDS, _explain_error, appsecret_proof, subscribe_page, whoami
+from messenger_bot import (
+    GRAPH,
+    SUBSCRIBED_FIELDS,
+    _explain_error,
+    appsecret_proof,
+    subscribe_page,
+    whoami,
+)
 
 WEBHOOK_PATH = "/messenger/webhook"
 # What the bot needs at run time. `pages_show_list` is only needed while deriving the Page token,
@@ -181,7 +186,7 @@ def _date(ts: int) -> str:
 
 
 async def run_checks(client, page_id: str, page_token: str, app_secret: str, app_id: str = "",
-                     webhook_url: str = "", bot_running: Optional[bool] = None) -> dict:
+                     webhook_url: str = "", bot_running: bool | None = None) -> dict:
     """The full checklist for one Page. Returns {"ok", "app_id", "page_name", "items"}; "ok" is
     True only when no row is red."""
     items = []

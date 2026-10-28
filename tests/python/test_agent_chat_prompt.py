@@ -5,17 +5,17 @@
 Không chạy engine. Kiểm hai hàm thuần trong main.py và canh (bằng đọc mã) rằng bộ điều
 phối lượt rẽ nhánh theo persona ở đủ các chỗ chọn prompt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 import tempfile
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agchat-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-agchat-brains-")  # KHONG dung brains/ that
 
-import main  # noqa: E402
+import main
 
 fails = []
 
@@ -52,7 +52,8 @@ except FileNotFoundError:
 sach = main._ket_luot_agent("brain", "nguoi-viet", "viết giúp", "Bài đây.\nJAVIS_LESSON: chủ thích câu ngắn")
 check("ket luot boc JAVIS_LESSON", sach.strip() == "Bài đây.")
 # T3 phần L (thiết kế 8.1): bài học chat riêng vào kho bài học phạm vi dm:<agent_key>, không còn vào MEMORY.md.
-import agent_lessons  # noqa: E402
+import agent_lessons
+
 _key = main._dm_agent_key("brain", "nguoi-viet")
 check("bai hoc vao kho bai hoc pham vi chat rieng cua tro ly", bool(_key) and "chủ thích câu ngắn" in [
     r["text"] for r in agent_lessons.lessons(main._resonance_store(), _key, scope=f"dm:{_key}")])
@@ -65,7 +66,7 @@ than = src[src.index("async def _do_turn("):src.index("async def run_turn(")]
 check("_do_turn doc persona tu phien", "_persona = workflow_chat.persona_cua_phien(_row0)" in than)
 check("_legacy_system_prompt dung prompt tro ly", "_agent_chat_prompt(brain, _persona[1], conv_sid=conv_sid, skill_served=skill_served)" in than)
 check("_subscription_system_prompt bo qua nen ngu canh khi co persona",
-      re.search(r"def _subscription_system_prompt\(.*?\):\s*\"\"\".*?\"\"\"\s*if _persona:\s*return _legacy_system_prompt\(\), None", than, re.S) is not None)
+      re.search(r"def _subscription_system_prompt\(.*?\):\s*\"\"\".*?\"\"\"\s*if _persona:\s*return _legacy_system_prompt\(\), None", than, re.DOTALL) is not None)
 check("nhanh phase8 API khong dung plan khi co persona", 'action == "use" and not _persona' in than)
 check("cuoi luot goi _ket_luot_agent", "_ket_luot_agent(brain, _persona[1], user_message, final_text, conv_sid=conv_sid)" in than)
 
@@ -75,7 +76,7 @@ check("cuoi luot goi _ket_luot_agent", "_ket_luot_agent(brain, _persona[1], user
 # "response" thay hẳn nội dung bong bóng bằng data.content).
 _m_resend = re.search(
     r"_ket_luot_agent\(brain, _persona\[1\], user_message, final_text, conv_sid=conv_sid\)(.{0,1600}?)\"type\": \"response\"(.{0,200}?)\}\)\)",
-    than, re.S)
+    than, re.DOTALL)
 check("sau _ket_luot_agent co gui lai khung response de xoa JAVIS_LESSON tren bong bong",
       _m_resend is not None)
 # Fix round 2: khung gửi lại PHẢI kèm "tts": False, nếu không app.js gọi voice.speak() lần
@@ -90,7 +91,7 @@ check("khung gui lai co tts:false de khong doc lai lan hai",
 # API/OAuth cuối (đã persona-aware) khi có persona.
 _m_cascade = re.search(
     r'elif \(kind == "api" and api_key\) or kind == "oauth":(.*?)# ===== API/OAuth: Phase 8',
-    than, re.S)
+    than, re.DOTALL)
 check("cascade api-key ton tai va bi gate boi not _persona",
       _m_cascade is not None and 'and not _persona' in _m_cascade.group(1))
 

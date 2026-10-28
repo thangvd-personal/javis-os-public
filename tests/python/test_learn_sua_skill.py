@@ -11,9 +11,8 @@ rào ép bằng Python; đây là mang đúng khuôn đó sang skill, cộng HAI
 
 Rào nào mất thì hỏng theo một kiểu riêng, nên mỗi rào một test.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import yaml
-
+from _paths import ROOT, SERVER  # noqa: F401
 from learn import LearnDeps, LearnFeature
 
 

@@ -15,9 +15,8 @@ hay dán câu bịa vào đầu rồi mới chép tiếp lời thật). Cắt s�
 Và nó phải KHÔNG đụng tới lời nói thật chỉ vì có chữ "kênh" hay "đăng ký" - người dùng bàn
 chuyện marketing cả ngày.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
-import stt  # noqa: E402
+import stt
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

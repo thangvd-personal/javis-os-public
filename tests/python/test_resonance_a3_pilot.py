@@ -28,7 +28,6 @@ bằng tiến trình mới, cổng ĐÓNG hẳn, đối soát hai lượt). Dry 
 lỗi engine ở lượt đầu, lượt cuối phép thử và lượt sản phẩm, hết giờ, token sắp hết hạn, tiến trình chết giữa lời gọi,
 lỗi lưu trữ, trần cổng giữa phép thử, trần kho thiếu. Real chạy đúng một kịch bản `real`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -40,6 +39,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 MODE = os.environ.get("JAVIS_RESONANCE_A3_PILOT", "").strip().lower()
 CHILD = "--child" in sys.argv
 if MODE not in ("dry", "real", "preflight") and not CHILD:
@@ -49,7 +50,7 @@ if MODE not in ("dry", "real", "preflight") and not CHILD:
 
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parent))
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_pilot_guard as G
 
 REAL_LIMIT = 5
 STORE_CEILING = 8
@@ -698,7 +699,7 @@ def judge(scenario, p1, p2) -> dict:
     exp = EXPECT.get(scenario)
     got = {"real": len(a.get("real_calls") or []), "calls_used": (a.get("goal") or {}).get("calls_used"),
            "hold": (a.get("holds") or [None])[-1], "lesson": ((a.get("lessons") or [[None]])[-1])[0],
-           "trial": tuple(((a.get("experiments") or [{}])[0].get(k) for k in ("verdict", "reason"))),
+           "trial": tuple((a.get("experiments") or [{}])[0].get(k) for k in ("verdict", "reason")),
            "halted": bool(a.get("gate_halted"))}
     return {"expect": exp, "got": got}
 

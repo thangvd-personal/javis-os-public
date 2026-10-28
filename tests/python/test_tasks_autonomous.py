@@ -1,10 +1,9 @@
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 from fastapi import FastAPI
-
 from task_store import TaskStore
 from tasks import TasksDeps, TasksFeature
 

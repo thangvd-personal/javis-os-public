@@ -1,6 +1,4 @@
 """Guardian v2 engineering fixtures; no SDK, model, account or runtime registration."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import base64
 import hashlib
@@ -9,15 +7,16 @@ import io
 import json
 import math
 import os
-from pathlib import Path
 import shutil
 import socket
 import struct
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 
 NONCE = 'a' * 64
 INVOCATION = 'b' * 64
@@ -180,10 +179,11 @@ asyncio.run(main())
 class GuardianV2WindowsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.mod = component(self)
-        from improvement_native_capture_win32 import backend
-        from improvement_native_bootstrap import _runtime_paths
-        from improvement_native_image import ImageReadGuard
         import msvcrt
+
+        from improvement_native_bootstrap import _runtime_paths
+        from improvement_native_capture_win32 import backend
+        from improvement_native_image import ImageReadGuard
         self.api, self.msvcrt = backend(), msvcrt
         self.temp = tempfile.TemporaryDirectory(prefix='guardian-v2-')
         self.root = Path(self.temp.name)

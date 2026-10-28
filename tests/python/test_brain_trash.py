@@ -1,9 +1,13 @@
 """Test helpers thùng rác + _dir_newer_than của git_brain. Chạy:
     python tests/run.py brain_trash"""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, time, tempfile
+import os
+import sys
+import tempfile
+import time
 from pathlib import Path
-import git_brain as gb  # noqa: E402
+
+import git_brain as gb
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 def check(name, cond):

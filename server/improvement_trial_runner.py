@@ -11,10 +11,10 @@ from contextlib import aclosing, closing
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_claude import ClaudeTrialAdapter
+from improvement_sandbox import WorkspaceCleanupError
 from improvement_telemetry import NativeUsageRecorder
 from improvement_trial_results import _guard
 from improvement_trials import TERMINAL
-from improvement_sandbox import WorkspaceCleanupError
 
 HEARTBEAT_SECONDS = 20
 LEASE_SECONDS = 60
@@ -359,7 +359,9 @@ class TrialRunner:
             if cancelled is not None:
                 raise cancelled
         if self._qualification is not None:
-            from improvement_qualification_results import QualificationQueryResults, _CleanupReceipt
+            from improvement_qualification_results import (
+                QualificationQueryResults,
+            )
             context = self._qualification._queries.get((trial_id, claimed['attempt']))
             if context is None or context['stage'] is None:
                 raise PermissionError('qualification_execution_incomplete')

@@ -20,12 +20,12 @@ Chạy:
 import os
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-agentmodel-"))
 
-import aux_engine  # noqa: E402
-import main  # noqa: E402
+import aux_engine
+import main
 
 fails = []
 
@@ -141,6 +141,7 @@ check("_agent_sysprompt trả kèm nhà", 'ameta.get("model_provider")' in src)
 # Chat riêng cũng dùng helper này; kiểm cấu trúc tuple ở mọi nơi gọi thay vì
 # đóng đinh tổng số lời gọi của cả main.py vào số nhánh workflow.
 import ast
+
 calls = [n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Assign)
          and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Name)
          and n.value.func.id in ("_agent_sysprompt", "agent_sysprompt")]

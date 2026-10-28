@@ -5,16 +5,16 @@
 Không cần pytest, không chạm mạng: chỉ dùng plugin bundled trong system/plugins/.
 Tự cô lập STATE_DIR sang thư mục tạm để không đụng state thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
-import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-plugtest-")
 
-import plugins_host  # noqa: E402
+import plugins_host
 
 
 def _names(tools):

@@ -12,17 +12,18 @@ Không cần pytest, không chạm mạng. Ba lỗi, ba nhóm kiểm:
   3. Skill thứ 21 trở đi vô hình với router, và cái bị cắt là cái tên vần cuối chứ không
      phải cái ít dùng nhất.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-baloi-"))
 
-import compaction  # noqa: E402
-import plugins_host  # noqa: E402
-import skill_router  # noqa: E402
+import compaction
+import plugins_host
+import skill_router
 
 _fails = []
 
@@ -173,7 +174,6 @@ def _h1(**kw):
 
 def _h2(**kw):
     _da_goi.append("h2")
-    return None
 
 
 _hoan = _vá_hook({"pre_tool_call": [_h1, _h2]})

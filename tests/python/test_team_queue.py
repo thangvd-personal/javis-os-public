@@ -6,14 +6,15 @@ Không gọi model. Ca TC14 (A đang chạy, ưu tiên C trước B: A, C, B), T
 TC16 (hai tab cùng đổi: CAS), TC17 (restart giữa lúc nhận việc), TC18 (việc bị chặn rời chỗ chạy), TC9 (giao việc trùng),
 và mã Kanban thường không bao giờ nhặt việc nhóm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-queue-")
 
-import task_store as TS  # noqa: E402
+import task_store as TS
 
 fails = []
 

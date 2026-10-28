@@ -7,14 +7,14 @@ readonly), plugin nạp 1 tool readonly, gate chưa-có-token, tách URL Trang v
 (nhiều tên trường), chuẩn hoá bài, và fb_monitor routing đúng actor + lọc min_shares + sắp theo
 share giảm dần + gộp lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import importlib.util
 import json
 import os
 import sys
 import tempfile
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-fbmon-"))
 

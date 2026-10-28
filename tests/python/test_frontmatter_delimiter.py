@@ -11,11 +11,12 @@ later steps vanished without an error. This test pins:
 2. For valid files the new splitter is byte-identical to the old split, checked on the real
    corpus of the repo, so nothing that worked changes.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-fm-state-"))
 
@@ -24,11 +25,11 @@ try:
 except Exception:
     pass
 
-import fastyaml      # noqa: E402
-import share_bundle  # noqa: E402
-import skill_router  # noqa: E402
-import system_sync   # noqa: E402
-import main          # noqa: E402
+import fastyaml
+import main
+import share_bundle
+import skill_router
+import system_sync
 
 _fails = []
 

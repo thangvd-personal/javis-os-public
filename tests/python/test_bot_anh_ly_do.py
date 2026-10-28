@@ -7,12 +7,13 @@ Chủ repo báo 10/10/2026: bot nhóm Zalo vẫn trả lời "Em không xem đư
 bộ não của bot không nhận ảnh (Antigravity, Grok Build), hoặc model từ chối ảnh. Trước bản này lý do chỉ in ra stderr của
 server, mà bot chạy trên VPS nên không ai đọc được. Giờ lý do đi vào trường `canh_bao` của nhật ký bot.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anhlydo-")
 try:
@@ -20,8 +21,8 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime as cr  # noqa: E402
-import image_vision  # noqa: E402
+import chatbot_runtime as cr
+import image_vision
 
 _fails = []
 
@@ -80,7 +81,8 @@ check("bộ não không nhận ảnh: cả hai đường trả lời mượn m�
 check("model từ chối ảnh: cả hai đường trả lời ghi LỖI GỐC vào cảnh báo",
       MAIN.count("không nhận ảnh (lỗi gốc: {goc}).") == 2)
 
-import main  # noqa: E402
+import main
+
 check("câu cảnh báo bộ não không nhận ảnh chỉ đường đổi model", "không nhận ảnh" in main._anh_khong_gui_duoc("antigravity-cli")
       and "Đổi model" in main._anh_khong_gui_duoc("antigravity-cli"))
 

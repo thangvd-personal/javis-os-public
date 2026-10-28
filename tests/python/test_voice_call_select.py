@@ -10,17 +10,18 @@ Không mạng. Khoá (docs/dev/2026-10-voice-call-spec.md mục 3.1):
   - /voice/call trả đúng lựa chọn; POST /settings lưu được call_engine;
   - /ws/voice-live dựng nhà cung cấp theo đường đã chọn, không theo khoá live_provider cũ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-call-"))
 
-import codex_realtime  # noqa: E402
-import main  # noqa: E402
-import voice_call  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import codex_realtime
+import main
+import voice_call
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []

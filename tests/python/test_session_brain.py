@@ -11,16 +11,16 @@ Bối cảnh:
   (/metrics + job spawn agent kèm MCP) vẫn chạy để nuôi một stub ẩn - đo trên log VPS là
   402/502 phiên của dự án "app". Bản này gỡ hẳn; test dưới chốt để không ai vô tình dựng lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-sbrain-")
 
-import session_brain       # noqa: E402
-import usage_parsers as up  # noqa: E402
+import session_brain
+import usage_parsers as up
 
 fails = []
 
@@ -90,7 +90,8 @@ check("system prompt: khong con bat nhung JAVIS_METRICS", "JAVIS_METRICS" not in
 
 # Khối điều khiển JAVIS_* vẫn phải bị bóc trước khi ra kênh chữ thuần: ký ức cũ trong brain
 # còn nhắc JAVIS_METRICS nên model vẫn có thể lỡ nhúng - không được lọt nguyên xi ra Telegram.
-import channel_context  # noqa: E402
+import channel_context
+
 out = channel_context.strip_control_blocks(
     'Báo cáo xong.\n\n<!-- JAVIS_METRICS: [{"label":"Doanh thu","value":"250k"}] -->')
 check("khoi la van bi boc khoi kenh chu thuan",

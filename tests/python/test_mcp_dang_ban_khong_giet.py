@@ -22,12 +22,12 @@ Lý do gốc của dòng `invalidate` đó vẫn đúng và phải giữ: huỷ 
 File này khoá đúng ranh giới đó, cộng hai hệ quả đi kèm: nguồn đang bận không được biến mất
 khỏi hộp công cụ, và vòng quét phiên rảnh cũng không được đóng phiên đang chạy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import time
 
-import mcp_client  # noqa: E402
+import mcp_client
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

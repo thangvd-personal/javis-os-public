@@ -5,20 +5,21 @@
 Việc bị chặn vì hết lượt có MỘT nút giải quyết ("Cho thêm lượt": nâng đúng trần đã chạm rồi cho chạy tiếp), lý do chặn viết
 bằng lời thường, số lần đã dùng hôm nay. Kho thật trên SQLite tạm, engine giả, không gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-ux-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-ux-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -262,7 +263,7 @@ check("hơn 600 sự kiện sau đó: KHÔNG nhắc lại cùng lần chặn", r
       notes_sent)
 
 # ═════ Review tích hợp 0.140.0: việc nền của API nhóm được giữ tham chiếu tới khi xong (không bị dọn rác giữa chừng) ═════
-import team_api  # noqa: E402
+import team_api
 
 
 async def _spawn_probe():

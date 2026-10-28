@@ -15,18 +15,18 @@ Lưu STATE_DIR/usage.json: { "days": { "YYYY-MM-DD": { "<provider>|<model>": {in
 """
 from __future__ import annotations
 
-import localefmt   # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
+import hashlib
 import json
+import math
 import os
 import threading
-import uuid
-import math
-import hashlib
 import time
-from datetime import datetime, timezone, timedelta
+import uuid
+from datetime import UTC, datetime, timedelta
 
-import quota_scheduler          # sổ cái TPM dùng chung (không phụ thuộc ngược, xem module đó)
-import usage_parsers            # price table (pure module, no config/DB)
+import localefmt  # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
+import quota_scheduler  # sổ cái TPM dùng chung (không phụ thuộc ngược, xem module đó)
+import usage_parsers  # price table (pure module, no config/DB)
 from config import STATE_DIR
 
 _PATH = STATE_DIR / "usage.json"
@@ -122,7 +122,7 @@ def _append_event(provider: str, model: str, tin: int, tout: int, cost, **metada
     anthropic) khong co log tho nen day la nguon DUY NHAT cho chung; claude/codex indexer lay
     tu log tho nen dong claude/codex o day chi bi indexer bo qua (tranh dem trung)."""
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         line = json.dumps({"ts": int(now.timestamp()), "day": _today(),
                            "provider": provider or "?", "model": model or "?",
                            "in": int(tin or 0), "out": int(tout or 0),

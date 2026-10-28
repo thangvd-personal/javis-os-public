@@ -10,9 +10,9 @@ import asyncio
 
 import improvement_cases as IC
 import improvement_store as IM
+from improvement_sandbox import WorkspaceCleanupError
 from improvement_trial_runner import _drain, _settled_call
 from improvement_trials import TERMINAL
-from improvement_sandbox import WorkspaceCleanupError
 
 
 class TrialTasks:

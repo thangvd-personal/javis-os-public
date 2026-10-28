@@ -26,16 +26,16 @@ An toàn (BẮT BUỘC, không nhận tham số để đổi):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 import httpx
-import json
 import yaml
+
 
 # Múi giờ đọc từ cấu hình; rơi về UTC+7 khi plugin chạy ngoài tiến trình server.
 def _tz():
@@ -113,7 +113,7 @@ def _is_cron(schedule: str) -> bool:
     return len(parts) == 5 and all(_CRON_TOKEN_RE.match(p) for p in parts)
 
 
-def _daily_cron(schedule: str) -> Optional[str]:
+def _daily_cron(schedule: str) -> str | None:
     """Dò lịch dạng MỐC GIỜ CỐ ĐỊNH lặp HẰNG NGÀY ('mỗi sáng 7h', 'mỗi ngày lúc 8h', '7h sáng
     hằng ngày') -> cron 5 trường 'M H * * *'. Trả None nếu KHÔNG phải dạng này (vd 'mỗi 7 tiếng'
     hay 'mỗi 2 tiếng' - duration thuần lặp theo KHOẢNG CÁCH, không có tín hiệu mốc-giờ-trong-ngày).
@@ -163,7 +163,7 @@ def _route_kind(schedule: str, notify_only: bool = False) -> str:
     return "reminder"                # còn lại: mốc một lần ("30 phút nữa", "8h30", ISO...)
 
 
-def _interval_min(schedule: str) -> Optional[int]:
+def _interval_min(schedule: str) -> int | None:
     """Rút số phút từ 1 chuỗi chu kỳ ('120m'->120, '2 tiếng'/'2h'->120, 'mỗi ngày'->1440,
     'mỗi tuần'->10080, 'mỗi tháng'->43200 - đơn vị đứng một mình không kèm số thì ngầm định
     số lượng 1). Tối thiểu 5 phút (khớp trần cứng self_improve.py:257).

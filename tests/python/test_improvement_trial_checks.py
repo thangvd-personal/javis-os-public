@@ -1,6 +1,4 @@
 """Pure execution record checks cannot promote missing native evidence into success."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -9,14 +7,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-trial-checks-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
                   "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-from improvement_cases import public_contract  # noqa: E402
-from improvement_sandbox import _effective_hash, trial_system_prompt  # noqa: E402
-from improvement_store import _hash  # noqa: E402
+from improvement_cases import public_contract
+from improvement_sandbox import _effective_hash, trial_system_prompt
+from improvement_store import _hash
 
 if importlib.util.find_spec("improvement_trial_checks"):
     import improvement_trial_checks as IC
@@ -336,7 +336,13 @@ class TrialChecksTests(unittest.TestCase):
 
     def test_actual_profile_receipt_is_compatible_without_starting_an_engine(self):
         from types import SimpleNamespace
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock
+
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            TextBlock,
+        )
         from improvement_claude import TrialProfile
         from improvement_sandbox import FixtureBroker, TrialWorkspace
 

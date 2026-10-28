@@ -6,18 +6,19 @@
 KHÔNG mạng. Hồi quy cho lỗi: ảnh Javis tạo (lưu attachments/ dạng path tương đối) không
 được auto-attach nên engine phải curl -> rơi về ID Telegram đầu tiên (chủ bot).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+import asyncio
 import os
 import sys
 import tempfile
 import time
-import asyncio
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-turnfiles-"))
 
-import channel_context  # noqa: E402
-from telegram_bot import TelegramBot  # noqa: E402
+import channel_context
+from telegram_bot import TelegramBot
 
 _fails = []
 

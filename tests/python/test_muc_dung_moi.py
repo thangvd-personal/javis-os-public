@@ -14,14 +14,14 @@ giờ chuyển giao ngay sau khi đổi mức. Bật tiết kiệm rồi để y
 đường mới, không còn lượt đối chứng, `du_du_lieu` thành False, và cả khối tắt ngóm. Chủ repo
 báo đúng chuyện đó: "ở phần mức dùng không hiển thị token tiết kiệm thật".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
-import sqlite3
 import sys
 import tempfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-mdm-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
@@ -30,10 +30,10 @@ os.environ["JAVIS_CODEX_SESSIONS_DIR"] = os.path.join(_TMP, "codex-sessions")
 os.makedirs(os.environ["JAVIS_CLAUDE_PROJECTS_DIR"], exist_ok=True)
 os.makedirs(os.environ["JAVIS_CODEX_SESSIONS_DIR"], exist_ok=True)
 
-import aux_engine  # noqa: E402
-import usage_index as ui  # noqa: E402
-import usage_parsers as up  # noqa: E402
-import usage_saving as us  # noqa: E402
+import aux_engine
+import usage_index as ui
+import usage_parsers as up
+import usage_saving as us
 
 _fails = []
 _TZ = timezone(timedelta(hours=7))
@@ -67,12 +67,11 @@ check("và mang theo mốc thời gian để dựng cửa sổ trượt", (_ev o
 _rollout = os.path.join(os.environ["JAVIS_CODEX_SESSIONS_DIR"], "rollout-test.jsonl")
 with open(_rollout, "w", encoding="utf-8") as fh:
     fh.write(json.dumps({"type": "session_meta", "payload": {"cwd": "/x/duan"}}) + "\n")
-    for i, tot in enumerate((100, 400, 900)):
-        fh.write(json.dumps({
+    fh.writelines(json.dumps({
             "timestamp": "2026-08-10T0%d:00:00Z" % (i + 1), "model": "gpt-5",
             "payload": {"type": "token_count", "info": {"total_token_usage": {
                 "total_tokens": tot, "input_tokens": tot - 10, "output_tokens": 10,
-                "cached_input_tokens": 0}}}}) + "\n")
+                "cached_input_tokens": 0}}}}) + "\n" for i, tot in enumerate((100, 400, 900)))
 _cx = up.parse_codex_file(_rollout)
 # Trước bản này một phiên Codex 200 lượt và một phiên 2 lượt đều được đếm là MỘT, nên
 # "token mỗi lượt" của Codex sai cả trăm lần - và nó là mẫu số của cả phép so engine.
@@ -142,7 +141,7 @@ os.makedirs(_CP2, exist_ok=True)
 _now2 = datetime.now(_TZ)
 with open(os.path.join(_CP2, "a.jsonl"), "w", encoding="utf-8") as _fh:
     _fh.write(json.dumps({
-        "type": "assistant", "timestamp": _now2.astimezone(timezone.utc).isoformat(),
+        "type": "assistant", "timestamp": _now2.astimezone(UTC).isoformat(),
         "sessionId": "s-dup", "cwd": "/x",
         "message": {"model": "claude-opus-5",
                     "usage": {"input_tokens": 1000, "output_tokens": 0}}}) + "\n")
@@ -155,6 +154,7 @@ with open(os.path.join(_D2, "usage-events.jsonl"), "w", encoding="utf-8") as _fh
 def _quet_rieng(state_dir, claude_dir):
     """Chạy indexer trên một kho tạm khác, rồi trả (tokens_ngay, tokens_cua_so)."""
     import importlib
+
     import config as _cfg
     cu = (os.environ.get("JAVIS_STATE_DIR"), os.environ.get("JAVIS_CLAUDE_PROJECTS_DIR"))
     os.environ["JAVIS_STATE_DIR"] = state_dir
@@ -308,7 +308,7 @@ check("CANARY: engine không có lượt nào thì bị loại, không chia cho 
 # ============================================================
 # 8. Endpoint: nói THẬT về tiền
 # ============================================================
-import main  # noqa: E402
+import main
 
 _tq = asyncio.run(main.usage_tong_quan(period="this_month", brain="brain"))
 check("endpoint tổng quan trả về dict", isinstance(_tq, dict))
@@ -369,7 +369,8 @@ check("CANARY: cache được dịch ra TIỀN chứ không chỉ phần trăm",
 check("CANARY: và tiền nhỏ hơn một xu không bị làm tròn thành 0", "<$0.01" in _USAGE)
 # Chủ repo chốt: chỉ USD, không quy đổi sang đồng ở bất cứ đâu. Soi cả hai phía, vì một chuỗi
 # "0đ" gõ cứng trong câu mở đầu ở server cũng đủ làm lời hứa đó sai trên màn hình.
-import re as _re  # noqa: E402
+import re as _re
+
 _ky_hieu_dong = _re.compile(r"\d\s*(?:đ|VNĐ|VND)\b")
 check("CANARY: giao diện không còn ký hiệu tiền đồng nào",
       not _ky_hieu_dong.search(_USAGE) and "vi-VN\") + \"đ\"" not in _USAGE)
@@ -453,6 +454,7 @@ _dem = {"cua_so": 0, "dinh": 0}
 
 def _do_moc():
     import importlib
+
     import config as _cfg
     cu = os.environ.get("JAVIS_STATE_DIR")
     os.environ["JAVIS_STATE_DIR"] = _D4

@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass
 from types import MappingProxyType
 
+
 def _tidy(text: str) -> str:
     """Collapse blank runs left by an empty optional slot."""
     return re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"

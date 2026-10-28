@@ -22,8 +22,6 @@ Ba luật mà test này canh, và cả ba đều là luật an toàn chứ khôn
 3. **Hỏng thì thiếu, không bao giờ thừa.** Mọi lỗi dẫn tới "gói đó không nạp" kèm lý do đọc
    được, chứ không bao giờ dẫn tới nạp một phần hay làm kho gốc xấu đi.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
-import io
 import os
 import shutil
 import sys
@@ -32,6 +30,7 @@ from pathlib import Path
 
 import mcp_catalog
 import packs
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 _fails = []
 

@@ -7,16 +7,17 @@ Owner report 26/10/2026: a plain question in the dashboard chat ("Là do composi
 text (no tool call, no error): the model sometimes stops after its thinking alone. Javis now asks once more in the
 same thread; an error or a plan limit is never retried, and an answer that has words is never asked again.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-empty-answer-")
 
-import main  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+from starlette.testclient import TestClient
 
 fails = []
 

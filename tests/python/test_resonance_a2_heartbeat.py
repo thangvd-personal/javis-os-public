@@ -9,7 +9,6 @@ thiết kế (7504bf6a, e95a3260, fe92e753, cb11fc23) được chuyển thành c
 
 Mỗi kịch bản dùng một kho riêng để lịch của kịch bản này không lẫn vào nhịp của kịch bản khác.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import datetime as _dt
 import hashlib
@@ -20,13 +19,16 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a2-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_heartbeat as HB  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance as R
+import resonance_heartbeat as HB
+import resonance_store as RS
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 
 _fails = []
@@ -200,7 +202,7 @@ def write(rel, text):
 
 
 def iso(t):
-    return _dt.datetime.fromtimestamp(t, _dt.timezone.utc).isoformat()
+    return _dt.datetime.fromtimestamp(t, _dt.UTC).isoformat()
 
 
 # ═══════════════════ Chính sách thuần ═══════════════════
@@ -782,7 +784,7 @@ w.tick()
 f = Path(BRAIN) / DELIV
 st0 = f.stat()
 data = bytearray(f.read_bytes())
-i = data.index("máy lạnh".encode("utf-8"))
+i = data.index("máy lạnh".encode())
 data[i:i + 3] = b"XYZ"
 f.write_bytes(bytes(data))
 os.utime(f, ns=(st0.st_atime_ns, st0.st_mtime_ns))
@@ -1143,7 +1145,7 @@ check("dọn hẹn thử lại của lượt cũ không đụng nghĩa vụ củ
       and w.store.published(P, g.id, DELIV)["sha256"] == hashlib.sha256(HALF.encode()).hexdigest())
 
 # P2-2: pha trước và sau lời gọi engine chạy ngoài event loop.
-import threading  # noqa: E402
+import threading
 
 for slow in ("finish_action", "evidence"):
     w = World(f"rv-loop-{slow}", Engine([GOOD]))
@@ -1233,7 +1235,7 @@ check("huỷ giữa pha sau: nhả khoá sau khi pha sau ghi xong, không ghi tr
 # ═══════════════════ Review mã vòng 2 (d1f64b46): huỷ lần thức ═══════════════════
 # Ca tái hiện của reviewer (`PR-593-A2-d1f64b46-checks.py`) chuyển thành kỳ vọng đúng. Đồng bộ giữa event loop và
 # luồng phụ bằng threading.Event, không dựa vào thời gian may rủi.
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import patch
 
 
 async def _settles_early(task, order, window=0.5):

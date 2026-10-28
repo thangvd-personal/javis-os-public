@@ -8,12 +8,13 @@ nhắn tay, hết 10 phút thì tin đã cũ quá 3 phút (`TUOI_TOI_DA`) nên b
 
 Test KHÔNG chờ giờ thật: `lui_gio` dời mọi mốc giờ đã nhớ (giờ chủ nhắn, giờ tin đang giữ) về quá khứ như thể thời gian đã trôi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpchu-")
 try:
@@ -21,10 +22,10 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import conversations  # noqa: E402,F401
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import conversations  # noqa: F401
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

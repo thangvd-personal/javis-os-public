@@ -1,6 +1,4 @@
 """Genuine v4 reservations in the existing ledger, without native query readiness."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import time
 import unittest
@@ -8,10 +6,11 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_trials import TrialStore
-from improvement_trial_views import read_trial
-import test_improvement_view_sources as sources
 import test_improvement_view_lineage as lineage_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER
+from improvement_trial_views import read_trial
+from improvement_trials import TrialStore
 
 
 class ViewReservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):
@@ -126,6 +125,7 @@ class ViewReservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCa
 class NativeFootprintTests(unittest.TestCase):
     def test_current_310_registration_matches_exact_native_evidence_and_sources(self):
         import hashlib
+
         from improvement_claude import PROFILE_SOURCES, PROFILE_VERSION, profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-26-m8-native-qualification-cli310.json').read_bytes()
@@ -144,6 +144,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_preparation_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-preparation-heartbeat.json').read_bytes()
@@ -155,6 +156,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m2_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-25-m2-native-qualification-cli310.json').read_bytes()
@@ -166,6 +168,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m7_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-26-m7-native-qualification-cli310.json').read_bytes()
@@ -177,6 +180,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m6_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-26-m6-native-qualification-cli310.json').read_bytes()
@@ -188,6 +192,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m5_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-25-m5-native-qualification-cli310.json').read_bytes()
@@ -199,6 +204,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m4_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-25-m4-native-qualification-cli310.json').read_bytes()
@@ -210,6 +216,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_m3_310_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-25-m3-native-qualification-cli310.json').read_bytes()
@@ -221,6 +228,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_skill_reads_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-skill-reads.json').read_bytes()
@@ -232,6 +240,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_observation_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-observation.json').read_bytes()
@@ -243,6 +252,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_format_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-24-m2d1-native-qualification-format.json').read_bytes()
@@ -254,6 +264,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-final.json').read_bytes()
@@ -265,6 +276,7 @@ class NativeFootprintTests(unittest.TestCase):
 
     def test_prior_outcome_309_qualification_remains_exact_historical_evidence(self):
         import hashlib
+
         from improvement_claude import profile_hash
         from improvement_native_qualifications import profile_qualification
         raw = (ROOT / 'docs/superpowers/evidence/2026-10-23-m2d1-native-qualification-outcome.json').read_bytes()

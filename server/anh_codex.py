@@ -20,7 +20,6 @@ import os
 import re
 import urllib.parse
 from pathlib import Path
-from typing import Optional
 
 import image_gen
 
@@ -44,7 +43,7 @@ def thu_muc_goc() -> Path:
     return (Path(home) if home else Path.home() / ".codex") / "generated_images"
 
 
-def _giai_duong(raw: str) -> Optional[Path]:
+def _giai_duong(raw: str) -> Path | None:
     """Chuỗi đường dẫn trong câu trả lời → file ảnh CÓ THẬT nằm trong generated_images, hoặc None."""
     t = str(raw or "").strip().strip("<>").strip("'\"")
     if not t:
@@ -91,7 +90,7 @@ def anh_moi_cua_thread(thread_id: str, t0: float) -> list:
     return ds[:TRAN_ANH_MOI_LUOT]
 
 
-def chep_vao_brain(src: Path, vault_root: str) -> Optional[str]:
+def chep_vao_brain(src: Path, vault_root: str) -> str | None:
     """Chép MỘT ảnh vào attachments/ của brain, trả đường tương đối theo gốc brain.
 
     Tên đích cố định theo tên nguồn (`codex-<thread 8 ký tự>-<tên>`), nên chạy lại lượt hay
@@ -126,7 +125,7 @@ def dua_anh_ve_brain(text: str, thread_id: str, t0: float, vault_root: str):
         return text, []
     ban_do = {}        # đường nguồn đã resolve → rel trong brain
 
-    def _nhap(p: Path) -> Optional[str]:
+    def _nhap(p: Path) -> str | None:
         if p in ban_do:
             return ban_do[p]
         rel = chep_vao_brain(p, vault_root)

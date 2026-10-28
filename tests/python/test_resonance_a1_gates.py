@@ -12,7 +12,6 @@ API thật qua TestClient. Không gọi model. Đi theo ma trận ở thiết k�
  10 công tắc trong phiên mở trước lúc cấp mã: needs_new_session (review vòng 2, P2); phiên cũ không nhận mã mới
  12 engine chưa mang khoá lượt: tool từ chối; bảng khả năng theo engine
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import contextvars
 import hashlib
@@ -24,18 +23,21 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a1g-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import main
+import mcp_hub
+import plugins_host
+import resonance as R
+import resonance_store as RS
+import turn_context
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -407,12 +409,13 @@ check("10 GET không truyền phiên: không có trạng thái phiên",
       client.get("/resonance/agents", params={"brain": BRAIN}).json().get("session") is None)
 
 # ═══════════ 11. đường agent trọn vòng qua thân THẬT của run_turn (engine giả) ═══════════
-import ast  # noqa: E402
-import localefmt  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import nghe_sua  # noqa: E402
-import types  # noqa: E402
-import uuid  # noqa: E402
+import ast
+import types
+import uuid
+
+import localefmt
+import luot_dang_chay
+import nghe_sua
 
 V = agent_now("viet-bai")
 S11 = ss.create_session(brain=BRAIN, engine="test", model="test", channel="agent:viet-bai")

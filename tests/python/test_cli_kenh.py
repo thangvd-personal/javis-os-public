@@ -18,19 +18,18 @@ Bốn thứ file này canh, theo đúng thứ tự rủi ro.
 4. **Luật Unix của CLI.** Câu trả lời ra stdout, mọi thứ khác ra stderr. Hỏng luật đó thì
    `javis "..." > ghi-chu.md` dính spinner vào giữa nội dung.
 """
-from _paths import ROOT, SERVER, moi_duong_dan  # noqa: E402,F401
-import asyncio
-import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-cli-")
 
-import config as cfg  # noqa: E402
-import channel_context  # noqa: E402
-import context_compiler  # noqa: E402
-import main  # noqa: E402
+import channel_context
+import config as cfg
+import context_compiler
+import main
 
 _fails = []
 
@@ -214,7 +213,7 @@ check("biến môi trường đè lên file (cho CI/Docker)", "JAVIS_TOKEN" in _
 
 # Chạy THẬT bộ phân tích tham số: `javis "câu hỏi"` phải là đường chính, không bắt gõ lệnh con.
 sys.path.insert(0, str(_CLI))
-import javis_cli.__main__ as cli_main  # noqa: E402
+import javis_cli.__main__ as cli_main
 
 _goi = {}
 _goc_hoi = cli_main.cmd.hoi

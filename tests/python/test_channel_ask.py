@@ -5,14 +5,15 @@
 KHÔNG mạng. Phủ: JAVIS_ASK xuống danh sách đánh số, JAVIS_METRICS biến mất sạch
 (hồi quy cho lỗi rò sang Telegram), JSON hỏng không nuốt câu trả lời.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-asktest-"))
 
-import channel_context  # noqa: E402
+import channel_context
 
 _fails = []
 

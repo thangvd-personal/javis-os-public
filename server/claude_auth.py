@@ -62,13 +62,13 @@ CANH_BAO_NGAN_EN = ("Running background work on a subscription plan carries a ri
 def che_do(settings: dict = None) -> str:
     """`subscription` (mặc định) hoặc `api_key`. Giá trị lạ trong file cấu hình về mặc định."""
     s = settings if settings is not None else cfgmod.read_settings()
-    v = str(((s.get("model") or {}).get("claude_auth") or "")).strip().lower()
+    v = str((s.get("model") or {}).get("claude_auth") or "").strip().lower()
     return API_KEY if v == API_KEY else SUBSCRIPTION
 
 
 def api_key(settings: dict = None) -> str:
     s = settings if settings is not None else cfgmod.read_settings()
-    return str(((s.get("model") or {}).get("anthropic_api_key") or "")).strip()
+    return str((s.get("model") or {}).get("anthropic_api_key") or "").strip()
 
 
 def env_cho_cli(settings: dict = None) -> dict:

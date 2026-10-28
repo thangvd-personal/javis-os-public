@@ -12,17 +12,18 @@ same request worked on Claude Code. Two causes:
 2. Browser control came from a connector on the owner's Claude account (claude.ai). Those only exist on Claude
    Code; `javis_connections` on an API engine did not list them, so the model had nothing true to say.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agapi-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-agapi-brains-")
 
-import main      # noqa: E402
-import mcp_hub   # noqa: E402
+import main
+import mcp_hub
 
 fails = []
 

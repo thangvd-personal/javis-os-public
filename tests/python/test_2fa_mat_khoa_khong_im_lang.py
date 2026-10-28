@@ -15,11 +15,12 @@ Test ghim 4 tầng vá: totp_hong phát hiện đúng trạng thái; write_setti
 blob; cổng đăng nhập fail-closed (mã khôi phục - vốn BĂM chứ không mã hoá - vẫn vào
 được); UI + /auth/status nói thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -38,8 +39,8 @@ def check(name, cond):
 _td = tempfile.TemporaryDirectory()
 os.environ["JAVIS_STATE_DIR"] = _td.name
 
-import config as cfgmod          # noqa: E402  - đọc JAVIS_STATE_DIR lúc import
-import secrets_store             # noqa: E402
+import config as cfgmod
+import secrets_store
 
 assert str(cfgmod.STATE_DIR) == _td.name, "STATE_DIR phải trỏ vào thư mục tạm của test"
 

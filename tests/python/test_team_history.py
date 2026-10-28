@@ -5,19 +5,20 @@
 Tóm tắt phần cũ bằng code (không model), tìm trong nhóm (không phân biệt hoa thường và dấu, không lẫn nhóm khác), mở nhóm
 chỉ tải trang đầu. Số đo hiệu năng ở tools/team_perf_bench.py (không phải test). Kho thật trên SQLite tạm, engine giả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-hist-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-hist-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -109,7 +110,7 @@ many = r.search(A["team_id"], "lap lai", limit=30)
 check("giới hạn số kết quả, mới nhất trước", len(many) == 30 and "79" in many[0]["snippet"])
 
 # ═════ Review T4 ═════
-import unicodedata  # noqa: E402
+import unicodedata
 
 nfd = unicodedata.normalize("NFD", "Đầu tin " + "chữ có dấu " * 60 + "hôm qua cửa hàng MẤT ĐIỆN cả buổi " + "đuôi " * 60)
 ss.append_team_message(A["session_id"], "user", nfd, author_kind="owner", client_msg_id="nfd")

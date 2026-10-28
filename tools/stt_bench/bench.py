@@ -38,7 +38,7 @@ ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 sys.path.insert(0, str(HERE))
 
-import corpus  # noqa: E402
+import corpus
 
 VI_VOICE = "vi-VN-HoaiMyNeural"
 EN_VOICE = "en-US-AriaNeural"
@@ -59,7 +59,7 @@ def data_dir() -> Path:
 # ---------------------------------------------------------------- chấm điểm
 def norm(s: str, ref: bool = False) -> list:
     s = unicodedata.normalize("NFC", str(s or "").lower())
-    s = re.sub(r"[^\w\s]", " ", s, flags=re.U).replace("_", " ")
+    s = re.sub(r"[^\w\s]", " ", s, flags=re.UNICODE).replace("_", " ")
     toks = s.split()
     return [NUM.get(w, w) for w in toks] if ref else toks
 

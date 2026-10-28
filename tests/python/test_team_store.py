@@ -4,14 +4,15 @@
 
 Không gọi model. Nhóm, thành viên ở nhiều nhóm, trưởng nhóm, bước nội bộ (CAS), sổ lượt, khoá bận theo agent.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-store-")
 
-import team_store as TS  # noqa: E402
+import team_store as TS
 
 fails = []
 

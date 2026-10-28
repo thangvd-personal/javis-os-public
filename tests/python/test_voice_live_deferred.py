@@ -7,13 +7,13 @@ nothing and hears nothing useful. ask_javis runs a whole brain turn (5 to 60 sec
 froze. Now the route answers the call at once (DEFERRED_ACK) and delivers the brain's result later,
 waiting for a pause first. Gemini 2.5 (NON_BLOCKING) and the other providers are unchanged.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import time
 import unittest
 
 import voice_live
 from _live_route import DeferringProvider, LiveRouteMixin
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class GeminiProviderTests(unittest.TestCase):

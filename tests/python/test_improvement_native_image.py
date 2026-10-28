@@ -1,13 +1,13 @@
 """Real Windows executable-file guards; own files, no CLI/model/account execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 @unittest.skipUnless(os.name == 'nt', 'Windows native file sharing')
@@ -64,9 +64,8 @@ class NativeImageGuardTests(unittest.TestCase):
         self.root.with_name(self.root.name + '-released').rename(self.root)
 
     def test_preexisting_file_writer_refuses_guard_without_leaking_ancestors(self):
-        with self.path.open('r+b'):
-            with self.assertRaises(OSError):
-                self.guard()
+        with self.path.open('r+b'), self.assertRaises(OSError):
+            self.guard()
         self.path.parent.rename(self.root / 'released')
 
     def test_existing_junction_ancestor_is_refused_even_for_exact_bytes(self):
@@ -162,18 +161,16 @@ class NativeImageGuardTests(unittest.TestCase):
     def test_closed_guard_cannot_be_reentered_as_an_owned_context(self):
         guard = self.guard()
         guard.close()
-        with self.assertRaisesRegex(ValueError, 'closed'):
-            with guard:
-                self.fail('A closed guard cannot claim an active ownership scope')
+        with self.assertRaisesRegex(ValueError, 'closed'), guard:
+            self.fail('A closed guard cannot claim an active ownership scope')
 
     def test_entry_failure_releases_handles_without_requiring_an_exit_call(self):
         import stat
         guard = self.guard()
         try:
             self.path.chmod(stat.S_IREAD)
-            with self.assertRaisesRegex(ValueError, 'identity'):
-                with guard:
-                    self.fail('Drift must refuse entry')
+            with self.assertRaisesRegex(ValueError, 'identity'), guard:
+                self.fail('Drift must refuse entry')
             self.path.chmod(stat.S_IREAD | stat.S_IWRITE)
             self.path.write_bytes(b'RELEASED')
         finally:

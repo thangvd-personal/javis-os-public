@@ -8,19 +8,20 @@ Hai lời hứa phải giữ:
     output có số dòng "N|..." và báo đọc tiếp ở đâu.
   - `javis_search_files` tìm được cả khi máy không có ripgrep (Windows thường không có).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-readsearch-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_files as cf  # noqa: E402
-import mcp_hub  # noqa: E402
-from coding_ctx import CodingToolContext  # noqa: E402
+import coding_files as cf
+import mcp_hub
+from coding_ctx import CodingToolContext
 
 _fails = []
 

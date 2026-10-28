@@ -1,6 +1,4 @@
 """Dedicated trial options and raw result observations do not inherit chat behavior."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import importlib.util
@@ -10,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-claude-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
@@ -43,8 +43,8 @@ class ProfileTests(unittest.TestCase):
         return engine
 
     def installation(self):
-        from improvement_sandbox import TrialWorkspace
         import improvement_sandbox as SB
+        from improvement_sandbox import TrialWorkspace
         self.assertTrue(hasattr(SB, "trial_system_prompt"), "Materialized system prompt needs an exact common hash")
         self.assertTrue(hasattr(IC.TrialProfile, "bind_installation"), "The native profile has no installation binding")
         sha = lambda text: hashlib.sha256(text.encode()).hexdigest()
@@ -69,7 +69,12 @@ class ProfileTests(unittest.TestCase):
         return profile, engine, manifest, receipt
 
     def test_installation_receipt_distinguishes_selected_assets_from_observed_use(self):
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            TextBlock,
+        )
         profile, engine, manifest, workspace = self.installation()
         options = engine._options()
         profile.observe(SystemMessage("init", {"tools": ["mcp__fixture__fixture_read"], "session_id": "session"}))
@@ -183,7 +188,12 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(next(e for e in events if e["type"] == "terminal")["artifact_status"], "unknown")
 
     def test_native_unavailable_tool_is_recorded_as_denied_not_just_a_tool_error(self):
-        from claude_agent_sdk import AssistantMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         profile = self.profile()
         profile.observe(AssistantMessage([ToolUseBlock("outside", "Bash", {"command": "forbidden"})], model=self.pin["model"]))
         events = profile.observe(UserMessage([ToolResultBlock("outside", "Tool is not available", is_error=True)]))
@@ -191,7 +201,12 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(profile.denials[0]["tool_use_id"], "outside")
 
     def test_successful_outside_tool_result_is_an_isolation_failure(self):
-        from claude_agent_sdk import AssistantMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         profile = self.profile()
         profile.observe(AssistantMessage([ToolUseBlock("outside", "Read", {"file_path": "outside"})], model=self.pin["model"]))
         with self.assertRaisesRegex(ValueError, "trial_unknown_tool_execution"):

@@ -1,14 +1,13 @@
 """Real global case aliases cannot enter a current effective-view tuning path."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-from improvement_cases import CaseStore
-import test_improvement_view_sources as sources
 import test_improvement_view_reservations as reservations
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_cases import CaseStore
 
 
 class ViewHoldoutTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

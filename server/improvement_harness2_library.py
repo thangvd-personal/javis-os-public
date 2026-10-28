@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import re
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+
 import improvement_harness2_context as context
 import improvement_harness2_tree as harness_tree
 from improvement_harness2_tree import SurfaceSpec

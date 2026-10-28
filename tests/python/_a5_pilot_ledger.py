@@ -15,7 +15,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sqlite3
 import subprocess
 import time
@@ -224,7 +223,7 @@ class Counted:
             else:
                 bad("cancelled" if isinstance(e, asyncio.CancelledError) else "no_final")
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             bad("exception", error=f"{type(e).__name__}: {str(e)[:200]}")
             raise
         if not state["seen"]:
@@ -242,7 +241,7 @@ def wrap_factory(real_factory, ledger: RoleLedger, role_of, text_verdict=host_te
         CURRENT_CALL.set(n)
         try:
             eng, info = real_factory(system_prompt, tag)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             ledger.mark_bad(n, "not_built", error=f"{type(e).__name__}: {str(e)[:200]}")
             raise
         if eng is None:
@@ -267,7 +266,7 @@ def wrap_ask(orig_ask, ledger: RoleLedger):
                 if n:
                     ledger.mark_bad(n, "cancelled")
                 raise
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 n = CURRENT_CALL.get()
                 if n:
                     ledger.mark_bad(n, "exception", error=f"{type(e).__name__}: {str(e)[:200]}")

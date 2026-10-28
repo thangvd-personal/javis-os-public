@@ -15,7 +15,6 @@ không thử lại lần nào.
   3. Lượt bot TRẢ LỜI người đó (có tag hay không) được gắn ảnh vừa nhớ.
   4. Tải ảnh lỗi tạm thì thử lại đúng một lần; lỗi vĩnh viễn (không phải ảnh) thì không.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -23,16 +22,18 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anhtron-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import chatbot_runtime as cr  # noqa: E402
-import image_vision  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels.zalo_personal import Transport  # noqa: E402
+import chatbot_runtime as cr
+import image_vision
+import zalo_personal_channel as zc
+from channels.zalo_personal import Transport
 
 _fails = []
 

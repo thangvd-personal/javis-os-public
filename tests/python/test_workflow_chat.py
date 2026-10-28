@@ -2,11 +2,11 @@
 
     python tests/run.py workflow_chat
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import sys
 
-import workflow_chat as wc  # noqa: E402
+import workflow_chat as wc
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

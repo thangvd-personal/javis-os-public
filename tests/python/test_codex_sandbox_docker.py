@@ -25,7 +25,7 @@ import os
 import sys
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-codexsb-"))
 os.environ.pop("JAVIS_CODEX_SANDBOX", None)     # test tự đặt, đừng để môi trường máy chen vào
@@ -35,7 +35,7 @@ try:
 except Exception:
     pass
 
-import claude_cli  # noqa: E402
+import claude_cli
 
 _fails = []
 
@@ -73,7 +73,7 @@ check("mức lạ (không có trong bản đồ) → không đặt rào, không 
 
 
 # ---- 2. Đường dây thật: aux_engine phải đi qua hàm này, không đọc dict cứng ----
-import aux_engine  # noqa: E402
+import aux_engine
 
 
 class _Vo:

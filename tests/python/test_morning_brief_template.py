@@ -5,16 +5,18 @@
 The template only PRE-FILLS the form: nothing is scheduled until the person presses Save, and Save
 goes through the normal POST /reminders, so with no report channel it still answers can_force.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-morning-")
 
-from pathlib import Path  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import reminders  # noqa: E402
+from pathlib import Path
+
+import reminders
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -42,7 +44,7 @@ async def no_send(chat_id, text):
 feature = reminders.RemindersFeature(reminders.RemindersDeps(
     brain_root=lambda _b: str(brain), atomic_write_text=atomic_write, send_telegram=no_send,
     build_system_prompt=lambda _b: "", aux_model=lambda: None, safe_tools=[], readonly_tools=[],
-    scheduler_brains=lambda: [],
+    scheduler_brains=list,
     notify_ready=lambda: (channel["ok"], "" if channel["ok"] else "Telegram is not connected")))
 app = FastAPI()
 app.include_router(feature.router)

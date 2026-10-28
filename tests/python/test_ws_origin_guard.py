@@ -7,10 +7,11 @@ password was set. On a default install (127.0.0.1, no password) a web page the u
 could connect to /ws/terminal or /ws from the user's own browser. web_security.WebSocketGuard closes
 any cross-origin handshake before a route sees it.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-wsguard-")
 try:
@@ -18,12 +19,11 @@ try:
 except Exception:
     pass
 
-from starlette.applications import Starlette  # noqa: E402
-from starlette.routing import WebSocketRoute  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
-from starlette.websockets import WebSocketDisconnect  # noqa: E402
-
-import web_security as ws  # noqa: E402
+import web_security as ws
+from starlette.applications import Starlette
+from starlette.routing import WebSocketRoute
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 _fails = []
 
@@ -72,7 +72,8 @@ except Exception:      # noqa: BLE001 - some versions raise a different error fo
 check("CANARY: foreign page cannot open the terminal socket", bi_chan)
 
 # ---- 3. main wires it ---------------------------------------------------------------------
-import main  # noqa: E402
+import main
+
 check("main.app has WebSocketGuard", any(getattr(m, "cls", None) is ws.WebSocketGuard for m in main.app.user_middleware))
 
 print()

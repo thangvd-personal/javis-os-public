@@ -14,8 +14,9 @@ from improvement_blobs import AssetUnavailable, RevisionBlobs
 from improvement_claude import ClaudeTrialAdapter
 from improvement_operation_schema import assert_installed
 from improvement_trial_dashboard import DashboardContextCapture
-from improvement_trial_file_sources import BrainFileFixtures, _root as owner_root, _authority
-from improvement_trial_host import HostContextStore, TARGET_FIELDS
+from improvement_trial_file_sources import BrainFileFixtures, _authority
+from improvement_trial_file_sources import _root as owner_root
+from improvement_trial_host import TARGET_FIELDS, HostContextStore
 from improvement_trial_records import HostContextRecords, _brain
 from improvement_trial_semantics import validate_capture
 from improvement_trial_service import _RetainedDashboard, dashboard_host

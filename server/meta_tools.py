@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 # ── SCHEMA phổ quát cho vault (seed thành CLAUDE.md + AGENTS.md để Claude Code lẫn Codex tự nạp) ──
 # Trung lập ngành: KHÔNG có folder marketing/sales... hay Bullet Journal. Chỉ giữ pattern LLM Wiki
 # (compounding) + 3 kỷ luật chống bịa + 3 phép toán + HANDOFF. Taxonomy mọc dần theo source người dùng.
@@ -140,7 +139,7 @@ def ensure_brain_pattern(root: str, wiki_dir: str = "") -> dict:
             fp = wd / fn
             if not fp.exists():
                 fp.parent.mkdir(parents=True, exist_ok=True)
-                import brain_seed_i18n   # lazy: tránh vòng import lúc nạp module
+                import brain_seed_i18n  # lazy: tránh vòng import lúc nạp module
                 fp.write_text(brain_seed_i18n.chon(content), encoding="utf-8")
                 created.append(f"wiki:{fn}")
         except Exception as e:

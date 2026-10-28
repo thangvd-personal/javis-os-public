@@ -25,10 +25,9 @@ from __future__ import annotations
 import json
 import sys
 import time
-from typing import Dict, List, Optional
 
-from config import STATE_DIR
 import localefmt
+from config import STATE_DIR
 
 STATE = STATE_DIR / "pack-update-notices.json"
 INTERVAL = 6 * 3600         # at most one check per six hours, the same as the catalog cache (`packs_store.TTL`)
@@ -47,7 +46,7 @@ def _name(g: dict) -> str:
     return str(names.get(lang) or names.get("en") or next(iter(names.values()), "") or g.get("id") or "")
 
 
-def find_updates(store_packs, installed: dict) -> List[dict]:
+def find_updates(store_packs, installed: dict) -> list[dict]:
     """Installed packs whose Store version is newer: [{id, name, from, to}]. Version compare is numeric
     (`packs._ver`), so 1.10.0 is newer than 1.9.0 and a Store entry with an older number is never an "update"."""
     import packs
@@ -64,7 +63,7 @@ def find_updates(store_packs, installed: dict) -> List[dict]:
     return out
 
 
-def _load() -> Dict[str, str]:
+def _load() -> dict[str, str]:
     try:
         d = json.loads(STATE.read_text(encoding="utf-8"))
         return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
@@ -72,7 +71,7 @@ def _load() -> Dict[str, str]:
         return {}
 
 
-def _save(d: Dict[str, str]) -> None:
+def _save(d: dict[str, str]) -> None:
     try:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         tmp = STATE.with_suffix(".json.tmp")
@@ -82,7 +81,7 @@ def _save(d: Dict[str, str]) -> None:
         print(f"[pack updates] could not save {STATE}: {e}", file=sys.stderr)
 
 
-def notify(updates: List[dict]) -> Optional[dict]:
+def notify(updates: list[dict]) -> dict | None:
     """Put one bell notice for the updates not announced yet. Returns the inbox item, or None when nothing is new."""
     told = _load()
     fresh = [u for u in updates or [] if told.get(u["id"]) != u["to"]]
@@ -107,7 +106,7 @@ def notify(updates: List[dict]) -> Optional[dict]:
     return item
 
 
-async def check() -> Optional[dict]:
+async def check() -> dict | None:
     """One check: the Store catalog (cached for `INTERVAL`) against the install ledger."""
     import pack_install
     import packs_store
@@ -117,7 +116,7 @@ async def check() -> Optional[dict]:
     return notify(find_updates(d.get("packs") or [], pack_install.doc_so()))
 
 
-async def on_open(now: Optional[float] = None) -> None:
+async def on_open(now: float | None = None) -> None:
     """Called when the owner opens the dashboard (main's `/version`, as a background task). Checks at most once per
     `INTERVAL`; any other call returns at once. A failed check only logs: the next open after six hours tries again."""
     now = time.time() if now is None else now

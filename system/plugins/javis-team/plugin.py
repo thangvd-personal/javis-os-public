@@ -100,8 +100,9 @@ def _agent_models(root) -> dict:
     """{slug: (model, provider)} đọc thẳng từ frontmatter (agents_meta chỉ có provider đã suy)."""
     out = {}
     try:
-        from skill_router import read_frontmatter_only
         from pathlib import Path
+
+        from skill_router import read_frontmatter_only
         d = Path(root) / "agents"
         for fp in sorted(d.glob("*.md")) if d.is_dir() else []:
             meta = read_frontmatter_only(fp)[0] or {}

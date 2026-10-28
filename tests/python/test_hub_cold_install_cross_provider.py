@@ -15,7 +15,6 @@ Locked here, with the real hub handler and a real stdio process: while the sourc
 starting, every engine gets a working tool list without it and nothing kills it; once it is up,
 every engine can call it; and it was spawned exactly once.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import glob
 import json
@@ -24,6 +23,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-hub-cold-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
@@ -34,13 +35,12 @@ for _d in ("state", "brains/Brain Default/Javis", "home"):
     (_TMP / _d).mkdir(parents=True, exist_ok=True)
 os.environ["JAVIS_MCP_DISCOVER_TIMEOUT"] = "0.4"
 
-import httpx  # noqa: E402
-from starlette.applications import Starlette  # noqa: E402
-from starlette.routing import Route  # noqa: E402
-
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
+import httpx
+import mcp_client
+import mcp_hub
+import mcp_store
+from starlette.applications import Starlette
+from starlette.routing import Route
 
 HELPER = str(Path(__file__).resolve().parent / "_slow_start_mcp_server.py")
 MARKER = _TMP / "marker"

@@ -1,13 +1,11 @@
 """Late actual-store corruption/domain controls; no native/lifecycle proof."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import test_improvement_compose_inputs as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ComposeInputRaceTests(unittest.TestCase):

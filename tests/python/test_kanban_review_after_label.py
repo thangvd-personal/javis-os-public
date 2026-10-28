@@ -8,12 +8,12 @@ being reviewed, in both languages, with the explanation in an (i) block.
 
     python tests/python/test_kanban_review_after_label.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import tempfile
 from pathlib import Path
 
 import task_store
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

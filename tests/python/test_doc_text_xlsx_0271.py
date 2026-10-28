@@ -8,7 +8,6 @@ characters or crashed with UnicodeEncodeError on a Windows console). A partner c
 files correctly. The server now extracts .xlsx with the standard library: every sheet, formulas with their cached
 values, error cells listed; a PDF page with no text layer is named as image-only.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import os
 import sys
@@ -16,14 +15,16 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-doc-xlsx-"))
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import doc_text  # noqa: E402
-import team_docs  # noqa: E402
+import doc_text
+import team_docs
 
 fails = []
 

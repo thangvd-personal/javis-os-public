@@ -26,16 +26,17 @@ việc cần làm, và ba file cài (install.ps1, setup.bat, install.sh) cài đ
 KHÔNG chạm mạng.
 KHÔNG dùng ký tự em dash.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import stat
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-caiwin-")
 
-import claude_cli as cc  # noqa: E402
+import claude_cli as cc
 
 _fails = []
 
@@ -163,7 +164,8 @@ check("install.sh cài agy và grok", "antigravity.google/cli/install.sh" in sh
 # STATE_DIR mặc định CHÍNH LÀ thư mục server/, nên bản nhớ phải được .gitignore che: không che
 # thì mỗi lần chạy app là cây git bẩn thêm một file và `git add -A` commit đường dẫn máy người
 # khác (test_ignore_files.py canh đúng loại rác này).
-import subprocess  # noqa: E402
+import subprocess
+
 _che = subprocess.run(["git", "check-ignore", "server/bin_paths.json"], cwd=ROOT,
                       capture_output=True, text=True)
 check("bản nhớ bị .gitignore che (STATE_DIR mặc định là server/)", _che.returncode == 0)

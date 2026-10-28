@@ -10,13 +10,12 @@ tools/list của workspace-mcp (connector Google Workspace) là MỘT dòng JSON
 than limit" (LimitOverrunError đội lốt ValueError). Nút Kết nối chỉ hiện "Không kết nối
 được (ValueError)" - không lần ra manh mối. Test này giữ cho trần dòng luôn đủ rộng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
-import os
 import sys
 
 import mcp_client
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 

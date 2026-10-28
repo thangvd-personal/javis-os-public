@@ -1,7 +1,12 @@
 """Test tầng cập nhật: update_state (thuần) + endpoint /update/status + updater dry-run.
 Chạy:  python tests/run.py update    (KHÔNG mạng)."""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, tempfile, json
+import json
+import os
+import sys
+import tempfile
+
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-update-test-")
 
 _fails = []
@@ -10,7 +15,7 @@ def check(name, cond):
     if not cond:
         _fails.append(name)
 
-import update_state as us  # noqa: E402
+import update_state as us
 
 # --- version compare ---
 check("ver_newer 0.9.79 > 0.9.78", us.ver_newer("0.9.79", "0.9.78") is True)
@@ -57,12 +62,14 @@ check("read_state gặp JSON hỏng -> trả {}", us.read_state() == {})
 us.STATE_FILE.unlink(missing_ok=True)
 
 # --- main.py dùng update_state + /version có previous_version ---
-import asyncio  # noqa: E402
-import main  # noqa: E402
+import asyncio
 
 # Stub httpx để suite KHÔNG chạm mạng: fetch VERSION/CHANGELOG từ GitHub là best-effort,
 # ta ép nó "không có" (404) nên version_info -> latest=None, do_update -> latest=None.
-import httpx as _httpx  # noqa: E402
+import httpx as _httpx
+import main
+
+
 class _FakeResp:
     def __init__(self, status_code=404, text=""):
         self.status_code = status_code
@@ -99,8 +106,10 @@ check("/update/status trả state.phase", _s["state"].get("phase") == "health_ch
 check("/update/status trả log_tail", "dong 3" in _s["log_tail"])
 
 # --- POST /update chống chạy trùng ---
-from fastapi.responses import JSONResponse  # noqa: E402
-import datetime as _dtmod  # noqa: E402
+import datetime as _dtmod
+
+from fastapi.responses import JSONResponse
+
 _recent_iso = _dtmod.datetime.now().isoformat(timespec="seconds")
 us.write_state({"phase": "pulling", "started_at": _recent_iso})
 _r = asyncio.run(main.do_update())
@@ -243,7 +252,8 @@ finally:
     us.write_state({"phase": "idle", "result": None, "error": None})
 
 # --- updater.py --dry-run (không thực thi git/pip) ---
-import subprocess as _sp  # noqa: E402
+import subprocess as _sp
+
 _upd = os.path.join(str(SERVER), "updater.py")
 _p = _sp.run([sys.executable, _upd, "--dry-run", "--port", "7777", "--server-pid", "123"],
              capture_output=True, text=True, env={**os.environ})
@@ -252,7 +262,8 @@ check("updater --dry-run in PLAN", "PLAN:" in (_p.stdout or ""))
 
 # --- updater: 4 chế độ restart (bug thật: Mac không có systemd bị chặn cứng không update được;
 # rồi 14/08/2026 Mac CÓ launchd mà updater kill PID + nohup → launchd respawn giành cổng 7777) ---
-import updater as _updmod  # noqa: E402
+import updater as _updmod
+
 check("service_mode: Windows -> windows", _updmod.service_mode("nt") == "windows")
 check("service_mode: Linux có systemd -> systemd",
       _updmod.service_mode("posix", systemd=True, launchd=False) == "systemd")
@@ -284,10 +295,12 @@ check("main.py truyền --server-pid cho updater",
 # làm cả 42 file đổi URL mỗi lần bump VERSION, cache immutable trượt sạch, trình duyệt kéo lại
 # trọn 1,6 MB - đúng câu người dùng báo "update xong app vào chậm". Bất biến cần giữ vẫn thế
 # (không file nào mang khoá chết), chỉ mạnh thêm: khoá bám NỘI DUNG chứ không bám số phiên bản.
-import asyncio as _aio  # noqa: E402
+import asyncio as _aio
+
 _html = _aio.run(main.root()).body.decode("utf-8")
 _ver = main._app_version()
-import re as _re2  # noqa: E402
+import re as _re2
+
 _khoa = dict(_re2.findall(r'/static/(\S+?\.(?:js|css))\?v=([\w.]+)', _html))
 check("mọi file .js/.css đều được gắn khoá cache, không sót cái nào",
       len(_khoa) > 30 and all(v for v in _khoa.values()))

@@ -12,13 +12,14 @@ Hai rủi ro thật của kiểu cache này, test khoá cả hai:
 - BẨN: _read_state và _read_manifest đều bị nơi gọi SỬA TẠI CHỖ rồi ghi ngược ra file
   (plugins_host toggle), nên trả thẳng object trong cache là hỏng dữ liệu ngầm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _STATE = tempfile.mkdtemp(prefix="javis-plgcache-")
 os.environ.setdefault("JAVIS_STATE_DIR", _STATE)
@@ -28,7 +29,7 @@ try:
 except Exception:
     pass
 
-import plugins_host  # noqa: E402
+import plugins_host
 
 _fails = []
 

@@ -22,17 +22,16 @@ người gọi đưa lại đúng sha256 đó - ràng buộc này làm cái đã
 cái được cài.
 """
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-
+import localefmt
 import pack_install
 import packs
 import packs_fetch
 import packs_store
-import localefmt
+from fastapi import APIRouter, File, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 
 # Chỉ ảnh, và KHÔNG SVG: một SVG phục vụ cùng origin thì trơ trong thẻ <img> nhưng chạy script
 # khi người dùng mở thẳng nó ra một tab, tức là XSS trên chính origin của dashboard.

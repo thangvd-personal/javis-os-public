@@ -14,12 +14,13 @@ Bốn thứ file này canh, đều là loại hỏng lặng lẽ:
    tài khoản, xoá từ chối khi còn bot trực; /conversations/{id}/reply gửi qua sổ, ghi tin
    `human`, và TIẾP QUẢN cuộc chat có bot.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-kenh-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -29,8 +30,8 @@ try:
 except Exception:
     pass
 
-from config import STATE_DIR  # noqa: E402
-import secrets_store  # noqa: E402
+import secrets_store
+from config import STATE_DIR
 
 # Bản ghi bot CŨ (trước 0.61.0) đặt sẵn TRƯỚC khi nạp kho, để test đúng đường di trú.
 STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -39,11 +40,11 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
      "channel": "zalo", "bot_username": "BotCu", "token_enc": secrets_store.encrypt("9:cu"),
      "enabled": False, "groups": [], "created_at": 1, "updated_at": 1}]}), encoding="utf-8")
 
-import channels  # noqa: E402
-import channel_accounts  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
+import channel_accounts
+import channels
+import chatbot_runtime
+import chatbot_store
+import conversations
 
 _fails = []
 
@@ -177,8 +178,8 @@ check("tắt bot dừng mọi poller", chatbot_runtime.stop_bot("bot_cu1") and c
 # ============================================================
 # 5. API: /channels, /channels/accounts, watch, delete, reply
 # ============================================================
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 c = TestClient(main.app, base_url="http://127.0.0.1")
 r = c.get("/channels")

@@ -12,7 +12,6 @@ runs Caddy only when 80/443 are free. Checks:
 Verified once by hand on Docker 29 (2026-10-24): idle without a domain, Caddy answering 308 then 200 through to the
 app when the ports were free, idle next to a container holding 80/443.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import subprocess
@@ -21,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

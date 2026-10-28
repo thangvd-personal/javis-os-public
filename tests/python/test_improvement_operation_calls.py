@@ -1,14 +1,13 @@
 """Actual role reservations share the real ledger and schema6 operation ownership."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_operation_records import OperationRecords
-from agent_ledger import CallLedger
 import test_improvement_operations as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
+from improvement_operation_records import OperationRecords
 
 
 class OperationCallTests(unittest.TestCase):

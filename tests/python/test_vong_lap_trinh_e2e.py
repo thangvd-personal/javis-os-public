@@ -7,22 +7,22 @@ terminal có pipe, rồi trả lời. Mọi lời gọi đi qua ĐÚNG đường
 (`_cc_tool_loop`) -> `mcp_client.call_route` -> route builtin của hub dựng cho phiên Coding. Phép
 thử này bắt lỗi ở chỗ nối giữa các mảnh mà test từng mảnh không thấy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-e2e-code-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_checkpoint  # noqa: E402
-import coding_terminal  # noqa: E402
-import engine  # noqa: E402
-import mcp_hub  # noqa: E402
-from coding_ctx import CodingToolContext  # noqa: E402
+import coding_checkpoint
+import coding_terminal
+import engine
+import mcp_hub
+from coding_ctx import CodingToolContext
 
 _fails = []
 

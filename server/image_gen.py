@@ -22,10 +22,9 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
-
 import localefmt
 import openai_oauth
 
@@ -56,7 +55,7 @@ _ATTACH_RE = r"^(\d+\s*[-_.]\s*)?attachments$"
 # ---------------------------------------------------------------------------
 # Helpers thuần (test được)
 # ---------------------------------------------------------------------------
-def resolve_size(aspect_ratio: Optional[str]) -> str:
+def resolve_size(aspect_ratio: str | None) -> str:
     return _SIZES.get((aspect_ratio or "square").strip().lower(), _SIZES["square"])
 
 
@@ -69,7 +68,7 @@ _IMG_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
              ".webp": "image/webp", ".gif": "image/gif"}
 
 
-def read_reference_image(path: str, vault_root: Optional[str] = None) -> dict:
+def read_reference_image(path: str, vault_root: str | None = None) -> dict:
     """Đọc MỘT ảnh mẫu trên đĩa -> {ok, data_url} để gửi thẳng cho ChatGPT xem.
 
     Đường dẫn nhận cả kiểu tương đối trong vault (attachments/abc.png) lẫn tuyệt đối, nhưng
@@ -121,7 +120,7 @@ def _catalog_models() -> list:
         return []
 
 
-def host_model_candidates(catalog: Optional[list] = None) -> list:
+def host_model_candidates(catalog: list | None = None) -> list:
     """Thứ tự model 'chủ' sẽ thử cho một lượt tạo ảnh.
 
     Env ghim thì chỉ đúng model đó. Còn lại: model vừa chạy được, rồi HOST_MODEL nếu tài khoản
@@ -164,7 +163,7 @@ def model_rejected(status: int, text: str) -> bool:
     return "model" in low and any(k in low for k in _TU_CHOI_MODEL)
 
 
-def build_payload(prompt: str, size: str, quality: str, images: Optional[list] = None,
+def build_payload(prompt: str, size: str, quality: str, images: list | None = None,
                   model: str = "") -> dict:
     """Body Responses cho 1 lời gọi image_generation (mirror hermes openai-codex).
 
@@ -188,10 +187,10 @@ def build_payload(prompt: str, size: str, quality: str, images: Optional[list] =
     }
 
 
-def extract_image_b64(value: Any, *, include_partial: bool = True) -> Optional[str]:
+def extract_image_b64(value: Any, *, include_partial: bool = True) -> str | None:
     """Bới đệ quy 1 payload sự kiện SSE, trả b64 ảnh MỚI nhất (image_generation_call.result
     hoặc partial_image_b64). Bới đệ quy để chịu được thay đổi hình dạng sự kiện của backend."""
-    found: Optional[str] = None
+    found: str | None = None
     if isinstance(value, dict):
         if value.get("type") == "image_generation_call":
             r = value.get("result")
@@ -216,7 +215,7 @@ def _default_vault() -> str:
     return str(Path(os.getenv("BRAINS_DIR", str(Path(__file__).parent.parent / "brains"))) / "Brain Default")
 
 
-def _resolve_vault(vault_root: Optional[str]) -> Path:
+def _resolve_vault(vault_root: str | None) -> Path:
     if vault_root and os.path.isdir(vault_root):
         return Path(vault_root)
     return Path(_default_vault())
@@ -323,7 +322,7 @@ def brand_png(raw: bytes) -> bytes:
         return raw                                    # gắn nhãn hỏng thì thà mất nhãn còn hơn mất ảnh
 
 
-def save_png_b64(b64: str, vault_root: Optional[str], prefix: str = "javis-img") -> dict:
+def save_png_b64(b64: str, vault_root: str | None, prefix: str = "javis-img") -> dict:
     """Giải mã b64 → lưu PNG vào <vault>/attachments. Trả {ok, rel_path, abs_path, file}."""
     try:
         raw = base64.b64decode(b64)
@@ -360,8 +359,8 @@ def _headers(token: str, account_id: str) -> dict:
 # Gọi thật
 # ---------------------------------------------------------------------------
 async def generate_chatgpt(prompt: str, aspect_ratio: str = "square", quality: str = "medium",
-                           vault_root: Optional[str] = None, timeout_s: float = 300.0,
-                           images: Optional[list] = None) -> dict:
+                           vault_root: str | None = None, timeout_s: float = 300.0,
+                           images: list | None = None) -> dict:
     """Tạo 1 ảnh bằng gói ChatGPT. Trả {ok, rel_path, abs_path, size, quality, aspect} hoặc {ok:False, error}.
 
     `images` = danh sách đường dẫn ảnh MẪU trong brain. Có ảnh thì ChatGPT NHÌN THẤY ảnh thật
@@ -400,8 +399,8 @@ async def generate_chatgpt(prompt: str, aspect_ratio: str = "square", quality: s
     size = resolve_size(aspect)
     headers = _headers(creds["access_token"], creds.get("account_id") or "")
 
-    b64: Optional[str] = None
-    err: Optional[str] = None
+    b64: str | None = None
+    err: str | None = None
     da_thu: list = []
     hang_doi = host_model_candidates()
     da_hoi_live = False
@@ -459,8 +458,8 @@ async def _live_models(creds: dict) -> list:
 
 async def _mot_luot(payload: dict, headers: dict, timeout_s: float):
     """Một lượt gọi tạo ảnh. Trả (b64 | None, lỗi | None, mã HTTP; 0 khi lỗi nằm trong stream)."""
-    b64: Optional[str] = None
-    err: Optional[str] = None
+    b64: str | None = None
+    err: str | None = None
     try:
         timeout = httpx.Timeout(timeout_s, connect=20)
         async with httpx.AsyncClient(timeout=timeout) as client:

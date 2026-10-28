@@ -14,10 +14,11 @@ the owner's own password was overwritten and their username became "admin". This
   2. same env value with whitespace + password never changed: stored clean, so the owner signs in without the invisible space;
   3. a REAL change of the env value still resets, as since 0.77.1.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-login-upg-")
 try:
@@ -25,7 +26,7 @@ try:
 except Exception:
     pass
 
-import config as c  # noqa: E402
+import config as c
 
 _fails = []
 

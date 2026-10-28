@@ -11,10 +11,11 @@ tiến trình mcp-google-sheets, 96 cái mồ côi, ăn 6,9/7,9 GB RAM của VPS
 Test dùng cây tiến trình THẬT (bash spawn cháu sleep) chứ không mock, vì chính hành vi
 "cháu có chết theo không" là thứ cần chứng minh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -30,8 +31,8 @@ def check(name, cond):
         _fails.append(name)
 
 
-import mcp_client        # noqa: E402
-import connect_health    # noqa: E402
+import connect_health
+import mcp_client
 
 # ---- 1. Hai mốc thời gian phải LỆCH nhau ----
 # TTL == interval là cái bẫy cộng hưởng: session bị dọn đúng trước lúc vòng quét tới,

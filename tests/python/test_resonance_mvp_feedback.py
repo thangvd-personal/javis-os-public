@@ -5,20 +5,21 @@
 TestClient trên main.app (http://127.0.0.1:8080), kho SQLite thật, kho phiên thật, engine GIẢ. Không gọi model.
 Tên test theo Task M4 của docs/superpowers/plans/2026-10-06-resonance-00-mvp.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m4-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import main
+import resonance as R
+import resonance_store as RS
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -36,7 +37,8 @@ KEY = main._brain_key(BRAIN)
 P = RS.Principal("agent", "javis", KEY)
 OWNER = RS.Principal("owner", "owner", KEY)
 store = main._resonance_store()
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo trợ lý qua API của chủ dự án
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 # Phiên của một trợ lý (kênh agent:<slug>), như trang Cộng sự mở: /goal-requests chỉ nhận tin của phiên trợ lý đang bật.
 SID = main.get_store().create_session(brain=BRAIN, engine="test", model="test", channel=f"agent:{RA.SLUG}")
@@ -437,9 +439,9 @@ code, body = api("post", "/goal-requests", json={"message_ref": R.message_ref(SI
 check("goal-requests: tin của trợ lý không lập được mục tiêu", code == 400)
 
 # ───────────── Review M4 vòng 1: năm lỗi, nay là hành vi mong đợi ─────────────
-import hashlib  # noqa: E402
-import json  # noqa: E402
-from contextlib import closing  # noqa: E402
+import hashlib
+import json
+from contextlib import closing
 
 DELIV = Path(KEY) / "Inbox" / "ke-hoach.md"
 
@@ -562,7 +564,8 @@ check("P2-1: bật lại: mục tiêu đã tạm dừng vẫn đứng yên, mụ
       e14.queries == 0 and store.get(P, g14.id).paused and store.get(P, g15.id).status == "cancelled")
 
 # P2-2: khoá báo cáo tìm trên toàn bộ phiên, không giới hạn 300 tin.
-import dataclasses  # noqa: E402
+import dataclasses
+
 g16 = make_goal()
 SID2 = main.get_store().get_or_create(None, brain=BRAIN, engine="test", model="test")
 store.notice(P, g16.id, "goal.blocked", {"code": "budget"}, idem="review-p22")
@@ -670,8 +673,8 @@ check("vòng 2: chuỗi trùng đứng trước tin thật, thêm 320 tin sau: n
       and not any(r["id"] == row19["id"] for r in store.outbox_pending(500)))
 
 # ───────────── Review e2e P1-1: trần chung tính cả bộ lập mục tiêu (POST /goal-requests) ─────────────
-import sqlite3 as _sq  # noqa: E402
-import threading  # noqa: E402
+import sqlite3 as _sq
+import threading
 
 
 def _total_calls():

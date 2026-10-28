@@ -1,15 +1,14 @@
 """Actual admission SQL/source fences; engineering verification, no CLI/model."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_operation_execution as operation_fixture
+import test_improvement_trial_admission as trial_fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_operation_adapter import ClaudeOperationAdapter
-import test_improvement_trial_admission as trial_fixture
-import test_improvement_operation_execution as operation_fixture
 
 
 class TrialAdmissionAuthorityTests(unittest.TestCase):

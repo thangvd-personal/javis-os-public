@@ -26,13 +26,14 @@ Nguyên tắc: file này KHÔNG chặn, KHÔNG sửa câu trả lời của mode
 """
 from __future__ import annotations
 
-import lang as lang_mod
-import lang_registry
-import lexicon   # mẫu lời hứa theo ngôn ngữ
-import localefmt
 import re
 import time
 import unicodedata
+
+import lang as lang_mod
+import lang_registry
+import lexicon  # mẫu lời hứa theo ngôn ngữ
+import localefmt
 
 # Việc Kanban còn "sống" - tức là còn có ngày nó chạy rồi báo về. Khớp với
 # task_store.ACTIVE_STATUS, chép lại ở đây để module này không phải nạp cả tầng task.
@@ -64,7 +65,7 @@ def _norm(value: str) -> str:
 
 # Khối mã và trích dẫn nguyên văn KHÔNG tính: model dán lại code hay dán lại câu của người
 # khác thì đó không phải lời hứa của nó.
-_CODE_FENCE = re.compile(r"```.*?```", re.S)
+_CODE_FENCE = re.compile(r"```.*?```", re.DOTALL)
 _INLINE_CODE = re.compile(r"`[^`\n]*`")
 
 # Mẫu lời hứa "sẽ báo lại sau". Cố ý viết hẹp: bắt nhầm một câu vô hại thì Javis tự dán một

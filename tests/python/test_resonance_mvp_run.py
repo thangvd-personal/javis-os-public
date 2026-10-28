@@ -6,20 +6,20 @@
 hợp đồng với cổng main.py dựng trên EvidenceStore. Không gọi model thật. Tên test theo Task M3 của
 docs/superpowers/plans/2026-10-06-resonance-00-mvp.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import os
 import sys
 import tempfile
-import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m3-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -35,7 +35,8 @@ BRAIN = str(Path(tempfile.mkdtemp(prefix="brain-m3-")).resolve())
 P = RS.Principal("agent", "javis", BRAIN)
 OWNER = RS.Principal("owner", "owner", BRAIN)
 store = RS.GoalStore()
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo agent, không theo brain
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 
 

@@ -12,7 +12,6 @@ P3 late outcome kept; a run given up on is stopped; [SILENT] text not sent; owne
    Retry-After; "allow_private": "false"; non-ASCII header values; header case; test events flagged; capped reads;
    refused-before-dispatch branches release the business key.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,6 +19,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m3r-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -30,10 +31,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -49,7 +50,7 @@ def check(name, cond, them=""):
         fails.append(name)
 
 
-PUBLIC = lambda h: ["93.184.216.34"]  # noqa: E731
+PUBLIC = lambda h: ["93.184.216.34"]
 SCRIPT = "https://script.google.com/macros/s/AKfycbx_TEST_DEPLOYMENT_123/exec"
 CTX = {"event_id": "ev_1", "hook_id": "wh_1", "action_id": "a", "received_at": 1.0, "delivery_id": "dlv_x",
        "fields": {}, "payload": {}, "body": b"{}", "content_type": "application/json", "brain": "/b"}

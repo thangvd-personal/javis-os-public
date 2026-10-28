@@ -7,14 +7,14 @@ these records claim loaded-page identity, provider acceptance or comprehension.
 from __future__ import annotations
 
 import asyncio
-from contextlib import aclosing, closing
 import hashlib
 import inspect
-from pathlib import Path
 import secrets
 import subprocess
 import tempfile
 import time
+from contextlib import aclosing, closing
+from pathlib import Path
 
 import improvement_store as IM
 from improvement_blobs import MAX_ASSET_BYTES
@@ -209,9 +209,9 @@ class NativeParentBoundary:
             return record
 
     def _check_qualification_start(self, guardian):
-        from improvement_qualification_session import QualificationSession
         from improvement_blobs import check_ancestry
         from improvement_qualification_environment import validate_dummy_environment
+        from improvement_qualification_session import QualificationSession
         session = self._qualification
         if (type(session) is not QualificationSession or self._guardian is not guardian
                 or session._native_boundaries.get(guardian) is not self or guardian not in session._owners
@@ -450,6 +450,7 @@ class NativeParentBoundary:
     async def execute_qualification(self, binding, *, owner, principal, identifier, expected_generation,
             lease_token, before_engine_start, on_closing_observations):
         from dataclasses import asdict
+
         from improvement_native_transport import execute_worker_qualification
         from improvement_sandbox import trial_system_prompt
         context = self._assert_query_current()

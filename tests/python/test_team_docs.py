@@ -6,10 +6,11 @@ Owner, 16/10/2026: a team chat needs what the main chat has: attach files, pin a
 the whole team uses, and an info panel (members, files, links) behind the team picture. Team turns stay text only
 (decision R3), so what a member reads is what the server puts in its prompt. Runs the real host, no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-docs-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-docs-brain-"))
@@ -20,9 +21,9 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
 (BR / "du-an" / "web" / "README.md").write_text("# Web\n", encoding="utf-8")
 (BR / "tai-lieu.md").write_text("Giá sỉ: 50.000đ một chai.\n", encoding="utf-8")
 
-import main  # noqa: E402
-import team_docs  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+import team_docs
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -125,15 +126,18 @@ check("without subdirs the file browser gets the same rows as before",
       "dirs" not in [i for i in client.get("/files/list", params={"brain": b}).json()["items"] if i["type"] == "dir"][0])
 
 # ---- Javis Core has no jobs of its own: its Jobs tab says "no jobs yet", not "could not load" ----
-import javis_core  # noqa: E402
+import javis_core
+
 r = client.get(f"/agents/{javis_core.SLUG}/jobs", params={"brain": b})
 check("the Jobs tab of Javis Core gets an empty ok list (it used to be a 404 shown as a load error)",
       r.status_code == 200 and r.json().get("ok") and r.json()["jobs"] == [] and r.json()["total"] == 0, r.text)
 check("an unknown assistant is still a 404", client.get("/agents/khong-co/jobs", params={"brain": b}).status_code == 404)
 
 # ---- 0.192.0: pictures are described for the text-only member turns ----
-import asyncio  # noqa: E402
-import team_api  # noqa: E402
+import asyncio
+
+import team_api
+
 seen = {}
 
 
@@ -225,7 +229,8 @@ check("@all calls every active member, leader first, past the per-message @ cap"
       and allm["meta"].get("mention_all") is True, (r.text, allm.get("meta")))
 check("without @all the cap still holds", "if len(wanted) > cap and not mention_all:" in
       (ROOT / "server" / "team_runner.py").read_text(encoding="utf-8"))
-import team_runner  # noqa: E402
+import team_runner
+
 # 0.197.0: only the leader's call to the owner is flagged (test_team_unread_0197.py covers the other members).
 lead_key = teams_store.get(tid)["leader_key"]
 mid_ask = runner._post(teams_store.get(tid), "@Chủ nhóm ơi, anh chọn mẫu A hay B?", author_kind="agent", author_ref=lead_key)

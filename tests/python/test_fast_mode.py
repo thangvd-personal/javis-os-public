@@ -3,12 +3,12 @@ the per-turn ContextVar and the last observed state per brain.
 
     python tests/run.py fast_mode
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
 
-import fast_mode as F  # noqa: E402
+import fast_mode as F
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

@@ -5,7 +5,7 @@ phải `heart`) để dữ liệu cũ còn đọc được. Không import gì ng
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 REACTIONS = ("like", "love", "haha", "wow", "sad", "angry")
 REACTION_EMOJI = {"like": "👍", "love": "❤️", "haha": "😂", "wow": "😮", "sad": "😢", "angry": "😡"}
@@ -61,7 +61,7 @@ def is_empty(state: dict) -> bool:
     return not state.get("value") and not state.get("reasons") and not state.get("axis") and not state.get("comment")
 
 
-def public(state: Optional[dict]) -> Optional[dict]:
+def public(state: dict | None) -> dict | None:
     """Khuôn `R` của hợp đồng (mục 3) từ một dòng reaction đã đọc; None khi không có."""
     if not state:
         return None

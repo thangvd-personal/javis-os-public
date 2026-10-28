@@ -27,18 +27,19 @@ Kèm một lỗi họ hàng cùng gốc: `learn._brain_last_active` đóng đinh
 chữ hoa, nên brain hiện đại luôn trả 0.0 và bộ lọc "bỏ brain đã nguội" của curator không bao
 giờ nổ - chết câm đúng việc mà chú thích của nó nói nó sinh ra để làm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-memcase-")
 os.environ.setdefault("JAVIS_STATE_DIR", _TMP)
 
-import main  # noqa: E402
-import learn  # noqa: E402
+import learn
+import main
 
 _fails = []
 

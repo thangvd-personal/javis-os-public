@@ -13,7 +13,7 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import World, check, finish  # noqa: E402
+from _judge_world import World, check, finish
 
 WAIT = '{"verdict":"wait","score":0.5,"reason":"đợi chủ","wait_for":["owner_message"]}'
 SPEAK = '{"verdict":"speak","score":0.95,"reason":"đúng lúc"}'

@@ -3,12 +3,12 @@
 Run:
     python tests/run.py chat_cards
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 
-import channel_context  # noqa: E402
-import chat_cards  # noqa: E402
-import chat_recall  # noqa: E402
+import channel_context
+import chat_cards
+import chat_recall
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

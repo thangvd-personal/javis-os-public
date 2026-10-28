@@ -14,14 +14,14 @@ P3 budget counted rows not runs; breaker kept after the target changed; breaker 
    failed send; one hook's digest error stopped the others, retried without cap, counted weeks; needs_you not
    paginated, Failed without dead, Filtered without invalid/duplicate; CSV formulas after tab/CR/spaces.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m5r-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -32,10 +32,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -255,8 +255,10 @@ for _ in range(3):
 check("P3: three runs of one event count three against the AI budget", s3.ai_runs_since("wh_ai", 0) == 3)
 
 # P2-6: the owner's time zone
-import localefmt  # noqa: E402
-from datetime import datetime  # noqa: E402
+from datetime import datetime
+
+import localefmt
+
 ts = datetime(2026, 10, 19, 2, 30, tzinfo=__import__("datetime").timezone.utc).timestamp()   # 09:30 in Vietnam
 check("P2: the digest hour and the day start follow the owner's zone (09:30 Vietnam = 02:30 UTC)",
       str(localefmt.tz()) in ("Asia/Ho_Chi_Minh", "Asia/Saigon") and wt._local(ts).hour == 9

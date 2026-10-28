@@ -18,15 +18,14 @@ clean-stop mark records an unexpected restart (when it was last alive), shown in
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import threading
 import time
 import traceback
-import json
 from collections import deque
 from pathlib import Path
-from typing import Optional
 
 TICK_S = 0.25
 try:
@@ -54,7 +53,7 @@ async def _ticker() -> None:
         await asyncio.sleep(TICK_S)
 
 
-def _stack_of(thread_id: Optional[int]) -> list:
+def _stack_of(thread_id: int | None) -> list:
     frame = sys._current_frames().get(thread_id) if thread_id else None
     if frame is None:
         return []
@@ -89,14 +88,14 @@ def _watch() -> None:
                           flush=True)
 
 
-def _read_json(path: Optional[Path], default):
+def _read_json(path: Path | None, default):
     try:
         return json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else default
     except Exception:  # noqa: BLE001 - a torn file only loses the diagnostics
         return default
 
 
-def _write_json(path: Optional[Path], data) -> None:
+def _write_json(path: Path | None, data) -> None:
     if not path:
         return
     try:
@@ -117,7 +116,7 @@ async def _beater() -> None:
         await asyncio.sleep(BEAT_S)
 
 
-def _note_restart(state_dir: Optional[str]) -> None:
+def _note_restart(state_dir: str | None) -> None:
     if not state_dir:
         return
     d = Path(state_dir)
@@ -142,7 +141,7 @@ def stop() -> None:
     _beat(clean=True)
 
 
-def start(loop: Optional[asyncio.AbstractEventLoop] = None, state_dir: Optional[str] = None) -> bool:
+def start(loop: asyncio.AbstractEventLoop | None = None, state_dir: str | None = None) -> bool:
     """Start the watchdog on the running loop (call from a startup hook). Idempotent."""
     if _state["started"]:
         return False

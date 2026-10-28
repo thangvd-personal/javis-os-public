@@ -10,12 +10,13 @@ Reported 2026-10-11 by the Mac mini user (qwen3 on Ollama, with a patch tested o
   3. A turn that only thought said "returned nothing", which points at a broken connection instead of the real cause.
 Also pinned: a model that cannot think at all must not lose the turn when the owner turns local thinking on.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ollama-think-")
 try:
@@ -23,14 +24,13 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import localefmt  # noqa: E402
+import httpx
+import localefmt
 
 localefmt.dat_ngon_ngu_yeu_cau("vi")
 
-import config as cfgmod  # noqa: E402
-import engine  # noqa: E402
+import config as cfgmod
+import engine
 
 _fails = []
 

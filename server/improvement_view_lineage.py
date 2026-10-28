@@ -1,7 +1,12 @@
 """Explicit v4 SQL/blob lineage; current host observation remains a separate gate."""
 import improvement_store as IM
 from improvement_blobs import AssetUnavailable
-from improvement_experiment_lineage import _comparison_proof, _row, _same, current_fences
+from improvement_experiment_lineage import (
+    _comparison_proof,
+    _row,
+    _same,
+    current_fences,
+)
 from improvement_view_history import load_history
 from improvement_view_trial_protocol import validate_request_v4
 

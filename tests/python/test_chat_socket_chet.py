@@ -19,9 +19,10 @@ lộ ra, rồi socket mới kéo về câu trả lời đã có sẵn.
   4. Nút Dừng luôn gửi thêm qua HTTP /stop: lệnh Dừng gửi vào socket chết là rơi mất.
   5. Socket mới chào "hello" mà phiên đang xem không còn chạy thì bỏ chip "đang suy nghĩ" còn sót.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import re
 import sys
+
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

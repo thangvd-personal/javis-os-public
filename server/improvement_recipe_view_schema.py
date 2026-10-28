@@ -5,7 +5,9 @@ historical authority; encrypted lineage and trace validation stays with owners.
 """
 from __future__ import annotations
 
-from improvement_recipe_schema import _assert_expected, assert_installed as assert_nine, statements as nine_statements
+from improvement_recipe_schema import _assert_expected
+from improvement_recipe_schema import assert_installed as assert_nine
+from improvement_recipe_schema import statements as nine_statements
 
 _TRIGGER = 'CREATE TRIGGER improvement_recipe_trial_scope '
 _TAIL = 'AND e.context_id=p.context_id AND c.experiment_id=p.experiment_id))) '
@@ -66,8 +68,8 @@ def assert_installed(connection) -> None:
 
 
 def migrate(connection) -> None:
-    from improvement_store import SchemaError
     from improvement_compose_schema import assert_installed as assert_compose
+    from improvement_store import SchemaError
     version = connection.execute('SELECT version FROM improvement_schema WHERE id=1').fetchone()
     if not connection.in_transaction or not version or version[0] != 9:
         raise SchemaError('recipe_view_migration_requires_owned_nine_transaction')

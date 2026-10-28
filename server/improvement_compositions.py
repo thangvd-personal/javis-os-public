@@ -13,7 +13,7 @@ import time
 from contextlib import closing
 
 import improvement_store as IM
-from improvement_compose_candidates import decisions_document, prepare, insert
+from improvement_compose_candidates import decisions_document, insert, prepare
 from improvement_compose_permissions import ComposePermissions, operation_permission
 from improvement_compose_protocol import parse_compose_output
 from improvement_experiments import _generation, _identifier

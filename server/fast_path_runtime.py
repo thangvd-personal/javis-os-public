@@ -11,8 +11,8 @@ import hashlib
 import math
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 import capability_resolver
 import context_compiler
@@ -21,7 +21,6 @@ import lang as lang_mod
 import lang_registry
 import lexicon
 import localefmt
-
 
 CANARY_POLICY_VERSION = "fast-path-canary-v1"
 
@@ -165,7 +164,7 @@ class CanaryPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "CanaryPolicy":
+    def from_settings(cls, settings: dict) -> CanaryPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         raw = runtime.get("canary") if isinstance(runtime.get("canary"), dict) else {}
         bps = raw.get("allocation_basis_points")
@@ -212,7 +211,7 @@ class CanaryPolicy:
         )
 
     @staticmethod
-    def _rule_thue_bao(settings: dict) -> Optional[QuotaRule]:
+    def _rule_thue_bao(settings: dict) -> QuotaRule | None:
         """Ngân sách biên soạn cho engine gói thuê bao, đọc từ `subscription_context`.
 
         Cùng lý do với Phase 8: gói thuê bao không công bố hạn mức token nên `quota_rule`
@@ -242,7 +241,7 @@ class CanaryPolicy:
             window_seconds=60, priority=-1, rule_id="subscription-context",
         )
 
-    def quota_rule(self, provider: str, model: str) -> Optional[QuotaRule]:
+    def quota_rule(self, provider: str, model: str) -> QuotaRule | None:
         # Casefold cả model lẫn pattern: "LLAMA-3" phải khớp rule "llama-*" thay vì
         # rơi nhầm vào rule "*" catch-all có quota khác.
         matches = [rule for rule in self.rules if rule.provider == str(provider or "").lower()
@@ -258,7 +257,7 @@ class FastPathPlan:
     action: str
     reason: str
     execution_path: str
-    bucket: Optional[int] = None
+    bucket: int | None = None
     messages: tuple[dict, ...] = ()
     reservation_id: str = ""
     capsule_hash: str = ""
@@ -281,7 +280,7 @@ class FastPathCanary:
         self.classifier = classifier or FastIntentClassifier()
 
     def _legacy(self, trace: context_runtime.TurnTrace | None, policy: CanaryPolicy,
-                bucket: Optional[int], reason: str) -> FastPathPlan:
+                bucket: int | None, reason: str) -> FastPathPlan:
         pinned = self.runtime.pin_execution_path(
             trace, "legacy", bucket, policy.version, reason
         ) if trace else "legacy"
@@ -407,7 +406,7 @@ class FastPathCanary:
             provider_kind, lang_tra_loi, resolution,
         )
 
-    def _compile_and_admit(self, trace, policy: CanaryPolicy, bucket: Optional[int],
+    def _compile_and_admit(self, trace, policy: CanaryPolicy, bucket: int | None,
                            rule: QuotaRule, objective: str, brain: str, channel: str,
                            provider: str, model: str, provider_kind: str, lang_tra_loi: str,
                            resolution: dict) -> FastPathPlan:

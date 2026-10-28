@@ -1,20 +1,18 @@
 """Real SQL role lease/marker/settlement; synthetic metadata, no model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
 import json
 import time
 import unittest
-from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_operation_workspace as W
+import test_improvement_preparation as F
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_records import OperationRecords
 from improvement_trial_service import OwnerTrialService
-import test_improvement_preparation as F
-import test_improvement_operation_workspace as W
-import usage_store as US
-import usage_index as UI
 
 
 class OperationExecutionTests(unittest.TestCase):

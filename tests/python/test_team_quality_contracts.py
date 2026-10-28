@@ -1,21 +1,21 @@
 """Quality contracts use real scratch stores and fake engines only."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
-import tempfile
 import sqlite3
-import time
-from contextlib import closing
+import tempfile
 import unittest
-from unittest.mock import patch
+from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ['JAVIS_STATE_DIR'] = tempfile.mkdtemp(prefix='quality-state-')
 import sessions
 import task_store
+import team_acceptance
 import team_runner
 import team_store
-import team_acceptance
 
 
 class QualityContracts(unittest.TestCase):

@@ -3,13 +3,14 @@
 Run:
     python tests/run.py team_share_routes
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import json
 import os
 import tempfile
 import zipfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-share-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-share-src-"))
@@ -24,8 +25,8 @@ BR2 = Path(tempfile.mkdtemp(prefix="javis-team-share-dst-"))
 (BR2 / "agents").mkdir()
 (BR2 / "agents" / "minh.md").write_text("---\nname: Minh của tôi\n---\nGiữ nguyên.\n", encoding="utf-8")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

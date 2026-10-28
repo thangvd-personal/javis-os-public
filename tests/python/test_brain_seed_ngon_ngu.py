@@ -8,20 +8,21 @@ lại sang ngôn ngữ đó. Cách nhận "còn nguyên" là so từng ký tự 
 nhất là bản tiếng Việt trong brain_seed_i18n.py lệch khỏi hằng số gốc ở main.py / meta_tools.py:
 lệch một ký tự là không file nào được nhận ra nữa, và chuyện đó xảy ra trong im lặng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-seed-"))
-import brain_seed_i18n as bs  # noqa: E402
-import localefmt  # noqa: E402
-import meta_tools  # noqa: E402
+import brain_seed_i18n as bs
+import localefmt
+import meta_tools
 
 _fails = []
-DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.I)
+DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.IGNORECASE)
 
 
 def check(ten, ok, chi_tiet=""):
@@ -35,8 +36,8 @@ _src = (SERVER / "main.py").read_text(encoding="utf-8")
 
 
 def _hang_so(ten):
-    m = re.search(rf"^{ten} = \(\n(.*?)\n\)", _src, re.S | re.M)
-    return eval("(" + m.group(1) + ")") if m else None  # noqa: S307 - chuỗi ghép từ mã của chính repo
+    m = re.search(rf"^{ten} = \(\n(.*?)\n\)", _src, re.DOTALL | re.MULTILINE)
+    return eval("(" + m.group(1) + ")") if m else None
 
 
 for ten, goc in (("dashboard", _hang_so("DASHBOARD_SEED")), ("memory", _hang_so("MEMORY_SEED")),

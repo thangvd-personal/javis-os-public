@@ -15,9 +15,8 @@
 # Extracted from pinned Harness2; see third_party/harness2/LIBRARY-PROVENANCE.json.
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence
-
 
 GRADER_VERDICT_MARKERS: tuple[str, ...] = (
     "deterministic_eval_summary",

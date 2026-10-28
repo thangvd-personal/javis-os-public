@@ -22,7 +22,6 @@ with only the model engines faked:
      still offered to a conversation without one.
   6. `javis --project X "..."` sends the `project` field; without it no field is sent.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -30,6 +29,8 @@ import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-cli-project-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-cli-project-brains-")
@@ -39,8 +40,8 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -302,8 +303,8 @@ check("CANARY: both dashboard fast-path offers check the project",
 # 7. The CLI client: --project sends the field
 # ============================================================
 sys.path.insert(0, str(ROOT / "cli"))
-import javis_cli.__main__ as cli_main  # noqa: E402
-import javis_cli.commands as cli_cmd  # noqa: E402
+import javis_cli.__main__ as cli_main
+import javis_cli.commands as cli_cmd
 
 _seen = {}
 _orig_hoi, _orig_chat = cli_main.cmd.hoi, cli_main.cmd.chat

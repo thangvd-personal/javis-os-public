@@ -26,7 +26,7 @@ SEND_TOOLS = ("zalo_send_message", "zalo_send_mention")
 TEXT_KEYS = ("text", "message", "content", "caption")
 
 
-def _space_if_glued(m: "re.Match") -> str:
+def _space_if_glued(m: re.Match) -> str:
     s = m.string
     before = s[m.start() - 1] if m.start() > 0 else ""
     after = s[m.end()] if m.end() < len(s) else ""

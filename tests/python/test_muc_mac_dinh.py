@@ -17,17 +17,18 @@ Test ở đây GIẢ LẬP việc nâng mặc định (đổi `cfg.PRESET_MAC_DI
 tới ngày thật sự nâng. Một cơ chế di trú chỉ chạy đúng một lần trong đời mà không có test thì
 tới hôm dùng mới biết nó hỏng, và lúc đó thì đã phát ra cho người dùng rồi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-macdinh-")
 
-import config as cfg  # noqa: E402
-import main  # noqa: E402
+import config as cfg
+import main
 
 _fails = []
 

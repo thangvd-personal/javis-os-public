@@ -21,13 +21,14 @@ máy sạch, nơi mặc định mới luôn đúng.
 File này dựng ĐÚNG một máy cũ: ghi settings.json kiểu trước 0.12.4 TRƯỚC khi nạp config, rồi
 bấm mức như người dùng bấm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 # PHẢI ghi file trước khi import config: config đọc JAVIS_STATE_DIR lúc nạp module.
 _STATE = Path(tempfile.mkdtemp(prefix="javis-cu-"))
@@ -46,8 +47,8 @@ os.environ["JAVIS_STATE_DIR"] = str(_STATE)
     },
 }, ensure_ascii=False), encoding="utf-8")
 
-import config as cfg  # noqa: E402
-import main  # noqa: E402
+import config as cfg
+import main
 
 _fails = []
 

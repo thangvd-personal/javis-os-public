@@ -17,17 +17,18 @@ Antigravity (CES Global).md nhưng chỗ đó không có gì". Hai gốc:
 File này canh: gỡ giao thức file:// ở server (link, ảnh, backtick, chữ trần), báo "không thấy"
 đúng chỗ, regex nhận ngoặc cân bằng, và prompt dặn thẳng model đừng dùng file://.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fileuri-")
 
-import main  # noqa: E402
-import channel_context  # noqa: E402
+import channel_context
+import main
 
 _fails = []
 
@@ -130,7 +131,7 @@ check("LỚP AGENTIC dặn KHÔNG dùng giao thức file:// và không mã hoá 
       "KHÔNG dùng giao thức `file://` và không mã hoá %20" in _agentic)
 check("không em dash trong đoạn dặn", "\u2014" not in _agentic)
 
-print("")
+print()
 if _fails:
     print(f"{len(_fails)} test HỎNG: " + ", ".join(_fails))
     sys.exit(1)

@@ -1,6 +1,4 @@
 """Actual SQLite/encrypted observation2 storage; no native/provider calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
@@ -10,10 +8,11 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
-import test_improvement_trials as T
-import test_improvement_operation_execution as O
 import test_improvement_native_observation as P
+import test_improvement_operation_execution as O
+import test_improvement_trials as T
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
 
 
 class StorageCases:

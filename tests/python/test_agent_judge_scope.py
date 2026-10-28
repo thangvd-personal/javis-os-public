@@ -12,9 +12,9 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import World, batch, check, finish, keys_in  # noqa: E402
-import agent_judge as AJ  # noqa: E402
-import team_store  # noqa: E402
+import agent_judge as AJ
+import team_store
+from _judge_world import World, batch, check, finish, keys_in
 
 ROLES = {"lan": "Điều phối", "minh": "Quảng cáo", "hoa": "Kho hàng"}
 w = World("scope", roles=ROLES, enabled=("minh",))

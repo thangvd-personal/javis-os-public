@@ -15,13 +15,14 @@ Bối cảnh - phụ lục spec 2026-07-28 ghi ba lỗ do hai bản dispatch tr�
 Test gọi THẲNG `_tg_answer` thật với engine giả, nên nó đo hành vi chứ không đo hình dạng
 code. Phần AST ở cuối chốt rằng nhánh dashboard cũng đi qua cùng một đường lưu.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import ast
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-luuluot-"))
 
@@ -30,7 +31,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 
@@ -88,7 +89,6 @@ class KhoGia:
 
     def auto_title(self, sid, first_user_message):
         self.titles.append((sid, first_user_message))
-        return None
 
     def set_cli_session_id(self, sid, cli_sid):
         self.sessions.setdefault(sid, {})["cli_session_id"] = cli_sid

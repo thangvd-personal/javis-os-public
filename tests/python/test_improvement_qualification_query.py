@@ -3,34 +3,32 @@
 Static candidate/runtime seams are engineering fixture data. Real source,
 admission, encrypted SQL, ledger and workspace owners are composed explicitly.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
-from contextlib import closing
-import json
 import hashlib
+import json
 import os
-from pathlib import Path
 import shutil
 import sys
 import sysconfig
 import threading
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+from dataclasses import asdict
+from pathlib import Path
 from unittest.mock import patch
 
+import improvement_native_qualifications as registry
+import improvement_qualification_session as QS
 import improvement_store as IM
+import test_improvement_trial_associations as associations
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_assets import capture_source
 from improvement_cases import CaseStore
 from improvement_trial_admission import TrialAdmission
 from improvement_trial_file_sources import BrainFileFixtures
 from improvement_trial_host import HostContextStore
-import improvement_qualification_session as QS
-import improvement_native_qualifications as registry
-import test_improvement_trial_associations as associations
-import test_improvement_qualification_session as session_fixtures
 
 
 def owned_admission(test, session):
@@ -69,9 +67,8 @@ def owned_admission(test, session):
     return fixture, TrialAdmission(fixture.host), public
 
 
-import test_improvement_qualification_native_preflight as preflight_fixture
 import test_improvement_native_transport_v2 as kernel_fixture
-
+import test_improvement_qualification_native_preflight as preflight_fixture
 
 # Synthetic engine/capture seam, executed only in the owned guarded worker.
 # Actual SDK client, options, transport builder/connect and original stdin write
@@ -385,8 +382,8 @@ class QualificationQueryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.count('native_qualification_attempt'),1)
 
     async def test_engine_commit_and_recorder_finish_before_ack_and_original_user_write(self):
-        from improvement_telemetry import NativeUsageRecorder
         from improvement_native_transport import GuardianSessionV2
+        from improvement_telemetry import NativeUsageRecorder
         trials=self.admission.trials
         started,release=threading.Event(),threading.Event()
         finish_started,finish_release=threading.Event(),threading.Event()
@@ -801,7 +798,7 @@ class QualificationQueryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cold_missing_trace_decision_cleanup_or_sql_join_refuses(self):
         result=await self.execute()
-        from improvement_qualification_results import _stored,_read,_FINAL,_identity
+        from improvement_qualification_results import _FINAL, _identity, _stored
         with closing(self.session.assets.store._conn()) as connection:
             trace=connection.execute('SELECT blob_hashes_json FROM improvement_trial_observations LIMIT 1').fetchone()[0]
             decision=json.loads(connection.execute("SELECT result_json FROM improvement_events WHERE operation='native_image_decision' LIMIT 1").fetchone()[0])
@@ -988,10 +985,10 @@ class QualificationQueryTests(unittest.IsolatedAsyncioTestCase):
 
 class QualificationQueryBoundaryTests(unittest.TestCase):
     def test_actual_observed_closure_contains_result_consumer_without_registration(self):
-        from improvement_claude import profile_hash, PROFILE_SOURCES
         import improvement_native_release as release
-        from test_improvement_native_sdk import pin
+        from improvement_claude import PROFILE_SOURCES, profile_hash
         from test_improvement_native_release import NativeReleaseTests
+        from test_improvement_native_sdk import pin
         before=(copy.deepcopy(registry.REVIEWED_QUALIFICATION_CANDIDATES),copy.deepcopy(registry.REVIEWED_RELEASES))
         config=pin();config.update(profile_hash=profile_hash(),profile_version='claude-owned-images-v3')
         # Portable source-closure observation uses declared inert wheel bytes,
@@ -1015,10 +1012,10 @@ class QualificationQueryBoundaryTests(unittest.TestCase):
         self.assertEqual((registry.REVIEWED_QUALIFICATION_CANDIDATES,registry.REVIEWED_RELEASES),before)
 
     def test_default_profile_and_startup2_refuse_identical_dummy_query(self):
-        from test_improvement_qualification_protocol import startup
-        from improvement_native_protocol import validate_startup2
         from improvement_native_profile import NativeProfileBinding
+        from improvement_native_protocol import validate_startup2
         from improvement_native_sdk import NativeInvocationSet
+        from test_improvement_qualification_protocol import startup
         packet=startup('trial')
         with self.assertRaises(ValueError):validate_startup2(packet)
         ordinary={key:value for key,value in packet.items() if key!='qualification'}
@@ -1030,9 +1027,9 @@ class QualificationQueryBoundaryTests(unittest.TestCase):
             user_prompt='fixture',environment=packet['environment'],query_policy={})
 
     def test_startup3_v1_or_tampered_binding_cannot_launch_query(self):
-        from test_improvement_qualification_protocol import startup,digest
-        from improvement_qualification_protocol import validate_startup3
         from improvement_native_worker import NativeWorkerSessionV2
+        from improvement_qualification_protocol import validate_startup3
+        from test_improvement_qualification_protocol import digest, startup
         packet=startup('trial')
         self.assertEqual(validate_startup3(packet),packet)
         with self.assertRaises(ValueError):NativeWorkerSessionV2.from_startup3(packet,namespace='trial')

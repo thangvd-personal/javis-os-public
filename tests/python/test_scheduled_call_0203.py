@@ -7,18 +7,19 @@ or a script job never rings. The javis_schedule tool passes `call` on create and
 Run:
     python tests/run.py scheduled_call
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-call-")
 sys.path.insert(0, str(ROOT / "system" / "plugins" / "javis-schedule"))
 
-import reminders  # noqa: E402
-import plugin as sched  # noqa: E402
+import plugin as sched
+import reminders
 
 fails = []
 
@@ -68,7 +69,8 @@ async def main():
 
 asyncio.run(main())
 
-import main as app_main  # noqa: E402
+import main as app_main
+
 blk = app_main.khoi_viec({"kind": "reminder", "status": "done", "title": "T", "id": "r", "call": "1"})
 check("JAVIS_VIEC block keeps the call flag", '"call": "1"' in blk)
 check("block without call stays as before", "call" not in app_main.khoi_viec({"kind": "reminder", "status": "done"}))

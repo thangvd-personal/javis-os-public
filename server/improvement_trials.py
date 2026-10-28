@@ -1,16 +1,16 @@
 """Durable isolated trial references and leases in the existing shared execution database."""
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import math
 import secrets
 import time
 from contextlib import closing
 
-from agent_ledger import CallLedger
 import improvement_cases as IC
 import improvement_store as IM
+from agent_ledger import CallLedger
 
 TERMINAL = frozenset({"completed", "failed", "unknown", "interrupted", "cancelled", "not_run"})
 FAILURE_REASONS = frozenset({"unsupported_configuration", "authority_changed", "worker_failed", "evidence_failed",
@@ -19,8 +19,8 @@ FAILURE_REASONS = frozenset({"unsupported_configuration", "authority_changed", "
 
 def _request(value):
     if type(value) is dict and type(value.get('version')) is int and value['version'] == 4:
-        from improvement_view_trial_protocol import validate_request_v4
         from improvement_claude import ClaudeTrialAdapter
+        from improvement_view_trial_protocol import validate_request_v4
         request = validate_request_v4(value)
         ClaudeTrialAdapter(request['engine_config'])
         return request
@@ -332,9 +332,14 @@ class TrialStore:
         return TrialResults(self).finish(principal, identifier, **options)
 
     def finish_qualification(self, session, principal, identifier, *, expected_generation, lease_token, evidence):
-        from improvement_qualification_session import QualificationSession
-        from improvement_qualification_results import _StagedEvidence, _authenticate, _key, _EVIDENCE
         from improvement_native_protocol import _parse
+        from improvement_qualification_results import (
+            _EVIDENCE,
+            _authenticate,
+            _key,
+            _StagedEvidence,
+        )
+        from improvement_qualification_session import QualificationSession
         if (type(session) is not QualificationSession or type(evidence) is not _StagedEvidence
                 or evidence.session is not session or evidence.context['stage'] is not evidence
                 or evidence.context['owner'] is not self or principal is not session.principal
@@ -443,7 +448,9 @@ class TrialStore:
                     ViewQualification(self._views.plans, self._views).consume_in(connection, principal, request)
                 else:
                     # A bare legacy pin cannot consume a later B-owned holdout.
-                    from improvement_experiment_qualification import require_legacy_qualification
+                    from improvement_experiment_qualification import (
+                        require_legacy_qualification,
+                    )
                     require_legacy_qualification(connection, row["brain_id"], request["case_set_id"], request["pins"])
                     connection.execute("UPDATE improvement_qualification SET status='consumed',consumed_at=? "
                                        "WHERE id=? AND brain_id=? AND status='reserved'",

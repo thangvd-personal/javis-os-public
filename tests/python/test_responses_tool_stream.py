@@ -1,10 +1,9 @@
 """Regression coverage for completed Codex streams with empty output."""
-from _paths import ROOT, SERVER
-import asyncio
 import copy
 import json
 import unittest
 from unittest.mock import patch
+
 import engine
 import mcp_client
 

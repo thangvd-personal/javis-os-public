@@ -1,19 +1,18 @@
 """Actual downstream native contracts, engineering captures only; no CLI."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_role_workflow as role
-import improvement_view_sources as views
 import improvement_improver_inputs as inputs
+import improvement_role_workflow as role
 import improvement_semantic_review as semantic
-import test_improvement_native_result_consumers as operation
+import improvement_view_sources as views
 import test_improvement_comparison_results as comparison
-import test_improvement_view_sources as probe
+import test_improvement_native_result_consumers as operation
 import test_improvement_native_trace_checks as native
+import test_improvement_view_sources as probe
+from _paths import ROOT, SERVER  # noqa: F401
 
 NATIVE = ('native_trace', 'native_authorization', 'native_qualification', 'native_input_delivery')
 

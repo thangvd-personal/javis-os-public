@@ -9,14 +9,15 @@ lỗi đã chứa sự thật chính xác nhất, do nhà cung cấp nói ra, đ
 Rào quan trọng nhất: KHÔNG được nhận nhầm lỗi quá tải tạm thời thành lỗi vượt kích thước.
 Nhận nhầm là co prompt vô ích trong khi vấn đề nằm ở phía nhà cung cấp.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-limit-"))
 
-import limit_learner as ll  # noqa: E402
+import limit_learner as ll
 
 _fails = []
 
@@ -131,7 +132,7 @@ check("không biết hạn mức thì trả 0, KHÔNG đoán bừa",
 check("shrink_target(None) không nổ", ll.shrink_target(None) == 0)
 
 # ---- 6. Co ngữ cảnh: giữ thứ không bỏ được, bỏ thứ bỏ được ----
-import main  # noqa: E402
+import main
 
 _msgs = [
     {"role": "system", "content": "PROMPT LÕI " * 500},
@@ -177,7 +178,6 @@ check("báo lỗi cuối: nói rõ đã tự thử lại", "thử lại" in _msg
 # _cc_tool_loop (luôn có tool vì Javis có builtin tools). Code đúng, test xanh, và không bao
 # giờ chạy. Rào này đối chiếu: chỗ nào phát "error" theo status_code thì phải có học hạn mức
 # ngay trên đó.
-import re as _re  # noqa: E402
 
 _eng = (ROOT / "server" / "engine.py").read_text(encoding="utf-8")
 _lines = _eng.split("\n")

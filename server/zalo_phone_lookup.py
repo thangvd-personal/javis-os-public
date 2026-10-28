@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import conversations
 import localefmt
@@ -37,15 +37,15 @@ CLI_TIMEOUT = 20           # seconds for one CLI call
 MAX_LIVE_PER_HOUR = 20     # live Zalo lookups per hour, all accounts together
 _NOT_FOUND = "No Zalo user found"   # javis-zalo `friend find` prints this when Zalo has no account for the number
 
-_live: List[float] = []
-_running: Dict[str, "asyncio.Task"] = {}
+_live: list[float] = []
+_running: dict[str, asyncio.Task] = {}
 
 
 def _key(conn_id: str, phone: str) -> str:
     return f"zalo_phone:{conn_id}:{phone}"
 
 
-def _cached(conn_id: str, phone: str, now: float) -> Optional[dict]:
+def _cached(conn_id: str, phone: str, now: float) -> dict | None:
     raw = conversations.doc_trang_thai(_key(conn_id, phone))
     if not raw:
         return None
@@ -59,7 +59,7 @@ def _cached(conn_id: str, phone: str, now: float) -> Optional[dict]:
     return d
 
 
-def parse_find(data: Any) -> Tuple[str, str]:
+def parse_find(data: Any) -> tuple[str, str]:
     """`(uid, name)` from what `friend find --json` prints: the user object itself or `{data: {...}}`."""
     u = data if isinstance(data, dict) else {}
     if not u.get("uid") and isinstance(u.get("data"), dict):
@@ -123,7 +123,7 @@ async def _one(conn: dict, phone: str, now: float) -> dict:
             "uid": d.get("uid") or "", "name": d.get("name") or "", "error": d.get("error") or "", "cached": cached}
 
 
-async def lookup(phone: str, account_id: str = "", now: Optional[float] = None) -> dict:
+async def lookup(phone: str, account_id: str = "", now: float | None = None) -> dict:
     """Who owns `phone` on each connected personal Zalo account. `account_id` (the inbox filter, `zalo_personal:<id>`)
     narrows it to one account; a filter on another channel means no Zalo account is asked.
 

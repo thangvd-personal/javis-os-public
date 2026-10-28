@@ -1,16 +1,15 @@
 """Actual tuning inputs/workspaces; no model execution or eligibility evidence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_sandbox as SB
+import improvement_store as IM
 import test_improvement_view_reservations as reservations
 import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ViewMaterializationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

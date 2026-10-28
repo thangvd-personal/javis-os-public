@@ -7,17 +7,18 @@ mark, newest message of either side), the routes behind login, and a muted partn
 Run:
     python tests/run.py agent_unread
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-agent-unread-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import agent_notify as an  # noqa: E402
-import sessions  # noqa: E402
+import agent_notify as an
+import sessions
 
 fails = []
 
@@ -71,8 +72,8 @@ check("partner messages across its chats are counted, this brain only", act["vie
 check("newest message time", act["viet"]["last_at"] > 0 and act["none"] == {"n": 0, "last_at": 0.0})
 check("read mark hides older messages", st.agent_activity(["/b"], {"viet": act["viet"]["last_at"]})["viet"]["n"] == 0)
 
-import main as app_main  # noqa: E402
-from _paths import moi_duong_dan  # noqa: E402
+import main as app_main
+from _paths import moi_duong_dan
 
 paths = moi_duong_dan(app_main.app)
 check("routes registered", {"/agents/unread", "/agents/opened", "/agents/mute"} <= paths)

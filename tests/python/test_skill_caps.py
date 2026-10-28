@@ -6,17 +6,18 @@ Không cần pytest, không chạm mạng.
 Phủ: hằng số SKILL_DESC_MAX/SKILL_LIST_MAX, validate_description (quá dài, boilerplate,
 hợp lệ, rỗng), fallback _meta_of dùng chung trần.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import ast
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-capstest-"))
 
-import skill_router  # noqa: E402
-import system_sync  # noqa: E402
+import skill_router
+import system_sync
 
 _fails = []
 
@@ -239,7 +240,7 @@ check("learn.py ép trần description khi promote",
 # thống phải bọc nháy). Ghi 'description: Khai thác tri thức: tổng hợp' KHÔNG bọc nháy thì
 # PyYAML NÉM LỖI -> split_frontmatter tha lỗi trả {} -> skill mất SẠCH frontmatter (không chỉ
 # description: cả name/group/origin/status bay theo) -> skill im lặng không route được.
-import learn  # noqa: E402
+import learn
 
 _fm_fn = getattr(learn, "_skill_frontmatter", None)
 check("learn.py có hàm _skill_frontmatter dựng frontmatter (tách ra để test được hành vi "

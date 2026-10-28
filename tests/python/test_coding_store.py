@@ -19,12 +19,13 @@ Bốn thứ file này canh, đều là loại hỏng lặng lẽ hoặc hỏng �
 4. **Rollback chỉ nhận điểm hồi CỦA CHÍNH phiên đó.** `git reset --hard` không hỏi lại và
    không hoàn tác được; nhận tag của phiên khác là một cú bấm nhầm kéo cả repo đi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-coding-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -34,7 +35,7 @@ try:
 except Exception:
     pass
 
-import coding_store  # noqa: E402
+import coding_store
 
 _fails = []
 
@@ -216,6 +217,7 @@ check("phiên chưa gắn thư mục thì KHÔNG chèn khối nào vào prompt",
 
 # ---- 8. Di trú sổ 0.63.0 (khoá `repos` / ràng buộc `repo`) ----
 import json as _json
+
 coding_store.STORE_PATH.write_text(_json.dumps({
     "version": 1,
     "repos": [{"id": "cu1", "ten": "du-an-cu", "duong_dan": REPO, "brain": "b1"}],

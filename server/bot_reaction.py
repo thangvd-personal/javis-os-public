@@ -15,7 +15,7 @@ Javis never decides on its own to answer or to react: the judge (group chats in 
 from __future__ import annotations
 
 import re
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import localefmt
 
@@ -31,7 +31,7 @@ EMOJI = {
 NAMES = ("heart", "like", "haha", "wow", "cry", "angry")
 CHANNELS = ("zalo_personal",)       # channels whose transport can put a reaction (`channels.zalo_personal.Transport._tha`)
 QUOTE_MAX = 80
-_MARK_RE = re.compile(r"\[\s*cam_xuc\s*:\s*([a-z_]*)\s*\]", re.I)
+_MARK_RE = re.compile(r"\[\s*cam_xuc\s*:\s*([a-z_]*)\s*\]", re.IGNORECASE)
 
 PROMPT_HINT = f"""
 ## Thả cảm xúc vào tin khách
@@ -47,7 +47,7 @@ def emoji_of(name: Any) -> str:
     return EMOJI.get(str(name or "").strip().lower(), "")
 
 
-def pick(text: Any) -> Tuple[str, Optional[str]]:
+def pick(text: Any) -> tuple[str, str | None]:
     """(answer without the marker, the reaction name or None). Every marker is removed so none reaches a customer;
     the first one naming a reaction the bot may use wins."""
     s = str(text or "")

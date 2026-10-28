@@ -1,10 +1,9 @@
 """Private socketpairs only; no app configuration, filesystem, DB or child process."""
 import asyncio
-import importlib.util
-from pathlib import Path
 import socket
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 SERVER = Path(__file__).resolve().parents[2] / 'server'

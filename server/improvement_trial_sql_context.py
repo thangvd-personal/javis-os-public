@@ -245,7 +245,7 @@ def _schema(connection, table, required, allowed):
     definitions = connection.execute("SELECT name,type,sql FROM main.sqlite_master WHERE name=? COLLATE NOCASE LIMIT 2", (table,)).fetchall()
     if (len(definitions) != 1 or definitions[0]["name"] != table or definitions[0]["type"] != "table"
             or not isinstance(definitions[0]["sql"], str)
-            or re.match(r"\s*CREATE\s+VIRTUAL\b", definitions[0]["sql"], re.I)):
+            or re.match(r"\s*CREATE\s+VIRTUAL\b", definitions[0]["sql"], re.IGNORECASE)):
         raise ValueError("insufficient_source: unsupported_sql_context_schema")
     columns = connection.execute(f'PRAGMA main.table_xinfo("{table}")').fetchall()
     names = {row["name"] for row in columns}

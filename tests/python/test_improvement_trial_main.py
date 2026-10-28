@@ -1,15 +1,14 @@
 """Actual application wiring: owner/CSRF gates and source-before-shutdown ordering."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-import test_improvement_trial_service as fixtures
-from fastapi.testclient import TestClient
 import improvement_trial_service as S
+import test_improvement_trial_service as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi.testclient import TestClient
 
 
 class MainTrialTests(unittest.TestCase):

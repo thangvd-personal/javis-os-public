@@ -11,7 +11,7 @@ from contextlib import closing
 
 import improvement_cases as IC
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
 from improvement_candidate_records import CandidateRecords, identifier
 from improvement_skill_candidates import SkillCandidates
 from improvement_skill_patch import body_layout
@@ -20,7 +20,7 @@ from improvement_trial_file_sources import BrainFileFixtures
 from improvement_trial_host import TARGET_FIELDS
 from improvement_trial_products import TrialProducts
 from improvement_trial_records import HostContextRecords, _brain
-from improvement_trial_sources import authorize_case, _manifest, validate_inventory
+from improvement_trial_sources import _manifest, authorize_case, validate_inventory
 from improvement_trials import TrialStore, _request
 
 MAX_PRIVATE_REVIEW_BYTES = 8 * MAX_ASSET_BYTES

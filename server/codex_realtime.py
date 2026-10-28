@@ -27,7 +27,6 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 def _chu(vi: str, en: str) -> str:
@@ -52,7 +51,7 @@ def _no_window() -> int:
         return 0
 
 
-def _codex_env() -> Optional[dict]:
+def _codex_env() -> dict | None:
     """CODEX_HOME do Javis dò ra (claude_cli.codex_env). None = kế thừa môi trường như cũ."""
     try:
         import claude_cli
@@ -68,11 +67,11 @@ class AppServer:
         self.proc = None
         self._lock = threading.Lock()
         self._next_id = 0
-        self._pending: Dict[int, tuple] = {}
-        self._subs: Dict[str, tuple] = {}
+        self._pending: dict[int, tuple] = {}
+        self._subs: dict[str, tuple] = {}
         self._dead = False
         self._started = False
-        self._start_lock: Optional[asyncio.Lock] = None
+        self._start_lock: asyncio.Lock | None = None
 
     # ---- vòng đời ----
     @property
@@ -131,7 +130,7 @@ class AppServer:
                 raise AppServerError(_chu(f"Không gửi được cho Codex app-server: {e}",
                                           f"Could not send to the Codex app-server: {e}"))
 
-    async def request(self, method: str, params: Optional[dict] = None, timeout: float = 30.0) -> dict:
+    async def request(self, method: str, params: dict | None = None, timeout: float = 30.0) -> dict:
         loop = asyncio.get_running_loop()
         fut = loop.create_future()
         with self._lock:
@@ -141,7 +140,7 @@ class AppServer:
         try:
             self._write({"method": method, "id": rid, "params": params or {}})
             msg = await asyncio.wait_for(fut, timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise AppServerError(_chu(f"Codex app-server không trả lời {method} sau {int(timeout)} giây.",
                                       f"The Codex app-server did not answer {method} within {int(timeout)} seconds."))
         finally:
@@ -217,18 +216,18 @@ class AppServer:
 
 
 # ---- một tiến trình cho cả máy chủ ----
-_SERVER: Optional[AppServer] = None
+_SERVER: AppServer | None = None
 _popen_factory = subprocess.Popen
 
 # Bản Codex thấp nhất chạy được ChatGPT Live. Đo 01/10/2026: 0.147 gửi thừa `session.model` và bị
 # OpenAI từ chối ("Field session.model is not allowed for this Codex realtime session"); 0.153.4
 # (Docker đang ghim) và 0.159.3 chạy tốt.
 MIN_VERSION = (0, 153, 0)
-_VERSIONS: Dict[tuple, Optional[tuple]] = {}
+_VERSIONS: dict[tuple, tuple | None] = {}
 _LAST_CLI_REASON = "no_cli"
 
 
-def _version_of(path: str) -> Optional[tuple]:
+def _version_of(path: str) -> tuple | None:
     """(major, minor, patch) của một binary Codex, nhớ theo (đường dẫn, mtime)."""
     try:
         key = (path, os.stat(path).st_mtime)
@@ -245,10 +244,10 @@ def _version_of(path: str) -> Optional[tuple]:
     return _VERSIONS[key]
 
 
-def _candidate_clis() -> List[str]:
+def _candidate_clis() -> list[str]:
     """Mọi bản Codex trên máy. Một máy Windows hay có nhiều bản cùng lúc (Codex Desktop đặt bản
     riêng trong ~/.codex, npm đặt bản khác), và bản `find_codex_cli` ưu tiên chưa chắc là bản mới."""
-    out: List[str] = []
+    out: list[str] = []
     try:
         import claude_cli
         p = claude_cli.find_codex_cli()
@@ -279,7 +278,7 @@ def _candidate_clis() -> List[str]:
     return uniq
 
 
-def _find_cli() -> Optional[str]:
+def _find_cli() -> str | None:
     """Bản Codex MỚI NHẤT trên máy đủ điều kiện chạy ChatGPT Live, hoặc None (lý do ở _LAST_CLI_REASON)."""
     global _LAST_CLI_REASON
     best = None
@@ -323,7 +322,7 @@ def _codex_logged_in() -> bool:
         return False
 
 
-def realtime_available(cfg: dict) -> Tuple[bool, str]:
+def realtime_available(cfg: dict) -> tuple[bool, str]:
     """ChatGPT Live dùng được chưa: (True, "") hoặc (False, "no_cli" | "no_login").
 
     Không hỏi mạng: chỉ xem có Codex CLI và có đăng nhập ChatGPT (token Javis đã nối ở trang Models,

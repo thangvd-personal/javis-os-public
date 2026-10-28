@@ -6,13 +6,14 @@ Chạy qua host thật (`main` + `team_api.current()`), không gọi model: tr�
 bộ chạy nhóm vẫn làm. Giữ các tiêu chí của issue: đúng 1 việc, gửi lại không tạo việc thứ hai, sai quyền hay nhóm của
 brain khác bị từ chối TRƯỚC khi tạo việc, báo về đúng khung chat, XONG khác ĐẠT, cổng duyệt vẫn là của chủ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-core-dispatch-")
 BR = Path(tempfile.mkdtemp(prefix="javis-core-dispatch-brain-"))
@@ -23,10 +24,10 @@ for root, slugs in ((BR, ("lan", "minh")), (BR2, ("xa",))):
         (root / "agents" / f"{slug}.md").write_text(f"---\nname: {slug}\nrole: Thành viên\n---\nBạn là {slug}.\n",
                                                     encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import team_api  # noqa: E402
-import team_dispatch  # noqa: E402
-import turn_context  # noqa: E402
+import main
+import team_api
+import team_dispatch
+import turn_context
 
 fails = []
 

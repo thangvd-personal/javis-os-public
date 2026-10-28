@@ -2,13 +2,11 @@
 
 Chạy: python tests/run.py deploy_environment
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-from pathlib import Path
 import re
 import sys
 
 import yaml
-
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 FAIL = []
 

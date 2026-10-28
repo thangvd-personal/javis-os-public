@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import re
 import sys
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 OPEN_JOBS_LIMIT = 8            # số việc mở tối đa trong khối
 OPEN_JOB_INTENT_CHARS = 300    # yêu cầu gốc của mỗi việc
@@ -67,7 +68,7 @@ def open_job_lines(tasks, team_id: str, exclude: str = "") -> list:
 
 
 def contribution_lines(tasks, teams, team_id: str, name_of: Callable[[str], str],
-                       contrib_reader: Optional[Callable[[str], list]] = None) -> list:
+                       contrib_reader: Callable[[str], list] | None = None) -> list:
     """Nguồn đóng góp của kết quả gần nhất của nhóm: một việc xong gần nhất, các bước của nó (có trần bởi `task_steps`)."""
     last = tasks.team_last_done(team_id)
     if not last:
@@ -111,7 +112,7 @@ def contribution_lines(tasks, teams, team_id: str, name_of: Callable[[str], str]
 
 
 def unconsumed_feedback_lines(teams, sessions, team: dict, name_of: Callable[[str], str], agent_key: str,
-                              skip: Optional[set] = None) -> list:
+                              skip: set | None = None) -> list:
     """Phản hồi của chủ chưa được xem xét, trên tin của các trợ lý trong nhóm này. Tin của chính agent lượt này đi trước.
     `skip`: mã tin đã hiện ở khối "Phản hồi gần đây" của lượt này (không lặp lại)."""
     rows = teams.unconsumed_feedback(team["team_id"], UNCONSUMED_STATUSES, UNCONSUMED_LIMIT * 2)
@@ -135,8 +136,8 @@ def unconsumed_feedback_lines(teams, sessions, team: dict, name_of: Callable[[st
 
 
 def always_kept_lines(*, team: dict, agent_key: str, tasks, teams, sessions, name_of: Callable[[str], str],
-                      contrib_reader: Optional[Callable[[str], list]] = None, current_task: str = "",
-                      skip_feedback: Optional[set] = None) -> list:
+                      contrib_reader: Callable[[str], list] | None = None, current_task: str = "",
+                      skip_feedback: set | None = None) -> list:
     """Phần luôn giữ của khối lịch sử dài, có trần ký tự. Rỗng khi không có gì để giữ."""
     sections = []
     for title, fn in (

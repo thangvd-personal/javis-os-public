@@ -11,19 +11,20 @@ pins the new contract:
 2. refused on a public bind and on a request that arrives through a tunnel or proxy;
 3. the 2FA config survives, and is back in force once a password is set again.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-auth-disable-test-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
 os.environ.pop("JAVIS_ADMIN_PASSWORD", None)
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c   # noqa: E402
-import main          # noqa: E402
-import totp          # noqa: E402
+import config as c
+import main
+import totp
+from fastapi.testclient import TestClient
 
 _fails = []
 

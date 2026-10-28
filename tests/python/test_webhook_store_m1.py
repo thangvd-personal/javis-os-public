@@ -16,7 +16,6 @@ What is proven here, against a real temporary SQLite file and real child process
   8. the event log API paginates, never lists bodies, and retry/resolve work through the routes;
   9. keys remembered by a pre-0.274.0 hook stay duplicates; pruning keeps unknown events.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -27,6 +26,8 @@ import threading
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m1-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
@@ -35,8 +36,8 @@ try:
 except Exception:
     pass
 
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -207,6 +208,7 @@ try:
 except ValueError:
     pass
 import sqlite3 as _sq
+
 other = _sq.connect(str(s5 / "e.sqlite3"), timeout=1, isolation_level=None)
 try:
     other.execute("BEGIN IMMEDIATE"); other.execute("ROLLBACK")
@@ -285,8 +287,8 @@ async def main():
     code2, resp2 = await feat2.accept(h["id"], tok, b'{"o":1}', "application/json", "crash-1")
     check("the sender's retry of the same key is a duplicate (no second order)", code2 == 200 and resp2["duplicate"])
 
-    from fastapi import FastAPI
     import httpx
+    from fastapi import FastAPI
     # Same event loop as the feature (not TestClient, whose own loop would kill the worker it starts).
     app = FastAPI()
     app.include_router(feat2.router)

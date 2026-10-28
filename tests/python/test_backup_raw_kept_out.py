@@ -7,13 +7,13 @@ applied back), so a machine still on an older version never loses its local copi
 
 Run: python tests/python/test_backup_raw_kept_out.py (needs git, uses a local file:// remote, no network).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-import git_brain as gb  # noqa: E402
+import git_brain as gb
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

@@ -6,11 +6,12 @@ Gom việc theo agent_key, đọc thẳng bản ghi gốc (không sao chép): vi
 việc Kanban từ chat riêng và từ nút Giao việc, mục tiêu Auto. Đi qua route thật của main với kho SQLite thật, không gọi
 model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
-import time
 import tempfile
+import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agent-jobs-")
 BR = Path(tempfile.mkdtemp(prefix="javis-agent-jobs-brain-")).resolve()
@@ -19,9 +20,9 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh"), ("hoa", "Hoa")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import agent_jobs  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import agent_jobs
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -360,7 +361,7 @@ check("0.191.1: việc xong quá 24 giờ thì không còn tính vừa xong", ol
 check("vai: mã đúng của slug thì có vai", "Bạn là Minh" in main._agent_persona(ROOT_B, "minh", keys["minh"]))
 check("vai: slug đã sang mã khác (dùng lại slug) thì không có vai",
       main._agent_persona(ROOT_B, "minh", "ag_tro_ly_cu") == "" and main._agent_persona(ROOT_B, "minh", keys["lan"]) == "")
-forged = dict(store.get_task(q2), idempotency_key=f"agent:ag_tro_ly_cu:minh:zz")
+forged = dict(store.get_task(q2), idempotency_key="agent:ag_tro_ly_cu:minh:zz")
 check("việc Kanban của trợ lý cũ cùng slug không mang vai của trợ lý mới", main.tasks_feature._persona(forged, ROOT_B) == "")
 check("việc của đúng trợ lý vẫn mang vai", "Bạn là Minh" in main.tasks_feature._persona(store.get_task(q2), ROOT_B))
 

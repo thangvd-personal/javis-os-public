@@ -219,7 +219,7 @@ async def _them(args, ctx) -> str:
     if loi:
         return f"ERROR: không thêm được - {loi}"
 
-    import mcp_hub   # nạp muộn: mcp_hub nạp plugins_host, import ở đầu file là vòng tròn
+    import mcp_hub  # nạp muộn: mcp_hub nạp plugins_host, import ở đầu file là vòng tròn
 
     # stdio = chạy lệnh trên máy chủ. Để TẮT và KHÔNG dial thử (dial là chạy lệnh đó rồi).
     if transport == "stdio":

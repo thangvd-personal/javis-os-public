@@ -9,20 +9,20 @@
    khi có nhiều GET đồng thời.
 3. Header Server-Timing có trên response HTTP (để tách thời gian Javis xử lý với thời gian đi qua proxy).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-perf-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -95,8 +95,8 @@ check("1 đọc có giới hạn vẫn lọc theo brain", store.latest_action(RS
       is None and store.recent_actions(RS.Principal("owner", "owner", "/khac"), g.id, 8) == [])
 
 # ───────────── 2. API thẻ không giữ event loop ─────────────
-import main  # noqa: E402
-import httpx  # noqa: E402
+import httpx
+import main
 
 _real_view = R.goal_view
 
@@ -122,7 +122,7 @@ async def _probe():
     async with httpx.AsyncClient(transport=tr, base_url="http://127.0.0.1:8080") as cl:
         tm = asyncio.create_task(timer())
         t0 = time.perf_counter()
-        rs = await asyncio.gather(*[cl.get(f"/goals/g_x", params={"brain": BRAIN}) for _ in range(5)])
+        rs = await asyncio.gather(*[cl.get("/goals/g_x", params={"brain": BRAIN}) for _ in range(5)])
         total = time.perf_counter() - t0
         await tm
     return rs, late, total
@@ -138,7 +138,8 @@ check("2 năm GET chạy song song (tổng < 0,8 giây thay vì 1 giây nếu x�
       round(total, 3))
 
 # ───────────── 3. Server-Timing ─────────────
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
+
 r = TestClient(main.app, base_url="http://127.0.0.1:8080").get("/health")
 st_h = r.headers.get("server-timing", "")
 check("3 response có Server-Timing: app;dur=<ms>", st_h.startswith("app;dur="), st_h)

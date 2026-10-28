@@ -1,6 +1,4 @@
 """Actual encrypted role results/CAS; SDK messages below are synthetic evidence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -9,9 +7,10 @@ from contextlib import closing
 from types import SimpleNamespace
 
 import improvement_store as IM
+import test_improvement_operation_execution as F
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_evidence import OperationEvidence
 from improvement_operation_profile import OperationProfile
-import test_improvement_operation_execution as F
 
 
 class OperationResultTests(unittest.TestCase):

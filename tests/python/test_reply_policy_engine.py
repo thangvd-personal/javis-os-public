@@ -8,11 +8,12 @@ nào. Gốc: chỉ "@tên" được coi là gọi bot, tin còn lại rơi vào 
 File này khoá phần nhận diện, và cả những thứ ngược lại: bot KHÔNG được nhận vơ khi người ta nhắc tới
 một thành viên khác, hay khi tên tự suy quá ngắn (thành viên tên "Lan").
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-engine-")
 try:
@@ -20,8 +21,7 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
+import chatbot_reply_policy as rp
 
 _fails = []
 

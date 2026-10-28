@@ -13,7 +13,6 @@ File này đẩy lượt THẬT qua `main.websocket_endpoint` với một Codex 
   3. tài khoản 1 gọi công cụ rồi hết lượt -> không chạy lại bằng đường khác;
 và kiểm hàm chọn đường kế tiếp, lượt Telegram, cùng dây nối trong mã nguồn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -22,15 +21,16 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-doiduong-"))
 
-from fastapi import WebSocketDisconnect  # noqa: E402
-
-import main  # noqa: E402
-import model_routing  # noqa: E402
-import plan_accounts  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
-from sessions import SessionStore  # noqa: E402
+import main
+import model_routing
+import plan_accounts
+from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
+from sessions import SessionStore
 
 _fails = []
 LIMIT = "You've hit your usage limit. Upgrade to Pro or try again later."

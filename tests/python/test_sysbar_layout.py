@@ -4,10 +4,10 @@ Phần chống-nở là hồi quy cũ (dải cạnh ô model từng đẩy cột
 dung: 27/08 chủ repo bỏ hai đèn "HỆ THỐNG" thay bằng ba tool vừa gọi; 23/09 bỏ nốt dải đó vì
 từng bước tool đã hiện ngay trong khung chat, dải xanh lá chỉ lặp lại.
 """
-import json  # noqa: E402
-import re  # noqa: E402
-from _paths import ROOT, SERVER  # noqa: E402,F401
+import json
+import re
 
+from _paths import ROOT, SERVER  # noqa: F401
 
 STYLE = (ROOT / "dashboard" / "style.css").read_text(encoding="utf-8")
 CONSOLE_CSS = (ROOT / "dashboard" / "console.css").read_text(encoding="utf-8")

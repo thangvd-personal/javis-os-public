@@ -9,15 +9,16 @@ Bất biến AN TOÀN quan trọng nhất: tầng này chỉ đổi THỨ TỰ v
 do widening thêm vào vẫn phải đi qua `_hard_filter`, vì lọc chạy sau khi hợp nhất. Không có
 đường nào ở đây nới quyền. Có test riêng khoá chuyện đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-capidx-")
 
-import capability_index as ci  # noqa: E402
+import capability_index as ci
 
 _fails = []
 
@@ -100,8 +101,8 @@ check("fusion: semantic KHÔNG kéo được mục rác lên trên mục khớp 
 # ---- 5. BẤT BIẾN AN TOÀN: widening không bao giờ nới quyền ----
 # Đây là rủi ro thật của việc tìm rộng hơn: thêm ứng viên mà quên lọc là mở đường cho một
 # tool ghi/nguy hiểm lọt vào phiên chỉ-đọc.
-from capability_registry import CapabilityRegistry  # noqa: E402
-from capability_resolver import ActorPolicy, DeterministicResolver  # noqa: E402
+from capability_registry import CapabilityRegistry
+from capability_resolver import ActorPolicy, DeterministicResolver
 
 _tmp = Path(tempfile.mkdtemp(prefix="javis-capidx-reg-"))
 _brain = _tmp / "brain"
@@ -133,7 +134,7 @@ check("quyền readonly: tool GHI không lọt vào kết quả dù có nới r�
 # widening không bao giờ thêm được gì, nên nó không kiểm được cái nó tưởng đang kiểm.
 # (Phát hiện bằng mutation: gỡ hard filter khỏi widening mà test vẫn xanh.)
 # Dựng lại với limit bé để widening THẬT SỰ nạp thêm ứng viên mới.
-from capability_resolver import ResolverPolicy  # noqa: E402
+from capability_resolver import ResolverPolicy
 
 _tmp2 = Path(tempfile.mkdtemp(prefix="javis-capidx-widen-"))
 _brain2 = _tmp2 / "brain"

@@ -21,7 +21,6 @@ from __future__ import annotations
 import hashlib
 import re
 import time
-from typing import Optional
 
 import localefmt
 
@@ -40,7 +39,7 @@ def _s(v) -> str:
     return str(v or "").strip()
 
 
-def check_caller(turn: Optional[dict]) -> dict:
+def check_caller(turn: dict | None) -> dict:
     """Người giao việc phải là chủ (hay việc nền chủ đã lên lịch). Trả lượt đó, sai thì `DispatchError`."""
     if not turn:
         raise DispatchError("không rõ ai đang giao việc (lượt không có danh tính), nên không giao việc cho nhóm. "
@@ -62,13 +61,13 @@ def report_to(turn: dict) -> str:
     return "" if chat in ("", "default") else chat
 
 
-def correlation(turn: dict, team_id: str, objective: str, given: str = "", now: Optional[float] = None) -> str:
+def correlation(turn: dict, team_id: str, objective: str, given: str = "", now: float | None = None) -> str:
     """Mã đối chiếu xuyên Core -> nhóm -> Core. Model đưa thì dùng đúng mã đó; không thì suy từ lượt, nên cùng một lượt
     gọi lại (thử lại sau lỗi mạng) ra cùng mã."""
     given = re.sub(r"[^A-Za-z0-9_.:-]", "", _s(given))[:80]
     if given:
         return given
-    h = hashlib.sha1(f"{team_id}\n{_s(objective)}".encode("utf-8")).hexdigest()[:10]
+    h = hashlib.sha1(f"{team_id}\n{_s(objective)}".encode()).hexdigest()[:10]
     if turn.get("session_id") and turn.get("message_id"):
         return f"c-{_s(turn['session_id'])[-16:]}-{int(turn['message_id'])}-{h}"
     if turn.get("job"):
@@ -136,14 +135,14 @@ def find(ops, team: dict, ref: str) -> dict:
 _OWNER_BLOCKS = ("waiting_user", "acceptance_review", "approval_expired", "rejected")
 
 
-def verdict(acc: Optional[dict]) -> str:
+def verdict(acc: dict | None) -> str:
     """'pass' (qua nghiệm thu thật), 'pending' (có hợp đồng nhưng chưa đạt), 'none' (nhóm không bật nghiệm thu)."""
     if not acc:
         return "none"
     return "pass" if acc.get("completion_valid") else "pending"
 
 
-def phase(task: dict, acc: Optional[dict], team: Optional[dict] = None) -> tuple:
+def phase(task: dict, acc: dict | None, team: dict | None = None) -> tuple:
     """(mã trạng thái, câu cho người đọc, có báo về không, đã kết thúc chưa)."""
     st, kind = _s(task.get("status")), _s(task.get("block_kind"))
     reason = _s(task.get("block_reason"))[:300]

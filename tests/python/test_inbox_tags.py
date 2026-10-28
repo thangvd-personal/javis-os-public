@@ -14,12 +14,13 @@ the server side:
      `dem_bo_loc` counts has-contact.
   6. The routes, including GET /conversations/tags not being swallowed by /conversations/{conv_id}.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-inbox-tags-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -31,7 +32,7 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
+import conversations
 
 _fails = []
 
@@ -178,8 +179,8 @@ check("delete a tag takes it off every conversation", conversations.delete_tag(t
 check("delete a missing tag", not conversations.delete_tag(t1["id"]))
 
 # ---- 6. routes ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/conversations/tags")

@@ -12,16 +12,17 @@ Chạy tay / CI:
 
 KHÔNG cần Claude CLI/SDK/mạng - chỉ test logic thuần _norm_loop + _build_prompt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-goaltest-"))
 
-import self_improve  # noqa: E402
+import self_improve
 
 _fails = []
 

@@ -5,11 +5,12 @@
 Owner, 17/10/2026: "khi vào team thì sẽ vào đoạn chat mà chủ team đang làm việc gần nhất", "trong team cũng phải gắn được
 tag phân loại ... nhiều team đang triển khai cùng 1 dự án thì sẽ có thể add vào 1 tag". Runs the real host, no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-tags-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-tags-brain-")).resolve()
@@ -18,9 +19,9 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import team_store  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import team_store
+from fastapi.testclient import TestClient
 
 fails = []
 

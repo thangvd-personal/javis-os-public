@@ -13,11 +13,12 @@ another brain's records under Brain Default.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 DEFAULT_ALIAS = "brain"
-_default_dir_fn: Optional[Callable[[], Any]] = None
+_default_dir_fn: Callable[[], Any] | None = None
 
 
 def set_default_dir(fn: Callable[[], Any]) -> None:

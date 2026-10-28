@@ -1,17 +1,18 @@
 """Legacy B baseline cannot bypass global holdout aliases after final consumption exists."""
-from _paths import ROOT, SERVER  # noqa: F401
 import copy
 import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
-import improvement_store as IM
-from improvement_cases import CaseStore
-from improvement_experiment_lineage import current_fences
-from improvement_experiment_admission import ExperimentAdmission
-from improvement_claude import ClaudeTrialAdapter
-from improvement_trials import TrialStore
+
 import test_improvement_experiment_lineage as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_cases import CaseStore
+from improvement_claude import ClaudeTrialAdapter
+from improvement_experiment_admission import ExperimentAdmission
+from improvement_experiment_lineage import current_fences
+from improvement_trials import TrialStore
+
 
 class LegacyTuningAliasTests(unittest.TestCase):
     def setUp(self):

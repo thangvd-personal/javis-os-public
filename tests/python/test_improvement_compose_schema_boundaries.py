@@ -3,19 +3,18 @@
 Uses the actual existing labelled synthetic storage fixture, not an account or
 native model. Pending compose rows here test only schema/permission constraints.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import time
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
+import agent_ledger as ledger_module
 import improvement_compose_schema as schema
 import improvement_store as IM
-import agent_ledger as ledger_module
 import test_improvement_compose_schema as migration
 import test_improvement_experiment_selection as selections
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ComposeSchemaBoundaryTests(unittest.TestCase):

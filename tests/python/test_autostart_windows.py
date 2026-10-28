@@ -22,12 +22,13 @@ File này canh phần LOGIC (chạy được trên Linux của CI) và canh vi�
 do ra. Phần đọc/ghi registry chỉ có trên Windows nên không mô phỏng ở đây; đổi lại, mọi quyết
 định đều nằm trong các hàm thuần dưới đây chứ không nhét trong nhánh `winreg`.
 """
-from _paths import ROOT, SERVER
-import json  # noqa: E402,F401
+import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-autostart-"))
 
@@ -36,7 +37,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

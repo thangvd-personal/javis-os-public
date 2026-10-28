@@ -16,17 +16,16 @@ hội thoại khoá theo `f"{kenh}:{id thô}"`; mỗi bản ghi trả về mang 
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-from fastapi import APIRouter, Form
-from fastapi.responses import JSONResponse
 
 import channel_accounts
 import channels
 import chatbot_store
 import conversations
 import localefmt
+from fastapi import APIRouter, Form
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
@@ -38,7 +37,7 @@ class ChannelsDeps:
     main_bot_token: Callable[[], str]
 
 
-_DEPS: "ChannelsDeps" = None   # type: ignore
+_DEPS: ChannelsDeps = None   # type: ignore
 
 
 def _400(msg: str, **them):

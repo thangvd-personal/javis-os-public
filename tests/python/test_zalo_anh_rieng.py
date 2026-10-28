@@ -7,12 +7,13 @@ by the time that was answered the photo was in an earlier message, so the bot sa
 The teacher sent the photo again without a caption, and that one was dropped outright: in a private chat a photo
 with no text never reached the bot (only groups remembered caption-less photos).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpar-")
 try:
@@ -20,10 +21,10 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import conversations  # noqa: E402,F401
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import conversations  # noqa: F401
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

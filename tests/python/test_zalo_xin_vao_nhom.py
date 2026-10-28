@@ -10,12 +10,13 @@ File này canh:
   2. Tin `group.join_request` thành sự kiện xin vào nhóm trong Hộp thư, và KHÔNG tới bot.
   3. Chủ được báo MỘT lần cho mỗi nhóm trong một lô, có tên người xin và tên nhóm; tin trùng không báo lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpxin-")
 try:
@@ -23,8 +24,8 @@ try:
 except Exception:
     pass
 
-import mcp_catalog  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import mcp_catalog
+import zalo_personal_channel as zc
 
 _fails = []
 

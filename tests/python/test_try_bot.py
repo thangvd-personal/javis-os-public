@@ -13,13 +13,14 @@ the outcome, but:
      place an order or send a message through a tool;
   5. the engine session is left clean (draft mode: no store write, RAM history undone).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-try-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -28,13 +29,12 @@ try:
 except Exception:
     pass
 
-import chatbot_log  # noqa: E402
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import chatbot_tu_dong  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_log
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
+import chatbot_runtime
+import chatbot_store
+import conversations
 
 _fails = []
 
@@ -184,8 +184,9 @@ check("Zalo bot -> never a Telegram warning",
                                                           {"da_hoi_telegram": True, "doc_moi_tin_nhom": False}))
 
 # ---- 9. HTTP route -----------------------------------------------------------------------------
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
+
 chatbot_runtime.wire(answer=_engine, brain_root=lambda b: str(BRAIN),
                      read_agent=lambda br, slug: ({"name": "Lan"}, "Trả lời ngắn gọn."),
                      session_probe=lambda key: ("", 0), session_undo=lambda key, keep: None)

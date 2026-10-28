@@ -15,13 +15,14 @@ real owner bot functions and the real shell (`_tg_answer`), with only the model 
   5. A chat that is not on the whitelist (or an empty whitelist) never reaches an agent, and the
      customer-facing bot accounts never get the owner functions.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tg-agent-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-tg-agent-brains-")
@@ -31,8 +32,8 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
-import telegram_bot  # noqa: E402
+import main
+import telegram_bot
 
 _fails = []
 

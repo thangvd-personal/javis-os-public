@@ -80,9 +80,9 @@ def esc(s) -> str:
 # biết link nào là app nào.
 TEN_TOI_DA = 120
 _DOC_DAU = 65536          # chỉ đọc đầu file: tiêu đề luôn nằm ở đó, file lớn không làm chậm
-_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title\s*>", re.I | re.S)
-_FM_TITLE_RE = re.compile(r"^title\s*:\s*(.+?)\s*$", re.M | re.I)
-_H1_RE = re.compile(r"^\s{0,3}#\s+(.+?)\s*#*\s*$", re.M)
+_TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title\s*>", re.IGNORECASE | re.DOTALL)
+_FM_TITLE_RE = re.compile(r"^title\s*:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE)
+_H1_RE = re.compile(r"^\s{0,3}#\s+(.+?)\s*#*\s*$", re.MULTILINE)
 
 
 def _gon(s: str) -> str:
@@ -146,7 +146,7 @@ def _url_tai_nguyen(duong_dan: str, goc_asset: str) -> str:
 
 
 # ---------------------------------------------------------------- markdown -> html
-_FENCE = re.compile(r"^```([^\n]*)\n(.*?)(?:^```\s*$|\Z)", re.S | re.M)
+_FENCE = re.compile(r"^```([^\n]*)\n(.*?)(?:^```\s*$|\Z)", re.DOTALL | re.MULTILINE)
 
 
 def _inline(s: str, goc_asset: str) -> str:
@@ -201,10 +201,8 @@ def _bang(khoi: list, goc_asset: str) -> str:
     """Bảng markdown. `khoi` là các dòng, dòng thứ hai là dòng gạch ngăn."""
     def o(dong):
         d = dong.strip()
-        if d.startswith("|"):
-            d = d[1:]
-        if d.endswith("|"):
-            d = d[:-1]
+        d = d.removeprefix("|")
+        d = d.removesuffix("|")
         return [c.strip() for c in d.split("|")]
 
     dau = o(khoi[0])
@@ -228,7 +226,7 @@ def md_to_html(src: str, goc_asset: str = "") -> str:
         return "\n\x01%d\x01\n" % (len(giu_khoi) - 1)
 
     # Frontmatter YAML ở đầu file: giấu đi, đó là dữ liệu quản trị chứ không phải nội dung.
-    src = re.sub(r"\A---\n.*?\n---\n", "", src, flags=re.S)
+    src = re.sub(r"\A---\n.*?\n---\n", "", src, flags=re.DOTALL)
     # Khối mã rút trước mọi thứ, giữ nguyên từng ký tự.
     src = _FENCE.sub(lambda m: _cat_khoi(
         '<pre class="code"><code>%s</code></pre>' % _esc(m.group(2))), src)
@@ -383,7 +381,7 @@ def trang_markdown(tieu_de: str, src: str, goc_asset: str, chan: str = "") -> st
 
 
 def trang_loi(thong_diep: str) -> str:
-    import localefmt   # lười: trang chia sẻ dựng bằng stdlib, chỉ trang lỗi cần chữ theo ngôn ngữ
+    import localefmt  # lười: trang chia sẻ dựng bằng stdlib, chỉ trang lỗi cần chữ theo ngôn ngữ
     tieu_de = localefmt.chu("Không mở được", "Cannot open")
     return trang(tieu_de, "<h1>" + _esc(tieu_de) + "</h1><p>" + _esc(thong_diep) + "</p>")
 
@@ -424,9 +422,9 @@ try{Object.defineProperty(window,ten,{value:kho(),configurable:true});}catch(e){
 # Chèn NGAY SAU <head> nếu có, không thì sau <html>, không nữa thì sau khai báo doctype. Thứ tự
 # này quan trọng: bản vá phải chạy TRƯỚC mọi script của trang, mà nhét trước doctype thì trình
 # duyệt rơi vào chế độ quirks và bố cục của người ta vỡ.
-_RE_HEAD = re.compile(r"<head\b[^>]*>", re.I)
-_RE_HTML = re.compile(r"<html\b[^>]*>", re.I)
-_RE_DOCTYPE = re.compile(r"<!doctype[^>]*>", re.I)
+_RE_HEAD = re.compile(r"<head\b[^>]*>", re.IGNORECASE)
+_RE_HTML = re.compile(r"<html\b[^>]*>", re.IGNORECASE)
+_RE_DOCTYPE = re.compile(r"<!doctype[^>]*>", re.IGNORECASE)
 
 
 def chen_polyfill_luu_tru(html: str) -> str:

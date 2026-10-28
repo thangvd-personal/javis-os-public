@@ -7,11 +7,12 @@ phải canh: danh sách khách (lọc kênh / tag / chữ / ngày), hồ sơ m�
 họ có mặt (cả nhóm), tag chuẩn hoá và khớp nguyên từ, ghi chú, tìm tin, chờ trả lời, thống kê
 khách mới theo ngày. Và hai hàm ghi không được làm đổi thứ tự "mới hoạt động trước".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-crm-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -21,7 +22,7 @@ try:
 except Exception:
     pass
 
-import conversations as cs  # noqa: E402
+import conversations as cs
 
 _fails = []
 

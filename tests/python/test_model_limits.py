@@ -8,18 +8,18 @@ nên gõ sai một tên trường sẽ cho ra `quota_profiles` có phần tử m
 hành nhìn trang Chẩn đoán thấy "đã khai" rồi bật canary, và mọi task vẫn rơi về legacy mà
 không ai hiểu vì sao. Test này biến lỗi câm đó thành CI đỏ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-limits-")
 
-import config as cfg  # noqa: E402
-import fast_path_runtime  # noqa: E402
-import model_limits  # noqa: E402
+import config as cfg
+import fast_path_runtime
+import model_limits
 
 _fails = []
 
@@ -77,7 +77,7 @@ check("mọi mục đều ghi nguồn tra",
       all(str(i.get("source") or "").strip() for i in model_limits.KNOWN_LIMITS))
 
 # ---- 4. Endpoint khai quota ----
-import main  # noqa: E402
+import main
 
 
 async def _endpoint_tests():

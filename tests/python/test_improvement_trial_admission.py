@@ -1,6 +1,4 @@
 """Actual atomic owner admission, with synthetic native availability and no query."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -12,11 +10,12 @@ from contextlib import closing
 from dataclasses import replace
 from unittest.mock import patch
 
-import test_improvement_trial_associations as fixtures
 import improvement_store as IM
+import test_improvement_trial_associations as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
 from improvement_assets import capture_source
 from improvement_claude import ClaudeTrialAdapter
-from agent_ledger import CallLedger
 
 if importlib.util.find_spec("improvement_trial_admission"):
     import improvement_trial_admission as A

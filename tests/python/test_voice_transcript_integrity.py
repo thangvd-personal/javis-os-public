@@ -1,10 +1,9 @@
 """Offline behavioral regressions for transcript preservation; no accounts or API calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 
 import nghe_sua
 import voice_brain
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class LocalCorrections(unittest.TestCase):

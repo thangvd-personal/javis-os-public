@@ -10,8 +10,6 @@ from pathlib import Path
 
 if any(flag in sys.argv for flag in ('--role-worker', '--role-owner')):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _paths import ROOT, SERVER  # noqa: F401,E402
-
 import asyncio
 import contextlib
 import gzip
@@ -29,11 +27,21 @@ from unittest.mock import patch
 
 import improvement_claude as native
 import improvement_worker as worker
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_profile import OperationProfile
 from improvement_operation_workspace import OperationWorkspace
 from improvement_sandbox import TrialWorkspace, worker_environment
 from improvement_store import _hash
-from test_improvement_runtime_qualification import candidate, _ambient, _job_pids, _alive, CANDIDATE_VERSION, CANDIDATE_HASH, SDK_VERSION, MARKERS
+from test_improvement_runtime_qualification import (
+    CANDIDATE_HASH,
+    CANDIDATE_VERSION,
+    MARKERS,
+    SDK_VERSION,
+    _alive,
+    _ambient,
+    _job_pids,
+    candidate,
+)
 
 KINDS = ('propose', 'repair', 'semantic')
 DATA_MARKER = 'QUALIFICATION_AUTHORIZED_ROLE_INPUT'
@@ -144,8 +152,8 @@ def role_worker(stage, kind):
     shutil.copytree(stage / '.claude', actual / '.claude')
     for name in ('CLAUDE.md', '.mcp.json'):
         shutil.copyfile(stage / name, actual / name)
-    from claude_cli import claude_engine
     from claude_agent_sdk._internal.transport import subprocess_cli
+    from claude_cli import claude_engine
     original = subprocess_cli.anyio.open_process
     spawns, events, order = [], [], []
 
@@ -324,8 +332,9 @@ class RoleNativeQualificationTests(unittest.TestCase):
     def test_guardian_death_retains_both_recovery_fences(self):
         import ctypes
         from ctypes import wintypes
-        from improvement_sandbox import _bytes_hash
+
         from improvement_native_lifetime import fence_busy
+        from improvement_sandbox import _bytes_hash
         binary = candidate(os.environ['JAVIS_TEST_NATIVE_QUALIFICATION_CLI'])
         kernel = ctypes.WinDLL('kernel32', use_last_error=True)
         kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]

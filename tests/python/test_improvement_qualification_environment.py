@@ -1,12 +1,11 @@
 """Pure local dummy environment, no I/O/runtime/account/launch capability."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib
 import importlib.util
 import unittest
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
 
 
@@ -62,8 +61,8 @@ class QualificationEnvironmentTests(unittest.TestCase):
             with self.subTest(missing=name), self.assertRaises(ValueError): self.m.validate_dummy_environment(broken)
 
     def test_production_startup2_still_refuses_dummy_environment_without_an_explicit_new_protocol(self):
-        from improvement_native_protocol import validate_startup2
         import test_improvement_native_protocol as wire
+        from improvement_native_protocol import validate_startup2
         value = wire.startup('trial')
         value['environment'] = self.m.dummy_environment(self.base, endpoint=self.endpoint)
         with self.assertRaises(ValueError): validate_startup2(value)

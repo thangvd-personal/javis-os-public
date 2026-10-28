@@ -9,9 +9,9 @@ import json
 import tempfile
 from pathlib import Path
 
+import _resonance_agent as RA
 import resonance as R
 import resonance_store as RS
-import _resonance_agent as RA
 
 DELIV = "Inbox/ban-tom-tat.md"
 GOOD = "# Tóm tắt\n\nMột bản tóm tắt đủ dài để qua tiêu chí, có mục Kết luận.\n\n## Kết luận\n\nXong.\n"

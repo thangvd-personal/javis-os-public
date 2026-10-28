@@ -9,12 +9,17 @@ from contextlib import closing
 
 import improvement_store as IM
 from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
+from improvement_observation_history import (
+    candidate,
+    is_observation2,
+    reject_v2_history,
+    validate_history,
+)
 from improvement_operation_execution import OperationExecution
 from improvement_operation_protocol import operation_packet
 from improvement_operation_schema import TERMINAL
-from improvement_trial_evidence import decode_trace, _metadata
+from improvement_trial_evidence import _metadata, decode_trace
 from improvement_trial_records import _brain
-from improvement_observation_history import is_observation2, candidate, reject_v2_history, validate_history
 
 
 class OperationEvidence:

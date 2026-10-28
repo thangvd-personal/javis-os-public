@@ -1,10 +1,8 @@
 """Actual source/semantic authority and atomic isolated-view publication."""
-from _paths import ROOT, SERVER  # noqa: F401
-
+import asyncio
+import copy
 import importlib
 import importlib.util
-import copy
-import asyncio
 import json
 import sqlite3
 import threading
@@ -14,8 +12,9 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_experiment_protocol import comparison_hash
 import test_improvement_view_schema as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_experiment_protocol import comparison_hash
 
 
 class SourceFixture:

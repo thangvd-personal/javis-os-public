@@ -1,9 +1,8 @@
 """M4 routing surface: description-only patches and the deterministic lazy-router evaluator."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 
 import improvement_routing as R
+from _paths import ROOT, SERVER  # noqa: F401
 
 SKILL = (b"---\nname: Bao cao doi soat\ndescription: Lap bao cao tong hop\ngroup: Finance\n---\n"
          b"# Body\nReconcile rows.\n")

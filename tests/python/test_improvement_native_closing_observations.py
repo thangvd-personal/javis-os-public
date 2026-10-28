@@ -1,12 +1,11 @@
 """Real private socket ingress; no native process, account or authority claim."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import socket
 import unittest
 
-from improvement_private_channel import PrivateWorkerChannelV2
 import test_improvement_native_transport_v2 as fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_private_channel import PrivateWorkerChannelV2
 
 
 class ClosingObservationTests(unittest.IsolatedAsyncioTestCase):

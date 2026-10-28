@@ -15,10 +15,10 @@ import asyncio
 import re
 import sys
 import time
-from typing import Optional
+
+import localefmt
 
 from channels import KenhSpec
-import localefmt
 
 SPEC = KenhSpec(
     id="zalo_personal", nhan="Zalo cá nhân", kind="account", logo="zalo", mau="#0068FF",
@@ -213,7 +213,7 @@ def _tag_result(conn_id: str, ok: bool) -> None:
               f"(tin vẫn gửi như thường)", file=sys.stderr)
 
 
-async def _send_tagged(conn: dict, chat_id: str, text: str, mention) -> Optional[tuple]:
+async def _send_tagged(conn: dict, chat_id: str, text: str, mention) -> tuple | None:
     """Gửi một tin nhóm CÓ TAG. Trả `(ok, lỗi)` khi đã có kết cục, hoặc None khi chưa gửi gì và người gọi nên gửi thường.
 
     Hết giờ là kết cục KHÔNG RÕ: CLI có thể đã gửi xong mới bị giết. Gửi lại bằng đường khác thì có thể thành hai tin dưới tên chủ trong
@@ -540,11 +540,12 @@ class Transport:
         nên cần mức quyền Được ghi trở lên: bot Chỉ đọc không tải. Lượt chỉ có file mà không được tải
         thì dừng cả lượt; lượt có chữ thì báo cho Agent biết khách có gửi file. Lượt bị huỷ sau khi đã
         tải thì xoá file vừa tải, không để rác trong brain."""
+        from pathlib import Path
+
+        import chatbot_store
         import conversations
         import zalo_attachments
         import zalo_personal_channel as zc
-        from pathlib import Path
-        import chatbot_store
         # Per-chat exception (0.172.0): a chat raised to "Can write" may send files even when the bot is read only.
         cfg = chatbot_store.ap_ngoai_le((self.cfg_fn() if self.cfg_fn else {}) or {}, meta)
         if cfg.get("muc_quyen") not in ("auto", "full"):
@@ -601,7 +602,7 @@ class Transport:
         này" của Telegram): nick này là người thật, câu đó khai với cả nhóm rằng đây là máy.
         """
         import chatbot_tu_dong
-        import conversations      # nhập trễ: conversations nạp sổ kênh lúc import, nhập ở đầu file là vòng import
+        import conversations  # nhập trễ: conversations nạp sổ kênh lúc import, nhập ở đầu file là vòng import
         import zalo_personal_channel as zc
         loai = ev.get("chat_type")
         kieu = ev.get("message_type")
@@ -877,7 +878,7 @@ class Transport:
             self.last_error = localefmt.chu(f"Thả cảm xúc Zalo lỗi: {err}", f"Zalo reaction failed: {err}")[:300]
             print(f"[zalo-personal bot {self.conn_id}] {self.last_error}", file=sys.stderr)
 
-    async def _gui(self, thread: str, cau: str, chat_type: str = "private", meta: Optional[dict] = None):
+    async def _gui(self, thread: str, cau: str, chat_type: str = "private", meta: dict | None = None):
         import zalo_personal_channel as zc
         # Nhớ TRƯỚC khi gửi: tiếng vọng có thể về vòng đọc ngay trong nhịp kế tiếp.
         zc.ghi_da_gui(self.conn_id, thread, cau)

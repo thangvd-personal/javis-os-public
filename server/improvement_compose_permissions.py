@@ -245,8 +245,8 @@ class ComposePermissions:
         Read existing authenticated events and role metadata only. A saved start
         is historical, never permission to resume or an inferred live owner.
         """
-        from improvement_operation_records import OperationRecords
         from improvement_compositions import ComposerService
+        from improvement_operation_records import OperationRecords
         self.scope(principal, experiment_id)
         if IM._schema_version(self.store) < 8:
             return []

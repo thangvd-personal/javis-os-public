@@ -23,10 +23,10 @@ Javis tưởng lượt đó chưa đụng gì bên ngoài và được phép ch�
 
 Các mẫu dưới đây chép từ luồng đo được ở trên, giữ đúng bộ khoá.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
-from antigravity_cli import AntigravityCLI  # noqa: E402
+from _paths import ROOT, SERVER  # noqa: F401
+from antigravity_cli import AntigravityCLI
 
 _fails = []
 

@@ -35,16 +35,15 @@ import os
 import re
 import sys
 import threading
-import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
-import yaml
 import fastyaml
-
-import mcp_catalog
 import localefmt
+import mcp_catalog
 import turn_context
+import yaml
 from config import STATE_DIR
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -75,7 +74,7 @@ _RESERVED_TOOLS = {"javis_connections", "javis_read_file", "javis_list_dir",
 PLUGIN_SERVER = "javis-plugins"
 
 
-def grant_patterns(names) -> List[str]:
+def grant_patterns(names) -> list[str]:
     """Allowlist entries that grant a gated background session exactly these plugin tools.
 
     Background lanes below Full run with an allowlist (Read/Write/Edit...) and no MCP, which used
@@ -85,7 +84,7 @@ def grant_patterns(names) -> List[str]:
     listed: the SDK engine serves plugins in-process as `javis-plugins`, and when the hub is
     attached the same tool is also reachable as `mcp__javis__<name>`. The tool's own `min_mode`
     is still checked at call time against the session mode, so this never lifts a level."""
-    out: List[str] = []
+    out: list[str] = []
     for n in names or ():
         n = str(n or "").strip()
         if _TOOL_RE.match(n):
@@ -101,7 +100,7 @@ def granted_plugin_tools(allowed) -> set:
 
 _lock = threading.Lock()
 # cache theo vault_root: {sig, plugins:[LoadedPlugin], hooks:{event:[cb]}, errors:{slug:msg}}
-_cache: Dict[str, dict] = {}
+_cache: dict[str, dict] = {}
 
 
 def valid_slug(s: Any) -> bool:
@@ -198,7 +197,7 @@ def _write_state(state: dict) -> None:
 # ============================================================
 # Discovery (chỉ ĐỌC manifest - KHÔNG chạy code plugin)
 # ============================================================
-def vault_plugins_dir(vault_root: Optional[str]) -> Optional[Path]:
+def vault_plugins_dir(vault_root: str | None) -> Path | None:
     """Thư mục plugin của vault: ưu tiên <root>/plugins (cấu trúc phẳng mới),
     fallback <root>/Javis/plugins (cấu trúc cũ). Trả path mặc định (có thể chưa tồn tại)."""
     if not vault_root:
@@ -213,7 +212,7 @@ def vault_plugins_dir(vault_root: Optional[str]) -> Optional[Path]:
     return flat
 
 
-def _pack_plugin_dirs() -> List[tuple]:
+def _pack_plugin_dirs() -> list[tuple]:
     """[(slug, dir, pack_id)] cho plugin nằm trong GÓI đang bật. Rỗng nếu module packs lỗi."""
     try:
         import packs
@@ -223,7 +222,7 @@ def _pack_plugin_dirs() -> List[tuple]:
         return []
 
 
-def _iter_plugin_dirs(vault_root: Optional[str]):
+def _iter_plugin_dirs(vault_root: str | None):
     """Yield (source, plugin_dir). source ∈ {'bundled','pack','user','vault'} (dedupe theo slug,
     nguồn SAU đè nguồn TRƯỚC): bundled (ship theo app) → pack (gói cài từ .zip) → user
     (GLOBAL_DIR, chung mọi brain) → vault (riêng 1 brain).
@@ -233,7 +232,7 @@ def _iter_plugin_dirs(vault_root: Optional[str]):
     (user/vault đè bundled) giữ nguyên bit-for-bit, không phá một shadow nào đang chạy. Còn
     việc gói KHÔNG được đè bundled thì chặn ở chỗ khác và chặn sớm hơn - trình cài từ chối
     ngay một gói mang plugin trùng slug bundled, xem `_slug_bundled`."""
-    seen: Dict[str, tuple] = {}
+    seen: dict[str, tuple] = {}
     for source, base in (("bundled", BUNDLED_DIR),):
         if not base or not Path(base).is_dir():
             continue
@@ -287,7 +286,7 @@ def _theo_ngon_ngu(manifest: dict, khoa: str, goc: str) -> str:
     return goc
 
 
-def _read_manifest(pdir: Path) -> Tuple[dict, str]:
+def _read_manifest(pdir: Path) -> tuple[dict, str]:
     f = pdir / "plugin.yaml"
     if not f.is_file():
         f = pdir / "plugin.yml"
@@ -307,7 +306,7 @@ def _read_manifest(pdir: Path) -> Tuple[dict, str]:
     return out, err
 
 
-def _entry_file(pdir: Path) -> Optional[Path]:
+def _entry_file(pdir: Path) -> Path | None:
     for e in _ENTRY_FILES:
         p = pdir / e
         if p.is_file():
@@ -343,12 +342,12 @@ def _effective_enabled(source: str, slug: str, manifest: dict) -> bool:
     return bool(manifest.get("enabled", False))
 
 
-def describe(vault_root: Optional[str] = None) -> List[dict]:
+def describe(vault_root: str | None = None) -> list[dict]:
     """Metadata MỌI plugin (KHÔNG chạy code plugin) - cho UI/index/endpoint.
     Kèm trạng thái load lỗi nếu cache đã từng nạp."""
     errors = (_cache.get(_key(vault_root)) or {}).get("errors") or {}
     env_ok = _env_user_enabled()
-    out: List[dict] = []
+    out: list[dict] = []
     for source, pdir in _iter_plugin_dirs(vault_root):
         slug = pdir.name
         manifest, merr = _read_manifest(pdir)
@@ -387,18 +386,18 @@ def describe(vault_root: Optional[str] = None) -> List[dict]:
 class PluginContext:
     """Thứ plugin nhận trong register(ctx). Đăng ký tool + hook, kèm tiện ích state/log."""
 
-    def __init__(self, slug: str, source: str, plugin_dir: Path, vault_root: Optional[str]):
+    def __init__(self, slug: str, source: str, plugin_dir: Path, vault_root: str | None):
         self.slug = slug
         self.source = source
         self.dir = Path(plugin_dir)
         self.vault_root = vault_root
         self.state_dir = STATE_DIR
-        self._tools: List[dict] = []
-        self._hooks: Dict[str, List[Callable]] = {}
-        self._on_unload: List[Callable] = []
-        self._http: List[dict] = []
-        self._well_known: Dict[str, Callable] = {}
-        self._webhook_handlers: Dict[str, dict] = {}
+        self._tools: list[dict] = []
+        self._hooks: dict[str, list[Callable]] = {}
+        self._on_unload: list[Callable] = []
+        self._http: list[dict] = []
+        self._well_known: dict[str, Callable] = {}
+        self._webhook_handlers: dict[str, dict] = {}
 
     @property
     def data_dir(self) -> Path:
@@ -411,10 +410,10 @@ class PluginContext:
         return d
 
     def register_tool(self, name: str, description: str, handler: Callable,
-                      schema: Optional[dict] = None, parameters: Optional[dict] = None,
-                      min_mode: str = "readonly", check_fn: Optional[Callable] = None,
-                      emoji: str = "", visible_fn: Optional[Callable] = None,
-                      op_modes: Optional[dict] = None, op_key: str = "op") -> None:
+                      schema: dict | None = None, parameters: dict | None = None,
+                      min_mode: str = "readonly", check_fn: Callable | None = None,
+                      emoji: str = "", visible_fn: Callable | None = None,
+                      op_modes: dict | None = None, op_key: str = "op") -> None:
         """Thêm 1 tool cho MỌI engine. handler(args: dict, ctx: PluginContext) -> str (sync|async).
         min_mode: readonly(mặc định, luôn chạy) | safe(chặn ở chế độ suggest) | full(chỉ chế độ full).
         check_fn(): None nếu sẵn sàng, hoặc str lý do để chặn (vd chưa đăng nhập).
@@ -519,7 +518,7 @@ class PluginContext:
         self._http.append({"path": duong, "handler": handler, "methods": mt,
                            "public": bool(public), "no_cookie": bool(no_cookie)})
 
-    def register_event_handler(self, name: str, handler: Callable, schema: Optional[dict] = None,
+    def register_event_handler(self, name: str, handler: Callable, schema: dict | None = None,
                                min_mode: str = "full", description: str = "", ai: bool = False,
                                idempotent: bool = True) -> None:
         """Webhook platform (spec §8.2): a handler a webhook can bind as an action
@@ -554,7 +553,7 @@ class PluginContext:
                                              "ai": bool(ai), "idempotent": bool(idempotent)}
 
     def register_webhook_handler(self, name: str, handler: Callable, min_mode: str = "full",
-                                 description: str = "", schema: Optional[dict] = None, ai: bool = False,
+                                 description: str = "", schema: dict | None = None, ai: bool = False,
                                  idempotent: bool = True) -> None:
         """Older name of register_event_handler (same contract)."""
         self.register_event_handler(name, handler, schema=schema, min_mode=min_mode, description=description, ai=ai,
@@ -571,8 +570,19 @@ class PluginContext:
 
 
 class LoadedPlugin:
-    __slots__ = ("slug", "source", "name", "description", "min_mode", "tools", "hooks", "ctx",
-                 "http", "well_known", "page")
+    __slots__ = (
+        "ctx",
+        "description",
+        "hooks",
+        "http",
+        "min_mode",
+        "name",
+        "page",
+        "slug",
+        "source",
+        "tools",
+        "well_known",
+    )
 
     def __init__(self, ctx: PluginContext, manifest: dict):
         self.slug = ctx.slug
@@ -592,13 +602,13 @@ class LoadedPlugin:
 # ============================================================
 # Load (CHẠY code plugin) - có cache theo signature
 # ============================================================
-def _key(vault_root: Optional[str], scope_vault: bool = True) -> str:
+def _key(vault_root: str | None, scope_vault: bool = True) -> str:
     return f"{vault_root or ''}|{scope_vault}"
 
 
-def _signature(vault_root: Optional[str], scope_vault: bool = True) -> tuple:
+def _signature(vault_root: str | None, scope_vault: bool = True) -> tuple:
     """Chữ ký để biết khi nào phải nạp lại: mtime state + mtime entry/manifest mọi plugin + env flag."""
-    sig: List[Any] = [_env_user_enabled()]
+    sig: list[Any] = [_env_user_enabled()]
     try:
         sig.append(_STATE_PATH.stat().st_mtime)
     except OSError:
@@ -671,7 +681,7 @@ def _pack_cua(pdir: Path) -> str:
     return ""
 
 
-def _pack_duoc_nap(pdir: Path) -> Tuple[bool, str]:
+def _pack_duoc_nap(pdir: Path) -> tuple[bool, str]:
     """Plugin của GÓI có được chạy mã không. Trả (được, lý do nếu không).
 
     Hai điều kiện, và cả hai đều nói về CÙNG một thứ: có người đã xem rồi bấm đồng ý.
@@ -707,7 +717,7 @@ def _pack_duoc_nap(pdir: Path) -> Tuple[bool, str]:
     return True, ""
 
 
-def _load_all(vault_root: Optional[str], scope_vault: bool = True) -> dict:
+def _load_all(vault_root: str | None, scope_vault: bool = True) -> dict:
     """Nạp (hoặc lấy cache) mọi plugin effective-enabled cho vault_root này.
 
     scope_vault=False: KHÔNG duyệt thư mục plugin riêng-của-vault (chỉ bundled + user/global),
@@ -719,9 +729,9 @@ def _load_all(vault_root: Optional[str], scope_vault: bool = True) -> dict:
         ent = _cache.get(k)
         if ent and ent.get("sig") == sig:
             return ent
-        plugins: List[LoadedPlugin] = []
-        hooks: Dict[str, List[Callable]] = {}
-        errors: Dict[str, str] = {}
+        plugins: list[LoadedPlugin] = []
+        hooks: dict[str, list[Callable]] = {}
+        errors: dict[str, str] = {}
         env_ok = _env_user_enabled()
         dirs_vault_root = vault_root if scope_vault else None
         for source, pdir in _iter_plugin_dirs(dirs_vault_root):
@@ -772,7 +782,7 @@ def _load_all(vault_root: Optional[str], scope_vault: bool = True) -> dict:
 # ============================================================
 # Đường HTTP của plugin (0.64.26) - lõi tra ở đây, main.py chỉ chuyển request
 # ============================================================
-def _trang_cua(manifest: dict) -> Optional[str]:
+def _trang_cua(manifest: dict) -> str | None:
     """Đường tương đối của trang riêng plugin khai trong `plugin.yaml` (`page: ""` là gốc), hoặc
     None nếu không khai. Thẻ trên trang Plugin dùng nó để hiện nút "Mở trang"."""
     if "page" not in (manifest or {}):
@@ -783,7 +793,7 @@ def _trang_cua(manifest: dict) -> Optional[str]:
     return v
 
 
-def _plugin_http() -> List["LoadedPlugin"]:
+def _plugin_http() -> list[LoadedPlugin]:
     """Plugin đang nạp được mở đường HTTP. MỘT bản nạp cố định, không theo brain: cùng một
     đường mà mỗi brain một bản plugin thì trạng thái trong RAM của plugin (yêu cầu đang chờ,
     mã một lần) sẽ nằm ở bản này còn request tới bản kia."""
@@ -804,7 +814,7 @@ def tim_http(slug: str, duong: str, method: str = ""):
     return None
 
 
-def find_webhook_handler(vault_root: Optional[str], slug: str, name: str) -> Optional[dict]:
+def find_webhook_handler(vault_root: str | None, slug: str, name: str) -> dict | None:
     """The webhook handler `name` of the ENABLED plugin `slug` visible to this brain (its own vault plugins, plus
     bundled, pack and global ones), as {"handler", "ctx", "min_mode"}; None if absent or off. Another brain's vault
     plugin is never found here."""
@@ -818,7 +828,7 @@ def find_webhook_handler(vault_root: Optional[str], slug: str, name: str) -> Opt
     return None
 
 
-def webhook_handlers(vault_root: Optional[str] = None) -> List[dict]:
+def webhook_handlers(vault_root: str | None = None) -> list[dict]:
     """Handlers a webhook of this brain can choose (for the dashboard)."""
     out = []
     for lp in _load_all(vault_root)["plugins"]:
@@ -946,6 +956,7 @@ def _make_call(tool: dict, ctx: PluginContext, mode: str):
             # `safe` yet queue work that runs at full later) needs the owner's approval of this exact call
             # (team_gate.py). Read-only plugin tools run.
             import asyncio
+
             import team_gate
             ok, why = await asyncio.to_thread(team_gate.hub_check, name, args or {}, f"plugin: {name}")
             if not ok:
@@ -1037,8 +1048,8 @@ def set_removed(slug: str, removed: bool) -> dict:
     return {"ok": True, "removed": bool(removed)}
 
 
-def plugin_tools(mode: str = "full", vault_root: Optional[str] = None, *,
-                 scope_vault: bool = True) -> Tuple[List[dict], Dict[str, dict]]:
+def plugin_tools(mode: str = "full", vault_root: str | None = None, *,
+                 scope_vault: bool = True) -> tuple[list[dict], dict[str, dict]]:
     """(tools_spec, route) từ MỌI plugin đã nạp. mcp_hub merge vào discover_all.
     tools_spec: [{fn, server:'javis', name, description, schema}]. route: {fn: {'call': async fn}}.
 
@@ -1046,8 +1057,8 @@ def plugin_tools(mode: str = "full", vault_root: Optional[str] = None, *,
     scope_vault=False: KHÔNG nạp plugin riêng-của-vault (chỉ bundled + global) nhưng ctx VẪN
     thấy vault_root. Tách hai nghĩa vì trước đây một chữ None gánh cả hai, làm ctx mù brain."""
     ent = _load_all(vault_root, scope_vault)
-    tools: List[dict] = []
-    route: Dict[str, dict] = {}
+    tools: list[dict] = []
+    route: dict[str, dict] = {}
     seen = set()
     for lp in ent["plugins"]:
         for t in lp.tools:
@@ -1104,13 +1115,13 @@ def plugin_tools(mode: str = "full", vault_root: Optional[str] = None, *,
 # ============================================================
 # Hooks - mcp_hub bắn quanh mọi tool call (khi có hook)
 # ============================================================
-def has_tool_hooks(vault_root: Optional[str] = None) -> bool:
+def has_tool_hooks(vault_root: str | None = None) -> bool:
     ent = _load_all(vault_root)
     h = ent["hooks"]
     return bool(h.get("pre_tool_call") or h.get("post_tool_call"))
 
 
-async def _fire(event: str, vault_root: Optional[str], payload: dict) -> None:
+async def _fire(event: str, vault_root: str | None, payload: dict) -> None:
     """Bắn hook và BỎ QUA thứ nó trả về. Dùng cho hook chỉ để quan sát (post_tool_call).
 
     Muốn hook CHẶN được thì dùng `_fire_pre` - xem chú thích dài ở đó.
@@ -1123,7 +1134,7 @@ async def _fire(event: str, vault_root: Optional[str], payload: dict) -> None:
             print(f"[plugins] hook {event} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
 
 
-async def _fire_pre(vault_root: Optional[str], payload: dict) -> dict:
+async def _fire_pre(vault_root: str | None, payload: dict) -> dict:
     """Bắn `pre_tool_call` và ĐỌC thứ hook trả về. Trả {"deny": str} hoặc {"args": dict} hoặc {}.
 
     **Vì sao hàm này tồn tại.** Tới 0.63.0, `wrap_with_hooks` gọi `await _fire("pre_tool_call")`
@@ -1172,7 +1183,7 @@ def _cau_bi_chan(fn: str, ly_do: str) -> str:
             f"Đọc kỹ lý do rồi làm lại theo đúng cách nó chỉ. Đừng gọi lại y nguyên.")
 
 
-def wrap_with_hooks(fn: str, base_call: Callable, mode: str, vault_root: Optional[str]) -> Callable:
+def wrap_with_hooks(fn: str, base_call: Callable, mode: str, vault_root: str | None) -> Callable:
     """Bọc 1 route call để bắn pre/post_tool_call. base_call(args) -> result (async).
 
     `pre_tool_call` CHẶN được và SỬA được tham số (xem `_fire_pre`). `post_tool_call` thì
@@ -1241,7 +1252,7 @@ def clean_context_line(value: Any, limit: int = CHATBOT_CONTEXT_LINE_MAX) -> str
     return s[:max(0, int(limit))].rstrip()
 
 
-def has_chatbot_context_hooks(vault_root: Optional[str] = None) -> bool:
+def has_chatbot_context_hooks(vault_root: str | None = None) -> bool:
     return bool(_load_all(vault_root)["hooks"].get(CHATBOT_TURN_CONTEXT))
 
 
@@ -1259,8 +1270,8 @@ async def _call_with_timeout(cb: Callable, payload: dict, timeout: float):
     return out
 
 
-async def chatbot_turn_context(vault_root: Optional[str], payload: dict,
-                               timeout: Optional[float] = None) -> List[str]:
+async def chatbot_turn_context(vault_root: str | None, payload: dict,
+                               timeout: float | None = None) -> list[str]:
     """Fire `chatbot_turn_context` and return the cleaned lines, in plugin load order. [] when no plugin
     listens, which is the common case. Never raises. `timeout` per callback, default
     CHATBOT_CONTEXT_TIMEOUT_S (read at call time)."""
@@ -1270,14 +1281,14 @@ async def chatbot_turn_context(vault_root: Optional[str], payload: dict,
     except Exception as e:      # noqa: BLE001 - a broken plugin host must not cost a reply
         print(f"[plugins] hook {CHATBOT_TURN_CONTEXT}: load failed: {type(e).__name__}: {e}", file=sys.stderr)
         return []
-    lines: List[str] = []
+    lines: list[str] = []
     used = 0
     for cb in cbs:
         if used >= CHATBOT_CONTEXT_TOTAL_MAX:
             break
         try:
             out = await _call_with_timeout(cb, dict(payload), timeout)   # a fresh copy: one hook cannot edit the next one's view
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"[plugins] hook {CHATBOT_TURN_CONTEXT}: {getattr(cb, '__qualname__', cb)} "
                   f"timed out after {timeout}s, skipped", file=sys.stderr)
             continue
@@ -1291,7 +1302,7 @@ async def chatbot_turn_context(vault_root: Optional[str], payload: dict,
     return lines
 
 
-def fire_hook(event: str, vault_root: Optional[str] = None, **payload) -> None:
+def fire_hook(event: str, vault_root: str | None = None, **payload) -> None:
     """Bắn 1 hook đồng bộ từ code không-async (tasks/loops sau này). Best-effort."""
     try:
         loop = asyncio.get_running_loop()
@@ -1309,7 +1320,7 @@ def fire_hook(event: str, vault_root: Optional[str] = None, **payload) -> None:
 # ============================================================
 # Bật/tắt plugin
 # ============================================================
-def set_enabled(slug: str, enabled: bool, vault_root: Optional[str] = None) -> dict:
+def set_enabled(slug: str, enabled: bool, vault_root: str | None = None) -> dict:
     """Bật/tắt 1 plugin. Bundled → ghi STATE_DIR/plugins.json (không đụng file app);
     vault → ghi enabled vào frontmatter plugin.yaml. Trả {ok, source, gated, note}."""
     if not valid_slug(slug):

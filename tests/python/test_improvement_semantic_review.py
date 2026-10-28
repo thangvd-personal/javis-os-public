@@ -1,8 +1,5 @@
 """Append-only actual reviewer evidence; no model/owner assertion grants execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-import copy
 import importlib.util
 import json
 import sqlite3
@@ -13,11 +10,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_proposals as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_execution import OperationExecution
 from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
 from improvement_trial_service import OwnerTrialService
-import test_improvement_proposals as fixtures
 
 
 class SemanticReviewTests(unittest.IsolatedAsyncioTestCase):
@@ -398,8 +396,8 @@ class SemanticProtocolTests(unittest.TestCase):
             semantic_output(IM._json({**base, 'verdict': 'unknown', 'findings': [finding]}), {'source_refs': []})
 
     def test_actual_reviewer_prompt_declares_closed_fields_and_protected_meaning_rule(self):
-        from improvement_semantic_protocol import render_semantic_input
         from improvement_operation_profile import operation_user_prompt
+        from improvement_semantic_protocol import render_semantic_input
         data = {'version': 1, 'kind': 'authorized_semantic_review', 'source_refs': []}
         prompt = json.loads(render_semantic_input(data))
         actual = json.loads(operation_user_prompt({'request': {'kind': 'semantic'}, 'data': data}))

@@ -1,22 +1,22 @@
 """Discovery, actual hub reads and warm lazy cache share disabled-source state."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.TemporaryDirectory(prefix='skill-state-import-')
 os.environ['JAVIS_STATE_DIR'] = _STATE.name
 os.environ['BRAIN_PATH'] = str(Path(_STATE.name) / 'brain')
 os.environ['BRAINS_DIR'] = str(Path(_STATE.name) / 'brains')
 
+import mcp_hub
 import skill_router
 import skill_usage
 from capability_registry import CapabilityRegistry
 from lazy_skill_runtime import LazySkillSource
-import mcp_hub
 
 
 class SkillResolutionStateTests(unittest.TestCase):

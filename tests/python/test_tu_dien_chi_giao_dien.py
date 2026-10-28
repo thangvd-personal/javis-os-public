@@ -10,12 +10,13 @@ registry only speaks vi and en, so:
   3. an unknown `ui_lang` saved on the server still turns into the registry default, which is why the dashboard saves
      English for a dashboard-only language (pinned in tests/js/test_i18n_theo_trinh_duyet.js).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tudien-")
 try:
@@ -23,7 +24,7 @@ try:
 except Exception:
     pass
 
-import lang_registry as L  # noqa: E402
+import lang_registry as L
 
 _fails = []
 
@@ -63,8 +64,8 @@ check("the server normalises an unknown code to its default (so the dashboard mu
       L.chuan_hoa("de") == "" and L.MAC_DINH == "vi")
 
 # ---- 4. GET /settings ----
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 r = TestClient(main.app, base_url="http://127.0.0.1:7777").get("/settings")
 s = r.json()

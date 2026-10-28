@@ -6,17 +6,18 @@ No network. Covers: no file = page unchanged, file present = <link> after the bu
 stylesheets with a content hash, default-mode marker seeds localStorage before the inline
 theme script, the route serves the file and is public (login screen is themed too).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 # Always a fresh temp dir: this test deletes branding/theme.css, and with an inherited
 # JAVIS_STATE_DIR it would delete a real operator theme.
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-themetest-")
 
-import main              # noqa: E402
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+import main
 
 _fails = []
 

@@ -1,19 +1,19 @@
 """Actual experiment compose facade; synthetic native packets never prove readiness."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
-import copy
 import json
 import threading
 import unittest
-from contextlib import closing, aclosing
+from contextlib import aclosing, closing
 from unittest.mock import patch
+
 import improvement_store as IM
+import test_improvement_compositions as publication
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_compose_permissions import ComposePermissions
 from improvement_experiment_requests import validate
 from improvement_experiment_service import ExperimentService
 from improvement_trial_requests import TrialRequestError
 from improvement_trial_service import OwnerTrialService
-import test_improvement_compositions as publication
 
 
 class ComposeControlsTests(unittest.IsolatedAsyncioTestCase):

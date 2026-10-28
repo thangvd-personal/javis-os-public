@@ -1,7 +1,4 @@
 """Host-derived experiment plans use actual encrypted context and A proposals."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import importlib.util
 import json
 import stat
@@ -11,10 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_cases as IC
 import improvement_assets as IA
+import improvement_cases as IC
 import improvement_store as IM
 import test_improvement_experiments as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_skill_candidates import SkillCandidates
 
 if importlib.util.find_spec("improvement_comparison_plans"):

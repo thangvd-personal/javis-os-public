@@ -13,7 +13,6 @@ phán xử luôn". This file guards:
   4. The bot reacts only when the Agent (`[CAM_XUC:<name>]`) or the judge (`"reaction"`) says so, on the customer's
      message, never on a reaction; the marker never reaches the customer.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -22,19 +21,21 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-reactions-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import bot_reaction  # noqa: E402
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal  # noqa: E402,F401
+import bot_reaction
+import chatbot_reply_policy as rp
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zc
+from channels import zalo_personal  # noqa: F401
 
 _fails = []
 

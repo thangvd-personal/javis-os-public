@@ -24,17 +24,16 @@ là bỏ sót - main đã có sẵn bộ bí danh đó, chép lại ở đây l�
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-from fastapi import APIRouter, Form, Query
-from starlette.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from pathlib import Path
 
 import coding_store
 import localefmt
 import sessions
+from fastapi import APIRouter, Form, Query
+from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
@@ -48,7 +47,7 @@ class CodingDeps:
     brain_root: Callable[[str], str] = None
 
 
-_DEPS: "CodingDeps" = None   # type: ignore
+_DEPS: CodingDeps = None   # type: ignore
 
 # Trần khi quét phiên để ghép thư mục. Kho phiên không lọc được theo TIỀN TỐ kênh, nên đọc một
 # mẻ rồi lọc trong Python; 300 là quá đủ cho một trang danh sách và vẫn rẻ.
@@ -317,7 +316,7 @@ def _make_router() -> APIRouter:
     return r
 
 
-def register(app, deps: "CodingDeps" = None):
+def register(app, deps: CodingDeps = None):
     """Gắn router vào app. Gọi ĐÚNG vị trí dòng cũ trong main.py - xem routes/__init__.py."""
     global _DEPS
     _DEPS = deps

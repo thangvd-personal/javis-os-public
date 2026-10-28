@@ -9,8 +9,8 @@ worker, tốn quota, rồi bắn một thông báo "bị chặn" làm phiền ch
 
 Gác ở cửa vào rẻ hơn hẳn chặn lúc chạy (kernel vốn đã chặn external-write mode != full).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import learn
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 
 def _lyDo(title, intent=""):

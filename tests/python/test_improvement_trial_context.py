@@ -1,6 +1,4 @@
 """Host context plans capture exact protected bytes without healing or writing sources."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -12,12 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-trial-context-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
                   "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-from improvement_store import _hash  # noqa: E402
 
 if importlib.util.find_spec("improvement_trial_context"):
     import improvement_trial_context as IC
@@ -34,7 +33,7 @@ class TrialContextTests(unittest.TestCase):
         self.assertIsNotNone(IC, "Read-only host context capture is not implemented")
         self.root = Path(tempfile.mkdtemp(prefix="brain-", dir=TEST_ROOT))
         self.owner = self.root / "CLAUDE.md"
-        self.owner_raw = "Keep the owner's rule exactly.\r\nKhông sửa luật chủ.\r\n".encode("utf-8")
+        self.owner_raw = "Keep the owner's rule exactly.\r\nKhông sửa luật chủ.\r\n".encode()
         self.owner.write_bytes(self.owner_raw)
         self.memory = self.root / "memory" / "MEMORY.md"
         self.memory.parent.mkdir()

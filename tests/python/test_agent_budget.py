@@ -9,19 +9,20 @@ Kho thật tạm, sổ lượt chung thật. Phần route đi qua main.py với 
 - qua ngày đếm lại; lý do đã chờ hạn mức chỉ được một lượt mỗi ngày (không bù hàng loạt);
 - dòng `agent_daily_calls` trong bảng giới hạn T1 (nhóm owner, có Không giới hạn); route `POST /agents/{slug}/budget`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-budget-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-budget-w-"))
 
-import agent_budget as AB  # noqa: E402
-import agent_ledger as ALG  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_budget as AB
+import agent_ledger as ALG
+import resonance_store as RS
 
 fails = []
 
@@ -150,10 +151,10 @@ AB.wire(lambda: gs)
 check("đã nối kho: dùng kho mặc định", AB.try_spend(K, "scan", NOON) == (False, "agent_daily_calls"))
 
 # ═════ bảng giới hạn T1 và route của chủ qua main.py (engine thật bị chặn) ═════
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 ss = sessions.SessionStore(db_path=TEMP / "chat.db")
 tm = team_store.TeamStore(TEMP / "team.sqlite3")
@@ -170,8 +171,8 @@ check("bảng giới hạn T1: dòng agent_daily_calls nhóm owner, mặc địn
 BR = (TEMP / "brain-main").resolve()
 (BR / "agents").mkdir(parents=True)
 (BR / "agents" / "viet.md").write_text("---\nname: Viết\nrole: Viết bài\n---\nBạn là Viết.\n", encoding="utf-8")
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 built = []
 
@@ -202,7 +203,7 @@ check("route hạn mức: trợ lý không có 404",
       client.post("/agents/khong/budget", params={"brain": B}, json={"daily_calls": 1}).status_code == 404)
 v = client.get("/agents/viet/pulse", params={"brain": B}).json()
 check("khung nhịp có mục lessons kèm hạn mức hôm nay", v["parts"]["lessons"]["budget"]["cap"] is None, v.get("parts"))
-import agent_lessons as ALS  # noqa: E402
+import agent_lessons as ALS
 
 mst = main._resonance_store()
 lid = ALS.add(mst, agent_key=key, scope=f"dm:{key}", kind="method", text="Hỏi lại khi mơ hồ.", source="self")
@@ -220,8 +221,9 @@ rp = client.post(f"/agents/viet/lessons/{lid2}/promote", params={"brain": B})
 check("route chủ nâng bài học lên mọi nơi: 200", rp.status_code == 200
       and ALS.get(mst, rp.json()["result"]["lesson_id"])["scope"] == "*", rp.text)
 # Chốt an toàn: host học mặc định của main.py không bao giờ dựng engine thật trong test (JAVIS_NO_REAL_JUDGE_ENGINE).
-import asyncio  # noqa: E402
-import agent_review as ARV  # noqa: E402
+import asyncio
+
+import agent_review as ARV
 
 check("_paths.py đặt chốt JAVIS_NO_REAL_JUDGE_ENGINE cho mọi test", os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE") == "1")
 dsid = ss2 = main.get_store()

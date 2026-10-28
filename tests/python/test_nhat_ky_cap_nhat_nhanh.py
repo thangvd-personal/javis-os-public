@@ -15,16 +15,17 @@ Ba điều file này khoá lại:
 Chạy:
     python tests/run.py nhat_ky_cap_nhat_nhanh
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-changelog-test-")
 
-import main  # noqa: E402
+import main
 
 fails = []
 
@@ -147,6 +148,6 @@ async def chay_mat_mang():
 
 asyncio.run(chay_mat_mang())
 
-print("")
+print()
 print(("ĐỎ: " + ", ".join(fails)) if fails else "OK - test_nhat_ky_cap_nhat_nhanh: tất cả pass")
 sys.exit(1 if fails else 0)

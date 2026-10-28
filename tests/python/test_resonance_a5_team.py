@@ -10,7 +10,6 @@ reviewer, tổng), số lần engine giả được gọi, và kết quả nào 
 
 Ngân sách và bộ đếm thử lại (T5 đến T9, T47 đến T54, T61 đến T67) ở test_resonance_a5_budget.py.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
@@ -19,15 +18,17 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a5-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_heartbeat as HB  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_agent as RA
+import _resonance_team as T
+import resonance as R
+import resonance_heartbeat as HB
+import resonance_store as RS
 
 _fails = []
 
@@ -179,9 +180,9 @@ except RS.ConflictError:
 check("T31 gọi assign_goal sau đó bị từ chối (đã gán), không có giao dịch thứ hai", _conf)
 
 # T32: tạo qua CHÍNH route POST /goal-requests (bộ lập mục tiêu chạy bằng engine giả, không phải model thật).
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import resonance_api as RAPI  # noqa: E402
+import resonance_api as RAPI
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 t32 = T.Team(_STATE, "t32")
 _framer = T.Engine(json.dumps(t32.proposal(), ensure_ascii=False))

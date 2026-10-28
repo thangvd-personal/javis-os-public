@@ -18,18 +18,19 @@ Ba quyết định đáng canh, vì cả ba đều có cách làm sai trông h�
 3. Gắn tay thì Javis phải THẤY. Không bơm vào system prompt thì nút thêm file chỉ là một danh
    sách để ngắm: người dùng gắn bảng giá vào rồi hỏi ngay, và Javis trả lời như chưa hề thấy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-gantay-"))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import sessions as sessions_mod  # noqa: E402
-from sessions import get_store  # noqa: E402
+import main
+import sessions as sessions_mod
+from fastapi.testclient import TestClient
+from sessions import get_store
 
 fails = []
 
@@ -230,7 +231,7 @@ check("và route trả lỗi rõ ràng chứ không im lặng nuốt",
 check("đường dẫn gắn tay nằm trong danh sách GIỮ của media_gc",
       "06 - Sources/bang-gia.md" in get_store().all_session_file_paths())
 
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

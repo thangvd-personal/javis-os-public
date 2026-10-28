@@ -8,16 +8,17 @@ no retry handler never retried, the switch that turns the desk off, and the repo
 Run:
     python tests/run.py incident_desk
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-incidents-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 
-import incident_desk as idk  # noqa: E402
+import incident_desk as idk
 
 fails = []
 
@@ -134,8 +135,8 @@ async def main():
 asyncio.run(main())
 
 # main.py wiring: every background source reports to the same desk, the routes exist and stay behind login.
-import main as app_main  # noqa: E402
-from _paths import moi_duong_dan  # noqa: E402
+import main as app_main
+from _paths import moi_duong_dan
 
 check("every source wired to the desk", all(f.deps.incident_hook == app_main.incident_desk.report for f in (
     app_main.tasks_feature, app_main.loop_feature, app_main.reminders_feature, app_main.webhook_feature)))

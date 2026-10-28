@@ -16,7 +16,6 @@ What is proven here:
      templated arguments (the payload is substituted, never evaluated), a rejection cancels it, a tool error fails
      only that branch, a hung tool is unknown.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import base64
 import hashlib
@@ -29,6 +28,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m4-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
@@ -39,11 +40,10 @@ try:
 except Exception:
     pass
 
-import webhook_actions as wa  # noqa: E402
-import webhook_secrets as wsec  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
-import webhook_verify as wv  # noqa: E402
+import webhook_actions as wa
+import webhook_secrets as wsec
+import webhook_triggers as wt
+import webhook_verify as wv
 
 fails = []
 
@@ -288,8 +288,8 @@ async def main():
     check("the tool waits for approval: event waiting, tool not called, the owner is asked",
           ev["status"] == "waiting" and not tool_calls and ev["branches"][0]["status"] == "approval"
           and any("duyệt" in m.lower() or "approval" in m.lower() for m in sent), (ev["status"], sent))
-    from fastapi import FastAPI
     import httpx
+    from fastapi import FastAPI
     app = FastAPI()
     app.include_router(f.router)
     cl = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t")

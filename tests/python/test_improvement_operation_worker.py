@@ -1,6 +1,4 @@
 """Actual role materialization/profile boundary, with a synthetic query engine."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
 import io
@@ -14,6 +12,7 @@ from unittest.mock import patch
 import improvement_claude as IC
 import improvement_store as IM
 import test_improvement_operation_workspace as W
+from _paths import ROOT, SERVER  # noqa: F401
 
 materialization = W.materialization
 
@@ -172,8 +171,8 @@ class OperationWorkerTests(unittest.TestCase):
 
     def _check_parent_adapter(self, *, close_after_ready=False):
         self.assertIsNotNone(importlib.util.find_spec("improvement_operation_adapter"), "Real role adapter is absent")
-        from improvement_operation_adapter import ClaudeOperationAdapter
         import improvement_worker as IW
+        from improvement_operation_adapter import ClaudeOperationAdapter
         payload = self.payload()
         identity = {key: payload["receipt"][key] for key in ("operation_id", "attempt", "role", "purpose", "input_hash")}
         packets = [{"type": "worker_ready", **identity, "capability_hash": "c" * 64},

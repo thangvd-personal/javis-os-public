@@ -15,7 +15,6 @@ before response.completed)". Hai tầng hỏng:
 
 File này dựng một Codex CLI giả in đúng khuôn JSONL đó và soi cả hai tầng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -24,6 +23,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TMP = Path(tempfile.mkdtemp(prefix="javis-codexws-"))
 os.environ["JAVIS_STATE_DIR"] = str(TMP / "state")
 os.environ["CODEX_HOME"] = str(TMP / "codexhome")
@@ -31,8 +32,8 @@ os.environ["CODEX_HOME"] = str(TMP / "codexhome")
 (TMP / "codexhome").mkdir()
 os.environ.pop("JAVIS_CODEX_TRANSPORT", None)
 
-import claude_cli  # noqa: E402
-from claude_cli import CodexCLI  # noqa: E402
+import claude_cli
+from claude_cli import CodexCLI
 
 _fails = []
 

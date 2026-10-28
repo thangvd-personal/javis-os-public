@@ -35,7 +35,6 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
 import localefmt
 import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool

@@ -12,8 +12,8 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import World, batch, check, finish, keys_in  # noqa: E402
-import agent_judge as AJ  # noqa: E402
+import agent_judge as AJ
+from _judge_world import World, batch, check, finish, keys_in
 
 QUESTION = "Cả nhóm ơi, ai biết cách xử lý doanh thu tháng này không?"
 

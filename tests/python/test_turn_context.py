@@ -16,7 +16,6 @@ another person's identity, with no error anywhere):
 
 No network, no engine run. STATE_DIR and BRAINS_DIR are temp dirs.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import contextvars
 import json
@@ -24,14 +23,16 @@ import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-turn-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-turn-brains-")
 
-import turn_context  # noqa: E402
-import plugins_host  # noqa: E402
-import mcp_hub  # noqa: E402
-import claude_sdk_engine  # noqa: E402
-import claude_cli  # noqa: E402
+import claude_cli
+import claude_sdk_engine
+import mcp_hub
+import plugins_host
+import turn_context
 
 fails = []
 

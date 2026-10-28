@@ -3,8 +3,6 @@
 The borrowed positive stream is explicitly the unexecuted storage control from
 CompositionTests. No account/model/CLI invocation or registry is introduced.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import json
 import threading
@@ -12,10 +10,11 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-from improvement_operation_adapter import ClaudeOperationAdapter
-import test_improvement_compositions as source
 import test_improvement_compose_admission as admission
+import test_improvement_compositions as source
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_operation_adapter import ClaudeOperationAdapter
 
 
 class ComposeMetadataTests(unittest.TestCase):

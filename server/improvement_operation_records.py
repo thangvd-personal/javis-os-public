@@ -8,8 +8,8 @@ from contextlib import closing
 
 import improvement_cases as IC
 import improvement_store as IM
-from improvement_experiments import ExperimentRecords, _identifier, _generation
 from improvement_experiment_protocol import definition
+from improvement_experiments import ExperimentRecords, _generation, _identifier
 from improvement_operation_protocol import operation_request
 from improvement_trial_records import _brain
 

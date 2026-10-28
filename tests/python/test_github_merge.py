@@ -9,7 +9,6 @@ Plus: no auto-merge with the switch off, with a flagged change, or without CI; a
 merge methods are followed; a branch behind its base is updated first; a conflict becomes a fix round; merges of one
 repo run one at a time; after a merge the chat's next work starts on a fresh branch and a new PR.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
@@ -17,20 +16,22 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghm-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN, git  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub, git
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos  # noqa: E402
-import github_store  # noqa: E402
-import github_work as w  # noqa: E402
+import github_repos
+import github_store
+import github_work as w
 
 _fails = []
 
@@ -54,7 +55,7 @@ async def start_turn(sid, text):
 
 
 w.configure(notify=notify, start_turn=start_turn, session_info=lambda sid: {"title": f"Việc {sid}", "engine": "x"})
-run = lambda coro: asyncio.run(coro)  # noqa: E731
+run = lambda coro: asyncio.run(coro)
 BRAIN = tempfile.mkdtemp(prefix="brain-")
 github_repos.connect(GOOD_TOKEN)
 S = github_store.store
@@ -100,7 +101,7 @@ check("criterion 15: the next job starts once, as the job that was asked for",
       len(turns) == 1 and "Thêm trang đăng ký" in turns[0][1] and turns[0][1].startswith(w.FIX_MARKER))
 run(w.tick())
 check("the next job is never handed out twice", len(turns) == 1 and w.session_state("c1")["queue"] == [])
-merge_calls = lambda: [c for c in fake.calls if c[0] == "PUT" and c[1] == "/repos/acme/app/pulls/1/merge"]  # noqa: E731
+merge_calls = lambda: [c for c in fake.calls if c[0] == "PUT" and c[1] == "/repos/acme/app/pulls/1/merge"]
 n_calls = len(merge_calls())
 github_store._STORE = None          # a restart: the state is read back from disk
 for _ in range(3):

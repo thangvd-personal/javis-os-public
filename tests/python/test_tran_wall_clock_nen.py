@@ -12,10 +12,11 @@ Trần này là LƯỚI ĐỠ chống fork treo vô hạn chứ không phải qu
 idle-timeout riêng bắt sớm hơn), nên nó phải đặt theo việc dài nhất hợp lệ. Nay cả ba nơi
 dùng chung aux_engine.bg_max_wall_s(): mặc định 3600s, env JAVIS_BG_MAX_WALL_S đổi được.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -26,7 +27,7 @@ def check(ten, cond, them=""):
         _fails.append(ten)
 
 
-import aux_engine  # noqa: E402
+import aux_engine
 
 # ---- 1. Helper: mặc định + env override + chống giá trị rác ----
 os.environ.pop("JAVIS_BG_MAX_WALL_S", None)

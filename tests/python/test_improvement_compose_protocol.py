@@ -1,16 +1,15 @@
 """Actual extracted compose function and body validator; no model/authority claim."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import ast
+import copy
 import hashlib
 import importlib
 import importlib.util
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_skill_patch import body_layout
 from improvement_store import _hash
 

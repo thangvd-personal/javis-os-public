@@ -13,18 +13,17 @@ import secrets
 import time
 from contextlib import closing
 
-from cryptography.fernet import InvalidToken
-
 import improvement_store as IM
+from cryptography.fernet import InvalidToken
 from evidence_store import redact
 from improvement_blobs import AssetUnavailable
-from improvement_recipe_sources import owner_rule_hash
 from improvement_comparison_plans import ExperimentPlans
 from improvement_comparison_results import ComparisonResults
 from improvement_experiments import _generation, _identifier
 from improvement_harness2_context import assert_tree_has_no_grader_verdicts
 from improvement_improver_inputs import ImproverInputs
 from improvement_qualification_records import require_product_store
+from improvement_recipe_sources import owner_rule_hash
 from improvement_result_domain import require_product_report
 from improvement_trial_evidence import decode_trace
 from improvement_trial_file_sources import BrainFileFixtures

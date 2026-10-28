@@ -23,13 +23,11 @@ import random
 import sqlite3
 import sys
 import time
-from typing import Optional
 
 import localefmt
 import webhook_actions
 import webhook_auth
 import webhook_rules
-import webhook_secrets
 import webhook_store
 
 WORKER_MAX = 4                 # events running at once in this process (one per hook: spec §11)
@@ -56,13 +54,13 @@ class WebhookWorker:
     """Mixin: needs self.deps, self.store(), self.vault, self._find_hook(hid), self._secret(ref, name)."""
 
     def _worker_init(self) -> None:
-        self._pump: Optional[asyncio.Task] = None
-        self._wake: Optional[asyncio.Event] = None
+        self._pump: asyncio.Task | None = None
+        self._wake: asyncio.Event | None = None
         self._active: dict = {}
         self._ai_active: set = set()
         self._ai_ids_last: list = []
         self._tasks: set = set()
-        self._sweeper: Optional[asyncio.Task] = None
+        self._sweeper: asyncio.Task | None = None
         self.clock = time.time
         self.rng = random.Random()
 
@@ -153,7 +151,7 @@ class WebhookWorker:
         await self.wait_idle()
 
     # ── triage ──
-    def _revision_config(self, hid: str, rev: int, legacy_snapshot: str = "") -> Optional[dict]:
+    def _revision_config(self, hid: str, rev: int, legacy_snapshot: str = "") -> dict | None:
         """The configuration an event arrived under: its revision; for an event stored by an older build, its own
         snapshot; failing both, the hook as it is now."""
         st = self.store()
@@ -309,7 +307,7 @@ class WebhookWorker:
                                                                   "title": "webhook store", "id": ""})
 
     # ── run ──
-    async def _heartbeat(self, eid: str, fence: int, run: Optional[asyncio.Task] = None) -> None:
+    async def _heartbeat(self, eid: str, fence: int, run: asyncio.Task | None = None) -> None:
         while True:
             await asyncio.sleep(webhook_store.HEARTBEAT_S)
             try:
@@ -399,7 +397,7 @@ class WebhookWorker:
         # The instruction, targets and rules as they were when the event arrived (its revision); the permission level
         # is the hook's level NOW (spec §3: current permissions are checked before every effect, so a right the owner
         # took away is gone for waiting events, and a level the owner raised to fix a blocked delivery applies).
-        from webhook_triggers import VALID_LEVELS, DEFAULT_LEVEL
+        from webhook_triggers import DEFAULT_LEVEL, VALID_LEVELS
         hook = dict(cur)
         for k in ("target", "workflow", "text"):
             if snap.get(k) is not None:
@@ -679,7 +677,7 @@ class WebhookWorker:
                       fields: dict, b: dict) -> tuple:
         """The hook's task or workflow: the only delivery that calls a model. The event and delivery ids go into the
         prompt (spec §8.4): the run is tied to them in the workflow history. Returns (status, detail, result)."""
-        from webhook_triggers import event_prompt, payload_text, _is_silent
+        from webhook_triggers import _is_silent, event_prompt, payload_text
         prompt = event_prompt(hook, payload_text(body, ct, compact=True), base["received_at"], fields,
                               ids={"event": base["event_id"], "delivery": b.get("delivery_id", "")})
         result, error, needs_input = "", "", False
@@ -734,7 +732,7 @@ class WebhookWorker:
                 ok.append(str(r["result"])[:1500])
         return "\n".join(ok), "\n".join(bad)
 
-    def _plugin_handler(self, brain: str, slug: str, name: str) -> Optional[dict]:
+    def _plugin_handler(self, brain: str, slug: str, name: str) -> dict | None:
         if not self.deps.plugin_handler:
             return None
         try:
@@ -763,7 +761,7 @@ class WebhookWorker:
         await asyncio.to_thread(
             self.store().notify_enqueue, dkey, kind, text, hook_id=str(h.get("id") or ""), event_id=eid,
             chat_id=h.get("chat_id", ""), brain=h.get("brain") or "brain",
-            web=web if web is not None else (text[2:] if text.startswith("⚠ ") else text),
+            web=web if web is not None else (text.removeprefix("⚠ ")),
             viec={"kind": "webhook", "status": status or kind, "title": str(h.get("name") or "")[:160],
                   "id": str(h.get("id") or "")}, mark_event=mark)
 
@@ -880,7 +878,7 @@ class WebhookWorker:
                     await self._enqueue(f"wh:{hid}:{ev['id']}:{fence}", "event", msg, h, ev["id"], mark, status)
                     if later:
                         await asyncio.to_thread(st.meta_set, *later[0])
-                    pass   # delivered by _notify, outside the hook's lock
+                    # delivered by _notify, outside the hook's lock
                     return
             await asyncio.to_thread(st.mark_notified, ev["id"], fence)
             return
@@ -895,7 +893,7 @@ class WebhookWorker:
                                         "lỗi.", f"Webhook \"{name}\" runs normally again after {cur.get('count', 1)} "
                                         "failures.")
                     await self._enqueue(f"whr:{hid}:{ev['id']}", "recovered", msg, h, ev["id"], mark, "done")
-                    pass   # delivered by _notify, outside the hook's lock
+                    # delivered by _notify, outside the hook's lock
                     return
             await asyncio.to_thread(st.mark_notified, ev["id"], fence)
             return
@@ -948,9 +946,9 @@ class WebhookWorker:
         await self._enqueue(dkey, "event", msg, h, ev["id"], mark, status)
         if inc_later:
             await asyncio.to_thread(st.meta_set, *inc_later[0])
-        pass   # delivered by _notify, outside the hook's lock
+        # delivered by _notify, outside the hook's lock
 
-    async def _digest(self, now: Optional[float] = None) -> int:
+    async def _digest(self, now: float | None = None) -> int:
         """`daily_digest`: once a day after DIGEST_HOUR in the hook's time zone (its `digest_timezone`, else the
         owner's), one plain message per hook counting the last day. Built from counts only: no model. The outbox key
         `whd:<hook>:<day>` makes a restart send at most one per period."""

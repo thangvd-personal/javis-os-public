@@ -1,6 +1,4 @@
 """Durable trial and existing call reservation use real isolated SQLite, without models."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -11,8 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from unittest.mock import patch
 
-import test_improvement_cases as fixtures
 import improvement_store as IM
+import test_improvement_cases as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from agent_ledger import CallLedger
 
 if importlib.util.find_spec("improvement_trials"):
@@ -263,6 +262,7 @@ class TrialStoreTests(unittest.TestCase):
 
     def test_schema_two_metadata_reads_do_not_migrate_and_failed_upgrade_rolls_back(self):
         from unittest.mock import patch
+
         import improvement_trial_schema as schema
         self.assets.set_policy(self.owner, "off", expected_version=0, event_key="off-before-upgrade")
         with self.rs._conn() as connection:

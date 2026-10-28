@@ -5,21 +5,21 @@
 Kho và bộ chạy thật trên SQLite tạm, engine giả theo kịch bản, lệnh quản trị qua khối JAVIS_TEAM. Thao tác của host
 (tạo agent, sửa lời nhắc, bật Cộng hưởng, cấp mã) là bản giả ghi lại lời gọi. Không gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
-import threading
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-auth-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-auth-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

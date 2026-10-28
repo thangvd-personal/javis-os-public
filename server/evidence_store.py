@@ -7,14 +7,14 @@ import os
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import config
 import context_runtime
 import secrets_store
-
 
 EVIDENCE_STORE_VERSION = "evidence-store-v1"
 _SECRET_KEYS = {

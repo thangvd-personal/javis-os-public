@@ -14,18 +14,18 @@ from __future__ import annotations
 
 import mimetypes
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
-
-from fastapi import APIRouter, Form, Query
-from fastapi.responses import FileResponse, JSONResponse
 
 import channel_accounts
 import channels
 import chatbot_store
 import conversations
 import localefmt
+from fastapi import APIRouter, Form, Query
+from fastapi.responses import FileResponse, JSONResponse
+
 import routes.channels as channels_routes
 
 router = APIRouter()
@@ -51,7 +51,7 @@ _DUOI_XEM_THANG = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic", ".
                    ".wav", ".opus", ".pdf")
 
 
-_DEPS: "ConversationsDeps" = None   # type: ignore
+_DEPS: ConversationsDeps = None   # type: ignore
 
 
 def _404(msg: str = ""):
@@ -67,7 +67,7 @@ def register(app, deps: ConversationsDeps):
         key = str(c.get("channel_account_id") or "")
         return key.split(":", 1)[1] if ":" in key else key
 
-    async def _gui_tin(c: dict, txt: str, tieng_vong: bool = False, reply_to: Optional[dict] = None):
+    async def _gui_tin(c: dict, txt: str, tieng_vong: bool = False, reply_to: dict | None = None):
         """Gửi một tin chữ vào cuộc chat qua năng lực `gui` của kênh. Trả (ok, lỗi). Dùng chung cho chủ gõ tay và cho lượt
         nhờ bot trả lời (0.65.5), để hai đường không lệch nhau ở cách dựng tài khoản gửi.
 
@@ -242,7 +242,7 @@ def register(app, deps: ConversationsDeps):
         return {"ok": True, "tag": tag, "tags": conversations.list_tags()} if tag else _tag_err(err)
 
     @router.post("/conversations/tags/{tag_id}")
-    async def conversations_tag_update(tag_id: int, name: Optional[str] = Form(None), color: Optional[str] = Form(None)):
+    async def conversations_tag_update(tag_id: int, name: str | None = Form(None), color: str | None = Form(None)):
         """Rename and/or recolour a tag (fields left out stay as they are)."""
         ok, err = conversations.update_tag(tag_id, name=name, color=color)
         return {"ok": True, "tags": conversations.list_tags()} if ok else _tag_err(err)

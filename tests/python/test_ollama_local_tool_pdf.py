@@ -9,7 +9,6 @@ Người dùng Mac mini báo 11/10/2026 (kèm bản vá đã chạy thử trên 
   4. Trang Local Model trên chip Apple ghi "Chạy bằng CPU và RAM" trong khi Ollama chạy 100% GPU: gợi ý model chỉ coi là GPU khi có
      VRAM rời, và nhận diện chip bằng `uname -m` (Python bản Intel qua Rosetta thấy x86_64).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import io
 import os
@@ -19,20 +18,22 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ollama-local-"))
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import localefmt  # noqa: E402
+import localefmt
 
 localefmt.dat_ngon_ngu_yeu_cau("vi")
 
-import doc_text  # noqa: E402
-import main  # noqa: E402
-import ollama_catalog  # noqa: E402
-import ollama_local  # noqa: E402
+import doc_text
+import main
+import ollama_catalog
+import ollama_local
 
 _fails = []
 
@@ -139,7 +140,7 @@ finally:
 HUB = (SERVER / "mcp_hub.py").read_text(encoding="utf-8")
 check("javis_read_file dùng doc_text cho .pdf/.docx (chạy ngoài event loop)",
       "if p.suffix.lower() in doc_text.SUFFIXES:" in HUB and "await asyncio.to_thread(doc_text.extract, p)" in HUB)
-check("requirements ghim pypdf", re.search(r"^pypdf==\d", (ROOT / "requirements.txt").read_text(encoding="utf-8"), re.M))
+check("requirements ghim pypdf", re.search(r"^pypdf==\d", (ROOT / "requirements.txt").read_text(encoding="utf-8"), re.MULTILINE))
 
 # ============================================================
 # 4. Chip Apple là GPU

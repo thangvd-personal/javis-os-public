@@ -18,10 +18,10 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from config import STATE_DIR
 import localefmt
+from config import STATE_DIR
 
 TRANG_THAI = ("running", "done", "error", "waiting")
 NHAN_TRANG_THAI = {"running": "đang chạy", "done": "xong", "error": "lỗi", "waiting": "chờ duyệt"}
@@ -129,7 +129,7 @@ class WorkflowRunStore:
 
     # ---- đọc ----
     @staticmethod
-    def _row(r: sqlite3.Row, day_du: bool) -> Dict[str, Any]:
+    def _row(r: sqlite3.Row, day_du: bool) -> dict[str, Any]:
         d = {k: r[k] for k in _COT}
         d["steps"] = json.loads(d.pop("steps_json") or "[]")
         d["nhan"] = localefmt.chu(NHAN_TRANG_THAI.get(d["status"], d["status"]),
@@ -140,13 +140,13 @@ class WorkflowRunStore:
                            "error": bool(s.get("error"))} for s in d["steps"]]
         return d
 
-    def lay(self, run_id: str) -> Optional[Dict[str, Any]]:
+    def lay(self, run_id: str) -> dict[str, Any] | None:
         with self._lock:
             r = self._db.execute("SELECT * FROM workflow_runs WHERE id=?", (run_id,)).fetchone()
         return self._row(r, True) if r else None
 
-    def gan_nhat(self, brain: str, *, slug: Optional[str] = None, session_id: Optional[str] = None,
-                 status: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    def gan_nhat(self, brain: str, *, slug: str | None = None, session_id: str | None = None,
+                 status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         where, params = ["brain=?"], [str(brain)]
         if slug:
             where.append("slug=?"); params.append(slug)
@@ -166,7 +166,7 @@ class WorkflowRunStore:
             r = self._db.execute("SELECT COUNT(*) FROM workflow_runs WHERE session_id=?", (session_id,)).fetchone()
         return int(r[0]) if r else 0
 
-    def tim_theo_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def tim_theo_task(self, task_id: str) -> dict[str, Any] | None:
         if not task_id:
             return None
         with self._lock:
@@ -174,14 +174,14 @@ class WorkflowRunStore:
                                  (task_id,)).fetchone()
         return self._row(r, True) if r else None
 
-    def moc_moi_nhat_theo_slug(self, brain: str) -> Dict[str, float]:
+    def moc_moi_nhat_theo_slug(self, brain: str) -> dict[str, float]:
         with self._lock:
             rows = self._db.execute("SELECT slug, MAX(started_at) AS m FROM workflow_runs WHERE brain=? GROUP BY slug",
                                     (str(brain),)).fetchall()
         return {r["slug"]: float(r["m"] or 0) for r in rows}
 
 
-_STORE: Optional[WorkflowRunStore] = None
+_STORE: WorkflowRunStore | None = None
 _STORE_LOCK = threading.Lock()
 
 

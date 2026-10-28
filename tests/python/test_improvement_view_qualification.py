@@ -1,6 +1,4 @@
 """Owned final claim denials over real stores; no fabricated eligible selection."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib
 import importlib.util
 import json
@@ -9,10 +7,11 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-from resonance_store import Principal
-from improvement_cases import CaseStore
-import test_improvement_view_sources as sources
 import test_improvement_view_qualification_schema as schema_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_cases import CaseStore
+from resonance_store import Principal
 
 
 def factory():

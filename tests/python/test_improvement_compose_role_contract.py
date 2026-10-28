@@ -3,25 +3,24 @@
 Private workspace/CallLedger controls are explicitly synthetic/unexecuted. No
 compose consent service, native/account/model readiness or new bundle is claimed.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import asyncio
+import copy
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_ledger import CallLedger
-import improvement_operation_protocol as protocol
 import improvement_operation_profile as profile
+import improvement_operation_protocol as protocol
 import improvement_store as IM
 import improvement_usage as usage
-import usage_store
-from resonance_store import GoalStore
 import test_improvement_compose_protocol as compose
 import test_improvement_operation_workspace as workspace
+import usage_store
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
+from resonance_store import GoalStore
 
 
 class ComposeRoleContractTests(unittest.TestCase):

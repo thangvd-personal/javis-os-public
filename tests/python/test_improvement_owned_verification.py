@@ -1,14 +1,13 @@
 """Actual adapter verification must settle before cancellation leaves the call."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-from pathlib import Path
 import threading
 import time
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_store import _hash

@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Dict, Optional
-
 
 Writer = Callable[[dict], Awaitable[None]]
 
@@ -26,8 +25,8 @@ BACKLOG_MAX = 500
 @dataclass
 class _Client:
     writer: Writer
-    on_drop: Optional[Callable[[], None]] = None
-    pending: Optional[asyncio.Future] = None
+    on_drop: Callable[[], None] | None = None
+    pending: asyncio.Future | None = None
     since: float = 0.0
     backlog: deque = field(default_factory=deque)
 
@@ -45,10 +44,10 @@ class ChatRuntime:
     """Registry in-memory cho job chat và các kết nối đang xem."""
 
     def __init__(self) -> None:
-        self._clients: Dict[str, _Client] = {}
-        self._jobs: Dict[str, ChatJob] = {}
+        self._clients: dict[str, _Client] = {}
+        self._jobs: dict[str, ChatJob] = {}
 
-    def add_client(self, client_id: str, writer: Writer, on_drop: Optional[Callable[[], None]] = None) -> None:
+    def add_client(self, client_id: str, writer: Writer, on_drop: Callable[[], None] | None = None) -> None:
         """`on_drop()` closes the page's socket when the runtime gives up on it (stuck sends)."""
         self._clients[client_id] = _Client(writer, on_drop)
 
@@ -92,7 +91,7 @@ class ChatRuntime:
             runtime_task_id=runtime_task_id, runtime_step_id=runtime_step_id,
         )
 
-    def get_job(self, session_id: str) -> Optional[ChatJob]:
+    def get_job(self, session_id: str) -> ChatJob | None:
         job = self._jobs.get(session_id)
         if job and job.task.done():
             self._jobs.pop(session_id, None)
@@ -105,7 +104,7 @@ class ChatRuntime:
         if job and job.task is task:
             self._jobs.pop(session_id, None)
 
-    def cancel_session(self, session_id: str) -> Optional[str]:
+    def cancel_session(self, session_id: str) -> str | None:
         job = self.get_job(session_id)
         if not job:
             return None

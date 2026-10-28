@@ -41,7 +41,6 @@ import time
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 SNAPSHOT = "snapshot"
 IF_PRESENT = "snapshot_if_present"
@@ -64,7 +63,7 @@ class Marker:
 class Entry:
     store: str
     kind: str
-    marker: Optional[Marker] = None
+    marker: Marker | None = None
     lost: str = ""
 
 
@@ -150,7 +149,7 @@ def _tables(path: Path) -> dict:
         return {n: c.execute(f'SELECT COUNT(*) FROM "{n}"').fetchone()[0] for n in names}
 
 
-def _snapshot_problem(snap: Path, m: Optional[Marker], ver: str) -> str:
+def _snapshot_problem(snap: Path, m: Marker | None, ver: str) -> str:
     """"" nếu `snap` là bản trước mốc `ver` dùng được, còn không thì lý do."""
     try:
         with closing(_ro(snap)) as c:
@@ -240,7 +239,7 @@ def _unique(path: Path) -> Path:
     return path.with_name(f"{path.name}-{n}")
 
 
-def _stat(path: Path) -> Optional[tuple]:
+def _stat(path: Path) -> tuple | None:
     try:
         st = path.stat()
         return (st.st_size, st.st_mtime_ns)
@@ -248,7 +247,7 @@ def _stat(path: Path) -> Optional[tuple]:
         return None
 
 
-def _put_back(store: Path, copy: Optional[Path], before: Optional[tuple] = None) -> str:
+def _put_back(store: Path, copy: Path | None, before: tuple | None = None) -> str:
     """Trả `store` về `copy` (bản sao trước khi khôi phục); `copy` None nghĩa là trước đó kho không có: gỡ đi. Kiểm lại
     sau khi trả. Trả "" nếu đúng, còn không thì lý do.
 

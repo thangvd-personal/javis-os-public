@@ -17,17 +17,18 @@ Phủ:
 - Bỏ qua vòng thì GIỮ mốc cũ - nếu dời mốc, thay đổi trước đó bị nuốt vĩnh viễn.
 - Wiki rỗng -> bỏ qua, không spawn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 _TMP = tempfile.mkdtemp(prefix="javis-cscope-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import learn  # noqa: E402
+import learn
 
 fails = []
 

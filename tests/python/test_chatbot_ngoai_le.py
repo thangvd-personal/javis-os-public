@@ -20,12 +20,13 @@ What this file guards:
      bot's level for others.
   5. The known-chats list tags each private chat with its account, so the form picks instead of typing.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-ngoaile-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -35,10 +36,10 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -253,8 +254,9 @@ check("inbox: every other chat runs at the bot's level", mucs[3:4] == ["suggest"
 # ============================================================
 # 6. The known-chats list tags each private chat with its account
 # ============================================================
-import chatbot_cuoc_chat  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_cuoc_chat
+import conversations
+
 _goc = conversations.cuoc_chat_cua_tai_khoan
 conversations.cuoc_chat_cua_tai_khoan = lambda kenh, aid, q, n: (
     [{"external_chat_id": "u_me", "chat_type": "private", "customer_name": "Mẹ", "last_message_at": 5}]
@@ -269,7 +271,8 @@ check("a known private chat carries the account it lives on, for the exception p
 # ============================================================
 # 7. Zalo Bot: a message without its chat type is not taken as private on trust
 # ============================================================
-import zalo_bot  # noqa: E402
+import zalo_bot
+
 check("Zalo Bot: missing type, chat id = sender id -> private", zalo_bot._chat_type(None, "123", "123") == "private")
 check("CANARY Zalo Bot: missing type, chat id != sender id -> group, so a group id never matches an exception",
       zalo_bot._chat_type(None, "g-999", "123") == "group")

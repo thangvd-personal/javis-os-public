@@ -5,20 +5,17 @@ Chạy:
 
 Không gọi mạng, không cần đăng nhập ChatGPT/Codex.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
-import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 
-
-import compaction  # noqa: E402
-from claude_cli import CodexCLI, _looks_like_codex_resume_error  # noqa: E402
-from sessions import SessionStore  # noqa: E402
-
+import compaction
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+from claude_cli import CodexCLI, _looks_like_codex_resume_error
+from sessions import SessionStore
 
 _fails = []
 

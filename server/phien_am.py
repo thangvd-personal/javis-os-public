@@ -44,19 +44,12 @@ from pathlib import Path
 _AM_DAU = ("ngh", "ng", "nh", "ch", "gh", "gi", "kh", "ph", "qu", "th", "tr",
            "b", "c", "d", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "v", "x", "")
 # Vần tiếng Việt viết thuần ASCII (không mũ, không móc, không thanh).
-_VAN = frozenset("""
-a ac ach ai am an ang anh ao ap at au ay
-e ec em en eng eo ep et
-i ia ich im in inh ip it iu
-o oa oac oach oai oam oan oang oanh oao oap oat oay oc oe oen oeo oet oi om on ong ooc oong op ot
-u ua uc ui um un ung up ut uy uya uych uyn uynh uyp uyt
-y
-""".split())
+_VAN = frozenset(["a", "ac", "ach", "ai", "am", "an", "ang", "anh", "ao", "ap", "at", "au", "ay", "e", "ec", "em", "en", "eng", "eo", "ep", "et", "i", "ia", "ich", "im", "in", "inh", "ip", "it", "iu", "o", "oa", "oac", "oach", "oai", "oam", "oan", "oang", "oanh", "oao", "oap", "oat", "oay", "oc", "oe", "oen", "oeo", "oet", "oi", "om", "on", "ong", "ooc", "oong", "op", "ot", "u", "ua", "uc", "ui", "um", "un", "ung", "up", "ut", "uy", "uya", "uych", "uyn", "uynh", "uyp", "uyt", "y"])
 # Từ tiếng Anh ngắn trùng khuôn âm tiết Việt mà tiếng Việt thật luôn viết có dấu ("chát",
 # "tốp", "ít"). KHÔNG đưa vào đây những từ tiếng Việt không dấu: "to" (chữ to), "in" (in hoá
 # đơn), "no" (ăn no), "so" (so sánh), "do" (do đó), "pin" (sạc pin).
-_ANH_NGAN = frozenset("chat top tip map cap ping bin hi ok up at it by".split())
-_TU = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*", re.U)
+_ANH_NGAN = frozenset(["chat", "top", "tip", "map", "cap", "ping", "bin", "hi", "ok", "up", "at", "it", "by"])
+_TU = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*", re.UNICODE)
 _CO_DAU = re.compile(r"[^\x00-\x7f]")
 
 

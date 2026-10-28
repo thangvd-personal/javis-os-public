@@ -37,27 +37,27 @@ Module KHÔNG import main (tránh vòng lặp import): mọi helper tiêm qua Re
 """
 from __future__ import annotations
 
-import localefmt
 import asyncio
 import json
 import os
 import re
 import shutil
 import sys
-import winproc         # lệnh con câm lặng trên Windows
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Body, Form, Query
-
+import channel_context  # bóc khối JAVIS_* trước khi gửi Telegram - kênh chữ, không phải web
 import cron_util
-import channel_context   # bóc khối JAVIS_* trước khi gửi Telegram - kênh chữ, không phải web
-import once_ledger       # outside actions of one firing run once, across retries (0.238.0)
+import localefmt
+import once_ledger  # outside actions of one firing run once, across retries (0.238.0)
 import turn_context
+import winproc  # lệnh con câm lặng trên Windows
+from fastapi import APIRouter, Body, Form, Query
 
 
 def _nhan_kw(fn, ten: str) -> bool:
@@ -69,8 +69,9 @@ def _nhan_kw(fn, ten: str) -> bool:
     except (TypeError, ValueError):
         return False
     return any(p.name == ten or p.kind is p.VAR_KEYWORD for p in ps)
-from claude_cli import claude_engine, _empty_mcp_file
-import aux_engine   # engine viec nen theo model phu nguoi dung chon
+import aux_engine  # engine viec nen theo model phu nguoi dung chon
+from claude_cli import _empty_mcp_file, claude_engine
+
 
 # Múi giờ để tính giờ nhắc hẹn. Đọc từ cấu hình, KHÔNG còn ghim Việt Nam.
 #
@@ -258,7 +259,7 @@ _AT_HH = re.compile(r"^(\d{1,2})h$")                 # 8h
 _AT_DATE = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})[ t](\d{1,2})[:h](\d{2})$")
 
 
-def _parse_iso_vn(s: str) -> Optional[datetime]:
+def _parse_iso_vn(s: str) -> datetime | None:
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M",
                 "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
         try:
@@ -330,27 +331,27 @@ class RemindersDeps:
     atomic_write_text: Callable[[Any, str], None]
     send_telegram: Callable                    # async send_telegram(chat_id, text) -> (ok, err)
     build_system_prompt: Callable[[str], str]
-    aux_model: Callable[[], Optional[str]]
-    safe_tools: List[str]
-    readonly_tools: List[str]
-    scheduler_brains: Callable[[], List[str]]  # () -> danh sách brain scheduler quét
-    apply_mcp: Optional[Callable] = None       # apply_mcp(cli, mode): gắn MCP Javis-quản-lý (đọc thật)
-    mcp_allow_patterns: Optional[Callable] = None  # () -> ["mcp__<server>", ...] cho allowlist
+    aux_model: Callable[[], str | None]
+    safe_tools: list[str]
+    readonly_tools: list[str]
+    scheduler_brains: Callable[[], list[str]]  # () -> danh sách brain scheduler quét
+    apply_mcp: Callable | None = None       # apply_mcp(cli, mode): gắn MCP Javis-quản-lý (đọc thật)
+    mcp_allow_patterns: Callable | None = None  # () -> ["mcp__<server>", ...] cho allowlist
     # Đổi engine việc nền theo model phụ người dùng chọn (Claude / Codex / API rẻ).
     # None = giữ nguyên Claude như trước (test dựng deps tối giản không cần tiêm).
-    aux_swap: Optional[Callable] = None
+    aux_swap: Callable | None = None
     # () -> (sẵn_sàng, lý_do): có đường gửi kết quả cho người dùng chưa (bot Telegram bật +
     # token + Chat ID). None = bỏ qua kiểm tra (test dựng deps tối giản).
-    notify_ready: Optional[Callable[[], tuple]] = None
+    notify_ready: Callable[[], tuple] | None = None
     # 0.199.0: (source, ref, brain=, title=, error=, request=) -> report a broken run to Javis Core (incident_desk.py).
-    incident_hook: Optional[Callable] = None
+    incident_hook: Callable | None = None
     # 0.202.0: async make_voice(brain, text) -> vault-relative mp3 path ("" on failure), and
     # async send_file(chat_id, abs_path, brain) -> (ok, err) for channels that need the file itself.
-    make_voice: Optional[Callable] = None
-    send_file: Optional[Callable] = None
+    make_voice: Callable | None = None
+    send_file: Callable | None = None
     # register_brain(brain): remember a brain that now holds a reminder so `scheduler_brains`
     # keeps returning it (needed for folders outside BRAINS_DIR). None = nothing to register.
-    register_brain: Optional[Callable[[str], None]] = None
+    register_brain: Callable[[str], None] | None = None
 
 
 class RemindersFeature:
@@ -985,7 +986,7 @@ class RemindersFeature:
                                      f"could not run the script: {type(e).__name__}: {e}"), -1
         try:
             out_b, err_b = await asyncio.wait_for(proc.communicate(), timeout=SCRIPT_TIMEOUT_S)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             try:
                 proc.kill()
             except Exception:
@@ -1232,7 +1233,7 @@ def _truthy(v) -> bool:
     return str(v or "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def next_runs(cron: str, count: int = NEXT_RUNS_SHOWN, after: Optional[float] = None) -> list:
+def next_runs(cron: str, count: int = NEXT_RUNS_SHOWN, after: float | None = None) -> list:
     """The next `count` firings of a cron schedule as [{"at", "human"}], so a person confirms a
     schedule by its dates instead of decoding "0 9 1 * *". Empty on a bad expression."""
     out = []

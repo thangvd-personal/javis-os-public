@@ -151,8 +151,9 @@ def token_cho(url: str) -> str:
     tiến trình con, trong log của proxy, và trong `Referer` khi có chuyển hướng - đó chính là
     lý do `git_brain._redact` phải tồn tại cho đường git."""
     try:
-        import config as cfgmod
         from urllib.parse import urlparse
+
+        import config as cfgmod
         host = (urlparse(str(url or "")).hostname or "").lower()
         if not host:
             return ""

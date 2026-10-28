@@ -1,16 +1,15 @@
 """Pure untrusted projection and genuine pending v4 report ownership; no fake results."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_comparison_results import ComparisonResults, project_result
 import test_improvement_comparison_results as arithmetic
-import test_improvement_view_sources as sources
 import test_improvement_view_reservations as reservations
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_comparison_results import ComparisonResults, project_result
 
 
 class ViewProjectionTests(unittest.TestCase):

@@ -24,10 +24,11 @@ lúc model suy nghĩ ở mức nỗ lực cao hoặc soạn nội dung file dài
 hoàn toàn dù mọi thứ đang chạy đúng. Nay hai trần đo-sự-im-lặng mặc định KHÔNG GIỚI HẠN; trần
 chờ TOOL giữ nguyên vì nó đo một tiến trình con có thật đang sống.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -50,7 +51,7 @@ for ten, nguon in (("engine Claude SDK", sdk), ("engine Codex CLI", cli)):
               re.search(rf'{bien}"\s*,\s*"{mac_dinh}"', nguon) is not None)
 
 # ---- 2. "0 = không giới hạn" phải là hành vi THẬT, không chỉ là con số trong mã ----
-from claude_sdk_engine import tran_watchdog  # noqa: E402
+from claude_sdk_engine import tran_watchdog
 
 for raw in ("0", "-1", "0.0"):
     os.environ["JAVIS_TEST_TRAN"] = raw

@@ -1,20 +1,19 @@
 """Real private M0/ledger/trial records; observer seams, no native/provider."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-from contextlib import closing
-from concurrent.futures import ThreadPoolExecutor
 import importlib
 import importlib.util
 import json
 import sqlite3
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
-from resonance_store import Principal
 import test_improvement_qualification_session as S
 import test_improvement_trials as T
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
+from resonance_store import Principal
 
 
 class QualificationRecordsTests(unittest.TestCase):
@@ -158,15 +157,15 @@ class QualificationRecordsTests(unittest.TestCase):
         with self.assertRaises(AssetUnavailable): self.read()
 
     def test_actual_default_trial_product_result_read_and_publication_refuse_durable_domain_before_data(self):
-        from improvement_trial_results import TrialResults
         from improvement_trial_products import TrialProducts
+        from improvement_trial_results import TrialResults
         results = TrialResults(self.trials)
         with closing(self.session.assets.store._conn()) as connection:
             row = self.trials._row(connection, self.owner.brain_id, self.identifier)
             actions = {
                 'cold_read': lambda: results.read(self.owner, self.identifier, 1),
                 'publication': lambda: results.finish(self.owner, self.identifier, expected_generation=self.row['generation'],
-                    lease_token=self.token, capability_hash='c' * 64, live_guard=lambda: {}, checker_registry={}),
+                    lease_token=self.token, capability_hash='c' * 64, live_guard=dict, checker_registry={}),
                 'products': lambda: TrialProducts(self.trials)._products(connection, row, principal=self.owner, capability_hash='c' * 64)}
             for name, action in actions.items():
                 with self.subTest(path=name), self.assertRaisesRegex(PermissionError, 'non_product_execution_domain'):

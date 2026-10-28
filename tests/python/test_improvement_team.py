@@ -1,6 +1,4 @@
 """M7 Team trials and recipe transfer: pinned comparable ground (T01), report scope (T02), untested transfer."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 from contextlib import closing
@@ -8,6 +6,7 @@ from unittest.mock import patch
 
 import improvement_store as IM
 import improvement_team as T
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEAM = {"team_id": "team-1", "brain_id": "/brain", "leader_key": "agent-a", "leader_mode": "limited", "work_mode": "gated"}
 MEMBERS = [{"agent_key": "agent-a", "role": "leader"}, {"agent_key": "agent-b", "role": "member"}]
@@ -177,9 +176,9 @@ class TeamTrialStoreTests(StoreBase):
             IM.ensure(self.store)
 
     def test_http_routes(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         transfers = T.RecipeTransfers(self.assets)
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: None, resolve_brain=lambda value: self.owner.brain_id,

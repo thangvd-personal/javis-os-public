@@ -1,7 +1,7 @@
 """Closed host-issued role request metadata, never model or HTTP authority."""
-from improvement_experiment_protocol import _freeze, _id, _digest
-from improvement_store import _hash, _json
 from improvement_blobs import MAX_ASSET_BYTES
+from improvement_experiment_protocol import _digest, _freeze, _id
+from improvement_store import _hash, _json
 
 _FIELDS = {"version", "experiment_id", "context_id", "definition_hash", "kind", "role", "purpose",
            "candidate_id", "parent_id", "input_hash"}

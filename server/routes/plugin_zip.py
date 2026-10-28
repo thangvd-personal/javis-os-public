@@ -13,15 +13,14 @@ A full store pack zip dropped here is not turned away: `inspect` reports it with
 and the result of the PACK inspector, so the dashboard opens the pack confirmation screen and
 installs it through `/packs/install`. One pack installer, one set of rules.
 """
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse
 
 import localefmt
 import pack_install
 import plugin_install
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 
 MAX_UPLOAD = pack_install.MAX_ZIP
 

@@ -36,13 +36,11 @@ import sys
 import time
 import uuid
 from pathlib import Path, PurePosixPath
-from typing import Dict, List, Optional, Tuple
 
-import yaml
 import fastyaml
-
 import localefmt
 import plugins_host
+import yaml
 from config import STATE_DIR
 
 ALLOWED_EXT = frozenset({".py", ".yaml", ".yml", ".md", ".txt", ".json"})
@@ -81,7 +79,7 @@ def _is_doc_key(key: str) -> bool:
     return k in _DOC_KEYS or k.startswith(("name_", "description_"))
 
 
-def _base_dir(scope: str, vault_root: Optional[str]) -> Path:
+def _base_dir(scope: str, vault_root: str | None) -> Path:
     if scope == "global":
         return plugins_host.global_plugins_dir()
     if scope == "brain":
@@ -141,7 +139,7 @@ def _ledger_key(scope: str, base: Path, slug: str) -> str:
     return f"{scope}:{hashlib.sha1(str(base.resolve()).encode('utf-8')).hexdigest()[:12]}:{slug}"
 
 
-def _ledger_set(key: str, value: Optional[dict]) -> None:
+def _ledger_set(key: str, value: dict | None) -> None:
     d = _read_ledger()
     if value is None:
         d.pop(key, None)
@@ -197,7 +195,7 @@ def _parse_manifest(text: str) -> dict:
     return m
 
 
-def _check_manifest(m: dict, slug: str, warnings: List[str]) -> dict:
+def _check_manifest(m: dict, slug: str, warnings: list[str]) -> dict:
     """Validated copy of the manifest. Refuses what would load wrong; warns about the rest."""
     m = dict(m)
     mm = m.get("min_mode")
@@ -232,7 +230,7 @@ def _check_manifest(m: dict, slug: str, warnings: List[str]) -> dict:
     return m
 
 
-def _registered_tool_names(src: str) -> Optional[set]:
+def _registered_tool_names(src: str) -> set | None:
     """Tool names a plugin.py passes to ctx.register_tool(...) as literals; None when undecidable."""
     try:
         tree = ast.parse(src)
@@ -252,7 +250,7 @@ def _registered_tool_names(src: str) -> Optional[set]:
     return names
 
 
-def _compile_all(files: Dict[str, str]) -> None:
+def _compile_all(files: dict[str, str]) -> None:
     for rel, text in sorted(files.items()):
         if rel.lower().endswith(".py"):
             try:
@@ -268,7 +266,7 @@ def _compile_all(files: Dict[str, str]) -> None:
 # ============================================================
 # Reading what is on disk
 # ============================================================
-def _walk_files(pdir: Path) -> Tuple[List[Tuple[str, Path]], List[str]]:
+def _walk_files(pdir: Path) -> tuple[list[tuple[str, Path]], list[str]]:
     """([(rel, path)] of regular allowlisted files, [skipped rel]) under pdir. Never follows links."""
     keep, skipped = [], []
     for dirpath, dirnames, filenames in os.walk(pdir, followlinks=False):
@@ -285,7 +283,7 @@ def _walk_files(pdir: Path) -> Tuple[List[Tuple[str, Path]], List[str]]:
     return keep, skipped
 
 
-def _find(slug: str, vault_root: Optional[str], scope: str = "") -> Optional[dict]:
+def _find(slug: str, vault_root: str | None, scope: str = "") -> dict | None:
     """The plugin with this slug as describe() reports it (the effective copy), or the copy in the
     named scope when `scope` is given. None when absent."""
     if scope:
@@ -303,7 +301,7 @@ def _find(slug: str, vault_root: Optional[str], scope: str = "") -> Optional[dic
 # ============================================================
 # Operations
 # ============================================================
-def list_plugins(vault_root: Optional[str]) -> dict:
+def list_plugins(vault_root: str | None) -> dict:
     editable, readonly = [], []
     for d in plugins_host.describe(vault_root):
         if d["source"] in ("user", "vault"):
@@ -317,7 +315,7 @@ def list_plugins(vault_root: Optional[str]) -> dict:
             "note": "Edit only user_plugins with op=write; system and pack plugins cannot be changed or cloned."}
 
 
-def read_plugin(slug: str, vault_root: Optional[str], scope: str = "") -> dict:
+def read_plugin(slug: str, vault_root: str | None, scope: str = "") -> dict:
     slug = str(slug or "").strip()
     if not plugins_host.valid_slug(slug):
         raise _err("slug không hợp lệ: {s}", "Invalid slug: {s}", s=repr(slug))
@@ -353,7 +351,7 @@ def read_plugin(slug: str, vault_root: Optional[str], scope: str = "") -> dict:
             "truncated": truncated, "skipped": skipped}
 
 
-def _normalise_files(files) -> Dict[str, str]:
+def _normalise_files(files) -> dict[str, str]:
     if files is None:
         return {}
     if isinstance(files, str) and files.strip().startswith("{"):
@@ -399,7 +397,7 @@ def _execution_view(m: dict) -> dict:
     return out
 
 
-def write_plugin(slug: str, files, vault_root: Optional[str], scope: str = "global",
+def write_plugin(slug: str, files, vault_root: str | None, scope: str = "global",
                  remove=None) -> dict:
     """Create or update a user plugin. Returns a result dict; raises AuthoringError when refused."""
     slug = str(slug or "").strip()
@@ -418,7 +416,7 @@ def write_plugin(slug: str, files, vault_root: Optional[str], scope: str = "glob
     base = _base_dir(scope, vault_root)
     new_files = _normalise_files(files)
     removing = sorted({clean_rel_path(x) for x in (remove or [])})
-    warnings: List[str] = []
+    warnings: list[str] = []
 
     pdir = base / slug
     if pdir.is_symlink() or (pdir.exists() and not pdir.is_dir()):
@@ -426,7 +424,7 @@ def write_plugin(slug: str, files, vault_root: Optional[str], scope: str = "glob
                    "{p} is not a plain plugin folder; it is not overwritten.", p=str(pdir))
     exists = pdir.is_dir()
 
-    old_files: Dict[str, str] = {}
+    old_files: dict[str, str] = {}
     old_manifest: dict = {}
     if exists:
         keep, skipped = _walk_files(pdir)
@@ -580,7 +578,7 @@ def write_plugin(slug: str, files, vault_root: Optional[str], scope: str = "glob
             "backup": str(bak) if exists else "", "warnings": warnings, "tell_owner": owner}
 
 
-def skipped_to_copy(pdir: Path) -> List[str]:
+def skipped_to_copy(pdir: Path) -> list[str]:
     """Files of an existing plugin this tool does not manage (other extensions), carried over as is.
     Symlinks and hidden entries are left behind on purpose: the new folder holds plain files only."""
     _keep, skipped = _walk_files(pdir)
@@ -592,7 +590,7 @@ def skipped_to_copy(pdir: Path) -> List[str]:
     return out
 
 
-def delete_plugin(slug: str, vault_root: Optional[str], scope: str = "") -> dict:
+def delete_plugin(slug: str, vault_root: str | None, scope: str = "") -> dict:
     """Remove a user plugin THIS TOOL created and that is currently off. The folder moves to the
     backup slot, so it can still be restored by hand. Anything else is left to the Plugins page."""
     slug = str(slug or "").strip()
@@ -638,7 +636,7 @@ def refresh_hub() -> None:
         print(f"[plugin_authoring] hub cache refresh failed: {e}", file=sys.stderr)
 
 
-def rebuild_index(vault_root: Optional[str]) -> None:
+def rebuild_index(vault_root: str | None) -> None:
     """Rebuild this brain's operations index (Javis/index.md) when the server module is loaded."""
     host = sys.modules.get("main")
     if vault_root and host is not None and callable(getattr(host, "rebuild_javis_index", None)):

@@ -10,12 +10,13 @@ Các chỗ thiếu hoặc sai tìm được khi đối chiếu, mỗi chỗ mộ
   nhận người tạo là chủ máy;
 - thành viên mang vai (title) cho gợi ý @.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-0142r-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-0142r-w-"))
@@ -25,13 +26,13 @@ for slug, name, role in (("lan", "Lan", "Chăm khách"), ("minh", "Minh", "Viế
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: {role}\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_engine  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import sessions
+import task_store
+import team_engine
+import team_runner as TR
+import team_store
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -237,7 +238,8 @@ check("nhóm tạm dừng, chưa có điều phối: vẫn có dòng kết cục
       rp)
 
 # Lượt bị huỷ hay quá trần thời gian: tiến trình engine của ĐÚNG lượt đó bị giết trước khi khoá bận được nhả (review #2).
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import patch
+
 killed = []
 
 
@@ -262,7 +264,7 @@ with patch.object(main.cfgmod, "read_settings", return_value={"model": {"main": 
                "engine_started": started}
         try:
             await asyncio.wait_for(fn(req), timeout=4)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return True
         return False
 

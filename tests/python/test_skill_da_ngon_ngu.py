@@ -10,7 +10,6 @@ Nhưng luật quan trọng nhất ở đây là luật RƠI VỀ. Thiếu bản 
 được rơi về rỗng: mô tả tiếng Việt vẫn định tuyến được cho người hỏi tiếng Anh (model đọc được
 cả hai), còn mô tả rỗng thì skill BIẾN MẤT khỏi router. Hỏng thầm, và hỏng nặng hơn nhiều.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import pathlib
 import shutil
 import sys
@@ -18,6 +17,7 @@ import tempfile
 
 import skill_router
 import system_sync
+from _paths import ROOT, SERVER  # noqa: F401
 
 _loi = []
 
@@ -127,8 +127,8 @@ check("manifest (Phase 8) cũng theo ngôn ngữ",
 # Router trong system prompt đưa cả danh sách cho model đọc, nên mô tả lệch tiếng vẫn chọn
 # đúng. `LazySkillSource._score` thì không có model nào cả - nó đếm từ chung giữa câu hỏi và
 # mô tả. Câu tiếng Anh gặp mô tả tiếng Việt là điểm gần 0, skill không bao giờ được chọn.
-import lazy_skill_runtime
 import capability_registry
+import lazy_skill_runtime
 
 _nguon = lazy_skill_runtime.LazySkillSource(capability_registry.CapabilityRegistry())
 _cau = "save a note fast"

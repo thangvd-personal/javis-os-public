@@ -3,10 +3,9 @@
 Chạy:
     .venv/Scripts/python.exe server/test_domain_setup_ui.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-from pathlib import Path
 import json
 
+from _paths import ROOT, SERVER
 
 INDEX = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
 BRANDING = (ROOT / "dashboard" / "branding.js").read_text(encoding="utf-8")

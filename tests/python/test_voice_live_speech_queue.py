@@ -12,12 +12,12 @@ việc đầu nên kết quả thứ hai hay tới đúng lúc đang đọc kế
   - không bao giờ kẹt: chờ quá trần thì vẫn đọc; send_tool_result không chặn route;
   - cúp máy thì bỏ các lời đọc còn trong hàng.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import time
 import unittest
 
 import voice_live
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class FakeServer:

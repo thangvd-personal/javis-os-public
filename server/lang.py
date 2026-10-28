@@ -38,7 +38,6 @@ from dataclasses import dataclass
 
 import lang_registry
 
-
 # Văn bản ngắn hơn ngần này thì không đủ căn cứ để dò ("ok", "cảm ơn", "yes"). Trả về ngôn
 # ngữ rỗng - nơi gọi PHẢI hiểu đó là "chưa biết", không phải "tiếng Việt".
 DO_DAI_TOI_THIEU = 12
@@ -112,7 +111,7 @@ _TU = re.compile(r"[^\W_]+", re.UNICODE)
 #
 # `_CHU_NGOAI`: ký tự tiếng Việt KHÔNG BAO GIỜ dùng. Thấy một chữ là chắc chắn không phải
 # tiếng Việt. Chú ý â ê ô KHÔNG có ở đây vì tiếng Việt dùng cả ba.
-_CHU_NGOAI = re.compile(r"[ñçüäößåæøœîûëï¿¡]", re.I)
+_CHU_NGOAI = re.compile(r"[ñçüäößåæøœîûëï¿¡]", re.IGNORECASE)
 
 # `_TU_NGOAI`: hư từ của các thứ tiếng Latin khác, những chữ tiếng Việt không có.
 #
@@ -166,7 +165,7 @@ def _tu_ngoai_trong(s: str) -> set:
 # `_DAU_CHUNG`: dấu sắc/huyền/hỏi trên nguyên âm trần. Tiếng Việt DÙNG chúng ("cá", "bà"),
 # nhưng tiếng Pháp, Tây Ban Nha, Bồ Đào Nha, Ý cũng vậy - nên một mình nó không kết luận
 # được gì. Nó chỉ dùng để SIẾT ngưỡng, xem chỗ chấm điểm bên dưới.
-_DAU_CHUNG = re.compile(r"[éáíóúàèìòù]", re.I)
+_DAU_CHUNG = re.compile(r"[éáíóúàèìòù]", re.IGNORECASE)
 
 # Dấu RIÊNG của tiếng Việt. Cố ý KHÔNG lấy cả bộ dấu: à á è é ì í ò ó ù ú â ê ô dùng chung
 # với tiếng Pháp, Tây Ban Nha, Bồ Đào Nha, Ý. Bản đầu vơ hết vào đây, nên
@@ -182,7 +181,7 @@ _DAU_VIET = re.compile(
     r"ỉĩị"
     r"ỏõọồốổỗộờớởỡợ"
     r"ủũụừứửữự"
-    r"ỳỷỹỵ]", re.I)
+    r"ỳỷỹỵ]", re.IGNORECASE)
 
 
 def _he_chu(text: str) -> str:

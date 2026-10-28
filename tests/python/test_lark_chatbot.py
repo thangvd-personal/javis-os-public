@@ -11,12 +11,13 @@ Lark was only an admin channel (0.85.0). The owner asked on 2026-10-12 for it on
      inbox gets the sender's and the group's names, a missing permission is asked once and then cached.
   6. Replying from the inbox goes through the same Lark API.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-larkbot-")
 try:
@@ -24,17 +25,16 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import localefmt  # noqa: E402
+import httpx
+import localefmt
 
 localefmt.dat_ngon_ngu_yeu_cau("vi")
 
-import bot_images  # noqa: E402
-import channels  # noqa: E402
-import config as cfgmod  # noqa: E402
-import lark_bot  # noqa: E402
-from channels import lark  # noqa: E402
+import bot_images
+import channels
+import config as cfgmod
+import lark_bot
+from channels import lark
 
 _fails = []
 

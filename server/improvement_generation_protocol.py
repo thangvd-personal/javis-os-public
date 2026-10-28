@@ -2,10 +2,12 @@
 # Proposal method adapted from Google Harness² (Copyright 2026 Google LLC),
 # Apache-2.0. Exact source/functions and changes: third_party/harness2/PROVENANCE.md.
 import json
+
 from evidence_store import redact
 from improvement_blobs import MAX_ASSET_BYTES
 from improvement_cases import _fields, _frozen, _text
-from improvement_skill_patch import validate_body_patch, _FIELDS as PATCH_FIELDS
+from improvement_skill_patch import _FIELDS as PATCH_FIELDS
+from improvement_skill_patch import validate_body_patch
 from improvement_store import _json
 
 

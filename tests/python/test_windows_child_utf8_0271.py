@@ -6,15 +6,16 @@ A Team member on Windows ran a Python one-liner that printed Vietnamese sheet na
 (cp1252). Every engine CLI Javis starts inherits the server environment, so config sets PYTHONUTF8 and
 PYTHONIOENCODING there on Windows, at import time, keeping any value the user set.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import subprocess
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-utf8-"))
 
-import config  # noqa: E402
+import config
 
 fails = []
 

@@ -7,12 +7,13 @@ Cộng hưởng, engine phán xử (`_agent_judge_ask`, chốt `JAVIS_NO_REAL_JU
 
 Không phải file test (tên bắt đầu bằng `_`).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-t4-host-")
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"   # chốt trung tâm (tests/run.py, _paths.py đặt sẵn; đặt lại cho chắc)
@@ -30,9 +31,9 @@ for _slug in SLUGS:
         encoding="utf-8", newline="\n")
 
 sys.path.insert(0, str(Path(ROOT) / "tools"))
-import main  # noqa: E402
-import team_adaptive_bench as TAB  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import team_adaptive_bench as TAB
+from fastapi.testclient import TestClient
 
 fakes = TAB.install_guards(main)
 api = main._TEAM_API
@@ -70,7 +71,7 @@ def drain(tolerate=False):
                 if asyncio.iscoroutine(job):
                     try:
                         await job
-                    except Exception as ex:  # noqa: BLE001
+                    except Exception as ex:
                         if not tolerate:
                             raise
                         errors.append(ex)

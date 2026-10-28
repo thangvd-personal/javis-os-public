@@ -20,17 +20,18 @@ Phủ:
 - stale_days = 0 thì tắt lọc theo thời gian (vẫn bỏ brain không tồn tại).
 - Lý do bỏ qua được nêu rõ để in ra log.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 _TMP = tempfile.mkdtemp(prefix="javis-curator-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import learn  # noqa: E402
+import learn
 
 fails = []
 

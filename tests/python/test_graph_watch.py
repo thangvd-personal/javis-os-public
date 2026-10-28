@@ -4,8 +4,16 @@ Chạy:  python tests/run.py graph_watch    (KHÔNG mạng).
 Kiểm tra: node mọc NGAY khi file .md được ghi (không đợi nhịp quét), phân biệt note mới /
 note đổi, file trong thư mục ẩn không lọt ra, và disconnect dọn task nền sạch sẽ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, tempfile, json, time, queue, threading
+import json
+import os
+import queue
+import sys
+import tempfile
+import threading
+import time
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-graphwatch-test-")
 
 _fails = []
@@ -14,9 +22,9 @@ def check(name, cond):
     if not cond:
         _fails.append(name)
 
-import main  # noqa: E402
-from routes import graph as graph_routes  # noqa: E402  - _hidden_in_roots bóc sang đây ở 0.9.243
-from starlette.testclient import TestClient  # noqa: E402
+import main
+from routes import graph as graph_routes
+from starlette.testclient import TestClient
 
 # --- _hidden_in_roots (thuần) ---
 root = tempfile.mkdtemp(prefix="javis-graphwatch-vault-")
@@ -103,6 +111,7 @@ if _fails:
 # flush kết quả; lỗi dọn WebSocket trong khối with ở trên vẫn bị test bắt bình thường.
 sys.stdout.flush()
 sys.stderr.flush()
-import _paths  # noqa: E402  - os._exit bỏ qua atexit, nên tự xoá thư mục tạm trước
+import _paths
+
 _paths.don_thu_muc_tam()
 os._exit(1 if _fails else 0)

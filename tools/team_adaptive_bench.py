@@ -148,7 +148,7 @@ class FakeModels:
         self._bump("judge_calls")
         if self.delay:
             await asyncio.sleep(self.delay)
-        keys = re.findall(r"^- \[([^\]]+)\]", prompt, re.M)
+        keys = re.findall(r"^- \[([^\]]+)\]", prompt, re.MULTILINE)
         return json.dumps({"decisions": [{"agent_key": k, "verdict": self.judge_verdict, "score": 0.2,
                                           "reason": "giả"} for k in keys]})
 
@@ -355,10 +355,10 @@ def main_bench(argv=None) -> dict:
     tally = SqlTally()
     tally.install()
     sys.path.insert(0, str(ROOT / "server"))
-    import main as M  # noqa: E402
-    import agent_pulse as AP  # noqa: E402
-    import httpx  # noqa: E402
-    import resonance_store as RS  # noqa: E402
+    import agent_pulse as AP
+    import httpx
+    import main as M
+    import resonance_store as RS
 
     fakes = install_guards(M, FakeModels(delay=a.fake_delay))
     assert not guards_hold(M), guards_hold(M)

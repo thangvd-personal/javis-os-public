@@ -4,7 +4,6 @@ giả ném lỗi nếu bị gọi với vai lạ, và `real_engine_guard` chặn
 
 Không phải file test (tên bắt đầu bằng `_`), `tests/run.py` không chạy trực tiếp.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import re
@@ -12,15 +11,16 @@ import tempfile
 import time
 from pathlib import Path
 
-import agent_judge as AJ  # noqa: E402
-import agent_judge_store as AJS  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_judge as AJ
+import agent_judge_store as AJS
+import agent_ledger as AL
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEMP = Path(tempfile.mkdtemp(prefix="javis-judge-world-"))
 _n = [0]
@@ -80,7 +80,7 @@ class FakeJudgeEngine:
         if self.raise_exc is not None:
             raise self.raise_exc
         if self.decide is None:
-            keys = re.findall(r"^- \[([^\]]+)\]", prompt, re.M)
+            keys = re.findall(r"^- \[([^\]]+)\]", prompt, re.MULTILINE)
             return json.dumps({"decisions": [{"agent_key": k, "verdict": "silent", "score": 0.1, "reason": "không"}
                                              for k in keys]})
         return self.decide(prompt)
@@ -100,7 +100,7 @@ def batch(**by_key):
 
 
 def keys_in(prompt):
-    return re.findall(r"^- \[([^\]]+)\]", prompt, re.M)
+    return re.findall(r"^- \[([^\]]+)\]", prompt, re.MULTILINE)
 
 
 class World:

@@ -6,8 +6,9 @@ import hashlib
 import json
 import math
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import context_runtime
 from capability_registry import CapabilityRegistry
@@ -150,7 +151,7 @@ class CapabilityExecutor:
         Mặc định vẫn là read-only, nên không đường cũ nào vô tình cấp được lease write.
         Effect `dangerous` KHÔNG BAO GIỜ được cấp lease ở phase này.
         """
-        from jsonschema import Draft202012Validator     # nạp lười, xem đầu file
+        from jsonschema import Draft202012Validator  # nạp lười, xem đầu file
         from jsonschema.exceptions import SchemaError
 
         effect = str(capability.get("side_effect") or "read")
@@ -220,7 +221,7 @@ class CapabilityExecutor:
         )
 
     def _validate(self, lease: CapabilityLease, args: Any) -> tuple[bool, str]:
-        from jsonschema import Draft202012Validator     # nạp lười, xem đầu file
+        from jsonschema import Draft202012Validator  # nạp lười, xem đầu file
         from jsonschema.exceptions import SchemaError
 
         if not isinstance(args, dict):

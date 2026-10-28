@@ -10,18 +10,19 @@ Google (dùng cho Gmail/Lịch), nên chỉ cần chạy luồng đó với scop
 Vướng duy nhất: oauth_mcp sinh HTTP header (cho transport http), còn google-ads là stdio và cần
 credential dạng FILE + biến môi trường. Test này phủ đúng cầu nối đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-adstest-"))
 
-import mcp_catalog  # noqa: E402
-import mcp_store  # noqa: E402
-import oauth_mcp  # noqa: E402
-import secrets_store  # noqa: E402
+import mcp_catalog
+import mcp_store
+import oauth_mcp
+import secrets_store
 
 _fails = []
 

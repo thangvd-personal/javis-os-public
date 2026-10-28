@@ -5,7 +5,6 @@
 
 Self-contained: JAVIS_STATE_DIR and the Claude/Codex log folders point at temp dirs. No network, no model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -13,15 +12,17 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = Path(tempfile.mkdtemp(prefix="javis-usage-cost-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
 os.environ["JAVIS_CLAUDE_PROJECTS_DIR"] = str(_TMP / "claude")
 os.environ["JAVIS_CODEX_SESSIONS_DIR"] = str(_TMP / "codex")
 (_TMP / "state").mkdir(parents=True, exist_ok=True)
 
-import usage_index as ui  # noqa: E402
-import usage_parsers as up  # noqa: E402
-import usage_store as us  # noqa: E402
+import usage_index as ui
+import usage_parsers as up
+import usage_store as us
 
 fails = []
 EVENTS = _TMP / "state" / "usage-events.jsonl"

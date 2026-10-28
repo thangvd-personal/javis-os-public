@@ -1,6 +1,4 @@
 """Typed source pins retain private inputs separately from rendered trial context."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -8,6 +6,8 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="trial-semantics-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",

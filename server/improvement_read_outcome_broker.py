@@ -8,7 +8,6 @@ import threading
 from improvement_sandbox import FixtureBroker, _frozen, _hash, _json, _manifest
 from improvement_skill_asset_broker import SkillAssetBroker
 
-
 _SKILL_TOOL = "mcp__skill__skill_asset_read"
 _FIXTURE_TOOL = "mcp__fixture__fixture_read"
 

@@ -7,7 +7,6 @@ random ids. This test checks that it is mirrored into `<brain>/Javis/learned/`, 
 only in `*.private.json`, which the GitHub backup never takes), and restored on a "fresh machine" (new STATE_DIR, same
 brain folder, new bot id and new agent key), once only.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import shutil
@@ -16,6 +15,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE_A = tempfile.mkdtemp(prefix="javis-lm-a-")
 BRAINS = tempfile.mkdtemp(prefix="javis-lm-brains-")
@@ -26,15 +27,15 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import chatbot_store  # noqa: E402
-import chatbot_reply_policy_store as rps  # noqa: E402
-import resonance_store  # noqa: E402
-import agent_lessons as AL  # noqa: E402
-import agent_judge_store  # noqa: E402
-import team_store  # noqa: E402
-import git_brain  # noqa: E402
-import learned_mirror as LM  # noqa: E402
+import agent_judge_store
+import agent_lessons as AL
+import chatbot_reply_policy_store as rps
+import chatbot_store
+import config as cfgmod
+import git_brain
+import learned_mirror as LM
+import resonance_store
+import team_store
 
 _fails = []
 

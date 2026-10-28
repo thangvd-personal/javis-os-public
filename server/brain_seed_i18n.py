@@ -130,7 +130,7 @@ def chon(goc: str, ma: str | None = None) -> str:
 def _thu_muc_con(root: Path, mau: str, mac_dinh: str) -> Path:
     try:
         for p in sorted(root.iterdir()):
-            if p.is_dir() and re.match(mau, p.name, re.I):
+            if p.is_dir() and re.match(mau, p.name, re.IGNORECASE):
                 return p
     except OSError:
         pass

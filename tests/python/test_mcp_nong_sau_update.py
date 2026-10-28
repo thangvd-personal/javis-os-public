@@ -20,13 +20,13 @@ lát sau tự khỏi. Chuỗi nhân quả, đọc từ dưới lên:
 Ba chốt được khoá ở đây: trần làm nóng phải rộng hơn hẳn trần lượt chat, `warm_pool` phải mở
 được phiên cho nguồn mà vòng chat bỏ, và một vòng dò THIẾU nguồn thì chỉ được cache ngắn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import time
 from pathlib import Path
 
-import mcp_client  # noqa: E402
+import mcp_client
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -128,9 +128,9 @@ finally:
 # ============================================================
 # 3. Vòng dò THIẾU nguồn chỉ được cache NGẮN
 # ============================================================
-import mcp_hub  # noqa: E402
+import mcp_hub
 
-check(f"cache bản đủ vẫn 60s", mcp_hub._CACHE_TTL == 60)
+check("cache bản đủ vẫn 60s", mcp_hub._CACHE_TTL == 60)
 check(f"cache bản thiếu ngắn hơn nhiều ({mcp_hub._CACHE_TTL_THIEU}s)",
       0 < mcp_hub._CACHE_TTL_THIEU <= mcp_hub._CACHE_TTL / 4, mcp_hub._CACHE_TTL_THIEU)
 

@@ -23,9 +23,10 @@ Ba điểm đáng canh, vì cả ba đều có cách làm sai trông hợp lý h
    cái chốt khiến Javis dám phục vụ HTML người dùng viết trên cùng tên miền với dashboard.
    Test này khoá chuyện đó lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-cskl-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-cskl-brains-")
@@ -41,9 +42,9 @@ with open(os.path.join(BRAIN, "apps", "bang.html"), "w", encoding="utf-8") as f:
 with open(os.path.join(BRAIN, "ghi-chu.md"), "w", encoding="utf-8") as f:
     f.write("# Ghi chú\n\nChữ thường.\n")
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import share_render  # noqa: E402
+import main
+import share_render
+from fastapi.testclient import TestClient
 
 fails = []
 

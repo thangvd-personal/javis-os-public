@@ -82,7 +82,7 @@ def _candidates(manifests):
 
 def route(query: str, manifests: list, *, min_score: float = 0.24, ambiguity_margin: float = 0.08) -> dict:
     """Same decision the bound lazy router makes: rank by score, refuse low or ambiguous picks."""
-    from lazy_skill_runtime import LazySkillSource, _EXPLICIT_RE
+    from lazy_skill_runtime import _EXPLICIT_RE, LazySkillSource
     ranked = sorted(((LazySkillSource._score(query, item), item["slug"]) for item in _candidates(manifests)),
                     key=lambda pair: (-pair[0], pair[1]))
     explicit = bool(_EXPLICIT_RE.search(query or ""))

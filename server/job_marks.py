@@ -11,15 +11,15 @@ from __future__ import annotations
 import sqlite3
 import threading
 import time
+from collections.abc import Iterable
 from contextlib import closing
 from pathlib import Path
-from typing import Dict, Iterable, Optional
 
 STATES = ("archived", "deleted")
 MAX_IDS = 500
 
 _lock = threading.Lock()
-_path: Optional[Path] = None
+_path: Path | None = None
 
 
 def configure(path) -> None:
@@ -37,7 +37,7 @@ def _conn() -> sqlite3.Connection:
     return c
 
 
-def marks(brain: str) -> Dict[str, dict]:
+def marks(brain: str) -> dict[str, dict]:
     """{job_id: {"state", "at"}} for one brain."""
     with _lock, closing(_conn()) as c:
         return {r["job_id"]: {"state": r["state"], "at": r["at"]}
@@ -52,17 +52,16 @@ def set_state(brain: str, ids: Iterable[str], state: str) -> int:
     if state and state not in STATES:
         raise ValueError("state")
     now = time.time()
-    with _lock, closing(_conn()) as c:
-        with c:
-            if not state:
-                return c.executemany("DELETE FROM job_marks WHERE brain=? AND job_id=?",
-                                     [(str(brain), i) for i in ids]).rowcount
-            return c.executemany("INSERT INTO job_marks(brain, job_id, state, at) VALUES(?,?,?,?) "
-                                 "ON CONFLICT(brain, job_id) DO UPDATE SET state=excluded.state, at=excluded.at",
-                                 [(str(brain), i, state, now) for i in ids]).rowcount
+    with _lock, closing(_conn()) as c, c:
+        if not state:
+            return c.executemany("DELETE FROM job_marks WHERE brain=? AND job_id=?",
+                                 [(str(brain), i) for i in ids]).rowcount
+        return c.executemany("INSERT INTO job_marks(brain, job_id, state, at) VALUES(?,?,?,?) "
+                             "ON CONFLICT(brain, job_id) DO UPDATE SET state=excluded.state, at=excluded.at",
+                             [(str(brain), i, state, now) for i in ids]).rowcount
 
 
-def split(jobs: list, mk: Dict[str, dict], done_bucket: str = "done", archive_max: int = 50):
+def split(jobs: list, mk: dict[str, dict], done_bucket: str = "done", archive_max: int = 50):
     """(kept, archived): deleted jobs dropped, archived FINISHED jobs moved out (newest archive first). A job that is
     not finished any more (retried, reopened) ignores an old archive mark and comes back to the list."""
     kept, archived = [], []

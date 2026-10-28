@@ -34,9 +34,8 @@ import re
 import sys
 import threading
 import time
-import zipfile
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional, Tuple
+import zipfile
 
 import agent_assets
 from localefmt import chu
@@ -53,11 +52,11 @@ MAX_ROWS = 3_000            # rows read per sheet tab
 MAX_CELL = 2_000            # characters kept per sheet cell
 
 _ID = r"([A-Za-z0-9_-]{20,})"
-_DOC_RE = re.compile(r"^https?://docs\.google\.com/document/(?:u/\d+/)?d/" + _ID, re.I)
-_SHEET_RE = re.compile(r"^https?://docs\.google\.com/spreadsheets/(?:u/\d+/)?d/" + _ID, re.I)
+_DOC_RE = re.compile(r"^https?://docs\.google\.com/document/(?:u/\d+/)?d/" + _ID, re.IGNORECASE)
+_SHEET_RE = re.compile(r"^https?://docs\.google\.com/spreadsheets/(?:u/\d+/)?d/" + _ID, re.IGNORECASE)
 _GID_RE = re.compile(r"[#?&]gid=(\d+)")
-_GOOGLE_HOST_RE = re.compile(r"^https?://(?:docs|drive)\.google\.com/", re.I)
-_URL_IN_TEXT_RE = re.compile(r"https?://(?:docs|drive)\.google\.com/[^\s<>\"')\]]+", re.I)
+_GOOGLE_HOST_RE = re.compile(r"^https?://(?:docs|drive)\.google\.com/", re.IGNORECASE)
+_URL_IN_TEXT_RE = re.compile(r"https?://(?:docs|drive)\.google\.com/[^\s<>\"')\]]+", re.IGNORECASE)
 
 _NS = {
     "table": "urn:oasis:names:tc:opendocument:xmlns:table:1.0",
@@ -79,7 +78,7 @@ class LinkError(Exception):
 # ============================================================
 # Which links
 # ============================================================
-def parse(url: str) -> Optional[dict]:
+def parse(url: str) -> dict | None:
     """{"kind": "doc"|"sheet", "id", "gid"} for a Google Docs/Sheets URL, else None.
 
     Published-to-web links (`/d/e/2PACX.../pub`) are not parsed: their id is not the document id, so
@@ -101,12 +100,12 @@ def is_google(url: str) -> bool:
     return bool(_GOOGLE_HOST_RE.match(str(url or "").strip()))
 
 
-def links_of_agent(meta: Optional[dict], body: str = "") -> List[dict]:
+def links_of_agent(meta: dict | None, body: str = "") -> list[dict]:
     """Google links the owner attached to the Agent, then Google links written in its text.
 
     Returns [{"url", "label"}], deduplicated by document, at most `MAX_LINKS`. Non-Google links are left
     out: they are web pages, not documents this module can read."""
-    out: List[dict] = []
+    out: list[dict] = []
     seen = set()
 
     def add(url: str, label: str) -> None:
@@ -141,7 +140,7 @@ def _export_url(p: dict, fmt: str) -> str:
     return url
 
 
-def _get(url: str) -> Tuple[bytes, str]:
+def _get(url: str) -> tuple[bytes, str]:
     """(content, content-type) of a public export, or LinkError saying why not."""
     import httpx
     try:
@@ -179,7 +178,7 @@ def _get(url: str) -> Tuple[bytes, str]:
                 return bytes(buf), ctype
     except LinkError:
         raise
-    except Exception as e:      # noqa: BLE001 - network errors of every kind become one owner message
+    except Exception as e:
         raise LinkError(chu("không tải được ({n})", "could not be downloaded ({n})",
                             n=type(e).__name__)) from e
 
@@ -188,9 +187,9 @@ def _clean_markdown(text: str) -> str:
     """Google's Markdown export inlines images as base64 at the bottom. Those are megabytes of noise
     for a keyword index, so the image definitions and any data URI go."""
     text = text.lstrip("﻿")
-    text = re.sub(r"^\[[^\]]+\]:\s*<?data:[^\n]*$", "", text, flags=re.M)
+    text = re.sub(r"^\[[^\]]+\]:\s*<?data:[^\n]*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"!\[[^\]]*\]\[[^\]]*\]", "", text)
-    text = re.sub(r"data:[a-z]+/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+", "", text, flags=re.I)
+    text = re.sub(r"data:[a-z]+/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
@@ -202,7 +201,7 @@ def _cell_text(cell: ET.Element) -> str:
     return re.sub(r"\s+", " ", " ".join(parts)).strip()[:MAX_CELL]
 
 
-def _ods_tables(data: bytes) -> Tuple[str, List[Tuple[str, List[List[str]]]]]:
+def _ods_tables(data: bytes) -> tuple[str, list[tuple[str, list[list[str]]]]]:
     """(spreadsheet title, [(tab name, rows)]) from an ODS export, every tab, empty rows dropped."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
@@ -223,11 +222,11 @@ def _ods_tables(data: bytes) -> Tuple[str, List[Tuple[str, List[List[str]]]]]:
     tabs = []
     for table in root.iter(_T + "table"):
         name = table.get(_T + "name") or ""
-        rows: List[List[str]] = []
+        rows: list[list[str]] = []
         for row in table.iter(_T + "table-row"):
             if len(rows) >= MAX_ROWS:
                 break
-            cells: List[str] = []
+            cells: list[str] = []
             for cell in row:
                 if cell.tag not in (_T + "table-cell", _T + "covered-table-cell"):
                     continue
@@ -247,7 +246,7 @@ def _ods_tables(data: bytes) -> Tuple[str, List[Tuple[str, List[List[str]]]]]:
     return title, tabs
 
 
-def _csv_rows(data: bytes) -> List[List[str]]:
+def _csv_rows(data: bytes) -> list[list[str]]:
     import csv
     text = data.decode("utf-8", errors="replace").lstrip("﻿")
     rows = []
@@ -262,7 +261,7 @@ def _csv_rows(data: bytes) -> List[List[str]]:
     return rows
 
 
-def rows_to_markdown(tab: str, rows: List[List[str]]) -> str:
+def rows_to_markdown(tab: str, rows: list[list[str]]) -> str:
     """One heading per tab, then one line per row carrying its column names ("Giá: 120.000").
 
     Column names ride on every row because the index cuts long tabs into chunks: a chunk that starts at
@@ -314,11 +313,11 @@ def fetch(url: str) -> dict:
 # Cache
 # ============================================================
 _lock = threading.Lock()
-_CACHE: Dict[str, dict] = {}     # url -> {"doc", "ok_at", "err", "err_at"}
+_CACHE: dict[str, dict] = {}     # url -> {"doc", "ok_at", "err", "err_at"}
 _REFRESHING: set = set()
 
 
-def _store(url: str, doc: Optional[dict], err: str) -> None:
+def _store(url: str, doc: dict | None, err: str) -> None:
     now = time.time()
     with _lock:
         c = _CACHE.setdefault(url, {"doc": None, "ok_at": 0.0, "err": "", "err_at": 0.0})
@@ -339,7 +338,7 @@ def _fetch_into_cache(url: str) -> None:
         _store(url, None, chu("đọc lỗi ({n})", "failed to read ({n})", n=type(e).__name__))
 
 
-def _plan(urls: List[str]) -> Tuple[List[str], List[str]]:
+def _plan(urls: list[str]) -> tuple[list[str], list[str]]:
     """(urls that must be fetched now because nothing usable is cached, urls to refresh in background)."""
     now = time.time()
     must, background = [], []
@@ -360,7 +359,7 @@ def _plan(urls: List[str]) -> Tuple[List[str], List[str]]:
     return must, background
 
 
-def collect(links: List[dict]) -> dict:
+def collect(links: list[dict]) -> dict:
     """Documents and owner warnings for a bot's linked Google files.
 
     Returns {"docs": [{"path", "title", "text"}], "warnings": [str]}. `path` is a display name for the

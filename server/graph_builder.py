@@ -8,7 +8,6 @@ import os
 import re
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 # Match [[Note]] và [[folder/Note|alias]]
 WIKILINK_RE = re.compile(r"\[\[([^\]\|#]+)(?:[#\|][^\]]*)?\]\]")
@@ -65,9 +64,9 @@ def _top_folder(rel_path: str) -> str:
 # chữ ký của vault (ETag), không đổi gì thì trình duyệt nhận 304 trống.
 _CACHE_VER = 1
 _locks_lock = threading.Lock()
-_root_locks: Dict[str, threading.Lock] = {}
-_file_cache: Dict[str, Dict[str, list]] = {}     # root -> {rel: [mtime_ns, size, born, [targets]]}
-_result_cache: Dict[tuple, Tuple[str, dict]] = {}  # (roots, orphans, max_files) -> (etag, kết quả)
+_root_locks: dict[str, threading.Lock] = {}
+_file_cache: dict[str, dict[str, list]] = {}     # root -> {rel: [mtime_ns, size, born, [targets]]}
+_result_cache: dict[tuple, tuple[str, dict]] = {}  # (roots, orphans, max_files) -> (etag, kết quả)
 _RESULT_MAX = 16
 
 
@@ -87,10 +86,10 @@ def _root_lock(root: str) -> threading.Lock:
         return lk
 
 
-def _load_cache(root: str) -> Dict[str, list]:
+def _load_cache(root: str) -> dict[str, list]:
     if root in _file_cache:
         return _file_cache[root]
-    files: Dict[str, list] = {}
+    files: dict[str, list] = {}
     try:
         d = json.loads(_cache_file(root).read_text(encoding="utf-8"))
         if d.get("v") == _CACHE_VER and d.get("root") == root and isinstance(d.get("files"), dict):
@@ -101,7 +100,7 @@ def _load_cache(root: str) -> Dict[str, list]:
     return files
 
 
-def _save_cache(root: str, files: Dict[str, list]) -> None:
+def _save_cache(root: str, files: dict[str, list]) -> None:
     """Ghi đè nguyên tử. Hỏng (đĩa đầy, không có quyền) thì thôi: bộ đệm chỉ để nhanh, không phải để đúng."""
     try:
         f = _cache_file(root)
@@ -163,7 +162,7 @@ def _collect(root: str, budget: int):
     with _root_lock(root):
         old = _load_cache(root)
         scanned = _scan_root(root)
-        fresh: Dict[str, list] = {}
+        fresh: dict[str, list] = {}
         changed = False
         out = []
         for rel, fpath, st in scanned:
@@ -183,7 +182,7 @@ def _collect(root: str, budget: int):
         return out
 
 
-def graph_with_etag(roots: List[str], max_files: int = 2000, include_orphans: bool = False) -> Tuple[str, Dict]:
+def graph_with_etag(roots: list[str], max_files: int = 2000, include_orphans: bool = False) -> tuple[str, dict]:
     """Như `build_graph`, kèm ETag theo chữ ký nội dung vault: mọi file .md giữ nguyên mtime và kích thước thì ETag
     giữ nguyên, và kết quả được trả lại từ bộ nhớ mà không dựng lại."""
     per_root = []
@@ -211,7 +210,7 @@ def graph_with_etag(roots: List[str], max_files: int = 2000, include_orphans: bo
     return etag, data
 
 
-def build_graph(roots: List[str], max_files: int = 2000, include_orphans: bool = False) -> Dict:
+def build_graph(roots: list[str], max_files: int = 2000, include_orphans: bool = False) -> dict:
     """
     Quét nhiều thư mục root, dựng graph.
     roots: list các đường dẫn thư mục chứa .md
@@ -220,7 +219,7 @@ def build_graph(roots: List[str], max_files: int = 2000, include_orphans: bool =
     return graph_with_etag(roots, max_files=max_files, include_orphans=include_orphans)[1]
 
 
-def _build_from(per_root, include_orphans: bool) -> Dict:
+def _build_from(per_root, include_orphans: bool) -> dict:
     nodes = {}          # stem (lowercase) -> node dict
     edges = []
 

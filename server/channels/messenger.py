@@ -8,8 +8,9 @@ token> <app secret>", because the channel-account store keeps one encrypted secr
 """
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 SPEC = KenhSpec(
     id="messenger", nhan="Messenger", kind="bot", logo="messenger", mau="#0866FF",

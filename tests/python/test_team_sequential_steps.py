@@ -15,20 +15,21 @@ after B's corrected answer, still said step 2 was not done; step 3 never ran, ye
      summarises once more with the newer message.
   5. A job with a step left to run is never marked done: it stops with the reason, and resuming runs what is left.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-seq-")
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_store  # noqa: E402
-import team_runner as TR  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

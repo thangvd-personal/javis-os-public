@@ -12,19 +12,20 @@ Test này canh: (1) phân loại từng lệnh con theo `call_rules`, fail-close
 tool cổng ở mức Chỉ đọc nhưng vẫn chặn lệnh ghi lúc gọi, với câu báo nêu đúng lệnh con;
 (3) kết quả tìm tool giữ mô tả đầy đủ cho các kết quả đầu.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-composio-doc-"))
 
-import config  # noqa: E402
-import mcp_catalog  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
+import config
+import mcp_catalog
+import mcp_client
+import mcp_hub
+import mcp_store
 
 _fails = []
 

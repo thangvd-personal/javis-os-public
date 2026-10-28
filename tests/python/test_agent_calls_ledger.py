@@ -13,7 +13,6 @@ thật với engine GIẢ (không model nào được gọi). Các ca:
 - vòng đời lý do: gom, CAS, bận không tốn lần thử, nguồn đến lúc đang chạy, nguồn chưa tiêu thụ, lỗi khi đã có lý do chờ
   mới hơn, quá 3 lần, gỡ nguồn, lý do hết nguồn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
@@ -22,16 +21,18 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agent-calls-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-agent-calls-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_ledger as AL
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

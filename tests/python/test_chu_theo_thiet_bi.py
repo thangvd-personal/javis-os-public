@@ -9,15 +9,15 @@ chọn bản chữ theo đó. Test này canh ba chỗ dễ hỏng:
   - request không có cookie (Telegram, script, test cũ) bị đổi sang tiếng Anh;
   - middleware bị gỡ hoặc đặt sai chỗ nên cookie không tới được endpoint.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-chu-"))
-import lang_registry  # noqa: E402
-import localefmt  # noqa: E402
+import lang_registry
+import localefmt
 
 _fails = []
 
@@ -54,8 +54,8 @@ localefmt.bo_ngon_ngu_yeu_cau(tok)
 
 # Đi qua app THẬT: cookie phải tới được endpoint qua cả chồng middleware.
 try:
-    from fastapi.testclient import TestClient
     import main
+    from fastapi.testclient import TestClient
     hits = [r for r in main.app.routes if getattr(r, "path", "") == "/__test_chu"]
     if not hits:
         @main.app.get("/__test_chu")
@@ -80,9 +80,11 @@ except Exception as e:  # noqa: BLE001
     check("app: nạp được main để thử middleware", False, f"{type(e).__name__}: {e}")
 
 # Trang Plugins: plugin đi kèm app có tên/mô tả tiếng Anh (name_en / description_en).
-import glob  # noqa: E402
-import fastyaml  # noqa: E402
-import plugins_host  # noqa: E402
+import glob
+
+import fastyaml
+import plugins_host
+
 _thieu = [f for f in glob.glob(str(ROOT / "system" / "plugins" / "*" / "plugin.yaml"))
           if not (lambda m: m.get("name_en") and m.get("description_en"))(fastyaml.safe_load(open(f, encoding="utf-8").read()) or {})]
 check("mọi plugin đi kèm app có name_en + description_en", not _thieu, _thieu[:3])

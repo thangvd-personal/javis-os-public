@@ -3,17 +3,17 @@
 Run:
     python tests/run.py voice_note
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-voice-")
 
-import reminders  # noqa: E402
-import voice_note  # noqa: E402
+import reminders
+import voice_note
 
 fails = []
 

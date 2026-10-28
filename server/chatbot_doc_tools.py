@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import chatbot_grounding
 import turn_context
@@ -48,7 +48,7 @@ SEARCH_CHUNK = 1_200       # characters per search chunk
 INDEX_MAX = 1_500          # characters of the table of contents handed to the reply judge
 
 
-def _root(vault_root: Any) -> Optional[Path]:
+def _root(vault_root: Any) -> Path | None:
     if not vault_root:
         return None
     try:
@@ -63,7 +63,7 @@ def turn_chat_id() -> str:
     return str((turn_context.current() or {}).get("chat_id") or "").strip()
 
 
-def allowed_docs(vault_root: Any, chat_id: Any = None) -> List[str]:
+def allowed_docs(vault_root: Any, chat_id: Any = None) -> list[str]:
     """Relative posix paths of every document the tools may show, in a stable order. `chat_id` adds that chat's
     scoped documents (see `chatbot_grounding.scoped_paths`)."""
     r = _root(vault_root)
@@ -90,7 +90,7 @@ def _norm(p: Any) -> str:
     return s.lstrip("/")
 
 
-def _match(vault_root: Any, requested: Any, chat_id: Any = None) -> Optional[str]:
+def _match(vault_root: Any, requested: Any, chat_id: Any = None) -> str | None:
     """The listed document the request names, or None. Exact first, then case-insensitive, then
     a unique file-name match (models often drop the folder)."""
     want = _norm(requested)
@@ -107,13 +107,13 @@ def _match(vault_root: Any, requested: Any, chat_id: Any = None) -> Optional[str
     return by_name[0] if len(by_name) == 1 else None
 
 
-def _headings(vault_root: Any, chat_id: Any = None) -> Dict[str, List[str]]:
+def _headings(vault_root: Any, chat_id: Any = None) -> dict[str, list[str]]:
     """{path: [section titles]} from the cached keyword index (no extra disk scan)."""
     r = _root(vault_root)
     if r is None:
         return {}
     ok = set(allowed_docs(r, chat_id))
-    out: Dict[str, List[str]] = {}
+    out: dict[str, list[str]] = {}
     for m in chatbot_grounding.chi_muc(r, chatbot_grounding.scoped_docs(r, chat_id) or None).get("manh") or []:
         path = str(m.get("path") or "").replace("\\", "/")
         if path not in ok:
@@ -155,7 +155,7 @@ def _route(call) -> dict:
             "required_mode": "readonly", "health": "healthy"}
 
 
-def build(vault_root: Any) -> Tuple[List[dict], Dict[str, dict]]:
+def build(vault_root: Any) -> tuple[list[dict], dict[str, dict]]:
     """(tools_spec, route) for one bot brain. No brain, no tools."""
     r = _root(vault_root)
     if r is None:

@@ -5,19 +5,20 @@ bị bỏ TRONG IM LẶNG: request vẫn 200, màn hình vẫn đúng nhờ loca
 Đúng lỗi cỡ "Rất lớn" từng dính. Thanh trượt đổi cỡ từ CHUỖI ("vua") sang SỐ (96), nên phải
 có test chạy thật cả đường lưu lẫn đường đọc lại.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import json
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 state = tempfile.mkdtemp(prefix="javis-pet-test-")
 os.environ["JAVIS_STATE_DIR"] = state
 os.environ["BRAINS_DIR"] = str(Path(state) / "brains")
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(state) / "sessions.db")
 
-import main
 import config as cfgmod
+import main
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

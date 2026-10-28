@@ -14,15 +14,16 @@ chặn là cả ba xếp hàng chờ. Test này khoá bốn chỗ từng chặn 
    mỗi lượt agy là một tiến trình mới gọi lại hub.
 4. Engine agy đọc hết stdout rồi mới đọc stderr: stderr đầy ống là lượt treo.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import inspect
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-doitroly-"))
 
-import antigravity_cli  # noqa: E402
-import aux_engine  # noqa: E402
+import antigravity_cli
+import aux_engine
 
 fails = []
 
@@ -64,7 +65,7 @@ finally:
      antigravity_cli.auth_status_nen) = _goc
 
 # ---- 2. route phiên chạy ở threadpool ----
-import main  # noqa: E402
+import main
 
 for ten in ("sessions_list", "sessions_new", "sessions_get"):
     check(f"{ten} là def thường (FastAPI chạy ở threadpool, không chặn loop)",
@@ -83,7 +84,7 @@ check("/voice/options hỏi `agy models` ở luồng phụ",
       "asyncio.to_thread(antigravity_cli.list_models)" in _vo)
 
 # ---- 3. hub dò MCP: phần đồng bộ ra luồng phụ ----
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 _dis = inspect.getsource(mcp_hub.discover_all)
 check("giải mã kho kết nối ở luồng phụ", "asyncio.to_thread(mcp_store.resolved" in _dis)

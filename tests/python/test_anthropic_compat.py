@@ -12,7 +12,6 @@ The fake gateway below behaves like the real ones this targets:
 - it accepts the key as either x-api-key or Bearer, and records which headers arrived;
 - it rejects the `thinking` field with a 400, as a gateway serving a non-Claude model may.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import json
 import os
@@ -20,11 +19,13 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ac-")
 
-import config as cfgmod  # noqa: E402
-import engine  # noqa: E402
-import main  # noqa: E402
+import config as cfgmod
+import engine
+import main
 
 GOOD = "sk-good"
 seen = []   # (method, path, x-api-key, authorization)
@@ -177,7 +178,7 @@ check("both x-api-key and Bearer were sent", posts and all(x[2] == GOOD and x[3]
 check("usage reported", any(e["type"] == "usage" and e["input"] == 7 and e["output"] == 2 for e in evs))
 
 # ---- 5. Chat with tools: the Anthropic tool loop, sent to the gateway ----
-import mcp_client  # noqa: E402
+import mcp_client
 
 
 async def _fake_call(route, name, args):
@@ -197,7 +198,8 @@ check("chat without tools routes to anthropic_compat_stream",
       main._api_stream_goc("anthropic-compat", GOOD, "m-1", []).__qualname__.startswith("anthropic_compat_stream"))
 check("hub tools are loaded for it", "anthropic-compat" in main._API_TOOL_PROVIDERS)
 check("agents and background work can use it", "anthropic-compat" in main.AGENT_PROVIDERS)
-import aux_engine  # noqa: E402
+import aux_engine
+
 check("aux engine: usable once the base is set", aux_engine.availability({"provider": "anthropic-compat"})[0])
 check("connect route is registered",
       any(getattr(r, "path", "") == "/provider/anthropic-compat/connect" for r in main.app.routes)

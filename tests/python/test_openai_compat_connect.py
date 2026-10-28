@@ -1,14 +1,15 @@
 """A saved API key must never be sent to a newly entered OpenAI-compatible endpoint."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-oc-connect-")
 
-import config as cfg  # noqa: E402
-import main  # noqa: E402
+import config as cfg
+import main
 
 
 class Request:

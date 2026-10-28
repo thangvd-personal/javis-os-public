@@ -1,6 +1,4 @@
 """Owner controls use actual experiment C services; metadata reads stay cold."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import json
 import threading
@@ -8,17 +6,16 @@ import unittest
 from unittest.mock import patch
 
 import httpx
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-
 import improvement_experiment_api as API
 import improvement_store as IM
-from improvement_experiment_service import ExperimentService
-from improvement_trial_service import OwnerTrialService
 import test_improvement_preparation as fixtures
 import test_improvement_preparation_execution as execution
 import test_improvement_proposals as roles
-
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from improvement_experiment_service import ExperimentService
+from improvement_trial_service import OwnerTrialService
 
 CONTROLS = ('preparation-freeze', 'preparation-next', 'preparation-complete', 'propose',
             'semantic-review', 'semantic-arbitrate', 'semantic-evidence')

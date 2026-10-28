@@ -1,19 +1,18 @@
 """Actual extracted Library behavior inside a disposable, checked owner root."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import ast
 import copy
 import hashlib
 import importlib.util
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix='recipe-tests-'))
 for key, name in {'JAVIS_STATE_DIR': 'state', 'BRAINS_DIR': 'brains', 'OBSIDIAN_VAULT_PATH': 'vault',

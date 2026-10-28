@@ -28,7 +28,6 @@ import re
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 import config as cfgmod
 
@@ -44,7 +43,7 @@ BRAINS = ("claude", "codex", "grok", "agy")
 # Plain words a Grok or Antigravity error uses when the plan pushed back. Only checked for those two
 # engines, after the shared detector found nothing: they print no fixed sentence for it.
 _HET_RE = re.compile(r"usage\s+limit|rate[\s_-]?limit|too\s+many\s+requests|\b429\b|quota|resource[\s_]+exhausted"
-                     r"|out\s+of\s+credits|limit\s+(?:reached|exceeded)", re.I)
+                     r"|out\s+of\s+credits|limit\s+(?:reached|exceeded)", re.IGNORECASE)
 
 _lock = threading.Lock()
 _codex_cache: dict = {}   # path -> (mtime, snapshot) of the rollout last read
@@ -73,14 +72,14 @@ def _ghi_file(d: dict):
         pass
 
 
-def _so(x) -> Optional[float]:
+def _so(x) -> float | None:
     try:
         return float(x)
     except (TypeError, ValueError):
         return None
 
 
-def _cua_so(pct, resets_at) -> Optional[dict]:
+def _cua_so(pct, resets_at) -> dict | None:
     p = _so(pct)
     if p is None:
         return None
@@ -220,7 +219,7 @@ def _ngay_moi_nhat(goc: str, n: int) -> list:
     return out
 
 
-def _doc_rollout(path: str) -> Optional[dict]:
+def _doc_rollout(path: str) -> dict | None:
     """The last `rate_limits` of one rollout file, read from its tail only."""
     try:
         with open(path, "rb") as fh:
@@ -245,7 +244,7 @@ def _doc_rollout(path: str) -> Optional[dict]:
     return None
 
 
-def quet_codex(now: float = None) -> Optional[dict]:
+def quet_codex(now: float = None) -> dict | None:
     """Newest Codex rollout files (Codex used inside or outside Javis) -> the latest snapshot, if newer
     than what is stored. Only the 3 newest files are opened, and an unchanged file is not reread."""
     now = time.time() if now is None else now

@@ -1,12 +1,11 @@
 """Owner-started self-learning runs: examples, split, protected skills, apply rules, recovery, cancel, HTTP."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 import improvement_loop_runs as R
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_store import ConflictError
 
 SKILL = "---\nname: doi-soat\ndescription: Doi soat don hang\ngroup: Finance\n---\nMatch codes and answer JSON.\n"
@@ -164,9 +163,9 @@ class LoopRunTests(unittest.TestCase):
         self.assertTrue(run["error"].startswith("engine_unavailable"))
 
     def test_http_routes(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         write_examples(self.brain)
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: None, resolve_brain=lambda value: str(self.brain),

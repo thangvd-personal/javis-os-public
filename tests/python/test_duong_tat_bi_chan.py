@@ -17,16 +17,17 @@ triệu chứng, hai lỗi khác nhau, và cả hai đều KHÔNG lộ ra trên 
    nhánh từ chối vì vượt hạn mức... đều gửi câu trả lời trần - và người dùng thấy đúng cái
    họ mô tả: có lượt hiện, có lượt không hiện gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-duongtat-")
 
-import config as cfg  # noqa: E402
-import fast_path_runtime as fp  # noqa: E402
+import config as cfg
+import fast_path_runtime as fp
 
 _fails = []
 
@@ -184,7 +185,7 @@ check("hàm dựng nhãn có thật",
 # ============================================================
 # 3. Trang phải nói được lý do LẶP LẠI, không bắt người dùng tự đếm
 # ============================================================
-import main  # noqa: E402
+import main
 
 # Lý do nhiều nhất CỐ Ý đứng sau theo bảng chữ cái: xếp nhầm theo tên thay vì theo số lần
 # thì dữ liệu này lộ ra ngay, còn dữ liệu thuận chiều thì hai cách xếp cho cùng kết quả và

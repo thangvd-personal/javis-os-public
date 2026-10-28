@@ -5,17 +5,18 @@
 Không chạm mạng: phần đổi token (_exchange) được mock. Kiểm PKCE, URL /oauth/authorize,
 tách code từ URL callback dán lại, kiểm state, và redirect_uri đúng cho device vs browser.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import base64
 import hashlib
 import os
 import sys
 import tempfile
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-oauthtest-")
 
-import openai_oauth     # noqa: E402
+import openai_oauth
 
 _fails = []
 
@@ -120,8 +121,9 @@ check("browser → redirect loopback 1455", grab["data"]["redirect_uri"] == "htt
 # Người dùng báo 04/09: "login Codex khó ghê, quay vòng vòng đợi rất lâu, hên xui lắm mới hiện
 # ra code". Bản cũ gọi ĐÚNG MỘT LẦN với hạn 20 giây, trượt một nhịp là hỏng cả lượt đăng nhập.
 # Thử lại ở đây an toàn vì mỗi lần chỉ XIN một mã thiết bị mới, chưa gắn tài khoản nào.
-import httpx        # noqa: E402
-import time as _t   # noqa: E402
+import time as _t
+
+import httpx
 
 
 class _Rep:

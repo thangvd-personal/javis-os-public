@@ -7,14 +7,15 @@ dashboard: ở đó không có dashboard nào để mở, dặn thêm chỉ tố
 nhầm. Khối `[NGỮ CẢNH GIAO DIỆN: ...]` do dashboard chèn trước câu hỏi phải bị lột khỏi tiêu
 đề hội thoại, cùng cách với khối FILE ĐANG MỞ (bug 2026-07-31 lặp lại nếu quên).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-chui-"))
 
-import channel_context  # noqa: E402
-import sessions  # noqa: E402
+import channel_context
+import sessions
 
 _fails = []
 

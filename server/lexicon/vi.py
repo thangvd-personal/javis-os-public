@@ -211,12 +211,12 @@ MEMORY_CLAIM = (
 )
 
 REMEMBER = re.compile(
-    r"(ghi nhớ|nhớ giúp|lưu lại|nhớ là|remember this|ghi lại vào bộ nhớ)", re.I
+    r"(ghi nhớ|nhớ giúp|lưu lại|nhớ là|remember this|ghi lại vào bộ nhớ)", re.IGNORECASE
 )
 
 DENSE = re.compile(
     r"(là gì|gồm .{0,8}bước|công thức|mô hình|nguyên (lý|tắc)|framework|quy trình|"
-    r"khái niệm|định nghĩa|cách (làm|dựng|triển khai))", re.I
+    r"khái niệm|định nghĩa|cách (làm|dựng|triển khai))", re.IGNORECASE
 )
 
 STUCK = ("chưa có thông tin", "không có thông tin", "chưa nắm được", "chuyển cho nhân viên",

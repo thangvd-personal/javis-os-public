@@ -9,13 +9,14 @@ anchors that no longer match the translated headings, a missing way back to the 
 languages, and the translated-from marker that tools/check_translations.py uses to spot stale
 copies. Staleness itself is NOT a failure here; that is a warning in the Translations workflow.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import os
 import re
 import sys
 import unicodedata
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 R = Path(ROOT)
 _fails = []
@@ -33,7 +34,7 @@ _spec.loader.exec_module(ct)
 
 LINK = re.compile(r"\]\(([^)\s]+)\)|<img[^>]*\bsrc=\"([^\"]+)\"")
 CODE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
-HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.M)
+HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 PAIRS = {"README.md": "README.md", "QUICKSTART.md": "QUICKSTART.en.md"}
 
 
@@ -100,8 +101,8 @@ for code in langs:
         dashes = text.count("—") + text.count("–") + text.count("―")
         check(f"{rel}: no em or en dash", dashes == 0, f"{dashes} found")
 
-        src_sections = len(re.findall(r"^## ", CODE.sub("", (R / source).read_text(encoding="utf-8")), re.M))
-        own_sections = len(re.findall(r"^## ", CODE.sub("", text), re.M))
+        src_sections = len(re.findall(r"^## ", CODE.sub("", (R / source).read_text(encoding="utf-8")), re.MULTILINE))
+        own_sections = len(re.findall(r"^## ", CODE.sub("", text), re.MULTILINE))
         check(f"{rel}: same number of sections as {source}", src_sections == own_sections,
               f"{own_sections} vs {src_sections}")
 
@@ -112,6 +113,7 @@ for code in langs:
 
 # Adding a language rewrites every bar; that must not mark every translation stale.
 import tempfile
+
 with tempfile.TemporaryDirectory() as _d:
     _a, _b = Path(_d) / "a.md", Path(_d) / "b.md"
     _a.write_text("# T\n[🇬🇧 English](x) · [🇻🇳 Tiếng Việt](y) · [🌍 Help](z)\nBody\n", encoding="utf-8")

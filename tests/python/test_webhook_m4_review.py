@@ -14,7 +14,6 @@ P2 a captured provider delivery replayed with a fresh Idempotency-Key was a new 
 P3 vault errors as 500s; no cross-process lock; simulate ignored a logged event's _event; uppercase hex signatures;
    a renamed masked header silently dropped; meta-tools as action tools.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import hmac
@@ -24,6 +23,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m4r-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -35,12 +36,12 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_secrets as wsec  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
-import webhook_verify as wv  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_secrets as wsec
+import webhook_store as ws
+import webhook_triggers as wt
+import webhook_verify as wv
 
 fails = []
 
@@ -233,7 +234,7 @@ os.environ["JAVIS_WH_MASTER_KEY"] = "!!!not-base64!!!"
 try:
     wsec.Vault(Path(tempfile.mkdtemp())).put("a/b", "v")
     r = "no error"
-except wsec.SecretError as e:
+except wsec.SecretError:
     r = "SecretError"
 except Exception as e:
     r = type(e).__name__
@@ -251,7 +252,8 @@ except Exception as e:
 check("P3: a damaged key file is a clear SecretError", r == "SecretError", r)
 
 # P3: cross-process lock (two processes putting 30 secrets each into one vault: none lost)
-import subprocess  # noqa: E402
+import subprocess
+
 vd = Path(tempfile.mkdtemp(prefix="m4r-lock-"))
 code = ("import sys, webhook_secrets as w\n"
         "v = w.Vault(sys.argv[1])\n"

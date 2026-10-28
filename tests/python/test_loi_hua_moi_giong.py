@@ -7,10 +7,10 @@ người dùng, không phải luật hệ thống). Phần này vẫn đáng gi�
 hô: `background_status.detect_promise` dán một dòng đính chính khi Javis hứa suông, và mẫu chỉ
 bắt một giọng ("em ... báo lại") thì đổi giọng là cổng im lặng mất tác dụng, không có gì kêu lên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
 import background_status
+from _paths import ROOT, SERVER  # noqa: F401
 
 _loi = []
 

@@ -22,8 +22,8 @@ import re
 import secrets
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import improvement_loop as L
 from improvement_store import ConflictError
@@ -57,7 +57,7 @@ def parse_json_output(text: str):
     text = text.strip()
     if "```" in text:
         text = text.split("```")[1]
-        text = text[4:] if text.startswith("json") else text
+        text = text.removeprefix("json")
     first = min([i for i in (text.find("{"), text.find("[")) if i >= 0], default=-1)
     if first < 0:
         raise ValueError("no_json")

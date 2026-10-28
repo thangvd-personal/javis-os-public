@@ -16,16 +16,17 @@ Một cái bẫy phải khoá luôn: mặc định của GET /agents vẫn PHẢ
 trong cache trình duyệt đọc `prompt` từ chính danh sách này để đổ vào ô sửa, trả rỗng cho nó
 là người dùng bấm Lưu một cái mất trắng prompt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import pathlib
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agnhe-")
 
-import main  # noqa: E402
+import main
 
 fails = []
 
@@ -56,12 +57,13 @@ check("bỏ prompt KHÔNG làm mất thứ cột trái cần",
 check("danh sách nhẹ mang tag; file cũ chỉ có group đọc thành đúng một tag",
       all(a["tags"] == [f"Nhóm {int(a['slug'].rsplit('-', 1)[1]) % 4}"] for a in nhe))
 
-_so = lambda ds: len(json.dumps({"agents": ds}, ensure_ascii=False).encode())  # noqa: E731
+_so = lambda ds: len(json.dumps({"agents": ds}, ensure_ascii=False).encode())
 check(f"bản nhẹ nhỏ hơn 5% bản đầy ({_so(nhe)} / {_so(day)} byte)", _so(nhe) < _so(day) * 0.05)
 
 # ---- 2. Qua HTTP ----
-from fastapi.testclient import TestClient  # noqa: E402
-from urllib.parse import quote  # noqa: E402
+from urllib.parse import quote
+
+from fastapi.testclient import TestClient
 
 # base_url phải là host được web_security cho phép, nếu không mọi lời gọi ăn 403.
 c = TestClient(main.app, base_url="http://127.0.0.1:8080")

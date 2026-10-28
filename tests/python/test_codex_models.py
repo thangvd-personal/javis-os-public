@@ -4,12 +4,11 @@
 
 Không chạy Codex thật và không chạm mạng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import sys
 
-import codex_models as cm  # noqa: E402
-
+import codex_models as cm
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

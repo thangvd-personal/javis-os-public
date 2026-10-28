@@ -9,17 +9,18 @@ later the rule was gone. These tests pin the three fixes:
 3. The guard refuses any write that drops a line the owner wrote.
 (The learn-engine side, op=update only adding rules, is in test_learn_agent_workflow.py.)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 # T3 phần L: bài học chat riêng nay vào kho resonance tạm (không bao giờ đụng dữ liệu thật của máy).
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agent-rules-")
 
-import agent_lessons  # noqa: E402
-import agent_rules  # noqa: E402
-import main  # noqa: E402
+import agent_lessons
+import agent_rules
+import main
 
 ZALO_RULE = "Nhắn Zalo thì không dùng markdown."
 

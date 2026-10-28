@@ -1,6 +1,4 @@
 """Actual baseline worker/parent routes, engineering seams; no native child."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -11,13 +9,14 @@ from unittest.mock import AsyncMock, patch
 
 import improvement_claude as claude
 import improvement_worker as worker
-from improvement_store import _hash
-from improvement_sandbox import TrialWorkspace, trial_system_prompt, worker_environment
-import test_improvement_startup2_routes as routes
-import test_improvement_trial_profile5 as profile_fixture
-import test_improvement_trial_profile4 as view_fixture
 import test_improvement_native_parent as parent_fixture
 import test_improvement_native_trace_checks as captures
+import test_improvement_startup2_routes as routes
+import test_improvement_trial_profile4 as view_fixture
+import test_improvement_trial_profile5 as profile_fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_sandbox import TrialWorkspace, trial_system_prompt, worker_environment
+from improvement_store import _hash
 
 
 class BaselineWorkerTests(unittest.TestCase):
@@ -127,7 +126,7 @@ class BaselineParentTests(unittest.IsolatedAsyncioTestCase):
     records = parent_fixture.NativeParentTests.records
 
     async def test_actual_parent_keeps_four_durable_allows_and_original_closing_callback(self):
-        from improvement_native_decisions import attempt_scope, NativeImageDecisionStore
+        from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
         workspace = {'trial_id': 'baseline-genuine', 'attempt': 1, 'input_hash': 'c' * 64, 'path': str(self.root)}
         request = {'deadline_at': time.time() + 60, 'capability_hash': 'd' * 64}
         joins, callbacks = [], []

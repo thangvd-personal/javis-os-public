@@ -1,6 +1,4 @@
 """Native SDK component; fake adapters and local SDK builder, no account/client."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -8,13 +6,15 @@ import importlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import socket
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def component(test):
@@ -113,7 +113,7 @@ class NativeSDKTests(unittest.IsolatedAsyncioTestCase):
         self.channels = {name: Channel(name, self.order) for name in ('adapter_version', 'auth_status', 'sdk_version', 'query')}
         async def emit(frame): self.order.append(('dispatch', copy.deepcopy(frame)))
         self.emit = emit
-        from improvement_native_protocol import _ENV_PATHS, _ENV_FIXED
+        from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
         self.env = {**{name: r'C:\empty' for name in _ENV_PATHS}, **_ENV_FIXED}
         self.cwd = r'C:\work'
         self.owner = self.m.NativeInvocationSet(pin(), image_channels=self.channels, emit_dispatch=emit,
@@ -131,8 +131,8 @@ class NativeSDKTests(unittest.IsolatedAsyncioTestCase):
         if not self.owner.closed: await self.owner.aclose()
 
     async def test_dummy_environment_cannot_enter_default_constructor_or_unadopted_factory(self):
-        from improvement_qualification_environment import dummy_environment
         from improvement_native_worker import NativeWorkerSessionV2
+        from improvement_qualification_environment import dummy_environment
         from test_improvement_qualification_protocol import startup
         environment = dummy_environment(self.env, endpoint='http://127.0.0.1:15432')
         with self.assertRaises(ValueError):
@@ -437,10 +437,10 @@ class NativeSDKTests(unittest.IsolatedAsyncioTestCase):
 class NativeSDKInertWindowsTests(unittest.IsolatedAsyncioTestCase):
     async def test_system_python_version_actual_saved_sdk_opener_and_image_channel_terminal(self):
         m = component(self)
+        from claude_agent_sdk._internal.transport import subprocess_cli as sdk
         from improvement_image_channel import ImageMetadataChannel
         from improvement_native_capture_win32 import backend
-        from improvement_native_protocol import _ENV_PATHS, _ENV_FIXED
-        from claude_agent_sdk._internal.transport import subprocess_cli as sdk
+        from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
         api = backend()
         birth = api.birth(api.current_process())
         with tempfile.TemporaryDirectory(prefix='native-sdk-inert-') as scratch:

@@ -10,19 +10,20 @@ các chức năng như nhau ở mọi khung chat". Phải giữ:
   - Telegram của chủ đi cùng đường; bot của khách (kể cả bot mức Toàn quyền) KHÔNG có terminal.
   - Ghi chú trong brain vẫn ghi như cũ: không bị chèn số dòng, không bị bắt đọc trước khi ghi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 _TMP = tempfile.mkdtemp(prefix="javis-moikhung-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_store  # noqa: E402
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
+import coding_store
+import main
+import mcp_hub
 
 _fails = []
 

@@ -6,7 +6,6 @@ Kho SQLite thật, engine GIẢ (hợp đồng sự kiện của aux_engine), b�
 EvidenceStore. Không gọi model thật. Bộ tình huống ở tests/fixtures/resonance/mvp_cases.json. Tên test theo
 Task M5 của docs/superpowers/plans/2026-10-06-resonance-00-mvp.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -15,11 +14,13 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m5-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -37,7 +38,8 @@ BRAIN = str(Path(tempfile.mkdtemp(prefix="brain-m5-")).resolve())
 P = RS.Principal("agent", "javis", BRAIN)
 OWNER = RS.Principal("owner", "owner", BRAIN)
 store = RS.GoalStore()
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo agent, không theo brain
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 
 
@@ -606,7 +608,7 @@ check("vòng 2 (kho): gỡ cờ tạm KHÔNG đụng chốt guard hay trạng th
       _k1 is False and _k2 is False and store.run_state(P, g_kx.id)["block_reason"] == "human_confirmation")
 
 # ═══════════════════════ Trần tổng lượt gọi cho pilot (JAVIS_RESONANCE_CALL_CEILING) ═══════════════════════
-import sqlite3 as _sq  # noqa: E402
+import sqlite3 as _sq
 
 
 def _total_calls():
@@ -712,7 +714,6 @@ except RS.AgentStateError:
 check("P1-3 c: mục tiêu của trợ lý mà phép thử không mang quyền: kho từ chối giữ hạn mức", _no_pin)
 
 # ═══════════════════════ A1, review tại 7d084394: chỉ hoàn lượt khi CHẮC model chưa được gọi ═══════════════════════
-import sqlite3 as _sq  # noqa: E402
 
 
 def _one_shot(method_name, kind, exc):

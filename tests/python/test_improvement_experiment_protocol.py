@@ -1,11 +1,10 @@
 """Closed v2 data validates without host, engine, filesystem or case-store access."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 
 import improvement_experiment_protocol as P
 import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def request_v2():

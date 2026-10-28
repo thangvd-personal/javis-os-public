@@ -7,18 +7,19 @@ chính xác: k của cá nhân hoá, u của từng kịch bản, mốc đổi b
 B6, ngày 50 B7, ngày 110 ngủ đông), 6 reaction "sai dữ kiện", tin chủ động đã xem bị bỏ qua, im lặng đúng không bị phạt,
 gọi trực tiếp lúc ngủ đông, thay/bỏ tín hiệu, lệch đồng hồ, max_tier.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-pulse-policy-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-pulse-policy-w-"))
 
-import agent_pulse as AP  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_pulse as AP
+import resonance_store as RS
 
 fails = []
 D = 86400.0
@@ -156,7 +157,7 @@ st, key, ctx = world()
 H0 = T0 + 0.1 * D
 feed = [(H0 + dd * D, i, "love") for i, dd in enumerate((0.0, 3.5, 7.0, 10.5, 14.0))]
 tiers, us = [], {}
-for k in range(0, 21):
+for k in range(21):
     while feed and feed[0][0] <= H0 + k * D + D / 3:
         at, i, v = feed.pop(0)
         heart(st, key, ctx, i, at, value=v)
@@ -466,7 +467,8 @@ with st._Tx(st) as c:
               (off_key, "*", "off", 1))
 with st._Tx(st) as c:   # kho "của T2": chưa có mốc nâng cấp T3
     c.execute("DELETE FROM pulse_meta WHERE name=?", (AP.UPGRADE_MARK,))
-import time as _time  # noqa: E402
+import time as _time
+
 before = _time.time()
 AP.ensure(st, force=True)
 r_on, r_off = AP.row(st, on_key, "*"), AP.row(st, off_key, "*")

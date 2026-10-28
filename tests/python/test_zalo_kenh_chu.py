@@ -18,7 +18,6 @@ Hai chỗ đáng canh nhất, cả hai đều là chỗ chép nguyên nết Tele
 
 Xem docs/dev/2026-08-zalo-bot-spec.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import sys
 import time
@@ -26,6 +25,7 @@ from pathlib import Path
 
 import config as cfgmod
 import main
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 loi = []
 

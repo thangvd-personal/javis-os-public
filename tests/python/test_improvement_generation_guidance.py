@@ -1,14 +1,13 @@
 """Real proposer consumer and closed output compatibility; no model quality claim."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import improvement_generation_protocol as protocol
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_profile import operation_user_prompt
 from improvement_skill_patch import body_layout
 

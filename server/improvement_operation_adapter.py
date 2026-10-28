@@ -51,8 +51,9 @@ class ClaudeOperationAdapter:
         if manifest['version'] == 2:
             if self._native._native_boundary is None:
                 raise ValueError('operation_native_parent_unbound')
-            from improvement_operation_profile import operation_system_prompt
             from contextlib import aclosing
+
+            from improvement_operation_profile import operation_system_prompt
             async with aclosing(self._native._native_boundary.execute('operation', request, receipt, adapter=self._native,
                     workspace_root=self.workspace.root, brain_id=manifest['brain_id'],
                     before_engine_start=self.before_engine_start, system_prompt=operation_system_prompt(manifest),
@@ -64,8 +65,9 @@ class ClaudeOperationAdapter:
         verified = await _verify_owned(self)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("operation_capability_drift")
-        from improvement_native_transport import execute_worker
         from contextlib import aclosing
+
+        from improvement_native_transport import execute_worker
         async with aclosing(execute_worker("operation", request, receipt, config_pin=self.pin,
                 workspace_root=self.workspace.root, brain_id=manifest['brain_id'], before_engine_start=self.before_engine_start)) as packets:
             async for packet in packets:

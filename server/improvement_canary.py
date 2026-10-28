@@ -20,11 +20,11 @@ import math
 import re
 import secrets
 import time
+from collections.abc import Callable
 from contextlib import closing
-from typing import Callable
 
 import improvement_store as IM
-from improvement_activation import Activations, apply_evidence, selector, scope_hash
+from improvement_activation import Activations, apply_evidence, scope_hash, selector
 
 MIN_DAYS = 7
 MIN_CANARY_VERDICTS = 10
@@ -35,7 +35,7 @@ _GRANT = re.compile(r"ias_[0-9a-f]{32}")
 
 
 def bucket(salt: str, session_id: str) -> int:
-    return int(hashlib.sha256(f"{salt}:{session_id}".encode("utf-8")).hexdigest()[:8], 16) % 100
+    return int(hashlib.sha256(f"{salt}:{session_id}".encode()).hexdigest()[:8], 16) % 100
 
 
 def arm(allocation_pct: int, salt: str, session_id: str) -> str:
@@ -203,8 +203,9 @@ class Canaries:
     # -- promotion -----------------------------------------------------------------------------------
 
     def promote(self, principal, activation_id: str, *, expected_generation: int, event_key: str) -> dict:
-        import skill_router as SR
         from pathlib import Path
+
+        import skill_router as SR
         from improvement_activation import _file_identity, _slug
         brain = IM._brain(principal)
         if type(expected_generation) is not int or expected_generation < 1:

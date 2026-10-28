@@ -27,7 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-gitchu-"))
 
@@ -36,7 +36,7 @@ try:
 except Exception:
     pass
 
-import git_brain as G  # noqa: E402
+import git_brain as G
 
 _fails = []
 

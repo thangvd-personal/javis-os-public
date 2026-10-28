@@ -4,21 +4,19 @@ The injected immutable marker is an intentionally unanchored CONTROL-FLOW
 negative, not a valid qualification run or product/native/quality evidence.
 Actual authenticated engineering-store cases live in product_boundaries tests.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-from contextlib import closing
 import json
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
+import test_improvement_comparison_reports as reports_fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_execution import OperationExecution
 from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
 from improvement_role_workflow import RoleWorkflow
 from improvement_trial_service import OwnerTrialService
-import test_improvement_comparison_reports as reports_fixture
 
 
 class QualificationProductRaceTests(unittest.TestCase):

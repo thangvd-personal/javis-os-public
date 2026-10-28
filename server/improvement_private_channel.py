@@ -13,8 +13,12 @@ import socket
 import struct
 import sys
 
-from improvement_native_protocol import (MAX_PRIVATE_BYTES, encode_private_packet2,
-    decode_private_packet2, validate_private_packet2)
+from improvement_native_protocol import (
+    MAX_PRIVATE_BYTES,
+    decode_private_packet2,
+    encode_private_packet2,
+    validate_private_packet2,
+)
 
 _RETAINED = set()
 

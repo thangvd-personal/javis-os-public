@@ -7,17 +7,17 @@ brain that may be synchronized by Git. A JSON snapshot is still exported by
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 import time
 import unicodedata
-import re
 import uuid
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import team_migration
-
 
 VALID_STATUS = {
     "triage", "todo", "ready", "running", "review", "blocked", "done",
@@ -293,7 +293,7 @@ class TaskStore:
         event_type: str,
         message: str = "",
         run_id: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> None:
         self._db.execute(
             """INSERT INTO task_events
@@ -309,7 +309,7 @@ class TaskStore:
         intent: str,
         route: str = "auto",
         priority: int = 2,
-        deps: Optional[Iterable[str]] = None,
+        deps: Iterable[str] | None = None,
         needs_approval: bool = False,
         created_by: str = "user",
         chat_id: str = "",
@@ -393,7 +393,7 @@ class TaskStore:
         task["deps"] = [str(d["depends_on_id"]) for d in deps]
         return task
 
-    def get_task(self, task_id: str) -> Optional[dict]:
+    def get_task(self, task_id: str) -> dict | None:
         with self._lock:
             row = self._db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         return self._task_from_row(row) if row else None
@@ -741,7 +741,7 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
-    def next_candidate(self, brain_root: str) -> Optional[dict]:
+    def next_candidate(self, brain_root: str) -> dict | None:
         with self._lock:
             # Trợ lý đang chạy một việc giao trực tiếp thì việc kế của CÙNG trợ lý đứng chờ; việc khác vẫn đi tiếp
             # (không bỏ đói ai), và việc của trợ lý đó vẫn theo đúng thứ tự (FIFO trong cùng ưu tiên).
@@ -778,7 +778,7 @@ class TaskStore:
         worker_id: str,
         lease_seconds: int = 90,
         engine_provider: str = "",
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Atomically claim exactly one selected task."""
         ts = now()
         run_id = "run_" + uuid.uuid4().hex[:14]
@@ -885,12 +885,12 @@ class TaskStore:
         error: str = "",
         block_kind: str = "",
         block_reason: str = "",
-        metadata: Optional[dict] = None,
-        artifacts: Optional[list] = None,
+        metadata: dict | None = None,
+        artifacts: list | None = None,
         event_type: str = "completed",
         not_before: float = 0.0,
         keep_attempt: bool = False,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """`not_before`: mốc epoch trước đó dispatcher không nhặt lại việc (hoãn vì hết hạn mức).
         `keep_attempt`: trả lại lượt thử mà `claim` vừa cộng - lượt vấp hạn mức không phải lỗi
         của việc, tính nó là ba lần vấp cùng một cửa sổ hết lượt là việc chết oan."""
@@ -956,9 +956,9 @@ class TaskStore:
         worker_id: str,
         result: str,
         needs_approval: bool = False,
-        metadata: Optional[dict] = None,
-        artifacts: Optional[list] = None,
-    ) -> Optional[dict]:
+        metadata: dict | None = None,
+        artifacts: list | None = None,
+    ) -> dict | None:
         return self._finish(
             task_id, worker_id, "review" if needs_approval else "done",
             result=result, metadata=metadata, artifacts=artifacts,
@@ -972,8 +972,8 @@ class TaskStore:
         intent: str,
         capability: str,
         execution_mode: str,
-        metadata: Optional[dict] = None,
-    ) -> Optional[dict]:
+        metadata: dict | None = None,
+    ) -> dict | None:
         ts = now()
         with self._lock:
             self._tx()
@@ -1024,7 +1024,7 @@ class TaskStore:
         transient: bool = False,
         not_before: float = 0.0,
         keep_attempt: bool = False,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """`transient=True` -> về ready để thử lại (còn lượt). `not_before` hoãn lần thử tới
         mốc đó; `keep_attempt` không tính lần vấp này vào `attempts` (hết hạn mức gói thuê bao
         đã biết giờ mở lại: đợi đúng giờ rồi thử là chắc ăn, không có lý do gì để đốt lượt)."""
@@ -1047,8 +1047,8 @@ class TaskStore:
 
     def ask(
         self, task_id: str, worker_id: str, question: str, result: str = "",
-        extra_meta: Optional[dict] = None,
-    ) -> Optional[dict]:
+        extra_meta: dict | None = None,
+    ) -> dict | None:
         """Chặn việc ở `needs_input` VÀ ghi câu hỏi vào `metadata.qa` (0.235.0).
 
         Trước đây câu hỏi chỉ nằm lẫn trong `block_reason`, và đường duy nhất để gỡ là Thử lại:
@@ -1075,7 +1075,7 @@ class TaskStore:
             metadata=meta, artifacts=task.get("artifacts") or [],
         )
 
-    def answer(self, task_id: str, text: str, by: str = "owner") -> tuple[Optional[dict], str]:
+    def answer(self, task_id: str, text: str, by: str = "owner") -> tuple[dict | None, str]:
         """Chủ trả lời việc đang chờ ở `needs_input`: điền câu trả lời rồi đưa việc về `ready`.
 
         Trả (task, "") khi xong, (None, mã lỗi) khi không: "not_found", "empty", "not_waiting".
@@ -1252,7 +1252,7 @@ class TaskStore:
         ).fetchone()
         return int(row["version"]) if row else 0
 
-    def _team_row(self, task_id: str) -> Optional[sqlite3.Row]:
+    def _team_row(self, task_id: str) -> sqlite3.Row | None:
         return self._db.execute(
             "SELECT * FROM tasks WHERE id=? AND lane='team'", (task_id,)
         ).fetchone()
@@ -1386,7 +1386,7 @@ class TaskStore:
                             "SELECT COALESCE(MAX(team_prio), 0) AS m FROM tasks WHERE lane='team' AND team_id=?",
                             (team_id,),
                         ).fetchone()["m"]
-                        value: Optional[int] = int(top) + 1
+                        value: int | None = int(top) + 1
                     else:
                         value = None
                     self._db.execute(
@@ -1419,7 +1419,7 @@ class TaskStore:
 
     def claim_team_next(
         self, team_id: str, worker_id: str, lease_s: int = 90, max_running: int = 1,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Nhận việc đầu hàng của nhóm nếu nhóm còn chỗ chạy (mặc định một việc mỗi nhóm).
 
         Kiểm chỗ chạy, chọn việc, đặt `team_running`, ghi `task_runs` và tăng version trong MỘT
@@ -1486,9 +1486,9 @@ class TaskStore:
 
     def _team_move(
         self, task_id: str, allowed_from: tuple, status: str, event_type: str, message: str = "",
-        *, block_kind: str = "", block_reason: str = "", result: Optional[str] = None,
-        run_status: str = "", expected_rev: Optional[int] = None, acceptance_decision: Optional[str] = None,
-    ) -> Optional[str]:
+        *, block_kind: str = "", block_reason: str = "", result: str | None = None,
+        run_status: str = "", expected_rev: int | None = None, acceptance_decision: str | None = None,
+    ) -> str | None:
         """Chuyển trạng thái một việc nhóm. Trả trạng thái TRƯỚC khi chuyển, None nếu không áp. `expected_rev`: chỉ áp
         khi `team_rev` vẫn là bản đó (CAS cùng giao dịch, review T1 R7)."""
         ts = now()
@@ -1530,19 +1530,19 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
-    def team_block(self, task_id: str, kind: str, reason: str = "") -> Optional[str]:
+    def team_block(self, task_id: str, kind: str, reason: str = "") -> str | None:
         """Việc bị chặn RỜI chỗ chạy (hàng đi tiếp). Giữ `team_seq`/`team_prio` để gỡ chặn về chỗ cũ."""
         return self._team_move(task_id, ("team_running", "team_queued"), "team_blocked", "team_blocked",
                                block_kind=str(kind or "failed"), block_reason=reason, run_status="blocked")
 
-    def team_reblock(self, task_id: str, kind: str, reason: str = "", *, decision_key=None, expected_rev=None) -> Optional[str]:
+    def team_reblock(self, task_id: str, kind: str, reason: str = "", *, decision_key=None, expected_rev=None) -> str | None:
         """A blocked job stays blocked for another reason (0.207.0: the owner rejected or revoked an approval, the request
         expired). Same place in the queue; the new kind decides which buttons the owner gets."""
         return self._team_move(task_id, ("team_blocked",), "team_blocked", "team_reblocked",
                                block_kind=str(kind or "failed"), block_reason=reason,
                                acceptance_decision=decision_key, expected_rev=expected_rev)
 
-    def team_unblock(self, task_id: str, *, decision_key=None, expected_rev=None) -> Optional[str]:
+    def team_unblock(self, task_id: str, *, decision_key=None, expected_rev=None) -> str | None:
         return self._team_move(task_id, ("team_blocked",), "team_queued", "team_unblocked",
                                acceptance_decision=decision_key, expected_rev=expected_rev)
 
@@ -1551,23 +1551,23 @@ class TaskStore:
             return self._db.execute('SELECT 1 FROM team_acceptance_applied WHERE task_id=? AND decision_key=?',
                                     (task_id, decision_key)).fetchone() is not None
 
-    def team_requeue(self, task_id: str, reason: str = "") -> Optional[str]:
+    def team_requeue(self, task_id: str, reason: str = "") -> str | None:
         """Việc đang chạy về hàng chờ, giữ chỗ cũ (restart trước mốc gọi engine)."""
         return self._team_move(task_id, ("team_running",), "team_queued", "team_requeued", reason,
                                run_status="stale")
 
-    def team_finish(self, task_id: str, result: str = "", expected_rev: Optional[int] = None) -> Optional[str]:
+    def team_finish(self, task_id: str, result: str = "", expected_rev: int | None = None) -> str | None:
         """Chốt việc xong. Có `expected_rev` thì chỉ chốt khi yêu cầu chưa bị sửa sang bản khác: kết quả của bản cũ
         không bao giờ thành kết quả của bản mới (review T1 R7)."""
         return self._team_move(task_id, ("team_running",), "done", "team_done", "done",
                                result=result, run_status="completed", expected_rev=expected_rev)
 
-    def team_finish_reviewed(self, task_id: str, result: str = "", expected_rev: Optional[int] = None, *, decision_key=None) -> Optional[str]:
+    def team_finish_reviewed(self, task_id: str, result: str = "", expected_rev: int | None = None, *, decision_key=None) -> str | None:
         """0.209.0: the owner confirmed the product of a job that waited for acceptance (blocked) -> done, same CAS."""
         return self._team_move(task_id, ("team_blocked",), "done", "team_done", "done (owner accepted)",
                                result=result, run_status="completed", expected_rev=expected_rev, acceptance_decision=decision_key)
 
-    def team_cancel(self, task_id: str, reason: str = "owner cancel") -> Optional[str]:
+    def team_cancel(self, task_id: str, reason: str = "owner cancel") -> str | None:
         return self._team_move(task_id, TEAM_OPEN_STATUS, "cancelled", "team_cancelled", reason,
                                block_kind="cancelled", block_reason=reason, run_status="cancelled")
 
@@ -1598,7 +1598,7 @@ class TaskStore:
             ).fetchall()
         return [self._task_from_row(r) for r in rows]
 
-    def team_core_find(self, team_id: str, correlation_id: str) -> Optional[dict]:
+    def team_core_find(self, team_id: str, correlation_id: str) -> dict | None:
         """Việc nhóm do Core mở theo mã đối chiếu (mới nhất nếu trùng)."""
         cid = str(correlation_id or "").strip()
         if not cid:
@@ -1627,7 +1627,7 @@ class TaskStore:
             self._db.execute("UPDATE tasks SET metadata_json=? WHERE id=?", (_json(meta), task_id))
             self._db.commit()
 
-    def team_amend(self, task_id: str, addition: str) -> Optional[int]:
+    def team_amend(self, task_id: str, addition: str) -> int | None:
         """Chủ sửa yêu cầu của việc chưa kết thúc: nối phần thêm vào `intent`, tăng `team_rev`."""
         addition = str(addition or "").strip()
         if not addition:
@@ -1727,7 +1727,7 @@ class TaskStore:
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def team_last_done(self, team_id: str) -> Optional[dict]:
+    def team_last_done(self, team_id: str) -> dict | None:
         """Việc xong gần nhất của một nhóm (nguồn đóng góp của kết quả gần nhất, T4 0.170.0). Không đọc phụ thuộc."""
         with self._lock:
             row = self._db.execute(
@@ -1737,7 +1737,7 @@ class TaskStore:
             ).fetchone()
         return dict(row) if row else None
 
-    def health(self, brain_root: Optional[str] = None) -> dict:
+    def health(self, brain_root: str | None = None) -> dict:
         where = " WHERE lane<>'team'" + (" AND brain_root=?" if brain_root else "")
         args = (brain_root,) if brain_root else ()
         with self._lock:

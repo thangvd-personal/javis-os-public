@@ -19,8 +19,9 @@ Hai lớp chắn, mỗi lớp một canary - bỏ lớp nào lỗi cũng quay l�
   2. Nhánh CLI không cầm tên model của nhà khác nữa: rơi về bộ não mặc định là có chủ ý,
      nhưng phải rơi CẢ MODEL theo nó, không thì `claude --model qwen3:4b-instruct`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -36,7 +37,7 @@ def check(name, cond):
         _fails.append(name)
 
 
-import main  # noqa: E402
+import main
 
 # Lấy qua getattr: thiếu hàm thì test phải báo hỏng GỌN rồi chạy tiếp mấy khẳng định định
 # tuyến bên dưới - đó mới là chỗ nói lên bệnh thật. Chết bằng traceback ngay đây thì người

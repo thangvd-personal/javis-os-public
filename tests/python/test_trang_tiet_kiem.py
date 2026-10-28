@@ -15,18 +15,17 @@ như không, và đó đúng là lời chê "không hiểu trang này và không
 nữa, trước bản này KHÔNG có cách nào biết một lượt đã đi đường tiết kiệm hay lặng lẽ tụt về
 đường cũ - phải đợi tới lúc nhà cung cấp báo vượt hạn mức mới lộ ra, mà lúc đó thì đã muộn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tk-")
 
-import config as cfg  # noqa: E402
-import context_runtime  # noqa: E402
-import main  # noqa: E402
+import main
 
 _fails = []
 
@@ -388,7 +387,7 @@ for _k in ("readonly", "orchestrator", "write", "workflow", "bot"):
 def _bo_comment(src):
     import re
     src = re.sub(r"/\*[\s\S]*?\*/", "", src)
-    return re.sub(r"(^|[^:])//.*$", r"\1", src, flags=re.M)
+    return re.sub(r"(^|[^:])//.*$", r"\1", src, flags=re.MULTILINE)
 
 
 for _ten_file, _src in (("console.js", _CONSOLE), ("app.js", _APP)):

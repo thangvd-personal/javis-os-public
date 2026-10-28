@@ -15,12 +15,12 @@ không nhận mỗi scope gộp 'auth/calendar'. Thiếu freebusy thì suggest_t
 Test này khoá 3 thứ: catalog xin đủ scope, Javis lưu và so được scope THẬT ĐƯỢC CẤP, và mọi
 đường báo lỗi (Test, health, lỗi tool) đều nói thẳng thiếu quyền gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import sys
 
 import mcp_hub
 import oauth_mcp
+from _paths import ROOT, SERVER
 
 _fails = []
 

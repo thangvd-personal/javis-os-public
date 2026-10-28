@@ -6,9 +6,10 @@ CI chạy test Python trên 2 máy, mỗi máy một nhóm (`--shard i/2`). Mộ
 test lặng lẽ không bao giờ chạy mà CI vẫn xanh, nên canary này kiểm đúng các khe đó, và kiểm
 luôn trên danh sách test THẬT đang có trong repo.
 """
-from _paths import ROOT  # noqa: E402
 import importlib.util
 import unittest
+
+from _paths import ROOT
 
 _spec = importlib.util.spec_from_file_location("javis_tests_run", ROOT / "tests" / "run.py")
 R = importlib.util.module_from_spec(_spec)

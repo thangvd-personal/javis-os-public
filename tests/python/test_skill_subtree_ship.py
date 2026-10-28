@@ -20,16 +20,17 @@ Phủ 5 điểm:
      làm skill tự bật lại.
   5. File con user ĐÃ SỬA thì được giữ, không bị bản của app ghi đè.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import os
 import shutil
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-subtree-"))
 
-import system_sync  # noqa: E402
+import system_sync
 
 _fails = []
 

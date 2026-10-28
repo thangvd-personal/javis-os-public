@@ -20,12 +20,13 @@ message-buffer.js) mới thấy tài liệu mcp-guide.md và mã Javis lệch v�
 Bài học chung: một tham số MCP viết sai tên KHÔNG báo lỗi (bị lặng lẽ bỏ qua), nên đúng loại lỗi
 này chỉ bắt được bằng một test khẳng định TÊN khoá thật, không phải bằng việc "gọi mà không lỗi".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpkhuon-")
 try:
@@ -33,13 +34,12 @@ try:
 except Exception:
     pass
 
-import chatbot_log  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import mcp_client  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as kenh  # noqa: E402
+import chatbot_log
+import chatbot_store
+import conversations
+import mcp_client
+import zalo_personal_channel as zc
+from channels import zalo_personal as kenh
 
 _fails = []
 

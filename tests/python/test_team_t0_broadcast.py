@@ -4,18 +4,19 @@
 
 Không gọi model. Lỗi (404) không phát gói; gói phụ lỗi không làm hỏng lệnh của chủ dự án.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-t0-")
 BR = Path(tempfile.mkdtemp(prefix="javis-t0-brain-"))
 (BR / "agents").mkdir()
 (BR / "agents" / "viet-bai.md").write_text("---\nname: Viết bài\n---\nBạn viết bài.\n", encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

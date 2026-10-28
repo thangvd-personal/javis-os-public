@@ -16,13 +16,13 @@ ghim đúng bốn chỗ đó, vì chúng là nơi một bản chép-từ-Telegra
 
 Xem docs/dev/2026-08-zalo-bot-spec.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import sys
 from pathlib import Path
 
 import chatbot_store
 import zalo_bot
+from _paths import ROOT, SERVER
 from zalo_bot import MAX_TIN, ZaloBot
 
 loi = []
@@ -238,7 +238,8 @@ check("danh sách nhóm không bị cắt ở 50 (spa có hàng trăm nhóm khá
 
 _RT = (Path(SERVER) / "chatbot_runtime.py").read_text(encoding="utf-8")
 # 0.61.0: bảng kênh -> lớp vận chuyển nằm ở sổ đăng ký kênh, bộ giám sát chỉ tra sổ.
-import channels  # noqa: E402
+import channels
+
 check("sổ đăng ký kênh cấp lớp vận chuyển cho từng kênh bot",
       channels.module("telegram").Transport is not None and channels.module("zalo").Transport is not None)
 check("bật bot thì tra sổ chứ không ghim cứng TelegramBot",

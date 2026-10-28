@@ -17,8 +17,9 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from collections.abc import Callable, Iterable
 from contextlib import closing
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
 import resonance_store as RS
 
@@ -45,14 +46,14 @@ class ReasonBusy(Exception):
     """Lý do đã có một lượt đang chạy hay đã chạy thành công (chỉ mục duy nhất từng phần chặn lượt thứ hai)."""
 
 
-def _now(now: Optional[float]) -> float:
+def _now(now: float | None) -> float:
     return time.time() if now is None else float(now)
 
 
 class CallLedger:
     """Sổ `agent_calls` trên kho của một `GoalStore`. Mọi thao tác ghi đi qua `GoalStore._Tx` (BEGIN IMMEDIATE)."""
 
-    def __init__(self, store: "RS.GoalStore"):
+    def __init__(self, store: RS.GoalStore):
         self.store = store
 
     def _tx(self):
@@ -61,8 +62,8 @@ class CallLedger:
     # ───────────── giữ chỗ, mốc engine, chốt, hoàn ─────────────
 
     def reserve(self, *, purpose: str, reason_ref: str, agent_key: str = "", brain_id: str = "", context_ref: str = "",
-                obligation: bool = False, counted: bool = True, mirror_ref: str = "", attempt: Optional[int] = None,
-                now: Optional[float] = None, c=None) -> Optional[int]:
+                obligation: bool = False, counted: bool = True, mirror_ref: str = "", attempt: int | None = None,
+                now: float | None = None, c=None) -> int | None:
         """Giữ chỗ MỘT lượt TRƯỚC khi gọi engine. Trả id dòng, hoặc None khi trần chung đầy (không ghi gì).
 
         Kiểm trần và ghi nằm trong CÙNG giao dịch BEGIN IMMEDIATE (SQLite tuần tự hoá mọi giao dịch ghi, kể cả từ tiến
@@ -96,7 +97,7 @@ class CallLedger:
             raise ReasonBusy(ref) from ex
         return int(cur.lastrowid)
 
-    def mark_engine(self, call_id: int, engine: str = "", model: str = "", now: Optional[float] = None) -> bool:
+    def mark_engine(self, call_id: int, engine: str = "", model: str = "", now: float | None = None) -> bool:
         """Mốc gọi engine: từ đây lượt luôn tính (không hoàn được). Chỉ dòng `reserved` chuyển `running`."""
         with self._tx() as c:
             return self._mark_engine_in(c, call_id, engine, model, _now(now))
@@ -107,8 +108,8 @@ class CallLedger:
                          "WHERE id=? AND status='reserved' AND engine_at IS NULL",
                          (str(engine or ""), str(model or ""), now, int(call_id))).rowcount == 1
 
-    def settle(self, call_id: int, status: str, tokens_in: Optional[int] = None, tokens_out: Optional[int] = None,
-               cost_usd: Optional[float] = None, now: Optional[float] = None) -> bool:
+    def settle(self, call_id: int, status: str, tokens_in: int | None = None, tokens_out: int | None = None,
+               cost_usd: float | None = None, now: float | None = None) -> bool:
         """Chốt `ok`, `error` hay `interrupted` (đều tính). Dòng đã chốt hay đã hoàn thì không đổi."""
         if status not in ("ok", "error", "interrupted"):
             raise ValueError("kết cục lượt không hợp lệ")
@@ -121,7 +122,7 @@ class CallLedger:
                          "WHERE id=? AND status IN ('reserved','running')",
                          (status, tokens_in, tokens_out, cost_usd, now, int(call_id))).rowcount == 1
 
-    def refund(self, call_id: int, now: Optional[float] = None) -> bool:
+    def refund(self, call_id: int, now: float | None = None) -> bool:
         """Hoàn lượt CHẮC CHẮN chưa gọi model (mốc engine chưa ghi). Dòng đã qua mốc thì không hoàn được: trả False."""
         with self._tx() as c:
             return self._refund_in(c, int(call_id), _now(now))
@@ -131,12 +132,12 @@ class CallLedger:
         return c.execute("UPDATE agent_calls SET status='refunded', settled_at=? WHERE id=? AND status='reserved' "
                          "AND engine_at IS NULL", (now, int(call_id))).rowcount == 1
 
-    def get(self, call_id: int) -> Optional[dict]:
+    def get(self, call_id: int) -> dict | None:
         with closing(self.store._conn()) as c:
             r = c.execute("SELECT * FROM agent_calls WHERE id=?", (int(call_id),)).fetchone()
             return dict(r) if r else None
 
-    def rows(self, reason_ref: Optional[str] = None, mirror_ref: Optional[str] = None) -> list:
+    def rows(self, reason_ref: str | None = None, mirror_ref: str | None = None) -> list:
         q, args = "SELECT * FROM agent_calls WHERE 1=1", []
         if reason_ref is not None:
             q += " AND reason_ref=?"
@@ -154,7 +155,7 @@ class CallLedger:
 
     # ───────────── đối soát lượt không gắn lượt nhóm ─────────────
 
-    def reconcile_stale(self, now: Optional[float] = None, stale_s: float = STALE_RESERVED_S) -> dict:
+    def reconcile_stale(self, now: float | None = None, stale_s: float = STALE_RESERVED_S) -> dict:
         """Dòng KHÔNG phản chiếu gì (`mirror_ref = ''`: phán xử theo lô, xem xét, chủ động, quét) còn mở quá một lượt (10
         phút): chưa có mốc engine thì `refunded` (chắc chắn chưa gọi model), có mốc thì `interrupted` (vẫn tính).
         Idempotent. Dòng `team_turn:*` KHÔNG BAO GIỜ xử lý theo tuổi (lượt nhóm có thể chờ khoá bận tới busy_wait_s và
@@ -180,7 +181,7 @@ class TeamCeiling:
     Thứ tự hai kho: giữ chỗ `team_turns` (kho nhóm) rồi mới giữ chỗ sổ chung; sổ chung từ chối thì người gọi hoàn
     `team_turns` ngay. Lỗi kho chung lúc chốt không được làm hỏng lượt nhóm (bộ chạy nuốt lỗi), đối soát sửa sau."""
 
-    def __init__(self, store: "RS.GoalStore"):
+    def __init__(self, store: RS.GoalStore):
         self.store = store
         self.ledger = CallLedger(store)
 
@@ -195,7 +196,7 @@ class TeamCeiling:
         return c.execute("SELECT * FROM agent_calls WHERE mirror_ref=? ORDER BY id DESC LIMIT 1",
                          (self.mirror(turn_id),)).fetchone()
 
-    def reserve(self, turn: dict, now: Optional[float] = None) -> bool:
+    def reserve(self, turn: dict, now: float | None = None) -> bool:
         """Giữ chỗ dòng phản chiếu cho lượt nhóm `turn` ({turn_id, team_id, agent_key, role, brain_id?}). False khi
         trần chung đầy (không ghi gì). Lượt nhóm là nghĩa vụ (dùng được cả trần), trừ lượt tự lên tiếng (T3 J)."""
         tid = str(turn["turn_id"])
@@ -207,7 +208,7 @@ class TeamCeiling:
                                   mirror_ref=self.mirror(tid), now=now)
         return cid is not None
 
-    def mark(self, turn_id: str, engine: str = "", model: str = "", now: Optional[float] = None) -> None:
+    def mark(self, turn_id: str, engine: str = "", model: str = "", now: float | None = None) -> None:
         """Mốc gọi engine của lượt nhóm. Dòng phản chiếu đã bị hoàn (đối soát) hay chưa có thì DỰNG LẠI một dòng
         `counted = 1` đang chạy (có thể tạm vượt trần: không làm mất lượt đã tới model)."""
         t = _now(now)
@@ -226,8 +227,8 @@ class TeamCeiling:
                       ("reply", self.mirror(turn_id), att, str(engine or ""), str(model or ""), "running", 1, 1,
                        self.mirror(turn_id), t, t))
 
-    def settle(self, turn_id: str, status: str, tokens_in: Optional[int] = None, tokens_out: Optional[int] = None,
-               cost_usd: Optional[float] = None, now: Optional[float] = None) -> None:
+    def settle(self, turn_id: str, status: str, tokens_in: int | None = None, tokens_out: int | None = None,
+               cost_usd: float | None = None, now: float | None = None) -> None:
         t = _now(now)
         with self.ledger._tx() as c:
             r = self._live(c, turn_id)
@@ -244,14 +245,14 @@ class TeamCeiling:
             c.execute("UPDATE agent_calls SET status=?, tokens_in=?, tokens_out=?, cost_usd=?, settled_at=? WHERE id=?",
                       (status, tokens_in, tokens_out, cost_usd, t, r["id"]))
 
-    def refund(self, turn_id: str, now: Optional[float] = None) -> None:
+    def refund(self, turn_id: str, now: float | None = None) -> None:
         """Lượt nhóm được hoàn (chưa tới mốc engine): dòng phản chiếu cũng `refunded`."""
         with self.ledger._tx() as c:
             r = self._live(c, turn_id)
             if r is not None:
                 self.ledger._refund_in(c, r["id"], _now(now))
 
-    def reconcile(self, teams: Any, startup: bool = False, now: Optional[float] = None,
+    def reconcile(self, teams: Any, startup: bool = False, now: float | None = None,
                   stale_s: float = STALE_RESERVED_S, grace_s: float = RECONCILE_GRACE_S, batch: int = 2000) -> dict:
         """Đối soát hai kho (thiết kế 9.1, bản sửa sau review T1 vòng 2), idempotent. Dòng `team_turn:*` chỉ theo trạng
         thái của CHÍNH lượt nhóm đó, KHÔNG BAO GIỜ theo tuổi (lượt nhóm có thể nằm `reserved` không mốc engine trong lúc
@@ -361,7 +362,7 @@ class WakeReasons:
     vào đó; một lý do `pending` mới được cùng tồn tại với một lý do đang `claimed` (nguồn đến trong lúc lượt xem xét
     đang chạy vào lý do chờ mới, không vào lý do đang chạy)."""
 
-    def __init__(self, store: "RS.GoalStore", ledger: Optional[CallLedger] = None):
+    def __init__(self, store: RS.GoalStore, ledger: CallLedger | None = None):
         self.store = store
         self.ledger = ledger or CallLedger(store)
 
@@ -385,7 +386,7 @@ class WakeReasons:
     # ───────────── nguồn ─────────────
 
     def add_source(self, agent_key: str, context_ref: str, code: str, source_ref: str, group_ref: str = "",
-                   now: Optional[float] = None) -> int:
+                   now: float | None = None) -> int:
         """Gom một nguồn vào lý do `pending` (tạo nếu chưa có). Idempotent theo `source_ref`: gọi lại trả đúng lý do cũ,
         không thêm dòng (bộ chiếu chạy lại an toàn). Trả mã lý do."""
         if code not in REASON_CODES:
@@ -422,7 +423,7 @@ class WakeReasons:
                 c.execute("UPDATE agent_wake_reasons SET updated_at=? WHERE id=?", (t, rid))
         return [s["source_ref"] for s in rows if int(s["reason_id"]) in touched]
 
-    def remove_source(self, source_ref: str, now: Optional[float] = None) -> bool:
+    def remove_source(self, source_ref: str, now: float | None = None) -> bool:
         """Nguồn bị bỏ (reaction gỡ hay đổi): đánh `removed_at` khi lý do còn `pending` hay đang `claimed`; lý do chờ không
         còn nguồn nào thì `superseded` (lý do đang chạy giữ nguyên, lượt đó tự chốt). Lý do đã chốt thì không đụng (bằng
         chứng). Trả có gỡ không."""
@@ -431,7 +432,7 @@ class WakeReasons:
             rows = c.execute("SELECT * FROM agent_wake_sources WHERE source_ref=?", (str(source_ref),)).fetchall()
             return bool(self._remove_in(c, rows, t))
 
-    def remove_group(self, group_ref: str, keep: Iterable[str] = (), now: Optional[float] = None) -> list:
+    def remove_group(self, group_ref: str, keep: Iterable[str] = (), now: float | None = None) -> list:
         """Gỡ mọi nguồn còn chờ của cùng một cặp (tin, người phản hồi) trừ `keep`. Trả các `source_ref` đã gỡ."""
         if not group_ref:
             return []
@@ -444,9 +445,9 @@ class WakeReasons:
 
     # ───────────── nhận (CAS), chốt ─────────────
 
-    def claim(self, reason_id: int, *, try_busy: Optional[Callable[[], bool]] = None,
-              release_busy: Optional[Callable[[], Any]] = None, purpose: Optional[str] = None,
-              brain_id: str = "", obligation: bool = False, now: Optional[float] = None) -> dict:
+    def claim(self, reason_id: int, *, try_busy: Callable[[], bool] | None = None,
+              release_busy: Callable[[], Any] | None = None, purpose: str | None = None,
+              brain_id: str = "", obligation: bool = False, now: float | None = None) -> dict:
         """Nhận một lý do để phục vụ (thiết kế 3.2, 3.4): THỬ KHOÁ BẬN TRƯỚC (không chờ), bận thì không nhận, lý do giữ
         `pending` và `attempt` không tăng. Rồi trong MỘT giao dịch: CAS `pending -> claimed`, `attempt + 1`, chốt danh
         sách nguồn còn sống, giữ chỗ một dòng `agent_calls` (`reason_ref = wr:<id>`, kiểm trần). Trần đầy thì không nhận
@@ -506,7 +507,7 @@ class WakeReasons:
         return out
 
     def settle(self, reason_id: int, call_status: str, consumed: Iterable[str] = (), *, tokens_in=None,
-               tokens_out=None, cost_usd=None, now: Optional[float] = None) -> dict:
+               tokens_out=None, cost_usd=None, now: float | None = None) -> dict:
         """Chốt lượt phục vụ lý do đang `claimed`.
 
         - `ok`: lý do `served`; nguồn trong `consumed` đánh `consumed_at`; nguồn KHÔNG được tiêu thụ chuyển sang lý do
@@ -567,7 +568,7 @@ class WakeReasons:
                       (st, max(0, att), t, r["id"]))
             return {"status": st, "moved_to": None}
 
-    def requeue(self, reason_id: int, source_refs: Iterable[str], now: Optional[float] = None) -> Optional[int]:
+    def requeue(self, reason_id: int, source_refs: Iterable[str], now: float | None = None) -> int | None:
         """Trả các nguồn ĐÃ tiêu thụ của một lý do `served` về lý do `pending` cùng loại (tạo nếu chưa có), bỏ mốc tiêu thụ.
         Dùng khi lượt đã chạy nhưng tác động bị chặn vì hết hạn mức trước khi phán xử (review T3 L P2-1: hết trần không làm
         mất phản hồi). Lý do cũ giữ `served` (lượt đã thật sự gọi model). Trả mã lý do chờ, None khi không có gì để trả."""
@@ -590,7 +591,7 @@ class WakeReasons:
             c.execute("UPDATE agent_wake_reasons SET updated_at=? WHERE id=?", (t, p["id"]))
             return int(p["id"])
 
-    def retry_failed(self, reason_id: int, now: Optional[float] = None) -> Optional[int]:
+    def retry_failed(self, reason_id: int, now: float | None = None) -> int | None:
         """Chủ bấm thử lại một lý do `failed`: về `pending` (attempt về 0). Đã có lý do chờ cùng loại thì gộp nguồn vào
         đó. Trả mã lý do đang chờ, None khi lý do không ở `failed`."""
         t = _now(now)
@@ -610,13 +611,13 @@ class WakeReasons:
 
     # ───────────── đọc ─────────────
 
-    def get(self, reason_id: int) -> Optional[dict]:
+    def get(self, reason_id: int) -> dict | None:
         with closing(self.store._conn()) as c:
             r = c.execute("SELECT * FROM agent_wake_reasons WHERE id=?", (int(reason_id),)).fetchone()
             return dict(r) if r else None
 
-    def reasons(self, agent_key: Optional[str] = None, context_ref: Optional[str] = None,
-                status: Optional[str] = None, code: Optional[str] = None) -> list:
+    def reasons(self, agent_key: str | None = None, context_ref: str | None = None,
+                status: str | None = None, code: str | None = None) -> list:
         q, args = "SELECT * FROM agent_wake_reasons WHERE 1=1", []
         for col, v in (("agent_key", agent_key), ("context_ref", context_ref), ("status", status), ("code", code)):
             if v is not None:
@@ -632,7 +633,7 @@ class WakeReasons:
         with closing(self.store._conn()) as c:
             return [dict(r) for r in c.execute(q + " ORDER BY added_at, source_ref", (int(reason_id),)).fetchall()]
 
-    def source(self, source_ref: str) -> Optional[dict]:
+    def source(self, source_ref: str) -> dict | None:
         """Nguồn kèm trạng thái lý do đang chứa nó ({..., reason_status, reason_attempt, code, context_ref})."""
         with closing(self.store._conn()) as c:
             r = c.execute("SELECT s.*, r.status AS reason_status, r.attempt AS reason_attempt, r.code AS code, "

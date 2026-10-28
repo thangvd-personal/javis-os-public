@@ -1,6 +1,4 @@
 """Private inventory fixtures and real runtime file handles; no native child."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import base64
 import csv
 import hashlib
@@ -9,10 +7,12 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def pin():
@@ -192,7 +192,6 @@ class NativeReleaseTests(unittest.TestCase):
             with self.assertRaises((ValueError, PermissionError)): self.m.qualified_launch(value, kind='operation', scratch=r'C:\private\scratch')
 
     def test_bad_pin_kind_scratch_and_registry_values_refuse(self):
-        import improvement_native_qualifications as authority
         for value in ({**pin(), 'version': True}, {**pin(), 'extra': 'private'}, {**pin(), 'cli_hash': False}):
             with self.subTest(value=value), self.assertRaises((ValueError, TypeError)): self.m.observe_release(value)
         for kind, scratch in ((True, r'C:\scratch'), ('query', r'C:\scratch'), ('trial', 'relative')):

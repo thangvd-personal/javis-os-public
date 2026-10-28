@@ -1,6 +1,4 @@
 """Compile reuse never caches live-source readability or a runtime match verdict."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import builtins
 import os
 import sys
@@ -12,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _BOOT = Path(tempfile.mkdtemp(prefix="dc-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "BRAIN_PATH": "brain",

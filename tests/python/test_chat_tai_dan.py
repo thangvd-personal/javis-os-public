@@ -15,16 +15,17 @@ Hai chỗ dễ làm sai, và test này canh đúng hai chỗ đó:
    mà tin ghi bù (bot, việc nền) có id lớn trong khi mốc giờ nhỏ. Con trỏ chỉ có id sẽ nhảy
    cóc qua vài tin hoặc trả lại tin đã hiện - cả hai đều lặng thinh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-taidan-"))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-from sessions import get_store  # noqa: E402
+import main
+from fastapi.testclient import TestClient
+from sessions import get_store
 
 fails = []
 
@@ -122,7 +123,7 @@ check("thiếu con trỏ thì rơi về khúc cuối, không nổ",
       chu(c.get(f"/sessions/{SID}/messages", params={"limit": 3}).json()["messages"])
       == ["tin so 97", "tin so 98", "tin so 99"])
 
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

@@ -8,12 +8,13 @@ cả các màn có lịch sử hội thoại". Danh sách hội thoại thườn
      `sessions-ui.js`) không có nút ghim, và server không trả trạng thái ghim của kết quả.
   2. Hòm thư bot (trang Hội thoại) chưa có ghim ở đâu cả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-ghim-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -25,8 +26,8 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
-import sessions  # noqa: E402
+import conversations
+import sessions
 
 _fails = []
 
@@ -111,8 +112,8 @@ check("hàng danh sách mang pinned", ds[0]["pinned"] == 1 and ds[1]["pinned"] =
 check("ghim không đổi giờ cập nhật (không phải tin mới)", conversations.chi_tiet(a)["updated_at"] == truoc)
 check("ghim cuộc không có: báo không thấy", not conversations.dat_ghim(99999, True))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.post(f"/conversations/{a}/pin", data={"pinned": "0"})

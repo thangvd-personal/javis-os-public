@@ -1,6 +1,4 @@
 """Concrete v2 Runner/dispatcher/stop integration with synthetic native packets."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import threading
 import unittest
@@ -9,10 +7,11 @@ from unittest.mock import patch
 
 import improvement_evaluation as EVAL
 import improvement_store as IM
+import test_improvement_experiment_execution as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_experiment_service import ExperimentService
 from improvement_trial_runner import TrialRunner
 from improvement_trial_service import OwnerTrialService
-import test_improvement_experiment_execution as fixtures
 
 
 class ExperimentLifetimeTests(unittest.IsolatedAsyncioTestCase):

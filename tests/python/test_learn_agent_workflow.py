@@ -5,9 +5,8 @@ thoại vừa diễn ra, theo đúng khuôn skill - fork read-only ĐỀ XUẤT 
 tin cậy mới là người GHI, tạo MỚI không ghi đè, workflow tạo ở trạng thái off, và cùng
 đi qua secret/injection-scan + scope guard.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import yaml
-
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 from learn import LearnDeps, LearnFeature
 
 

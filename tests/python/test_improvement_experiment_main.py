@@ -1,12 +1,11 @@
 """Actual application auth, lazy dispatcher reuse and shutdown ordering."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import unittest
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
 import test_improvement_trial_service as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi.testclient import TestClient
 
 
 class MainExperimentTests(unittest.TestCase):

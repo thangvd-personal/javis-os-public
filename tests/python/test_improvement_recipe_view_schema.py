@@ -1,19 +1,15 @@
 """Trigger-only v10 migration controls; synthetic fixtures are not native proof."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
-import subprocess
-import sys
 import threading
-import types
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_recipe_schema as nine
+import improvement_store as IM
 import test_improvement_recipe_schema as historical
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class RecipeViewSchemaTests(unittest.TestCase):

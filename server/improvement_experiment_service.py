@@ -7,17 +7,26 @@ import time
 from contextlib import closing
 
 import improvement_store as IM
+from improvement_comparison_links import (
+    comparison_tables,
+    experiment_trial_scope,
+    has_view_binding,
+)
 from improvement_comparison_plans import ExperimentPlans
-from improvement_experiments import _generation, _identifier
+from improvement_execution_limits import (
+    MAX_COMPARISON_TRIALS,
+    MAX_PREPARATION_TRIALS,
+    MAX_ROLE_ATTEMPTS,
+    MAX_ROLE_OPERATIONS,
+    MAX_TRIAL_ATTEMPTS,
+)
 from improvement_experiment_schema import TERMINAL_PHASES
+from improvement_experiments import _generation, _identifier
+from improvement_operation_schema import TERMINAL as ROLE_TERMINAL
 from improvement_trial_records import _brain
 from improvement_trial_runner import _drain, _settled_call
 from improvement_trial_service import OwnerTrialService
 from improvement_trials import TERMINAL
-from improvement_execution_limits import (MAX_COMPARISON_TRIALS, MAX_PREPARATION_TRIALS,
-    MAX_TRIAL_ATTEMPTS, MAX_ROLE_OPERATIONS, MAX_ROLE_ATTEMPTS)
-from improvement_operation_schema import TERMINAL as ROLE_TERMINAL
-from improvement_comparison_links import comparison_tables, has_view_binding, experiment_trial_scope
 
 
 def _call_settled(status, engine_at):
@@ -36,13 +45,13 @@ class ExperimentService:
         self.trials, self.tasks = trial_service.trials, trial_service.tasks
         from improvement_experiment_admission import ExperimentAdmission
         self.admission = ExperimentAdmission(plans)
-        from improvement_preparation import PreparationService
+        from improvement_compositions import ComposerService
         from improvement_operation_execution import OperationExecution
         from improvement_operation_runner import OperationRunner
         from improvement_operation_tasks import OperationTasks
+        from improvement_preparation import PreparationService
         from improvement_proposals import ProposalService
         from improvement_semantic_review import SemanticReview
-        from improvement_compositions import ComposerService
         self.preparation = PreparationService(plans)
         self.execution = OperationExecution(plans, trial_service)
         self.operation_tasks = OperationTasks(self.execution, OperationRunner(self.execution))
@@ -356,7 +365,7 @@ class ExperimentService:
 
     async def workflow(self, principal, experiment_id, operation, value):
         """Closed owner C controls, owned before any synchronous source/SQL work."""
-        from improvement_experiment_requests import validate, WORKFLOW_CONTROLS
+        from improvement_experiment_requests import WORKFLOW_CONTROLS, validate
         if operation not in WORKFLOW_CONTROLS:
             raise ValueError('invalid_experiment_control')
         data = validate(value, operation)

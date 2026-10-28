@@ -1,8 +1,8 @@
 """A closed trial profile for the existing Claude engine; release capability is gated separately."""
 from __future__ import annotations
 
-import hashlib
 import asyncio
+import hashlib
 import importlib.metadata
 import json
 import math
@@ -11,12 +11,14 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-import winproc
 
+import winproc
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_cases import _digest, _fields, _frozen, _text
+from improvement_native_qualifications import (
+    profile_qualification as _profile_qualification,
+)
 from improvement_store import _hash, _json
-from improvement_native_qualifications import profile_qualification as _profile_qualification
 
 PROFILE_VERSION = "claude-isolated-roles-v2"
 PROFILE_SOURCES = ("improvement_claude.py", "improvement_sandbox.py", "improvement_worker.py", "claude_sdk_engine.py",
@@ -238,7 +240,10 @@ class ClaudeTrialAdapter:
         trusted worker/host consumer; caller-supplied hashes are not authority.
         """
         def observe():
-            from improvement_native_protocol import _tree, _fields as closed_fields, _text as closed_text, _digest as closed_digest
+            from improvement_native_protocol import _digest as closed_digest
+            from improvement_native_protocol import _fields as closed_fields
+            from improvement_native_protocol import _text as closed_text
+            from improvement_native_protocol import _tree
             _tree(runtime)
             closed_fields(runtime, {'platform', 'cli_hash', 'sdk_version', 'profile_hash',
                 'managed_policy', 'cli_version', 'auth'})
@@ -317,8 +322,9 @@ class ClaudeTrialAdapter:
         if manifest['version'] in (4, 5):
             if self._native_boundary is None:
                 raise ValueError('trial_native_parent_unbound')
-            from improvement_sandbox import trial_system_prompt
             from contextlib import aclosing
+
+            from improvement_sandbox import trial_system_prompt
             async with aclosing(self._native_boundary.execute('trial', request, receipt, adapter=self,
                     workspace_root=self.workspace_root, brain_id=manifest['brain_id'],
                     before_engine_start=self.before_engine_start, system_prompt=trial_system_prompt(manifest),
@@ -331,8 +337,9 @@ class ClaudeTrialAdapter:
         verified = await _verify_owned(self)
         if not verified.get("supported") or verified.get("capability_hash") != request["capability_hash"]:
             raise ValueError("trial_capability_drift")
-        from improvement_native_transport import execute_worker
         from contextlib import aclosing
+
+        from improvement_native_transport import execute_worker
         async with aclosing(execute_worker("trial", request, receipt, config_pin=self.pin,
                 workspace_root=self.workspace_root, brain_id=manifest['brain_id'], before_engine_start=self.before_engine_start)) as packets:
             async for packet in packets:
@@ -510,7 +517,10 @@ class TrialProfile:
                 for asset in receipt['asset_revisions']:
                     asset['observed_use'] = 'observed'
         if manifest['version'] == 4:
-            from improvement_read_outcome_proof import correlate_read_outcomes, SKILL_TOOL
+            from improvement_read_outcome_proof import (
+                SKILL_TOOL,
+                correlate_read_outcomes,
+            )
             proof = correlate_read_outcomes(manifest, workspace,
                 [json.loads(event) for event in self._read_events] + list(pending_events))
             delivery = None if self._native_binding is None else self._native_binding.completed_delivery
@@ -536,7 +546,12 @@ class TrialProfile:
 
     def options(self, engine):
         self._native_required()
-        from claude_agent_sdk import ClaudeAgentOptions, PermissionResultDeny, create_sdk_mcp_server, tool
+        from claude_agent_sdk import (
+            ClaudeAgentOptions,
+            PermissionResultDeny,
+            create_sdk_mcp_server,
+            tool,
+        )
         if engine.session_id:
             raise ValueError("trial_resume_forbidden")
         if self._installation is not None:
@@ -596,7 +611,14 @@ class TrialProfile:
 
     def observe(self, message):
         """Never fabricate a missing usage field or assemble an artifact from narration."""
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolUseBlock, UserMessage, ToolResultBlock
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         events = [json.loads(event) for event in self._pending_asset_events]
         self._pending_asset_events.clear()
         if self._read_outcome_broker is not None and not (isinstance(message, SystemMessage) and message.subtype == 'init'):

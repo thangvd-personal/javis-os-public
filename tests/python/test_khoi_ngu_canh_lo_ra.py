@@ -19,11 +19,10 @@ Hai tầng cùng một lỗi, và tầng thứ hai là lỗi TÁI PHÁT:
    khối "File đính kèm", nhưng khối "FILE ĐANG MỞ" ra đời SAU nên đi lọt qua cửa khác. Ghim còn
    phổ biến hơn đính kèm nhiều vì nó gửi lại mỗi lượt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import re
 import sys
 
-import sessions   # noqa: E402
+import sessions
+from _paths import ROOT, SERVER
 
 _fails = []
 
@@ -94,9 +93,9 @@ check("nhận cả hai loại khối",
       "[FILE ĐANG MỞ trong trình sửa của Javis:" in APP and '"[File đính kèm"' in APP)
 
 # Hành vi THẬT của hàm, chạy bằng node nếu có; không có node thì đọc hợp đồng là đủ.
-import shutil          # noqa: E402
-import subprocess      # noqa: E402
-import json as _json   # noqa: E402
+import json as _json
+import shutil
+import subprocess
 
 if shutil.which("node"):
     _i, _j = APP.index("const _KHOI_NGU_CANH"), APP.index("window.JavisChuNguoiGo")

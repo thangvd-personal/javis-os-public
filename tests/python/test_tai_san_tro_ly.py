@@ -22,16 +22,17 @@ Bốn quyết định đáng canh, vì cả bốn đều có cách làm sai trô
 4. Gắn vào thì trợ lý phải THẤY. Không bơm vào system prompt của nó thì danh sách chỉ để
    ngắm: người dùng gắn bảng giá xong hỏi ngay, và trợ lý trả lời như chưa hề thấy gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tsag-state-"))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import agent_assets  # noqa: E402
-import main  # noqa: E402
+import agent_assets
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

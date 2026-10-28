@@ -13,15 +13,14 @@ import asyncio
 import os
 import re
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import JSONResponse
 
 import config as cfgmod
 import localefmt
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import JSONResponse
 
 
 @dataclass
@@ -132,7 +131,7 @@ def _hostinger_base(ip, ptr_lookup=None) -> str:
     try:
         if ptr_lookup is None:
             import socket as _sock
-            ptr_lookup = lambda x: _sock.gethostbyaddr(x)[0]   # noqa: E731
+            ptr_lookup = lambda x: _sock.gethostbyaddr(x)[0]
         ptr = str(ptr_lookup(ip) or "").strip().lower().rstrip(".")
     except Exception:
         return ""

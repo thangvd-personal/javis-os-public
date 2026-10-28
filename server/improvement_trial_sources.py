@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import improvement_cases as IC
 import improvement_store as IM
 from evidence_store import redact
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
 
 _MATCH_FIELDS = {"source_ref", "source_version", "source_hash", "fixture_hash", "timezone", "data_period",
                  "cutoff", "schema", "redaction", "sufficient_source"}

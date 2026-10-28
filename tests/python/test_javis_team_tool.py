@@ -4,12 +4,13 @@
 
 Chạy qua host thật (`main` + `team_api.current()`), không gọi model: không gửi tin nào vào nhóm nên không có lượt nhóm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-tool-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-tool-brain-"))
@@ -20,10 +21,10 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh"), ("hoa", "Hoa")):
                                               encoding="utf-8", newline="\n")
 (BR2 / "agents").mkdir()
 
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import team_api  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import mcp_hub
+import team_api
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -166,7 +167,8 @@ check("POST /teams gửi lại cùng mã yêu cầu: trả nhóm cũ kèm duplic
       d2.get("duplicate") is True and d1["team"]["team_id"] == d2["team"]["team_id"] and "duplicate" not in d1, (d1, d2))
 
 # Đường hub thật: plugin bundled nạp được, chủ (API engine) thấy javis_team, bot chăm khách thì không
-import plugins_host  # noqa: E402
+import plugins_host
+
 _pl = {p.get("slug"): p for p in plugins_host.describe(None)}.get("javis-team") or {}
 check("plugin javis-team nạp không lỗi, bật sẵn, bundled, đúng tool, min_mode khớp",
       not _pl.get("error") and _pl.get("enabled") is True and _pl.get("source") == "bundled"

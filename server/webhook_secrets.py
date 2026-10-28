@@ -25,7 +25,6 @@ import secrets as _rand
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,160}$")
 _lock = threading.RLock()

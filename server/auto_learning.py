@@ -26,10 +26,10 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
 
 import improvement_loop as L
 
@@ -100,7 +100,7 @@ def skill_from_tool(name: str, args: dict) -> str:
     return ""
 
 
-from improvement_store import ConflictError  # noqa: E402 - target changed since Javis wrote it, or nothing to undo
+from improvement_store import ConflictError
 
 
 def _today(clock) -> str:
@@ -170,9 +170,8 @@ class Store:
         return conn
 
     def write(self, fn):
-        with self._lock, closing(self._conn()) as c:
-            with c:
-                return fn(c)
+        with self._lock, closing(self._conn()) as c, c:
+            return fn(c)
 
     def read(self, sql: str, args=()) -> list:
         with closing(self._conn()) as c:
@@ -195,11 +194,11 @@ class Host:
     agent_apply: Callable[[str, str, str, dict], dict]   # (brain, slug, text, overlay the run started from) -> undo info
     agent_undo: Callable[[str, dict], None]              # (brain, undo info) -> None
     reaction: Callable[[str, int], str] = lambda session_id, mid: ""   # owner's reaction on an answer, as text
-    workflow_run: Callable[[str], Optional[dict]] = lambda run_id: None
+    workflow_run: Callable[[str], dict | None] = lambda run_id: None
     backups: Path = None                                 # folder for skill/workflow backups
     # The background model the Models page sets for "tự học": judging, writing cases, grading and writing the
     # revision run here; only doing the test work runs on text_call (the brain's own engine). None = text_call.
-    background_call: Optional[Callable[[str, str], str]] = None
+    background_call: Callable[[str, str], str] | None = None
     # The owner's "Tự học" page: on/off, write mode (dry-run | suggest | auto) and which kinds may learn.
     settings: Callable[[str], dict] = lambda brain: {"enabled": True, "mode": "auto", "kinds": set(KINDS)}
 
@@ -336,7 +335,7 @@ class Targets:
     def __init__(self, host: Host):
         self.host = host
 
-    def read(self, brain: str, kind: str, slug: str, step: int = -1) -> Optional[Target]:
+    def read(self, brain: str, kind: str, slug: str, step: int = -1) -> Target | None:
         return getattr(self, "_read_" + kind)(brain, slug, step)
 
     def _read_skill(self, brain, slug, step):
@@ -361,7 +360,6 @@ class Targets:
             body.strip() + ("\n\n# Learned procedure\n" + v if v.strip() else "")), meta={"current": current})
 
     def _read_workflow(self, brain, slug, step):
-        import yaml
         path = Path(self.host.workflows_dir(brain)) / f"{slug}.md"
         if not path.is_file():
             return None
@@ -593,7 +591,7 @@ class AutoLearner:
         try:
             raw = self.background("You are a careful reviewer. Answer with JSON only.",
                                       judge_prompt(kind, target_text, episode, reaction))
-        except Exception as error:  # noqa: BLE001
+        except Exception as error:
             raise EngineError(f"{type(error).__name__}: {error}") from error
         self._bump(brain, "judged")
         try:
@@ -622,7 +620,7 @@ class AutoLearner:
         path = Path(self.host.workflows_dir(brain)) / f"{slug}.md"
         return path.read_bytes().decode("utf-8") if path.is_file() else None
 
-    def next_target(self) -> Optional[tuple]:
+    def next_target(self) -> tuple | None:
         now = self.clock()
         rows = self.store.read("SELECT brain, target, kind, slug, step, COUNT(*) AS n FROM mistakes WHERE run_id IS NULL "
                                "GROUP BY brain, target HAVING n>=? ORDER BY MIN(created_at)", (MIN_MISTAKES,))

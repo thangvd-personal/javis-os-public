@@ -14,17 +14,18 @@ link markdown là cử chỉ cố ý "đây là file của bạn" nên giữ c�
 dẫn trần trong văn xuôi phải tự chứng minh bằng cách tồn tại, vì một đường dẫn giả định nêu
 trong lời giải thích trông y hệt đường dẫn thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-taisan-"))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-from sessions import get_store  # noqa: E402
+import main
+from fastapi.testclient import TestClient
+from sessions import get_store
 
 fails = []
 
@@ -120,7 +121,7 @@ d2 = c.get("/sessions/cuoc-trong/assets").json()
 check("cuộc chưa có tin nhắn thì hai danh sách rỗng, không lỗi",
       d2.get("ok") and d2.get("files") == [] and d2.get("links") == [])
 
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

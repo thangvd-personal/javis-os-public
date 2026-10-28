@@ -16,18 +16,18 @@ import asyncio
 import contextlib
 import sys
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
+from typing import Any
 
 import avatar_upload
 import localefmt
 import resonance_store as RS
 import task_store
 import team_store
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from team_runner import TeamRunner, run_io
 from team_store import TeamError
 
@@ -46,35 +46,35 @@ class TeamApiDeps:
     task_store: Callable[[], Any]                      # () -> TaskStore của Kanban (kanban.sqlite3)
     resonance_store: Callable[[], Any]                 # () -> GoalStore (sổ danh tính agent)
     agents_meta: Callable[[str], list]                 # root -> [{slug, name, ...}]
-    agent_info: Callable[[str, str], Optional[dict]]   # (root, agent_key) -> {slug, name, system} | None
+    agent_info: Callable[[str, str], dict | None]   # (root, agent_key) -> {slug, name, system} | None
     engine_for: Callable[[dict, str, str], tuple]      # (team, agent_key, role) -> (engine, model, async fn)
-    broadcast: Optional[Callable[[dict], Any]] = None  # gói WS tới mọi tab (async)
-    notify: Optional[Callable[[str, str], Any]] = None  # (session_id nhóm, chữ) -> hộp thư (async)
+    broadcast: Callable[[dict], Any] | None = None  # gói WS tới mọi tab (async)
+    notify: Callable[[str, str], Any] | None = None  # (session_id nhóm, chữ) -> hộp thư (async)
     spawn: Callable[[Any], Any] = field(default=asyncio.ensure_future)
-    store_path: Optional[Path] = None                  # mặc định STATE_DIR/team.sqlite3
+    store_path: Path | None = None                  # mặc định STATE_DIR/team.sqlite3
     admin: Any = None                                  # thao tác host cho lệnh quản trị Toàn quyền (T3)
-    owner_name: Optional[Callable[[], str]] = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
-    ceiling: Optional[Callable[[], Any]] = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
-    projector: Optional[Callable[[], Any]] = None      # () -> feedback_projector.FeedbackProjector (T2) | None
-    judge: Optional[Callable[[], Any]] = None          # () -> agent_judge.Judge (T3 phần J) | None
-    learning: Optional[Callable[[], Any]] = None       # () -> agent_lessons.TeamLearning (T3 phần L) | None
-    contrib_reader: Optional[Callable[[str], list]] = None  # result_ref -> pulse_contrib còn hiệu lực (T4, lịch sử dài)
-    unhide_agent: Optional[Callable[[str, str], bool]] = None  # (root, slug) -> bỏ ẩn trợ lý khi vào nhóm
-    attach: Optional[Callable[[dict, list], list]] = None  # (team, attachments) -> [{name, path, image}] (0.191.0)
-    docs_block: Optional[Callable[[dict], str]] = None    # team -> documents/folder block of member turns (0.191.0)
+    owner_name: Callable[[], str] | None = None     # tên đăng nhập của chủ máy (người tạo nhóm, 0.142.0)
+    ceiling: Callable[[], Any] | None = None        # () -> agent_ledger.TeamCeiling (T2, trần lượt chung) | None
+    projector: Callable[[], Any] | None = None      # () -> feedback_projector.FeedbackProjector (T2) | None
+    judge: Callable[[], Any] | None = None          # () -> agent_judge.Judge (T3 phần J) | None
+    learning: Callable[[], Any] | None = None       # () -> agent_lessons.TeamLearning (T3 phần L) | None
+    contrib_reader: Callable[[str], list] | None = None  # result_ref -> pulse_contrib còn hiệu lực (T4, lịch sử dài)
+    unhide_agent: Callable[[str, str], bool] | None = None  # (root, slug) -> bỏ ẩn trợ lý khi vào nhóm
+    attach: Callable[[dict, list], list] | None = None  # (team, attachments) -> [{name, path, image}] (0.191.0)
+    docs_block: Callable[[dict], str] | None = None    # team -> documents/folder block of member turns (0.191.0)
     # (team, files, caption) -> awaitable: pictures among `files` get a pinned text description, read by member turns
     # (team turns are text only). Awaited BEFORE the member turns of the message that carried them (0.192.0).
-    describe: Optional[Callable[[dict, list, str], Any]] = None
+    describe: Callable[[dict, list, str], Any] | None = None
     # 0.208.0: what the department mandate needs from the host (team_mandate.MandateEngine deps): brain_root,
     # kanban_failures, mcp_status, run_test, open_job. None: mandates can be written but are never observed.
-    mandate_deps: Optional[Callable[[], Any]] = None
+    mandate_deps: Callable[[], Any] | None = None
     # 0.209.0: runs a `command_ok` acceptance criterion: (command, cwd) -> {ran, exit, output, error}. None: unknown.
-    check_command: Optional[Callable[[str, Any], dict]] = None
-    brain_root: Optional[Callable[[dict], Any]] = None   # team -> Path of its brain (acceptance product paths)
-    work_dir: Optional[Callable[[dict], str]] = None     # team -> pinned working folder, "" when none (0.260.0)
+    check_command: Callable[[str, Any], dict] | None = None
+    brain_root: Callable[[dict], Any] | None = None   # team -> Path of its brain (acceptance product paths)
+    work_dir: Callable[[dict], str] | None = None     # team -> pinned working folder, "" when none (0.260.0)
     # 0.357.0: report a job Javis Core gave the team back where it was asked (main._notify_owner):
     # (owner_chat, text, *, kind, label, source, ngan, brain, dedup) -> (ok, error), sync or async. None: no reports.
-    report: Optional[Callable[..., Any]] = None
+    report: Callable[..., Any] | None = None
 
 
 async def _body(request: Request) -> dict:
@@ -236,7 +236,7 @@ class TeamApi:
             return dict(m["identity"])
         return {"slug": slug, "name": m["slug_at_join"] or slug, "avatar": None, "avatar_seed": m["agent_key"]}
 
-    def member_views(self, team: dict, meta: Optional[list] = None) -> list:
+    def member_views(self, team: dict, meta: list | None = None) -> list:
         """Thành viên đang hoạt động của nhóm kèm tên và ảnh đại diện ĐÚNG ảnh trợ lý đang dùng (`avatar` của file trợ lý;
         trợ lý chưa chọn ảnh thì dashboard tự suy từ slug như trang Cộng sự). Nhân dạng giữ theo agent_key (`_identity`)."""
         root = team["brain_id"]
@@ -254,7 +254,7 @@ class TeamApi:
                             managed=bool(m.get("managed_by_team"))))
         return out
 
-    def authors(self, team: dict, meta: Optional[list] = None) -> dict:
+    def authors(self, team: dict, meta: list | None = None) -> dict:
         """Sổ tác giả {agent_key: {slug, name, avatar}} của MỌI trợ lý từng ở nhóm, kể cả đã rời: tin cũ giữ đúng tên và
         ảnh của người viết (review b93c46bd #2), theo agent_key chứ không theo slug (review 4f6268bd #1). Ảnh nhóm và gợi ý
         @ không dùng sổ này, chỉ dùng thành viên đang hoạt động."""
@@ -276,7 +276,7 @@ class TeamApi:
         q = self.deps.task_store().team_queue(team_id)
         return {"running": len(q["running"]), "waiting": len(q["waiting"]), "blocked": len(q["blocked"])}
 
-    def last_message(self, team: dict) -> Optional[dict]:
+    def last_message(self, team: dict) -> dict | None:
         """Tin cuối của nhóm cho dòng xem trước ở danh sách (T5): loại người gửi, tên, 120 ký tự đầu, giờ."""
         page = self.deps.session_store().get_team_messages_page(team["session_id"], limit=1)
         msgs = page.get("messages") or []
@@ -306,7 +306,7 @@ class TeamApi:
                     acceptance_template=self.runner().quality.template(team["team_id"]),
                     mandate=self.mandate_summary(team["team_id"]))
 
-    def mandate_summary(self, team_id: str) -> Optional[dict]:
+    def mandate_summary(self, team_id: str) -> dict | None:
         """0.208.0: the team's mandate for the Team tab (None = no mandate), with each source's last state."""
         import team_mandate
         st = self.mandates()
@@ -444,7 +444,7 @@ class TeamOps:
     làm y như nhau. Mọi hàm chạy ở luồng phụ (route qua `api.io`, công cụ qua `asyncio.to_thread`). Lỗi: `OpError` hay
     `TeamError` của kho."""
 
-    def __init__(self, api: "TeamApi"):
+    def __init__(self, api: TeamApi):
         self.api = api
         self.deps = api.deps
 
@@ -571,7 +571,7 @@ class TeamOps:
         self.api.runner()._state(team_id)
         return self.api.teams().get(team_id)
 
-    def set_leader(self, root: str, team_id: str, agent_key: Optional[str]) -> dict:
+    def set_leader(self, root: str, team_id: str, agent_key: str | None) -> dict:
         self.team(root, team_id)
         with self.api.runner().accept_lock:
             updated = self.api.teams().set_leader(team_id, str(agent_key) if agent_key else None)
@@ -600,14 +600,14 @@ class TeamOps:
 _CURRENT: list = [None]
 
 
-def current() -> Optional[TeamOps]:
+def current() -> TeamOps | None:
     """`TeamOps` của tiến trình (đặt trong `register`), cho plugin `javis_team` gọi mà không import main. None khi chưa
     đăng ký (test không dựng host)."""
     return _CURRENT[0]
 
 
 
-async def _described_then(api: "TeamApi", team: dict, pics: list, caption: str, then: Any) -> None:
+async def _described_then(api: TeamApi, team: dict, pics: list, caption: str, then: Any) -> None:
     """Describe the pictures of a team message, then run what comes after it (`then()`, its member turns). A failed or slow
     description never stops the turns: they run anyway and the documents block says the picture could not be read."""
     try:
@@ -634,7 +634,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         api.prime()
         api._loop_task = asyncio.create_task(api.loop())
 
-    def _root(brain: str) -> Optional[str]:
+    def _root(brain: str) -> str | None:
         root = deps.brain_key(brain or "")
         return root if root and Path(root).is_dir() else None
 
@@ -649,7 +649,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             return None, _err(404, "Không có nhóm này", "Team not found")
         return team, None
 
-    def _own_task(team_id: str, task_id: str) -> Optional[dict]:
+    def _own_task(team_id: str, task_id: str) -> dict | None:
         t = deps.task_store().get_task(task_id)
         return t if t and t.get("lane") == "team" and t.get("team_id") == team_id else None
 
@@ -659,7 +659,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
     # lưu trữ) giữ `accept_lock` của bộ chạy (R3).
 
     @app.get("/teams")
-    async def teams_list(brain: str = "brain", before: Optional[float] = None, limit: int = 50):
+    async def teams_list(brain: str = "brain", before: float | None = None, limit: int = 50):
         def _do():
             root = _root(brain)
             if root is None:
@@ -981,8 +981,8 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         return await api.io(_do)
 
     @app.get("/teams/{team_id}/messages")
-    async def teams_messages(team_id: str, brain: str = "brain", before_ts: Optional[float] = None,
-                             before_id: Optional[int] = None, limit: int = 30):
+    async def teams_messages(team_id: str, brain: str = "brain", before_ts: float | None = None,
+                             before_id: int | None = None, limit: int = 30):
         def _do():
             team, err = _team(team_id, brain)
             if err:
@@ -1069,7 +1069,7 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 # Lượt trả lời theo @ (như cũ), rồi bộ phán xử cho người không được gọi (T3 phần J), đều chạy nền.
                 # 0.192.0: ảnh đính kèm được tả thành chữ TRƯỚC, để lượt của thành viên đọc được ảnh (lượt chỉ chữ).
                 if pics:
-                    turns = lambda: runner.run_message(sub)  # noqa: E731 - created only once the pictures are described
+                    turns = lambda: runner.run_message(sub)
                     runner._on_loop(lambda: api._spawn(_described_then(api, team, pics, text, turns)))
                 else:
                     runner._on_loop(lambda: api._spawn(runner.run_message(sub)))

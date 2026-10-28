@@ -1,6 +1,4 @@
 """Actual owner view controls expose metadata only; current evidence is never a grant."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import json
 import threading
@@ -9,6 +7,7 @@ from unittest.mock import patch
 
 import test_improvement_view_sources as sources
 import test_improvement_workflow_api as api_fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 
 

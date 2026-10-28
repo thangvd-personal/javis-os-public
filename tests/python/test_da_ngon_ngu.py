@@ -17,17 +17,17 @@ tiếng Anh khớp ALLOW rồi lọt.
 File này khoá lại cả hai hướng: tiếng Việt phải giữ NGUYÊN hành vi cũ từng bit, và tiếng Anh
 phải được chặn ngang bằng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
+import chatbot_runtime
+import chatbot_store
 import lang as lang_mod
 import lang_registry
 import lexicon
-from fast_path_runtime import FastIntentClassifier
-import readonly_path_runtime
 import readonly_orchestrator
-import chatbot_runtime
-import chatbot_store
+import readonly_path_runtime
+from _paths import ROOT, SERVER  # noqa: F401
+from fast_path_runtime import FastIntentClassifier
 
 _loi = []
 

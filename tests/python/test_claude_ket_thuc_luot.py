@@ -1,10 +1,11 @@
 """A completed Claude response must not wait forever for the CLI result envelope."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-completion-"))
 import claude_agent_sdk as sdk
@@ -47,7 +48,7 @@ async def run_case(messages, monitored=True):
                 events.append(event)
         try:
             await asyncio.wait_for(consume(), 0.5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise AssertionError("Claude reported end_turn but Javis kept waiting for result") from None
     assert client.closed, "SDK connection must be closed"
     return events

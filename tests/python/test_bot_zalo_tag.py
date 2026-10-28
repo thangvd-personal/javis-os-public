@@ -14,12 +14,13 @@ Chủ dự án (30/09/2026): khách hỏi trong nhóm thì bot mở đầu bằn
   4. TAG HỎNG MÃI. Mỗi câu trả lời trả thêm vài giây cho một thứ đang hỏng: hỏng liên tiếp thì nghỉ, tin vẫn đi như cũ.
   5. TAG NHẦM. uid đi vào tham số lệnh nên phải là số; chưa biết tên người hỏi thì không có gì để tô, gửi thường.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zptag-")
 try:
@@ -27,10 +28,10 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels
+import zalo_cli
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 fails = []
 
@@ -260,7 +261,7 @@ txt = "@Lan Dạ em đã báo @Minh Quý và @Phạm Đại xem giúp chị ạ"
 specs = [x for x in c.get("opts", []) if x.count(":") == 2]
 check("CANARY: người được trả lời VÀ hai người được nhắc tên đều có tag thật, một lần gửi",
       c.get("pos") == [GROUP, txt] and specs == [
-          f"0:7770005:4", f"{txt.index('@Minh Quý')}:7770001:9", f"{txt.index('@Phạm Đại')}:7770002:9"], c)
+          "0:7770005:4", f"{txt.index('@Minh Quý')}:7770001:9", f"{txt.index('@Phạm Đại')}:7770002:9"], c)
 check("các tag đi sau MỘT cờ --mention (CLI nhận danh sách)", c.get("opts", [])[:3] == ["-t", "1", "--mention"], c)
 
 reset()
@@ -315,7 +316,8 @@ check("incoming message: the bot reads @Name, never the markup (so it does not c
 
 # 0.309.0 (field report 2026-10-25, Zalo on a phone): a BROKEN tag survived, `@Hotline Gsmsuppliershref="zm://Profile/
 # 102631062_mention">@Trinh Tran</a_mention>`, and two whole tags back to back glued the names ("@A@B").
-import zalo_markup  # noqa: E402
+import zalo_markup
+
 check("broken tag: the leftover href fragment goes, the names stay apart",
       zc.strip_mention_markup('@Hotline Gsmsuppliershref="zm://Profile/102631062_mention">@Trinh Tran</a_mention> Dạ em')
       == "@Hotline Gsmsuppliers @Trinh Tran Dạ em")

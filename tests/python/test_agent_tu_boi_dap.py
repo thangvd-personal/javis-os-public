@@ -14,10 +14,11 @@ Chủ repo chốt thiết kế: cải thiện LÚC DÙNG, không job nền quét
 3. _log_agent_run cắt cả task (chống phình sau vòng retry).
 4. gitignore brain chặn memory/agents/*/runs/ (nhật ký thô không vào git).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -33,7 +34,7 @@ def check(name, cond):
         _fails.append(name)
 
 
-import main  # noqa: E402
+import main
 
 # ---- 1. Prompt agent: bộ nhớ + luật tự bồi đắp ----
 with tempfile.TemporaryDirectory() as td:
@@ -118,7 +119,8 @@ check("agent kiểm chứng cũng được ghi nhật ký (cả 2 đường)",
 check("runner cũ vẫn ghi nhật ký qua cùng closure", "_log(agent_slug, task_f, out)" in src)
 
 # ---- 4. Nhật ký thô không vào git của brain ----
-import git_brain  # noqa: E402
+import git_brain
+
 check("gitignore brain chặn memory/agents/*/runs/",
       "memory/agents/*/runs/" in git_brain._GITIGNORE
       and "Memory/agents/*/runs/" in git_brain._GITIGNORE)

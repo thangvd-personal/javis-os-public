@@ -29,7 +29,7 @@ import httpx
 # ngày ("đăng ký kênh YouTube tốn bao nhiêu", "viết câu kêu gọi đăng ký kênh"), nên chỉ bắt khi
 # có dấu hiệu riêng của câu outro: tên kênh, "subscribe cho kênh", hoặc cụm "không bỏ lỡ ...
 # video". Thà sót một câu bịa còn hơn nuốt một câu người ta nói thật.
-_AO_GIAC = [re.compile(p, re.I) for p in (
+_AO_GIAC = [re.compile(p, re.IGNORECASE) for p in (
     r"ghi[eề]n\s*m[iì]\s*g[oõ]",                 # tên kênh trong câu outro phổ biến nhất
     r"subscribe\s+cho\s+k[eê]nh",
     r"(đăng\s*k[yý]|like)\b[^.!?]{0,60}\bk[eê]nh\b[^.!?]{0,60}kh[oô]ng\s+b[oỏ]\s+l[oỡ]",
@@ -58,13 +58,13 @@ _AO_GIAC = [re.compile(p, re.I) for p in (
 # Chú thích trong ngoặc do Whisper tự thêm (không ai đọc thành tiếng mấy thứ này).
 _CHU_THICH = re.compile(
     r"[\[\(]\s*(music|nhạc|nhạc\s*nền|applause|vỗ\s*tay|laughter|cười|silence|im\s*lặng|"
-    r"blank[_\s]*audio|inaudible|sound|tiếng\s*động)[^\]\)]{0,20}[\]\)]", re.I)
+    r"blank[_\s]*audio|inaudible|sound|tiếng\s*động)[^\]\)]{0,20}[\]\)]", re.IGNORECASE)
 _NOT_NHAC = re.compile("[♪♫♬♩]+")
 # Tách "câu" để soi từng mảnh. XUỐNG DÒNG cũng là ranh giới: khối điều khiển của Javis
 # (`[NGỮ CẢNH GIAO DIỆN: ...]`) đứng riêng một dòng, không tách ra thì nó dính vào câu bịa ngay
 # sau và bị cắt oan. Ba nhánh phủ HẾT mọi ký tự nên ghép lại là nguyên văn.
 _CAU = re.compile(r"[^.!?…\n]+[.!?…]*|[.!?…]+|\n")
-_CO_CHU = re.compile(r"[^\W_]", re.U)   # còn ít nhất một chữ cái hay chữ số thì mới là lời nói
+_CO_CHU = re.compile(r"[^\W_]", re.UNICODE)   # còn ít nhất một chữ cái hay chữ số thì mới là lời nói
 _GIU_TOI_THIEU = 4   # số chữ tối thiểu để một mẩu hai bên câu bịa được coi là lời nói thật
 
 
@@ -156,7 +156,7 @@ def khop_ban_nhap(nhap, nghe) -> tuple:
     return (tu >= NGUONG_KHOP_TU or am >= NGUONG_KHOP_AM), round(tu, 2), round(am, 2)
 
 
-_CHU_THUONG = re.compile(r"[^\W_]+", re.U)
+_CHU_THUONG = re.compile(r"[^\W_]+", re.UNICODE)
 _MOI_LAP_MIN = 4   # dưới số chữ này thì trùng lời mồi là chuyện thường ("deploy lên VPS")
 
 

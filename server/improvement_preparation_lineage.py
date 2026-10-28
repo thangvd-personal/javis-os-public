@@ -7,7 +7,11 @@ import improvement_store as IM
 from improvement_blobs import AssetUnavailable
 from improvement_experiment_lineage import _row, _same
 from improvement_experiment_protocol import definition
-from improvement_preparation_protocol import PINS, preparation_schedule, validate_preparation_request_v3
+from improvement_preparation_protocol import (
+    PINS,
+    preparation_schedule,
+    validate_preparation_request_v3,
+)
 
 
 def current_preparation_fences(connection, brain, proof):

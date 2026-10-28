@@ -11,11 +11,11 @@ Ba thứ được lấy về, mỗi thứ một câu hỏi trang cũ không tr�
 3. `nhiet_7`: trung bình token mỗi ngày ở từng giờ trong ngày, chỉ tính 7 ngày TRỌN (hôm nay
    đang dở thì không kéo trung bình xuống), chia cho số ngày CÓ dùng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
-from datetime import timedelta
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-tg-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
@@ -24,8 +24,9 @@ os.environ["JAVIS_CODEX_SESSIONS_DIR"] = os.path.join(_TMP, "codex-sessions")
 os.makedirs(os.environ["JAVIS_CLAUDE_PROJECTS_DIR"], exist_ok=True)
 os.makedirs(os.environ["JAVIS_CODEX_SESSIONS_DIR"], exist_ok=True)
 
-import usage_index as ui  # noqa: E402
-from datetime import datetime  # noqa: E402
+from datetime import datetime
+
+import usage_index as ui
 
 fails = []
 
@@ -49,7 +50,7 @@ def seed(h, tokens, provider="claude", turns=1):
         c.close()
 
 
-gio = lambda d, h: NOW.replace(day=d, hour=h, minute=0)  # noqa: E731
+gio = lambda d, h: NOW.replace(day=d, hour=h, minute=0)
 seed(gio(26, 9), 1000)                     # giờ hiện tại
 seed(gio(26, 8), 2000, "codex")
 seed(gio(26, 5), 4000)                     # giờ cuối còn trong cửa sổ 5 giờ (5,6,7,8,9)

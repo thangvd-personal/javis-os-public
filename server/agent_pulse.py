@@ -18,10 +18,10 @@ quyền, không nâng được).
 from __future__ import annotations
 
 import json
-import math
 import time
+from collections.abc import Callable, Iterable
 from contextlib import closing
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
 POLICY_VERSION = "pulse.v1"
 
@@ -82,7 +82,7 @@ CONTRIB_CAP = 0.6
 _POLICY_REVERTERS: dict = {}
 
 
-def _now(at: Optional[float]) -> float:
+def _now(at: float | None) -> float:
     return time.time() if at is None else float(at)
 
 
@@ -99,7 +99,7 @@ def _jl(s: Any, default: Any) -> Any:
 
 # ═════════════════════════════ hàm thuần ═════════════════════════════
 
-def interval(tier: int) -> Optional[float]:
+def interval(tier: int) -> float | None:
     """Khoảng của bậc (giây); None ở ngủ đông."""
     t = int(tier)
     return float(TIERS[t]) if 0 <= t < len(TIERS) else None
@@ -135,7 +135,7 @@ def compute_k(n: int, count_e: int) -> float:
     return min(K_MAX, max(K_MIN, k))
 
 
-def reaction_signal(value: Optional[str], reasons: Iterable[str] = ()) -> Optional[tuple]:
+def reaction_signal(value: str | None, reasons: Iterable[str] = ()) -> tuple | None:
     """(kind, v0, w, personalize) của một reaction của CHỦ, hay None khi không tạo tín hiệu (chỉ trục nói/im, chỉ góp ý
     chữ, bỏ hết). Lý do chất lượng THẮNG emoji (`k = 1`); nhiều lý do thì lấy trung bình giá trị của chúng."""
     rs = [r for r in (reasons or []) if r in REASON_VALUE]
@@ -147,7 +147,7 @@ def reaction_signal(value: Optional[str], reasons: Iterable[str] = ()) -> Option
     return None
 
 
-def score(signals: Iterable[dict], now: float, k_of: Optional[Callable[[dict], float]] = None,
+def score(signals: Iterable[dict], now: float, k_of: Callable[[dict], float] | None = None,
           since: float = 0.0) -> dict:
     """Ước lượng hữu ích (6.3) từ các tín hiệu SỐNG của một ngữ cảnh. Mỗi tín hiệu: {value, w, share, at, kind,
     personalize, ...}; `k_of(sig)` trả `k` (tính lại mỗi kỳ). `since`: mốc của "bằng chứng mới" (max(last_change_at,
@@ -223,8 +223,8 @@ def decide(row: dict, sc: dict, now: float, has_opportunity: bool = False) -> di
     return {"tier": tier - 1 if want > 0 else tier + 1, "dir": want, "reason": reason}
 
 
-def effective_due(next_due_at: Optional[float], pending_reason_at: Optional[float], busy: bool,
-                  now: float) -> Optional[float]:
+def effective_due(next_due_at: float | None, pending_reason_at: float | None, busy: bool,
+                  now: float) -> float | None:
     """Hợp nhất lịch chủ động và lý do lớp 3 đang chờ (5.1). Agent đang có lượt A2 hay lượt nhóm (khoá bận) thì dời 60
     giây. None: không có gì tới hạn (ngủ đông, không lý do)."""
     cands = [x for x in (next_due_at, pending_reason_at) if x is not None]
@@ -394,7 +394,7 @@ def _agent_on(c, agent_key: str) -> bool:
 
 
 def _event(c, agent_key: str, context_ref: str, kind: str, *, before: Any = None, after: Any = None, source: str = "",
-           reason: str = "", u: Optional[float] = None, new: Optional[float] = None, payload: Any = None,
+           reason: str = "", u: float | None = None, new: float | None = None, payload: Any = None,
            at: float) -> int:
     cur = c.execute("INSERT INTO agent_pulse_events(agent_key,context_ref,kind,before_json,after_json,source,reason,u,new,"
                     "policy_version,payload_json,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -403,12 +403,12 @@ def _event(c, agent_key: str, context_ref: str, kind: str, *, before: Any = None
     return int(cur.lastrowid)
 
 
-def _row(c, agent_key: str, context_ref: str) -> Optional[dict]:
+def _row(c, agent_key: str, context_ref: str) -> dict | None:
     r = c.execute("SELECT * FROM agent_pulse WHERE agent_key=? AND context_ref=?", (agent_key, context_ref)).fetchone()
     return dict(r) if r else None
 
 
-def _live_signals(c, agent_key: str, context_ref: Optional[str] = None) -> list:
+def _live_signals(c, agent_key: str, context_ref: str | None = None) -> list:
     if context_ref is None:
         rows = c.execute("SELECT * FROM pulse_signals WHERE agent_key=? AND status='live' AND kind<>'context_init'",
                          (agent_key,)).fetchall()
@@ -478,7 +478,7 @@ def _ensure_row_in(c, agent_key: str, context_ref: str, now: float) -> dict:
     return _row(c, agent_key, context_ref)
 
 
-def ensure_row(store, agent_key: str, context_ref: str, at: Optional[float] = None) -> dict:
+def ensure_row(store, agent_key: str, context_ref: str, at: float | None = None) -> dict:
     ensure(store)
     with store._Tx(store) as c:
         return _ensure_row_in(c, str(agent_key), str(context_ref), _now(at))
@@ -488,7 +488,7 @@ def ensure_row(store, agent_key: str, context_ref: str, at: Optional[float] = No
 
 def record_signal(store, *, source_ref: str, agent_key: str, context_ref: str, kind: str, value: float, w: float,
                   share: float = 1.0, reactor: str = "", emoji: str = "", reasons: Iterable[str] = (),
-                  at: Optional[float] = None, subject_ref: str = "", personalize: Optional[bool] = None) -> bool:
+                  at: float | None = None, subject_ref: str = "", personalize: bool | None = None) -> bool:
     """Ghi MỘT tín hiệu (`pulse_signals`), idempotent theo `(source_ref, agent_key)`: gọi lại trả False, không ghi thêm.
     Reaction của agent (reactor `agent:...`) không bao giờ thành tín hiệu (chống tự thưởng). Mỗi sự kiện nguồn đóng góp
     `|w·v| ≤ 1`. `personalize` mặc định: reaction không lý do."""
@@ -518,9 +518,9 @@ def record_signal(store, *, source_ref: str, agent_key: str, context_ref: str, k
     return True
 
 
-def record_reaction(store, *, source_ref: str, agent_key: str, context_ref: str, value: Optional[str],
+def record_reaction(store, *, source_ref: str, agent_key: str, context_ref: str, value: str | None,
                     reasons: Iterable[str] = (), reactor: str = "owner", share: float = 1.0,
-                    at: Optional[float] = None, subject_ref: str = "") -> bool:
+                    at: float | None = None, subject_ref: str = "") -> bool:
     """Tín hiệu của một reaction của chủ (bảng 6.1). Chỉ trục nói/im hay chỉ góp ý: không tín hiệu (False)."""
     sig = reaction_signal(value, reasons)
     if sig is None:
@@ -532,7 +532,7 @@ def record_reaction(store, *, source_ref: str, agent_key: str, context_ref: str,
 
 
 def record_host_event(store, *, event: str, source_ref: str, agents: dict, context_ref: str,
-                      at: Optional[float] = None, subject_ref: str = "") -> list:
+                      at: float | None = None, subject_ref: str = "") -> list:
     """Tín hiệu từ sự kiện host (chấp nhận đề xuất, chốt quyết định, sửa yêu cầu sau kết quả, huỷ, kiểm khách quan).
     `agents`: {agent_key: share} (tổng 1). Trả các agent đã ghi."""
     if event not in HOST_EVENT:
@@ -548,7 +548,7 @@ def record_host_event(store, *, event: str, source_ref: str, agents: dict, conte
 
 
 def record_objective(store, *, goal_id: str, revision: int, passed: bool, agents: dict, context_ref: str,
-                     at: Optional[float] = None) -> str:
+                     at: float | None = None) -> str:
     """Kiểm khách quan (6.1, ±0.5 w 0.8): MỘT tín hiệu cho kết luận CUỐI của mỗi (mục tiêu, revision), nguồn
     `obj:<goal_id>:<revision>`. Không bao giờ gọi cho đánh giá trung gian trong vòng làm việc. Kết luận cuối đổi chiều (vd.
     revision bị gác vì hết hạn mức rồi chủ nới hạn mức và nó đạt) thì SỬA giá trị của chính tín hiệu đó, không thêm dòng.
@@ -614,7 +614,7 @@ def void_agent(store, agent_key: str) -> int:
                          (time.time(), str(agent_key))).rowcount
 
 
-def signals(store, agent_key: str, context_ref: Optional[str] = None, status: Optional[str] = None) -> list:
+def signals(store, agent_key: str, context_ref: str | None = None, status: str | None = None) -> list:
     ensure(store)
     q, args = "SELECT * FROM pulse_signals WHERE agent_key=?", [str(agent_key)]
     if context_ref is not None:
@@ -630,8 +630,8 @@ def signals(store, agent_key: str, context_ref: Optional[str] = None, status: Op
 # ───────────── ghi nhận đóng góp (6.5) ─────────────
 
 def record_contrib(store, *, source_ref: str, result_ref: str, synth: str, inputs: Iterable[str], context_ref: str,
-                   value: Optional[str] = None, reasons: Iterable[str] = (), reactor: str = "owner",
-                   at: Optional[float] = None, subject_ref: str = "", signal: Optional[tuple] = None) -> dict:
+                   value: str | None = None, reasons: Iterable[str] = (), reactor: str = "owner",
+                   at: float | None = None, subject_ref: str = "", signal: tuple | None = None) -> dict:
     """Một phản hồi của chủ trên bản tổng hợp `result_ref`, phân bổ theo tập đầu vào host đã ghi (`inputs`, agent của
     từng mục). Ghi `pulse_contrib` và một dòng `pulse_signals` mỗi agent với `share` (tác giả tổng hợp KHÔNG có thêm tín
     hiệu trực tiếp riêng cho cùng nguồn). Gọi lại cùng `result_ref`: không đổi gì. Bản kết quả khác (thay bản): phân bổ
@@ -695,7 +695,7 @@ def contrib(store, source_ref: str, live_only: bool = True) -> list:
 
 # ───────────── đánh giá, thức, trạng thái (5.2-5.4) ─────────────
 
-def evaluate(store, agent_key: str, context_ref: str, at: Optional[float] = None, *, has_opportunity: bool = False,
+def evaluate(store, agent_key: str, context_ref: str, at: float | None = None, *, has_opportunity: bool = False,
              count_wake: bool = False, source: str = "schedule") -> dict:
     """Một kỳ đánh giá của (agent, ngữ cảnh): tính lại ước lượng (k tính lại từ lịch sử hiện tại), áp `decide`, ghi
     trước/sau vào `agent_pulse_events` khi đổi bậc. Chỉ cho trạng thái có lịch (active/awake/slowed); trạng thái khác chỉ
@@ -738,7 +738,7 @@ def evaluate(store, agent_key: str, context_ref: str, at: Optional[float] = None
 OWNER_WAKES = ("owner_message", "direct_call", "owner_reply", "new_job", "manual")
 
 
-def wake(store, agent_key: str, context_ref: str, why: str, at: Optional[float] = None) -> bool:
+def wake(store, agent_key: str, context_ref: str, why: str, at: float | None = None) -> bool:
     """Thức lại (5.2): bậc mới = `min(bậc hiện tại, B3)` (đang nhanh hơn B3 thì giữ), giữ nguyên ước lượng, ký ức và lịch
     sử. Kích hoạt bởi lời gọi trực tiếp, chủ nhắn, giao việc mới, reaction mới hợp lệ, sự kiện liên quan có cấu trúc.
     `paused`/`off`: không đổi gì (False). `waiting_owner`: chỉ chủ (trả lời, gọi, giao việc) mới gỡ."""
@@ -779,7 +779,7 @@ def wake(store, agent_key: str, context_ref: str, why: str, at: Optional[float] 
 
 
 def set_state(store, agent_key: str, context_ref: str, state: str, by: str = "owner",
-              at: Optional[float] = None) -> int:
+              at: float | None = None) -> int:
     """Đổi trạng thái do chủ hay host: `paused` (Tạm dừng), `resume` (Tiếp), `waiting_owner`, `off` (tắt Cộng hưởng),
     `on` (bật lại: mọi ngữ cảnh về B3, giữ ước lượng cũ, ghi `resumed_at = now`). `context_ref = '*'`: mọi dòng của agent.
     Trả số dòng đổi. Chỉ dừng phần CHỦ ĐỘNG: việc đã nhận, hạn chót, goal, lời gọi trực tiếp không đọc bảng này."""
@@ -831,7 +831,7 @@ def set_state(store, agent_key: str, context_ref: str, state: str, by: str = "ow
         return n
 
 
-def reset(store, agent_key: str, context_ref: str, by: str = "owner", at: Optional[float] = None) -> bool:
+def reset(store, agent_key: str, context_ref: str, by: str = "owner", at: float | None = None) -> bool:
     """Đặt lại nhịp ngữ cảnh: về B3, bằng chứng trước mốc này không còn là "mới" (`resumed_at = now` của ngữ cảnh), lịch
     sử và ước lượng giữ nguyên. Trạng thái tạm dừng hay tắt giữ nguyên."""
     ensure(store)
@@ -851,7 +851,7 @@ def reset(store, agent_key: str, context_ref: str, by: str = "owner", at: Option
     return True
 
 
-def revert(store, agent_key: str, event_id: int, by: str = "owner", at: Optional[float] = None) -> Optional[dict]:
+def revert(store, agent_key: str, event_id: int, by: str = "owner", at: float | None = None) -> dict | None:
     """Quay lại MỘT lần đổi bậc (`tier_change`): về bậc trước của sự kiện đó, ghi sự kiện `revert`. Đã quay lại rồi hay
     không phải sự kiện đổi bậc của agent này: None."""
     ensure(store)
@@ -878,7 +878,7 @@ def revert(store, agent_key: str, event_id: int, by: str = "owner", at: Optional
         return {"tier": nt, "state": st, "event_id": rid}
 
 
-def set_max_tier(store, agent_key: str, tier: int, by: str = "owner", at: Optional[float] = None) -> int:
+def set_max_tier(store, agent_key: str, tier: int, by: str = "owner", at: float | None = None) -> int:
     """`max_tier` (nhịp nhanh nhất, mục 9): CHỈ chủ đặt (tới B0). Trưởng nhóm, kể cả Toàn quyền, không nâng được: mọi
     người gọi khác `owner` bị từ chối. Bậc đang nhanh hơn trần mới thì chậm lại tới trần."""
     if str(by) != "owner":
@@ -907,7 +907,7 @@ def set_max_tier(store, agent_key: str, tier: int, by: str = "owner", at: Option
         return len(rows)
 
 
-def row(store, agent_key: str, context_ref: str) -> Optional[dict]:
+def row(store, agent_key: str, context_ref: str) -> dict | None:
     ensure(store)
     with closing(store._conn()) as c:
         return _row(c, str(agent_key), str(context_ref))
@@ -920,7 +920,7 @@ def rows(store, agent_key: str) -> list:
                                            (str(agent_key),)).fetchall()]
 
 
-def events(store, agent_key: str, context_ref: Optional[str] = None, kinds: Optional[Iterable[str]] = None,
+def events(store, agent_key: str, context_ref: str | None = None, kinds: Iterable[str] | None = None,
            limit: int = 50) -> list:
     ensure(store)
     q, args = "SELECT * FROM agent_pulse_events WHERE agent_key=?", [str(agent_key)]
@@ -943,7 +943,7 @@ def events(store, agent_key: str, context_ref: Optional[str] = None, kinds: Opti
 
 
 def record_event(store, agent_key: str, context_ref: str, kind: str, *, source: str = "host", reason: str = "",
-                 payload: Any = None, at: Optional[float] = None) -> int:
+                 payload: Any = None, at: float | None = None) -> int:
     ensure(store)
     with store._Tx(store) as c:
         return _event(c, str(agent_key), str(context_ref), kind, source=source, reason=reason, payload=payload,
@@ -953,7 +953,7 @@ def record_event(store, agent_key: str, context_ref: str, kind: str, *, source: 
 # ───────────── cơ hội (5.5) ─────────────
 
 def fresh_opportunities(store, agent_key: str, context_ref: str, items: Iterable[dict],
-                        at: Optional[float] = None) -> list:
+                        at: float | None = None) -> list:
     """Lọc danh sách cơ hội lập bằng code: mỗi cơ hội khoá `(source_ref, version)`, đã tiêu thụ thì bỏ (kể cả khi lượt
     quét trước trả `none`) cho tới khi nguồn có phiên bản mới. Ghi `first_seen_at` cho cơ hội mới."""
     ensure(store)
@@ -976,7 +976,7 @@ def fresh_opportunities(store, agent_key: str, context_ref: str, items: Iterable
 
 
 def consume_opportunities(store, agent_key: str, context_ref: str, items: Iterable[dict], by: str,
-                          at: Optional[float] = None) -> int:
+                          at: float | None = None) -> int:
     ensure(store)
     t = _now(at)
     n = 0
@@ -992,8 +992,8 @@ def consume_opportunities(store, agent_key: str, context_ref: str, items: Iterab
 # ───────────── đề xuất của lượt quét (5.5, 6.1) ─────────────
 
 def record_proposal(store, *, agent_key: str, context_ref: str, source_ref: str, version: str, title: str,
-                    brief: str = "", session_id: str = "", message_id: Optional[int] = None,
-                    at: Optional[float] = None) -> int:
+                    brief: str = "", session_id: str = "", message_id: int | None = None,
+                    at: float | None = None) -> int:
     ensure(store)
     with store._Tx(store) as c:
         cur = c.execute("INSERT INTO pulse_proposals(agent_key,context_ref,source_ref,version,title,brief,session_id,"
@@ -1013,8 +1013,8 @@ def proposal_blocked(store, agent_key: str, context_ref: str, source_ref: str, v
                                                str(version or ""))).fetchone() is not None
 
 
-def proposal(store, proposal_id: Optional[int] = None, *, context_ref: str = "",
-             message_id: Optional[int] = None) -> Optional[dict]:
+def proposal(store, proposal_id: int | None = None, *, context_ref: str = "",
+             message_id: int | None = None) -> dict | None:
     ensure(store)
     with closing(store._conn()) as c:
         if proposal_id is not None:
@@ -1026,7 +1026,7 @@ def proposal(store, proposal_id: Optional[int] = None, *, context_ref: str = "",
 
 
 def decide_proposal(store, proposal_id: int, decision: str, by: str = "owner", task_id: str = "",
-                    signal: bool = True, at: Optional[float] = None) -> Optional[dict]:
+                    signal: bool = True, at: float | None = None) -> dict | None:
     """Chủ (hay trưởng nhóm có quyền) chấp nhận (+0.6 w 0.8) hay bác (-0.4 w 0.8) MỘT đề xuất còn chờ (CAS). `signal`:
     False khi nơi gọi đã ghi tín hiệu theo nguồn của chính nó (thẻ đề xuất trong nhóm). Đã quyết rồi: None."""
     if decision not in ("accepted", "rejected"):
@@ -1060,7 +1060,7 @@ def proposals(store, agent_key: str, limit: int = 20) -> list:
 # ───────────── đã xem, tin chủ động (6.2, 6.1) ─────────────
 
 def mark_seen(store, context_ref: str, message_ids: Iterable[int], agent_key: str = "", session_id: str = "",
-              at: Optional[float] = None) -> int:
+              at: float | None = None) -> int:
     """Ghi lần ĐẦU tin của agent được thấy (≥ 1,5 giây, tab hiển thị). Trả số tin mới ghi."""
     ensure(store)
     t = _now(at)
@@ -1077,7 +1077,7 @@ def mark_seen(store, context_ref: str, message_ids: Iterable[int], agent_key: st
     return n
 
 
-def seen_at(store, context_ref: str, message_id: int) -> Optional[float]:
+def seen_at(store, context_ref: str, message_id: int) -> float | None:
     ensure(store)
     with closing(store._conn()) as c:
         r = c.execute("SELECT seen_at FROM message_seen WHERE context_ref=? AND message_id=?",
@@ -1086,7 +1086,7 @@ def seen_at(store, context_ref: str, message_id: int) -> Optional[float]:
 
 
 def record_proactive(store, agent_key: str, context_ref: str, session_id: str, message_id: int,
-                     at: Optional[float] = None) -> None:
+                     at: float | None = None) -> None:
     ensure(store)
     t = _now(at)
     with store._Tx(store) as c:
@@ -1097,7 +1097,7 @@ def record_proactive(store, agent_key: str, context_ref: str, session_id: str, m
                                           seen["seen_at"] if seen else None))
 
 
-def sweep_seen_ignored(store, interacted: Callable[[dict], bool], at: Optional[float] = None) -> list:
+def sweep_seen_ignored(store, interacted: Callable[[dict], bool], at: float | None = None) -> list:
     """Tin CHỦ ĐỘNG đã có bằng chứng xem, qua 24 giờ kể từ lúc xem mà không tương tác: tín hiệu -0,15 w 0,6 (nguồn
     `seen:<ngữ cảnh>:<mã tin>`). Chưa có bằng chứng xem: không tạo tín hiệu (chưa biết). Agent tắt Cộng hưởng: bỏ qua."""
     ensure(store)
@@ -1133,7 +1133,7 @@ def register_policy_reverter(kind: str, fn: Callable[[dict], Any]) -> None:
     _POLICY_REVERTERS[str(kind)] = fn
 
 
-def apply_policy_change(store, agent_key: str, context_ref: str, change: dict, at: Optional[float] = None) -> int:
+def apply_policy_change(store, agent_key: str, context_ref: str, change: dict, at: float | None = None) -> int:
     """Ghi một thay đổi CHÍNH SÁCH đã áp (độ lệch ngưỡng, độ hăng hái, bài học tự áp, phiên bản pulse) và mở cửa sổ quan
     sát (≥ 6 nhãn hay ≥ 5 tín hiệu mới, tối đa 14 ngày). `change`: {kind, before, after, source, base_error_rate?}.
     Không áp cho bước bậc (bậc chỉ theo 5.3). Trả mã thay đổi."""
@@ -1169,7 +1169,7 @@ def record_policy_labels(store, change_id: int, labels: int, errors: int) -> Non
 
 
 def revert_policy_change(store, change_id: int, reason: str = "owner", by: str = "owner",
-                         at: Optional[float] = None) -> Optional[dict]:
+                         at: float | None = None) -> dict | None:
     """Quay lại một thay đổi chính sách: gọi hàm quay lại đã đăng ký của loại đó (J/L), đánh `reverted`, ghi lý do.
     Đã quyết rồi thì None."""
     ensure(store)
@@ -1198,7 +1198,7 @@ def revert_policy_change(store, change_id: int, reason: str = "owner", by: str =
     return ch
 
 
-def observe_policy_changes(store, at: Optional[float] = None) -> list:
+def observe_policy_changes(store, at: float | None = None) -> list:
     """Đóng các cửa sổ quan sát đã đủ (6.4): tỷ lệ lỗi phán xử tăng quá 0,15 (≥ 6 nhãn) hay `estimate` của ngữ cảnh giảm
     quá 0,3 khi `confidence ≥ 0.5` thì tự quay lại và ghi lý do; còn lại `kept`. Chưa đủ cửa sổ: không tuyên bố gì."""
     ensure(store)
@@ -1246,7 +1246,7 @@ def policy_changes(store, agent_key: str, limit: int = 20) -> list:
 
 # ───────────── hiển thị ─────────────
 
-def view(store, agent_key: str, at: Optional[float] = None) -> dict:
+def view(store, agent_key: str, at: float | None = None) -> dict:
     """Khung `GET /agents/{slug}/pulse` (phần nhịp): trạng thái và bậc theo từng ngữ cảnh, tổng hợp `*` (chỉ hiển thị),
     lần xem xét gần nhất và dự kiến, lý do thức, đổi nhịp gần đây (trước/sau, nguồn), phản hồi đã xử lý và trạng thái."""
     ensure(store)

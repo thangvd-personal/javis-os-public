@@ -7,22 +7,23 @@ dashboard asks with the short alias "brain" and the filter compared the strings 
 These checks pin the fix: "brain", "path:<dir>", the absolute path and a trailing slash all
 name the same brain, while an unknown or other brain is never folded into Brain Default.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-brain-filter-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ["BRAINS_DIR"] = str(Path(_STATE) / "brains")
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(_STATE) / "sessions.db")
 
-import main  # noqa: E402
-import brain_ident  # noqa: E402
-import channel_accounts  # noqa: E402
-import chatbot_store  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import brain_ident
+import channel_accounts
+import chatbot_store
+import main
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 _fails = []
 

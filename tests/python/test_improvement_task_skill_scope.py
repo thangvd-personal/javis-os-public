@@ -1,27 +1,25 @@
 """Real ordinary owner/runtime/M0 task snapshots; no provider/native process."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import contextvars
 import copy
 import hashlib
 import importlib
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, contextmanager
+from pathlib import Path
 from unittest.mock import patch
 
-from cryptography.fernet import Fernet
-from capability_registry import CapabilityRegistry
 import context_runtime as CR
 import improvement_store as IM
+import turn_context as TC
+from _paths import ROOT, SERVER  # noqa: F401
+from capability_registry import CapabilityRegistry
+from cryptography.fernet import Fernet
 from improvement_blobs import AssetUnavailable, RevisionBlobs
 from resonance_store import GoalStore, Principal
-import skill_router
-import turn_context as TC
 
 
 class TaskSkillScopeTests(unittest.TestCase):

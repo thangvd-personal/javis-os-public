@@ -8,13 +8,13 @@ tổng, trần giai đoạn; vai khác bị chặn; lượt giữ chỗ chưa c�
 hàm dựng thật; kết cục của lượt (final, lỗi, ngoại lệ, huỷ, không có final) chốt đúng và chốt NGAY khi thấy khung kết
 thúc; `max_wall_s` chuyển xuống engine thật; phân nhánh và đếm lượt của bộ chạy. Engine ở đây là engine giả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import tempfile
 from pathlib import Path
 
 import _a5_pilot_ledger as PL
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 CAPS = {"maker": 2, "reviewer": 2, "total": 4}
@@ -246,7 +246,7 @@ check("nhánh: bản làm chưa đạt kiểm khách quan, chưa có review",
       PL.classify("active", [], ["succeeded"], []) == "maker_not_met")
 
 # ═════════ R1 (review cổng pilot vòng 1): kết cục của lượt theo đúng luật lỗi của host ═════════
-import resonance as R  # noqa: E402
+import resonance as R
 
 
 def through_host(name, events, verdict=PL.host_text_verdict, wrap_ask=False):
@@ -393,7 +393,7 @@ check("mã thoát: chỉ duyệt nội dung là 0; nhánh nghiệp vụ 2; còn 
       and PL.EXIT_CODES.get("technical_failed", 1) == 1)
 
 # ═════════ R3: bảo toàn bằng chứng và quyền dọn ═════════
-import sqlite3  # noqa: E402
+import sqlite3
 
 
 def sandbox(name):
@@ -453,7 +453,8 @@ check("file hỏng chép NGUYÊN bytes, không sửa", (Path(pr4["dest"]) / "sta
 
 b5 = sandbox("deep")
 deep = TMP / ("hs-" + "d" * 60) / ("thu-muc-ho-so-" + "x" * 60) / ("con-" + "y" * 60) / ("chau-" + "z" * 60)
-import os  # noqa: E402
+import os
+
 os.makedirs(PL._xp(deep), exist_ok=True)
 pr5 = PL.preserve_sandbox(b5, deep, required=["resonance.sqlite3", "server-1-A.log"])
 check(f"bảo toàn khi thư mục hồ sơ sâu (đường dẫn {len(str(deep)) + 60} ký tự, vượt 260 của Windows)",
@@ -471,9 +472,9 @@ for label, args in (("real luôn giữ", ("real", "pending_content_review", ok_p
     check(f"không dọn: {label}", PL.may_delete_sandbox(*args) is False)
 
 # ═════════ Review cổng vòng 2: ghi hồ sơ cuối là một phần của kết luận ═════════
-import contextlib  # noqa: E402
-import io  # noqa: E402
-from unittest.mock import patch  # noqa: E402
+import contextlib
+import io
+from unittest.mock import patch
 
 
 def finish(name, mode, acceptance, fault=None, branch="pass_first", delete=None, patch_write=None, no_out=False):
@@ -557,7 +558,7 @@ check("ca dry chèn lỗi ghi: chỉ ở dry, đúng ba ca", PL.dry_fault("real"
       and PL.dry_fault("dry", "main_pass") is None)
 
 # ═════════ Lưu ý 2: kiểm nguồn trước khi có thể gọi model ═════════
-import subprocess  # noqa: E402
+import subprocess
 
 repo = TMP / "repo"
 repo.mkdir()

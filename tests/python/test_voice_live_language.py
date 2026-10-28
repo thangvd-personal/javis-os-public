@@ -1,7 +1,8 @@
 """Configured recognition language must reach supported provider fields and prompts."""
-from _paths import ROOT, SERVER  # noqa: F401
 import unittest
+
 import voice_live as vl
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class LiveLanguageTests(unittest.TestCase):

@@ -18,7 +18,7 @@ import contextvars
 import itertools
 import threading
 import time
-from typing import Callable, Dict, List, Optional
+from collections.abc import Callable
 
 MAX_PENDING = 10
 MAX_CHARS = 8000
@@ -26,7 +26,7 @@ MAX_CHARS = 8000
 _CURRENT: contextvars.ContextVar[str] = contextvars.ContextVar("javis_steer_sid", default="")
 
 
-def note_for(texts: List[str]) -> str:
+def note_for(texts: list[str]) -> str:
     """The text a running turn reads: the owner's own words, fenced, and what to do with them. Model prompt: Vietnamese."""
     if not texts:
         return ""
@@ -39,7 +39,7 @@ def note_for(texts: List[str]) -> str:
             "rồi trả lời cả hai trong câu trả lời cuối. Đừng bỏ qua tin này.\n")
 
 
-def followup_prompt(texts: List[str]) -> str:
+def followup_prompt(texts: list[str]) -> str:
     """The message of the turn that runs the leftovers after a turn ended. Model prompt: Vietnamese."""
     body = "\n\n".join(texts)
     if len(texts) == 1:
@@ -52,15 +52,15 @@ def followup_prompt(texts: List[str]) -> str:
 class SteerInbox:
     def __init__(self, clock: Callable[[], float] = time.time):
         self._lock = threading.Lock()
-        self._pending: Dict[str, List[dict]] = {}
-        self._live: Dict[str, bool] = {}
-        self._tags: Dict[str, str] = {}
+        self._pending: dict[str, list[dict]] = {}
+        self._live: dict[str, bool] = {}
+        self._tags: dict[str, str] = {}
         self._ids = itertools.count(1)
         self._clock = clock
-        self.on_read: Optional[Callable[[str, List[int]], None]] = None
+        self.on_read: Callable[[str, list[int]], None] | None = None
         # Per-turn: where a read message is written into the chat history (0.213.0, chat channels). The web dashboard
         # stores the owner's message when it arrives; a channel turn only knows its stored session once it has started.
-        self._sinks: Dict[str, Callable[[List[str]], None]] = {}
+        self._sinks: dict[str, Callable[[list[str]], None]] = {}
 
     # -- one turn's lifetime --
     def open(self, sid: str, tag: str = "") -> contextvars.Token:
@@ -76,7 +76,7 @@ class SteerInbox:
             if sid in self._live:
                 self._live[sid] = bool(live)
 
-    def close(self, sid: str, tag: str = "", token: Optional[contextvars.Token] = None) -> List[dict]:
+    def close(self, sid: str, tag: str = "", token: contextvars.Token | None = None) -> list[dict]:
         """The turn ended: returns what it never read (to run as the next turn) and forgets the turn."""
         with self._lock:
             self._live.pop(sid, None)
@@ -91,18 +91,18 @@ class SteerInbox:
                 pass
         return left
 
-    def set_sink(self, sid: str, sink: Optional[Callable[[List[str]], None]]) -> None:
+    def set_sink(self, sid: str, sink: Callable[[list[str]], None] | None) -> None:
         """While the turn of `sid` runs, `sink(texts)` gets every message it reads (0.213.0)."""
         with self._lock:
             if sid in self._live and sink is not None:
                 self._sinks[sid] = sink
 
-    def drop(self, sid: str) -> List[dict]:
+    def drop(self, sid: str) -> list[dict]:
         """Forget what is waiting for the turn of `sid` without ending it (a /stop on a chat channel)."""
         with self._lock:
             return self._pending.pop(sid, [])
 
-    def requeue(self, sid: str, items: List[dict]) -> bool:
+    def requeue(self, sid: str, items: list[dict]) -> bool:
         """Put back messages an engine took but could not hand over (Codex refused a steer because its turn had just
         ended): ahead of anything newer, so the next turn runs them in order. False once the turn is over."""
         with self._lock:
@@ -120,7 +120,7 @@ class SteerInbox:
             return bool(self._live.get(sid))
 
     # -- the owner sends --
-    def put(self, sid: str, text: str) -> Optional[dict]:
+    def put(self, sid: str, text: str) -> dict | None:
         """Hold one message for the running turn of `sid`. None when no turn is running or too many are waiting."""
         text = str(text or "").strip()[:MAX_CHARS]
         if not text:
@@ -136,7 +136,7 @@ class SteerInbox:
             return dict(item)
 
     # -- a running turn reads --
-    def take(self, sid: str) -> List[dict]:
+    def take(self, sid: str) -> list[dict]:
         with self._lock:
             items = self._pending.pop(sid, [])
             sink = self._sinks.get(sid) if items else None

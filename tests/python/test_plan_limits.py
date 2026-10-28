@@ -6,16 +6,17 @@ Chủ repo 25/10 gửi ảnh "Plan usage limits" của Claude (phiên 9%, tuần
 được không. Claude Code tự phát `rate_limit_event` trong luồng, Codex phát
 `account/rateLimits/updated` và ghi `rate_limits` vào file rollout. Test này giữ ba đường đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-pl-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 os.environ["JAVIS_CODEX_SESSIONS_DIR"] = os.path.join(_TMP, "codex")
 
-import plan_limits as pl  # noqa: E402
+import plan_limits as pl
 
 fails = []
 
@@ -35,8 +36,8 @@ RAW = {"isUsingOverage": False, "overageStatus": "rejected", "rateLimitType": "f
 
 # 1. Claude Code qua map_message của engine thật (RateLimitEvent của SDK). claude_sdk_engine.py bị khoá
 #    bằng bằng chứng kiểm định native (PROFILE_SOURCES), nên móc từ ngoài chứ không sửa file đó.
-from claude_agent_sdk.types import RateLimitEvent, RateLimitInfo  # noqa: E402
-import claude_sdk_engine as eng  # noqa: E402
+import claude_sdk_engine as eng
+from claude_agent_sdk.types import RateLimitEvent, RateLimitInfo
 
 ev = RateLimitEvent(rate_limit_info=RateLimitInfo(status="allowed", resets_at=RAW["resetsAt"],
                                                   rate_limit_type="five_hour", utilization=0.09, raw=RAW),
@@ -87,7 +88,7 @@ check("Codex: tuần 12%", x["seven_day"]["pct"] == 12, x)
 day = os.path.join(_TMP, "codex", "2026", "10", "25")
 os.makedirs(day)
 f = os.path.join(day, "rollout-2026-10-25T10-00-00-abc.jsonl")
-dong = lambda pct: json.dumps({"timestamp": "2026-10-25T10:00:00Z", "type": "event_msg", "payload": {  # noqa: E731
+dong = lambda pct: json.dumps({"timestamp": "2026-10-25T10:00:00Z", "type": "event_msg", "payload": {
     "type": "token_count", "info": None, "rate_limits": {
         "primary": {"used_percent": pct, "window_minutes": 300, "resets_at": NOW + 7200},
         "secondary": {"used_percent": 33.0, "window_minutes": 10080, "resets_at": NOW + 99999}}}})
@@ -141,7 +142,8 @@ check("rỗng thì rỗng", pl.ten_goi("") == "" and pl.ten_goi(None) == "")
 x = pl.tu_codex({"rateLimits": {"planType": "pro", "primary": {"usedPercent": 1, "windowDurationMins": 300}}})
 check("Codex báo planType thì giữ lại", x["goi"] == "pro", x)
 
-import hashlib  # noqa: E402
+import hashlib
+
 ev_pin = json.loads((ROOT / "docs/superpowers/evidence/2026-10-25-m5-native-qualification-cli310.json").read_text())
 check("CANARY: claude_sdk_engine.py giữ nguyên đúng bản đã kiểm định native",
       hashlib.sha256((ROOT / "server/claude_sdk_engine.py").read_bytes()).hexdigest()

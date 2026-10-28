@@ -15,18 +15,19 @@ Checks:
   3. The block message names the blocked command, also for rules without `items`.
   4. The hub hides such a tool at Read-only, lists it at Draft, runs create, blocks delete.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-call-rules-"))
 
-import config  # noqa: E402
-import mcp_catalog  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
+import config
+import mcp_catalog
+import mcp_client
+import mcp_hub
+import mcp_store
 
 _fails = []
 

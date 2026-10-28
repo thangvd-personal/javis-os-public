@@ -12,7 +12,6 @@ Những chỗ ở đây đều ĐÃ HOẶC SUÝT gây hại khi gửi tin Zalo t
   3. WINDOWS + cmd.exe. `npx.cmd` chạy qua `cmd /c` thì `& | ^ %` trong nội dung tin bị cmd diễn giải: vừa hỏng tin vừa là lỗ hổng
      chèn lệnh. Chạy `node npx-cli.js` thẳng; rơi về cmd thì từ chối tham số nguy hiểm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -21,12 +20,14 @@ import time
 import types
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import zalo_cli as Z  # noqa: E402
+import zalo_cli as Z
 
 # Hermetic: thư mục cài trỏ vào chỗ trống và không bao giờ cài thật (không thì test đụng npm và mạng).
 EMPTY = Path(tempfile.mkdtemp(prefix="zcli-empty-"))
@@ -319,7 +320,7 @@ check("không có kết nối nào thì báo lỗi", Z.pick_connection([], "")[0
 # ============================================================
 # 4c. Kiểm tra điều kiện
 # ============================================================
-Z.connections = lambda: []
+Z.connections = list
 Z.shutil = types.SimpleNamespace(which=lambda n: None)
 check("chưa có Node thì nói rõ", "nodejs.org" in (Z.check() or ""))
 Z.shutil = types.SimpleNamespace(which=lambda n: "/usr/bin/npx")

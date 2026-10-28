@@ -5,7 +5,6 @@
 Đi qua plugins_host thật (nạp plugin bundled từ system/plugins), sổ luot_dang_chay thật và kho
 SQLite thật. Không gọi model: bộ não được giả bằng cách gọi thẳng tool như engine sẽ gọi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -13,13 +12,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m2w-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import luot_dang_chay  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import luot_dang_chay
+import plugins_host
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -35,8 +36,8 @@ OTHER = str(Path(tempfile.mkdtemp(prefix="brain-w2-")).resolve())
 USER = "Mỗi sáng gom giúp anh việc đang dở vào một ghi chú, làm tới hết tuần này."
 
 
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402  - A1: bật theo agent, danh tính lượt từ turn_context
+import _resonance_agent as RA
+import turn_context
 
 AG = {}
 
@@ -114,10 +115,10 @@ check("create lặp trong cùng tin nhắn: không tạo mục tiêu thứ hai",
 # Đề xuất sai luật phải thử trên một TIN MỚI: cùng tin 41 đã có mục tiêu thì tool trả lại mục tiêu đó (chống trùng).
 luot_dang_chay.ket_thuc(k1)
 TURN["mid"] = 44
-out3 = tool({"op": "create", **{**PROPOSAL, "relevant_quote": "em đề xuất dọn wiki"}})
+out3 = tool({"op": "create", **PROPOSAL, "relevant_quote": "em đề xuất dọn wiki"})
 check("create với căn cứ không có trong lời người dùng: ERROR, nói rõ vì sao",
       out3.startswith("ERROR") and "lời người dùng" in out3)
-out4 = tool({"op": "create", **{**PROPOSAL, "criteria": []}})
+out4 = tool({"op": "create", **PROPOSAL, "criteria": []})
 check("create thiếu tiêu chí: ERROR nhắc M", out4.startswith("ERROR") and "tiêu chí" in out4)
 check("đề xuất sai luật không để lại mục tiêu nào", store.find_by_key(P, R.message_ref("s1", 44)) is None
       and len(store.list_open(P)) == 1)
@@ -142,9 +143,9 @@ check("việc Kanban cũ từ trước lượt không tính", d.kind == "answer_
 TURN.update(mid=43, text="Ý anh là có cả lịch tuần trong ghi chú đó.")
 gid = goals[0].id
 upd = {"op": "update", "goal_id": gid, "expected_revision": 1, "reason": "anh thêm lịch tuần",
-       **{**PROPOSAL, "understanding": "Ghi chú việc đang dở kèm lịch tuần",
+       **PROPOSAL, "understanding": "Ghi chú việc đang dở kèm lịch tuần",
           "relevant_quote": "có cả lịch tuần",
-          "horizon": {"kind": "review", "at_iso": "2026-10-09T08:00:00+07:00", "reason": "xem lại giữa tuần"}}}
+          "horizon": {"kind": "review", "at_iso": "2026-10-09T08:00:00+07:00", "reason": "xem lại giữa tuần"}}
 out5 = tool(upd)
 check("update: lên revision 2", "revision 2" in out5 and not out5.startswith("ERROR"))
 check("update: route của tin bổ sung là continue_goal",

@@ -12,11 +12,12 @@ app.js, see tests/js/test_chat_acts.js):
      deleted turns is dropped, one that covers only kept turns stays.
   4. Refused while the chat is answering; an unknown text deletes nothing.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tualai-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -25,7 +26,7 @@ try:
 except Exception:
     pass
 
-import sessions  # noqa: E402
+import sessions
 
 _fails = []
 
@@ -57,8 +58,8 @@ check("...and keeps everything before it", noi_dung(store, sid) == [("user", "má
 check("...msg_count follows", int(store.get_session(sid)["msg_count"]) == 2, store.get_session(sid)["msg_count"])
 
 # ---- 2-4. The endpoint ----
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 ms = main.get_store()

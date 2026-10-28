@@ -6,7 +6,6 @@
 trong thư mục tạm; không gọi model. R6 (hạ, nâng cả bộ kho) nằm ở test_team_rollback.py vì cần mã 0.139.0 thật.
 Mỗi nhóm có đối chứng hợp lệ: đường đúng vẫn ra "done", bài học hợp lệ vẫn được ghi, v.v.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
@@ -16,14 +15,16 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-review-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-review-w-"))
 
-import main  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import main
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -94,8 +95,9 @@ def memory_files_text(d):
 
 def scoped_lessons(prefix="team:"):
     """T3 phần L (0.156.0): bài học của lượt nhóm vào kho bài học phạm vi nhóm (`agent_lessons`), không vào MEMORY.md."""
-    import agent_lessons
     from contextlib import closing as _closing
+
+    import agent_lessons
     st = main._resonance_store()
     agent_lessons.ensure(st)
     with _closing(st._conn()) as c:
@@ -629,7 +631,7 @@ def section_r5():
           and tm.turns(t["team_id"]) == [] and not (lock and lock.locked()), ts.get_task(job))
 
     # Route ghi thật (POST /teams/{id}/messages) với kho phiên chậm: event loop không bị chặn.
-    import httpx  # noqa: E402
+    import httpx
 
     BR = TEMP / "route-brain"
     (BR / "agents").mkdir(parents=True)

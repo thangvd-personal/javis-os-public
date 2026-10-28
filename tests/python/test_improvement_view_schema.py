@@ -1,10 +1,8 @@
 """Actual published schema6 upgrade/rollback; no engine or runtime authority."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
-import json
 import importlib
 import importlib.util
+import json
 import shutil
 import sqlite3
 import subprocess
@@ -16,11 +14,12 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
-import test_improvement_store as fixtures
 import improvement_store as IM
 import test_improvement_semantic_review as semantic
-from improvement_view_protocol import view_manifest, view_hash
+import test_improvement_store as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_experiment_protocol import comparison_hash
+from improvement_view_protocol import view_hash, view_manifest
 
 RELEASED_C = '2727edcc5cdfab6f2dcf2e2871164f22f2771f92'
 VIEWS_BACKUP = '.pre-improvement-m2-views.bak'

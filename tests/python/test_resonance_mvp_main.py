@@ -4,22 +4,23 @@
 
 Brain chưa bật thì không có gì chạy, không tạo kho, prompt không dài thêm chữ nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m2m-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import asyncio  # noqa: E402
+import asyncio
+
+import main
+import plugins_host
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -41,7 +42,8 @@ p_off = main.build_system_prompt(BRAIN)
 check("tắt: system prompt không nhắc javis_goal", "javis_goal" not in p_off)
 
 # ───────────── bật (A1: theo agent, trong lượt của agent đó) ─────────────
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 (Path(BRAIN) / "Javis").mkdir(parents=True, exist_ok=True)
 (Path(BRAIN) / "Javis" / "resonance.json").write_text('{"enabled": true}', encoding="utf-8")
@@ -227,7 +229,7 @@ check("M3 trọn vòng: nhịp sau không có gì tới hạn thì không gọi 
 
 # ───────────── mọi nhánh web mang id tin gốc tới run_turn (review PR #567, P2-1) ─────────────
 # run_turn nằm trong closure của websocket nên không gọi thẳng được; kiểm bằng AST các chỗ gọi nó.
-import ast  # noqa: E402
+import ast
 
 _tree = ast.parse(Path(main.__file__).read_text(encoding="utf-8"))
 _fns = {n.name: n for n in ast.walk(_tree) if isinstance(n, (ast.AsyncFunctionDef, ast.FunctionDef))}

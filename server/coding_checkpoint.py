@@ -33,7 +33,6 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import winproc
 from config import STATE_DIR
@@ -54,19 +53,19 @@ _BO_QUA = ("node_modules/", ".venv/", "venv/", "__pycache__/", "*.pyc", ".mypy_c
 
 _KHOA = threading.RLock()
 # Lượt hiện tại của mỗi phiên, và lượt nào đã có mốc cho thư mục nào.
-_LUOT: Dict[str, int] = {}
-_DA_TAO: Dict[Tuple[str, str], int] = {}
+_LUOT: dict[str, int] = {}
+_DA_TAO: dict[tuple[str, str], int] = {}
 # Sổ băm nội dung file do model ghi: {sid: {đường dẫn: sha256}}.
-_SO_GHI: Dict[str, Dict[str, str]] = {}
+_SO_GHI: dict[str, dict[str, str]] = {}
 # Lần cuối model làm gì đó thay đổi được file trong phiên (ghi, sửa, chạy lệnh).
-_HOAT_DONG: Dict[str, float] = {}
+_HOAT_DONG: dict[str, float] = {}
 
 
 class LoiMoc(Exception):
     pass
 
 
-def _git_env(ws: str, index: Path) -> Dict[str, str]:
+def _git_env(ws: str, index: Path) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env.update({
         "GIT_DIR": str(KHO), "GIT_WORK_TREE": str(ws), "GIT_INDEX_FILE": str(index),
@@ -77,7 +76,7 @@ def _git_env(ws: str, index: Path) -> Dict[str, str]:
     return env
 
 
-def _git(args: List[str], ws: str, index: Path, inp: Optional[bytes] = None, bytes_out: bool = False):
+def _git(args: list[str], ws: str, index: Path, inp: bytes | None = None, bytes_out: bool = False):
     git = shutil.which("git")
     if not git:
         raise LoiMoc("máy không có git")
@@ -137,7 +136,7 @@ def _kho_mb() -> float:
     return tong / 1_048_576
 
 
-def _quet(ws: str) -> Tuple[bool, List[str], str]:
+def _quet(ws: str) -> tuple[bool, list[str], str]:
     """(được chụp không, file quá lớn cần bỏ, lý do nếu không được)."""
     p = Path(ws).resolve()
     if str(p) in ("/", str(Path.home().resolve())) or len(p.parts) <= 1:
@@ -184,7 +183,7 @@ def luot_moi(sid: str) -> None:
         _LUOT[sid] = _LUOT.get(sid, 0) + 1
 
 
-def ghi_nhan_hoat_dong(sid: str, path: Optional[Path] = None) -> None:
+def ghi_nhan_hoat_dong(sid: str, path: Path | None = None) -> None:
     """Model vừa thay đổi được file: ghi mốc thời gian, và băm file nếu biết file nào."""
     if not sid:
         return
@@ -255,7 +254,7 @@ def tao(sid: str, ws: str, ly_do: str = "", luot: int = 0) -> dict:
 def _don_bot(giu: int = 5) -> None:
     so = _nap_so()
     for sid, ds in list(so.items()):
-        theo_ws: Dict[str, list] = {}
+        theo_ws: dict[str, list] = {}
         for x in ds:
             theo_ws.setdefault(x.get("ws", ""), []).append(x)
         con = []
@@ -274,7 +273,7 @@ def _don_bot(giu: int = 5) -> None:
                        timeout=120, creationflags=winproc.no_window())
 
 
-def danh_sach(sid: str) -> List[dict]:
+def danh_sach(sid: str) -> list[dict]:
     return list(reversed(_nap_so().get(str(sid)) or []))
 
 

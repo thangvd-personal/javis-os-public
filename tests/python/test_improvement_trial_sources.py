@@ -1,19 +1,16 @@
 """Synthetic host inventories against real immutable case SQLite; no provider access."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import base64
 import copy
-import hashlib
 import importlib.util
-import json
 import sqlite3
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import test_improvement_cases as fixtures
 import improvement_cases as IC
 import improvement_store as IM
+import test_improvement_cases as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable, RevisionBlobs
 
 if importlib.util.find_spec("improvement_trial_sources"):

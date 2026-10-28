@@ -18,16 +18,17 @@ Ba điểm đáng canh, vì cả ba đều hỏng ÂM THẦM:
 3. Client CŨ không gửi trường `group` lúc lưu. Server phải tự điền "Chung", đừng để
    frontmatter mọc ra `group: None`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-nhom-state-"))
 
-import main  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+from starlette.testclient import TestClient
 
 _fails = []
 

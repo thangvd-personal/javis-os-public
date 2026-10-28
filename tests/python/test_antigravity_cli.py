@@ -17,7 +17,6 @@ có thể sai lặng lẽ:
 
 Test dựng một `agy` GIẢ bằng script Python nên chạy được ở CI không có gì cả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -26,9 +25,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agytest-")
 
-import antigravity_cli   # noqa: E402
+import antigravity_cli
 
 _fails = []
 
@@ -172,7 +173,8 @@ check("mode suggest vẫn sandbox, không tự duyệt",
       antigravity_cli.co_quyen_cho_mode("suggest") == ["--sandbox"])
 
 # ---- Lời nhắc đường file phải nhắc ĐÚNG câu hỏi mới nhất, không phải đầu gói lịch sử ----
-import compaction  # noqa: E402
+import compaction
+
 _goi = compaction.bootstrap_prompt(
     [{"role": "user", "content": "gửi ảnh favicon cho tôi"},
      {"role": "assistant", "content": "Bạn chỉ cần gửi trực tiếp file ảnh favicon."}],
@@ -855,7 +857,8 @@ check("và .gitignore của brain cũng chặn", '".javis-agy/"' in _gb)
 # Cùng một hạng rủi ro, chỗ khác: cấu hình MCP Javis ghi vào brain chứa `Bearer <hub token>` và
 # có đuôi .json, mà khối 2 của .gitignore mở lại MỌI file .json. Không chặn thì token đi thẳng
 # lên remote sao lưu của người dùng và git giữ blob vĩnh viễn.
-import git_brain as _gbm  # noqa: E402
+import git_brain as _gbm
+
 for _rel in (".agents/mcp_config.json", ".antigravity/mcp.json", ".antigravity/settings.json",
              ".gemini/settings.json"):
     check(f"CANARY: git backup chặn {_rel} (chứa hub token)", _gbm._backup_skip(_rel) is True)

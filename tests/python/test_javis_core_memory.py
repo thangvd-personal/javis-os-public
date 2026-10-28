@@ -12,21 +12,22 @@ Spec: owner, 16/10/2026 (Javis Core goal, sections 10, 12, 13 and 14; acceptance
 - a lesson the owner revoked is not re-learnt by the agent;
 - the person's profile is shared by every brain and sits before the brain's own memory, which wins.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-core-mem-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 
-import agent_lessons as AL  # noqa: E402
-import main  # noqa: E402
-import memory_control as MC  # noqa: E402
-import resonance_store as RS  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import agent_lessons as AL
+import main
+import memory_control as MC
+import resonance_store as RS
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -113,7 +114,8 @@ try:
 finally:
     main.agent_lessons.record_self_lessons = orig
 check("off: an agent's JAVIS_LESSON is stripped from the answer and not stored", calls == [] and "JAVIS_LESSON" not in out, (calls, out))
-import mcp_hub  # noqa: E402
+import mcp_hub
+
 _tools, _route = mcp_hub._builtin_tools("full", str(B))
 _write = _route["javis_write_file"]["call"]
 _r1 = asyncio.new_event_loop().run_until_complete(_write({"path": "memory/facts/moi.md", "content": "x"}))

@@ -8,21 +8,21 @@ khởi động rồi không bao giờ cập nhật, bản cài trên máy thì c
 tay. Cùng bệnh Claude Code đã chữa ở `claude_update`, khác một điều: đường này chạy cả trong Docker
 vì `agy` nằm ở thư mục của chính user chạy Javis.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
-import subprocess
 import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agy-upd-")
 
-import agy_update as au  # noqa: E402
-import antigravity_cli  # noqa: E402
-import claude_update  # noqa: E402
-import deploy_info  # noqa: E402
-import main  # noqa: E402
+import agy_update as au
+import antigravity_cli
+import claude_update
+import deploy_info
+import main
 
 _fails = []
 

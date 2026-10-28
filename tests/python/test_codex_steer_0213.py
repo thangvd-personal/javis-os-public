@@ -10,7 +10,6 @@ Two layers:
 Run:
     python tests/run.py codex_steer
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -24,14 +23,16 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TMP = Path(tempfile.mkdtemp(prefix="javis-codex-steer-"))
 os.environ["JAVIS_STATE_DIR"] = str(TMP / "state")
 os.environ["CODEX_HOME"] = str(TMP / "codex-home")
 (TMP / "codex-home").mkdir()
 
-import steer_inbox as si  # noqa: E402
-import codex_steer  # noqa: E402
-from claude_cli import CodexCLI  # noqa: E402
+import codex_steer
+import steer_inbox as si
+from claude_cli import CodexCLI
 
 fails = []
 

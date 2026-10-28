@@ -6,13 +6,14 @@ Owner, 17/10/2026: "ở phần team cũng phải hiện chấm nổi bao nhiêu 
 được quyền tag chủ nhóm ... thông báo của team về cho chủ sẽ chỉ là những thông báo có được tag tên chủ ... team nào bị tắt
 thông báo thì dù có tag tên cũng không báo về máy người dùng". Runs the real host, no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-unread-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-unread-brain-")).resolve()
@@ -21,10 +22,10 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import team_runner  # noqa: E402
-import team_store  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import team_runner
+import team_store
+from fastapi.testclient import TestClient
 
 fails = []
 

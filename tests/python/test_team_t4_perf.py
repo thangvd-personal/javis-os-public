@@ -8,12 +8,13 @@ theo số tin, mỗi thao tác có trần câu SQL, không engine thật nào đ
 ngưỡng rộng cho độ trễ event loop (p95 của bộ hẹn giờ 10 ms) ở pha chỉ có request, đo trên hàng trăm mẫu, không sleep cố
 định. Không nới ngưỡng cũ nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

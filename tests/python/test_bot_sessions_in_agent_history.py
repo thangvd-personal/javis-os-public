@@ -13,11 +13,12 @@ Ba thứ được canh:
      phiên của bot dùng Agent khác.
   3. Ô tìm ở lịch sử Agent cũng vậy (không nhảy ra khỏi trợ lý đang mở).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-botsess-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"       # xem test_workflow_runs_api.py
@@ -26,8 +27,8 @@ try:
 except Exception:
     pass
 
-import chatbot_store  # noqa: E402
-import sessions  # noqa: E402
+import chatbot_store
+import sessions
 
 _fails = []
 
@@ -39,7 +40,7 @@ def check(name, cond, them=""):
 
 
 store = sessions.SessionStore(Path(tempfile.mkdtemp(prefix="sess-")) / "s.db")
-mk = lambda ch, title: store.create_session(brain="brain", engine="cli", title=title, channel=ch)  # noqa: E731
+mk = lambda ch, title: store.create_session(brain="brain", engine="cli", title=title, channel=ch)
 web = mk("web", "chat thường của chủ")
 tg = mk("telegram", "chat telegram")
 own = mk("agent:lan", "chủ chat với Lan")
@@ -82,7 +83,7 @@ res = {r["session_id"] for r in store.search("đổi bộ não", brain=["brain"]
 check("tìm ở Trò chuyện vẫn tìm mọi kênh (giữ hành vi cũ)", {web, own, bot1, bot2} <= res, res)
 
 # 4. Ánh xạ Agent -> kênh bot ở tầng endpoint
-import main  # noqa: E402
+import main
 
 b1, err = chatbot_store.create_bot({"name": "Javis Vũ", "agent_slug": "lan", "brain": "brain"})
 b2, err2 = chatbot_store.create_bot({"name": "Nhi Mai", "agent_slug": "hoa", "brain": "brain"})
@@ -102,7 +103,7 @@ check("và lịch sử của brain riêng có kênh bot của nó", "bot:" + cha
 
 # 5. Endpoint: gộp phiên bot là OPT-IN. Lúc trang Cộng sự chọn "phiên gần nhất để mở tiếp" (limit=1) mà lẫn phiên
 #    của khách vào thì tin chủ gõ sẽ rơi vào cuộc chat của khách.
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 ms = main.get_store()
@@ -129,7 +130,8 @@ check("giao diện: chỉ cột lịch sử và ô tìm của Agent xin gộp ph
       js.count('"&bots=1"') == 2 and 'indexOf("agent:") === 0' in js)
 ws = (ROOT / "dashboard" / "workspace.js").read_text(encoding="utf-8")
 check("trang Cộng sự chọn phiên để mở tiếp KHÔNG xin gộp phiên bot", "&limit=1" in ws and "bots=" not in ws)
-import json  # noqa: E402
+import json
+
 for lang in ("vi", "en"):
     d = json.loads((ROOT / "dashboard" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
     check(f"i18n {lang} có sess.bot_badge", bool(d.get("sess.bot_badge")))
@@ -156,7 +158,8 @@ i_answer = src_main.index("async def _tg_answer(")
 check("vỏ _tg_answer đặt tên phiên bot theo nhóm, chỉ với bot và tin nhóm",
       "if bot and chatbot_runtime._rp_is_group(meta):" in src_main[i_answer:i_answer + 12000]
       and "name_group_session(conv_sid" in src_main[i_answer:i_answer + 12000])
-import chatbot_runtime  # noqa: E402
+import chatbot_runtime
+
 check("chỉ tin nhóm mới đổi tên phiên: chat riêng của khách vẫn theo tin đầu như cũ",
       chatbot_runtime._rp_is_group({"chat_type": "group"}) is True and chatbot_runtime._rp_is_group({"chat_type": "private"}) is False
       and chatbot_runtime._rp_is_group({}) is False)

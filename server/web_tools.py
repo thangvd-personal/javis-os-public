@@ -33,7 +33,6 @@ import re
 import tempfile
 import time
 from html.parser import HTMLParser
-from typing import Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -77,7 +76,7 @@ def _kiem_url(url: str) -> None:
 # ---------------------------------------------------------------------------------------
 # Khoá các nguồn tìm
 # ---------------------------------------------------------------------------------------
-def _cau_hinh() -> Dict[str, str]:
+def _cau_hinh() -> dict[str, str]:
     """Key và địa chỉ nguồn tìm: biến môi trường trước, rồi mục `web` trong Cài đặt."""
     web = {}
     try:
@@ -108,7 +107,7 @@ def _cau_hinh() -> Dict[str, str]:
 # ---------------------------------------------------------------------------------------
 # Các nguồn tìm. Mỗi hàm trả [(tiêu đề, địa chỉ, đoạn trích)] hoặc ném.
 # ---------------------------------------------------------------------------------------
-async def _tavily(key: str, q: str, n: int) -> List[Tuple[str, str, str]]:
+async def _tavily(key: str, q: str, n: int) -> list[tuple[str, str, str]]:
     async with _client() as cl:
         r = await cl.post("https://api.tavily.com/search", json={"api_key": key, "query": q, "max_results": n})
         r.raise_for_status()
@@ -116,7 +115,7 @@ async def _tavily(key: str, q: str, n: int) -> List[Tuple[str, str, str]]:
                 for x in (r.json().get("results") or [])]
 
 
-async def _brave(key: str, q: str, n: int) -> List[Tuple[str, str, str]]:
+async def _brave(key: str, q: str, n: int) -> list[tuple[str, str, str]]:
     async with _client() as cl:
         r = await cl.get("https://api.search.brave.com/res/v1/web/search", params={"q": q, "count": n},
                          headers={"X-Subscription-Token": key, "Accept": "application/json"})
@@ -125,7 +124,7 @@ async def _brave(key: str, q: str, n: int) -> List[Tuple[str, str, str]]:
                 for x in ((r.json().get("web") or {}).get("results") or [])]
 
 
-async def _searxng(base: str, q: str, n: int) -> List[Tuple[str, str, str]]:
+async def _searxng(base: str, q: str, n: int) -> list[tuple[str, str, str]]:
     async with _client() as cl:
         r = await cl.get(base.rstrip("/") + "/search", params={"q": q, "format": "json"})
         r.raise_for_status()
@@ -133,8 +132,8 @@ async def _searxng(base: str, q: str, n: int) -> List[Tuple[str, str, str]]:
                 for x in (r.json().get("results") or [])][:n]
 
 
-_DDG_KQ = re.compile(r'<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.S | re.I)
-_DDG_TRICH = re.compile(r'class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</(?:a|td|div)>', re.S | re.I)
+_DDG_KQ = re.compile(r'<a[^>]+class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.DOTALL | re.IGNORECASE)
+_DDG_TRICH = re.compile(r'class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</(?:a|td|div)>', re.DOTALL | re.IGNORECASE)
 _THE = re.compile(r"<[^>]+>")
 
 
@@ -155,7 +154,7 @@ def _ddg_url(href: str) -> str:
     return h
 
 
-def doc_ket_qua_ddg(trang: str, n: int) -> List[Tuple[str, str, str]]:
+def doc_ket_qua_ddg(trang: str, n: int) -> list[tuple[str, str, str]]:
     """Bóc kết quả từ trang HTML của DuckDuckGo. Tách riêng để test không cần mạng."""
     tieu_de = _DDG_KQ.findall(trang or "")
     trich = _DDG_TRICH.findall(trang or "")
@@ -170,7 +169,7 @@ def doc_ket_qua_ddg(trang: str, n: int) -> List[Tuple[str, str, str]]:
     return ra
 
 
-async def _ddg(q: str, n: int) -> List[Tuple[str, str, str]]:
+async def _ddg(q: str, n: int) -> list[tuple[str, str, str]]:
     async with _client(follow_redirects=True) as cl:
         r = await cl.post("https://html.duckduckgo.com/html/", data={"q": q, "kl": "wt-wt"})
         r.raise_for_status()
@@ -231,13 +230,13 @@ class _Md(HTMLParser):
     def __init__(self, base: str):
         super().__init__(convert_charrefs=True)
         self.base = base
-        self.out: List[str] = []
-        self.chinh: List[str] = []      # phần trong <main>/<article>, nếu trang có
+        self.out: list[str] = []
+        self.chinh: list[str] = []      # phần trong <main>/<article>, nếu trang có
         self.bo = 0
         self.trong_chinh = 0
         self.title = ""
         self._title = False
-        self._a: List[Optional[str]] = []
+        self._a: list[str | None] = []
         self._pre = 0
 
     def _ghi(self, s: str):
@@ -311,7 +310,7 @@ def _gon(s: str) -> str:
     return s.strip()
 
 
-def html_sang_md(trang: str, base: str = "") -> Tuple[str, str]:
+def html_sang_md(trang: str, base: str = "") -> tuple[str, str]:
     """(tiêu đề, markdown). Trang có <main>/<article> đủ dài thì chỉ lấy phần đó (bỏ menu, quảng cáo)."""
     p = _Md(base)
     try:
@@ -327,10 +326,10 @@ def html_sang_md(trang: str, base: str = "") -> Tuple[str, str]:
 # ---------------------------------------------------------------------------------------
 # Đọc trang
 # ---------------------------------------------------------------------------------------
-_DEM: Dict[str, Tuple[float, str, str, str]] = {}      # url -> (lúc, url cuối, tiêu đề, chữ)
+_DEM: dict[str, tuple[float, str, str, str]] = {}      # url -> (lúc, url cuối, tiêu đề, chữ)
 
 
-def _cat_dong(text: str, offset: int, limit: int) -> Tuple[str, int]:
+def _cat_dong(text: str, offset: int, limit: int) -> tuple[str, int]:
     """Lấy text[offset:offset+limit] nhưng kết thúc ở cuối dòng gần nhất (không cắt giữa câu)."""
     phan = text[offset:offset + limit]
     if offset + limit < len(text):
@@ -340,7 +339,7 @@ def _cat_dong(text: str, offset: int, limit: int) -> Tuple[str, int]:
     return phan, offset + len(phan)
 
 
-async def _tai(url: str) -> Tuple[str, str, str]:
+async def _tai(url: str) -> tuple[str, str, str]:
     """(url cuối, tiêu đề, chữ). Ném LoiWeb."""
     import httpx
     cur = url
@@ -400,7 +399,7 @@ async def doc(url: str, offset: int = 0, limit: int = DOC_MAC_DINH) -> str:
     u = str(url or "").strip()
     if not u:
         return "ERROR: thiếu url."
-    if not re.match(r"^https?://", u, re.I):
+    if not re.match(r"^https?://", u, re.IGNORECASE):
         u = "https://" + u
     try:
         off = max(0, int(offset or 0))

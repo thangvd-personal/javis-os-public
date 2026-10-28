@@ -2,17 +2,18 @@
 
     python tests/run.py pinned_folder
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-pin-")
 os.environ["JAVIS_STATE_DIR"] = STATE
-from fastapi.testclient import TestClient  # noqa: E402
-import coding_store  # noqa: E402
-import main  # noqa: E402
+import coding_store
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -124,7 +125,7 @@ try:
     check("unpinning also forgets extra folders nobody else uses", coding_store.thu_muc(rec3["id"]) is None)
     check("but keeps a folder another conversation still uses", coding_store.thu_muc(proj_id) is not None)
 
-    import routes.coding as coding_routes  # noqa: E402
+    import routes.coding as coding_routes
     keep = coding_routes._DEPS.resolve_path
 
     def _outside(b, rel):

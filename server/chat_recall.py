@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any
 
 MAX_HITS = 3
 SNIPPET_CHARS = 300
@@ -27,11 +28,7 @@ MIN_MESSAGE_CHARS = 12
 BLOCK_TITLE = "NHỚ LẠI TỪ CÁC CUỘC TRÒ CHUYỆN TRƯỚC"
 
 # Words too common to say what a message is about (Vietnamese without marks, and English).
-_STOP = set("""
-anh chi em ban minh toi cho cua nhung nay kia gi sao the nao duoc khong khong co cac mot hai voi va hay
-lam giup nhe nha roi luon dang can phai thi la nay de tu den len xuong ra vao trong ngoai neu khi
-the this that what with from have your about please would could should there their them then than
-""".split())
+_STOP = set(["anh", "chi", "em", "ban", "minh", "toi", "cho", "cua", "nhung", "nay", "kia", "gi", "sao", "the", "nao", "duoc", "khong", "khong", "co", "cac", "mot", "hai", "voi", "va", "hay", "lam", "giup", "nhe", "nha", "roi", "luon", "dang", "can", "phai", "thi", "la", "nay", "de", "tu", "den", "len", "xuong", "ra", "vao", "trong", "ngoai", "neu", "khi", "the", "this", "that", "what", "with", "from", "have", "your", "about", "please", "would", "could", "should", "there", "their", "them", "then", "than"])
 _WORD_RE = re.compile(r"[\w]+", re.UNICODE)
 
 
@@ -46,9 +43,9 @@ def allowed_channel(channel: Any) -> bool:
     return ch == "" or ch == "web" or ch.startswith("agent:")
 
 
-def terms(message: str) -> List[str]:
+def terms(message: str) -> list[str]:
     """Distinctive words of a message, longest first, without marks (FTS5's unicode61 folds them too)."""
-    text = re.sub(r"<!--.*?-->|\[[^\]]{0,400}\]\n\n", " ", str(message or ""), flags=re.S)
+    text = re.sub(r"<!--.*?-->|\[[^\]]{0,400}\]\n\n", " ", str(message or ""), flags=re.DOTALL)
     seen, out = set(), []
     for w in _WORD_RE.findall(_fold(text)):
         if len(w) < 4 or w.isdigit() or w in _STOP or w in seen:
@@ -69,7 +66,7 @@ def _clean(snippet: str) -> str:
     return s[:SNIPPET_CHARS]
 
 
-def pick(rows: List[dict], current_sid: str) -> List[dict]:
+def pick(rows: list[dict], current_sid: str) -> list[dict]:
     """One hit per other chat, best ranked first."""
     out, seen = [], set()
     for r in rows:
@@ -86,7 +83,7 @@ def pick(rows: List[dict], current_sid: str) -> List[dict]:
     return out
 
 
-def block(hits: List[dict]) -> str:
+def block(hits: list[dict]) -> str:
     """Prompt text (Vietnamese like every model prompt). Empty when there is nothing to recall."""
     if not hits:
         return ""
@@ -97,7 +94,7 @@ def block(hits: List[dict]) -> str:
     return "\n".join(lines) + "]\n\n"
 
 
-def recall(store: Any, message: str, *, brain: Any, current_sid: str = "") -> List[dict]:
+def recall(store: Any, message: str, *, brain: Any, current_sid: str = "") -> list[dict]:
     """Search the brain's other owner chats for the message. Never raises."""
     if len(str(message or "").strip()) < MIN_MESSAGE_CHARS:
         return []

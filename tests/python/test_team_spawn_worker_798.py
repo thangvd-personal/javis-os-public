@@ -8,14 +8,15 @@ needs an event loop in the CALLING thread: "RuntimeError: There is no current ev
 had already moved to acceptance_checking, so it stayed there. `_spawn` now hands work from a worker thread to the main
 loop. This test goes through `io` the same way the route does.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-team-spawn-798-"))
 
-import team_api  # noqa: E402
+import team_api
 
 fails = []
 
@@ -46,7 +47,7 @@ async def from_worker():
     out = await api.io(route_body)
     try:
         await asyncio.wait_for(ran.wait(), 2)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass
     await asyncio.sleep(0)
     return out, ran.is_set(), len(api._bg)

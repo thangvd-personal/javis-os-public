@@ -1,7 +1,7 @@
 """Lazy x64 Windows debug APIs for the isolated capture component only."""
-from functools import lru_cache
 import os
 import platform
+from functools import lru_cache
 
 
 @lru_cache(maxsize=1)

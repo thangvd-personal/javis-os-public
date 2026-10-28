@@ -1,8 +1,5 @@
 """Actual encrypted SQLite result publication with synthetic native evidence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-import copy
 import json
 import unittest
 from contextlib import closing
@@ -10,14 +7,15 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_native_trace_checks as N
+import test_improvement_operation_execution as O
+import test_improvement_operation_profile2 as B
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
 from improvement_operation_evidence import OperationEvidence
 from improvement_operation_profile import OperationProfile
 from improvement_operation_results import OperationResults
-import test_improvement_operation_execution as O
-import test_improvement_operation_profile2 as B
-import test_improvement_native_trace_checks as N
 
 
 class NativeOperationResultTests(unittest.TestCase):
@@ -41,7 +39,7 @@ class NativeOperationResultTests(unittest.TestCase):
         asyncio.run(self.profile.before_query())
 
     def prepare_trace(self, *, denied=False, persist=True):
-        from claude_agent_sdk import SystemMessage, AssistantMessage, ResultMessage
+        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
         provisional = N.trace('operation', self.workspace, self.pin, system_prompt=self.profile.system_prompt)
         self.profile._native_binding.delivery = N.delivery('operation', self.workspace, provisional,
             self.profile.user_prompt(), self.manifest['request']['input_hash'])
@@ -140,21 +138,21 @@ class LegacyProductStreamingTests(unittest.TestCase):
                 TrialProducts(fixture.trials)._products(connection, stored)
 
 
-import test_improvement_view_sources as V
 import test_improvement_view_next as VN
+import test_improvement_view_sources as V
 
 
 class NativeTrialResultTests(V.SourceFixture, unittest.IsolatedAsyncioTestCase):
     owned_service, admit = VN.ViewNextTests.owned_service, VN.ViewNextTests.admit
 
     async def test_actual_trial4_products_finish_and_cold_read_authenticate_durable_native_history(self):
+        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
         from improvement_claude import ClaudeTrialAdapter, TrialProfile
+        from improvement_native_trace_checks import validate_native_trace
         from improvement_sandbox import FixtureBroker, trial_system_prompt
         from improvement_trial_evidence import TrialEvidence
         from improvement_trial_results import TrialResults
-        from improvement_native_trace_checks import validate_native_trace
         from test_improvement_trial_profile4 import EngineeringBinding
-        from claude_agent_sdk import SystemMessage, AssistantMessage, ResultMessage
         service, _ = self.owned_service(); trials = service.trials
         with patch.object(ClaudeTrialAdapter, 'verify', return_value={'supported': True, 'capability_hash': 'd' * 64}):
             admitted = self.admit(service)

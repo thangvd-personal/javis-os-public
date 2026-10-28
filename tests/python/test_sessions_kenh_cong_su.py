@@ -2,11 +2,12 @@
 
     python tests/run.py sessions_kenh_cong_su
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-kenh-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
@@ -18,7 +19,7 @@ os.environ["BRAINS_DIR"] = _BRAINS
 # TestClient gửi Host: testserver, không nằm trong allowlist mặc định của web_security.py.
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
 
-import sessions  # noqa: E402
+import sessions
 
 fails = []
 
@@ -54,8 +55,9 @@ _learn_src = (ROOT / "server" / "learn.py").read_text(encoding="utf-8")
 check("learn.py fallback dung channel=\"*\"", 'channel="*"' in _learn_src)
 
 # Route: POST /sessions/new
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
+
 cl = TestClient(main.app)
 r = cl.post("/sessions/new", data={"brain": "brain", "channel": "agent:khong-ton-tai"})
 check("POST /sessions/new agent khong co -> 404", r.status_code == 404)
@@ -90,7 +92,8 @@ for xau in ["agent:a/b", "agent:a\\b", "workflow:x y", "agent:", "agent:a:b", "t
 # Slug toan DAU CHAM. Day la nua AN TOAN cua viec noi khuon: khuon moi cho qua moi ky tu tru
 # gach cheo, hai cham va khoang trang, nen ".." va "." lot khuon. Chung KHONG duoc tro ra
 # ngoai thu muc agents/, va quan trong hon: khong duoc doc mot file nao nam ngoai do.
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import patch
+
 _da_doc = []
 _read_md_that = main._read_md
 

@@ -1,15 +1,14 @@
 """Completion requires actual terminal exit success; no account or SDK client."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import os
-from pathlib import Path
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_native_transport_v2 as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 async def noop(*args): pass

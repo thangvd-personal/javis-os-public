@@ -8,7 +8,6 @@ Chạy riêng hàm route (khuôn của test_voice_live_focus.py) với nhà cung
   - khung webrtc_offer từ trình duyệt được trả bằng webrtc_answer;
   - giao việc: bong bóng tool_result mang bản ĐẦY ĐỦ, lưu vào lịch sử, rồi mới trả model.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import ast
 import asyncio
 import json
@@ -22,6 +21,7 @@ import lang
 import localefmt
 import sessions
 import voice_live
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ChatGPTLiveRouteTests(unittest.IsolatedAsyncioTestCase):

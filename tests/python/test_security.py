@@ -7,20 +7,21 @@ Phủ: hash mật khẩu, require_login fail-closed, session TTL, setup token, m
 secrets_store roundtrip, ma trận quyền MCP, chống path traversal, quyết định CSRF/DNS-rebinding,
 rào _AUTH_LOCAL_EXACT (endpoint chỉ-localhost miễn đăng nhập).
 """
-from _paths import ROOT, SERVER, moi_route  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER, moi_route  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-sectest-")
 os.environ.pop("JAVIS_ALLOWED_HOSTS", None)
 
-import config as cfg           # noqa: E402
-import secrets_store           # noqa: E402
-import mcp_catalog             # noqa: E402
-import mcp_hub                 # noqa: E402
-import web_security            # noqa: E402
-import main                    # noqa: E402
+import config as cfg
+import main
+import mcp_catalog
+import mcp_hub
+import secrets_store
+import web_security
 
 _fails = []
 
@@ -160,7 +161,8 @@ check("rào: không còn webhook Zalo local sau khi chuyển sang MCP chuẩn",
 # Tin Zalo do NGƯỜI LẠ soạn và được chuyển thẳng vào Telegram của chủ. _notify_owner phải
 # gửi PLAIN TEXT: nếu ai đó thêm parse_mode như telegram_bot._send (MarkdownV2) thì chữ
 # trong tin khách sẽ dựng được markup, mở đường giả dạng lời của Javis.
-import inspect  # noqa: E402
+import inspect
+
 check("rào: _notify_owner gửi plain text, KHÔNG parse_mode (tin người lạ không dựng được markup)",
       "parse_mode" not in inspect.getsource(main._notify_owner))
 

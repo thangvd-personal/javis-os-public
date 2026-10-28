@@ -23,14 +23,15 @@ chính tính năng tiết kiệm token sinh ra rác. Bật lên là hỏng, nên
 Object vẫn giữ nguyên trong CompileResult.output_contract cho trace đọc; chỉ phần ĐƯA CHO
 MODEL đổi sang lời. Máy đọc dữ liệu, model đọc chữ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-capsule-"))
 
-import context_compiler as cc  # noqa: E402
+import context_compiler as cc
 
 _fails = []
 

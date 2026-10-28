@@ -10,18 +10,19 @@ Không chạm mạng. Khoá:
   - /voice/ear trả đúng lựa chọn, /stt không gọi tai khi tai tắt, POST /settings lưu được khoá ear;
   - từ mồi gồm tên các kết nối MCP, nhưng lớp sửa mờ nghe_sua.sua KHÔNG nhận chúng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ear-"))
 
-import main  # noqa: E402
-import nghe_sua  # noqa: E402
-import stt  # noqa: E402
-import voice_ear  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import nghe_sua
+import stt
+import voice_ear
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []
@@ -146,7 +147,8 @@ finally:
     stt.openai_nghe, stt.groq_nghe, main.cfgmod.read_settings = _goc_openai, _goc_nghe, _goc_cfg
 
 # The OpenAI call itself: right endpoint, model, prompt; no network (httpx client replaced).
-import asyncio  # noqa: E402
+import asyncio
+
 sent = {}
 
 

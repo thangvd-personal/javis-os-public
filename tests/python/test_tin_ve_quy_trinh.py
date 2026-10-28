@@ -23,16 +23,17 @@ Phủ ba tầng:
 KHÔNG chạm mạng, không engine thật: tầng 2 chạy bằng engine giả.
 KHÔNG dùng ký tự em dash.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tinwf-"))
 
-import workflow_chat  # noqa: E402
+import workflow_chat
 
 _fails = []
 
@@ -126,7 +127,7 @@ check("khối ngữ cảnh mở bằng dấu hiệu máy đọc được", _khoi
 # dùng CHUNG _run_workflow_step mà lại không soi, nên cùng một lần chạy, cùng một câu tiếng
 # Anh, hai đường cho ra hai kết cục khác nhau - đúng kiểu hỏng mà chú thích ở
 # _workflow_agent_helpers dặn phải tránh bằng cách dùng chung code.
-import main  # noqa: E402
+import main
 
 _CAU_HET_LUOT = "You've hit your session limit · resets 12pm (UTC)"
 _da_goi = []

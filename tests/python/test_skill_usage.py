@@ -7,7 +7,6 @@ ngoài thư mục tạm.
 Phủ: bump tăng đúng, ghi atomic, file thiếu, file JSON hỏng, brain root không ghi được,
 gọi song song (không mất bump), is_stale (pinned / có use_count / chưa đủ già / đủ già).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import sys
@@ -15,9 +14,11 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-usagetest-"))
 
-import skill_usage  # noqa: E402
+import skill_usage
 
 _fails = []
 
@@ -88,7 +89,7 @@ os.unlink(_bogus_file)
 # đọc-sửa-ghi nên kết quả duy nhất đúng là 80. Nếu để khoảng (0 < n <= 80) thì gỡ _LOCK ra
 # test vẫn xanh dù bump bị nuốt do race - tức là chỉ chứng minh "không sập", đúng thứ mà
 # test này KHÔNG có nhiệm vụ chứng minh.
-import threading  # noqa: E402
+import threading
 
 _R2 = Path(tempfile.mkdtemp(prefix="javis-usagepar-"))
 
@@ -180,10 +181,10 @@ check("bump: sau khi lành, lần bump tiếp theo cộng dồn bình thường 
 # ---- javis_use_skill (mcp_hub): bump đúng tại điểm nghẽn duy nhất ----
 # Test HÀNH VI THẬT qua handler (gọi thẳng route["javis_use_skill"]["call"]), KHÔNG quét
 # source text - quét chuỗi không phân biệt được code sống với comment/code chết.
-import asyncio  # noqa: E402
-import shutil  # noqa: E402
+import asyncio
+import shutil
 
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 _HUB_ROOT = Path(tempfile.mkdtemp(prefix="javis-hubtest-"))
 _HUB_SLUG = "skill-that-ban-dung-thu"
@@ -251,7 +252,7 @@ shutil.rmtree(_HUB_ROOT2, ignore_errors=True)
 # "stale" của dict trả về. Nó KHÔNG chứng minh HTTP response thật trả đúng giá trị lúc chạy (vd
 # lỗi ở tầng skill_router hay FastAPI serialize), và không miễn nhiễm 100% với mọi kiểu code
 # chết (vd lồng trong "if False:" ast.walk vẫn thấy) - chỉ mạnh hơn so chuỗi thô một bậc.
-import ast  # noqa: E402
+import ast
 
 _main_path = SERVER / "main.py"
 _main_tree = ast.parse(_main_path.read_text(encoding="utf-8"))
@@ -308,7 +309,7 @@ if _list_skills is not None:
     check("dict trả về của GET /skills có key 'last_used_at'", _has_last_used_key)
 
 # ---- sidecar là state runtime → phải bị gitignore + không lên mirror backup ----
-import git_brain  # noqa: E402
+import git_brain
 
 check("_GITIGNORE có Javis/skill-usage.json", "Javis/skill-usage.json" in git_brain._GITIGNORE)
 check("_backup_skip bỏ qua sidecar", git_brain._backup_skip("brain/Javis/skill-usage.json") is True)
@@ -343,7 +344,7 @@ check("file .gitignore dựng mới cũng LF thuần",
 # hiện ở Review UI + revert_last_learn KHÔNG undo được. Test HÀNH VI: giữ sẵn BrainLock (giả
 # lập learn đang ghi) rồi gọi ensure_git_repo -> KHÔNG được sinh commit mới.
 # Toàn bộ chạy trong thư mục tạm, KHÔNG đụng repo thật / brains thật.
-import subprocess  # noqa: E402
+import subprocess
 
 
 def _git_q(root, *args):

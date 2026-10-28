@@ -11,12 +11,11 @@ import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
-from typing import Optional
 
 SNAPSHOT_SUFFIX = ".pre-0.140.0"
 
 
-def snapshot_once(path: Path, table: str, marker_column: str, suffix: str = SNAPSHOT_SUFFIX) -> Optional[Path]:
+def snapshot_once(path: Path, table: str, marker_column: str, suffix: str = SNAPSHOT_SUFFIX) -> Path | None:
     """Chép kho `path` thành `<tên><suffix>` (mặc định `.pre-0.140.0`) nếu bảng `table` có mà chưa có cột `marker_column`.
     Trả đường dẫn bản sao vừa tạo, hay None. Lỗi chỉ in ra, không chặn việc mở kho (mất bản sao còn hơn không chạy được).
     T2 (0.154.0) dùng `suffix=".pre-0.154.0"` cho `team.sqlite3` (cột mới của reaction)."""
@@ -40,7 +39,7 @@ def snapshot_once(path: Path, table: str, marker_column: str, suffix: str = SNAP
         return None
 
 
-def snapshot_before_table(path: Path, base_table: str, marker_table: str, suffix: str) -> Optional[Path]:
+def snapshot_before_table(path: Path, base_table: str, marker_table: str, suffix: str) -> Path | None:
     """Chép kho `path` thành `<tên><suffix>` lần đầu mã mới gặp một kho cũ: bảng `base_table` có mà bảng `marker_table`
     chưa có (T2 dùng cho `conversations.db`, bảng `dm_reactions`). Cùng luật với `snapshot_once`."""
     path = Path(path)

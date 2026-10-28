@@ -15,7 +15,6 @@ Vá 2 tầng, test ghim cả hai:
 2. giu_credentials: bản lành → sao lưu; file hỏng/mất → phục hồi từ sao lưu + hô to;
    đăng xuất CHỦ ĐỘNG → xoá sao lưu, không "hồi sinh" phiên người dùng vừa ngắt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import subprocess
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -38,7 +39,7 @@ def check(name, cond):
         _fails.append(name)
 
 
-import claude_cli  # noqa: E402
+import claude_cli
 
 CRED_LANH = json.dumps({"claudeAiOauth": {
     "accessToken": "sk-ant-test", "refreshToken": "rt-test", "expiresAt": 9999999999}})

@@ -1,10 +1,15 @@
 """Test tích hợp: xóa não lan sang máy khác qua sync (remote file:// cục bộ). Chạy:
     python tests/run.py brain_delete_sync
 Cần git trong PATH. KHÔNG mạng thật."""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, time, tempfile, subprocess
+import os
+import subprocess
+import sys
+import tempfile
+import time
 from pathlib import Path
-import git_brain as gb  # noqa: E402
+
+import git_brain as gb
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 def check(name, cond):

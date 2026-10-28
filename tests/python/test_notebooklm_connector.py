@@ -25,10 +25,10 @@ sai mà không ai thấy, nên ba thứ sau phải có test canh:
      bằng isolate_home (mỗi kết nối một HOME riêng theo slug) nên ô này vừa thừa
      vừa là bẫy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import sys
 
 import mcp_catalog as mc
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 loi = []
 

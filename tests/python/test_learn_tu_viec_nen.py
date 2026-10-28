@@ -10,9 +10,9 @@ Ba rào phải giữ, vì mất rào nào thì hỏng theo một kiểu riêng:
   - Việc nền và hội thoại của cùng một brain rơi vào CÙNG một rổ pending (không thì hai mẻ).
   - Trần số việc mỗi mẻ, để digest không phình theo số việc chạy trong ngày.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 from learn import LearnDeps, LearnFeature
 
 

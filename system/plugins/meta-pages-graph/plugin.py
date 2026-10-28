@@ -267,8 +267,9 @@ def _resolve_media(ref, cctx):
 async def _post_file(path_in_graph, file_path, data, token, base=GRAPH, timeout=900):
     """POST multipart (upload file thật). Video đi base GRAPH_VIDEO, timeout dài."""
     import mimetypes
-    import httpx
     from pathlib import Path
+
+    import httpx
     mime = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
     try:
         with open(file_path, "rb") as f:

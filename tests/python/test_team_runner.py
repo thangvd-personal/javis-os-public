@@ -4,20 +4,21 @@
 
 Chỉ engine giả, không gọi model. Ca TC6 tới TC13, TC17 tới TC23 và khối JAVIS_TEAM sai khuôn (Review Focus 5).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-runner-")
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_store  # noqa: E402
-import team_runner as TR  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

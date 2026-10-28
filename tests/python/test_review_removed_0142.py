@@ -9,19 +9,18 @@ migration để giả lập kho trước 0.142.0, mở lại bằng mã mới, r
 - có bản sao kho trước khi nâng; mở lại lần hai không đổi gì;
 - mục tiêu mới không còn đội; tab Công việc xếp mục tiêu đã gỡ vào Cần bạn với lý do bằng lời.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import json
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-review-removed-")
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import agent_jobs  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_team as T
+import agent_jobs
+import resonance_store as RS
 
 fails = []
 

@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import re
 import shutil
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional
 
 MAX_PER_SEND = 10
 TREE_DEPTH = 2
@@ -47,9 +47,9 @@ def _inside(p: Path, root: Path) -> bool:
 
 
 def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_dir: Path,
-         to_rel: Callable[[Path], str], add: Callable[[str, str], Optional[str]],
+         to_rel: Callable[[Path], str], add: Callable[[str, str], str | None],
          pin: Callable[[str], object], readable: Iterable[str],
-         extract: Optional[Callable[[Path], str]] = None, extract_suffixes: Iterable[str] = ()) -> List[dict]:
+         extract: Callable[[Path], str] | None = None, extract_suffixes: Iterable[str] = ()) -> list[dict]:
     """Keep the files attached in a team (from the upload staging area, or already in the brain) as team documents.
 
     A staged upload is copied into `dest_dir` (inside the brain: the staging area is swept after a few days). A file
@@ -99,8 +99,8 @@ def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_d
     return out
 
 
-def save_description(names: List[str], text: str, who: str, *, dest_dir: Path, to_rel: Callable[[Path], str],
-                     add: Callable[[str, str], Optional[str]], pin: Callable[[str], object]) -> Optional[str]:
+def save_description(names: list[str], text: str, who: str, *, dest_dir: Path, to_rel: Callable[[Path], str],
+                     add: Callable[[str, str], str | None], pin: Callable[[str], object]) -> str | None:
     """Keep what another brain saw in the pictures of a team message as a pinned text document (0.192.0).
 
     Team turns are text only, so a member cannot look at a picture; this description is what it reads instead. One file
@@ -120,12 +120,12 @@ def save_description(names: List[str], text: str, who: str, *, dest_dir: Path, t
     return to_rel(out)
 
 
-def tree(folder: str, depth: int = TREE_DEPTH, cap: int = TREE_MAX) -> List[str]:
+def tree(folder: str, depth: int = TREE_DEPTH, cap: int = TREE_MAX) -> list[str]:
     """A short indented listing of a folder (folders first), at most `cap` lines, hidden folders left out."""
     root = Path(folder or "")
     if not folder or not root.is_dir():
         return []
-    lines: List[str] = []
+    lines: list[str] = []
 
     def walk(d: Path, level: int) -> None:
         try:
@@ -148,7 +148,7 @@ def tree(folder: str, depth: int = TREE_DEPTH, cap: int = TREE_MAX) -> List[str]
     return lines
 
 
-def block(listed: List[str], loaded: List[str], folder: str, tools: bool = False) -> str:
+def block(listed: list[str], loaded: list[str], folder: str, tools: bool = False) -> str:
     """The team documents block of a member's prompt. "" when the team has nothing attached and no folder.
     `tools=True` (0.194.0): the wording of a Work/Help turn, which can open the files and the folder itself."""
     out = ""

@@ -49,7 +49,6 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import secret_redact
 import winproc
@@ -89,10 +88,10 @@ _ENV_TRANG = ("PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "USER", "LOGNA
               "APPDATA", "LOCALAPPDATA", "PROGRAMFILES", "WINDIR", "JAVA_HOME", "GOPATH",
               "GOROOT", "NVM_DIR", "PYENV_ROOT", "CARGO_HOME", "RUSTUP_HOME")
 # Lọc thêm theo tên, phòng khi ai đó đặt một biến trắng trùng tên lạ.
-_TEN_BI_MAT = re.compile(r"(KEY|TOKEN|SECRET|PASSW|CREDENTIAL|COOKIE|PRIVATE)", re.I)
+_TEN_BI_MAT = re.compile(r"(KEY|TOKEN|SECRET|PASSW|CREDENTIAL|COOKIE|PRIVATE)", re.IGNORECASE)
 
 
-def env_sach() -> Dict[str, str]:
+def env_sach() -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k in _ENV_TRANG and not _TEN_BI_MAT.search(k)}
     env.setdefault("PATH", os.defpath)
     if POSIX:
@@ -122,7 +121,7 @@ _DD_O_DIA = re.compile(r"\bdd\b[^\n]*\bof=" + _O_DIA_THO)
 _GHI_O_DIA = re.compile(r">\s*" + _O_DIA_THO)
 
 
-def _doan_lenh(cmd: str) -> List[str]:
+def _doan_lenh(cmd: str) -> list[str]:
     """Tách thành từng đoạn lệnh tại ; & | xuống dòng ( ) ` $( NẰM NGOÀI dấu nháy.
 
     Tách thô bằng regex thì `echo "a; sudo b"` thành hai lệnh và bị chặn oan; tách theo nháy thì
@@ -167,14 +166,14 @@ def _doan_lenh(cmd: str) -> List[str]:
     return [x.strip() for x in ra if x.strip()]
 
 
-def _tach_tu(doan: str) -> List[str]:
+def _tach_tu(doan: str) -> list[str]:
     try:
         return shlex.split(doan, posix=True)
     except ValueError:
         return doan.split()
 
 
-def _bo_vo(toks: List[str]) -> List[str]:
+def _bo_vo(toks: list[str]) -> list[str]:
     """Bỏ phép gán biến đầu lệnh và các lệnh vỏ (env, nohup, timeout...) để thấy lệnh thật."""
     i = 0
     while i < len(toks):
@@ -245,7 +244,7 @@ def kiem_rao_cung(cmd: str, sau: int = 0) -> str:
 
 # Nguy hiểm nhưng HỢP LỆ khi lập trình. Ở mức Toàn quyền vẫn chạy, nhưng bắt buộc có mốc khôi
 # phục trước và nhật ký ghi nhãn "nguy hiểm". Học từ DANGEROUS_PATTERNS của Hermes.
-_NGUY_HIEM = [re.compile(p, re.I) for p in (
+_NGUY_HIEM = [re.compile(p, re.IGNORECASE) for p in (
     r"\brm\s+(-\S+\s+)*-[a-z]*r", r"\brm\s+.*--recursive",
     r"\bgit\s+reset\s+--hard", r"\bgit\s+push\b.*(\s-f\b|--force)", r"\bgit\s+clean\s+-\S*f",
     r"\bgit\s+(checkout|restore)\s+(--\s+)?\.(\s|$)", r"\bgit\s+branch\s+-D\b",
@@ -291,7 +290,7 @@ def la_chi_doc(cmd: str) -> bool:
 
 # Lệnh không bao giờ tự thoát, hoặc tự đẩy mình xuống nền: chạy tiền cảnh là treo tới hết giờ,
 # hoặc bị giết khi lệnh tiền cảnh kết thúc. Bảo model dùng background=true.
-_CAN_CHAY_NEN = [re.compile(p, re.I) for p in (
+_CAN_CHAY_NEN = [re.compile(p, re.IGNORECASE) for p in (
     r"\b(npm|pnpm|yarn|bun)\s+(run\s+)?(dev|start|serve|watch)\b", r"\bnext\s+(dev|start)\b",
     r"\bvite(\s|$)(?!\s*build)", r"\buvicorn\b", r"\bgunicorn\b", r"\bflask\s+run\b",
     r"\bmanage\.py\s+runserver\b", r"\bpython3?\s+-m\s+http\.server\b", r"\brails\s+s(erver)?\b",
@@ -358,7 +357,7 @@ def thu_muc_phien(sid: str) -> Path:
     return d
 
 
-def _trong_goc(p: str, goc: List[str]) -> bool:
+def _trong_goc(p: str, goc: list[str]) -> bool:
     try:
         r = Path(p).resolve()
     except (OSError, ValueError):
@@ -373,7 +372,7 @@ def _trong_goc(p: str, goc: List[str]) -> bool:
     return False
 
 
-def _cwd_phien(sid: str, goc: List[str]) -> Tuple[str, str]:
+def _cwd_phien(sid: str, goc: list[str]) -> tuple[str, str]:
     """(cwd hiện tại, câu báo nếu phải đặt lại). cwd thoát khỏi thư mục làm việc thì về gốc."""
     f = thu_muc_phien(sid) / "cwd"
     try:
@@ -405,7 +404,7 @@ def _don_file_cu(d: Path) -> None:
             pass
 
 
-def _doc_ong(ong, f_day_du, gioi_han: int, duoi: List[bytes]) -> int:
+def _doc_ong(ong, f_day_du, gioi_han: int, duoi: list[bytes]) -> int:
     """Đọc hết ống vào file (tới `gioi_han` byte), giữ thêm đuôi 64 KB trong `duoi`. Trả số byte."""
     tong = 0
     DUOI_MAX = 65_536
@@ -422,13 +421,13 @@ def _doc_ong(ong, f_day_du, gioi_han: int, duoi: List[bytes]) -> int:
     return tong
 
 
-def _git_bash() -> Optional[str]:
+def _git_bash() -> str | None:
     if POSIX:
         return shutil.which("bash")
     return None
 
 
-def _powershell() -> Optional[str]:
+def _powershell() -> str | None:
     return shutil.which("pwsh") or shutil.which("powershell")
 
 
@@ -485,7 +484,7 @@ def _kich_ban_posix(command: str, sid: str, cwd: str, goc0: str, ghi_trang_thai:
     return f
 
 
-def _argv(command: str, sid: str, cwd: str, goc0: str, ghi_trang_thai: bool) -> Tuple[List[str], Optional[Path], str]:
+def _argv(command: str, sid: str, cwd: str, goc0: str, ghi_trang_thai: bool) -> tuple[list[str], Path | None, str]:
     """(argv, file kịch bản cần xoá sau, lỗi). Bash trên POSIX, PowerShell trên Windows."""
     bash = _git_bash()
     if bash:
@@ -507,7 +506,7 @@ def _argv(command: str, sid: str, cwd: str, goc0: str, ghi_trang_thai: bool) -> 
 # ---------------------------------------------------------------------------------------
 # Chạy tiền cảnh
 # ---------------------------------------------------------------------------------------
-def chay(command: str, sid: str, goc: List[str], timeout: Optional[float] = None,
+def chay(command: str, sid: str, goc: list[str], timeout: float | None = None,
          workdir: str = "", brain_root: str = "", chat_id: str = "") -> str:
     """Chạy một lệnh. Trả chữ cho model đọc, không ném. `goc`: các thư mục làm việc của phiên,
     đã resolve, thư mục chính đứng đầu."""
@@ -553,7 +552,7 @@ def chay(command: str, sid: str, goc: List[str], timeout: Optional[float] = None
     cwd_truoc = cwd
     t0 = time.time()
     het_gio = False
-    duoi: List[bytes] = []
+    duoi: list[bytes] = []
     try:
         with open(duong_day_du, "wb") as f_day_du:
             p = subprocess.Popen(argv, cwd=cwd, env=env_sach(), stdin=subprocess.DEVNULL,
@@ -636,8 +635,8 @@ class TienTrinh:
         self.p = p
         self.log = log
         self.bat_dau = time.time()
-        self.ket_thuc: Optional[float] = None
-        self.rc: Optional[int] = None
+        self.ket_thuc: float | None = None
+        self.rc: int | None = None
         self.job_id = job_id          # mã việc bên tien_trinh_nen (để báo khi xong)
         self.bi_dung = False
 
@@ -654,7 +653,7 @@ class TienTrinh:
         return self.rc is None
 
 
-_NEN: Dict[str, TienTrinh] = {}
+_NEN: dict[str, TienTrinh] = {}
 _NEN_KHOA = threading.Lock()
 
 
@@ -667,7 +666,7 @@ def _don_nen() -> None:
                 _NEN.pop(k, None)
 
 
-def _tim(sid: str, pid: str) -> Optional[TienTrinh]:
+def _tim(sid: str, pid: str) -> TienTrinh | None:
     pid = str(pid or "").strip()
     if not pid:
         return None
@@ -677,7 +676,7 @@ def _tim(sid: str, pid: str) -> Optional[TienTrinh]:
     return ds[0] if len(ds) == 1 else None
 
 
-def chay_nen(command: str, sid: str, goc: List[str], workdir: str = "", brain_root: str = "",
+def chay_nen(command: str, sid: str, goc: list[str], workdir: str = "", brain_root: str = "",
              chat_id: str = "") -> str:
     cmd = str(command or "").strip()
     if not cmd:
@@ -748,7 +747,7 @@ def chay_nen(command: str, sid: str, goc: List[str], workdir: str = "", brain_ro
     return "\n".join(out)
 
 
-def _doc_log(tt: TienTrinh) -> List[str]:
+def _doc_log(tt: TienTrinh) -> list[str]:
     try:
         with open(tt.log, "rb") as f:
             f.seek(0, 2)

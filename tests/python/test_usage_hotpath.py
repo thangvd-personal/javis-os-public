@@ -12,14 +12,13 @@ Bối cảnh 0.9.238:
 
 Rủi ro của nhớ đệm là im lặng trả sai TIỀN, nên test đối chiếu từng dòng với thuật toán gốc.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
-import sqlite3
 import sys
 import tempfile
 import threading
 import time
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-usagehot-"))
 
@@ -28,8 +27,8 @@ try:
 except Exception:
     pass
 
-import usage_index as u      # noqa: E402
-import usage_parsers as up   # noqa: E402
+import usage_index as u
+import usage_parsers as up
 
 _fails = []
 

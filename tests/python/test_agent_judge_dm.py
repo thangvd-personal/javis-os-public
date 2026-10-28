@@ -17,11 +17,11 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import TEMP, check, finish  # noqa: E402
-import agent_judge as AJ  # noqa: E402
-import agent_judge_store as AJS  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_judge as AJ
+import agent_judge_store as AJS
+import agent_ledger as AL
+import resonance_store as RS
+from _judge_world import TEMP, check, finish
 
 
 class Eng:
@@ -187,8 +187,8 @@ check("không ai đăng ký người gửi: speak sau xét lại được ghi l�
       any(x["silence_code"] == "no_sender" for x in d2), d2)
 
 # ═════ đường chat riêng của host: câu hỏi trực tiếp không qua phán xử ═════
-import re  # noqa: E402
-from pathlib import Path  # noqa: E402
+import re
+from pathlib import Path
 
 main_src = (Path(__file__).resolve().parents[2] / "server" / "main.py").read_text(encoding="utf-8")
 hook = main_src[main_src.index("def _judge_dm_owner_message"):]

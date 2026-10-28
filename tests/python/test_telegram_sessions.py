@@ -16,12 +16,13 @@ Test này phủ đúng phần chữa đó:
      nghỉ lâu / chạm trần tin / phiên bị xoá trên dashboard.
   3. Ràng buộc kiến trúc: xoay chỉ đụng BẢN GHI, không đụng ngữ cảnh engine của phiên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sqlite3
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _TMP = tempfile.mkdtemp(prefix="javis-tgsess-")
 os.environ.setdefault("JAVIS_STATE_DIR", _TMP)
@@ -31,7 +32,7 @@ try:
 except Exception:
     pass
 
-from sessions import SessionStore  # noqa: E402
+from sessions import SessionStore
 
 _fails = []
 
@@ -109,7 +110,7 @@ check("DB cũ ghi tiếp được sau migrate",
 # ============================================================
 # 2) Luật xoay thật trong main.py::_tg_conv_sid
 # ============================================================
-import main  # noqa: E402
+import main
 
 rot = _store("rotate.db")
 BRAIN = "brain"

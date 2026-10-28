@@ -8,7 +8,6 @@ Owner report 2026-10-26: in a group, a bot answered "chatbot chưa đọc trực
 Guards: the document's text reaches the turn on every brain, a scanned or broken file says so instead of a guess, a bare
 group file waits for its sender's next call (once, for 10 minutes), and a call that quotes a file gets that file.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import shutil
@@ -17,14 +16,15 @@ import time
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zalo-docs-")
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_attachments as za  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal  # noqa: E402,F401
+import chatbot_runtime
+import chatbot_store
+import zalo_attachments as za
+import zalo_personal_channel as zc
+from channels import zalo_personal  # noqa: F401
 
 fails = []
 

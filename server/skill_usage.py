@@ -24,7 +24,6 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Optional
 
 # Skill chưa có tín hiệu dùng nào và đã quá ngần này ngày thì gắn nhãn "chưa thấy dùng".
 # Ngưỡng rộng tay có chủ đích: skill mới đơn giản là chưa gặp trigger (luật của Hermes).
@@ -105,7 +104,7 @@ def bump(brain_root, slug: str, created_by: str = "") -> None:
         print(f"[skill usage] bump {slug}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
-def is_stale(rec: dict, skill_md_mtime: Optional[float], now: Optional[float] = None) -> bool:
+def is_stale(rec: dict, skill_md_mtime: float | None, now: float | None = None) -> bool:
     """Hàm THUẦN. True = "chưa thấy dùng và đã đủ già" - CHỈ để hiển thị, KHÔNG để tự tắt.
 
     Luật:

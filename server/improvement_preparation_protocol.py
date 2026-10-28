@@ -1,10 +1,9 @@
 """Pure typed baseline preparation data; no candidate or execution grant."""
 import math
 
-from improvement_experiment_protocol import definition, _id, _digest, _freeze
-from improvement_store import _hash
-from improvement_store import _json
 from improvement_execution_limits import MAX_PREPARATION_TRIALS
+from improvement_experiment_protocol import _digest, _freeze, _id, definition
+from improvement_store import _hash, _json
 
 PINS = {"experiment_id", "base_bundle_hash", "contract_hash", "case_set_hash", "engine_config_hash",
         "grant_hash", "scope_hash", "policy_version"}

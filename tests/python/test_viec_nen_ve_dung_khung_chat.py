@@ -10,7 +10,6 @@ luôn:
 2. Kết quả loop và nhắc hẹn vẫn là bong bóng chữ trơn có emoji. Nay mang khối JAVIS_VIEC như
    việc Kanban để khung chat vẽ thẻ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
@@ -18,9 +17,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-khung-chat-state-"))
 
-import luot_dang_chay as ldc  # noqa: E402
+import luot_dang_chay as ldc
 
 fails = []
 
@@ -112,7 +113,7 @@ check("hai khung cùng chạy: không đoán, giữ cảnh báo", nhan[-1][8] ==
 ldc._DANG.clear()
 
 # ---- 3. Nhắc hẹn và loop mang thẻ ----
-import reminders  # noqa: E402
+import reminders
 
 check("_nhan_kw: hàm (chat_id, text) không nhận viec", not reminders._nhan_kw(lambda c, t: None, "viec"))
 check("_nhan_kw: hàm có viec thì nhận", reminders._nhan_kw(lambda c, t, viec=None: None, "viec"))

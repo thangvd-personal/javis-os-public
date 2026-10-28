@@ -6,19 +6,20 @@ Trước bản sửa `cancel_job` luôn ghi -0,4 cho người đã nộp kết q
 (agent tạo tín hiệu cho agent, trái 6.1), lưu trữ nhóm và `cancel_idle_running`. Bộ chạy nhóm thật, bộ chiếu thật, kho nhịp
 thật; không engine nào được gọi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fix-cancel-"))
 
-import agent_pulse as AP  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_pulse as AP
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

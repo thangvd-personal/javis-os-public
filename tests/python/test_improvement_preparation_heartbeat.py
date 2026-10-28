@@ -1,6 +1,4 @@
 """Real lease/runner scheduling with an inert adapter; no native/model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import threading
 import time
@@ -9,6 +7,7 @@ from unittest.mock import patch
 
 import improvement_trial_runner as runner_module
 import test_improvement_trial_runner as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class PreparationHeartbeatTests(unittest.IsolatedAsyncioTestCase):

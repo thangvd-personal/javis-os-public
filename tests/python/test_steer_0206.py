@@ -8,14 +8,15 @@ hook (main thread only), the one-shot engines marked as "after", and the main.py
 Run:
     python tests/run.py steer
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-steer-")
 
-import steer_inbox as si  # noqa: E402
+import steer_inbox as si
 
 fails = []
 
@@ -56,8 +57,8 @@ check("follow-up prompt keeps the owner's words", "gửi báo giá" in si.follow
       and "2 tin" in si.followup_prompt(["a", "b"]))
 
 # ---- the API engines' tool loop reads a message sent while a tool ran ----
-import engine  # noqa: E402
-import mcp_client  # noqa: E402
+import engine
+import mcp_client
 
 requests = []
 
@@ -124,7 +125,7 @@ check("the turn still finishes normally", any(e.get("type") == "text" and "Xong"
 check("outside a chat turn the loop reads nothing", si.INBOX.take_note_current() == "")
 
 # ---- Claude Code: the PostToolUse hook ----
-import claude_sdk_engine as cse  # noqa: E402
+import claude_sdk_engine as cse
 
 eng = cse.ClaudeSDK.__new__(cse.ClaudeSDK)
 eng.tag = "chat:web2:y"

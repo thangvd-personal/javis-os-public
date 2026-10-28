@@ -9,7 +9,6 @@ về mã 0.88.1 thật ở `test_resonance_a3_rollback.py`; đường API (biên
 
 Mỗi kịch bản dùng một kho riêng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -20,15 +19,18 @@ import tempfile
 import threading
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a3-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_heartbeat as HB  # noqa: E402
-import resonance_learning as L  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance as R
+import resonance_heartbeat as HB
+import resonance_learning as L
+import resonance_store as RS
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 
 _fails = []
@@ -1091,7 +1093,7 @@ check("G2c phản hồi M4 sai revision: ConflictError (không đổi)", ok)
 
 # ═══════════════════ Hồi quy review mã vòng 1 (5b4f48a6): RV1 tới RV3 ═══════════════════
 
-import time as _time  # noqa: E402
+import time as _time
 
 # RV1: dọn phép thử không được xoá hẹn gỡ chặn mà cổng vừa ghi trong lúc thử (P2-1).
 _GF = "Inbox/a3-guard-src.txt"

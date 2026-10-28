@@ -11,16 +11,17 @@ Khoá:
   - thông báo đi đúng hàng đợi theo threadId; thread chưa đăng ký thì bỏ;
   - tiến trình chết: request đang chờ ném lỗi, hàng đợi nhận dấu `_exit`, get_app_server dựng lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import queue
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-codexrt-"))
 
-import codex_realtime  # noqa: E402
+import codex_realtime
 
 _fails = []
 
@@ -182,6 +183,7 @@ check("không có Codex CLI -> lý do no_cli", ok is False and why == "no_cli")
 # Chọn bản Codex: bản MỚI NHẤT đủ 0.153; chỉ có bản cũ thì lý do old_cli (0.147 bị OpenAI từ chối
 # vì gửi thừa session.model, đo 01/10/2026).
 import importlib
+
 cr = importlib.reload(codex_realtime)
 cr._candidate_clis = lambda: ["old.exe", "mid.exe", "new.exe"]
 cr._version_of = lambda p: {"old.exe": (0, 147, 0), "mid.exe": (0, 153, 4), "new.exe": (0, 158, 0)}[p]
@@ -190,7 +192,7 @@ cr._candidate_clis = lambda: ["old.exe"]
 check("chỉ có Codex cũ -> None, lý do old_cli", cr._find_cli() is None and cr._LAST_CLI_REASON == "old_cli")
 ok, why = cr.realtime_available({"model": {"openai_oauth": {"refresh_token": "r"}}})
 check("realtime_available báo old_cli", ok is False and why == "old_cli")
-cr._candidate_clis = lambda: []
+cr._candidate_clis = list
 check("không có Codex nào -> lý do no_cli", cr._find_cli() is None and cr._LAST_CLI_REASON == "no_cli")
 
 if _fails:

@@ -22,18 +22,17 @@ Bản vá có ba tầng, test khoá cả ba:
   3. Mọi probe subprocess.run của hai driver CLI cắt stdin (DEVNULL) - CLI rơi vào màn hỏi
      tương tác thì thoát ngay thay vì ngồi chờ bàn phím vô hình ăn trọn timeout.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import io
 import os
 import re
 import tempfile
-import threading
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-treo-"))
 
-import antigravity_cli  # noqa: E402
-import grok_cli         # noqa: E402
+import antigravity_cli
+import grok_cli
 
 _fails = []
 
@@ -124,7 +123,7 @@ finally:
 # ============================================================
 # Soi nguồn thay vì dựng cả app: main.py nạp nặng, mà điều cần khoá là "đừng ai vô tình đổi
 # auth_status_nen về auth_status trong _providers_view" - một literal check bắt được đúng nó.
-_src = io.open(os.path.join(ROOT, "server", "main.py"), encoding="utf-8").read()
+_src = open(os.path.join(ROOT, "server", "main.py"), encoding="utf-8").read()
 _pv = _src.split("def _providers_view", 1)[1].split("\ndef ", 1)[0]
 check("CANARY: _providers_view chỉ dùng auth_status_nen cho agy, không gọi bản chặn",
       "antigravity_cli.auth_status_nen()" in _pv
@@ -173,7 +172,7 @@ for _mod, _ten in ((antigravity_cli, "agy"), (grok_cli, "grok")):
 # là nó ngồi chờ bàn phím vô hình cho tới hết timeout. Trừ duy nhất chỗ CỐ Ý bơm stdin
 # (input=...), mọi subprocess.run còn lại phải khai stdin=subprocess.DEVNULL.
 for _f in ("antigravity_cli.py", "grok_cli.py"):
-    _s = io.open(os.path.join(ROOT, "server", _f), encoding="utf-8").read()
+    _s = open(os.path.join(ROOT, "server", _f), encoding="utf-8").read()
     _thieu = []
     for m in re.finditer(r"subprocess\.run\((?:[^()]|\([^()]*\))*\)", _s):
         goi = m.group(0)

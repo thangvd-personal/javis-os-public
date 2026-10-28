@@ -19,17 +19,15 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
+import fast_mode  # composer Fast mode bolt: per-provider parameters (0.164.0)
 import httpx
-
-import fast_mode   # composer Fast mode bolt: per-provider parameters (0.164.0)
 import limit_learner
 import localefmt
+import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
 import vision_input
-import steer_inbox   # 0.206.0: messages the owner sends while a turn runs
-
 
 TEAM_REQUEST_OBSERVER = contextvars.ContextVar("team_request_observer", default=None)
 
@@ -216,8 +214,8 @@ def _giay_toi_moc(raw) -> float | None:
     except ValueError:
         return None
     if moc.tzinfo is None:
-        moc = moc.replace(tzinfo=timezone.utc)
-    return (moc - datetime.now(timezone.utc)).total_seconds()
+        moc = moc.replace(tzinfo=UTC)
+    return (moc - datetime.now(UTC)).total_seconds()
 
 
 def _parse_retry_after(headers, cap: float = 600.0):
@@ -459,10 +457,10 @@ async def thu_lai_khi_tam_thoi(tao_stream, *, so_lan=3, nhan=""):
             # được phải làm gì tiếp, mà đó đúng là thứ chủ cần biết khi nhìn thẻ đỏ.
             if loi_hoan.get("ma") == 429:
                 cuoi["content"] += _c(
-                    f" - hạn mức nhà cung cấp đang đầy"
+                    " - hạn mức nhà cung cấp đang đầy"
                     + (f", cửa sổ mở lại sau khoảng {cho:.0f}s" if cho > _WINDOW_WAIT_MAX else "")
                     + ". Chờ cửa sổ trôi qua, hoặc đổi bộ não cho bot ở trang Models.",
-                    f" - the provider's rate limit is full"
+                    " - the provider's rate limit is full"
                     + (f", the window reopens in about {cho:.0f}s" if cho > _WINDOW_WAIT_MAX else "")
                     + ". Wait for the window to pass, or switch the bot's brain on the Models page."
                 )
@@ -675,8 +673,7 @@ def openai_compat_base() -> str:
     import config as cfgmod
     ep = (cfgmod.read_settings().get("model", {}).get("openai_compat_base") or "").strip().rstrip("/")
     # Người dùng hay dán nguyên URL chat thay vì base - cắt đuôi đó đi thay vì báo lỗi.
-    if ep.endswith("/chat/completions"):
-        ep = ep[: -len("/chat/completions")]
+    ep = ep.removesuffix("/chat/completions")
     return ep
 
 
@@ -2396,6 +2393,7 @@ async def responses_with_mcp(access_token, account_id, model, messages, reasonin
     gọi phải coi "rỗng" là một kết cục CÓ THẬT và có đường lui, đừng coi là chuyện hiếm.
     """
     import uuid
+
     import mcp_client
     if not access_token:
         yield {"type": "error", "content": _c("Chưa đăng nhập ChatGPT (OAuth).", "Not signed in to ChatGPT (OAuth).")}

@@ -10,17 +10,18 @@ list although no tool may run there. Two things are pinned here:
   2. The Claude Code no-tool path sends no tool at all (`disallowed_tools=["*"]`, measured 183
      input tokens).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-smalltalk-"))
-from capability_registry import CapabilityRegistry  # noqa: E402
-from capability_resolver import DeterministicResolver  # noqa: E402
-from context_compiler import ContextCompiler  # noqa: E402
-from context_runtime import ObserveRuntime  # noqa: E402
-import fast_path_runtime as fp  # noqa: E402
+import fast_path_runtime as fp
+from capability_registry import CapabilityRegistry
+from capability_resolver import DeterministicResolver
+from context_compiler import ContextCompiler
+from context_runtime import ObserveRuntime
 
 fails = []
 
@@ -85,7 +86,7 @@ check("other channels and API engines too", plan.action == "execute", plan)
 
 
 # ---- 3. Claude Code's no-tool path sends no tool schema ----
-import main  # noqa: E402
+import main
 
 _goc = main._claude_sub_doc
 main._claude_sub_doc = lambda cli, prompt, model: cli

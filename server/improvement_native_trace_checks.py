@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 from improvement_native_observation import observation_binding, validate_observation2
-from improvement_native_protocol import _canonical, _parse, _fields, _digest
+from improvement_native_protocol import _canonical, _digest, _fields, _parse
 from improvement_store import _hash, _json
 
 PURPOSES = ('adapter_version', 'auth_status', 'sdk_version', 'query')

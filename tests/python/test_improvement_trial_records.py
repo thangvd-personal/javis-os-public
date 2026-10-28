@@ -1,14 +1,12 @@
 """Cold metadata/revocation needs no native, SQL context or prompt dependencies."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import importlib.util
 import hashlib
+import importlib.util
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
-import test_improvement_trial_host as fixtures
 import improvement_store as IM
+import test_improvement_trial_host as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import RevisionBlobs
 from resonance_store import Principal
 

@@ -19,6 +19,7 @@ Phân biệt 3 loại id:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -28,9 +29,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import hashlib
+from typing import Any
 
 import reaction_values as RV
 import team_migration
@@ -312,7 +311,7 @@ _CAU_TU_DIEN = "Hãy đọc (các) file trên và phản hồi / tóm tắt nộ
 # File đính kèm được app.js liệt kê mỗi dòng một cái, dạng "- <đường dẫn>". Neo vào ĐÚNG dạng
 # đó, đừng quét mọi thứ trông giống đường dẫn trong khối: dạng có Sources="..."/Attachments="..."
 # sẽ lọt hai thư mục cấu hình vào, ra tên kiểu "My +4 file" (lặp y hệt ở mọi hội thoại).
-_DONG_FILE = re.compile(r"^\s*-\s+(\S.*?)\s*$", re.M)
+_DONG_FILE = re.compile(r"^\s*-\s+(\S.*?)\s*$", re.MULTILINE)
 TITLE_MAX = 48
 
 
@@ -407,7 +406,7 @@ SESSION_ASSETS_MAX = 50
 _ICON_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 
-def _sach_icon(icon: Optional[str]) -> Optional[str]:
+def _sach_icon(icon: str | None) -> str | None:
     """Chuẩn hoá tên icon; rỗng hoặc sai khuôn -> None (tức là GỠ icon).
 
     Không cần biết bộ icon hiện có những tên nào: dashboard chỉ đưa ra tên có thật, còn tên
@@ -558,7 +557,7 @@ class SessionStore:
     # ── write executor (BEGIN IMMEDIATE + jitter retry, hermes_state.py:1055) ──
 
     def _write(self, fn):
-        last_err: Optional[Exception] = None
+        last_err: Exception | None = None
         for attempt in range(self._WRITE_MAX_RETRIES):
             try:
                 with self._lock:
@@ -582,17 +581,17 @@ class SessionStore:
                 raise
         raise last_err or sqlite3.OperationalError("database is locked after retries")
 
-    def _read(self, sql: str, params: tuple = ()) -> List[sqlite3.Row]:
+    def _read(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         with self._lock:
             return self._conn.execute(sql, params).fetchall()
 
     # ── sessions ──
 
-    def create_session(self, brain: str = "brain", engine: Optional[str] = None,
-                        model: Optional[str] = None, title: Optional[str] = None,
-                        session_id: Optional[str] = None,
-                        cli_session_id: Optional[str] = None,
-                        codex_thread_id: Optional[str] = None,
+    def create_session(self, brain: str = "brain", engine: str | None = None,
+                        model: str | None = None, title: str | None = None,
+                        session_id: str | None = None,
+                        cli_session_id: str | None = None,
+                        codex_thread_id: str | None = None,
                         channel: str = "web") -> str:
         sid = session_id or uuid.uuid4().hex
         now = time.time()
@@ -610,8 +609,8 @@ class SessionStore:
         self._write(_do)
         return sid
 
-    def get_or_create(self, session_id: Optional[str], *, brain: str,
-                      engine: str, model: Optional[str]) -> str:
+    def get_or_create(self, session_id: str | None, *, brain: str,
+                      engine: str, model: str | None) -> str:
         """Resume phiên cũ hoặc tạo mới. Trả về conv id.
         Backward compatible: session_id None/không tồn tại -> tạo phiên mới."""
         if session_id:
@@ -624,8 +623,8 @@ class SessionStore:
         return self.create_session(brain=brain, engine=engine, model=model,
                                    session_id=session_id)
 
-    def append_message(self, session_id: str, role: str, content: Optional[str],
-                       tool_calls: Any = None, report: Optional[Dict[str, str]] = None) -> int:
+    def append_message(self, session_id: str, role: str, content: str | None,
+                       tool_calls: Any = None, report: dict[str, str] | None = None) -> int:
         """`report` (Resonance M4): {"key", "goal_id"} của tin báo cáo do host gửi. Biên nhận ghi trong CÙNG giao dịch
         với tin, nên không có trạng thái "tin đã lưu mà chưa có biên nhận" hay ngược lại."""
         tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
@@ -655,9 +654,9 @@ class SessionStore:
     # ───────────── nhóm chat team (spec 2026-10-13 mục 5.3) ─────────────
 
     def append_team_message(self, session_id: str, role: str, content: str, *, author_kind: str,
-                            author_ref: str = "", client_msg_id: Optional[str] = None, reply_to: Optional[int] = None,
-                            task_id: Optional[str] = None, step_id: Optional[str] = None,
-                            meta: Optional[Dict[str, Any]] = None) -> Tuple[int, bool]:
+                            author_ref: str = "", client_msg_id: str | None = None, reply_to: int | None = None,
+                            task_id: str | None = None, step_id: str | None = None,
+                            meta: dict[str, Any] | None = None) -> tuple[int, bool]:
         """Ghi MỘT tin của phiên nhóm kèm người gửi. Trả (mã tin, có tạo mới không). Cùng `client_msg_id` trong cùng
         phiên (gửi lại sau rớt mạng, bấm hai lần) trả đúng tin cũ và không tạo dòng mới: không thêm việc, không thêm lượt."""
         if author_kind not in ("owner", "agent", "system"):
@@ -682,7 +681,7 @@ class SessionStore:
         return self._write(_do)
 
     @staticmethod
-    def _team_msg(r: sqlite3.Row) -> Dict[str, Any]:
+    def _team_msg(r: sqlite3.Row) -> dict[str, Any]:
         d = dict(r)
         raw = d.pop("meta_json", None)
         try:
@@ -697,11 +696,11 @@ class SessionStore:
                   "meta_json")
 
     def get_team_messages_page(self, session_id: str, limit: int = 30,
-                               before: Optional[Tuple[float, int]] = None) -> Dict[str, Any]:
+                               before: tuple[float, int] | None = None) -> dict[str, Any]:
         """Một khúc tin của phiên nhóm tính từ cuối lên, con trỏ (ts, id) như `get_messages_page`, kèm người gửi."""
         limit = max(1, min(int(limit), 200))
         sql = f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ?"
-        params: List[Any] = [session_id]
+        params: list[Any] = [session_id]
         if before is not None:
             sql += " AND (ts < ? OR (ts = ? AND id < ?))"
             params += [float(before[0]), float(before[0]), int(before[1])]
@@ -711,19 +710,19 @@ class SessionStore:
         has_more = len(rows) > limit
         return {"messages": [self._team_msg(r) for r in reversed(rows[:limit])], "has_more": has_more}
 
-    def team_messages_after(self, session_id: str, after_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+    def team_messages_after(self, session_id: str, after_id: int, limit: int = 20) -> list[dict[str, Any]]:
         """Tin của phiên nhóm có id lớn hơn `after_id` (tin mới kể từ lượt trước của một agent), xếp xuôi, tối đa `limit`
         tin GẦN NHẤT."""
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND id > ? "
                           "ORDER BY id DESC LIMIT ?", (session_id, int(after_id), max(1, int(limit))))
         return [self._team_msg(r) for r in reversed(rows)]
 
-    def team_message(self, session_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+    def team_message(self, session_id: str, message_id: int) -> dict[str, Any] | None:
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND id = ?",
                           (session_id, int(message_id)))
         return self._team_msg(rows[0]) if rows else None
 
-    def team_unread(self, session_id: str, since_ts: float, cap: int = 99) -> Dict[str, int]:
+    def team_unread(self, session_id: str, since_ts: float, cap: int = 99) -> dict[str, int]:
         """Tin chưa đọc của phiên nhóm (0.197.0): tin của trợ lý và hệ thống sau `since_ts` (mốc chủ đọc lần cuối), tối đa
         `cap`. `at`: bao nhiêu tin trong đó gọi tên chủ (meta.asks_owner), để danh sách nhóm hiện dấu @."""
         rows = self._read("SELECT COUNT(*), COALESCE(SUM(CASE WHEN meta_json LIKE '%\"asks_owner\": true%' THEN 1 "
@@ -746,7 +745,7 @@ class SessionStore:
         return s.replace("đ", "d").replace("Đ", "D").casefold()
 
     def team_search(self, session_id: str, query: str, limit: int = 50, scan_max: int = 20000,
-                    batch: int = 2000) -> List[Dict[str, Any]]:
+                    batch: int = 2000) -> list[dict[str, Any]]:
         """Tìm trong MỘT phiên nhóm (T4, spec mục 19): khớp mọi từ của câu tìm, không phân biệt hoa thường và dấu, mới
         nhất trước, tối đa `limit` kết quả. Lọc ở Python vì LIKE của SQLite chỉ bỏ hoa thường cho chữ ASCII.
 
@@ -757,7 +756,7 @@ class SessionStore:
         if not words:
             return []
         want = max(1, min(int(limit), 200))
-        hits: List[int] = []
+        hits: list[int] = []
         cursor, scanned = None, 0
         while len(hits) < want and scanned < scan_max:
             n = max(1, min(int(batch), int(scan_max) - scanned))
@@ -785,20 +784,20 @@ class SessionStore:
                           (session_id, str(author_ref or "")))
         return int(rows[0][0] or 0) if rows else 0
 
-    def team_messages_of_task(self, session_id: str, task_id: str, limit: int = 200) -> List[Dict[str, Any]]:
+    def team_messages_of_task(self, session_id: str, task_id: str, limit: int = 200) -> list[dict[str, Any]]:
         """Tin của một việc nhóm (lọc khung chat theo việc, chi tiết việc; spec 7.7), cũ trước."""
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND task_id = ? "
                           "ORDER BY id DESC LIMIT ?", (session_id, str(task_id), max(1, min(int(limit), 500))))
         return [self._team_msg(r) for r in reversed(rows)]
 
-    def team_decisions(self, session_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def team_decisions(self, session_id: str, limit: int = 20) -> list[dict[str, Any]]:
         """Tin chủ nhóm ghim làm quyết định ("Sổ quyết định", spec 11.2), cũ trước, tối đa `limit` tin gần nhất."""
         # Mẫu LIKE viết thẳng (không qua tham số) để SQLite dùng được chỉ mục từng phần `idx_messages_team_decision`.
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND meta_json LIKE "
                           f"'{TEAM_DECISION_LIKE}' ORDER BY id DESC LIMIT ?", (session_id, max(1, int(limit))))
         return [m for m in (self._team_msg(r) for r in reversed(rows)) if m["meta"].get("decision") is True]
 
-    def update_team_message_meta(self, session_id: str, message_id: int, patch: Dict[str, Any]) -> bool:
+    def update_team_message_meta(self, session_id: str, message_id: int, patch: dict[str, Any]) -> bool:
         """Gộp `patch` vào meta của một tin nhóm (vd. gắn nhãn "Kết quả việc" khi việc xong)."""
         def _do(conn):
             row = conn.execute("SELECT meta_json FROM messages WHERE session_id=? AND id=?",
@@ -815,19 +814,19 @@ class SessionStore:
             return True
         return self._write(_do)
 
-    def set_message_reply(self, session_id: str, message_id: int, reply_to: Optional[int]) -> bool:
+    def set_message_reply(self, session_id: str, message_id: int, reply_to: int | None) -> bool:
         """Gắn `reply_to` cho một tin (vd. bản sửa của lượt xem xét reaction ở chat riêng trả lời tin bị phản hồi)."""
         def _do(conn):
             return conn.execute("UPDATE messages SET reply_to=? WHERE session_id=? AND id=?",
                                 (None if reply_to is None else int(reply_to), session_id, int(message_id))).rowcount == 1
         return self._write(_do)
 
-    def message_by_client_id(self, session_id: str, client_msg_id: str) -> Optional[Dict[str, Any]]:
+    def message_by_client_id(self, session_id: str, client_msg_id: str) -> dict[str, Any] | None:
         rows = self._read(f"SELECT {self._TEAM_COLS} FROM messages WHERE session_id = ? AND client_msg_id = ?",
                           (session_id, str(client_msg_id)))
         return self._team_msg(rows[0]) if rows else None
 
-    def report_receipt(self, session_id: str, report_key: str, goal_id: str) -> Optional[Dict[str, Any]]:
+    def report_receipt(self, session_id: str, report_key: str, goal_id: str) -> dict[str, Any] | None:
         """Tin báo cáo host đã lưu cho đúng khoá và đúng mục tiêu (kèm nội dung để đối chiếu khối thẻ), hoặc None.
         Tra theo khoá chính, không giới hạn độ sâu hội thoại."""
         rows = self._read(
@@ -837,7 +836,7 @@ class SessionStore:
             (session_id, str(report_key), str(goal_id)))
         return dict(rows[0]) if rows else None
 
-    def report_receipt_by_message(self, session_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+    def report_receipt_by_message(self, session_id: str, message_id: int) -> dict[str, Any] | None:
         """Biên nhận báo cáo Resonance của MỘT tin (A3: reaction chỉ nhận trên tin báo do host ghi). Tin bị xoá thì
         biên nhận mất theo (ON DELETE CASCADE) và trả None."""
         rows = self._read(
@@ -846,7 +845,7 @@ class SessionStore:
             "WHERE r.session_id = ? AND r.message_id = ?", (session_id, int(message_id)))
         return dict(rows[0]) if rows else None
 
-    def report_receipts_for(self, report_key: str, goal_id: str) -> List[Dict[str, Any]]:
+    def report_receipts_for(self, report_key: str, goal_id: str) -> list[dict[str, Any]]:
         """Mọi biên nhận của một khoá báo cáo và mục tiêu (A3: trang vẽ tin không phải lúc nào cũng biết phiên). Khoá
         `outbox:<id>` chỉ gửi vào một phiên, nên bình thường có đúng một dòng."""
         rows = self._read(
@@ -854,11 +853,11 @@ class SessionStore:
             "WHERE r.report_key = ? AND r.goal_id = ?", (str(report_key), str(goal_id)))
         return [dict(r) for r in rows]
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         rows = self._read("SELECT * FROM sessions WHERE id = ?", (session_id,))
         return dict(rows[0]) if rows else None
 
-    def pop_last_message(self, session_id: str, role: str, content: Optional[str] = None) -> bool:
+    def pop_last_message(self, session_id: str, role: str, content: str | None = None) -> bool:
         """Xoá tin CUỐI của phiên nếu nó đúng vai (và đúng nội dung, khi có truyền).
 
         Dùng khi chạy lại một lượt vấp hạn mức: câu "hết lượt" đã lưu để F5 còn thấy, nhưng
@@ -881,7 +880,7 @@ class SessionStore:
         return bool(self._write(_do))
 
     def replace_last_message(self, session_id: str, role: str, content: str,
-                             expected_content: Optional[str] = None) -> bool:
+                             expected_content: str | None = None) -> bool:
         """Thay NỘI DUNG tin cuối của phiên nếu nó đúng vai. Trả True khi có thay.
 
         Dùng cho lượt nói: tin người dùng được lưu NGAY khi tới (chữ thô của máy nghe), rồi bộ
@@ -921,7 +920,7 @@ class SessionStore:
         return int(self._write(_do) or 0)
 
     @staticmethod
-    def _tin(r: sqlite3.Row) -> Dict[str, Any]:
+    def _tin(r: sqlite3.Row) -> dict[str, Any]:
         """Một dòng bảng messages -> dict trả ra ngoài (mở gói tool_calls_json). T2: kèm `content_sha` của nội dung đã
         lưu, để giao diện gửi lại (`seen_sha`) khi thả reaction."""
         d = dict(r)
@@ -940,13 +939,13 @@ class SessionStore:
 
     # ───────────── reaction chat riêng (T2, thiết kế mục 4.1, hợp đồng mục 4) ─────────────
 
-    def message_row(self, session_id: str, message_id: int) -> Optional[Dict[str, Any]]:
+    def message_row(self, session_id: str, message_id: int) -> dict[str, Any] | None:
         """Một tin của phiên (id, role, content, ts), None khi không có trong ĐÚNG phiên này."""
         rows = self._read("SELECT id, session_id, role, content, ts FROM messages WHERE id = ? AND session_id = ?",
                           (int(message_id), session_id))
         return dict(rows[0]) if rows else None
 
-    def messages_by_ids(self, ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    def messages_by_ids(self, ids: list[int]) -> dict[int, dict[str, Any]]:
         ids = [int(x) for x in ids or []]
         if not ids:
             return {}
@@ -955,7 +954,7 @@ class SessionStore:
         return {int(r["id"]): dict(r) for r in rows}
 
     @staticmethod
-    def _dm_reaction(r: sqlite3.Row) -> Dict[str, Any]:
+    def _dm_reaction(r: sqlite3.Row) -> dict[str, Any]:
         d = dict(r)
         d["reasons"] = json.loads(d.pop("reasons_json", None) or "[]")
         d["stale"] = bool(d.get("stale"))
@@ -963,17 +962,17 @@ class SessionStore:
         return d
 
     @staticmethod
-    def _dm_state_json(r: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
+    def _dm_state_json(r: sqlite3.Row | None) -> dict[str, Any] | None:
         if r is None:
             return None
         return {"value": r["value"], "reasons": json.loads(r["reasons_json"] or "[]"), "axis": r["axis"],
                 "comment": r["comment"], "content_sha": r["content_sha"], "source_kind": r["source_kind"]}
 
     def set_dm_reaction(self, session_id: str, message_id: int, *, value: Any, reasons: Any = None, axis: Any = "",
-                        comment: Any = "", nonce: Any = "", seen_sha: Optional[str] = None, agent_key: str = "",
+                        comment: Any = "", nonce: Any = "", seen_sha: str | None = None, agent_key: str = "",
                         agent_config_version: int = 0, goal_id: str = "", reactor: str = "owner",
                         source_kind: str = "owner", effect_state: str = "pending",
-                        status: str = "received", status_reason: str = "") -> Dict[str, Any]:
+                        status: str = "received", status_reason: str = "") -> dict[str, Any]:
         """Đặt trọn trạng thái phản hồi của `reactor` trên một câu trả lời của chat riêng. Trả
         {"state": dòng reaction (None khi đã bỏ hết), "log_id", "replayed"}.
 
@@ -1045,13 +1044,13 @@ class SessionStore:
             return {"state": self._dm_reaction(r) if r else None, "log_id": log_id, "replayed": hit is not None}
         return self._write(_do)
 
-    def dm_nonce_owner(self, nonce: str) -> Optional[Tuple[str, int, str]]:
+    def dm_nonce_owner(self, nonce: str) -> tuple[str, int, str] | None:
         """(session_id, message_id, reactor) đã dùng `nonce`, None khi chưa dùng (route kiểm gửi lại TRƯỚC khi tra tác giả)."""
         rows = self._read("SELECT session_id, message_id, reactor FROM dm_reaction_log WHERE nonce = ?",
                           (str(nonce or "").strip(),))
         return (rows[0]["session_id"], int(rows[0]["message_id"]), rows[0]["reactor"]) if rows else None
 
-    def pending_author_dm_logs(self, limit: int = 200) -> List[Dict[str, Any]]:
+    def pending_author_dm_logs(self, limit: int = 200) -> list[dict[str, Any]]:
         """Dòng nhật ký chờ tra tác giả (`effect_state = 'pending_author'`: kho resonance lỗi lúc thả reaction)."""
         return [self._dm_log(r) for r in self._read(
             "SELECT * FROM dm_reaction_log WHERE effect_state = 'pending_author' ORDER BY id LIMIT ?", (int(limit),))]
@@ -1072,12 +1071,12 @@ class SessionStore:
                           r["reactor"], int(log_id)))
         self._write(_do)
 
-    def dm_reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[Dict[str, Any]]:
+    def dm_reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> dict[str, Any] | None:
         rows = self._read("SELECT * FROM dm_reactions WHERE session_id = ? AND message_id = ? AND reactor = ?",
                           (session_id, int(message_id), reactor))
         return self._dm_reaction(rows[0]) if rows else None
 
-    def dm_reactions_for(self, session_id: str, message_ids: List[int], reactor: str = "owner") -> Dict[int, Dict]:
+    def dm_reactions_for(self, session_id: str, message_ids: list[int], reactor: str = "owner") -> dict[int, dict]:
         """{message_id: reaction} của `reactor` cho một khúc tin (một lần đọc)."""
         ids = [int(x) for x in message_ids or []]
         if not ids:
@@ -1087,32 +1086,32 @@ class SessionStore:
         return {int(r["message_id"]): self._dm_reaction(r) for r in rows}
 
     @staticmethod
-    def _dm_log(r: sqlite3.Row) -> Dict[str, Any]:
+    def _dm_log(r: sqlite3.Row) -> dict[str, Any]:
         d = dict(r)
         d["prev"] = json.loads(d["prev_json"]) if d.get("prev_json") else None
         d["next"] = json.loads(d["next_json"]) if d.get("next_json") else None
         d["effect_refs"] = json.loads(d.get("effect_refs_json") or "{}")
         return d
 
-    def dm_reaction_log(self, session_id: str, message_id: int) -> List[Dict[str, Any]]:
+    def dm_reaction_log(self, session_id: str, message_id: int) -> list[dict[str, Any]]:
         return [self._dm_log(r) for r in self._read(
             "SELECT * FROM dm_reaction_log WHERE session_id = ? AND message_id = ? ORDER BY id",
             (session_id, int(message_id)))]
 
-    def dm_reaction_log_row(self, log_id: int) -> Optional[Dict[str, Any]]:
+    def dm_reaction_log_row(self, log_id: int) -> dict[str, Any] | None:
         rows = self._read("SELECT * FROM dm_reaction_log WHERE id = ?", (int(log_id),))
         return self._dm_log(rows[0]) if rows else None
 
-    def pending_dm_reaction_logs(self, limit: int = 200) -> List[Dict[str, Any]]:
+    def pending_dm_reaction_logs(self, limit: int = 200) -> list[dict[str, Any]]:
         return [self._dm_log(r) for r in self._read(
             "SELECT * FROM dm_reaction_log WHERE effect_state = 'pending' ORDER BY id LIMIT ?", (int(limit),))]
 
-    def dm_pair_logs(self, session_id: str, message_id: int, reactor: str) -> List[Dict[str, Any]]:
+    def dm_pair_logs(self, session_id: str, message_id: int, reactor: str) -> list[dict[str, Any]]:
         return [self._dm_log(r) for r in self._read(
             "SELECT * FROM dm_reaction_log WHERE session_id = ? AND message_id = ? AND reactor = ? ORDER BY id",
             (session_id, int(message_id), reactor))]
 
-    def mark_dm_reaction_effects(self, log_ids: List[int], state: str, refs: Optional[Dict[str, Any]] = None) -> None:
+    def mark_dm_reaction_effects(self, log_ids: list[int], state: str, refs: dict[str, Any] | None = None) -> None:
         ids = [int(x) for x in log_ids or []]
         if not ids:
             return
@@ -1121,8 +1120,8 @@ class SessionStore:
             f"UPDATE dm_reaction_log SET effect_state = ?, effect_refs_json = COALESCE(?, effect_refs_json) "
             f"WHERE id IN ({','.join('?' * len(ids))})", tuple([state, payload] + ids)))
 
-    def set_dm_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: Optional[int],
-                               status: str, reason: str = "") -> Optional[Dict[str, Any]]:
+    def set_dm_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: int | None,
+                               status: str, reason: str = "") -> dict[str, Any] | None:
         """Host ghi trạng thái hiển thị (bộ chiếu, lượt xem xét), chỉ khi reaction còn ở đúng lần đổi `log_id`."""
         if status not in RV.STATUSES:
             raise DmReactionError(400, "trạng thái reaction không hợp lệ")
@@ -1141,7 +1140,7 @@ class SessionStore:
             return self._dm_reaction(r) if r else None
         return self._write(_do)
 
-    def dm_open_reaction_logs(self, statuses, limit: int = 200) -> List[int]:
+    def dm_open_reaction_logs(self, statuses, limit: int = 200) -> list[int]:
         """Mã lần đổi (`log_id`) của các reaction đang ở một trong `statuses` (bộ chiếu ghi ngược trạng thái)."""
         st = [str(x) for x in statuses or []]
         if not st:
@@ -1150,7 +1149,7 @@ class SessionStore:
                           f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
         return [int(r["log_id"]) for r in rows]
 
-    def dm_open_reaction_rows(self, statuses, limit: int = 200) -> List[Dict[str, Any]]:
+    def dm_open_reaction_rows(self, statuses, limit: int = 200) -> list[dict[str, Any]]:
         """Như `dm_open_reaction_logs` nhưng trả cả reaction (một câu đọc) cho đối soát theo lô của bộ chiếu."""
         st = [str(x) for x in statuses or []]
         if not st:
@@ -1159,7 +1158,7 @@ class SessionStore:
                           f"({','.join('?' * len(st))}) ORDER BY updated_at LIMIT ?", tuple(st + [int(limit)]))
         return [self._dm_reaction(r) for r in rows]
 
-    def dm_reaction_log_rows(self, log_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    def dm_reaction_log_rows(self, log_ids: list[int]) -> dict[int, dict[str, Any]]:
         """{log_id: dòng nhật ký} cho nhiều mã trong một câu đọc."""
         ids = sorted({int(x) for x in log_ids or []})
         if not ids:
@@ -1168,7 +1167,7 @@ class SessionStore:
         return {int(r["id"]): self._dm_log(r) for r in rows}
 
     def recent_dm_feedback(self, agent_key: str, since: float, limit: int = 15,
-                           reactor: str = "owner") -> List[Dict[str, Any]]:
+                           reactor: str = "owner") -> list[dict[str, Any]]:
         """Phản hồi còn hiệu lực của `reactor` trên câu trả lời của ĐÚNG agent `agent_key` ở chat riêng (mọi phiên
         `agent:<slug>` của agent đó gộp chung, ngữ cảnh `dm:<agent_key>`), mới nhất trước."""
         if not agent_key:
@@ -1182,7 +1181,7 @@ class SessionStore:
         self._write(lambda c: c.execute("UPDATE dm_reactions SET updated_at = ? WHERE session_id = ? AND message_id = ?",
                                         (float(ts), session_id, int(message_id))))
 
-    def get_messages(self, session_id: str) -> List[Dict[str, Any]]:
+    def get_messages(self, session_id: str) -> list[dict[str, Any]]:
         rows = self._read(
             "SELECT id, role, content, ts, tool_calls_json, "
             "(SELECT json_object('utterance_id',utterance_id,'message_id',message_id,'response_policy',response_policy,'answer_requested',answer_requested,'state',state) FROM voice_receipts WHERE message_id=messages.id) AS voice_metadata FROM messages "
@@ -1197,7 +1196,7 @@ class SessionStore:
         return int(rows[0]["n"]) if rows else 0
 
     def get_messages_page(self, session_id: str, limit: int = 30,
-                          before: Optional[Tuple[float, int]] = None) -> Dict[str, Any]:
+                          before: tuple[float, int] | None = None) -> dict[str, Any]:
         """Một KHÚC tin nhắn tính từ CUỐI lên, cho khung chat tải dần.
 
         `before` là con trỏ (ts, id) của tin GIÀ NHẤT đang hiện trên màn: lượt sau lấy tiếp
@@ -1212,7 +1211,7 @@ class SessionStore:
         sql = ("SELECT id, role, content, ts, tool_calls_json, "
             "(SELECT json_object('utterance_id',utterance_id,'message_id',message_id,'response_policy',response_policy,'answer_requested',answer_requested,'state',state) FROM voice_receipts WHERE message_id=messages.id) AS voice_metadata FROM messages "
                "WHERE session_id = ?")
-        params: List[Any] = [session_id]
+        params: list[Any] = [session_id]
         if before is not None:
             sql += " AND (ts < ? OR (ts = ? AND id < ?))"
             params += [float(before[0]), float(before[0]), int(before[1])]
@@ -1226,9 +1225,9 @@ class SessionStore:
 
     def list_sessions(self, limit: int = 50, brain: Any = None,
                       include_archived: bool = False,
-                      project: Optional[str] = None,
-                      channel: Optional[str] = None,
-                      also_channels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+                      project: str | None = None,
+                      channel: str | None = None,
+                      also_channels: list[str] | None = None) -> list[dict[str, Any]]:
         """Danh sách hội thoại, MỤC GHIM luôn nằm trên đầu.
 
         `project`: bỏ trống = tất cả; "none" = các cuộc chưa xếp vào project nào;
@@ -1311,7 +1310,7 @@ class SessionStore:
             "ORDER BY updated_at DESC LIMIT 1")
         return (rows[0]["brain"] if rows else "") or ""
 
-    def moc_cap_nhat_theo_kenh(self, brain: Any, tien_to: str) -> Dict[str, float]:
+    def moc_cap_nhat_theo_kenh(self, brain: Any, tien_to: str) -> dict[str, float]:
         """{kênh: updated_at mới nhất} cho các kênh bắt đầu bằng `tien_to` (vd "agent:").
         Trang Cộng sự dùng để xếp trợ lý vừa chat gần nhất lên đầu và (0.142.0) hiện GIỜ NHẮN GẦN NHẤT trên thẻ. Chỉ
         tính phiên đã có tin: bấm vào một trợ lý là trang tạo sẵn một phiên trống, phiên đó không phải "vừa nhắn"."""
@@ -1324,13 +1323,13 @@ class SessionStore:
         sql += " GROUP BY channel"
         return {r["channel"]: float(r["m"] or 0) for r in self._read(sql, tuple(params))}
 
-    def agent_activity(self, brain: Any, since: Dict[str, float], cap: int = 99) -> Dict[str, Dict[str, float]]:
+    def agent_activity(self, brain: Any, since: dict[str, float], cap: int = 99) -> dict[str, dict[str, float]]:
         """0.205.0, private partner chats: {slug: {"n": partner messages after since[slug] (at most `cap`), "last_at": the
         newest message of any side}} over every `agent:<slug>` chat of this brain. `last_at` reads the messages, not
         sessions.updated_at, which also moves on a rename or an archive."""
         cond, bparams = loc_brain(brain)
         extra = (" AND " + cond) if cond else ""
-        out: Dict[str, Dict[str, float]] = {}
+        out: dict[str, dict[str, float]] = {}
         for slug, ts in since.items():
             ch = "agent:" + str(slug)
             rows = self._read(
@@ -1352,8 +1351,8 @@ class SessionStore:
             (1 if pinned else 0, session_id),
         ))
 
-    def set_project(self, session_id: str, project_id: Optional[str], *,
-                    brain: Optional[str] = None) -> bool:
+    def set_project(self, session_id: str, project_id: str | None, *,
+                    brain: str | None = None) -> bool:
         """Xếp hội thoại vào project. project_id rỗng = gỡ khỏi mọi project.
 
         `brain` khác None thì TẠO hàng nếu chưa có. Vì sao cần: dashboard tự sinh id hội thoại
@@ -1373,8 +1372,8 @@ class SessionStore:
             "UPDATE sessions SET project_id = ? WHERE id = ?", (pid, session_id)))
         return True
 
-    def set_pinned_model(self, session_id: str, provider: Optional[str],
-                         model: Optional[str], *, brain: Optional[str] = None) -> bool:
+    def set_pinned_model(self, session_id: str, provider: str | None,
+                         model: str | None, *, brain: str | None = None) -> bool:
         """Ghim model riêng cho MỘT phiên (provider rỗng = gỡ ghim, phiên quay về mặc
         định chung). Cùng khuôn set_project: `brain` khác None thì tạo hàng nếu phiên
         chưa kịp tồn tại - dashboard mint id phía client, user có thể đổi model trước
@@ -1405,7 +1404,7 @@ class SessionStore:
         ))
         return pid
 
-    def list_projects(self, brain: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_projects(self, brain: str | None = None) -> list[dict[str, Any]]:
         """Project kèm số hội thoại đang nằm trong đó (đếm cả cuộc đã cất vào kho lưu:
         con số này để người dùng biết xoá project sẽ gỡ nhãn bao nhiêu cuộc)."""
         where_sql, params = ("WHERE p.brain = ?", (brain,)) if brain else ("", ())
@@ -1426,7 +1425,7 @@ class SessionStore:
         )
         return [dict(r) for r in rows]
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
         rows = self._read("SELECT * FROM projects WHERE id = ?", (project_id,))
         return dict(rows[0]) if rows else None
 
@@ -1441,7 +1440,7 @@ class SessionStore:
             "UPDATE projects SET pinned = ? WHERE id = ?",
             (1 if pinned else 0, project_id))).rowcount)
 
-    def get_project_full(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project_full(self, project_id: str) -> dict[str, Any] | None:
         """Project kèm hướng dẫn + danh sách file + link. Chỉ dùng khi MỞ khung project.
 
         Tách khỏi `list_projects` là cố ý: danh sách ở cột bên trái vẽ lại mỗi lần đổi brain,
@@ -1462,9 +1461,9 @@ class SessionStore:
             "WHERE project_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (project_id,))]
         return p
 
-    def update_project(self, project_id: str, *, name: Optional[str] = None,
-                       icon: Optional[str] = None,
-                       instructions: Optional[str] = None) -> None:
+    def update_project(self, project_id: str, *, name: str | None = None,
+                       icon: str | None = None,
+                       instructions: str | None = None) -> None:
         """Đổi tên, icon và/hoặc hướng dẫn. Tham số None = không đụng tới; "" là GỠ."""
         sets, params = [], []
         if name is not None:
@@ -1513,7 +1512,7 @@ class SessionStore:
     # Xoá ở đây là GỠ KHỎI PROJECT, không đụng file trên đĩa. File nằm trong brain và có đời
     # sống riêng; gỡ nhãn mà xoá luôn file thì một cú bấm nhầm mất dữ liệu thật.
 
-    def add_project_file(self, project_id: str, path: str, name: str = "") -> Optional[str]:
+    def add_project_file(self, project_id: str, path: str, name: str = "") -> str | None:
         """Gắn một file có sẵn trong brain vào project. Trùng đường dẫn thì KHÔNG thêm lần hai.
 
         Đường dẫn phải được caller kiểm bằng rào path của brain TRƯỚC khi gọi (xem
@@ -1555,7 +1554,7 @@ class SessionStore:
             "UPDATE project_files SET pinned = ? WHERE id = ? AND project_id = ?",
             (1 if pinned else 0, file_id, project_id))).rowcount)
 
-    def add_project_link(self, project_id: str, url: str, label: str = "") -> Optional[str]:
+    def add_project_link(self, project_id: str, url: str, label: str = "") -> str | None:
         u = (url or "").strip()
         if not u:
             return None
@@ -1586,17 +1585,17 @@ class SessionStore:
     # kéo trên giao diện vẽ cả hai, nên hai bộ API mà lệch nhau là chỗ nào cũng phải rẽ nhánh.
     # Khác đúng một điểm: khoá ngoại lo phần xoá theo, nên không có `delete_session_assets`.
 
-    def list_session_files(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_session_files(self, session_id: str) -> list[dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, path, name, pinned, added_at FROM session_files "
             "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
-    def list_session_links(self, session_id: str) -> List[Dict[str, Any]]:
+    def list_session_links(self, session_id: str) -> list[dict[str, Any]]:
         return [dict(r) for r in self._read(
             "SELECT id, url, label, pinned, added_at FROM session_links "
             "WHERE session_id = ? ORDER BY pinned DESC, added_at DESC, rowid DESC", (session_id,))]
 
-    def add_session_file(self, session_id: str, path: str, name: str = "") -> Optional[str]:
+    def add_session_file(self, session_id: str, path: str, name: str = "") -> str | None:
         """Gắn một file có sẵn trong brain vào cuộc trò chuyện. Trùng đường dẫn thì trả id cũ.
 
         Đường dẫn phải được caller kiểm bằng rào path của brain TRƯỚC khi gọi (xem
@@ -1630,7 +1629,7 @@ class SessionStore:
             "UPDATE session_files SET pinned = ? WHERE id = ? AND session_id = ?",
             (1 if pinned else 0, file_id, session_id))).rowcount)
 
-    def add_session_link(self, session_id: str, url: str, label: str = "") -> Optional[str]:
+    def add_session_link(self, session_id: str, url: str, label: str = "") -> str | None:
         u = (url or "").strip()
         if not u:
             return None
@@ -1809,7 +1808,7 @@ class SessionStore:
                     "codex": "codex_thread_id",
                     "grok-cli": "grok_session_id"}
 
-    def clear_native_threads(self, session_id: str, keep: str = "") -> List[str]:
+    def clear_native_threads(self, session_id: str, keep: str = "") -> list[str]:
         """Vô hiệu mạch native của MỌI engine, TRỪ engine `keep` đang chạy lượt này.
 
         BẤT BIẾN: một mạch native chỉ còn đúng khi nó chứa TOÀN BỘ hội thoại. Ngay khi một
@@ -1819,7 +1818,7 @@ class SessionStore:
 
         Trả về tên các cột vừa dọn, để chỗ gọi ghi vào nhật ký chạy mà lần sau còn soi được.
         """
-        da_don: List[str] = []
+        da_don: list[str] = []
         cot_giu = self._MACH_NATIVE.get(str(keep or ""), "")
         row = self.get_session(session_id) or {}
         for nhan, cot in self._MACH_NATIVE.items():
@@ -1834,7 +1833,7 @@ class SessionStore:
 
     # ── auto-title ──
 
-    def auto_title(self, session_id: str, first_user_message: str) -> Optional[str]:
+    def auto_title(self, session_id: str, first_user_message: str) -> str | None:
         """Đặt title từ câu hỏi đầu nếu phiên chưa có title."""
         sess = self.get_session(session_id)
         if not sess or (sess.get("title") or "").strip():
@@ -1872,8 +1871,8 @@ class SessionStore:
         return q.strip()
 
     def search(self, query: str, limit: int = 30,
-               brain: Any = None, channel: Optional[str] = None,
-               also_channels: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+               brain: Any = None, channel: str | None = None,
+               also_channels: list[str] | None = None) -> list[dict[str, Any]]:
         """Full-text search nội dung mọi hội thoại. FTS5 nếu có, fallback LIKE.
 
         `brain` nhận cả danh sách bí danh, cùng luật với `list_sessions`.
@@ -1947,7 +1946,7 @@ class SessionStore:
 
 
 # Singleton toàn process (1 connection + app-lock).
-_store: Optional[SessionStore] = None
+_store: SessionStore | None = None
 _store_lock = threading.Lock()
 
 

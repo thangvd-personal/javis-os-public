@@ -1,7 +1,4 @@
 """Real scratch workspaces and fixture capabilities never dispatch to a live environment."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import hashlib
 import importlib.util
 import json
@@ -12,6 +9,8 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-sandbox-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",

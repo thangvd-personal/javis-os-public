@@ -1,10 +1,11 @@
 """Owner routes for opt-in quality contracts and non-blocking usage (fake engines only)."""
-from _paths import ROOT, SERVER  # noqa: F401
-import os
 import asyncio
+import os
 import tempfile
 import unittest
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ['JAVIS_STATE_DIR'] = tempfile.mkdtemp(prefix='javis-quality-api-')
 BRAIN = Path(tempfile.mkdtemp(prefix='javis-quality-brain-'))
@@ -14,8 +15,8 @@ for slug in ('leader', 'maker'):
     (BRAIN / 'agents' / f'{slug}.md').write_text(
         f'---\nname: {slug}\nrole: Helper\n---\nStay in scope.\n', encoding='utf-8')
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 
 class QualityRoutes(unittest.TestCase):

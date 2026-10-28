@@ -3,7 +3,6 @@
 The legacy oracle is frozen before extraction, not computed through the new renderer.
 All production API dependencies point at disposable fixtures; no application startup.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import copy
 import importlib.util
 import os
@@ -13,6 +12,8 @@ import unittest
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="main-rendering-"))
 for key, relative in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",

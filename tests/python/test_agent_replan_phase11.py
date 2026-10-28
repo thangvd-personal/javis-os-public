@@ -3,15 +3,13 @@
 Bất biến quan trọng nhất: replan KHÔNG BAO GIỜ cấp thêm quyền. Mọi test dưới đây
 đều được kiểm chứng ngược - gỡ hàng rào ra thì phải đỏ.
 """
-from _paths import SERVER  # noqa: E402,F401
-
 import asyncio
 
-from cryptography.fernet import Fernet
-
 import workflow_graph as wg
+from _paths import SERVER  # noqa: F401
 from agent_runtime import AgentPolicy, AgentRunner, CapabilityGrant
 from context_runtime import ObserveRuntime
+from cryptography.fernet import Fernet
 from workflow_runtime import WorkflowCanary
 
 
@@ -334,6 +332,7 @@ def test_grant_is_derived_from_the_base_graph_only():
 
 def test_defaults_do_not_admit_any_agent(tmp_path):
     import copy
+
     import config as cfgmod
 
     settings = copy.deepcopy(cfgmod._DEFAULT)
@@ -425,8 +424,9 @@ def test_only_workflows_that_declare_agent_get_replan():
 
 def test_repo_defaults_never_admit_the_agent_path(tmp_path, monkeypatch):
     """Chạy thật qua main: mặc định thì workflow khai agent vẫn KHÔNG được replan."""
-    import copy
     import asyncio as aio
+    import copy
+
     import config as cfgmod
     import main
 
@@ -479,6 +479,7 @@ def test_agent_pause_is_not_recorded_as_a_failure(tmp_path, monkeypatch):
     """
     import asyncio as aio
     import copy
+
     import config as cfgmod
     import main
 
@@ -536,6 +537,7 @@ def test_agent_pause_is_not_recorded_as_a_failure(tmp_path, monkeypatch):
 
 def _planner_stack(tmp_path, monkeypatch, settings=None):
     import copy
+
     import config as cfgmod
     import main
 
@@ -645,5 +647,6 @@ def _extract_planner(main):
 
 if __name__ == "__main__":
     import sys
+
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))

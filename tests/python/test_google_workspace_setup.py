@@ -19,11 +19,11 @@ Soát lại thì có ba chỗ hỏng thật, không phải chuyện chữ nghĩa
 Test này khoá cả ba, vì cả ba đều là loại lỗi im lặng: không có test thì lần sửa sau chỉ cần
 sơ ý là quay lại y nguyên mà CI vẫn xanh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import sys
 
 import mcp_catalog
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _fails = []
 

@@ -15,7 +15,7 @@ from contextlib import closing
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, RevisionBlobs  # noqa: F401
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable, RevisionBlobs  # noqa: F401
 
 SCHEMA_VERSION = 17
 _SOURCE = re.compile(r"(?:skills/[a-z0-9][a-z0-9_-]*/SKILL\.md|agents/[a-z0-9][a-z0-9_-]*\.md)")
@@ -123,16 +123,31 @@ def read_existing(path: Path, blobs: RevisionBlobs, *, qualification_anchor=None
 
 def ensure(store) -> None:
     installed = _schema_version(store)
-    from improvement_compose_schema import assert_historical, assert_installed as assert_compose, migrate, migration_transaction
-    from improvement_recipe_schema import _assert_absent, assert_installed as assert_recipes, migrate as migrate_recipes
-    from improvement_recipe_view_schema import assert_installed as assert_recipe_views, migrate as migrate_recipe_views
-    from improvement_activation_schema import assert_installed as assert_activations, migrate as migrate_activations
-    from improvement_canary_schema import assert_installed as assert_canaries, migrate as migrate_canaries
-    from improvement_routing_schema import assert_installed as assert_routing, migrate as migrate_routing
-    from improvement_agent_schema import assert_installed as assert_agents, migrate as migrate_agents
-    from improvement_bundle_schema import assert_installed as assert_bundles, migrate as migrate_bundles
-    from improvement_team_schema import assert_installed as assert_team, migrate as migrate_team
-    from improvement_library_schema import assert_installed as assert_library, migrate as migrate_library
+    from improvement_activation_schema import assert_installed as assert_activations
+    from improvement_activation_schema import migrate as migrate_activations
+    from improvement_agent_schema import assert_installed as assert_agents
+    from improvement_agent_schema import migrate as migrate_agents
+    from improvement_bundle_schema import assert_installed as assert_bundles
+    from improvement_bundle_schema import migrate as migrate_bundles
+    from improvement_canary_schema import assert_installed as assert_canaries
+    from improvement_canary_schema import migrate as migrate_canaries
+    from improvement_compose_schema import (
+        assert_historical,
+        migrate,
+        migration_transaction,
+    )
+    from improvement_compose_schema import assert_installed as assert_compose
+    from improvement_library_schema import assert_installed as assert_library
+    from improvement_library_schema import migrate as migrate_library
+    from improvement_recipe_schema import _assert_absent
+    from improvement_recipe_schema import assert_installed as assert_recipes
+    from improvement_recipe_schema import migrate as migrate_recipes
+    from improvement_recipe_view_schema import assert_installed as assert_recipe_views
+    from improvement_recipe_view_schema import migrate as migrate_recipe_views
+    from improvement_routing_schema import assert_installed as assert_routing
+    from improvement_routing_schema import migrate as migrate_routing
+    from improvement_team_schema import assert_installed as assert_team
+    from improvement_team_schema import migrate as migrate_team
     if installed == SCHEMA_VERSION:
         with closing(store._conn()) as connection:
             assert_compose(connection)
@@ -320,32 +335,32 @@ def ensure(store) -> None:
             _immutable_triggers(connection, ("improvement_revisions", "improvement_bundles",
                                               "improvement_bundle_assets", "improvement_events"))
         if not installed or installed["version"] < 2:
-            from improvement_case_schema import SCHEMA, IMMUTABLE
+            from improvement_case_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 3:
-            from improvement_trial_schema import SCHEMA, IMMUTABLE
+            from improvement_trial_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 4:
-            from improvement_candidate_schema import SCHEMA, IMMUTABLE
+            from improvement_candidate_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 5:
-            from improvement_experiment_schema import SCHEMA, IMMUTABLE
+            from improvement_experiment_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 6:
-            from improvement_operation_schema import SCHEMA, IMMUTABLE
+            from improvement_operation_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)
         if not installed or installed["version"] < 7:
-            from improvement_view_schema import SCHEMA, IMMUTABLE
+            from improvement_view_schema import IMMUTABLE, SCHEMA
             for statement in SCHEMA:
                 connection.execute(statement)
             _immutable_triggers(connection, IMMUTABLE)

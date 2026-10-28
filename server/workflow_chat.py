@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import javis_core
 import localefmt
@@ -31,7 +32,7 @@ TRAN_KET_QUA_TRUOC = 8000
 _LOAI = ("agent", "workflow")
 
 
-def persona_cua_phien(row: Optional[dict]) -> Optional[Tuple[str, str]]:
+def persona_cua_phien(row: dict | None) -> tuple[str, str] | None:
     ch = str((row or {}).get("channel") or "")
     # Javis Core (0.185.0) is not a persona: its chat is a normal Javis turn plus a role block.
     if javis_core.is_core_channel(ch):
@@ -59,7 +60,7 @@ def tin_xong(so_lan: int, so_buoc: int, giay: int, ket_qua: str) -> str:
                          f"Run #{int(so_lan)} · {int(so_buoc)} steps · {int(giay)} seconds\n\n{than}")
 
 
-def tin_loi(i: Optional[int], agent: str, loi: str) -> str:
+def tin_loi(i: int | None, agent: str, loi: str) -> str:
     loi = str(loi or "").strip() or localefmt.chu("không rõ lý do", "reason unknown")
     if i is None:
         return localefmt.chu(f"Quy trình dừng vì lỗi: {loi}", f"The workflow stopped on an error: {loi}")
@@ -77,7 +78,7 @@ def tin_cho_duyet(node: str, prompt: str) -> str:
                             ". Press Approve in the right column to continue."))
 
 
-async def chay(events, emit: Callable[[dict], Awaitable[None]]) -> Dict[str, Any]:
+async def chay(events, emit: Callable[[dict], Awaitable[None]]) -> dict[str, Any]:
     """Tiêu thụ luồng sự kiện của một lần chạy. `emit(frame)` gửi khung về trình duyệt.
 
     Khung phát ra:
@@ -87,10 +88,10 @@ async def chay(events, emit: Callable[[dict], Awaitable[None]]) -> Dict[str, Any
     Không phát `stream`: main.py gửi cả tin trả lời một lần sau khi có kết quả, để bong bóng
     sống và bản lưu giống hệt nhau.
     """
-    kq: Dict[str, Any] = {"trang_thai": "error", "ket_qua": "", "so_buoc": 0, "loi": None,
+    kq: dict[str, Any] = {"trang_thai": "error", "ket_qua": "", "so_buoc": 0, "loi": None,
                           "wait": None, "run_id": ""}
-    agent_cua_buoc: Dict[int, str] = {}
-    buoc_dang_chay: Optional[int] = None
+    agent_cua_buoc: dict[int, str] = {}
+    buoc_dang_chay: int | None = None
     da_ket = False
     try:
         async for ev in events:
@@ -223,7 +224,7 @@ _MAU_VE_QUY_TRINH = (
 )
 
 
-def tach_lenh_chay(user_message: str) -> Tuple[bool, str]:
+def tach_lenh_chay(user_message: str) -> tuple[bool, str]:
     """(ép chạy?, tin đã bỏ tiền tố). Tiền tố "chạy:" là đường thoát khi hàng rào đoán sai."""
     msg = str(user_message or "")
     dau = _khong_dau(msg.lstrip())
@@ -241,7 +242,7 @@ def la_tin_ve_quy_trinh(user_message: str) -> bool:
     return any(m.search(dau) for m in _MAU_VE_QUY_TRINH)
 
 
-def quyet_dinh_luot(user_message: str, ep_chay: bool = False) -> Tuple[str, str]:
+def quyet_dinh_luot(user_message: str, ep_chay: bool = False) -> tuple[str, str]:
     """Rẽ nhánh một tin ở phiên workflow:<slug>. Trả ("chay"|"tra_loi", tin đã dọn tiền tố).
 
     Hàm THUẦN và module-level để test gọi thẳng: đây là chỗ quyết định một tin có đốt 10 phút
@@ -266,7 +267,7 @@ def tin_khong_chay(ten: str = "") -> str:
 
 
 def khoi_quy_trinh_dang_mo(ten: str, slug: str, duong_dan: str, so_buoc: int,
-                           buoc: Optional[list] = None) -> str:
+                           buoc: list | None = None) -> str:
     """Khối ngữ cảnh cho bộ não chính: người dùng đang đứng ở khung chat của quy trình nào.
 
     Cùng lối với khối "[FILE ĐANG MỞ...]" của trình sửa (xem CLAUDE.md): nói rõ file nào là

@@ -24,7 +24,7 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 import config as cfgmod
 
@@ -85,8 +85,8 @@ CREATE TABLE IF NOT EXISTS review_state(bot_id TEXT PRIMARY KEY, last_ts REAL NO
 # older store needs these added by hand. Each one is tried once per process; "duplicate column" is the normal case.
 _MIGRATIONS = ("ALTER TABLE lessons ADD COLUMN source TEXT NOT NULL DEFAULT ''",)
 
-_STOP = frozenset("la va cua thi cho voi nhe a oi da co khong roi ma nay kia the thoi vay nhi nha".split())
-_TOK = re.compile(r"[^\W_]+", re.U)
+_STOP = frozenset(["la", "va", "cua", "thi", "cho", "voi", "nhe", "a", "oi", "da", "co", "khong", "roi", "ma", "nay", "kia", "the", "thoi", "vay", "nhi", "nha"])
+_TOK = re.compile(r"[^\W_]+", re.UNICODE)
 
 
 def db_path() -> Path:
@@ -122,11 +122,11 @@ def _cut(s: Any, n: int = TEXT_MAX) -> str:
     return str(s or "")[:n]
 
 
-def _row(r: Optional[sqlite3.Row]) -> Optional[dict]:
+def _row(r: sqlite3.Row | None) -> dict | None:
     return dict(r) if r is not None else None
 
 
-def tokens_of(text: str) -> List[str]:
+def tokens_of(text: str) -> list[str]:
     """Token chuẩn hoá (bỏ dấu, chữ thường, bỏ chữ đệm) để so độ giống. Trả list đã khử trùng."""
     import chatbot_grounding
     t = chatbot_grounding._bo_dau(str(text or "")).lower()
@@ -153,7 +153,7 @@ def _note_write(now: float) -> None:
 # ============================================================
 # Quyết định
 # ============================================================
-def log_decision(rec: dict, now: Optional[float] = None) -> int:
+def log_decision(rec: dict, now: float | None = None) -> int:
     """Ghi một quyết định, trả id. Nội dung cắt 400 ký tự."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -173,12 +173,12 @@ def log_decision(rec: dict, now: Optional[float] = None) -> int:
     return rid
 
 
-def get_decision(decision_id: int) -> Optional[dict]:
+def get_decision(decision_id: int) -> dict | None:
     with _lock, _conn() as con:
         return _row(con.execute("SELECT * FROM decisions WHERE id=?", (int(decision_id),)).fetchone())
 
 
-def recent_decisions(bot_id: str, limit: int = 100, chat_id: str = "", only_silent: bool = False) -> List[dict]:
+def recent_decisions(bot_id: str, limit: int = 100, chat_id: str = "", only_silent: bool = False) -> list[dict]:
     q = "SELECT * FROM decisions WHERE bot_id=?"
     args: list = [str(bot_id)]
     if chat_id:
@@ -192,7 +192,7 @@ def recent_decisions(bot_id: str, limit: int = 100, chat_id: str = "", only_sile
         return [dict(r) for r in con.execute(q, args).fetchall()]
 
 
-def last_decision(bot_id: str, chat_id: str) -> Optional[dict]:
+def last_decision(bot_id: str, chat_id: str) -> dict | None:
     """Quyết định GẦN NHẤT của bot ở một cuộc chat (hòm thư dùng nó để nói "bot im vì sao" dưới tin khách cuối).
     Kho chưa có thì trả None và KHÔNG tạo file."""
     if not db_path().exists():
@@ -208,7 +208,7 @@ def last_decision(bot_id: str, chat_id: str) -> Optional[dict]:
 HESITANT_CODES = ("judge_silent", "below_threshold", "rate_limited", "rate_limited_user", "policy_error")
 
 
-def hesitant_chats(since_ts: float, limit: int = 200) -> List[tuple]:
+def hesitant_chats(since_ts: float, limit: int = 200) -> list[tuple]:
     """(bot_id, chat_id) các cuộc chat mà bot vừa cân nhắc nói rồi im, chưa được chủ gắn nhãn Đúng/Sai. Hòm thư dùng
     nó để biết NHÓM nào đáng gọi là "cần trả lời": trong nhóm mà bot chỉ nói khi được gọi thì khách nhắn cuối là chuyện
     bình thường, không phải việc tồn đọng. Kho chưa từng có (bot chưa bật bộ phán xử) thì trả rỗng và KHÔNG tạo file."""
@@ -223,7 +223,7 @@ def hesitant_chats(since_ts: float, limit: int = 200) -> List[tuple]:
     return [(str(r["bot_id"]), str(r["chat_id"])) for r in rows]
 
 
-def set_label(decision_id: int, label: str, weight: float, now: Optional[float] = None) -> Optional[dict]:
+def set_label(decision_id: int, label: str, weight: float, now: float | None = None) -> dict | None:
     """Gắn nhãn cho một quyết định. Chỉ gắn MỘT lần: nhãn đầu tiên thắng, để một cuộc trò chuyện dài
     không lật đi lật lại kết luận của cùng một ca."""
     now = time.time() if now is None else now
@@ -235,7 +235,7 @@ def set_label(decision_id: int, label: str, weight: float, now: Optional[float] 
         return _row(con.execute("SELECT * FROM decisions WHERE id=?", (int(decision_id),)).fetchone())
 
 
-def force_label(decision_id: int, label: str, weight: float, now: Optional[float] = None) -> Optional[dict]:
+def force_label(decision_id: int, label: str, weight: float, now: float | None = None) -> dict | None:
     """Như `set_label` nhưng ghi đè: dành cho nhãn của CHỦ (👍/👎), nặng hơn nhãn tự động."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -246,7 +246,7 @@ def force_label(decision_id: int, label: str, weight: float, now: Optional[float
         return _row(con.execute("SELECT * FROM decisions WHERE id=?", (int(decision_id),)).fetchone())
 
 
-def last_decisions_in_chat(bot_id: str, chat_id: str, since_ts: float, limit: int = 5) -> List[dict]:
+def last_decisions_in_chat(bot_id: str, chat_id: str, since_ts: float, limit: int = 5) -> list[dict]:
     with _lock, _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT * FROM decisions WHERE bot_id=? AND chat_id=? AND ts>=? AND candidate=1"
@@ -263,7 +263,7 @@ def add_watch(decision_id: int, bot_id: str, chat_id: str, expires_ts: float, me
                                             float(expires_ts), int(messages_left)))
 
 
-def open_watches(bot_id: str, chat_id: str, now: Optional[float] = None) -> List[dict]:
+def open_watches(bot_id: str, chat_id: str, now: float | None = None) -> list[dict]:
     """Các quyết định còn đang được theo dõi ở cuộc chat này, kèm nội dung quyết định."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -289,8 +289,8 @@ def close_watch(decision_id: int) -> None:
 # Ca
 # ============================================================
 def add_case(bot_id: str, chat_id: str, text: str, features: dict, correct_verdict: str, reason: str,
-             source: str, weight: float, origin_case_id: Optional[int] = None,
-             now: Optional[float] = None, decision_id: Optional[int] = None) -> int:
+             source: str, weight: float, origin_case_id: int | None = None,
+             now: float | None = None, decision_id: int | None = None) -> int:
     """Thêm một ca và giữ trần: 500 ca mỗi bot, 200 mỗi cuộc chat. Vượt thì bỏ ca có
     `trọng số × độ mới` thấp nhất TRONG PHẠM VI bị vượt (ca do chủ dạy không bao giờ bị bỏ trước)."""
     now = time.time() if now is None else now
@@ -327,13 +327,13 @@ def _trim_cases(con: sqlite3.Connection, bot_id: str, chat_id: str, now: float) 
         worst("bot_id=? AND chat_id=?", (bot_id, chat_id), MAX_CASES_PER_CHAT)
 
 
-def candidate_cases(bot_id: str, limit: int = 600) -> List[dict]:
+def candidate_cases(bot_id: str, limit: int = 600) -> list[dict]:
     with _lock, _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT * FROM cases WHERE bot_id=? ORDER BY id DESC LIMIT ?", (str(bot_id), int(limit))).fetchall()]
 
 
-def list_cases(bot_id: str, limit: int = 100, offset: int = 0) -> List[dict]:
+def list_cases(bot_id: str, limit: int = 100, offset: int = 0) -> list[dict]:
     with _lock, _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT * FROM cases WHERE bot_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -385,7 +385,7 @@ def set_case_weight(case_id: int, weight: float) -> None:
 # ============================================================
 # Ngưỡng theo cuộc chat
 # ============================================================
-def get_offset(bot_id: str, chat_id: str, now: Optional[float] = None) -> float:
+def get_offset(bot_id: str, chat_id: str, now: float | None = None) -> float:
     """Độ lệch ngưỡng của cuộc chat, đã co dần về 0 theo chu kỳ bán rã 14 ngày kể từ lần cập nhật."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -397,7 +397,7 @@ def get_offset(bot_id: str, chat_id: str, now: Optional[float] = None) -> float:
     return float(r["offset"]) * (0.5 ** (age / OFFSET_HALF_LIFE_S))
 
 
-def adjust_offset(bot_id: str, chat_id: str, delta: float, now: Optional[float] = None) -> float:
+def adjust_offset(bot_id: str, chat_id: str, delta: float, now: float | None = None) -> float:
     """Cộng `delta` vào độ lệch (đã tính phần nhạt dần), kẹp trong [-0.25, +0.25]. Trả giá trị mới."""
     now = time.time() if now is None else now
     cur = get_offset(bot_id, chat_id, now)
@@ -408,7 +408,7 @@ def adjust_offset(bot_id: str, chat_id: str, delta: float, now: Optional[float] 
     return new
 
 
-def list_offsets(bot_id: str) -> List[dict]:
+def list_offsets(bot_id: str) -> list[dict]:
     with _lock, _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT chat_id, offset, updated_ts FROM threshold_offsets WHERE bot_id=?", (str(bot_id),)).fetchall()]
@@ -417,24 +417,24 @@ def list_offsets(bot_id: str) -> List[dict]:
 # ============================================================
 # Hồ sơ vai và bài học
 # ============================================================
-def get_role_profile(bot_id: str) -> Optional[dict]:
+def get_role_profile(bot_id: str) -> dict | None:
     with _lock, _conn() as con:
         return _row(con.execute("SELECT * FROM role_profiles WHERE bot_id=?", (str(bot_id),)).fetchone())
 
 
-def set_role_profile(bot_id: str, generated_text: str, agent_hash: str, now: Optional[float] = None) -> None:
+def set_role_profile(bot_id: str, generated_text: str, agent_hash: str, now: float | None = None) -> None:
     now = time.time() if now is None else now
     with _lock, _conn() as con:
         con.execute("INSERT OR REPLACE INTO role_profiles(bot_id, generated_text, agent_hash, updated_ts)"
                     " VALUES(?,?,?,?)", (str(bot_id), str(generated_text or "")[:3000], str(agent_hash), now))
 
 
-def add_lesson(bot_id: str, text: str, now: Optional[float] = None, source: str = "") -> bool:
+def add_lesson(bot_id: str, text: str, now: float | None = None, source: str = "") -> bool:
     """Thêm một bài học (khử trùng, tối đa 15 dòng, dòng cũ nhất rơi ra). True nếu thật sự thêm."""
     return insert_lesson(bot_id, text, now, source) is not None
 
 
-def insert_lesson(bot_id: str, text: str, now: Optional[float] = None, source: str = "") -> Optional[int]:
+def insert_lesson(bot_id: str, text: str, now: float | None = None, source: str = "") -> int | None:
     """Like `add_lesson` but returns the new row id (None when empty or a duplicate).
 
     `source`: '' for the owner's own lessons (taught in the group, or older rows), 'owner_chat' when the owner asked
@@ -469,7 +469,7 @@ def insert_lesson(bot_id: str, text: str, now: Optional[float] = None, source: s
     return lid
 
 
-def get_lesson(bot_id: str, lesson_id: int) -> Optional[dict]:
+def get_lesson(bot_id: str, lesson_id: int) -> dict | None:
     with _lock, _conn() as con:
         return _row(con.execute("SELECT id, text, ts, source FROM lessons WHERE bot_id=? AND id=?",
                                 (str(bot_id), int(lesson_id))).fetchone())
@@ -480,7 +480,7 @@ def delete_lesson(bot_id: str, lesson_id: int) -> bool:
         return con.execute("DELETE FROM lessons WHERE bot_id=? AND id=?", (str(bot_id), int(lesson_id))).rowcount > 0
 
 
-def list_lessons(bot_id: str) -> List[dict]:
+def list_lessons(bot_id: str) -> list[dict]:
     with _lock, _conn() as con:
         return [dict(r) for r in con.execute(
             "SELECT id, text, ts, source FROM lessons WHERE bot_id=? ORDER BY id", (str(bot_id),)).fetchall()]
@@ -489,12 +489,12 @@ def list_lessons(bot_id: str) -> List[dict]:
 # ============================================================
 # Self-review (0.77.0): knobs, change log, review state, metrics
 # ============================================================
-def get_case(bot_id: str, case_id: int) -> Optional[dict]:
+def get_case(bot_id: str, case_id: int) -> dict | None:
     with _lock, _conn() as con:
         return _row(con.execute("SELECT * FROM cases WHERE bot_id=? AND id=?", (str(bot_id), int(case_id))).fetchone())
 
 
-def set_offset(bot_id: str, chat_id: str, value: float, now: Optional[float] = None) -> float:
+def set_offset(bot_id: str, chat_id: str, value: float, now: float | None = None) -> float:
     """Set a chat's threshold offset outright (clamped). It still fades with the same half-life as learned offsets."""
     now = time.time() if now is None else now
     v = max(-OFFSET_LIMIT, min(OFFSET_LIMIT, float(value)))
@@ -504,7 +504,7 @@ def set_offset(bot_id: str, chat_id: str, value: float, now: Optional[float] = N
     return v
 
 
-def get_tuning(bot_id: str) -> Dict[str, str]:
+def get_tuning(bot_id: str) -> dict[str, str]:
     """Knobs the self-review (or the owner, through chat) has set for a bot. Missing key = engine default.
     A store that was never created returns {} without creating the file."""
     if not db_path().exists():
@@ -514,7 +514,7 @@ def get_tuning(bot_id: str) -> Dict[str, str]:
             "SELECT key, value FROM tuning WHERE bot_id=?", (str(bot_id),)).fetchall()}
 
 
-def set_tuning(bot_id: str, key: str, value: Optional[str], now: Optional[float] = None) -> None:
+def set_tuning(bot_id: str, key: str, value: str | None, now: float | None = None) -> None:
     """`value=None` removes the knob (back to the default)."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -525,7 +525,7 @@ def set_tuning(bot_id: str, key: str, value: Optional[str], now: Optional[float]
                         (str(bot_id), str(key), str(value), now))
 
 
-def log_change(rec: dict, now: Optional[float] = None) -> int:
+def log_change(rec: dict, now: float | None = None) -> int:
     now = time.time() if now is None else now
     with _lock, _conn() as con:
         return int(con.execute(
@@ -549,14 +549,14 @@ def _change_row(r) -> dict:
     return d
 
 
-def get_change(change_id: int) -> Optional[dict]:
+def get_change(change_id: int) -> dict | None:
     with _lock, _conn() as con:
         r = con.execute("SELECT * FROM changes WHERE id=?", (int(change_id),)).fetchone()
     return _change_row(r) if r else None
 
 
 def list_changes(bot_id: str = "", limit: int = 50, status: str = "", review_id: str = "",
-                 since_ts: float = 0.0) -> List[dict]:
+                 since_ts: float = 0.0) -> list[dict]:
     q, args = "SELECT * FROM changes WHERE ts>=?", [float(since_ts)]
     if bot_id:
         q += " AND bot_id=?"
@@ -575,7 +575,7 @@ def list_changes(bot_id: str = "", limit: int = 50, status: str = "", review_id:
         return [_change_row(r) for r in con.execute(q, args).fetchall()]
 
 
-def set_change_status(change_id: int, status: str, now: Optional[float] = None) -> None:
+def set_change_status(change_id: int, status: str, now: float | None = None) -> None:
     now = time.time() if now is None else now
     with _lock, _conn() as con:
         con.execute("UPDATE changes SET status=?, status_ts=? WHERE id=?", (str(status), now, int(change_id)))
@@ -592,7 +592,7 @@ def set_review_ts(bot_id: str, ts: float) -> None:
         con.execute("INSERT OR REPLACE INTO review_state(bot_id, last_ts) VALUES(?,?)", (str(bot_id), float(ts)))
 
 
-def activity_since(since_ts: float) -> List[dict]:
+def activity_since(since_ts: float) -> list[dict]:
     """Per bot, what happened after `since_ts`: decisions, silent ones, and labels given. Cheap enough for a 30-minute
     tick (one grouped query). A store that was never created returns [] without creating the file."""
     if not db_path().exists():
@@ -617,7 +617,7 @@ def counts_since(bot_id: str, since_ts: float) -> dict:
     return {"labels": int(lab), "silent": int(sil)}
 
 
-def label_counts(bot_id: str, since_ts: float, until_ts: float) -> Dict[str, int]:
+def label_counts(bot_id: str, since_ts: float, until_ts: float) -> dict[str, int]:
     """Labels on decisions MADE in [since, until): {'correct': n, 'missed': n, 'intruded': n, 'taught': n}."""
     with _lock, _conn() as con:
         rows = con.execute("SELECT label, COUNT(*) AS n FROM decisions WHERE bot_id=? AND ts>=? AND ts<?"
@@ -628,7 +628,7 @@ def label_counts(bot_id: str, since_ts: float, until_ts: float) -> Dict[str, int
 
 def decisions_between(bot_id: str, since_ts: float, until_ts: float = 0.0, *, chat_id: str = "", code: str = "",
                       label: str = "", only_silent: bool = False, labeled_wrong: bool = False,
-                      limit: int = 50) -> List[dict]:
+                      limit: int = 50) -> list[dict]:
     """Filtered decision rows, newest first. `labeled_wrong` = labelled missed or intruded."""
     q, args = "SELECT * FROM decisions WHERE bot_id=? AND ts>=?", [str(bot_id), float(since_ts)]
     if until_ts:
@@ -716,7 +716,7 @@ def delete_bot(bot_id: str) -> None:
             con.execute(f"DELETE FROM {t} WHERE bot_id=?", (b,))
 
 
-def purge(now: Optional[float] = None) -> dict:
+def purge(now: float | None = None) -> dict:
     """Giữ hạn: quyết định chưa nhãn 14 ngày, quyết định đã nhãn và ca 180 ngày, cửa theo dõi hết hạn."""
     now = time.time() if now is None else now
     with _lock, _conn() as con:
@@ -730,7 +730,7 @@ def purge(now: Optional[float] = None) -> dict:
 def stats(bot_id: str) -> dict:
     b = str(bot_id)
     with _lock, _conn() as con:
-        one = lambda q, *a: int(con.execute(q, a).fetchone()[0])   # noqa: E731
+        one = lambda q, *a: int(con.execute(q, a).fetchone()[0])
         return {
             "decisions": one("SELECT COUNT(*) FROM decisions WHERE bot_id=?", b),
             "silent": one("SELECT COUNT(*) FROM decisions WHERE bot_id=? AND verdict='silent'", b),

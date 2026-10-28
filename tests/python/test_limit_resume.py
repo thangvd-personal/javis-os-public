@@ -7,15 +7,16 @@
 huỷ lịch, và có trần số lần tự chạy lại. Kèm `pop_last_message` của kho phiên: chỉ rút đúng
 câu "hết lượt" ở cuối, không rút nhầm câu trả lời thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-resume-"))
 
-import limit_resume as lr  # noqa: E402
+import limit_resume as lr
 
 _fails = []
 
@@ -126,10 +127,11 @@ for kb in (kich_ban_hen, kich_ban_khong_moc, kich_ban_tat_bat, kich_ban_huy,
 
 
 # ---- 7. Kho phiên: rút đúng câu "hết lượt" ở cuối ----
-import sessions  # noqa: E402
+import sessions
 
 _db = os.path.join(tempfile.mkdtemp(prefix="javis-resume-db-"), "s.db")
-from pathlib import Path  # noqa: E402
+from pathlib import Path
+
 store = sessions.SessionStore(Path(_db))
 sid = store.create_session(brain="brain")
 store.append_message(sid, "user", "Doanh thu tháng này?")

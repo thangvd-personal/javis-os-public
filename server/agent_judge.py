@@ -30,10 +30,17 @@ import threading
 import time
 import unicodedata
 import weakref
-from typing import Any, Awaitable, Callable, Iterable, Optional
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
-from agent_judge_store import (DEFAULT_EAGERNESS, EAGERNESS, LABELS, WAIT_KINDS, JudgeStore,  # noqa: F401
-                               clamp_offset)
+from agent_judge_store import (  # noqa: F401
+    DEFAULT_EAGERNESS,
+    EAGERNESS,
+    LABELS,
+    WAIT_KINDS,
+    JudgeStore,
+    clamp_offset,
+)
 from io_offload import LoopMarker, call_hook, run_io, run_io_quiet
 
 # Mọi đọc/ghi kho phán xử, sổ lượt, lý do thức và các hàm của host (lịch sử, Cộng hưởng, hạn mức) trong đường async chạy ở
@@ -98,24 +105,20 @@ def real_engine_blocked(ask: Any) -> bool:
     return os.environ.get(NO_REAL_ENGINE_ENV) == "1" and not getattr(ask, TEST_FAKE_ATTR, False)
 
 
-def _now(clock: Callable[[], float], now: Optional[float]) -> float:
+def _now(clock: Callable[[], float], now: float | None) -> float:
     return clock() if now is None else float(now)
 
 
 # ═══════════════════════════ phần thuần ═══════════════════════════
 
-_STOP = frozenset("""
-va la cua co cho mot nhung cac the nay do thi ma khi de duoc voi tu trong ra vao len xuong da dang se chua roi nhe nha a
-oi ban minh toi em anh chi ho no can lam gi sao nao dau ai the hay hoac neu vi nen cung van con rat qua lai ve theo
-the and or of to in on for is are be it this that with as at by from an we you they i
-""".split())
+_STOP = frozenset(["va", "la", "cua", "co", "cho", "mot", "nhung", "cac", "the", "nay", "do", "thi", "ma", "khi", "de", "duoc", "voi", "tu", "trong", "ra", "vao", "len", "xuong", "da", "dang", "se", "chua", "roi", "nhe", "nha", "a", "oi", "ban", "minh", "toi", "em", "anh", "chi", "ho", "no", "can", "lam", "gi", "sao", "nao", "dau", "ai", "the", "hay", "hoac", "neu", "vi", "nen", "cung", "van", "con", "rat", "qua", "lai", "ve", "theo", "the", "and", "or", "of", "to", "in", "on", "for", "is", "are", "be", "it", "this", "that", "with", "as", "at", "by", "from", "an", "we", "you", "they", "i"])
 _QUESTION_WORDS = ("sao", "the nao", "nhu the nao", "tai sao", "vi sao", "bao gio", "bao nhieu", "khong a", "khong nhi",
                    "duoc khong", "co nen", "nen khong", "ai biet", "ai co", "how", "why", "what", "which", "who",
                    "should we", "can we", "could", "anyone")
 _TEAM_WORDS = ("moi nguoi", "ca nhom", "ca team", "cac ban", "nhom minh", "team minh", "ai co the", "ai biet",
                "everyone", "anyone", "team", "all of you")
 _HINT_RE = re.compile(r"(sao|tai sao|vi sao)\s+(\w+\s+){0,3}(khong|chua)\s+(tra loi|noi|len tieng|giup|tham gia)|"
-                      r"why\s+(didn'?t|did not|don'?t|wasn'?t)\s+(you|\w+)\s+(answer|reply|respond|speak|say)", re.I)
+                      r"why\s+(didn'?t|did not|don'?t|wasn'?t)\s+(you|\w+)\s+(answer|reply|respond|speak|say)", re.IGNORECASE)
 
 
 def fold(text: Any) -> str:
@@ -147,7 +150,7 @@ def overlap(a: set, b: set) -> float:
     return len(a & b) / float(min(len(a), len(b)))
 
 
-_QUOTE_LINE = re.compile(r"^\s*(>|\[#\d+[^\]]*\]).*$", re.M)
+_QUOTE_LINE = re.compile(r"^\s*(>|\[#\d+[^\]]*\]).*$", re.MULTILINE)
 _QUOTE_BLOCK = re.compile(r"[\"“«][^\"”»\n]{12,}[\"”»]")
 
 
@@ -220,7 +223,7 @@ def label_delta(verdict: str, label: str) -> float:
 
 def clip(text: Any, n: int = TEXT_MAX) -> str:
     s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", " ", str(text or ""))
-    s = re.sub(r"<\s*/?\s*chat_data\b[^>]*>", " ", s, flags=re.I)
+    s = re.sub(r"<\s*/?\s*chat_data\b[^>]*>", " ", s, flags=re.IGNORECASE)
     s = re.sub(r"\s+", " ", s).strip()
     return s if len(s) <= n else s[:n] + "..."
 
@@ -341,7 +344,7 @@ def _json_objects(raw: str) -> list:
     return out
 
 
-def _clean_item(d: Any) -> Optional[dict]:
+def _clean_item(d: Any) -> dict | None:
     if not isinstance(d, dict):
         return None
     v = d.get("verdict")
@@ -359,7 +362,7 @@ def _clean_item(d: Any) -> Optional[dict]:
             "wait_for": wf, "ask_clarify": clip(d.get("ask_clarify"), 200)}
 
 
-def parse_batch(raw: Any, keys: Iterable[str]) -> Optional[dict]:
+def parse_batch(raw: Any, keys: Iterable[str]) -> dict | None:
     """{agent_key: mục} hay None khi sai cấu trúc. Mã không nằm trong `keys` bị bỏ (model không đặt được quyết định cho
     người ngoài lô)."""
     want = set(keys)
@@ -381,7 +384,7 @@ def parse_batch(raw: Any, keys: Iterable[str]) -> Optional[dict]:
     return None
 
 
-def parse_one(raw: Any) -> Optional[dict]:
+def parse_one(raw: Any) -> dict | None:
     for blk in _json_objects(str(raw or "")):
         try:
             c = _clean_item(json.loads(blk))
@@ -400,7 +403,7 @@ def select_volunteers(speakers: list, k: int, already: int) -> tuple:
     return [x[0] for x in ranked[:slots]], [x[0] for x in ranked[slots:]]
 
 
-def public_decision(d: Optional[dict]) -> Optional[dict]:
+def public_decision(d: dict | None) -> dict | None:
     """Khuôn trả về theo hợp đồng mục 2 (kèm vài trường cho giao diện)."""
     if not d:
         return None
@@ -450,7 +453,7 @@ def _default_policy_change(agent_key: str, context_ref: str, change: dict) -> No
         log.warning("agent_pulse.apply_policy_change failed: %s: %s", type(ex).__name__, ex)
 
 
-_SEMS: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+_SEMS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def _slots(capacity: int) -> asyncio.Semaphore:
@@ -479,13 +482,13 @@ class Judge:
     - `try_spend(agent_key, purpose)`: trần `agent_daily_calls` (phần L).
     """
 
-    def __init__(self, *, store: Any, ledger: Optional[Callable[[], Any]] = None, wake: Optional[Callable[[], Any]] = None,
-                 ask: Optional[AskFn] = None, engine_label: Optional[Callable[[], tuple]] = None,
-                 resonance_on: Optional[Callable[[str], bool]] = None,
-                 resumed_at: Optional[Callable[[str, str], Optional[float]]] = None,
-                 history: Optional[Callable[[str], list]] = None, agent_meta: Optional[Callable[[str], dict]] = None,
-                 try_spend: Optional[Callable[[str, str], tuple]] = None,
-                 policy_change: Optional[Callable[[str, str, dict], Any]] = None,
+    def __init__(self, *, store: Any, ledger: Callable[[], Any] | None = None, wake: Callable[[], Any] | None = None,
+                 ask: AskFn | None = None, engine_label: Callable[[], tuple] | None = None,
+                 resonance_on: Callable[[str], bool] | None = None,
+                 resumed_at: Callable[[str, str], float | None] | None = None,
+                 history: Callable[[str], list] | None = None, agent_meta: Callable[[str], dict] | None = None,
+                 try_spend: Callable[[str, str], tuple] | None = None,
+                 policy_change: Callable[[str, str, dict], Any] | None = None,
                  clock: Callable[[], float] = time.time, timeout_s: float = JUDGE_TIMEOUT_S,
                  concurrency: int = JUDGE_CONCURRENCY):
         if isinstance(store, JudgeStore):
@@ -507,14 +510,14 @@ class Judge:
         self.timeout_s = float(timeout_s)
         self.concurrency = int(concurrency)
         self._senders: list = []
-        self._team_handler: Optional[Callable[[list], Any]] = None
+        self._team_handler: Callable[[list], Any] | None = None
         self._last_prune = 0.0
         self._admit_lock = threading.Lock()
         self._related_admitted: dict = {}   # {(context_ref, root_ref, agent_key): lúc nhận} cho "một lượt mỗi tin gốc"
 
     # ───────────── kho ─────────────
 
-    def store(self, create: bool = True) -> Optional[JudgeStore]:
+    def store(self, create: bool = True) -> JudgeStore | None:
         try:
             return self._store_fn(create)
         except TypeError:
@@ -621,7 +624,7 @@ class Judge:
                   via_key: str = "") -> None:
         self.store(True).set_chain(context_ref, message_id, root_ref, depth, author_key, via_key, self.clock())
 
-    def chain(self, context_ref: str, message_id: int) -> Optional[dict]:
+    def chain(self, context_ref: str, message_id: int) -> dict | None:
         st = self.store(False)
         return st.chain(context_ref, message_id) if st else None
 
@@ -672,13 +675,13 @@ class Judge:
             return ("", "")
 
     @staticmethod
-    def _settle_call(ledger: Any, cid: int, status: str, mark: Optional[tuple]) -> None:
+    def _settle_call(ledger: Any, cid: int, status: str, mark: tuple | None) -> None:
         """Chốt dòng sổ (luồng phụ); `mark` = (engine, model) khi mốc engine chưa ghi thì ghi trước, đúng thứ tự cũ."""
         if mark is not None:
             ledger.mark_engine(cid, mark[0], mark[1])
         ledger.settle(cid, status)
 
-    def _undo_reserve(self, prep: Optional[dict]) -> None:
+    def _undo_reserve(self, prep: dict | None) -> None:
         """Hoàn tác của bước chuẩn bị (luồng phụ): bị huỷ ngay sau khi đã giữ chỗ dòng sổ thì hoàn dòng đó."""
         if prep and not prep.get("done") and prep.get("cid") is not None and prep.get("ledger") is not None:
             prep["ledger"].refund(prep["cid"])
@@ -690,7 +693,7 @@ class Judge:
         sem = _slots(self.concurrency)
         try:
             await asyncio.wait_for(sem.acquire(), timeout=self.timeout_s)
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             return "judge_busy", None
         except asyncio.CancelledError:
             await on_cancel()
@@ -700,7 +703,7 @@ class Judge:
             raw = await asyncio.wait_for(ask(prompt, "agent_judge", marker), timeout=self.timeout_s)
         except EngineUnavailable:
             return "engine_unavailable", None
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             return "timeout", None
         except asyncio.CancelledError:
             sem.release()
@@ -715,8 +718,8 @@ class Judge:
                 sem.release()
         return "ok", raw
 
-    async def _run_engine(self, prompt: str, cid: Optional[int], ask: Optional[AskFn], ledger: Any = None,
-                          label: Optional[tuple] = None) -> tuple:
+    async def _run_engine(self, prompt: str, cid: int | None, ask: AskFn | None, ledger: Any = None,
+                          label: tuple | None = None) -> tuple:
         """Gọi model với tối đa `concurrency` lô đồng thời và hạn `timeout_s`. Trả (raw | None, mã lỗi). Mọi ghi sổ lượt
         (hoàn, mốc engine, chốt) chạy ở luồng phụ; `ledger`/`label` do bước chuẩn bị (luồng phụ) đưa sang."""
         if ledger is None and cid is not None:
@@ -875,7 +878,7 @@ class Judge:
                                             kind=dkind)
         return prep
 
-    def _team_finish(self, prep: dict, raw: Optional[str], err: str) -> list:
+    def _team_finish(self, prep: dict, raw: str | None, err: str) -> list:
         """Phần ĐỒNG BỘ sau model của một lô nhóm (luồng phụ): đọc JSON, ngưỡng, chờ, chọn K người, khép lý do và chờ."""
         st, now, cref, root, src, dkind = (prep["st"], prep["now"], prep["cref"], prep["root"], prep["src"],
                                            prep["dkind"])
@@ -1013,8 +1016,8 @@ class Judge:
     # ───────────── chat riêng và tin chủ động (7.3) ─────────────
 
     async def judge_proactive(self, *, agent_key: str, context_ref: str, draft: str, source_event: str,
-                              engine: Optional[AskFn] = None, origin: str = "", payload: Optional[dict] = None,
-                              rejudge_of: Optional[int] = None) -> dict:
+                              engine: AskFn | None = None, origin: str = "", payload: dict | None = None,
+                              rejudge_of: int | None = None) -> dict:
         """Nói/chờ/im cho một tin CHỦ ĐỘNG (lượt quét `say` của P, `ask_back`/`revise` của L) ở chat riêng hay nhóm. Lỗi,
         hết giờ, JSON sai: `silent` có lý do, KHÔNG gửi (người gọi giữ lý do của mình, không mất gì). Ở chat riêng lượt
         phán xử hỏi `agent_daily_calls` (phần L) trước khi giữ chỗ; trong nhóm lượt tính vào `judge_daily` của nhóm.
@@ -1041,7 +1044,7 @@ class Judge:
         return public_decision(st.get_decision(did))
 
     def _proactive_prepare(self, *, agent_key: str, context_ref: str, draft: str, source_event: str, origin: str,
-                           payload: Optional[dict], rejudge_of: Optional[int]) -> dict:
+                           payload: dict | None, rejudge_of: int | None) -> dict:
         """Phần ĐỒNG BỘ trước model của một tin chủ động (luồng phụ): ngưỡng, hạn mức, giữ chỗ, prompt."""
         st = self.store(True)
         now = self.clock()
@@ -1086,7 +1089,7 @@ class Judge:
                                                 context_kind="dm" if is_dm else "team")
         return prep
 
-    def _proactive_finish(self, prep: dict, raw: Optional[str], err: str) -> dict:
+    def _proactive_finish(self, prep: dict, raw: str | None, err: str) -> dict:
         """Phần ĐỒNG BỘ sau model của một tin chủ động (luồng phụ): đọc JSON, ngưỡng, ghi quyết định, chờ."""
         st, now, thr, lref = prep["st"], prep["now"], prep["thr"], prep["lref"]
         record = self._proactive_record
@@ -1183,11 +1186,11 @@ class Judge:
             out.extend(got or [])
         return out
 
-    def _wait_by_reason(self, reason_id: int) -> Optional[dict]:
+    def _wait_by_reason(self, reason_id: int) -> dict | None:
         st = self.store(False)
         return st.wait_by_reason(int(reason_id)) if st is not None else None
 
-    async def serve_reason(self, reason_id: int) -> Optional[dict]:
+    async def serve_reason(self, reason_id: int) -> dict | None:
         """Phục vụ một lý do `wait_unblocked`/`related_review` do bộ phán xử tạo. Phần P (vòng pulse) gọi hàm này cho hai
         loại đó thay vì tự chạy lượt (điểm nối, xem tài liệu J). Lý do của nhóm chuyển cho bộ chạy nhóm; của chat riêng
         xét lại bản nháp đúng một lần."""
@@ -1211,7 +1214,7 @@ class Judge:
         payload = (w or {}).get("payload") or {}
         return bool(str(payload.get("draft") or "").strip()) and not payload.get("message_id")
 
-    def _rejudge_dm_prepare(self, w: dict, reason_id: Optional[int]) -> dict:
+    def _rejudge_dm_prepare(self, w: dict, reason_id: int | None) -> dict:
         """Phần ĐỒNG BỘ đầu của lần xét lại một tin chủ động (luồng phụ): đọc lại lần chờ, hạn mức, nhận lý do (CAS, giữ chỗ
         dòng sổ). `skip` = không xét lại lần này. Trong nhóm: CAS lần chờ `released -> rejudged` ngay (một người xét lại),
         khép lý do, rồi xét lại qua `judge_proactive` với trần `judge_daily` của nhóm (không hỏi hạn mức ngày của agent)."""
@@ -1244,7 +1247,7 @@ class Judge:
             return {"skip": True}
         return out
 
-    def _undo_claim(self, pre: Optional[dict]) -> None:
+    def _undo_claim(self, pre: dict | None) -> None:
         """Bị huỷ ngay sau khi nhận lý do: trả lý do về hàng chờ, hoàn dòng sổ vừa giữ (luồng phụ)."""
         if pre and pre.get("claimed") is not None and pre.get("wake") is not None:
             pre["wake"].settle(int(pre["reason_id"]), "refunded", now=self.clock())
@@ -1252,7 +1255,7 @@ class Judge:
     def _move_wait(self, wait_id: int, to: str, frm: str) -> Any:
         return self.store(True).move_wait(int(wait_id), to, frm=frm, now=self.clock())
 
-    async def _rejudge_dm(self, w: dict, reason_id: Optional[int]) -> Optional[dict]:
+    async def _rejudge_dm(self, w: dict, reason_id: int | None) -> dict | None:
         pre = await run_io(self._rejudge_dm_prepare, w, reason_id, undo=self._undo_claim)
         if pre.get("skip"):
             return None
@@ -1285,7 +1288,7 @@ class Judge:
         return {"st": st, "now": now, "payload": payload, "cid": cid, "thr": thr, "prompt": prompt, "w": w,
                 "ledger": self.ledger() if cid is not None else None, "label": self._engine_label_safe()}
 
-    def _rejudge_call_finish(self, prep: dict, raw: Optional[str], err: str) -> dict:
+    def _rejudge_call_finish(self, prep: dict, raw: str | None, err: str) -> dict:
         st, now, w, thr, cid, payload = prep["st"], prep["now"], prep["w"], prep["thr"], prep["cid"], prep["payload"]
         r = parse_one(raw) if raw is not None else None
         wake = self.wake()
@@ -1320,8 +1323,8 @@ class Judge:
                                                   label=prep["label"])
         return await run_io(self._rejudge_call_finish, prep, raw, err)
 
-    async def _run_engine_claimed(self, prompt: str, cid: Optional[int], ledger: Any = None,
-                                  label: Optional[tuple] = None) -> tuple:
+    async def _run_engine_claimed(self, prompt: str, cid: int | None, ledger: Any = None,
+                                  label: tuple | None = None) -> tuple:
         """Như `_run_engine` nhưng không chốt dòng sổ (người nhận lý do chốt qua `WakeReasons.settle`); chỉ ghi mốc
         engine (ở luồng phụ)."""
         if self.ask is None or real_engine_blocked(self.ask):
@@ -1367,7 +1370,7 @@ class Judge:
                               now=now)
         return public_decision(st.get_decision(did)), mode, dict(payload, ask_clarify=d0.get("ask_clarify"))
 
-    async def _expire_dm(self, w: dict) -> Optional[dict]:
+    async def _expire_dm(self, w: dict) -> dict | None:
         d, mode, payload = await run_io(self._expire_dm_record, w)
         if mode:
             await self._send(d, payload, "ask_clarify")
@@ -1417,7 +1420,7 @@ class Judge:
 
     # ───────────── dạy phán xử (7.6) ─────────────
 
-    def label(self, ref: Any, label: Optional[str], by: str = "owner", *, at: Optional[float] = None,
+    def label(self, ref: Any, label: str | None, by: str = "owner", *, at: float | None = None,
               source: str = "history") -> dict:
         """Nhãn "Đáng lẽ nên nói" (`should_speak`) / "Nên im (chen ngang)" (`should_silent`) trên một quyết định (mã số) hay
         trên tin nó sinh ra (`msg:<id>`). Nhãn trống là bỏ nhãn (hoàn phần đã dịch).
@@ -1486,7 +1489,7 @@ class Judge:
         return {"ok": True, "effect": effect, "delta": delta,
                 "decision": public_decision(st.get_decision(int(d["id"])))}
 
-    def hint(self, context_ref: str, text: str, agent_key: Optional[str] = None) -> Optional[dict]:
+    def hint(self, context_ref: str, text: str, agent_key: str | None = None) -> dict | None:
         """Tin kiểu "sao em không trả lời?": GỢI Ý quyết định im gần nhất (24 giờ) để chủ mở lịch sử và sửa. Không đổi gì."""
         if not hint_match(text):
             return None
@@ -1498,13 +1501,13 @@ class Judge:
 
     # ───────────── đọc ─────────────
 
-    def decisions(self, agent_key: str, context_ref: Optional[str] = None, limit: int = 50) -> list:
+    def decisions(self, agent_key: str, context_ref: str | None = None, limit: int = 50) -> list:
         st = self.store(False)
         if st is None:
             return []
         return [public_decision(d) for d in st.decisions(agent_key, context_ref, limit)]
 
-    def view(self, agent_key: str, contexts: Optional[list] = None, limit: int = 20) -> dict:
+    def view(self, agent_key: str, contexts: list | None = None, limit: int = 20) -> dict:
         """Phần "judge" của `GET /agents/{slug}/pulse` (và `GET /agents/{slug}/judge`): nơi áp dụng, ngưỡng theo ngữ cảnh,
         quyết định nói/chờ/im gần đây (cả ca im không có tin) kèm nhãn, lần chờ đang mở, đổi chính sách gần đây."""
         st = self.store(False)
@@ -1541,13 +1544,13 @@ class Judge:
 _DEFAULT: list = [None]
 
 
-def wire(judge: Optional[Judge]) -> Optional[Judge]:
+def wire(judge: Judge | None) -> Judge | None:
     """`main.py` nối bộ phán xử mặc định (một lần lúc khởi động). Trả bộ phán xử để dùng tiếp."""
     _DEFAULT[0] = judge
     return judge
 
 
-def default() -> Optional[Judge]:
+def default() -> Judge | None:
     return _DEFAULT[0]
 
 
@@ -1563,7 +1566,7 @@ async def judge_team_message(ctx: dict) -> list:
 
 
 async def judge_proactive(*, agent_key: str, context_ref: str, draft: str, source_event: str,
-                          engine: Optional[AskFn] = None, origin: str = "", payload: Optional[dict] = None) -> dict:
+                          engine: AskFn | None = None, origin: str = "", payload: dict | None = None) -> dict:
     return await _need().judge_proactive(agent_key=agent_key, context_ref=context_ref, draft=draft,
                                          source_event=source_event, engine=engine, origin=origin, payload=payload)
 
@@ -1572,7 +1575,7 @@ def record_direct(agent_key: str, context_ref: str, source_event: str, **kw) -> 
     return _need().record_direct(agent_key, context_ref, source_event, **kw)
 
 
-def label(ref: Any, label_value: Optional[str], by: str = "owner", **kw) -> dict:
+def label(ref: Any, label_value: str | None, by: str = "owner", **kw) -> dict:
     return _need().label(ref, label_value, by, **kw)
 
 
@@ -1592,15 +1595,15 @@ def release_waits(context_ref: str, event: dict) -> list:
     return _need().release_waits(context_ref, event)
 
 
-def decisions(agent_key: str, context_ref: Optional[str] = None, limit: int = 50) -> list:
+def decisions(agent_key: str, context_ref: str | None = None, limit: int = 50) -> list:
     return _need().decisions(agent_key, context_ref, limit)
 
 
-def view(agent_key: str, contexts: Optional[list] = None) -> dict:
+def view(agent_key: str, contexts: list | None = None) -> dict:
     return _need().view(agent_key, contexts)
 
 
-async def serve_reason(reason_id: int) -> Optional[dict]:
+async def serve_reason(reason_id: int) -> dict | None:
     return await _need().serve_reason(reason_id)
 
 

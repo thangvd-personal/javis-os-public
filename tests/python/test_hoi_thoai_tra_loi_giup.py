@@ -11,12 +11,12 @@ DỄ HỎNG của một hành động chủ bấm tay, chạy Agent thật của
   4. lỗi không nuốt: Agent chọn im, engine hỏng, gửi hỏng (trả chữ đã soạn để chủ gửi tay), và không bao giờ kẹt khoá "đang soạn".
   5. dạy bot: tin mà bộ phán xử đã chọn im thì gửi xong gắn nhãn "im nhầm" nặng nhất.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-httlg-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -26,14 +26,14 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402
-import chatbot_reply_policy_store as rps  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import routes.conversations as cr  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import channels
+import chatbot_reply_policy_store as rps
+import chatbot_runtime
+import chatbot_store
+import conversations
+import main
+import routes.conversations as cr
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -72,7 +72,8 @@ async def fake_gui(kenh, tk, chat_id, text, chat_type="private", **extra):
 
 channels.gui = fake_gui
 ECHO = []           # mỗi lần nhớ tiếng vọng của câu bot vừa gửi (Zalo cá nhân)
-import zalo_personal_channel as _zc  # noqa: E402
+import zalo_personal_channel as _zc
+
 _zc.ghi_da_gui = lambda conn, thread, text: ECHO.append((conn, thread, text))
 chatbot_runtime.wire(answer=fake_answer, brain_root=lambda b: _STATE, read_agent=lambda b, s: ({}, ""),
                      session_probe=lambda key: (PROBE.append(key) or ("sid-nhap", 5)),

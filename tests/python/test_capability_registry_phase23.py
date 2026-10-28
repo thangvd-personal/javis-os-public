@@ -1,13 +1,12 @@
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
 import json
 import sqlite3
 import time
 
-from capability_registry import CapabilityRegistry, brain_scope
+import mcp_hub
+from _paths import ROOT, SERVER
+from capability_registry import CapabilityRegistry
 from capability_resolver import ActorPolicy, DeterministicResolver
 from context_runtime import ObserveRuntime
-import mcp_hub
 
 
 def _tool(name, description, aliases=()):

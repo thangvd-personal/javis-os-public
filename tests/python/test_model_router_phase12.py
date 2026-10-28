@@ -3,10 +3,8 @@
 Luật nặng nhất của spec mục 9.3: không đổi model chỉ để tiết kiệm nếu việc đổi làm
 mất năng lực cần thiết. Mọi hàng rào dưới đây đều được kiểm chứng ngược.
 """
-from _paths import SERVER  # noqa: E402,F401
-
-from model_router import (ModelRouter, RouterPolicy, RoutingRequest,
-                          requirements_for)
+from _paths import SERVER  # noqa: F401
+from model_router import ModelRouter, RouterPolicy, RoutingRequest, requirements_for
 
 
 def _settings(models=None, allocation=10_000, allow_downgrade=False):
@@ -203,6 +201,7 @@ def test_rules_without_real_price_or_context_are_dropped():
 
 def test_defaults_never_route(tmp_path):
     import copy
+
     import config as cfgmod
 
     settings = copy.deepcopy(cfgmod._DEFAULT)
@@ -287,6 +286,7 @@ def test_router_errors_keep_the_agent_model(monkeypatch):
 
 def test_defaults_leave_every_workflow_step_on_the_agent_model(monkeypatch):
     import copy
+
     import config as cfgmod
     import main
 
@@ -320,5 +320,6 @@ def test_a_long_prompt_is_not_routed_into_a_small_context_model(monkeypatch):
 
 if __name__ == "__main__":
     import sys
+
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))

@@ -21,7 +21,6 @@ Hai lỗi chồng nhau, và cái thứ nhất giải thích vì sao chỉ tiến
    ra người dùng - một câu họ không sửa được gì, và lượt chat mất trắng, dù Javis có sẵn hai
    đường không trần (stdin, file ngữ cảnh) nằm ngay đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import errno
 import json
@@ -30,9 +29,11 @@ import stat
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-agydai-"))
 
-import antigravity_cli as A  # noqa: E402
+import antigravity_cli as A
 
 _fails = []
 

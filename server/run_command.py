@@ -41,9 +41,8 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-import winproc         # cờ CREATE_NO_WINDOW: lệnh con không nháy cửa sổ đen trên Windows
+import winproc  # cờ CREATE_NO_WINDOW: lệnh con không nháy cửa sổ đen trên Windows
 from coding_ctx import AUTO, FULL, SUGGEST, CodingToolContext
 
 # Trần thời gian một lệnh, giây. Mặc định vừa đủ cho một lượt test; trần trên chặn model tự
@@ -163,8 +162,7 @@ def kiem_quyen(argv: list[str], muc: str) -> str:
     """Mức quyền này có cho chạy `argv` không. Trả "" nếu được, hoặc lý do từ chối."""
     prog = Path(argv[0]).name.lower()
     # Bỏ đuôi .exe để `git.exe` trên Windows so khớp được với danh sách.
-    if prog.endswith(".exe"):
-        prog = prog[:-4]
+    prog = prog.removesuffix(".exe")
 
     if prog in CHAN_CUNG:
         return (f"'{prog}' bị chặn ở MỌI mức quyền, kể cả toàn quyền. Đây là rào cứng của "
@@ -219,7 +217,7 @@ def _cwd_hop_le(ctx: CodingToolContext, cwd: str) -> tuple[str, str]:
 
 
 def chay(command: str, ctx: CodingToolContext, cwd: str = ".",
-         timeout_s: Optional[float] = None) -> KetQua:
+         timeout_s: float | None = None) -> KetQua:
     """Chạy một lệnh. KHÔNG ném: mọi cảnh hỏng đều trả `KetQua` nói được.
 
     Không ném là có chủ ý: engine Web chạy vòng tool bằng chữ, một exception giữa lô tool là

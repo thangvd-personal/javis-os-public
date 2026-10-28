@@ -13,7 +13,6 @@ không dựa vào sleep cố định ngắn. Các ca:
 - G5 bảng giới hạn và "Không giới hạn" cho trần của chủ.
 - G6 luật `set_resonance` của trưởng nhóm (chỉ trợ lý do chính nhóm quản lý, dưới Toàn quyền).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -21,13 +20,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-goal-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-goal-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 WAIT = 10.0   # hạn chờ của mọi Event: đủ rộng cho máy chậm, test đỏ thay vì treo

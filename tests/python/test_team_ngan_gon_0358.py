@@ -6,15 +6,16 @@
 team loạn lắm". Luật nói ngắn nằm trong đoạn nối vào MỌI lượt nhóm (INTERNAL_GROUP_NOTE), nên lượt trả lời, lập kế hoạch,
 làm và tổng hợp đều nhận.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ngan-gon-"))
 
-import team_runner as TR  # noqa: E402
+import team_runner as TR
 
 _fails = []
 

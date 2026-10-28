@@ -12,7 +12,7 @@ import queue
 import subprocess
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 from claude_cli import codex_env, find_codex_cli
 
@@ -127,8 +127,8 @@ def _normalize_items(items: Any) -> list[dict]:
     return out
 
 
-def list_models(timeout: float = 20.0, cli_path: Optional[str] = None,
-                popen_factory=subprocess.Popen) -> Optional[dict]:
+def list_models(timeout: float = 20.0, cli_path: str | None = None,
+                popen_factory=subprocess.Popen) -> dict | None:
     """Gọi Codex app-server ``model/list``.
 
     Trả ``None`` khi CLI cũ/chưa cài/chưa đăng nhập để caller dùng nguồn dự
@@ -161,7 +161,7 @@ def list_models(timeout: float = 20.0, cli_path: Optional[str] = None,
         finally:
             messages.put(None)
 
-    def response(request_id: int) -> Optional[dict]:
+    def response(request_id: int) -> dict | None:
         while time.monotonic() < deadline:
             try:
                 msg = messages.get(timeout=remaining())

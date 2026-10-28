@@ -8,14 +8,13 @@ và chạy nó, nên đường này đòi PHIÊN ĐĂNG NHẬP THẬT và KHÔNG
 trình duyệt về máy chủ" đúng là thứ không nên có đường tồn tại.
 """
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
 
 import localefmt
 import optional_tools
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 router = APIRouter()
 

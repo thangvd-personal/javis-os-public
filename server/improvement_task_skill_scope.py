@@ -7,22 +7,21 @@ Lazy/hub consumers use this private scope; HTTP/native resume remain separate.
 """
 from __future__ import annotations
 
-from contextlib import closing
 import contextvars
-import hashlib
 import json
 import os
-from pathlib import Path
 import stat
 import threading
+from contextlib import closing
+from pathlib import Path
 
 import context_runtime as CR
 import improvement_store as IM
+import skill_router as SR
+import turn_context as TC
 from improvement_blobs import AssetUnavailable, RevisionBlobs, check_ancestry
 from resonance_store import GoalStore, Principal
 from skill_asset_io import open_skill_source
-import skill_router as SR
-import turn_context as TC
 
 _CONSTRUCT = object()
 _CURRENT = contextvars.ContextVar('javis_owned_task_skill_scope', default=None)

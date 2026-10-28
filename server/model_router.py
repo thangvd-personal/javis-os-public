@@ -17,9 +17,9 @@ ngày nào đó gửi ảnh vào một model mù.
 """
 from __future__ import annotations
 
-import fnmatch
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 ROUTER_POLICY_VERSION = "model-router-canary-v1"
 
@@ -61,7 +61,7 @@ class ModelCandidate:
     is_downgrade: bool
 
     @classmethod
-    def from_rule(cls, raw: dict, index: int) -> Optional["ModelCandidate"]:
+    def from_rule(cls, raw: dict, index: int) -> ModelCandidate | None:
         provider = str(raw.get("provider") or "").strip().casefold()
         model = str(raw.get("model") or "").strip()
         if not provider or not model:
@@ -99,8 +99,8 @@ class RoutingRequest:
     reserved_output_tokens: int = 0
     data_class: str = ""
     risk: str = "none"
-    max_cost_usd: Optional[float] = None
-    deadline_ms: Optional[int] = None
+    max_cost_usd: float | None = None
+    deadline_ms: int | None = None
     min_reliability: float = 0.0
 
 
@@ -128,7 +128,7 @@ class RouterPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "RouterPolicy":
+    def from_settings(cls, settings: dict) -> RouterPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         runtime = runtime if isinstance(runtime, dict) else {}
         raw = runtime.get("model_router_canary")

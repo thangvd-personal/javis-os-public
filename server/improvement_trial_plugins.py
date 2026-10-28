@@ -20,7 +20,6 @@ import types
 from pathlib import Path
 
 import yaml
-
 from improvement_store import _hash
 from improvement_trial_context import ContextSource, _check_path, _read, _root
 

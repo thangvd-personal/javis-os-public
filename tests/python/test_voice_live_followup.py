@@ -14,12 +14,12 @@ lần hai, ra hai bong bóng kết quả khác chữ, rồi lời đọc lại t
   - lời Javis sau khi người dùng nói tiếp vẫn hiện như thường.
 Câu hỏi tiến độ và lời tự lên tiếng khi việc chạy lâu nằm ở test_voice_live_progress.py.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import unittest
 
 import voice_live
 from _live_route import LiveRouteMixin
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class FollowupWordsTests(unittest.TestCase):

@@ -7,19 +7,20 @@ CHANGELOG.en.md cho những phiên bản đã dịch. Hai file sống riêng, n�
 từ 0.66.0 trở đi, phiên bản nào có trong CHANGELOG.md mà thiếu trong CHANGELOG.en.md là đỏ.
 Không có chốt này thì sau vài tuần bản tiếng Anh dừng ở đúng phiên bản cuối cùng có người nhớ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-cl-"))
-import localefmt  # noqa: E402
-import main  # noqa: E402
+import localefmt
+import main
 
 _fails = []
-DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.I)
+DAU_VIET = re.compile("[ăđơưảãạằắẳẵặầấẩẫậẻẽẹềếểễệỉĩịỏõọồốổỗộờớởỡợủũụừứửữựỳỷỹỵ]", re.IGNORECASE)
 MOC = (0, 66, 0)   # bản dịch tiếng Anh bắt đầu từ đây
 
 
@@ -33,7 +34,7 @@ vi_md = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 en_md = (ROOT / "CHANGELOG.en.md").read_text(encoding="utf-8")
 vi = {r["version"]: r for r in main._parse_changelog(vi_md)}
 en = {r["version"]: r for r in main._parse_changelog(en_md)}
-ver = lambda v: tuple(int(x) for x in v.split("."))  # noqa: E731
+ver = lambda v: tuple(int(x) for x in v.split("."))
 
 check("CHANGELOG.en.md đọc ra được phiên bản", len(en) >= 3, len(en))
 check("bản tiếng Anh không có phiên bản lạ (mọi bản đều có trong CHANGELOG.md)", set(en) <= set(vi), set(en) - set(vi))

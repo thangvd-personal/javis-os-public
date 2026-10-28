@@ -33,7 +33,6 @@ dry chạy mỗi ca bằng một tiến trình con. Ở dry, settings dùng prov
 việc nền bằng engine giả đọc kịch bản; hàm dựng "thật" là bẫy (chạm tới là ghi sự kiện và dừng). Không có lượt chat
 nào ở cả hai chế độ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -46,6 +45,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 MODE = os.environ.get("JAVIS_RESONANCE_A5_PILOT", "").strip().lower()
 SCEN = os.environ.get("JAVIS_RESONANCE_A5_SCENARIO", "").strip()
 if MODE not in ("dry", "real"):
@@ -55,7 +56,7 @@ if MODE not in ("dry", "real"):
 
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parent))
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_pilot_guard as G
 
 # ───────────── Hạn mức của pilot (đề xuất; real dùng đúng số đã duyệt) ─────────────
 CAPS = {"maker": 2, "reviewer": 2, "total": 4}
@@ -155,9 +156,8 @@ def read_ledger(path: Path) -> tuple:
     return st, ""
 
 
-import _a5_pilot_ledger as PL  # noqa: E402  - hàm dùng chung, test ở test_resonance_a5_pilot_gate.py
-from _a5_pilot_ledger import classify, ledger_counts  # noqa: E402
-
+import _a5_pilot_ledger as PL
+from _a5_pilot_ledger import classify, ledger_counts
 
 # ───────────── Ca chạy (một tiến trình mỗi ca) ─────────────
 
@@ -217,9 +217,9 @@ def run_case(scen: str) -> int:
 
     os.environ["JAVIS_STATE_DIR"] = str(state)
     os.environ["BRAINS_DIR"] = str(brains)
-    import resonance as R  # noqa: E402  - sau khi đặt JAVIS_STATE_DIR
-    import resonance_store as RS  # noqa: E402
-    import sessions as SSm  # noqa: E402
+    import resonance as R
+    import resonance_store as RS
+    import sessions as SSm
 
     key = str(brain.resolve())
     owner = RS.Principal("owner", "owner", key)
@@ -803,7 +803,7 @@ def _extra_checks(name: str, case_dir: Path, kept: str) -> list:
     bad = []
     if name == "ledger_corrupt":
         with open(PL._xp(case_dir / "a5-pilot-ledger.json"), "rb") as f:
-            if f.read() != "{hỏng".encode("utf-8"):
+            if f.read() != "{hỏng".encode():
                 bad.append("sổ hỏng bị ghi đè")
     if name == "ledger_lost_end" and not isfile(case_dir / "a5-pilot-ledger.json.lost"):
         bad.append("sổ đổi tên không còn")

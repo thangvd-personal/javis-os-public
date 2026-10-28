@@ -14,13 +14,14 @@ Review of PR #652 (maintainer, 5522960488) locked in here:
   3. A tagged / reply-to-bot group message carrying a file during the yield is downloaded and handled (explicit bots).
   4. The note to the Agent says how long it has been since the owner's LAST hand-typed message, with the real minutes.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-zpnhuong-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -30,12 +31,12 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402,F401
-import zalo_attachments  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import chatbot_store
+import conversations  # noqa: F401
+import zalo_attachments
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 
@@ -70,8 +71,8 @@ bid2, _ = chatbot_store.create_bot({"name": "Bot hai", "agent_slug": "tro-ly", "
 check("tạo bot kèm số phút thì lưu đúng", chatbot_store.get_bot(bid2)["nhuong_tay_phut"] == 5)
 
 # ---- 1b. qua đúng API mà form bot gọi (thay cho kiểm chữ trong main.py) ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 FORM = {"name": "Bot form", "agent_slug": "tro-ly", "brain": "b", "channel": "zalo_personal"}
@@ -250,6 +251,7 @@ async def chay():
     zc.xa_cho_chu("zalo-1", time.time())
     await asyncio.sleep(0.3)
     from datetime import datetime
+
     import localefmt
     gio_tay = datetime.fromtimestamp(tay, localefmt.tz()).strftime("%H:%M")
     check("5 phút: chủ im đủ 5 phút thì bot trả lời thay (không chờ 10)", len(LUOT) == 1, LUOT)

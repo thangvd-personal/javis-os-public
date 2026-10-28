@@ -10,11 +10,12 @@ KHÔNG cần Claude CLI/SDK/đăng nhập - chỉ test logic thuần:
   chặn cứng Bash/Web/Task + apply_mcp đúng mode; loop thường → gated (allowed_tools có giá trị);
   for_verify → LUÔN gated dù ambient_mcp (bước kiểm chứng phải an toàn).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-looptest-"))
 

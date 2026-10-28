@@ -9,15 +9,19 @@ No SDK, account, model, arbitrary argv/environment or socket handles enter here.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 import json
 import os
-from pathlib import Path, PureWindowsPath
 import re
 import subprocess
+from functools import lru_cache
+from pathlib import Path, PureWindowsPath
 
-from improvement_native_bootstrap import validate_bootstrap_manifest, _canonical, _load_guard_type, _runtime_paths
-
+from improvement_native_bootstrap import (
+    _canonical,
+    _load_guard_type,
+    _runtime_paths,
+    validate_bootstrap_manifest,
+)
 
 _FLAGS = 0x08080406  # NO_WINDOW | EXTENDED_STARTUPINFO | UNICODE_ENV | SUSPENDED | DEBUG_ONLY
 _RETAINED = set()

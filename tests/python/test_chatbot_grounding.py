@@ -25,13 +25,14 @@ Ba mảnh, mỗi mảnh canh một kiểu hỏng khác nhau:
    HOÁ ("Giá bao nhiêu?" và "gia bao nhieu" là một câu), và phải bắt được cả loại bí tinh vi:
    tìm ra tài liệu nhưng tài liệu không nói tới điều khách hỏi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
-import re
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-cbg-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -41,10 +42,10 @@ try:
 except Exception:
     pass
 
-import chatbot_grounding  # noqa: E402
-import chatbot_log  # noqa: E402
-import chatbot_runtime  # noqa: E402
-from telegram_bot import TelegramBot  # noqa: E402
+import chatbot_grounding
+import chatbot_log
+import chatbot_runtime
+from telegram_bot import TelegramBot
 
 _fails = []
 
@@ -500,7 +501,7 @@ async def _chuong(text):
 chatbot_runtime.wire(answer=_loi_gia, brain_root=lambda b: str(BRAIN),
                      read_agent=lambda b, s: ({"name": "Hoa"}, ""), notify=_chuong)
 BID2 = "bot_loi"
-import chatbot_store  # noqa: E402
+import chatbot_store
 
 _bid, _ = chatbot_store.create_bot({"name": "Bot lỗi", "agent_slug": "cskh", "brain": "b",
                                     "token": "1:x", "handoff_to": "999"})

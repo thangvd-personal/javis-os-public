@@ -1,16 +1,14 @@
 """Concrete service composition uses actual initialized scratch application sources."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import os
 import sys
 import types
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_trial_dashboard as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from cryptography.fernet import Fernet
 from improvement_assets import capture_source
 from improvement_blobs import RevisionBlobs
@@ -45,8 +43,6 @@ class DashboardServiceTests(unittest.TestCase):
         self.input = self.f.write(self.f.brain, "reports/input.json", '{"input":"private fixture"}\r\n')
         self.selections = [{"source_ref": self.ref, "timezone": "UTC", "data_period": "synthetic",
             "cutoff": "2026-10-23T00:00:00+00:00", "schema": "application/json"}]
-        import claude_cli
-        import claude_sdk_engine
         import improvement_claude
         self.binary = self.f.root / "inert-cli.exe"
         self.binary.write_bytes(b"Never execute this synthetic binary")

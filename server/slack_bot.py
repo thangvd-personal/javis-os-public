@@ -37,7 +37,6 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
 import localefmt
 import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
@@ -72,7 +71,7 @@ def split_tokens(raw) -> tuple:
 
 def md_to_mrkdwn(text: str) -> str:
     """Markdown as the engines write it -> Slack mrkdwn. Code blocks are left untouched."""
-    parts = re.split(r"(```.*?```)", str(text or ""), flags=re.S)
+    parts = re.split(r"(```.*?```)", str(text or ""), flags=re.DOTALL)
     out = []
     for i, p in enumerate(parts):
         if i % 2 == 1:
@@ -80,7 +79,7 @@ def md_to_mrkdwn(text: str) -> str:
             continue
         p = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1", p)                 # images: keep the alt
         p = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"<\2|\1>", p)   # links
-        p = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"*\1*", p, flags=re.M)       # headings -> bold
+        p = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"*\1*", p, flags=re.MULTILINE)       # headings -> bold
         p = re.sub(r"\*\*(.+?)\*\*", r"*\1*", p)                           # **bold** -> *bold*
         p = re.sub(r"__(.+?)__", r"*\1*", p)
         p = re.sub(r"~~(.+?)~~", r"~\1~", p)

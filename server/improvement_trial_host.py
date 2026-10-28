@@ -7,14 +7,14 @@ import json
 import secrets
 import time
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import improvement_cases as IC
 import improvement_store as IM
 from evidence_store import redact
 from improvement_blobs import MAX_ASSET_BYTES
 from improvement_claude import ClaudeTrialAdapter
-from improvement_trial_records import HostContextRecords, MAX_BINDING_BYTES, _brain
+from improvement_trial_records import MAX_BINDING_BYTES, HostContextRecords, _brain
 
 TARGET_FIELDS = ("id", "generation", "kind", "canonical_ref", "identity", "source_hash", "protected_hash", "ownership")
 
@@ -344,7 +344,7 @@ class HostContextStore(HostContextRecords):
         for raw in (captured["raw"], captured["fixture"]):
             _exclude_baseline_body(raw, baseline)
         manifest = {**captured["manifest"], "grant_hash": row["grant_hash"],
-                    "captured_at": datetime.now(timezone.utc).isoformat()}
+                    "captured_at": datetime.now(UTC).isoformat()}
         inner_key = "host-snapshot-" + IM._hash([experiment_id, source_ref, event_key])
         with self.store._Tx(self.store) as connection:
             replay = self.assets._replay(connection, brain, event_key, "trial_snapshot_capture", payload)
@@ -380,7 +380,9 @@ class HostContextStore(HostContextRecords):
             # afterward, then refresh SQL fences without another slow blob read.
             self._snapshot_observe(principal, final_binding)
             if request.get("version") == 3:
-                from improvement_preparation_lineage import current_preparation_fences as current_fences
+                from improvement_preparation_lineage import (
+                    current_preparation_fences as current_fences,
+                )
             else:
                 from improvement_experiment_lineage import current_fences
             with closing(self.store._conn()) as connection:

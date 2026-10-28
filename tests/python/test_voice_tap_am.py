@@ -1,12 +1,13 @@
 """Legacy noise-marker compatibility, conservative prompt and focus-setting wiring."""
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tapam-"))
 
-import voice_brain as vb  # noqa: E402
-import sessions  # noqa: E402
+import sessions
+import voice_brain as vb
 
 _fails = []
 

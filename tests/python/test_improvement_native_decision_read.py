@@ -1,13 +1,12 @@
 """Historical decision reads use actual SQLite/encrypted bytes, not live grants."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import test_improvement_native_decision_store as fixture
 import improvement_store as IM
+import test_improvement_native_decision_store as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 
 

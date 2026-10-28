@@ -8,7 +8,6 @@ có watchdog.sh: N lần /health hỏng liên tiếp -> launchctl kickstart -k. 
 `watchdog.sh check` THẬT, chỉ thay lệnh kick bằng `echo` (không ai muốn test đá server thật
 trên máy dev) - hành vi đếm/ngưỡng/reset/đứng-ngoài-lúc-cập-nhật đều là đường code thật.
 """
-from _paths import ROOT  # noqa: E402,F401
 import http.server
 import os
 import subprocess
@@ -16,6 +15,8 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+
+from _paths import ROOT
 
 _fails = []
 

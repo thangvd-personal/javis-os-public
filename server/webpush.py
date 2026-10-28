@@ -36,11 +36,9 @@ import struct
 import sys
 import threading
 import time
-from pathlib import Path
 from urllib.parse import urlsplit
 
 # `cryptography` (about 20 ms) loads in the functions that sign or encrypt, not at `import main` (0.274.0).
-
 from config import STATE_DIR
 
 VAPID_FILE = STATE_DIR / "vapid.json"
@@ -136,7 +134,8 @@ def _jwt_vapid(endpoint: str, sub_lien_he: str = None) -> str:
     quên bước này thì mọi dịch vụ đẩy trả 401 mà không nói vì sao.
     """
     from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import ec, utils as asym_utils
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.asymmetric import utils as asym_utils
     sub_lien_he = sub_lien_he or lien_he()
     d = khoa_vapid()
     pk = serialization.load_pem_private_key(d["private_pem"].encode("ascii"), password=None)

@@ -27,17 +27,18 @@ tự rủi ro:
    nhận kết quả.
 4. **Tài liệu phải khớp mã.** Đây là lỗi gốc, nên nó cũng phải có canary riêng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import pathlib
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-viec-")
 
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
-import tasks as tasks_mod  # noqa: E402
+import mcp_hub
+import plugins_host
+import tasks as tasks_mod
 
 _fails = []
 

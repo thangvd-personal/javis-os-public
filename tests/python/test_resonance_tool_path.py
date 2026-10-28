@@ -10,21 +10,22 @@ trả về javis_goal ở đó. Gợi ý đúng cho mọi engine trừ engine d�
 Test chỉ kiểm cơ chế (đăng ký, danh sách tới engine, đường tìm, nguồn tin người dùng). Nó KHÔNG chứng
 minh model sẽ chọn đúng; việc đó chỉ pilot thật mới trả lời được. Không gọi model, không đọc settings thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-res-toolpath-")
 
-import claude_agent_sdk  # noqa: E402
-import claude_sdk_engine  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
+import claude_agent_sdk
+import claude_sdk_engine
+import luot_dang_chay
+import main
+import mcp_hub
+import plugins_host
 
 _fails = []
 
@@ -35,9 +36,9 @@ def check(name, cond):
         _fails.append(name)
 
 
-import resonance_store as RS  # noqa: E402
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance_store as RS
+import turn_context
 
 
 def _brain():

@@ -10,13 +10,14 @@ comment tiếng Việt trong main.py, nhưng /brains thì để nguyên suốt t
 Test quan trọng nhất ở đây là "event loop vẫn thở": đó là thứ đã làm VPS trả 404 toàn trang
 (request nặng bỏ đói healthcheck -> Docker gắn unhealthy -> Traefik gỡ route).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _STATE = tempfile.mkdtemp(prefix="javis-braindem-")
 os.environ.setdefault("JAVIS_STATE_DIR", _STATE)
@@ -28,7 +29,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

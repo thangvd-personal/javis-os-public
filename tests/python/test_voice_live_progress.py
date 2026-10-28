@@ -17,13 +17,13 @@ This file pins the fix:
   - a status line that is still queued when the real result arrives is dropped, so it is never
     read out after the answer it was waiting for.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import time
 import unittest
 
 import voice_live
 from _live_route import LiveRouteMixin
+from _paths import ROOT, SERVER  # noqa: F401
 from test_voice_live_speech_queue import FakeServer
 
 # Real questions from the owner's call (speech-to-text output, punctuation and all).

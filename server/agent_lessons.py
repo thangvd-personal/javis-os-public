@@ -24,8 +24,9 @@ import json
 import re
 import time
 import unicodedata
+from collections.abc import Callable, Iterable
 from contextlib import closing
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
 KINDS = ("speak", "method", "presentation", "collab")
 SOURCES = ("owner", "teammate", "leader", "self", "review")
@@ -78,7 +79,7 @@ CREATE INDEX IF NOT EXISTS agent_peer_feedback_rx ON agent_peer_feedback(team_id
 _READY: set = set()
 
 
-def _now(at: Optional[float]) -> float:
+def _now(at: float | None) -> float:
     return time.time() if at is None else float(at)
 
 
@@ -117,7 +118,7 @@ def clean_text(text: Any, limit: int = TEXT_MAX) -> str:
     return s[:limit].rstrip()
 
 
-def valid_scope(scope: str, agent_key: Optional[str] = None) -> bool:
+def valid_scope(scope: str, agent_key: str | None = None) -> bool:
     s = str(scope or "")
     if s == "*":
         return True
@@ -138,7 +139,7 @@ def scopes_for(context_ref: str, agent_key: str) -> list:
     raise ValueError("ngữ cảnh không hợp lệ cho bài học")
 
 
-def _row(r) -> Optional[dict]:
+def _row(r) -> dict | None:
     if r is None:
         return None
     d = dict(r)
@@ -154,7 +155,7 @@ def _event(c, lesson_id: int, agent_key: str, kind: str, by: str, payload: Any, 
 # ───────────── bài học ─────────────
 
 def add(store, *, agent_key: str, scope: str, kind: str, text: str, source: str, source_refs: Iterable[str] = (),
-        at: Optional[float] = None, by: str = "") -> int:
+        at: float | None = None, by: str = "") -> int:
     """Thêm một bài học có phạm vi. Trùng chữ (đã chuẩn hoá) với bài học đang dùng cùng phạm vi thì trả mã cũ và chỉ nối
     thêm nguồn (không thêm dòng). Phạm vi vượt trần thì bài học tự học cũ nhất (không phải của chủ) chuyển `superseded`.
     Trả mã bài học."""
@@ -210,14 +211,14 @@ def add(store, *, agent_key: str, scope: str, kind: str, text: str, source: str,
         return cid
 
 
-def get(store, lesson_id: int) -> Optional[dict]:
+def get(store, lesson_id: int) -> dict | None:
     ensure(store)
     with closing(store._conn()) as c:
         return _row(c.execute("SELECT * FROM agent_lessons WHERE id=?", (int(lesson_id),)).fetchone())
 
 
-def revoke(store, lesson_id: int, *, by: str = "owner", reason: str = "", agent_key: Optional[str] = None,
-           at: Optional[float] = None) -> Optional[dict]:
+def revoke(store, lesson_id: int, *, by: str = "owner", reason: str = "", agent_key: str | None = None,
+           at: float | None = None) -> dict | None:
     """Thu hồi: `revoked`, không nạp nữa, nhật ký giữ nguyên. `agent_key` (route của chủ) chặn thu hồi bài học của agent
     khác. Đã thu hồi hay không còn đang dùng: None."""
     ensure(store)
@@ -232,7 +233,7 @@ def revoke(store, lesson_id: int, *, by: str = "owner", reason: str = "", agent_
         return _row(c.execute("SELECT * FROM agent_lessons WHERE id=?", (r["id"],)).fetchone())
 
 
-def restore(store, lesson_id: int, *, by: str = "auto", reason: str = "", at: Optional[float] = None) -> Optional[dict]:
+def restore(store, lesson_id: int, *, by: str = "auto", reason: str = "", at: float | None = None) -> dict | None:
     """Khôi phục một bài học đã thu hồi hay đã bị thay (quay lại thay đổi `lesson_remove`/`lesson_promote` của tự rà soát).
     Đã có bài học đang dùng cùng chữ cùng phạm vi thì không khôi phục (None)."""
     ensure(store)
@@ -251,7 +252,7 @@ def restore(store, lesson_id: int, *, by: str = "auto", reason: str = "", at: Op
 
 
 def promote(store, lesson_id: int, *, by: str, evidence_contexts: Iterable[str] = (), source_refs: Iterable[str] = (),
-            at: Optional[float] = None, agent_key: Optional[str] = None) -> int:
+            at: float | None = None, agent_key: str | None = None) -> int:
     """Đưa một bài học nhóm/chat riêng lên phạm vi `*` (mọi ngữ cảnh). Chỉ chủ (`by="owner"`), hay tự rà soát
     (`by="review"`) kèm bằng chứng từ ít nhất 2 ngữ cảnh KHÁC NHAU (`team:`/`dm:`). Bài học gốc chuyển `superseded` (trỏ
     sang bài học mới qua nhật ký); trả mã bài học `*` mới. Không hợp lệ: ValueError/PermissionError."""
@@ -285,7 +286,7 @@ def promote(store, lesson_id: int, *, by: str, evidence_contexts: Iterable[str] 
         return nid
 
 
-def link_turn_message(store, turn_ref: str, message_id: int, at: Optional[float] = None) -> int:
+def link_turn_message(store, turn_ref: str, message_id: int, at: float | None = None) -> int:
     """Gắn tin nhóm vừa đăng vào nguồn của bài học ghi trong cùng lượt (`turn:<id>` có trong nguồn). Trả số bài học."""
     ref = str(turn_ref or "")
     if not ref:
@@ -341,7 +342,7 @@ def lesson_line(r: dict) -> str:
     return f"- [L{r['id']}] ({where}, {r['kind']}, nguồn {r['source']}{'; ' + refs if refs else ''}) {r['text']}"
 
 
-def lessons(store, agent_key: str, status: Optional[str] = "active", scope: Optional[str] = None,
+def lessons(store, agent_key: str, status: str | None = "active", scope: str | None = None,
             limit: int = 200) -> list:
     ensure(store)
     q, args = "SELECT * FROM agent_lessons WHERE agent_key=?", [str(agent_key)]
@@ -393,7 +394,7 @@ def split_lessons(text: str) -> tuple:
 
 
 def record_self_lessons(store, *, agent_key: str, context_ref: str, lessons_: Iterable[str],
-                        source_refs: Iterable[str] = (), at: Optional[float] = None) -> list:
+                        source_refs: Iterable[str] = (), at: float | None = None) -> list:
     """Bài học `JAVIS_LESSON` do chính agent đề xuất ở một ngữ cảnh (nhóm hay chat riêng): phạm vi = ngữ cảnh, nguồn
     `self`, loại `method`. Trả mã bài học đã ghi."""
     ids = []
@@ -407,8 +408,8 @@ def record_self_lessons(store, *, agent_key: str, context_ref: str, lessons_: It
 # ───────────── góp ý của đồng đội (8.2) ─────────────
 
 def record_peer_feedback(store, *, team_id: str, receiver_key: str, author_key: str, author_role: str,
-                         message_id: int, note: str, nonce: str, task_id: str = "", revision: Optional[int] = None,
-                         turn_ref: str = "", evidence_reason: str = "", at: Optional[float] = None) -> Optional[int]:
+                         message_id: int, note: str, nonce: str, task_id: str = "", revision: int | None = None,
+                         turn_ref: str = "", evidence_reason: str = "", at: float | None = None) -> int | None:
     """Ghi một góp ý (idempotent theo `nonce`). `evidence_reason` khác rỗng: chỉ là bằng chứng (đầu ra đến muộn sau huỷ,
     sửa, bỏ thành viên, thu hồi), không bao giờ đưa vào lượt của người nhận. Trả mã, None khi đã ghi trước đó."""
     if author_role not in ("teammate", "leader"):
@@ -429,7 +430,7 @@ def record_peer_feedback(store, *, team_id: str, receiver_key: str, author_key: 
              str(evidence_reason or "")[:200], str(nonce), t)).lastrowid)
 
 
-def peer_feedback(store, team_id: str, receiver_key: Optional[str] = None, status: Optional[str] = None,
+def peer_feedback(store, team_id: str, receiver_key: str | None = None, status: str | None = None,
                   limit: int = 50) -> list:
     ensure(store)
     q, args = "SELECT * FROM agent_peer_feedback WHERE team_id=?", [str(team_id)]
@@ -453,7 +454,7 @@ def pending_peer_feedback(store, team_id: str, receiver_key: str, since: float, 
             (str(team_id), str(receiver_key), float(since), int(limit))).fetchall()]
 
 
-def mark_peer_delivered(store, ids: Iterable[int], turn_ref: str, at: Optional[float] = None) -> int:
+def mark_peer_delivered(store, ids: Iterable[int], turn_ref: str, at: float | None = None) -> int:
     xs = [int(x) for x in ids or []]
     if not xs:
         return 0
@@ -479,7 +480,7 @@ class TeamLearning:
     huỷ hay bản đã đổi."""
 
     def __init__(self, store: Callable[[], Any], clock: Callable[[], float] = time.time,
-                 task_state: Optional[Callable[[str], Optional[tuple]]] = None):
+                 task_state: Callable[[str], tuple | None] | None = None):
         self._store = store
         self.clock = clock
         self.task_state = task_state
@@ -525,8 +526,8 @@ class TeamLearning:
         return lines, ids
 
     def peer_feedback(self, *, team_id: str, receiver_key: str, author_key: str, author_role: str, message_id: int,
-                      note: str, nonce: str, task_id: str = "", revision: Optional[int] = None, turn_ref: str = "",
-                      evidence_reason: str = "") -> Optional[int]:
+                      note: str, nonce: str, task_id: str = "", revision: int | None = None, turn_ref: str = "",
+                      evidence_reason: str = "") -> int | None:
         st = self._st()
         if st is None:
             return None

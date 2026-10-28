@@ -3,18 +3,19 @@ không ghi đè âm thầm (spec 2026-10-13-team-chat-design mục 5.1).
 
     python tests/run.py team_identity
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-id-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-id-brain-"))
 (BR / "agents").mkdir()
 
-import main  # noqa: E402
-import resonance_store as RS  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import resonance_store as RS
+from fastapi.testclient import TestClient
 
 fails = []
 

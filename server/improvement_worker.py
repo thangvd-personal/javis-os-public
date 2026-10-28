@@ -329,9 +329,9 @@ class WorkerGroup:
 async def run_request(payload, read_control, emit, *, adapter_factory=None, engine_factory=None, native_session=None):
     """Validate host materialization before creating an engine; model text is always data."""
     from improvement_cases import _digest, _fields, _frozen
-    from improvement_store import _hash, _json
-    from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
     from improvement_claude import ClaudeTrialAdapter, TrialProfile
+    from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
+    from improvement_store import _hash, _json
     payload = _frozen(payload)
     _fields(payload, {"version", "config_pin", "workspace_root", "receipt", "capability_hash"})
     if type(payload["version"]) is not int or payload["version"] != 1:

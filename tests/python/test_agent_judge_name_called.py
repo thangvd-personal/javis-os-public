@@ -5,9 +5,8 @@
 Pilot model thật 2026-10-16: tên "Minh" bỏ dấu thành "minh", trùng từ dừng "mình", nên `prefilter` không bao giờ thấy chủ gọi
 "Minh ơi" (không @) và trợ lý Minh luôn im với `no_signal`. Tên được so cả dấu, nguyên từ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
-import agent_judge as AJ  # noqa: E402
+import agent_judge as AJ
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

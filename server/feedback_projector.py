@@ -22,7 +22,8 @@ import logging
 import re
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import reaction_values as RV
 
@@ -90,11 +91,11 @@ class FeedbackProjector:
     """`resonance`, `sessions`, `teams`: hàm trả kho (hay None khi chưa có kho). `team_view(team_id, session_id, mid)`:
     tin nhóm đã gắn reaction cho gói WS `team_message`. Mọi phương thức trả danh sách gói WS cần đẩy (người gọi đẩy)."""
 
-    def __init__(self, *, resonance: Callable[[], Any], sessions: Optional[Callable[[], Any]] = None,
-                 teams: Optional[Callable[[], Any]] = None,
-                 team_view: Optional[Callable[[str, str, int], Optional[dict]]] = None,
+    def __init__(self, *, resonance: Callable[[], Any], sessions: Callable[[], Any] | None = None,
+                 teams: Callable[[], Any] | None = None,
+                 team_view: Callable[[str, str, int], dict | None] | None = None,
                  clock: Callable[[], float] = time.time,
-                 judge_label: Optional[Callable[..., Any]] = None):
+                 judge_label: Callable[..., Any] | None = None):
         self._resonance = resonance
         # T3 phần J (0.156.0): `agent_judge.label` (trục nói/im của reaction dạy bộ phán xử). None: chỉ lưu như T2.
         self._judge_label = judge_label
@@ -105,7 +106,7 @@ class FeedbackProjector:
 
     # ───────────── điểm nối cho T3 ─────────────
 
-    def record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> Optional[dict]:
+    def record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> dict | None:
         """T3 (thiết kế 6.1, 6.3, 6.5): ghi tín hiệu hữu ích (`pulse_signals`, UNIQUE `(source_ref, agent_key)`) của một
         reaction HỢP LỆ của chủ (Cộng hưởng bật, sau `resumed_at`; bộ chiếu đã lọc trước khi gọi) rồi đánh thức nhịp của
         agent ở ngữ cảnh đó (`min(bậc, B3)`). Lý do chất lượng thắng emoji; chỉ trục nói/im hay chỉ góp ý thì không có tín
@@ -118,7 +119,7 @@ class FeedbackProjector:
             log.warning("pulse signal %s %s: %s: %s", kind, log_row.get("id"), type(ex).__name__, ex)
             return None
 
-    def _record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> Optional[dict]:
+    def _record_pulse_signal(self, kind: str, log_row: dict, agent_key: str, context_ref: str) -> dict | None:
         res = self._resonance()
         if res is None or not agent_key or str(log_row.get("source_kind") or "owner") != "owner":
             return None
@@ -148,7 +149,7 @@ class FeedbackProjector:
         AP.wake(res, agent_key, context_ref, "reaction", at=at)
         return out
 
-    def _synthesis_inputs(self, log_row: dict) -> Optional[tuple]:
+    def _synthesis_inputs(self, log_row: dict) -> tuple | None:
         """Tin được phản hồi là kết quả của một bước `synthesize`: (result_ref, [agent của từng mục trong tập đầu vào host
         đã đưa cho bước đó]). Chỉ một tầng: trích dẫn, chuyển tiếp, tổng hợp nhiều tầng không nhân điểm. Không phải bản
         tổng hợp: None."""
@@ -229,7 +230,7 @@ class FeedbackProjector:
         except Exception as ex:  # noqa: BLE001
             log.warning("pulse void %s: %s", source_ref_, ex)
 
-    def record_judge_label(self, kind: str, log_row: dict, agent_key: str, axis: str) -> Optional[dict]:
+    def record_judge_label(self, kind: str, log_row: dict, agent_key: str, axis: str) -> dict | None:
         """T3 phần J: trục "Đáng lẽ nên nói" / "Nên im (chen ngang)" của reaction CỦA CHỦ trên tin của agent tới
         `agent_judge.label` (nguồn `reaction`, thời điểm là lúc thả). Trục trống là bỏ nhãn do reaction đặt (nhãn chủ sửa
         trong lịch sử quyết định giữ nguyên). Bộ phán xử tự quyết hiệu lực: chỉ dịch ngưỡng khi Cộng hưởng bật và nhãn sau
@@ -248,7 +249,7 @@ class FeedbackProjector:
     def _store(self, kind: str):
         return self._sessions() if kind == "dm" else self._teams()
 
-    def _log_row(self, kind: str, log_id: int) -> Optional[dict]:
+    def _log_row(self, kind: str, log_id: int) -> dict | None:
         st = self._store(kind)
         if st is None:
             return None
@@ -259,26 +260,26 @@ class FeedbackProjector:
         return (st.dm_pair_logs(row["session_id"], row["message_id"], row["reactor"]) if kind == "dm"
                 else st.pair_logs(row["session_id"], row["message_id"], row["reactor"]))
 
-    def _mark(self, kind: str, ids: list, state: str, refs: Optional[dict] = None) -> None:
+    def _mark(self, kind: str, ids: list, state: str, refs: dict | None = None) -> None:
         st = self._store(kind)
         if kind == "dm":
             st.mark_dm_reaction_effects(ids, state, refs)
         else:
             st.mark_reaction_effects(ids, state, refs)
 
-    def _reaction(self, kind: str, row: dict) -> Optional[dict]:
+    def _reaction(self, kind: str, row: dict) -> dict | None:
         st = self._store(kind)
         return (st.dm_reaction_of(row["session_id"], row["message_id"], row["reactor"]) if kind == "dm"
                 else st.reaction_of(row["session_id"], row["message_id"], row["reactor"]))
 
-    def _set_status(self, kind: str, row: dict, log_id: Optional[int], status: str, reason: str) -> Optional[dict]:
+    def _set_status(self, kind: str, row: dict, log_id: int | None, status: str, reason: str) -> dict | None:
         st = self._store(kind)
         if kind == "dm":
             return st.set_dm_reaction_status(row["session_id"], row["message_id"], row["reactor"], log_id, status,
                                              reason)
         return st.set_reaction_status(row["session_id"], row["message_id"], row["reactor"], log_id, status, reason)
 
-    def _event(self, kind: str, row: dict) -> Optional[dict]:
+    def _event(self, kind: str, row: dict) -> dict | None:
         """Gói WS sau khi host đổi trạng thái: `chat_reaction` (chat riêng) hay `team_message` (nhóm)."""
         if kind == "dm":
             if row.get("reactor") != "owner":
@@ -335,7 +336,7 @@ class FeedbackProjector:
         ev = self._event(kind, newest)
         return [ev] if ev else []
 
-    def _next_state(self, kind: str, row: dict) -> Optional[dict]:
+    def _next_state(self, kind: str, row: dict) -> dict | None:
         if kind == "dm":
             return row.get("next")
         st = {"value": row.get("value"), "reasons": row.get("reasons") or [], "axis": row.get("axis") or "",
@@ -438,7 +439,7 @@ class FeedbackProjector:
 
     # ───────────── trạng thái hiển thị ─────────────
 
-    def _status_for(self, refs: dict, prefetched: Optional[dict] = None) -> Optional[tuple]:
+    def _status_for(self, refs: dict, prefetched: dict | None = None) -> tuple | None:
         """(status, status_reason) theo trạng thái lý do thật; None khi không đổi gì. `prefetched`: {source_ref: nguồn}
         đã đọc theo lô (đối soát của nhịp); nguồn vắng trong đó nghĩa là không có."""
         res = self._resonance()
@@ -475,7 +476,7 @@ class FeedbackProjector:
         return None
 
     def _sync_one(self, kind: str, row: dict, refs: dict, *, cur: Any = None,
-                  prefetched: Optional[dict] = None) -> Optional[dict]:
+                  prefetched: dict | None = None) -> dict | None:
         got = self._status_for(refs, prefetched)
         if got is None:
             return None
@@ -508,7 +509,7 @@ class FeedbackProjector:
 
     # ───────────── điểm nối cho lượt xem xét reaction (T3 phần L, `agent_review`) ─────────────
 
-    def review_source(self, src: str) -> Optional[dict]:
+    def review_source(self, src: str) -> dict | None:
         """Một nguồn `rx:<kind>:<log_id>` của lý do `reaction_review`, đủ để dựng lời nhắc: tin bị phản hồi, emoji, lý do,
         trục nói/im, góp ý. `current`: lần đổi này còn là trạng thái hiện tại của reaction (đổi sau đó thì không). None
         khi nguồn không đọc được (kho chưa có, dòng đã mất)."""
@@ -551,7 +552,7 @@ class FeedbackProjector:
         ev = self._event(kind, row)
         return [ev] if ev else []
 
-    def _refresh_open(self, kind: str, st: Any, limit: int) -> Optional[list]:
+    def _refresh_open(self, kind: str, st: Any, limit: int) -> list | None:
         """Đối soát trạng thái của các reaction đang chờ/đang xem xét THEO LÔ (T3 hiệu năng): một câu đọc reaction, một câu
         đọc nhật ký, một câu đọc nguồn lý do, rồi CHỈ ghi những reaction có trạng thái lý do đổi. Trước đây mỗi nhịp 30
         giây đọc lại từng dòng (ba kết nối SQLite mỗi dòng, tối đa 200 dòng) dù không có gì đổi. None khi kho không có
@@ -619,7 +620,7 @@ class FeedbackProjector:
 
 # ───────────── khối phản hồi cho lượt chat riêng ─────────────
 
-def dm_feedback_lines(sessions: Any, agent_key: str, now: Optional[float] = None, limit: int = FEEDBACK_LIMIT) -> list:
+def dm_feedback_lines(sessions: Any, agent_key: str, now: float | None = None, limit: int = FEEDBACK_LIMIT) -> list:
     """Mục phản hồi gần đây của CHỦ trên câu trả lời của ĐÚNG agent này ở chat riêng (ngữ cảnh `dm:<agent_key>`): tối đa
     `limit` mục trong 30 ngày, emoji gốc kèm tên loại, lý do, trục nói/im, góp ý, đoạn trích. Mục đã bỏ không còn trong kho
     nên tự rời khối. Không đọc gì của ngữ cảnh khác."""
@@ -651,7 +652,7 @@ def dm_feedback_lines(sessions: Any, agent_key: str, now: Optional[float] = None
     return out
 
 
-def dm_feedback_block(sessions: Any, agent_key: str, now: Optional[float] = None) -> str:
+def dm_feedback_block(sessions: Any, agent_key: str, now: float | None = None) -> str:
     lines = dm_feedback_lines(sessions, agent_key, now)
     if not lines:
         return ""

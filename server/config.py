@@ -3,12 +3,12 @@ Cấu hình tập trung của Javis OS - đọc/ghi server/settings.json (gitign
 Gồm: workspace, tài khoản admin (mật khẩu hash), model engine, telegram.
 Auth CHỈ bật khi đã đặt mật khẩu → bản local chưa đặt vẫn chạy như cũ.
 """
+import hashlib
 import json
 import os
+import secrets
 import threading
 import time
-import hashlib
-import secrets
 from pathlib import Path
 
 # Mọi state Javis tự ghi (settings, auth sessions, loop config) nằm ở JAVIS_STATE_DIR.
@@ -960,7 +960,7 @@ def read_settings():
     _no_rong_pham_vi_bo_nao(cfg)
     _ap_muc_mac_dinh(cfg)
     try:
-        import secrets_store   # lazy: secrets_store import config → tránh vòng lặp import
+        import secrets_store  # lazy: secrets_store import config → tránh vòng lặp import
         _transform_secret_fields(cfg, secrets_store.decrypt)
     except Exception as e:
         print(f"[config] giải mã secret lỗi: {e}", file=__import__('sys').stderr)
@@ -1383,6 +1383,7 @@ def totp_dung_ma_khoi_phuc(ma):
 # ---- Session (lưu ra file → restart KHÔNG bị đăng xuất) ----
 # Lưu {token: created_ts} để session CÓ HẠN (chống token bất tử nếu lỡ rò).
 import time as _time
+
 _SESS_PATH = STATE_DIR / ".sessions.json"
 _SESSION_TTL = 30 * 86400   # 30 ngày
 

@@ -34,7 +34,6 @@ import os
 import re
 import sys
 import time
-from typing import Optional
 
 import config as cfgmod
 import model_routing
@@ -502,8 +501,8 @@ COOLDOWN_MAX_S = 6 * 3600
 _COOLDOWN: dict = {}               # key -> monotonic time it may be tried first again
 _COOL_CLASSES = ("ClaudeSDK", "CodexCLI", "GrokCLI", "AntigravityCLI")
 
-_RE_RETRY_AFTER = re.compile(r"retry[- ]?after\D{0,5}(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?)?", re.I)
-_RE_TRY_AGAIN = re.compile(r"try again in\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?|h|hours?)", re.I)
+_RE_RETRY_AFTER = re.compile(r"retry[- ]?after\D{0,5}(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?)?", re.IGNORECASE)
+_RE_TRY_AGAIN = re.compile(r"try again in\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?|h|hours?)", re.IGNORECASE)
 
 
 def _seconds(num: str, unit: str) -> float:
@@ -764,8 +763,7 @@ _TAG_VIEC_NEN_THEO_LICH = ("reminder", "loop")
 
 def la_viec_nen_theo_lich(tag) -> bool:
     t = str(tag or "").strip()
-    if t.endswith("-main"):
-        t = t[:-len("-main")]
+    t = t.removesuffix("-main")
     return t in _TAG_VIEC_NEN_THEO_LICH or t.startswith("dispatch:")
 
 
@@ -992,7 +990,7 @@ def _links_for_step(step: dict, cli, mode, tag, codex_profile, settings, claude_
             field = _KEY_FIELD.get(prov, "")
             accs = ([] if prov in ("openai-compat", "anthropic-compat", "ollama-local")
                     else model_routing.usable_accounts(m, prov, field))
-            mk = lambda key="", acc="": _ApiAuxEngine(   # noqa: E731
+            mk = lambda key="", acc="": _ApiAuxEngine(
                 provider=prov, model=sp["model"], system_prompt=getattr(cli, "system_prompt", None),
                 vault_root=getattr(cli, "javis_vault", None),
                 mode=mode or getattr(cli, "javis_mode", None) or "full",

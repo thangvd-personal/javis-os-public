@@ -8,11 +8,12 @@ or in local time without one, and the NEXT occurrence of that time is the reset.
 Run:
     python tests/python/test_limit_reset_clock.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
+
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 
 # Local time for the "no time zone" samples. tzset does not exist on Windows; there the expected
 # values below are computed from the machine's own local time instead.
@@ -20,9 +21,9 @@ os.environ["TZ"] = "Asia/Ho_Chi_Minh"
 if hasattr(time, "tzset"):
     time.tzset()
 
-import limit_learner  # noqa: E402
-import limit_resume  # noqa: E402
-import model_limits  # noqa: E402
+import limit_learner
+import limit_resume
+import model_limits
 
 fails = []
 
@@ -34,7 +35,7 @@ def check(name, cond):
 
 
 def utc(*a) -> float:
-    return datetime(*a, tzinfo=timezone.utc).timestamp()
+    return datetime(*a, tzinfo=UTC).timestamp()
 
 
 def local(*a) -> float:

@@ -6,16 +6,15 @@ Every dependency is host supplied. Requests never supply principals or runtime p
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
-from fastapi import Request
-from fastapi.responses import JSONResponse, Response
-
-import localefmt
 import improvement_cases as IC
 import improvement_store as IM
+import localefmt
 from evidence_store import redact
+from fastapi import Request
+from fastapi.responses import JSONResponse, Response
 from improvement_blobs import AssetUnavailable
 from improvement_trial_associations import TrialCaseAssociations
 from improvement_trial_decisions import OwnerDecisionStore

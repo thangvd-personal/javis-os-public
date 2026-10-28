@@ -1,25 +1,23 @@
 """Real solver lifetime/storage/usage for v3, with synthetic worker packets only."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
-import subprocess
 import threading
 import unittest
 from contextlib import ExitStack, closing
 from pathlib import Path
 from unittest.mock import patch
 
-import test_improvement_preparation as fixtures
-from test_improvement_experiment_execution import _acl_only, _REAL_RUN, _REAL_POPEN
-import improvement_store as IM
 import improvement_evaluation as EVAL
-import usage_store as US
+import improvement_store as IM
+import test_improvement_preparation as fixtures
 import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
 from agent_ledger import CallLedger
 from improvement_trial_runner import TrialRunner
 from improvement_trial_tasks import TrialTasks
 from improvement_trial_views import read_trial
+from test_improvement_experiment_execution import _REAL_POPEN, _REAL_RUN, _acl_only
 
 
 class PreparationExecutionTests(unittest.IsolatedAsyncioTestCase):

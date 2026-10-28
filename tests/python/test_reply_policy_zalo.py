@@ -12,7 +12,6 @@ bot im và không để lại dòng nhật ký nào. Sau bản này:
   6. Chỉ CHỦ mới dạy được luật; người lạ thì không.
   7. Chạy thử ghi lại quyết định của người phán xử nhưng luật cũ vẫn là bên quyết.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -21,18 +20,20 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-zalo-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import channels  # noqa: F401
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
+import chatbot_runtime
+import chatbot_store
+import zalo_personal_channel as zc
 
 _fails = []
 
@@ -73,7 +74,6 @@ zc._ket_noi = lambda: [dict(CONN)]
 zc._goi = _goi_gia
 zc.NHUONG_GIAY = 0.02
 zc.THU_LAI_TEN_GIAY = 0
-import chatbot_tu_dong  # noqa: E402
 
 
 async def _engine(text, meta, progress, *, channel="", bot=None):
@@ -258,7 +258,7 @@ async def chay():
     sach()
 
     # Tiếp quản: chủ bấm nhận cuộc chat ngay sau lần bot tự nói thì đó là chen nhầm.
-    import conversations  # noqa: E402
+    import conversations
     J.mode = "reply"
     off1 = st.get_offset(bid, NHOM)
     KHO_TIN.append(msg("cho mình hỏi lỗi cổng 7777 lần nữa nhé mọi người", "t1", giay_truoc=3, uid="7770005", nguoi="Học viên E"))
@@ -321,7 +321,7 @@ async def chay():
     sach()
 
     # #6b: chủ đã Tiếp quản thì kiểm TRƯỚC khi tốn lượt model; tin khách vẫn vào Hộp thư cho người trực đọc.
-    import conversations  # noqa: E402
+    import conversations
     with conversations._conn() as cx:
         conv_id2 = cx.execute("SELECT id FROM conversations WHERE external_chat_id=?", (NHOM,)).fetchone()[0]
     conversations.dat_che_do(conv_id2, "human")

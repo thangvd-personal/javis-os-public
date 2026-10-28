@@ -1,12 +1,13 @@
 """Quality pilot traces remain read-only and do not invent reconciled totals."""
-from _paths import ROOT
 import importlib.util
 import json
-from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
+from pathlib import Path
+
+from _paths import ROOT
 
 spec = importlib.util.spec_from_file_location('quality_trace', ROOT / 'pilot/team-multiday/trace_export.py')
 trace = importlib.util.module_from_spec(spec)

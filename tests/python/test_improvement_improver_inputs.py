@@ -1,18 +1,16 @@
 """Actual completed preparation supplies minimized, immutable proposer input."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-import copy
 import importlib.util
 import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_evaluation as EVAL
-from improvement_trial_runner import TrialRunner
+import improvement_store as IM
 import test_improvement_preparation_execution as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_trial_runner import TrialRunner
 
 
 class ImproverInputTests(unittest.IsolatedAsyncioTestCase):
@@ -155,7 +153,10 @@ class ImproverInputTests(unittest.IsolatedAsyncioTestCase):
     async def test_renderer_and_closed_output_bind_actual_evidence_and_body_only(self):
         await self.prepare()
         data = self.build()['data']
-        from improvement_generation_protocol import render_proposer_input, generation_output
+        from improvement_generation_protocol import (
+            generation_output,
+            render_proposer_input,
+        )
         rendered = json.loads(render_proposer_input(data))
         self.assertEqual(rendered['authorized_evidence'], data)
         self.assertEqual(rendered['untrusted_data'], True)

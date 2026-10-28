@@ -8,7 +8,6 @@ giữa chừng, chuẩn hoá Unicode, xuất/nhập gói, và tag không chạm 
 
 KHÔNG chạm mạng, KHÔNG gọi model. KHÔNG dùng ký tự em dash.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -17,13 +16,15 @@ import tempfile
 import threading
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-tags-state-")
 os.environ.setdefault("JAVIS_STATE_DIR", STATE)
 
-import agent_tags  # noqa: E402
-import main  # noqa: E402
-import share_bundle  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import agent_tags
+import main
+import share_bundle
+from starlette.testclient import TestClient
 
 _fails = []
 
@@ -235,7 +236,7 @@ B3 = brain_moi("javis-tags-c-")
 share_bundle.import_bundle(zipb, "goi.zip", agents_dir=B3 / "agents", workflows_dir=B3 / "workflows",
                            skills_root=B3 / "skills")
 check("10 xuất/nhập vòng kín giữ đủ tag", mot(B3, "mk")["tags"] == ["Marketing", "Viết nội dung"])
-cu = "---\ntype: agent\nname: Gói cũ\nslug: goi-cu\nrole: x\ngroup: Bán hàng\n---\nthân\n".encode("utf-8")
+cu = "---\ntype: agent\nname: Gói cũ\nslug: goi-cu\nrole: x\ngroup: Bán hàng\n---\nthân\n".encode()
 share_bundle.import_bundle(cu, "goi-cu.md", agents_dir=B3 / "agents", workflows_dir=B3 / "workflows",
                            skills_root=B3 / "skills")
 check("10 nhập gói cũ: group thành đúng một tag", mot(B3, "goi-cu")["tags"] == ["Bán hàng"])
@@ -288,7 +289,7 @@ viet(B4, "dai3", f"type: agent\nname: Dài 3\nslug: dai3\nrole: x\ngroup: {DAI}\
 r = client.post("/agents/tags/delete", data={"brain": str(B4), "tag": DAI})
 check("R1 xoá được tag cũ dài", r.status_code == 200 and doc(B4, "dai3")[0]["tags"] == [], r.text)
 B5 = brain_moi("javis-tags-r1-nhap-")
-cu = f"---\ntype: agent\nname: Gói dài\nslug: goi-dai\nrole: x\ngroup: {DAI}\n---\nthân\n".encode("utf-8")
+cu = f"---\ntype: agent\nname: Gói dài\nslug: goi-dai\nrole: x\ngroup: {DAI}\n---\nthân\n".encode()
 share_bundle.import_bundle(cu, "goi-dai.md", agents_dir=B5 / "agents", workflows_dir=B5 / "workflows",
                            skills_root=B5 / "skills")
 meta(B5, "goi-dai", pinned="1")
@@ -310,7 +311,8 @@ r = meta(B4, "nhieu", remove_tags=J("t00"))
 check("R1 bỏ tag khi đang quá 20 luôn được", r.status_code == 200 and r.json()["tags"] == NHIEU[1:], r.text)
 
 # R2 + R3. Dữ liệu API THẬT đưa vào mã thật của trang Cộng sự và Studio (tests/js/agent_tags_ui_probe.js).
-import subprocess  # noqa: E402
+import subprocess
+
 B6 = brain_moi("javis-tags-r3-")
 NFD = "Viết"
 for slug, tgs in (("a", ["Straße"]), ("b", ["STRASSE"]), ("c", ["Viết"]), ("d", ["VIẾT"]), ("e", ["Viet"]),
@@ -365,7 +367,8 @@ check("R3 đổi tên theo khoá: Viết, VIẾT, NFD cùng đổi; Viet giữ n
 B7 = brain_moi("javis-tags-r4-")
 for i in range(3):
     viet(B7, f"cham{i}", f"type: agent\nname: C{i}\nslug: cham{i}\nrole: x\ntags:\n- Chậm\n", f"Thân {i}.")
-import time  # noqa: E402
+import time
+
 _goc2 = main._write_md
 
 
@@ -449,7 +452,7 @@ finally:
 # Xoá agent và mọi thao tác ghi file agent đi tuần tự qua CÙNG một khoá, ở worker. Barrier xác định: giữ worker
 # ghi NGAY TRƯỚC _write_md (đã đọc file, đang giữ khoá), xoá qua API thật, nhả, đợi TẤT CẢ xong rồi mới kiểm
 # đĩa và GET /agents. Chỉ đợi sự kiện (có hạn giờ để không treo), không dùng sleep làm điều kiện đồng bộ.
-import httpx  # noqa: E402
+import httpx
 
 B8 = brain_moi("javis-tags-r5-")
 _goc5 = main._write_md

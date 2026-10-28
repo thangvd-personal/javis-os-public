@@ -30,9 +30,11 @@ import hashlib
 import json
 import sqlite3
 import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any, Callable, Optional
+from typing import Any
+
 import localefmt
 import team_migration
 
@@ -135,7 +137,7 @@ def clean_criteria(raw: Any) -> list:
     return out
 
 
-def sha256_file(p: Path) -> Optional[str]:
+def sha256_file(p: Path) -> str | None:
     try:
         h = hashlib.sha256()
         with open(p, "rb") as f:
@@ -146,7 +148,7 @@ def sha256_file(p: Path) -> Optional[str]:
         return None
 
 
-def resolve_in(root: Path, rel: str) -> Optional[Path]:
+def resolve_in(root: Path, rel: str) -> Path | None:
     """The product path inside `root`, symlinks resolved; None when it leaves the root."""
     if not _rel_ok(rel):
         return None
@@ -200,7 +202,7 @@ def _script_sha(root: Path, command: str) -> dict:
     return {}
 
 
-def check_one(c: dict, root: Path, run_command: Optional[Callable] = None, since: float = 0.0) -> tuple:
+def check_one(c: dict, root: Path, run_command: Callable | None = None, since: float = 0.0) -> tuple:
     """(verdict, evidence) for one criterion on the product as it is now. `since`: the job's start; a product file not
     touched since then did not come from this job, so it is only "unknown" (the owner decides)."""
     k = c["kind"]
@@ -314,7 +316,7 @@ class AcceptanceStore:
         return c
 
     @staticmethod
-    def _row(r) -> Optional[dict]:
+    def _row(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
@@ -324,7 +326,7 @@ class AcceptanceStore:
             d[key] = json.loads(d.pop(key + '_json') or '[]')
         return d
 
-    def get(self, task_id: str) -> Optional[dict]:
+    def get(self, task_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._row(c.execute("SELECT * FROM team_acceptance WHERE task_id=?", (task_id,)).fetchone())
 
@@ -466,7 +468,7 @@ class AcceptanceStore:
                 "WHERE task_id=? ORDER BY id", (task_id,)).fetchall()]
 
 
-def run_checks(acc: dict, root: Path, run_command: Optional[Callable] = None, since: float = 0.0, message=None) -> list:
+def run_checks(acc: dict, root: Path, run_command: Callable | None = None, since: float = 0.0, message=None) -> list:
     results = []
     for c in acc['criteria']:
         if c['kind'] == 'owner_confirm' and c.get('target') == 'message':
@@ -535,7 +537,7 @@ def summarize(results: list) -> str:
     return "pass"
 
 
-def stale(acc: Optional[dict], history: list, root: Path) -> list:
+def stale(acc: dict | None, history: list, root: Path) -> list:
     """Checked product files that changed since the last passing round or the owner's confirmation (sha256)."""
     if not acc or acc.get("status") not in ("passed", "accepted"):
         return []
@@ -560,7 +562,7 @@ def stale(acc: Optional[dict], history: list, root: Path) -> list:
     return out
 
 
-def view(acc: Optional[dict], history: Optional[list] = None, root: Optional[Path] = None) -> Optional[dict]:
+def view(acc: dict | None, history: list | None = None, root: Path | None = None) -> dict | None:
     if not acc:
         return None
     hist = history or []

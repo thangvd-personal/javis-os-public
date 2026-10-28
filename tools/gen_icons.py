@@ -86,7 +86,7 @@ def data_uri(body: str) -> str:
     return 'url("data:image/svg+xml,' + svg + '")'
 
 
-def _ten_sai(name: str) -> "None":
+def _ten_sai(name: str) -> None:
     sys.exit(
         f"Không có icon '{name}' trong lucide-static@{LUCIDE_VERSION}.\n"
         f"Tra lại tên đúng ở https://lucide.dev/icons/ rồi sửa manifest."

@@ -16,7 +16,7 @@ kiểm lại lần nữa vì nó là bên thực hiện và không tin server tu
 from __future__ import annotations
 
 import ui_bridge
-import ui_targets   # bảng tên trang/nhóm + bí danh tiếng Việt, dùng CHUNG với đường tắt giọng nói
+import ui_targets  # bảng tên trang/nhóm + bí danh tiếng Việt, dùng CHUNG với đường tắt giọng nói
 
 # Tên trang, tên nhóm và bí danh nằm ở server/ui_targets.py. Trước 0.57.6 bảng đó nằm ngay
 # trong file này, nên đường tắt giọng nói (main.py, dòng JAVIS_UI:) không tra được và cứ nói
@@ -73,8 +73,7 @@ async def _ui(args, ctx) -> str:
         return "ERROR: [failed] " + why
     target = normalize_target(action, target)
     sid = str((args or {}).get("session_id") or "").strip()
-    if sid.startswith("web:"):
-        sid = sid[4:]
+    sid = sid.removeprefix("web:")
     res = await ui_bridge.request(action, target, session_id=sid)
     if not res.get("ok"):
         return "ERROR: [failed] " + (res.get("detail") or "dashboard không thực hiện được")

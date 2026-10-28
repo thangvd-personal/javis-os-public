@@ -12,7 +12,6 @@ Checked through the real app over HTTP (TestClient) on temporary brains:
   is replaced by a new empty chat instead of being revived;
 - a Javis Core chat is a normal Javis turn (CLAUDE.md + memory) plus its role block, not a persona.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import os
 import tempfile
@@ -20,14 +19,16 @@ import threading
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-core-state-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 
-import javis_core  # noqa: E402
-import main  # noqa: E402
-import share_bundle  # noqa: E402
-import workflow_chat  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import javis_core
+import main
+import share_bundle
+import workflow_chat
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -109,7 +110,7 @@ r = client.post("/capability/meta", data={"brain": str(OLD), "kind": "agent", "s
 check("tagging refused", r.status_code == 403)
 r = client.post("/resonance/agents/toggle", params={"brain": str(OLD)}, json={"slug": "javis-core", "enabled": False})
 check("Auto switch refused", r.status_code == 403, r.text)
-r = client.post(f"/agents/javis-core/assets/links", params={"brain": str(OLD)},
+r = client.post("/agents/javis-core/assets/links", params={"brain": str(OLD)},
                 data={"url": "https://example.com", "title": "x"})
 check("assets cannot be attached to it", r.status_code in (403, 404, 422))
 check("the team leader cannot create an agent on the reserved slug",

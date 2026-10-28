@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import time
 from contextlib import closing
 
@@ -12,9 +11,10 @@ from improvement_generation_protocol import input_bytes, parse_generation_output
 from improvement_improver_inputs import ImproverInputs
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_schema import TERMINAL, assert_installed
+from improvement_role_workflow import RoleWorkflow
 from improvement_trial_records import _brain
 from improvement_trial_runner import _settled_call
-from improvement_role_workflow import RoleWorkflow
+
 
 class ProposalService(RoleWorkflow):
     _product_kinds = frozenset({'propose', 'repair'})

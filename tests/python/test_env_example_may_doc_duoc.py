@@ -28,9 +28,10 @@ Vì sao là phép thử chứ không phải một dòng nhắc trong tài liệu
 tự nhiên. Ai thêm một biến mới đều muốn giải thích nó ngay tại chỗ, và không ai nhớ tới cái ô
 Environment của một nền tảng deploy mình không dùng.
 """
-from _paths import ROOT  # noqa: E402,F401
 import re
 import sys
+
+from _paths import ROOT
 
 _fails = []
 

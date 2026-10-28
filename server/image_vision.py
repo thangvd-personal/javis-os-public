@@ -18,12 +18,12 @@ import ipaddress
 import json
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
-
 import image_gen
 import localefmt
 import openai_oauth
@@ -39,7 +39,7 @@ INSTRUCTIONS = (
 )
 
 
-def build_prompt(question: str = "", labels: Optional[List[str]] = None) -> str:
+def build_prompt(question: str = "", labels: list[str] | None = None) -> str:
     """The text part of the request: what to look for, plus one label per image so the answer can be matched back."""
     q = str(question or "").strip()
     lines = [f"Yêu cầu: {q}" if q else "Yêu cầu: mô tả chi tiết từng ảnh."]
@@ -143,7 +143,7 @@ def image_extension(url: str, content_type: str = "") -> str:
     return ".jpg"
 
 
-async def fetch_image(url: str, dest_dir: Path, stem: str, max_bytes: int = image_gen.MAX_REF_BYTES) -> Tuple[Optional[Path], str]:
+async def fetch_image(url: str, dest_dir: Path, stem: str, max_bytes: int = image_gen.MAX_REF_BYTES) -> tuple[Path | None, str]:
     """Save one posted image as `<dest_dir>/<stem>.<ext>` and return `(path, "")` or `(None, reason)`.
 
     Reuses a copy saved earlier under the same stem. Redirects are followed by hand so every hop is checked BEFORE it is requested;
@@ -208,8 +208,8 @@ def not_connected_reason() -> str:
         "try again - it uses your ChatGPT plan, no API key needed.")
 
 
-async def describe_images(paths: List[str], question: str = "", vault_root: Optional[str] = None,
-                          labels: Optional[List[str]] = None, timeout_s: float = 180.0) -> dict:
+async def describe_images(paths: list[str], question: str = "", vault_root: str | None = None,
+                          labels: list[str] | None = None, timeout_s: float = 180.0) -> dict:
     """Send up to MAX_IMAGES brain images to ChatGPT and return `{ok, text, count}` or `{ok: False, error}`."""
     paths = [str(p).strip() for p in (paths or []) if str(p or "").strip()]
     if not paths:
@@ -256,7 +256,7 @@ async def describe_images(paths: List[str], question: str = "", vault_root: Opti
 async def _look_once(payload: dict, headers: dict, timeout_s: float):
     """One streamed look. Returns (deltas, completed text, error, status): status is the HTTP code of a refused request,
     0 when the stream ran (an error inside it is in `error`), -1 when the call itself blew up."""
-    parts: List[str] = []
+    parts: list[str] = []
     final = ""
     err = ""
     try:

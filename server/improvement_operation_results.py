@@ -12,9 +12,9 @@ import improvement_usage as IU
 from improvement_blobs import AssetUnavailable
 from improvement_operation_checks import execution_checks
 from improvement_operation_execution import OperationExecution
+from improvement_qualification_records import require_product_store
 from improvement_trial_evidence import decode_trace
 from improvement_trial_records import _brain
-from improvement_qualification_records import require_product_store
 
 
 class OperationResults:
@@ -61,8 +61,14 @@ class OperationResults:
                 or value.get("request_hash") != operation["request_hash"]):
             raise AssetUnavailable("operation_result_binding_mismatch")
         if value.get('version') == 2:
-            from improvement_native_trace_checks import validated_history, reread_native_decisions
-            from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+            from improvement_native_decisions import (
+                NativeImageDecisionStore,
+                attempt_scope,
+            )
+            from improvement_native_trace_checks import (
+                reread_native_decisions,
+                validated_history,
+            )
             from improvement_trial_records import HostContextRecords
             with closing(assets.store._conn()) as connection:
                 stored_attempt = connection.execute('SELECT workspace_json FROM improvement_operation_attempts WHERE operation_id=? AND brain_id=? AND attempt=?',
@@ -123,9 +129,19 @@ class OperationResults:
         native = None
         decision_reader = None
         if manifest['version'] == 2:
-            from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
-            from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
-            from improvement_operation_profile import operation_system_prompt, operation_user_prompt
+            from improvement_native_decisions import (
+                NativeImageDecisionStore,
+                attempt_scope,
+            )
+            from improvement_native_trace_checks import (
+                require_durable_allow,
+                validate_native_trace,
+                validated_history,
+            )
+            from improvement_operation_profile import (
+                operation_system_prompt,
+                operation_user_prompt,
+            )
             packets = validated_history(trace, lambda item: decode_trace(self.execution.blobs, brain, item), kind='operation', receipt=workspace)
             scope = attempt_scope(kind='operation', brain_id=brain, receipt=workspace,
                 config_pin=prepared[1]['engine_config'], capability_hash=capability_hash)

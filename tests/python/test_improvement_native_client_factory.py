@@ -1,11 +1,10 @@
 """Actual engine query with a trusted profile factory; no native/client request."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
 import test_improvement_claude as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class NativeClientFactoryTests(unittest.TestCase):

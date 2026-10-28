@@ -2,33 +2,37 @@
 
 Mỗi test dưới đây gắn với một lỗi CỤ THỂ đã tái hiện được, không phải test trang trí.
 """
-from _paths import SERVER, ROOT  # noqa: E402,F401
-
 import asyncio
 import json
 import sqlite3
 import time
-
-from cryptography.fernet import Fernet
+from datetime import datetime as _dt
+from datetime import timedelta as _td
+from datetime import timezone as _tz
 
 import capability_resolver
-import fast_path_runtime
-import readonly_path_runtime
-from adaptive_context_runtime import FeaturePolicy
-from capability_executor import CapabilityExecutor
-from capability_registry import CapabilityRegistry
-from context_compiler import (
-    CompileRequest, ContextCompiler, ContextItem, DeterministicQualityGate,
-)
-from context_runtime import ObserveRuntime
-from evidence_store import EvidenceStore, redact
-from memory_index import MemoryIndex
 
 # Ghim đồng hồ: capsule mang theo giờ thật, nên từ 0.14.6 thời điểm biên soạn cũng là một
 # đầu vào của capsule hash. Không ghim thì hai lần biên soạn rơi hai bên mốc phút sẽ ra hai
 # hash khác nhau và bất biến dưới đây thỉnh thoảng đỏ - loại đỏ tệ nhất vì chạy lại là xanh.
 import context_compiler as _cc
-from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+import fast_path_runtime
+import readonly_path_runtime
+from _paths import ROOT, SERVER  # noqa: F401
+from adaptive_context_runtime import FeaturePolicy
+from capability_executor import CapabilityExecutor
+from capability_registry import CapabilityRegistry
+from context_compiler import (
+    CompileRequest,
+    ContextCompiler,
+    ContextItem,
+    DeterministicQualityGate,
+)
+from context_runtime import ObserveRuntime
+from cryptography.fernet import Fernet
+from evidence_store import EvidenceStore, redact
+from memory_index import MemoryIndex
+
 _cc._DONG_HO_NOW = lambda: _dt(2026, 8, 3, 21, 34, tzinfo=_tz(_td(hours=7)))
 
 
@@ -408,14 +412,15 @@ def test_repository_defaults_activate_no_canary_path(tmp_path):
     Kiểm bằng cách chạy thật admission của cả năm đường canary với chính hằng
     mặc định trong config.py, không phải bằng cách grep chuỗi trong source.
     """
-    import copy
     import asyncio
-    import config as cfgmod
+    import copy
+
     import agent_runtime
+    import config as cfgmod
     import fast_path_runtime
     import model_router
-    import readonly_path_runtime
     import readonly_orchestrator
+    import readonly_path_runtime
     import workflow_graph
     import workflow_runtime
     import write_path_runtime
@@ -503,6 +508,7 @@ def test_shadow_resolve_uses_the_real_permission_mode_not_a_hardcoded_full(tmp_p
     cao hơn thực tế.
     """
     import inspect
+
     import main
 
     source = inspect.getsource(main._schedule_registry_shadow)
@@ -547,6 +553,7 @@ def test_diagnostics_answers_where_tokens_went_without_leaking_content(tmp_path)
     Ràng buộc: chỉ metadata. Không objective, không actor hash, không excerpt.
     """
     import json as _json
+
     from context_runtime import ObserveRuntime
 
     settings = {"context_runtime": {"mode": "shadow"}}

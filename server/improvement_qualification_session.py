@@ -1,19 +1,18 @@
 """Disposable engineering authority and retained native preflight ownership."""
 from __future__ import annotations
 
-from contextlib import closing
 import asyncio
-from dataclasses import asdict, dataclass
 import hashlib
-from pathlib import Path
 import secrets
 import sys
 import tempfile
 import time
-
-from cryptography.fernet import Fernet
+from contextlib import closing
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import improvement_store as IM
+from cryptography.fernet import Fernet
 from improvement_blobs import AssetUnavailable, RevisionBlobs, check_ancestry
 from improvement_claude import _runtime_identity
 from improvement_native_formats import NATIVE_PROFILE_VERSION
@@ -224,9 +223,15 @@ class QualificationSession:
         Exact replay is historical identity only; it still requires an active
         pre-engine lease and does not permit relaunch or refresh a closed run.
         """
-        from improvement_trials import TrialStore
         from improvement_operation_execution import OperationExecution
-        from improvement_qualification_records import _key, _ATTEMPT, actual_binding, read_attempt, read_run
+        from improvement_qualification_records import (
+            _ATTEMPT,
+            _key,
+            actual_binding,
+            read_attempt,
+            read_run,
+        )
+        from improvement_trials import TrialStore
         _digest(capability_hash)
         if (type(owner) not in (TrialStore, OperationExecution) or owner.assets is not self.assets
                 or principal != self.principal):
@@ -255,8 +260,8 @@ class QualificationSession:
             else:
                 prepared = owner._current(connection, principal, row)
                 owner.host._snapshot_observe(principal, prepared[1])
-                from improvement_operation_protocol import operation_materialization
                 from improvement_native_formats import input_version
+                from improvement_operation_protocol import operation_materialization
                 expected = operation_materialization({'version': input_version(self._pin, 'operation'),
                     'brain_id': principal.brain_id, 'operation_id': identifier,
                     'request': _parse(row['request_json'].encode()), 'engine_config_hash': IM._hash(self._pin),
@@ -484,14 +489,14 @@ class QualificationSession:
         # Retry only their known cleanup, never admission, settlement or query.
         for key, resource in tuple(self._attempt_resources.items()):
             await resource['runner']._cleanup_qualification_attempt(key)
-        from improvement_trial_runner import _settled_call
         from improvement_qualification_results import QualificationQueryResults
+        from improvement_trial_runner import _settled_call
         for context in tuple(self._pending_proofs.values()):
             await _settled_call(QualificationQueryResults(self)._save_cleanup_diagnostic, context)
 
     def _attach_native(self, guardian, boundary):
-        from improvement_native_transport import GuardianSessionV2
         from improvement_native_parent import NativeParentBoundary
+        from improvement_native_transport import GuardianSessionV2
         self._assert_native_current()
         if (type(guardian) is not GuardianSessionV2 or type(boundary) is not NativeParentBoundary
                 or boundary._qualification is not self or boundary._guardian is not guardian

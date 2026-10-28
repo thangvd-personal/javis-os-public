@@ -25,9 +25,8 @@ import time
 from pathlib import Path
 
 import httpx
-
-import stt
 import localefmt
+import stt
 from bot_gateway import HangLuot, dong_vet, ten_tool
 
 
@@ -169,7 +168,7 @@ def md_to_mdv2(text: str) -> str:
                                 m.group(2).replace("\\", "\\\\").replace(")", "\\)") + ")"), t)
     # 4) heading → đậm
     t = re.sub(r"^#{1,6}\s+(.+?)\s*$",
-               lambda m: _stash("*" + _esc_mdv2(m.group(1)) + "*"), t, flags=re.M)
+               lambda m: _stash("*" + _esc_mdv2(m.group(1)) + "*"), t, flags=re.MULTILINE)
     # 5) **đậm**
     t = re.sub(r"\*\*([^*\n]+)\*\*", lambda m: _stash("*" + _esc_mdv2(m.group(1)) + "*"), t)
     # 6) escape toàn bộ phần còn lại rồi trả placeholder về chỗ cũ
@@ -518,7 +517,7 @@ class TelegramBot(HangLuot):
         # Chặn hậu tố ở cuối: "@shopbot" và "@shopbotvn" là hai username hợp lệ khác nhau, và
         # so chuỗi trần trụi thì con thứ nhất nhận vơ mọi câu gọi con thứ hai.
         if self.bot_username:
-            re_ten = re.compile(re.escape(u) + r"(?![A-Za-z0-9_])", re.I)
+            re_ten = re.compile(re.escape(u) + r"(?![A-Za-z0-9_])", re.IGNORECASE)
             for khoa_text in ("text", "caption"):
                 if re_ten.search(str(msg.get(khoa_text) or "")):
                     return True

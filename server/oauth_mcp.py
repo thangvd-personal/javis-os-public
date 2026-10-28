@@ -17,9 +17,8 @@ import time
 import urllib.parse
 
 import httpx
-
-import mcp_store
 import localefmt
+import mcp_store
 import secrets_store
 from config import STATE_DIR
 

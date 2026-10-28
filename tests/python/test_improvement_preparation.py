@@ -1,25 +1,22 @@
 """Host derives real baseline preparation without creating any candidate/arm."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
-import json
 import sqlite3
 import subprocess
 import threading
 import time
 import unittest
-from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_trial_associations as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_comparison_plans import ExperimentPlans
 from improvement_skill_candidates import SkillCandidates
 from improvement_trials import TrialStore, _request
-from improvement_preparation_protocol import preparation_schedule
-import test_improvement_trial_associations as fixtures
-from test_improvement_experiment_execution import _acl_only, _REAL_RUN, _REAL_POPEN
+from test_improvement_experiment_execution import _REAL_POPEN, _REAL_RUN, _acl_only
 
 
 class PreparationTests(unittest.TestCase):
@@ -138,7 +135,10 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM agent_calls").fetchone()[0], 1)
 
     def test_final_sql_fence_rejects_holdout_alias_added_after_slow_lineage_read(self):
-        from improvement_preparation_lineage import load_preparation_lineage, current_preparation_fences
+        from improvement_preparation_lineage import (
+            current_preparation_fences,
+            load_preparation_lineage,
+        )
         self.freeze()
         admitted = self.admit()
         with self.store._Tx(self.store) as connection:

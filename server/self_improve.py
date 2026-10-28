@@ -50,25 +50,25 @@ Thiết kế "register(app, deps)" + LoopDeps: module KHÔNG import main.py (tr�
 """
 from __future__ import annotations
 
-import localefmt   # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
 import asyncio
-import sys
 import json
 import re
+import sys
 import time
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any
 
-import yaml
+import aux_engine  # engine viec nen theo model phu nguoi dung chon
+import channel_context  # bóc khối JAVIS_* trước khi báo Telegram - kênh chữ, không phải web
 import fastyaml
+import localefmt  # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
+import yaml
+from claude_cli import _empty_mcp_file, cancel_all, claude_engine
 from fastapi import APIRouter, Form, Query
-
-from claude_cli import claude_engine, cancel_all, _empty_mcp_file
-import aux_engine   # engine viec nen theo model phu nguoi dung chon
-import channel_context   # bóc khối JAVIS_* trước khi báo Telegram - kênh chữ, không phải web
 
 LEGACY_SLUG = "vong-lap-goc"
 # Dấu "đã migrate loop_config.json" ghi thẳng vào chính file đó. Có dấu này thì KHÔNG dựng lại
@@ -159,23 +159,23 @@ class LoopDeps:
     """Các helper của main.py được tiêm vào (tránh import vòng)."""
     build_system_prompt: Callable[[str], str]
     brain_root: Callable[[str], str]
-    aux_model: Callable[[], Optional[str]]
+    aux_model: Callable[[], str | None]
     atomic_write_text: Callable[[Any, str], None]
     project_root: Path
     state_dir: Path
-    safe_tools: List[str]
-    readonly_tools: List[str]
-    notify: Optional[Callable] = None        # async notify(text) - broadcast Telegram khi auto-pause (mọi admin)
+    safe_tools: list[str]
+    readonly_tools: list[str]
+    notify: Callable | None = None        # async notify(text) - broadcast Telegram khi auto-pause (mọi admin)
     # async report(owner_chat, text, *, quiet=False) - báo NGƯỜI YÊU CẦU loop mỗi vòng.
     # `quiet` bỏ chuông + thông báo đẩy (vòng chạy trót lọt), tin vẫn về kênh và hòm thư.
-    report: Optional[Callable] = None
-    apply_mcp: Optional[Callable] = None      # apply_mcp(cli): gắn MCP Javis-quản-lý (config+strict+deny) - loop ĐỌC được dữ liệu thật
-    mcp_allow_patterns: Optional[Callable] = None  # () -> ["mcp__<server>", ...] để thêm vào allowlist (MCP mới gọi được)
+    report: Callable | None = None
+    apply_mcp: Callable | None = None      # apply_mcp(cli): gắn MCP Javis-quản-lý (config+strict+deny) - loop ĐỌC được dữ liệu thật
+    mcp_allow_patterns: Callable | None = None  # () -> ["mcp__<server>", ...] để thêm vào allowlist (MCP mới gọi được)
     # Đổi engine việc nền theo model phụ người dùng chọn (Claude / Codex / API rẻ).
     # None = giữ nguyên Claude như trước (test dựng deps tối giản không cần tiêm).
-    aux_swap: Optional[Callable] = None
+    aux_swap: Callable | None = None
     # 0.199.0: (source, ref, brain=, title=, error=, request=) -> report a broken run to Javis Core (incident_desk.py).
-    incident_hook: Optional[Callable] = None
+    incident_hook: Callable | None = None
 
 
 class LoopFeature:
@@ -191,7 +191,7 @@ class LoopFeature:
         }
         self.lock = asyncio.Lock()           # THỰC THI TUẦN TỰ: 1 vòng/lúc trên toàn hệ
         self._viec_nen: set = set()   # vòng loop đang chạy nền (xem _chay_nen)
-        self._running: Optional[Tuple[str, str]] = None   # (brain_root_resolved, slug) đang chạy
+        self._running: tuple[str, str] | None = None   # (brain_root_resolved, slug) đang chạy
         self._migrated = False
         self.router = self._make_router()
 
@@ -276,7 +276,7 @@ class LoopFeature:
     def _loops_dir(self, brain: str) -> Path:
         return Path(self.deps.brain_root(brain)) / "Javis" / "loops"
 
-    def _loop_path(self, brain: str, slug: str) -> Optional[Path]:
+    def _loop_path(self, brain: str, slug: str) -> Path | None:
         """Path file loop AN TOÀN theo slug tuỳ ý (kể cả stem tiếng Việt user tự đặt):
         file PHẢI nằm NGAY TRONG Javis/loops - chặn '../' traversal. None = slug không hợp lệ."""
         d = self._loops_dir(brain)
@@ -338,10 +338,10 @@ class LoopFeature:
             "body": (body or "").strip(),
         }
 
-    def list_loops(self, brain: str) -> List[dict]:
+    def list_loops(self, brain: str) -> list[dict]:
         """Đọc mọi loop của brain. Chịu lỗi tốt: file hỏng → bỏ qua + log stderr, không crash."""
         d = self._loops_dir(brain)
-        out: List[dict] = []
+        out: list[dict] = []
         if not d.is_dir():
             return out
         for fp in sorted(d.glob("*.md")):
@@ -359,7 +359,7 @@ class LoopFeature:
                 print(f"[loops] bỏ qua {fp.name}: {type(e).__name__}: {e}", file=__import__('sys').stderr)
         return out
 
-    def get_loop(self, brain: str, slug: str) -> Optional[dict]:
+    def get_loop(self, brain: str, slug: str) -> dict | None:
         for lp in self.list_loops(brain):
             if lp["slug"] == slug:
                 return lp
@@ -552,7 +552,7 @@ class LoopFeature:
 
     # ══════════════════════ scheduler ══════════════════════
 
-    def scheduler_brains(self) -> List[str]:
+    def scheduler_brains(self) -> list[str]:
         """Các brain mà scheduler quét loop: legacy brain + brain đã đăng ký (khi user
         tạo/toggle loop trên brain khác) + brain mặc định. Dedup theo root đã resolve."""
         cfg = self._read_legacy_raw()
@@ -584,7 +584,7 @@ class LoopFeature:
         except Exception:
             pass
 
-    def _eligible_overdue(self, loop: dict, st: dict, now_ts: float, hour: int) -> Optional[float]:
+    def _eligible_overdue(self, loop: dict, st: dict, now_ts: float, hour: int) -> float | None:
         """None = không đủ điều kiện; số >= 0 = đã quá hạn bấy nhiêu giây."""
         if not loop["enabled"] or st.get("auto_paused_reason"):
             return None
@@ -597,7 +597,7 @@ class LoopFeature:
         overdue = now_ts - float(st.get("last_run", 0)) - loop["interval_min"] * 60
         return overdue if overdue >= 0 else None
 
-    def _pick_due(self) -> Optional[Tuple[str, dict]]:
+    def _pick_due(self) -> tuple[str, dict] | None:
         now, hour = time.time(), _now_vn().hour
         best = None
         for brain in self.scheduler_brains():
@@ -648,9 +648,9 @@ class LoopFeature:
         except Exception as e:
             print(f"[loop log] {e}", file=__import__('sys').stderr)
 
-    def _read_log_entries(self, brain: str, slug: str = "", limit: int = 10) -> List[str]:
+    def _read_log_entries(self, brain: str, slug: str = "", limit: int = 10) -> list[str]:
         d = Path(self.deps.brain_root(brain)) / "Javis" / "loop-log"
-        entries: List[str] = []
+        entries: list[str] = []
         if d.is_dir():
             # Đọc file mới nhất trước; trong mỗi file entry mới nằm DƯỚI (ghi nối) nên đảo lại để
             # nhật ký xếp MỚI NHẤT TRƯỚC. Đọc tiếp file cho tới khi gom đủ 'limit' (dashboard phân
@@ -662,7 +662,7 @@ class LoopFeature:
                     txt = f.read_text(encoding="utf-8")
                 except Exception:
                     continue
-                chunks: List[str] = []
+                chunks: list[str] = []
                 for chunk in re.split(r"(?=^## \[)", txt, flags=re.MULTILINE):
                     chunk = chunk.strip()
                     if not chunk.startswith("## ["):
@@ -687,7 +687,7 @@ class LoopFeature:
         whole block to PREV_ROUNDS_TOTAL_CHARS. Failed rounds are left out: an error line says
         nothing about what was already suggested or done.
         """
-        picked: List[str] = []
+        picked: list[str] = []
         used = 0
         try:
             entries = self._read_log_entries(brain, slug, PREV_ROUNDS_MAX * 3)
@@ -725,7 +725,7 @@ class LoopFeature:
 
     # ══════════════════════ 1 vòng (giữ khung 4 bước bản gốc) ══════════════════════
 
-    async def _build_prompt(self, loop: dict) -> Tuple[str, str]:
+    async def _build_prompt(self, loop: dict) -> tuple[str, str]:
         """Trả (prompt, skip_reason). skip_reason != '' → bỏ qua vòng này (vd business chưa có số)."""
         goal, mode = loop["goal"], loop["mode"]
         is_write = mode in ("auto", "full")   # auto/full = được ghi; suggest = chỉ đọc
@@ -796,7 +796,7 @@ class LoopFeature:
             "Mỗi việc 1 dòng '- [loại] mô tả → hành động'. Không có gì → 'Không có việc mới'."
         ), ""
 
-    def _make_cli(self, loop: dict, cwd: str, sysprompt: Optional[str], for_verify: bool = False,
+    def _make_cli(self, loop: dict, cwd: str, sysprompt: str | None, for_verify: bool = False,
                   brain: str = ""):
         """Dựng CLI cho 1 vòng loop.
         - profile 'code' (nâng cao, chỉ đặt qua .md): Bash/Web + file, cwd=workspace, VẪN 0 MCP
@@ -1103,7 +1103,7 @@ class LoopFeature:
 
     # ══════════════════════ helpers cho API/automations ══════════════════════
 
-    def loop_view(self, brain: str, lp: dict, st_all: Optional[dict] = None) -> dict:
+    def loop_view(self, brain: str, lp: dict, st_all: dict | None = None) -> dict:
         """Định nghĩa + state + next_run + running - cho GET /loops và tab Lịch."""
         st = (st_all if st_all is not None else self.read_state(brain)).get(lp["slug"], {})
         today = _today()
@@ -1122,7 +1122,7 @@ class LoopFeature:
             "running": running,
         }
 
-    def toggle(self, brain: str, slug: str) -> Optional[dict]:
+    def toggle(self, brain: str, slug: str) -> dict | None:
         lp = self.get_loop(brain, slug)
         if not lp:
             return None

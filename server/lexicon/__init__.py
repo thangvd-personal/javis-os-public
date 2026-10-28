@@ -57,7 +57,7 @@ BAT_BUOC = (
     "MEMORY_CLAIM",      # assistant KHAI đã nhớ/quên/thu hồi (0.190.0, memory_receipt)
 )
 
-_CACHE: Dict[str, Optional[ModuleType]] = {}
+_CACHE: dict[str, ModuleType | None] = {}
 
 
 def _kiem_parity(mod: ModuleType, code: str) -> None:
@@ -69,7 +69,7 @@ def _kiem_parity(mod: ModuleType, code: str) -> None:
         )
 
 
-def get(code: str) -> Optional[ModuleType]:
+def get(code: str) -> ModuleType | None:
     """Module lexicon của ngôn ngữ, hoặc None nếu chưa có.
 
     None là một câu trả lời HỢP LỆ và nơi gọi PHẢI xử lý nó theo luật suy biến ở đầu file,

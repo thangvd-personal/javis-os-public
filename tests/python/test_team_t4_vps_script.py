@@ -7,7 +7,6 @@ Không bao giờ chạm VPS: máy chủ giả là `http.server` trong tiến tr�
 gần đúng theo trang tin khi không có kho), đo cả `GET /agents/{slug}/pulse` với slug của `faces[0]`, chỉ gửi GET, không ghi
 gì vào kho.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import hashlib
 import importlib.util
 import io
@@ -18,6 +17,8 @@ import threading
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -56,7 +57,7 @@ class Stub(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self):  # noqa: N802
+    def do_GET(self):
         hits.append(("GET", self.path.split("?")[0]))
         path = self.path.split("?")[0]
         if path == "/health":
@@ -72,7 +73,7 @@ class Stub(BaseHTTPRequestHandler):
             return self._send({"ok": True, "slug": parts[1]})
         return self._send({"ok": False}, 404)
 
-    def do_POST(self):  # noqa: N802
+    def do_POST(self):
         hits.append(("POST", self.path))
         self._send({"ok": False}, 405)
 

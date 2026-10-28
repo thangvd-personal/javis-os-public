@@ -14,12 +14,13 @@ Hai báo cáo 13/10/2026:
 2. Bot đăng nguyên câu "You've hit your session limit · resets 4:40am (UTC)" vào nhóm, tag người hỏi. Câu đó về
    như một câu trả lời bình thường chứ không phải lỗi, nên lọt qua nhánh lỗi kỹ thuật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zself-")
 try:
@@ -27,10 +28,10 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zc
 
 _fails = []
 

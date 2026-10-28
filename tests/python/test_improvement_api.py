@@ -1,6 +1,4 @@
 """Owner metadata routes are lazy and isolated from engines, live brains and server startup."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
 import os
 import sqlite3
@@ -9,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="imp-api-"))
 for key, value in {"JAVIS_STATE_DIR": TEST_ROOT / "state", "BRAINS_DIR": TEST_ROOT / "brains",
                    "OBSIDIAN_VAULT_PATH": TEST_ROOT / "vault", "BRAIN_PATH": TEST_ROOT / "brain",
@@ -16,11 +16,11 @@ for key, value in {"JAVIS_STATE_DIR": TEST_ROOT / "state", "BRAINS_DIR": TEST_RO
     os.environ[key] = str(value)
 (TEST_ROOT / "brains" / "Brain Default").mkdir(parents=True)
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import resonance_store as RS  # noqa: E402
-from improvement_blobs import RevisionBlobs  # noqa: E402
-from improvement_store import ImprovementStore, read_existing  # noqa: E402
+import resonance_store as RS
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from improvement_blobs import RevisionBlobs
+from improvement_store import ImprovementStore, read_existing
 
 if importlib.util.find_spec("improvement_api"):
     import improvement_api as IA

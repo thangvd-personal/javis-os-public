@@ -7,9 +7,9 @@ from contextlib import closing
 
 import improvement_cases as IC
 import improvement_store as IM
-from improvement_trial_records import _brain
 from improvement_experiment_protocol import definition as _definition
 from improvement_experiment_schema import TERMINAL_PHASES
+from improvement_trial_records import _brain
 
 _BLOCKERS = {"source_unavailable", "runtime_unavailable", "quota_unavailable", "candidate_unavailable",
              "cleanup_unavailable", "reviewer_unavailable"}
@@ -59,9 +59,9 @@ class ExperimentRecords:
 
     def _bound_in(self, connection, brain, value, expected_context_generation):
         """Current SQL authority only; Plans must also observe real sources before commit."""
-        from improvement_trial_records import HostContextRecords
-        from improvement_trial_associations import _association
         from improvement_evaluation import EVALUATOR_PIN
+        from improvement_trial_associations import _association
+        from improvement_trial_records import HostContextRecords
         context = HostContextRecords._row(connection, brain, value["experiment_id"])
         grant = HostContextRecords._grant(connection, context)
         if grant["status"] != "active":

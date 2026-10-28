@@ -54,8 +54,8 @@ import time
 import zipfile
 from pathlib import Path
 
-import packs
 import localefmt
+import packs
 from config import STATE_DIR
 
 LEDGER = STATE_DIR / "packs.json"

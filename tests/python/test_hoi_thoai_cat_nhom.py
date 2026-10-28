@@ -10,13 +10,14 @@ không hiểu "câu trên"; cho nó 30 tin ngay trước tin đang hỏi. Xoá d
   4. Ngữ cảnh cho bot: không có tin đang hỏi (nó đã đi riêng), chỉ trong nhóm, đã gỡ marker và thẻ `<chat_data>` (tin nhắn không đóng được khối), có trần
      độ dài, nằm trong prompt hệ thống chứ không trong tin của người hỏi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-catnhom-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -25,9 +26,9 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import conversations
 
 fails = []
 

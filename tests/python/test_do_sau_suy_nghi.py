@@ -14,11 +14,11 @@ mức Javis sang giá trị API an toàn, và mọi chỗ gửi đều phải đ
 Chỗ dễ quên thứ hai: đường LƯU và đường ĐỌC có hai whitelist RIÊNG. Sửa một bên thì giao diện
 cho chọn nấc mới mà server lặng lẽ hạ về "off" (đúng lỗi đã đo được trong trình duyệt).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import re
 import sys
 
 import engine
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 loi = []
 
@@ -69,7 +69,7 @@ check("CANARY: xhigh và ultra KHÔNG cùng budget (nếu bằng nhau thì nấc
 # chung `api_effort` (bảng cho các nhà kiểu OpenAI) là bóp ba nấc trên cùng của Javis thành
 # "high" - người dùng bấm "Tối đa" mà không có gì đổi, không lỗi, không dấu hiệu nào.
 HOP_LE_ANT = {"low", "medium", "high", "xhigh", "max"}
-_eff = lambda m, r: engine._anthropic_reasoning(m, r)["output_config"]["effort"]  # noqa: E731
+_eff = lambda m, r: engine._anthropic_reasoning(m, r)["output_config"]["effort"]
 for _m in ("claude-opus-4-8", "claude-opus-5", "claude-sonnet-5", "claude-fable-5-1",
            "claude-sonnet-4-6", "claude-opus-4-5"):
     for _r in engine.REASONING_LEVELS[1:]:
@@ -157,9 +157,9 @@ finally:
 # Ba engine này trước đây nhận độ sâu suy nghĩ bằng đúng bảng từ khoá của Claude Code, tức là
 # Javis dán chữ "ultrathink" vào cuối câu hỏi của người dùng rồi gửi cho Grok hay Gemini - một
 # chữ chúng không hiểu. Không lỗi, không dấu hiệu, chỉ là không có tác dụng gì.
-import antigravity_cli  # noqa: E402
-import codex_models  # noqa: E402
-import grok_cli  # noqa: E402
+import antigravity_cli
+import codex_models
+import grok_cli
 
 
 class _EngineGia2:
@@ -200,7 +200,7 @@ _HELP_CO = "Usage: x\n  --effort <level>   low, medium, high, xhigh\n  --model <
 _HELP_KHONG = "Usage: x\n  --model <m>\n"
 grok_cli.find_grok_cli = lambda: "gia"
 antigravity_cli.find_antigravity_cli = lambda: "gia"
-import time as _t  # noqa: E402
+import time as _t
 
 for _mod, _ten in ((grok_cli, "Grok"), (antigravity_cli, "Antigravity")):
     _mod._HELP_CACHE.update(path="gia", text=_HELP_CO, ts=_t.time())

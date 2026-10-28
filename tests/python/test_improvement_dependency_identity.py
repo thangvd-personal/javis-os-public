@@ -1,11 +1,11 @@
 """Dependency evidence follows each declaring document's exact granted identity."""
-from _paths import ROOT, SERVER  # noqa: F401
 import tempfile
 import unittest
 from pathlib import Path
 
-from improvement_trial_context import ContextSource, capture_context
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_dependency_evidence import dependency_evidence
+from improvement_trial_context import ContextSource, capture_context
 
 
 class DependencyIdentityTests(unittest.TestCase):

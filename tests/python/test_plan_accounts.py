@@ -6,7 +6,6 @@ Spec: docs/dev/2026-10-model-routing-spec.md 2.2 and 6.3. Pins what decides beha
 login and never moves; each extra account runs in its own folder; rotation is sequential and an account that ran out
 rests while the next one runs; the plan only counts as out of quota when no account of it can run.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import copy
 import json
@@ -14,6 +13,8 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-plan-acc-"))
 os.environ.setdefault("JAVIS_STATE_DIR", str(_TMP / "state"))
@@ -29,9 +30,9 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import model_routing as R  # noqa: E402
-import plan_accounts as P  # noqa: E402
+import config as cfgmod
+import model_routing as R
+import plan_accounts as P
 
 _fails = []
 
@@ -120,9 +121,11 @@ e = P.use(FakeCodex(), "openai-oauth", "acc_b")
 check("a Codex engine on account 2 runs with its CODEX_HOME", e.codex_home == str(fb) and e.account_id == "acc_b")
 e1 = P.use(FakeCodex(), "openai-oauth", "main")
 check("a Codex engine on account 1 keeps the default folder", e1.codex_home is None)
-import claude_cli  # noqa: E402
+import claude_cli
+
 check("codex_env takes an account folder", claude_cli.codex_env(str(fb))["CODEX_HOME"] == str(fb))
-import grok_cli  # noqa: E402
+import grok_cli
+
 check("Grok runs with GROK_HOME of its account", grok_cli._moi_truong("/tmp/g")["GROK_HOME"] == "/tmp/g")
 check("Grok on account 1 keeps the default", "GROK_HOME" not in grok_cli._moi_truong())
 c = FakeClaude()
@@ -135,7 +138,8 @@ check("a copy for another account builds its own options (background work)",
       "CLAUDE_CONFIG_DIR" not in (c2._options().env or {}) and c._options().env.get("CLAUDE_CONFIG_DIR") == str(fc))
 
 # ---- 5. background: one link per account ---------------------------------------------------------------------
-import aux_engine  # noqa: E402
+import aux_engine
+
 s = cfgmod.read_settings()
 s["model"]["accounts"] = {"openai-oauth": [{"id": "main", "label": "", "enabled": True},
                                            {"id": "acc_b", "label": "", "enabled": True}]}
@@ -152,7 +156,8 @@ check("a plan card with one account runs as before (one link, no account set)",
       len(one) == 1 and not hasattr(one[0], "account_id"))
 
 # ---- 6. chat: the plan is out of quota only when no account is left -----------------------------------------
-import main  # noqa: E402
+import main
+
 s = cfgmod.read_settings()
 s["model"]["accounts"] = {"openai-oauth": [{"id": "main", "label": "", "enabled": True},
                                            {"id": "acc_b", "label": "", "enabled": True}]}
@@ -184,7 +189,8 @@ check("next route after account 1 runs out: account 2 of the same card",
 R.clear_rest("openai-oauth", "main")
 main._PIN_LIMITED.clear()
 
-import aux_engine  # noqa: E402
+import aux_engine
+
 e = P.use(FakeCodex(), "openai-oauth", "acc_b")
 aux_engine._FallbackChain._rest(e, "model_not_found: gpt-x is not available on this plan")
 check("a background 'model not found' does not rest the plan account for chat", not R.resting_until("openai-oauth", "acc_b"))
@@ -211,7 +217,8 @@ kj = json.loads((fk / ".claude.json").read_text(encoding="utf-8"))
 check("an extra Claude account sees account 1's user-scope MCP servers, keeping its own login data",
       "gmail" in (kj.get("mcpServers") or {}) and kj["oauthAccount"]["emailAddress"] == "two@x")
 
-import time as _t  # noqa: E402
+import time as _t
+
 main._PLAN_LOGIN["acc_k"] = {"provider": "anthropic-cli", "ts": _t.time() + 60}
 check("sign in again: the old credentials file does not finish the new sign-in",
       not main._plan_login_fresh("anthropic-cli", "acc_k", fk))

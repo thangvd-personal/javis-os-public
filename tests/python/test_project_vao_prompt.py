@@ -17,18 +17,18 @@ tệ hơn không có, vì người dùng tin là nó đang chạy.
    này tuân luật lượt kia không - và người dùng không có cách nào biết vì sao, chỉ thấy Javis
    bướng. Danh sách tài liệu là dữ liệu tra cứu, bỏ thì cùng lắm model phải hỏi lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-pvp-")
 os.environ.setdefault("JAVIS_STATE_DIR", _STATE)
 _BRAINS = tempfile.mkdtemp(prefix="javis-pvp-brains-")
 os.environ["BRAINS_DIR"] = _BRAINS
 
-import main  # noqa: E402
-import sessions  # noqa: E402
+import main
 
 _fails = []
 

@@ -7,15 +7,15 @@ from contextlib import closing
 
 import improvement_cases as IC
 import improvement_store as IM
-from improvement_experiments import ExperimentRecords, _generation, _identifier
 from improvement_experiment_protocol import definition
+from improvement_experiment_schema import TERMINAL_PHASES
+from improvement_experiments import ExperimentRecords, _generation, _identifier
+from improvement_qualification_records import require_product_store
 from improvement_skill_candidates import SkillCandidates
 from improvement_trial_admission import TrialAdmission
-from improvement_trial_associations import _association, _FIELDS
+from improvement_trial_associations import _FIELDS, _association
 from improvement_trial_host import HostContextStore, _brain
 from improvement_trial_sources import authorize_case
-from improvement_experiment_schema import TERMINAL_PHASES
-from improvement_qualification_records import require_product_store
 
 
 class ExperimentPlans:

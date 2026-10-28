@@ -19,15 +19,15 @@ và `force=1` luôn soi lại (chép vault cũ từ máy khác vào).
 import os
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-mdhong-"))
 
-import asyncio  # noqa: E402
-import pathlib  # noqa: E402
-import sys  # noqa: E402
+import asyncio
+import pathlib
+import sys
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

@@ -13,7 +13,6 @@ history without ever reaching the customer. Checks:
   3. the read-loop watch spots rapid closes in the MCP log, kills local rivals, marks the bot card, rings once;
   4. a send that javis-zalo reports as success without a message id counts as failed.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import subprocess
@@ -21,16 +20,18 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-evict-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import mcp_client  # noqa: E402
-import mcp_orphans  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import mcp_client
+import mcp_orphans
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

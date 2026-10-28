@@ -17,7 +17,6 @@ No network. What is guarded, in order of what would hurt most if it broke:
      fails its signature and the bot hears nothing while looking healthy); a failed automatic
      subscribe only warns, because a Page subscribed by hand in the Meta app still delivers.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import hmac
@@ -26,6 +25,8 @@ import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-messenger-")
 
 try:
@@ -33,9 +34,9 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402
-import chatbot_store  # noqa: E402
-import messenger_bot  # noqa: E402
+import channels
+import chatbot_store
+import messenger_bot
 
 _fails = []
 
@@ -234,7 +235,7 @@ check("precheck {} (e.g. outside active hours) keeps the bot silent",
 # ============================================================
 # 4b. Start-up: App secret checked through appsecret_proof, subscribe failure only warns
 # ============================================================
-import httpx  # noqa: E402
+import httpx
 
 seen_params = []
 
@@ -298,8 +299,8 @@ check("start: wrong App secret refuses to start", not reg and "App secret" in bo
 # ============================================================
 # 5. Webhook endpoints (TestClient)
 # ============================================================
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://localhost")
 settings = {"messenger": {"verify_token": "ms-vt-1"}}

@@ -13,9 +13,10 @@ file tools cannot write. This module only puts them behind one tool call.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional
+from typing import Any
 
 import agent_lessons as AL
 import memory_control as MC
@@ -27,13 +28,13 @@ BODY_PREVIEW = 160
 @dataclass
 class Deps:
     memory_dir: Callable[[str], Path]                       # vault root -> <brain>/memory
-    agents: Callable[[str], List[dict]]                     # vault root -> [{slug, name}]
-    agent_key: Callable[[str, str, bool], Optional[str]]    # (root, slug, register) -> agent_key | None
+    agents: Callable[[str], list[dict]]                     # vault root -> [{slug, name}]
+    agent_key: Callable[[str, str, bool], str | None]    # (root, slug, register) -> agent_key | None
     lesson_store: Callable[[], Any]                         # () -> GoalStore | None
     agent_memory_file: Callable[[str, str], Path]           # (root, slug) -> memory/agents/<slug>/MEMORY.md
 
 
-_DEPS: List[Optional[Deps]] = [None]
+_DEPS: list[Deps | None] = [None]
 
 
 def wire(deps: Deps) -> Deps:
@@ -141,7 +142,7 @@ def _op_profile(args: dict) -> str:
 
 # ── lessons of an assistant ───────────────────────────────────────────────────
 
-def _legacy_file_lines(path: Path) -> List[str]:
+def _legacy_file_lines(path: Path) -> list[str]:
     try:
         return AL.legacy_lessons(path.read_text(encoding="utf-8")) if path.is_file() else []
     except OSError:
@@ -183,7 +184,7 @@ def _op_lesson_add(d: Deps, root: str, args: dict) -> str:
     return f"Đã thêm bài học L{lid} cho {a.get('name') or a['slug']}, dùng ở mọi nơi."
 
 
-def _remove_legacy_line(path: Path, idx: int) -> Optional[str]:
+def _remove_legacy_line(path: Path, idx: int) -> str | None:
     """Remove the idx-th (1-based) bullet of the legacy lessons section. Returns its text, or None."""
     try:
         text = path.read_text(encoding="utf-8")
@@ -214,7 +215,7 @@ def _op_lesson_revoke(d: Deps, root: str, args: dict) -> str:
     if ref.startswith("C") and ref[1:].isdigit():
         gone = _remove_legacy_line(d.agent_memory_file(root, a["slug"]), int(ref[1:]))
         return f"Đã gỡ bài học cũ: {_one_line(gone, 220)}" if gone else f"ERROR: không có bài học cũ {ref}."
-    num = ref[1:] if ref.startswith("L") else ref
+    num = ref.removeprefix("L")
     if not num.isdigit():
         return "ERROR: id là mã trong op=lessons, ví dụ L12 hoặc C3."
     key, store = d.agent_key(root, a["slug"], False), d.lesson_store()

@@ -6,14 +6,14 @@
 - loop_watch: a freeze of the event loop is caught with the stack that caused it; an unclean restart is recorded.
 - claude_sdk_engine builds its options off the loop; the page retries a handshake stuck in CONNECTING.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 
-import chat_runtime  # noqa: E402
-import loop_watch  # noqa: E402
+import chat_runtime
+import loop_watch
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -123,7 +123,8 @@ check("the record ends once the loop is free, with its length", inc.get("ended")
 check("no unclean restart on a first boot", rep["unclean_restarts"] == [], rep)
 
 # The previous run died without a clean stop: the next boot records it.
-import json  # noqa: E402
+import json
+
 beat = os.path.join(state, "loop_beat.json")
 with open(beat, "w", encoding="utf-8") as f:
     json.dump({"pid": 999999, "alive": 1700000000.0, "clean": False}, f)

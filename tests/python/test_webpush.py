@@ -26,15 +26,14 @@ import os
 import struct
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-push-"))
 
-from cryptography.hazmat.primitives import hashes, serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import ec  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric import utils as au  # noqa: E402
-
-import webpush  # noqa: E402
+import webpush
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import utils as au
 
 fails = []
 
@@ -61,7 +60,7 @@ ua_pub = ua.public_key().public_bytes(serialization.Encoding.X962,
                                       serialization.PublicFormat.UncompressedPoint)
 p256dh = webpush.b64u(ua_pub)
 auth = webpush.b64u(os.urandom(16))
-tin = "Javis: doanh thu hôm nay 12 đơn 🎉".encode("utf-8")
+tin = "Javis: doanh thu hôm nay 12 đơn 🎉".encode()
 
 body = webpush.ma_hoa(tin, p256dh, auth)
 check("giải mã ngược ra ĐÚNG bản gốc (ECDH+HKDF+AESGCM khớp cả hai chiều)",
@@ -105,7 +104,8 @@ try:
 except Exception as e:
     check("khoá công khai gửi kèm xác minh được chữ ký", False, e)
 
-import json  # noqa: E402
+import json
+
 claims = json.loads(webpush.b64u_giai(pl))
 check("aud là gốc của dịch vụ đẩy, không phải cả URL",
       claims["aud"] == "https://fcm.googleapis.com", claims.get("aud"))
@@ -138,7 +138,7 @@ check("huỷ cái không có trả False", webpush.huy_dang_ky("https://khong-co
 # Đây là đoạn gần nhất với "chạy thật" mà không cần mạng: thay tầng HTTP bằng một bản giả,
 # rồi đóng vai trình duyệt để mở gói. Chạy được tới đây nghĩa là dịch vụ đẩy thật cũng đọc
 # được gói đó - phần còn lại chỉ là đường truyền.
-import asyncio  # noqa: E402
+import asyncio
 
 
 class _GiaResponse:
@@ -166,7 +166,7 @@ class _GiaClient:
         return _GiaResponse(_GiaClient.ma_tra.get(url, 201))
 
 
-import httpx  # noqa: E402
+import httpx
 
 that_client = httpx.AsyncClient
 webpush.dang_ky(sub, "máy test")

@@ -12,18 +12,18 @@ Bộ lọc câu hỏi CÓ chặn "bây giờ", "hôm nay"... nhưng chặn theo 
 "giờ Việt Nam là mấy giờ" lọt qua đúng như vậy. Nên chữa ở gốc: mọi prompt Javis gửi đi đều
 mang theo một dòng giờ thật. Khoảng 30 token, đổi lấy việc không còn cửa nào để bịa.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
-import re
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-dongho-")
 
-import context_compiler as cc  # noqa: E402
-import main  # noqa: E402
+import context_compiler as cc
+import main
 
 _fails = []
 
@@ -47,7 +47,7 @@ check("không dùng em dash", "—" not in _d)
 check("nói rõ khỏi cần gọi tool", "không cần gọi tool" in _d)
 
 # Múi giờ là UTC+7 CỐ ĐỊNH, không đọc múi giờ của máy chủ - VPS thường chạy UTC.
-_utc = datetime(2026, 8, 3, 14, 34, tzinfo=timezone.utc).astimezone(
+_utc = datetime(2026, 8, 3, 14, 34, tzinfo=UTC).astimezone(
     timezone(timedelta(hours=7)))
 check("14:34 UTC là 21:34 giờ Việt Nam", "21:34" in cc.dong_ho(_utc))
 
@@ -60,7 +60,7 @@ check("và đúng giờ đang chạy", _hom_nay.strftime("%H:%M") in _that
       or (_hom_nay + timedelta(minutes=1)).strftime("%H:%M") in _that)
 
 # ---- 2. Capsule của ĐƯỜNG TẮT phải mang theo giờ. Đây là chỗ lỗi thật nằm ----
-from capability_registry import CapabilityRegistry  # noqa: E402
+from capability_registry import CapabilityRegistry
 
 _reg_dir = tempfile.mkdtemp(prefix="javis-dongho-reg-")
 _reg = CapabilityRegistry(_reg_dir)

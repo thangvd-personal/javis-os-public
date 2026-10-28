@@ -1,6 +1,4 @@
 """Atomic owner imports use actual encrypted Host/CaseStore state and synthetic owner files."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -13,14 +11,16 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="as-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",
                   "OBSIDIAN_VAULT_PATH": "vault", "SOURCES_PATH": "sources", "JAVIS_SESSIONS_DB": "sessions.sqlite3"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-import test_improvement_host_snapshots as fixtures
 import improvement_cases as IC
 import improvement_store as IM
+import test_improvement_host_snapshots as fixtures
 from improvement_evaluation import EVALUATOR_PIN
 from improvement_trial_file_sources import BrainFileFixtures
 

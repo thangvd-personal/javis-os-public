@@ -13,11 +13,12 @@ thoại không có banner như web, một ghim chết mà không ai nói là h�
 0.350.0 (docs/dev/2026-10-model-routing-spec.md 2.5): a pin belongs to ONE Telegram chat. /model inside a chat pins
 that chat only and never changes the main model any more; chats without a pin follow the web's main model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tgghim-"))
 try:
@@ -25,8 +26,8 @@ try:
 except Exception:
     pass
 
-import config as cfgmod  # noqa: E402
-import main  # noqa: E402
+import config as cfgmod
+import main
 
 _fails = []
 

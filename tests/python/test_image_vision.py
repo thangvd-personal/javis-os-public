@@ -12,7 +12,6 @@ pinned here:
   4. The Zalo plugins are no longer bundled, and the Zalo connector names `javis.zalo` as its companion pack so the QR flow
      and the Connect page can offer it. Javis never installs it silently: the state is reported, nothing more.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
@@ -22,16 +21,17 @@ import tempfile
 import types
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-iv-"))
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import yaml  # noqa: E402
-
-import image_vision as iv  # noqa: E402
+import httpx
+import image_vision as iv
+import yaml
 
 fails = []
 
@@ -165,7 +165,8 @@ iv.describe_images = real_describe
 # ============================================================
 # 3. The brain's text reader on a photo
 # ============================================================
-import mcp_hub  # noqa: E402
+import mcp_hub
+
 _tools, route = mcp_hub._builtin_tools("full", str(vault))
 kq = asyncio.run(route["javis_read_file"]["call"]({"path": "attachments/x.jpg"}))
 check("reading a photo as text explains how to see it instead of mojibake", "javis_describe_image" in kq
@@ -183,15 +184,17 @@ cat = json.loads((ROOT / "system" / "mcp-catalog.json").read_text(encoding="utf-
 zalo = next(c for c in cat["connectors"] if c["id"] == "zalo")
 check("the Zalo connector stays in the app and names its companion pack", zalo.get("companion_pack") == "javis.zalo"
       and zalo.get("auth", {}).get("type") == "qr")
-import mcp_catalog  # noqa: E402
+import mcp_catalog
+
 pub = {c["id"]: c for c in mcp_catalog.public_catalog()}
 check("the dashboard sees the companion pack (the QR flow offers it after sign-in)",
       pub.get("zalo", {}).get("companion_pack") == "javis.zalo")
 
-import pack_install  # noqa: E402
-import packs  # noqa: E402
+import pack_install
+import packs
+
 CAT = {"zalo": {"name": "Zalo Agent MCP", "companion_pack": "javis.zalo"}, "gmail": {"name": "Gmail"}}
-pack_install.doc_so = lambda: {}
+pack_install.doc_so = dict
 check("no Zalo connection: nothing to offer", pack_install.companion_packs(CAT, {"gmail"}) == [])
 st = pack_install.companion_packs(CAT, {"zalo", "gmail"})
 check("Zalo connected, pack missing: reported as missing", st == [{"connector_id": "zalo", "name": "Zalo Agent MCP",
@@ -200,7 +203,7 @@ pack_install.doc_so = lambda: {"javis.zalo": {"enabled": False}}
 check("installed but off: reported as disabled", pack_install.companion_packs(CAT, {"zalo"})[0]["state"] == "disabled")
 pack_install.doc_so = lambda: {"javis.zalo": {"enabled": True}}
 check("installed and on: reported as installed", pack_install.companion_packs(CAT, {"zalo"})[0]["state"] == "installed")
-pack_install.doc_so = lambda: {}
+pack_install.doc_so = dict
 real_dir = packs.PACKS_DIR
 packs.PACKS_DIR = Path(tempfile.mkdtemp(prefix="javis-iv-packs-"))
 (packs.PACKS_DIR / "javis.zalo").mkdir()

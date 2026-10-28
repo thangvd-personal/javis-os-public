@@ -1,10 +1,7 @@
 """Owner proposals use real canonical files, ACLs, encrypted blobs and M1 context grants."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import json
-import sqlite3
 import stat
 import threading
 import unittest
@@ -14,8 +11,9 @@ from unittest.mock import patch
 
 import improvement_assets as IA
 import improvement_store as IM
-from improvement_candidate_records import CandidateRecords
 import test_improvement_host_snapshots as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_candidate_records import CandidateRecords
 
 if importlib.util.find_spec("improvement_skill_candidates"):
     from improvement_skill_candidates import SkillCandidates

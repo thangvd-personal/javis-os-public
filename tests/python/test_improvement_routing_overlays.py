@@ -1,12 +1,11 @@
 """M4 routing overlays: evaluate a description, apply it to the brain's main chat, revert, suspend on drift."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import shutil
 import unittest
 
 import improvement_routing as R
 import improvement_store as IM
 import test_improvement_activation as base
+from _paths import ROOT, SERVER  # noqa: F401
 
 CASES = [{"query": q, "expected": "report", "kind": "positive"} for q in (
     "doi soat ma hang giua hai bang", "doi soat so tien thanh toan", "doi soat don hang ton kho",
@@ -152,9 +151,9 @@ class RoutingOverlayTests(base.ActivationBase):
             IM.ensure(self.store)
 
     def test_http_routes_round_trip(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: self.activations,
             resolve_brain=lambda value: self.owner.brain_id, routing=lambda: self.routing))
@@ -179,6 +178,7 @@ class CanaryRoutingEngineTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
         from unittest.mock import patch
+
         import test_adaptive_context_phase8 as phase8
         from adaptive_context_runtime import AdaptiveContextCanary
         from capability_registry import CapabilityRegistry

@@ -31,7 +31,6 @@ brain. Brain tạm có một trợ lý tạm (AGENT_SLUG, không chọn model ri
 dùng được. Prompt phiên trợ lý KHÁC prompt chat thường của pilot 5 (không có CLAUDE.md): kết quả pilot không suy ngược
 cho chat thường.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -43,6 +42,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 MODE = os.environ.get("JAVIS_RESONANCE_E2E_ACHIEVE", "").strip().lower()
 if MODE not in ("dry", "real"):
     print("pilot achieve: bỏ qua (đặt JAVIS_RESONANCE_E2E_ACHIEVE=dry hoặc real để chạy)")
@@ -50,8 +51,8 @@ if MODE not in ("dry", "real"):
     sys.exit(0)
 
 sys.path.insert(0, str(Path(__file__).parent))
-import _e2e_pilot_guard as G  # noqa: E402
-import _e2e_achieve_harness as H  # noqa: E402
+import _e2e_achieve_harness as H
+import _e2e_pilot_guard as G
 
 PORT = int(os.environ.get("JAVIS_RESONANCE_E2E_PORT", "7792"))
 CHAT_LIMIT = 2 if MODE == "real" else 0
@@ -86,9 +87,9 @@ assert not any(k in MODEL for k in ("claude_auth", "anthropic_api_key")), "setti
 (STATE / "settings.json").write_text(json.dumps({"model": MODEL}, ensure_ascii=False), encoding="utf-8", newline="\n")
 
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions as SS  # noqa: E402
+import resonance as R
+import resonance_store as RS
+import sessions as SS
 
 KEY = str(BRAIN.resolve())
 P = RS.Principal("agent", "javis", KEY)

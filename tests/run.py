@@ -384,7 +384,7 @@ def main() -> int:
             ra(r.stderr or "")
             ra("::endgroup::")
     cham_nhat = sorted(da_do.items(), key=lambda x: -x[1])[:10]
-    ra(f"\nChậm nhất: " + ", ".join(f"{t} {g:.0f}s" for t, g in cham_nhat))
+    ra("\nChậm nhất: " + ", ".join(f"{t} {g:.0f}s" for t, g in cham_nhat))
     if cuu:
         ra("Đỏ khi chạy chung, xanh khi chạy một mình (nên làm chắc hơn hoặc thêm vào CHAY_RIENG): " + ", ".join(cuu))
     ra(f"{len(viec) - len(do)}/{len(viec)} xanh{nhan} trong {giay:.0f} giây")

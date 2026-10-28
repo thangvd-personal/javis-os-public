@@ -4,7 +4,6 @@
 
 Không chạm mạng: phần gọi thật được mock (fake httpx + fake creds) để kiểm payload → parse SSE → lưu.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import base64
 import json
@@ -13,11 +12,13 @@ import sys
 import tempfile
 import zlib
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-imgtest-")
 
-import config           # noqa: E402
-import image_gen        # noqa: E402
-import openai_oauth     # noqa: E402
+import config
+import image_gen
+import openai_oauth
 
 
 def _cfg_default_strip():
@@ -278,7 +279,7 @@ async def _terminal_case(lines):
     openai_oauth.valid_creds = lambda: {"access_token": "fake", "account_id": "fake"}
     try:
         result = await asyncio.wait_for(image_gen.generate_chatgpt("test", vault_root=vault), 0.3)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         result = {"ok": False, "error": "TEST: vẫn chờ EOF"}
     return result, state
 
@@ -330,7 +331,7 @@ check("model thường xếp trước model -codex, bỏ id đã gỡ",
 image_gen._catalog_models = lambda: ["gpt-6-luna", image_gen.HOST_MODEL]
 check("tài khoản có HOST_MODEL thì thử nó đầu tiên",
       image_gen.host_model_candidates()[0] == image_gen.HOST_MODEL)
-image_gen._catalog_models = lambda: []
+image_gen._catalog_models = list
 check("chưa có danh mục: chỉ còn HOST_MODEL", image_gen.host_model_candidates() == [image_gen.HOST_MODEL])
 
 _loi_55 = "ChatGPT 400: The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."

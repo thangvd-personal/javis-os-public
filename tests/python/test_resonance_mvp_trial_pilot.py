@@ -13,7 +13,6 @@ Kiểm CỨNG các tính chất của host (hạn mức, receipt, bằng chứng
 Kết quả chấm của model chỉ GHI LẠI, không ép: model thật có thể cho kết quả khác kỳ vọng ghi trong fixture.
 JAVIS_RESONANCE_PILOT_OUT: nơi ghi báo cáo JSON (không có đường dẫn cá nhân).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 PILOT = os.environ.get("JAVIS_RESONANCE_PILOT") == "1"
 if not PILOT:
@@ -41,9 +42,9 @@ Path(_STATE, "settings.json").write_text(json.dumps({"model": {k: _m[k] for k in
                                                                                    "claude_model") if k in _m}},
                                                     ensure_ascii=False), encoding="utf-8", newline="\n")
 
-import main  # noqa: E402  - nạp SAU khi JAVIS_STATE_DIR tạm đã đặt
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import main
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 

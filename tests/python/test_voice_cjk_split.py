@@ -5,10 +5,10 @@
 `。！？` take no space after them, so the old rule (stop + whitespace) never cut a Japanese
 paragraph and the whole reply went to TTS as one block: the first sound came very late.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import unittest
 
 import voice_brain
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class SplitTests(unittest.TestCase):

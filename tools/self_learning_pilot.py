@@ -34,7 +34,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
-import improvement_loop as L  # noqa: E402
+import improvement_loop as L
 
 CARRIERS = ("GHTK COD", "GHN COD", "Viettel Post COD")
 NAMES = ("Lan", "Minh", "Hoa", "Tuan", "Mai", "Khang", "Thu", "Long", "Nga", "Phuc", "Vy", "Son", "Ha", "Quang")
@@ -217,7 +217,7 @@ def parse_output(text: str):
     text = text.strip()
     if "```" in text:
         text = text.split("```")[1]
-        text = text[4:] if text.startswith("json") else text
+        text = text.removeprefix("json")
     start, end = text.find("{"), text.rfind("}")
     return json.loads(text[start:end + 1])
 

@@ -6,15 +6,13 @@ Bối cảnh (2026-09-19, task t_305e712a90f4): khung chat đã có limit_resume
 hàng đợi chỉ có `_is_transient` khớp "429" rồi trả việc về ready ngay -> dispatcher nhặt lại
 sau 5 giây, 3 lượt thử cháy trong vài phút, việc nằm blocked vĩnh viễn dù 47 phút sau gói mở.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
-
 import aux_engine
 import tasks as tasks_mod
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi import FastAPI
 from task_store import TaskStore
 from tasks import TasksDeps, TasksFeature
 

@@ -21,16 +21,17 @@ Phủ:
 KHÔNG chạm mạng.
 KHÔNG dùng ký tự em dash.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ghim-"))
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

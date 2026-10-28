@@ -1,13 +1,12 @@
 """Pure paired-case arithmetic is technical evidence, never dataset acceptance."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import unittest
 
-import improvement_store as IM
-import improvement_experiment_protocol as P
 import improvement_comparison_results as C
+import improvement_experiment_protocol as P
+import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_comparison_results"):
     from improvement_comparison_results import aggregate

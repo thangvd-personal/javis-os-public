@@ -9,15 +9,16 @@ các thao tác đó của harness với tiến trình và mạng giả, và soá
 P2-2: tin báo của giai đoạn phải là tin MỚI của đúng loại và revision, có trong đúng phiên kèm biên nhận. Ca âm:
 không gửi, chỉ có tin cũ của bản đầu, gửi nhầm phiên, có tin mà thiếu biên nhận, chỉ có cờ delivered.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 sys.path.insert(0, str(Path(__file__).parent))
-import _e2e_achieve_harness as H  # noqa: E402
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_achieve_harness as H
+import _e2e_pilot_guard as G
 
 _fails = []
 
@@ -211,17 +212,18 @@ check("chuẩn hoá dòng outbox đọc revision từ payload và cờ đã giao
           {"id": 6, "goal_id": "g1", "kind": "x", "revision": None, "delivered": False}])
 
 # ═══════════ Review mã bàn giao: P2-1 (giữ đầu ra chưa có receipt) và P2-2 (sửa hợp lệ sau tiếp nhận) ═══════════
-import asyncio  # noqa: E402
-import os  # noqa: E402
+import asyncio
+import os
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="ach-h-state-"))
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import resonance as R
+import resonance_store as RS
 
 _B = Path(tempfile.mkdtemp(prefix="ach-h-brain-")).resolve()
 (_B / "Javis").mkdir()
 _ST = RS.GoalStore(Path(tempfile.mkdtemp(prefix="ach-h-db-")) / "r.sqlite3")
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo trợ lý
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 RA.enable(_ST, _B)
 _P = RS.Principal("agent", "javis", str(_B))
@@ -292,7 +294,7 @@ def _a(why, **kw):
     return {"intent": {"last_verdict": why}, "receipt": _rc(**kw)}
 
 
-C = lambda acts, left: H.adoption_contract(acts, left, EXP)  # noqa: E731
+C = lambda acts, left: H.adoption_contract(acts, left, EXP)
 check("P2-2 bản đạt, 0 lượt việc nền: đạt", C([], 1)[0])
 check("P2-2 việc nền chạy khi bản đã đạt (lý do unknown): bác, làm lại vô ích", not C([_a("unknown")], 1)[0])
 check("P2-2 bản chưa đạt, việc nền sửa một lượt (lý do not_met) đúng hợp đồng receipt: ĐẠT", C([_a("not_met")], 1)[0])

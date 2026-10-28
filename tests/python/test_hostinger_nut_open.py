@@ -9,12 +9,13 @@ DOMAIN_NAME was empty. Checks:
      published port, http://<ip>:7777); with DOMAIN_NAME set they are exactly as before;
   2. the Settings page offers the free srv<id>.hstgr.cloud name from reverse DNS, only for a .hstgr.cloud name.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-open-")
 try:
@@ -22,7 +23,7 @@ try:
 except Exception:
     pass
 
-import yaml  # noqa: E402
+import yaml
 
 _fails = []
 
@@ -71,7 +72,7 @@ check("the rest of the Traefik labels unchanged",
       and yes.get("traefik.http.services.javis.loadbalancer.server.port") == "7777")
 
 # ---- 2. the free name ----
-from routes import domain as dom   # noqa: E402
+from routes import domain as dom
 
 S = dom.hostinger_suggestion
 check("reverse DNS under .hstgr.cloud gives javis.<name>", S("1.2.3.4", lambda ip: "srv1782015.hstgr.cloud.") == "javis.srv1782015.hstgr.cloud")
@@ -96,7 +97,8 @@ H = dom.hostinger_names
 check("default instance: javis.<vps> first, then <vps>", H("srv1.hstgr.cloud", "javis") == ["javis.srv1.hstgr.cloud", "srv1.hstgr.cloud"])
 check("second instance: only its own sub-name", H("srv1.hstgr.cloud", "javis-b") == ["javis-b.srv1.hstgr.cloud"])
 check("no VPS name: nothing", H("", "javis") == [])
-import tempfile  # noqa: E402
+import tempfile
+
 _st = Path(tempfile.mkdtemp()) / "gateway.txt"
 _st.write_text("state=serving\nnames=javis.srv1.hstgr.cloud srv1.hstgr.cloud\n")
 G = dom.read_gateway_status
@@ -119,9 +121,8 @@ os.environ.pop("DOMAIN_NAME")
 dom._hostinger_base = _ptr
 
 # ---- 4. /domain/auto: only a link that answers as THIS Javis, Hostinger only ----
-import asyncio  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app, base_url="http://127.0.0.1:7777")
 who = cl.get("/domain/whoami")

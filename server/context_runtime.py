@@ -21,13 +21,13 @@ import sqlite3
 import threading
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import config
-import quota_scheduler        # sổ cái TPM dùng chung cho MỌI nguồn gọi model
-
+import quota_scheduler  # sổ cái TPM dùng chung cho MỌI nguồn gọi model
 
 RUNTIME_VERSION = "adaptive-v7"
 RESOLVER_POLICY_VERSION = "deterministic-shadow-v1"
@@ -35,7 +35,7 @@ COMPILER_POLICY_VERSION = "adaptive-compiler-shadow-v1"
 REGISTRY_REVISION = "legacy-live"
 MODEL_PROFILE_REVISION = "settings-live"
 
-_CURRENT: contextvars.ContextVar[Optional["TurnTrace"]] = contextvars.ContextVar(
+_CURRENT: contextvars.ContextVar[TurnTrace | None] = contextvars.ContextVar(
     "javis_context_runtime_trace", default=None
 )
 
@@ -51,7 +51,7 @@ class TurnTrace:
     registry_revision: str = "registry-unavailable"
     model_profile_revision: str = "models-unavailable"
     execution_path: str = "unassigned"
-    canary_bucket: Optional[int] = None
+    canary_bucket: int | None = None
     canary_policy_version: str = ""
 
 
@@ -66,7 +66,7 @@ class QuotaAdmission:
     remaining_tokens: int
 
 
-def current_trace() -> Optional[TurnTrace]:
+def current_trace() -> TurnTrace | None:
     return _CURRENT.get()
 
 
@@ -75,7 +75,7 @@ def current_trace() -> Optional[TurnTrace]:
 CHECKPOINTED_PATHS = frozenset({"orchestrator", "workflow"})
 
 
-def bind_trace(trace: Optional[TurnTrace]):
+def bind_trace(trace: TurnTrace | None):
     return _CURRENT.set(trace)
 
 
@@ -83,7 +83,7 @@ def reset_trace(token) -> None:
     _CURRENT.reset(token)
 
 
-def event_fields(trace: Optional[TurnTrace]) -> dict:
+def event_fields(trace: TurnTrace | None) -> dict:
     if not trace:
         return {}
     return {"task_id": trace.task_id, "step_id": trace.step_id}
@@ -557,7 +557,7 @@ class ObserveRuntime:
 
     def start_turn(self, session_id: str, brain: str, channel: str,
                    token_budget: dict | None = None,
-                   deadline_seconds: float | None = None) -> Optional[TurnTrace]:
+                   deadline_seconds: float | None = None) -> TurnTrace | None:
         if not self.enabled():
             return None
         registry_revision, model_revision = REGISTRY_REVISION, MODEL_PROFILE_REVISION
@@ -612,7 +612,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def set_route(self, trace: Optional[TurnTrace], provider: str, model: str) -> None:
+    def set_route(self, trace: TurnTrace | None, provider: str, model: str) -> None:
         if not trace:
             return
         try:
@@ -626,7 +626,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def nha_ghim_duong(self, trace: Optional[TurnTrace], path: str) -> bool:
+    def nha_ghim_duong(self, trace: TurnTrace | None, path: str) -> bool:
         """Trả lại chỗ ghim khi tầng đã nhận lượt lại KHÔNG giao được hàng.
 
         Ghim một đường là cam kết "tầng này lo lượt này". Đường tắt của bộ não gói thuê bao có
@@ -663,8 +663,8 @@ class ObserveRuntime:
         except Exception:  # noqa: BLE001 - nhả ghim hỏng không được phá lượt chat
             return False
 
-    def pin_execution_path(self, trace: Optional[TurnTrace], path: str,
-                           bucket: Optional[int], policy_version: str,
+    def pin_execution_path(self, trace: TurnTrace | None, path: str,
+                           bucket: int | None, policy_version: str,
                            reason: str = "") -> str:
         """Pin đường chạy cho task. Đường THẬT chốt đúng một lần; "legacy" chỉ là mặc định.
 
@@ -750,7 +750,7 @@ class ObserveRuntime:
             trace.execution_path = "legacy"
             return "legacy"
 
-    def rebase_registry_revision(self, trace: Optional[TurnTrace], revision: str,
+    def rebase_registry_revision(self, trace: TurnTrace | None, revision: str,
                                  reason: str = "source_changed") -> bool:
         """Re-pin có kiểm soát trước model/tool khi discovery thấy source revision mới."""
         if not trace or not revision or trace.execution_path != "unassigned":
@@ -782,7 +782,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def record_runtime_event(self, trace: Optional[TurnTrace], event_type: str,
+    def record_runtime_event(self, trace: TurnTrace | None, event_type: str,
                              data: dict | None = None) -> None:
         """Ghi event metadata allowlist cho runtime phase mới; raw content vẫn bị loại."""
         if not trace:
@@ -796,7 +796,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def initialize_orchestrator(self, trace: Optional[TurnTrace], actor_hash: str,
+    def initialize_orchestrator(self, trace: TurnTrace | None, actor_hash: str,
                                 objective_encrypted: str, state_encrypted: str,
                                 state_hash: str, orchestration_status: str,
                                 budget: dict, deadline_at: float | None) -> bool:
@@ -848,7 +848,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def checkpoint_orchestrator(self, trace: Optional[TurnTrace], state_encrypted: str,
+    def checkpoint_orchestrator(self, trace: TurnTrace | None, state_encrypted: str,
                                 state_hash: str, orchestration_status: str) -> bool:
         """Checkpoint encrypted, append-only; task row và version đổi atomically."""
         if (not trace or trace.execution_path not in CHECKPOINTED_PATHS or
@@ -897,7 +897,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def load_orchestrator_checkpoint(self, task_id: str) -> Optional[dict]:
+    def load_orchestrator_checkpoint(self, task_id: str) -> dict | None:
         """Trả ciphertext và metadata pinning; caller có quyền mới được decrypt."""
         try:
             with self._lock:
@@ -917,7 +917,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def resume_trace(self, task_id: str) -> Optional[TurnTrace]:
+    def resume_trace(self, task_id: str) -> TurnTrace | None:
         """Khôi phục trace đúng runtime/revision đã pin; không tự migrate task giữa chừng."""
         snapshot = self.load_orchestrator_checkpoint(task_id)
         if not snapshot:
@@ -949,7 +949,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def claim_orchestrator_resume(self, trace: Optional[TurnTrace]) -> bool:
+    def claim_orchestrator_resume(self, trace: TurnTrace | None) -> bool:
         """OCC claim chống hai worker cùng resume một task trong cùng thời điểm."""
         if not trace or trace.execution_path not in CHECKPOINTED_PATHS:
             return False
@@ -977,9 +977,9 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def create_child_step(self, trace: Optional[TurnTrace], step_kind: str,
+    def create_child_step(self, trace: TurnTrace | None, step_kind: str,
                           objective_hash: str, attempt: int = 1,
-                          parent_step_id: str | None = None) -> Optional[TurnTrace]:
+                          parent_step_id: str | None = None) -> TurnTrace | None:
         """Tạo step con độc lập; parallel step không tranh optimistic version của task."""
         if not trace or trace.execution_path not in CHECKPOINTED_PATHS:
             return None
@@ -1019,7 +1019,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def finish_child_step(self, trace: Optional[TurnTrace], status: str,
+    def finish_child_step(self, trace: TurnTrace | None, status: str,
                           error_code: str = "") -> bool:
         if not trace or trace.execution_path not in CHECKPOINTED_PATHS:
             return False
@@ -1047,7 +1047,7 @@ class ObserveRuntime:
 
     def find_reusable_read(self, task_id: str, capability_id: str,
                            capability_revision: str, args_hash: str,
-                           now: float | None = None) -> Optional[dict]:
+                           now: float | None = None) -> dict | None:
         """Evidence reuse chỉ trong cùng task và đúng capability revision + args hash."""
         try:
             with self._lock:
@@ -1067,7 +1067,7 @@ class ObserveRuntime:
 
     def find_step_read_evidence(self, task_id: str, step_id: str,
                                 capability_id: str,
-                                capability_revision: str) -> Optional[dict]:
+                                capability_revision: str) -> dict | None:
         """Restart reconciliation: step đã SUCCEEDED thì dùng evidence, không gọi read lại."""
         try:
             with self._lock:
@@ -1104,7 +1104,7 @@ class ObserveRuntime:
         except Exception:
             return {"input_tokens": 0, "output_tokens": 0, "model_rounds": 0}
 
-    def admit_quota(self, trace: Optional[TurnTrace], provider: str, model: str,
+    def admit_quota(self, trace: TurnTrace | None, provider: str, model: str,
                     input_tokens: int, output_tokens: int, rolling_tpm_limit: int,
                     window_seconds: int = 60) -> QuotaAdmission:
         """Admission atomically theo rolling-window local; fail closed khi limit không biết."""
@@ -1172,7 +1172,7 @@ class ObserveRuntime:
         except Exception:
             return QuotaAdmission(False, "", "quota_store_error", requested, 0, limit, 0)
 
-    def consume_quota(self, trace: Optional[TurnTrace], reservation_id: str,
+    def consume_quota(self, trace: TurnTrace | None, reservation_id: str,
                       input_tokens: int = 0, output_tokens: int = 0) -> None:
         if not trace or not reservation_id:
             return
@@ -1203,7 +1203,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def release_quota(self, trace: Optional[TurnTrace], reservation_id: str,
+    def release_quota(self, trace: TurnTrace | None, reservation_id: str,
                       reason: str = "setup_failed") -> bool:
         """Nhả reservation trước model call; không dùng để hoàn token đã gửi."""
         if not trace or not reservation_id:
@@ -1227,7 +1227,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def create_capability_lease(self, trace: Optional[TurnTrace], capability_id: str,
+    def create_capability_lease(self, trace: TurnTrace | None, capability_id: str,
                                 capability_revision: str, schema_hash: str,
                                 actor_hash: str, allowed_effect: str,
                                 resource_scope: dict, ttl_seconds: int = 120) -> str:
@@ -1262,7 +1262,7 @@ class ObserveRuntime:
         except Exception:
             return ""
 
-    def get_capability_lease(self, lease_id: str) -> Optional[dict]:
+    def get_capability_lease(self, lease_id: str) -> dict | None:
         try:
             with self._lock:
                 row = self._conn().execute(
@@ -1276,7 +1276,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def revoke_capability_lease(self, trace: Optional[TurnTrace], lease_id: str,
+    def revoke_capability_lease(self, trace: TurnTrace | None, lease_id: str,
                                 reason: str = "cancelled") -> bool:
         if not trace or not lease_id:
             return False
@@ -1299,7 +1299,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def claim_read_invocation(self, trace: Optional[TurnTrace], lease_id: str,
+    def claim_read_invocation(self, trace: TurnTrace | None, lease_id: str,
                               capability_id: str, capability_revision: str,
                               schema_hash: str, actor_hash: str, args_hash: str) -> str:
         """Claim lease dùng một lần trước I/O; không lưu arguments, chỉ lưu hash."""
@@ -1342,7 +1342,7 @@ class ObserveRuntime:
         except Exception:
             return ""
 
-    def finish_read_invocation(self, trace: Optional[TurnTrace], invocation_id: str,
+    def finish_read_invocation(self, trace: TurnTrace | None, invocation_id: str,
                                lease_id: str, status: str,
                                evidence_id: str = "", error_code: str = "") -> bool:
         if not trace:
@@ -1382,7 +1382,7 @@ class ObserveRuntime:
     # KHÔNG BAO GIỜ được retry mù; chỉ reconcile bằng read hoặc hỏi người dùng.
 
     def prepare_write_invocation(
-            self, trace: Optional[TurnTrace], lease_id: str, capability_id: str,
+            self, trace: TurnTrace | None, lease_id: str, capability_id: str,
             capability_revision: str, actor_hash: str, args_hash: str,
             idempotency_key: str, resource_lock_key: str, confirmation_code: str,
             session_id: str, ttl_seconds: int = 900) -> dict:
@@ -1454,7 +1454,7 @@ class ObserveRuntime:
         except Exception as exc:
             return {"status": "error", "error_code": type(exc).__name__}
 
-    def find_pending_write(self, session_id: str, confirmation_code: str) -> Optional[dict]:
+    def find_pending_write(self, session_id: str, confirmation_code: str) -> dict | None:
         """Tra ý định write đang chờ xác nhận theo mã người dùng gõ lại."""
         code = str(confirmation_code or "").strip().upper()
         if not code:
@@ -1471,7 +1471,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def start_write_invocation(self, trace: Optional[TurnTrace], invocation_id: str,
+    def start_write_invocation(self, trace: TurnTrace | None, invocation_id: str,
                                actor_hash: str) -> bool:
         """PREPARED -> RUNNING sau khi người dùng xác nhận. Chỉ thành công đúng một lần."""
         if not trace or not invocation_id:
@@ -1499,7 +1499,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def finish_write_invocation(self, trace: Optional[TurnTrace], invocation_id: str,
+    def finish_write_invocation(self, trace: TurnTrace | None, invocation_id: str,
                                 lease_id: str, status: str, evidence_id: str = "",
                                 error_code: str = "", provider_request_id: str = "") -> bool:
         """Chốt sổ write. UNKNOWN GIỮ resource lock để không ai ghi đè khi chưa reconcile."""
@@ -1543,7 +1543,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def resolve_unknown_write(self, trace: Optional[TurnTrace], invocation_id: str,
+    def resolve_unknown_write(self, trace: TurnTrace | None, invocation_id: str,
                               landed: bool, evidence_id: str = "") -> bool:
         """Kết luận một write UNKNOWN bằng bằng chứng reconcile, rồi mới nhả lock."""
         if not trace or not invocation_id:
@@ -1622,7 +1622,7 @@ class ObserveRuntime:
         except Exception:
             return []
 
-    def get_invocation(self, invocation_id: str) -> Optional[dict]:
+    def get_invocation(self, invocation_id: str) -> dict | None:
         try:
             with self._lock:
                 row = self._conn().execute(
@@ -1632,7 +1632,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def persist_evidence_metadata(self, trace: Optional[TurnTrace], evidence_id: str,
+    def persist_evidence_metadata(self, trace: TurnTrace | None, evidence_id: str,
                                   source_type: str, source_ref: str, content_type: str,
                                   artifact_path: str, excerpt_encrypted: str,
                                   content_hash: str, trust: str,
@@ -1682,7 +1682,7 @@ class ObserveRuntime:
         except Exception:
             return False
 
-    def get_evidence_metadata(self, evidence_id: str) -> Optional[dict]:
+    def get_evidence_metadata(self, evidence_id: str) -> dict | None:
         try:
             with self._lock:
                 row = self._conn().execute(
@@ -1774,7 +1774,7 @@ class ObserveRuntime:
         giua = ti_le[len(ti_le) // 2]
         return max(1.0, min(giua, self._HIEU_CHINH_TRAN))
 
-    def observe_payload(self, trace: Optional[TurnTrace], messages, tools=None,
+    def observe_payload(self, trace: TurnTrace | None, messages, tools=None,
                         provider: str = "", model: str = "") -> dict:
         if not trace:
             return {}
@@ -1813,7 +1813,7 @@ class ObserveRuntime:
         except Exception:
             return meta
 
-    def record_usage(self, trace: Optional[TurnTrace], input_tokens=0, output_tokens=0) -> None:
+    def record_usage(self, trace: TurnTrace | None, input_tokens=0, output_tokens=0) -> None:
         if not trace:
             return
         tin, tout = int(input_tokens or 0), int(output_tokens or 0)
@@ -1842,8 +1842,8 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def add_evidence_ref(self, trace: Optional[TurnTrace], source_type: str,
-                         source_ref: str, trust: str = "observed") -> Optional[str]:
+    def add_evidence_ref(self, trace: TurnTrace | None, source_type: str,
+                         source_ref: str, trust: str = "observed") -> str | None:
         """Lưu ref tối thiểu dạng hash; nội dung và đường dẫn gốc không vào trace Phase 1."""
         if not trace or not source_ref:
             return None
@@ -1868,7 +1868,7 @@ class ObserveRuntime:
         except Exception:
             return None
 
-    def record_shadow_resolution(self, trace: Optional[TurnTrace], report: dict) -> None:
+    def record_shadow_resolution(self, trace: TurnTrace | None, report: dict) -> None:
         """Ghi quyết định shadow đã redaction. Query thô và capability schema không vào trace."""
         if not trace:
             return
@@ -1904,7 +1904,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def record_compiler_shadow(self, trace: Optional[TurnTrace], report: dict) -> None:
+    def record_compiler_shadow(self, trace: TurnTrace | None, report: dict) -> None:
         if not trace:
             return
         excluded = report.get("excluded") or {}
@@ -1955,7 +1955,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def record_quality_shadow(self, trace: Optional[TurnTrace], report: dict) -> None:
+    def record_quality_shadow(self, trace: TurnTrace | None, report: dict) -> None:
         if not trace:
             return
         data = {
@@ -1992,7 +1992,7 @@ class ObserveRuntime:
         except Exception:
             return {"samples": 0, "median_abs_pct_error": 0.0, "p95_abs_pct_error": 0.0}
 
-    def note_error(self, trace: Optional[TurnTrace], error_code: str) -> None:
+    def note_error(self, trace: TurnTrace | None, error_code: str) -> None:
         if not trace:
             return
         trace.had_error = True
@@ -2004,7 +2004,7 @@ class ObserveRuntime:
         except Exception:
             pass
 
-    def finish(self, trace: Optional[TurnTrace], status: str = "COMPLETED",
+    def finish(self, trace: TurnTrace | None, status: str = "COMPLETED",
                error_code: str = "") -> bool:
         if not trace:
             return False
@@ -2169,7 +2169,7 @@ class ObserveRuntime:
             out["error"] = type(exc).__name__
             return out
 
-    def get_task(self, task_id: str) -> Optional[dict]:
+    def get_task(self, task_id: str) -> dict | None:
         """Read-only helper cho test/admin tương lai; không trả raw content vì DB không lưu."""
         try:
             with self._lock:

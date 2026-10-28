@@ -18,13 +18,14 @@ Two decisions worth guarding, because each has a wrong version that looks more r
    is not inconsistent: a conversation has a life outside the project, while a project's
    documents mean nothing once the project is gone - leaving them is orphaned garbage.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-proj-"))
 
-import sessions  # noqa: E402
+import sessions
 
 _fails = []
 
@@ -102,7 +103,7 @@ check("unpinning goes back to newest-first order",
 # the old ORDER BY (pinned, added_at) left the tie to SQLite, so the older row could come
 # first. Freeze the clock so every row below gets the SAME added_at and check that
 # insertion order (rowid) breaks the tie, for all four project/session asset lists.
-from unittest import mock  # noqa: E402
+from unittest import mock
 
 pid_tie = st.create_project("Tie project", brain="brain")
 st.get_or_create("s-tie", brain="brain", engine="cli", model="sonnet")
@@ -228,8 +229,8 @@ check("CANARY: links accept only http/https", "^https?://" in _link, _link[:200]
 # lands in the right place. The easiest case to get wrong is a brain that names the folder
 # "01 - Sources": a hardcoded guess creates a second "sources" folder next to it, and the user
 # opens Sources without finding the file they just uploaded.
-from fastapi.testclient import TestClient  # noqa: E402
-import main as _mainmod  # noqa: E402
+import main as _mainmod
+from fastapi.testclient import TestClient
 
 _brain = tempfile.mkdtemp(prefix="brain-proj-")
 os.makedirs(os.path.join(_brain, "01 - Sources"), exist_ok=True)

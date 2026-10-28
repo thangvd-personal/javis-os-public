@@ -2,9 +2,9 @@
 
 Chạy: python tests/run.py connect_group
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import mcp_catalog
 import mcp_store
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 GOOGLE_GROUP = {"google-workspace", "google-tasks", "google-calendar",
                 "gmail", "google-keep", "google-sheets"}

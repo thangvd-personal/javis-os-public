@@ -16,17 +16,18 @@ Contract now:
    from the dashboard is not reverted on every reboot.
 4. Only a salted hash of the applied env value is stored, never the value itself.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-envpw-")
 os.environ.pop("JAVIS_ADMIN_PASSWORD", None)
 os.environ.pop("JAVIS_ADMIN_USER", None)
 
-import config as c   # noqa: E402
+import config as c
 
 _fails = []
 

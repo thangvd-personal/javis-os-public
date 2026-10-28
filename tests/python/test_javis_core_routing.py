@@ -11,20 +11,21 @@ Spec: owner, 16/10/2026 (Javis Core goal, sections 6 and 8; acceptance groups "Ä
 - no "first Telegram id" and no broadcast to every id: only the owner's own linked chat, or the single id;
 - a retry with the same key is filed once and rings once; one channel failing does not lose the report.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-core-route-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 
-import inbox  # noqa: E402
-import javis_core  # noqa: E402
-import main  # noqa: E402
-import tasks  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import inbox
+import javis_core
+import main
+import tasks
+from starlette.testclient import TestClient
 
 fails = []
 

@@ -33,7 +33,6 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List
 
 import winproc
 
@@ -70,7 +69,7 @@ def _path() -> Path:
         return Path(__file__).parent / _FILE
 
 
-def _load() -> Dict[str, dict]:
+def _load() -> dict[str, dict]:
     try:
         data = json.loads(_path().read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -78,7 +77,7 @@ def _load() -> Dict[str, dict]:
         return {}
 
 
-def _save(data: Dict[str, dict]) -> None:
+def _save(data: dict[str, dict]) -> None:
     p = _path()
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -89,7 +88,7 @@ def _save(data: Dict[str, dict]) -> None:
         print(f"[mcp orphans] ghi sổ PID lỗi: {e}", file=sys.stderr)
 
 
-def record(key: str, pid: int, args: List[str]) -> None:
+def record(key: str, pid: int, args: list[str]) -> None:
     """Remember the stdio process now serving `key` (one per key: a newer one replaces the older)."""
     if not key or not pid:
         return
@@ -113,7 +112,7 @@ def forget(key: str, pid: int) -> None:
             _save(data)
 
 
-def _markers(args: List[str]) -> List[str]:
+def _markers(args: list[str]) -> list[str]:
     """Every string whose presence in a command line marks the process as ours: `_marker`, plus the package name of a
     tarball URL (`.../javis-zalo/tar.gz/...` -> "/javis-zalo/"). npx runs the package as `node .../javis-zalo/...`, so
     once its `npm exec` launcher is gone the URL is in no command line of the group (0.283.0)."""
@@ -128,7 +127,7 @@ def _markers(args: List[str]) -> List[str]:
     return out
 
 
-def _marker(args: List[str]) -> str:
+def _marker(args: list[str]) -> str:
     """The argument that must appear in a process's command line for it to count as ours. The last one
     is the most specific that survives every launcher layer (`npx ... mcp start` -> node ... `start`
     is too common, so take the last argument that is not a bare sub-command word)."""
@@ -184,7 +183,7 @@ def _cmdline_posix(pid: int) -> str:
         return ""
 
 
-def _group_members_posix(pgid: int) -> List[int]:
+def _group_members_posix(pgid: int) -> list[int]:
     """Pids whose process group is `pgid` (the launcher may already be gone, its children not)."""
     out = []
     proc = Path("/proc")
@@ -270,7 +269,7 @@ def _same_dir(a: str, b: str) -> bool:
         return a == b
 
 
-def reap_same_home(home: str, keep_pgids=()) -> List[int]:
+def reap_same_home(home: str, keep_pgids=()) -> list[int]:
     """Kill every `... zalo ... mcp start` process (and its group) running with HOME = `home`, except the groups in
     `keep_pgids` and our own server's. Linux only (needs /proc); returns the process groups killed.
 
@@ -320,7 +319,7 @@ def reap_same_home(home: str, keep_pgids=()) -> List[int]:
     return killed
 
 
-def reap_all() -> List[str]:
+def reap_all() -> list[str]:
     """Kill stdio MCP processes left by an EARLIER server lifetime. Runs once per process; returns the
     keys whose survivor was killed. Entries this server recorded itself are never touched."""
     global _reaped

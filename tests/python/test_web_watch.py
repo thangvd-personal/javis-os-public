@@ -4,16 +4,12 @@
 dưới đây giữ những chi tiết làm nó dùng được thật: thời gian tương đối không báo, đổi giá có báo, đọc
 giá kiểu Việt Nam, giãn lần thử khi lỗi, tự dừng sau 5 lỗi, chống báo trùng, chặn mạng nội bộ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import importlib.util
-import json
-from pathlib import Path
 
 import pytest
-
 import web_watch as ww
-
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 # ---------------------------------------------------------------- giá
 

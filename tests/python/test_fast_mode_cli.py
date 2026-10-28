@@ -2,17 +2,18 @@
 
     python tests/run.py fast_mode_cli
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-fastcli-"))
-import fast_mode  # noqa: E402
-import codex_models  # noqa: E402
-import main as srv  # noqa: E402
-from claude_sdk_engine import ClaudeSDK, map_message  # noqa: E402
+import codex_models
+import fast_mode
+import main as srv
+from claude_sdk_engine import ClaudeSDK, map_message
 
 fails = []
 
@@ -55,7 +56,8 @@ check("background Claude Code runs (never touched by _cli_fast) send fastMode fa
       getattr(e2._options(), "settings", None))
 
 # The SDK passes Claude Code's init data through; Javis remembers the real Fast mode state.
-from claude_agent_sdk import SystemMessage  # noqa: E402
+from claude_agent_sdk import SystemMessage
+
 map_message(SystemMessage(subtype="init", data={"session_id": "x", "fast_mode_state": "cooldown",
                                                 "fast_mode_disabled_reason": "rate limit"}))
 st = fast_mode.states().get("anthropic-cli", {})
@@ -86,8 +88,8 @@ check("Codex + bolt off: forces the normal tier", cz.extra_config == ['service_t
 
 # Background Codex runs (loops, reminders, kanban, team turns) never get the bolt: force the normal
 # tier, or a config.toml with service_tier = "priority" would make every background run fast.
-import aux_engine  # noqa: E402
-import team_engine  # noqa: E402
+import aux_engine
+import team_engine
 
 
 class _Base:
@@ -100,12 +102,14 @@ class _Base:
 
 bg = aux_engine._build_codex({"model": "gpt-x"}, _Base(), "auto", "loop")
 check("background Codex runs force the normal tier", 'service_tier="default"' in bg.extra_config, bg.extra_config)
-from claude_cli import CodexCLI  # noqa: E402
+from claude_cli import CodexCLI
+
 tm = team_engine.codex_text_only(CodexCLI(cwd=".", tag="team", model="gpt-x"))
 check("team Codex turns force the normal tier", 'service_tier="default"' in tm.extra_config, tm.extra_config)
 
 # The bolt tooltip reads the remembered states.
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
+
 _r = TestClient(srv.app, base_url="http://localhost").get("/model/fast-state")
 check("GET /model/fast-state returns the remembered states",
       _r.status_code == 200 and _r.json().get("states", {}).get("anthropic-cli", {}).get("state") == "cooldown", _r.text[:200])

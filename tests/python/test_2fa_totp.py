@@ -14,18 +14,19 @@ File này canh bốn thứ dễ làm sai khi tự viết TOTP, và cả bốn đ
 4. **Ô mã thành máy dò.** Kiểm mã TRƯỚC mật khẩu là cho người chưa biết mật khẩu biết tài khoản
    nào đã bật 2FA.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-2fa-test-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c   # noqa: E402
-import main          # noqa: E402
-import totp          # noqa: E402
+import config as c
+import main
+import totp
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -73,7 +74,8 @@ check("nhưng bước SAU đó vẫn nhận",
 # Nhãn GIỮ dấu tiếng Việt (phần trăm-mã-hoá UTF-8, đúng Key Uri Format) nhưng phải bỏ dấu ':'
 # vì nó là dấu ngăn giữa issuer và tên tài khoản - lọt vào là vỡ cú pháp nhãn.
 _uri = totp.otpauth_uri(S, "Minh Quý", "Javis OS của Quý: bản 1")
-import urllib.parse as _up   # noqa: E402
+import urllib.parse as _up
+
 _nhan = _up.unquote(_up.urlparse(_uri).path).lstrip("/")
 check("otpauth đúng dạng và chỉ còn MỘT dấu ':' (của scheme)",
       _uri.startswith("otpauth://totp/") and _uri.count(":") == 1)
@@ -103,8 +105,9 @@ check("chuẩn hoá bỏ qua cách gõ",
 #      điện thoại vào MÀN HÌNH máy tính chứ không phải tờ giấy, nên cỡ mỗi ô là tất cả.
 #
 # Con số là thứ duy nhất canh được ở đây, nên test đo bằng số chứ không đọc chữ.
-import re as _re          # noqa: E402
-import segno as _segno    # noqa: E402
+import re as _re
+
+import segno as _segno
 
 _uri = totp.otpauth_uri(S, "admin", "Javis OS")
 for _thua in ("algorithm=", "digits=", "period="):

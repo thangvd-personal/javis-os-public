@@ -28,7 +28,6 @@ nhận đăng không thành, lỗi engine, bộ não không nộp, bộ não t�
 không kết quả). Lượt chat ở dry là MÔ PHỎNG trong tiến trình bằng đúng các hàm công cụ dùng; mọi bước khác (server
 thật, API thẻ, giết và dựng lại) như real.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -40,6 +39,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 MODE = os.environ.get("JAVIS_RESONANCE_A4_PILOT", "").strip().lower()
 SCEN = os.environ.get("JAVIS_RESONANCE_A4_SCENARIO", "").strip()
 if MODE not in ("dry", "real"):
@@ -49,7 +50,7 @@ if MODE not in ("dry", "real"):
 
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parent))
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_pilot_guard as G
 
 CHAT_LIMIT = 2
 STORE_CEILING = 0
@@ -328,11 +329,11 @@ def run_case(scen: str) -> int:
 
     os.environ["JAVIS_STATE_DIR"] = str(state)
     os.environ["BRAINS_DIR"] = str(brains)
-    import resonance as R  # noqa: E402  - sau khi đặt JAVIS_STATE_DIR
-    import resonance_store as RS  # noqa: E402
-    import sessions as SSm  # noqa: E402
-    import turn_context  # noqa: E402
-    import luot_dang_chay  # noqa: E402
+    import luot_dang_chay
+    import resonance as R
+    import resonance_store as RS
+    import sessions as SSm
+    import turn_context
 
     key = str(brain.resolve())
     owner = RS.Principal("owner", "owner", key)
@@ -663,7 +664,7 @@ def run_case(scen: str) -> int:
             else:
                 res = sim_turn(n, message)
                 status = "ok"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             status, res = "timeout", {}
         except RuntimeError as e:
             status, res = ("engine_error" if "engine_error" in str(e) else "transport_error"), {"error": str(e)}

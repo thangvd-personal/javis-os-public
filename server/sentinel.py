@@ -18,14 +18,14 @@ import json
 import re
 import sqlite3
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 WINDOW_S = 24 * 3600
 EXAMPLES_PER_ISSUE = 3
 SIGNATURE_CHARS = 140
 
-_ID_RE = re.compile(r"\b(?:[0-9a-f]{8,}|[A-Za-z]+_[0-9a-f]{6,})\b", re.I)
+_ID_RE = re.compile(r"\b(?:[0-9a-f]{8,}|[A-Za-z]+_[0-9a-f]{6,})\b", re.IGNORECASE)
 _NUM_RE = re.compile(r"\d+")
 _SPACE_RE = re.compile(r"\s+")
 
@@ -39,14 +39,14 @@ def signature(error: str) -> str:
     return s[:SIGNATURE_CHARS] or "(no error text)"
 
 
-def _read_json(path: Path) -> Optional[object]:
+def _read_json(path: Path) -> object | None:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
 
-def kanban_failures(state_dir: Path, since: float) -> List[dict]:
+def kanban_failures(state_dir: Path, since: float) -> list[dict]:
     db = Path(state_dir) / "kanban.sqlite3"
     if not db.exists():
         return []
@@ -68,7 +68,7 @@ def kanban_failures(state_dir: Path, since: float) -> List[dict]:
     return out
 
 
-def reminder_failures(brains: Iterable[Path], since: float) -> List[dict]:
+def reminder_failures(brains: Iterable[Path], since: float) -> list[dict]:
     out = []
     for b in brains:
         d = _read_json(Path(b) / "Javis" / "reminders.json")
@@ -80,7 +80,7 @@ def reminder_failures(brains: Iterable[Path], since: float) -> List[dict]:
     return out
 
 
-def loop_failures(brains: Iterable[Path]) -> List[dict]:
+def loop_failures(brains: Iterable[Path]) -> list[dict]:
     out = []
     for b in brains:
         d = _read_json(Path(b) / "Javis" / "loop-state.json")
@@ -96,7 +96,7 @@ def loop_failures(brains: Iterable[Path]) -> List[dict]:
     return out
 
 
-def webhook_failures(state_dir: Path, since: float) -> List[dict]:
+def webhook_failures(state_dir: Path, since: float) -> list[dict]:
     d = _read_json(Path(state_dir) / "webhooks.json")
     out = []
     for h in (d or {}).get("hooks", []) if isinstance(d, dict) else []:
@@ -107,13 +107,13 @@ def webhook_failures(state_dir: Path, since: float) -> List[dict]:
     return out
 
 
-def open_incidents(state_dir: Path) -> List[dict]:
+def open_incidents(state_dir: Path) -> list[dict]:
     d = _read_json(Path(state_dir) / "incidents.json")
     items = (d or {}).get("incidents", []) if isinstance(d, dict) else []
     return [i for i in items if i.get("status") in ("open", "retrying", "needs_you")]
 
 
-def scan(state_dir: Path, brains: Iterable[Path], now: Optional[float] = None,
+def scan(state_dir: Path, brains: Iterable[Path], now: float | None = None,
          window_s: float = WINDOW_S) -> dict:
     """One scan. Returns {"scanned_at", "window_h", "issues": [...], "counts": {...}, "incidents": n}."""
     now = time.time() if now is None else float(now)

@@ -35,7 +35,6 @@ import sys
 import threading
 import time
 import uuid
-from pathlib import Path
 
 from config import STATE_DIR
 

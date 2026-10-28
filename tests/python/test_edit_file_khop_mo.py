@@ -10,15 +10,16 @@ thứ phải giữ:
     lược "tương tự" không bao giờ chạy với replace_all.
   - **Gửi lại một sửa đã áp không nhân đôi nó.**
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-edit-"))
 
-import coding_files as cf  # noqa: E402
+import coding_files as cf
 
 _fails = []
 

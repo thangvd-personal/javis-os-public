@@ -1,6 +1,4 @@
 """Actual role admission ownership survives HTTP cancellation and shutdown."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
 import threading
@@ -9,6 +7,7 @@ from unittest.mock import patch
 
 import test_improvement_operation_execution as F
 import test_improvement_operation_runner as R
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_operation_adapter import ClaudeOperationAdapter
 
 

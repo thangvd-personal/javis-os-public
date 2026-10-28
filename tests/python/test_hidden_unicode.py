@@ -8,10 +8,11 @@ owner sees, zero-width spaces, and variation selectors used to smuggle bytes beh
 reads them, the owner reading the inbox does not. Before 0.83.2 `clean_chat_text` only removed ASCII
 control characters, so every one of these went into the prompt untouched.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-hidden-unicode-")
 try:
@@ -19,7 +20,7 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
+import chatbot_reply_policy as rp
 
 _fails = []
 
@@ -41,7 +42,7 @@ check("tag characters (ASCII smuggling) are removed", rp.clean_chat_text(smuggle
       rp.clean_chat_text(smuggled))
 for name, ch in (("right-to-left override", "‮"), ("left-to-right embedding", "‪"),
                  ("first strong isolate", "⁨"), ("pop directional isolate", "⁩"),
-                 ("zero-width space", "​"), ("zero-width non-joiner", "‌"),
+                 ("zero-width space", "\u200b"), ("zero-width non-joiner", "‌"),
                  ("right-to-left mark", "‏"), ("word joiner", "⁠"),
                  ("byte order mark", "﻿"), ("soft hyphen", "­"),
                  ("Hangul filler", "ㅤ"), ("interlinear annotation", "￹")):
@@ -56,7 +57,7 @@ check("a run of emoji presentation selectors is removed", rp.clean_chat_text("ok
 # Removing (not replacing with a space) means a marker split by a hidden character is put back together
 # and then caught by the marker filter, instead of slipping past it in two halves.
 check("an internal marker split by a zero-width space is still removed",
-      "JAVIS" not in rp.clean_chat_text("a JAVIS​_TASK b"), rp.clean_chat_text("a JAVIS​_TASK b"))
+      "JAVIS" not in rp.clean_chat_text("a JAVIS\u200b_TASK b"), rp.clean_chat_text("a JAVIS\u200b_TASK b"))
 check("clean_block removes hidden characters too and keeps its line breaks",
       rp.clean_block("dòng 1" + tags("x") + "\ndòng‮ 2") == "dòng 1\ndòng 2",
       rp.clean_block("dòng 1" + tags("x") + "\ndòng‮ 2"))
@@ -70,14 +71,15 @@ check("a skin-tone emoji is kept", rp.clean_chat_text("\U0001F44D\U0001F3FD") ==
 check("Arabic and Chinese text is kept", rp.clean_chat_text("مرحبا 你好") == "مرحبا 你好")
 
 check("strip_hidden keeps line breaks and markers (it is for the message the bot answers, not for chat_data)",
-      rp.strip_hidden("dòng​ 1\nJAVIS_TASK" + tags("x")) == "dòng 1\nJAVIS_TASK")
+      rp.strip_hidden("dòng\u200b 1\nJAVIS_TASK" + tags("x")) == "dòng 1\nJAVIS_TASK")
 
 # ---- The message the bot answers: the shared entry of every channel ----
 # `clean_chat_text` only guards the reply judge and the group context. The customer's own message goes
 # through `_tg_answer` (Telegram, Zalo, chatbots, CLI) straight to the engine and into the session store,
 # which the self-learning loop reads back. So the hidden characters must go at that entry.
-import asyncio  # noqa: E402
-import main  # noqa: E402
+import asyncio
+
+import main
 
 seen = {}
 

@@ -1,27 +1,25 @@
 """Disposable Session authority and native preflight; synthetic candidates only."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
-from contextlib import closing
 import hashlib
 import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
 import sys
-import tempfile
 import unittest
+from contextlib import closing
+from pathlib import Path
 from unittest.mock import patch
 
-import improvement_native_qualifications as registry
-import improvement_qualification_session as qs
 import improvement_native_parent as parent
+import improvement_native_qualifications as registry
 import improvement_native_transport as transport
+import improvement_qualification_session as qs
+import test_improvement_native_transport_v2 as kernel
+from _paths import ROOT, SERVER  # noqa: F401
 from test_improvement_native_sdk import pin
 from test_improvement_native_transport_v2 import fixture_manifest
-import test_improvement_native_transport_v2 as kernel
 
 
 class QualificationNativeTests(unittest.IsolatedAsyncioTestCase):
@@ -259,8 +257,8 @@ class QualificationKernelTests(unittest.IsolatedAsyncioTestCase):
         await kernel.HostGuardianWindowsTests.cleanup(self)
 
     async def _exercise_final_current_handoff(self, mutation):
-        from contextlib import ExitStack
         import threading
+        from contextlib import ExitStack
         session = self.qualification
         held, release = threading.Event(), threading.Event()
         transactions = session.assets.store._Tx
@@ -743,7 +741,7 @@ class QualificationRetainedProcessTests(unittest.IsolatedAsyncioTestCase):
 @unittest.skipUnless(os.name=='nt','actual static Windows runtime/source/installed import inventory')
 class QualificationClosureTests(unittest.TestCase):
     def test_actual_observed_closure_contains_changed_consumers_without_registering_candidate(self):
-        from improvement_claude import profile_hash, PROFILE_VERSION
+        from improvement_claude import PROFILE_VERSION, profile_hash
         from improvement_native_release import observe_release
         before_candidates=copy.deepcopy(registry.REVIEWED_QUALIFICATION_CANDIDATES)
         before_releases=copy.deepcopy(registry.REVIEWED_RELEASES)

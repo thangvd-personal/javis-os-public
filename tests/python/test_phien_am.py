@@ -9,15 +9,16 @@ khác vẫn ra Hoài My). Cùng bộ phiên âm đó giúp chốt kiểm tra câ
 chép "GitHub Actions" thành "huyết áp Action", so mặt chữ tiếng Anh thì chặn, so cách đọc thì
 khớp. Không chạm mạng: edge_tts bị thay bằng module giả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import types
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-phien-am-"))
 
-import phien_am as P  # noqa: E402
+import phien_am as P
 
 _fails = []
 
@@ -62,7 +63,7 @@ check("số, đường dẫn và khoảng trắng giữ nguyên",
 check("chuỗi rỗng", P.doc_viet("") == "" and P.doc_viet(None) == "")
 
 # ---- 4. Chốt kiểm tra câu diễn giải so âm theo cách đọc ----
-import voice_brain as vb  # noqa: E402
+import voice_brain as vb
 
 NHAN = [("vẫn không nhận ra huyết áp Action luôn", "vẫn không nhận ra GitHub Actions luôn"),
         ("anh hỏi về khít half action", "anh hỏi về GitHub Actions"),
@@ -94,8 +95,8 @@ fake = types.ModuleType("edge_tts")
 fake.Communicate = _FakeCommunicate
 sys.modules["edge_tts"] = fake
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _cfg_goc = main.cfgmod.read_settings

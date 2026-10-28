@@ -6,15 +6,14 @@ KHÔNG mạng (monkeypatch httpx). Phủ: catalog connector hợp lệ, oauth_mc
 (authorize không PKCE + redirect localhost + scope, đổi code bằng GET + nâng long-lived,
 _refresh qua fb_exchange_token), plugin nạp + tool readonly + gate chưa-kết-nối + format.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import importlib.util
-import json
 import os
 import sys
 import tempfile
 import urllib.parse
-from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-metagraph-"))
 
@@ -36,8 +35,8 @@ def check(n, c):
 
 
 # ---- 2. oauth_mcp nhánh Meta ----
-import oauth_mcp  # noqa: E402
-import secrets_store  # noqa: E402
+import oauth_mcp
+import secrets_store
 
 META_AUTH = {"provider": "meta", "authorize_url": "https://www.facebook.com/v25.0/dialog/oauth",
              "token_url": "https://graph.facebook.com/v25.0/oauth/access_token",

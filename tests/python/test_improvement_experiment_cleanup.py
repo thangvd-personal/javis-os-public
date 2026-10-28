@@ -1,6 +1,4 @@
 """Stop completion requires real execution exclusion and verified cleanup."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import json
 import subprocess
@@ -8,9 +6,9 @@ import sys
 import unittest
 from pathlib import Path
 
-import winproc
-
 import test_improvement_sandbox as fixtures
+import winproc
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ExperimentCleanupTests(unittest.TestCase):

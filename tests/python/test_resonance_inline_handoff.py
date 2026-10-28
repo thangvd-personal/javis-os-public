@@ -12,7 +12,6 @@ chat còn receipt mô tả bản việc nền. Sửa:
   nhận mới hơn (P1-2).
 Thiết kế: docs/dev/resonance-inline-artifact-handoff.md. Không gọi model thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import os
@@ -20,17 +19,25 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-handoff-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import claude_sdk_engine  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo trợ lý
+import _resonance_agent as RA
+import claude_sdk_engine
+import luot_dang_chay
+import resonance as R
+import resonance_store as RS
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
-from claude_agent_sdk import AssistantMessage, ToolResultBlock, ToolUseBlock, UserMessage  # noqa: E402
+from claude_agent_sdk import (
+    AssistantMessage,
+    ToolResultBlock,
+    ToolUseBlock,
+    UserMessage,
+)
 
 _fails = []
 

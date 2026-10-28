@@ -16,7 +16,6 @@ What is checked here:
      call itself timed out (marked so callers never resend), connection gone, odd result.
   4. The three pins of javis-zalo agree, and the catalog lists the new tool as dangerous (it sends).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
@@ -24,12 +23,14 @@ import tempfile
 import types
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import zalo_cli as Z  # noqa: E402
+import zalo_cli as Z
 
 fails = []
 
@@ -142,7 +143,7 @@ check("unreadable source: failure before calling MCP, outbox clean",
 # ============================================================
 # 4. Pins and catalog
 # ============================================================
-import zalo_login  # noqa: E402
+import zalo_login
 
 cat = json.loads((ROOT / "system" / "mcp-catalog.json").read_text(encoding="utf-8"))
 

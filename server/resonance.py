@@ -28,9 +28,11 @@ import os
 import re
 import secrets
 import time
-from dataclasses import asdict, dataclass, field, replace as dataclasses_replace
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
+from dataclasses import replace as dataclasses_replace
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import fastyaml
 import resonance_heartbeat as HB
@@ -100,10 +102,10 @@ class ActionReceipt:
     started_at: float
     finished_at: float
     engine: dict
-    output_ref: Optional[str] = None
-    output_sha256: Optional[str] = None
+    output_ref: str | None = None
+    output_sha256: str | None = None
     output_chars: int = 0
-    usage: Optional[dict] = None
+    usage: dict | None = None
     tool_calls_observed: int = 0
     error_code: str = ""
     error_detail: str = ""
@@ -154,7 +156,7 @@ _USAGE_KEYS = (("tokens_in", ("tokens_in", "input_tokens", "input")),
                ("cost_usd", ("cost_usd", "cost")))
 
 
-def _usage_from(ev: dict, usage: Optional[dict]) -> Optional[dict]:
+def _usage_from(ev: dict, usage: dict | None) -> dict | None:
     """Cộng usage của một sự kiện vào tổng. Trường nào engine KHÔNG báo thì để vắng, không ghi 0.
 
     Cộng dồn đúng với các engine M1 nhận (một `final` của Claude, hoặc một `usage` mỗi vòng của engine API
@@ -237,14 +239,14 @@ def pick_text_only_link(engine: Any, base: Any, requested: dict, chain_type: typ
 class TextTurn:
     """Kết quả một lượt engine chỉ chữ, trước khi host làm gì với nó."""
     text: str = ""
-    usage: Optional[dict] = None
+    usage: dict | None = None
     tool_calls: int = 0
     called: bool = False
     engine_info: dict = field(default_factory=dict)
     error_code: str = ""
     error_detail: str = ""
 
-    def fail(self, code: str, detail: Any) -> "TextTurn":
+    def fail(self, code: str, detail: Any) -> TextTurn:
         self.error_code, self.error_detail = code, _short(detail)
         return self
 
@@ -273,7 +275,7 @@ class GoalDeps:
     evidence: Any = None
     notify: Any = None
 
-    async def _ask(self, system_prompt: str, prompt: str) -> "TextTurn":
+    async def _ask(self, system_prompt: str, prompt: str) -> TextTurn:
         """MỘT lượt engine chỉ chữ, dùng chung cho run_once (M1) và bộ lập mục tiêu (M2).
 
         Người gọi đã giữ chỗ hạn mức. Mọi đường dừng TRƯỚC lúc gọi model trả lại chỗ đó. Trả TextTurn:
@@ -301,8 +303,8 @@ class GoalDeps:
         except Exception:  # noqa: BLE001 - engine không có trần riêng thì vẫn còn wait_for bên dưới
             pass
         turn.called = True
-        final_text: Optional[str] = None
-        err: Optional[tuple] = None
+        final_text: str | None = None
+        err: tuple | None = None
 
         async def consume():
             nonlocal final_text, err
@@ -329,7 +331,7 @@ class GoalDeps:
 
         try:
             await asyncio.wait_for(consume(), timeout=float(self.max_wall_s) + float(self.wall_grace_s))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return turn.fail("timeout", f"quá {self.max_wall_s}s")
         except Exception as e:  # noqa: BLE001
             return turn.fail("engine_exception", f"{type(e).__name__}: {e}")
@@ -465,7 +467,7 @@ class RouteDecision:
     kind: str
     reason: str
     message_ref: str
-    goal_id: Optional[str] = None
+    goal_id: str | None = None
 
 
 def enabled_for(brain_root) -> bool:
@@ -500,7 +502,7 @@ SCOPE_BLOCKS = {"pending": "scope_pending", "denied": "scope_denied", "revoked":
                 "missing": "grant_missing", "invalid": "path_rejected"}
 
 
-def agent_gate(store, brain_id: str, agent_key: str, version: Optional[int] = None) -> tuple:
+def agent_gate(store, brain_id: str, agent_key: str, version: int | None = None) -> tuple:
     """Cổng agent của A1, MỘT chính sách cho mọi đường: tool, /goal-requests, scheduler, bàn giao, đăng, phép thử.
 
     Trả (agent | None, lý do). Lý do rỗng là được tác động. `unassigned`: mục tiêu chưa gán agent; `agent_unknown`,
@@ -552,7 +554,7 @@ def engine_support(provider: str) -> dict:
     return {"provider": p, "goal": api, "chat_output": caps["submit_tool"], **extra, "background": True}
 
 
-def _agent_intent(goal: "GoalRecord", deps: "GoalDeps") -> dict:
+def _agent_intent(goal: GoalRecord, deps: GoalDeps) -> dict:
     """Mã và version của agent sở hữu, ghi vào ý định hành động lúc giữ lượt hay trước tác động (A1)."""
     a = deps.store.agent_by_key(deps.principal.brain_id, goal.agent_key) if goal.agent_key else None
     return {"agent_key": goal.agent_key, "agent_config_version": int(a["config_version"]) if a else 0}
@@ -916,7 +918,7 @@ def framer_prompt(user_text: str, extra: str = "") -> str:
     )
 
 
-def _parse_json_obj(text: str) -> Optional[dict]:
+def _parse_json_obj(text: str) -> dict | None:
     import json as _json
     t = str(text or "").strip()
     i, j = t.find("{"), t.rfind("}")
@@ -945,7 +947,7 @@ class _LedgerCall:
         self.store.release_ledger_call(self.principal, self.ledger_id)
 
 
-async def form_goal(message_ref: str, context: dict, deps: "GoalDeps") -> GoalRecord:
+async def form_goal(message_ref: str, context: dict, deps: GoalDeps) -> GoalRecord:
     """Từ một tin nhắn cần theo đuổi, lập (hoặc trả lại) đúng một mục tiêu.
 
     context: principal, brain_root, session_id, message_id, user_text, constraints, budget_calls, và tuỳ chọn
@@ -1061,7 +1063,7 @@ TRIAL_CASES_MAX = 6
 TRIAL_SPLITS = ("tuning", "holdout")
 
 
-def effective_method(goal: "GoalRecord") -> str:
+def effective_method(goal: GoalRecord) -> str:
     """Cách làm có hiệu lực cho revision HIỆN TẠI. Cách làm đã học chỉ chạy trên ĐÚNG revision nó được kiểm (spec
     11.1: kết quả cũ giữ nguyên phạm vi). Revision chưa được kiểm thì dùng cách làm mặc định, KHÔNG rơi về ref trước
     đó: ref trước có thể cũng là một ứng viên chỉ thắng ở revision cũ (review M5, P1-3). Ref quay-lại
@@ -1101,7 +1103,7 @@ def _t(vi: str, en: str) -> str:
         return vi
 
 
-def _brain_file(brain_root: str, rel: Any) -> Optional[Path]:
+def _brain_file(brain_root: str, rel: Any) -> Path | None:
     """Đường dẫn tương đối do model khai, chỉ nhận khi nằm TRONG brain sau khi resolve (chặn ../, đường tuyệt
     đối, symlink trỏ ra ngoài). Không hợp lệ thì None."""
     rel = str(rel or "").strip()
@@ -1173,7 +1175,7 @@ def _turn_state(message_ref: str, now: float) -> dict:
     return ent
 
 
-def note_turn_event(message_ref: str, brain_root: str, event: dict, now: Optional[float] = None) -> str:
+def note_turn_event(message_ref: str, brain_root: str, event: dict, now: float | None = None) -> str:
     """Đưa MỘT sự kiện công cụ của lượt chat vào sổ. Trả việc đã làm (để test và ghi vết):
     - `candidate`: lời gọi Write có id, đường dẫn trong brain, toàn văn: ghi ứng viên, CHƯA là biên nhận;
     - `confirmed` / `failed`: kết quả gắn đúng id một ứng viên, thành công hay lỗi;
@@ -1241,7 +1243,7 @@ def drop_turn_writes(message_ref: str) -> None:
     _TURN_WRITES.pop(str(message_ref), None)
 
 
-def _turn_revision(store, p, goal_id: str, message_ref: str) -> Optional[int]:
+def _turn_revision(store, p, goal_id: str, message_ref: str) -> int | None:
     """Revision do ĐÚNG tin nhắn này tạo ra (sự kiện created hay reframe mang message_ref đó), hoặc None."""
     revs = [int(e["revision"]) for e in store.events(p, goal_id)
             if e.get("kind") in ("created", "reframe") and str(e.get("message_ref") or "") == str(message_ref)]
@@ -1261,7 +1263,7 @@ def _turn_active(message_ref: str) -> bool:
         return False
 
 
-def _handoff_gate(goal: "GoalRecord", deps: "GoalDeps") -> str:
+def _handoff_gate(goal: GoalRecord, deps: GoalDeps) -> str:
     h = deps.store.handoff(deps.principal, goal.id, goal.revision)
     if not h or h.get("status") != "pending":
         return "clear"
@@ -1275,7 +1277,7 @@ def take_turn_receipts(message_ref: str) -> dict:
     return rec
 
 
-def handoff_after_turn(goal_id: str, message_ref: str, deps: "GoalDeps", receipts: Optional[dict] = None) -> str:
+def handoff_after_turn(goal_id: str, message_ref: str, deps: GoalDeps, receipts: dict | None = None) -> str:
     """Bàn giao cuối lượt chat cho một mục tiêu lượt này vừa lập hay cập nhật. KHÔNG gọi model.
 
     A4 (mục 4.4): liên kết `handoff` của tin chuyển `sealed` (hết nhận lời nộp). Có bản nộp `submit_tool` thì host đăng
@@ -1315,15 +1317,15 @@ def handoff_after_turn(goal_id: str, message_ref: str, deps: "GoalDeps", receipt
 
 # Host đặt hàm dựng phụ thuộc theo brain lúc khởi động (main), để công cụ hub trong tiến trình dùng ĐÚNG kho bằng chứng
 # và kho mục tiêu của server, không tự dựng bản riêng.
-_DEPS_PROVIDER: Optional[Callable] = None
+_DEPS_PROVIDER: Callable | None = None
 
 
-def set_deps_provider(fn: Optional[Callable]) -> None:
+def set_deps_provider(fn: Callable | None) -> None:
     global _DEPS_PROVIDER
     _DEPS_PROVIDER = fn
 
 
-def deps_for(brain_id: str) -> Optional["GoalDeps"]:
+def deps_for(brain_id: str) -> GoalDeps | None:
     try:
         return _DEPS_PROVIDER(brain_id) if _DEPS_PROVIDER is not None else None
     except Exception:  # noqa: BLE001
@@ -1335,7 +1337,7 @@ SUBMIT_CODES = ("no_turn", "not_agent_turn", "invalid_content", "path_rejected",
                 "scope_decided", "revision_changed", "agent_changed", "storage_error")
 
 
-def submit_deliverable(turn: Optional[dict], args: dict, deps: "GoalDeps") -> dict:
+def submit_deliverable(turn: dict | None, args: dict, deps: GoalDeps) -> dict:
     """Công cụ `javis_submit_deliverable` (thiết kế A4 mục 4.3). Model chỉ đưa đường, toàn văn, khoá tuỳ chọn và mã
     liên kết `handoff` host đã trả; mục tiêu, trợ lý và quyền do HOST xác định từ danh tính lượt.
 
@@ -1426,7 +1428,7 @@ def submit_deliverable(turn: Optional[dict], args: dict, deps: "GoalDeps") -> di
     return {"ok": False, "code": res.get("reason") or "no_open_handoff"}
 
 
-def _observed_adopt(g: "GoalRecord", receipts: dict, message_ref: str, deps: "GoalDeps") -> tuple:
+def _observed_adopt(g: GoalRecord, receipts: dict, message_ref: str, deps: GoalDeps) -> tuple:
     """(adopt | None, lý do) cho Write A của lượt: biên nhận đã xác nhận, bytes khớp, bằng chứng đã lưu. Kho kiểm thêm
     liên kết và quyền A4 trong giao dịch `finish_handoff`."""
     store, p = deps.store, deps.principal
@@ -1474,7 +1476,7 @@ def _output_refs(store, p, goal_id: str, revision: int) -> tuple:
                  if e.get("kind") in ("action_output", "chat_output"))
 
 
-def _effective_text(goal: "GoalRecord", deps: "GoalDeps") -> Optional[str]:
+def _effective_text(goal: GoalRecord, deps: GoalDeps) -> str | None:
     """Bản ĐANG CÓ HIỆU LỰC của file sản phẩm: file đích khi hash của nó đúng mốc đã đăng hay đã tiếp nhận. Đó là
     bản người dùng đang đọc; lần sửa sau phải dựa trên bản này (review pilot lần 3). None khi không có mốc hay file
     đã đổi so với mốc."""
@@ -1514,7 +1516,7 @@ def _check_text(text: Any, params: dict) -> tuple:
     return "met", "đạt"
 
 
-def _read_evidence(deps: GoalDeps, evidence_id: str) -> Optional[dict]:
+def _read_evidence(deps: GoalDeps, evidence_id: str) -> dict | None:
     if deps.evidence is None:
         return None
     try:
@@ -1524,7 +1526,7 @@ def _read_evidence(deps: GoalDeps, evidence_id: str) -> Optional[dict]:
 
 
 def _put_evidence(goal: GoalRecord, label: str, text: str, kind: str, deps: GoalDeps,
-                  revision: Optional[int] = None, reuse: bool = False) -> Optional[str]:
+                  revision: int | None = None, reuse: bool = False) -> str | None:
     """Đưa nội dung vào kho bằng chứng và gắn với mục tiêu/revision. Không lưu được thì None: người gọi phải coi
     như chưa có bằng chứng, không được xác nhận thành công."""
     if deps.evidence is None:
@@ -1557,7 +1559,7 @@ def current_artifact_ref(goal: GoalRecord, deps: GoalDeps) -> str:
     return _artifact_ref_of(deps.store, deps.principal, goal, deps.brain_root)
 
 
-def _human_verdict(goal: GoalRecord, criterion: dict, deps: GoalDeps, artifact_ref: Optional[str] = None) -> dict:
+def _human_verdict(goal: GoalRecord, criterion: dict, deps: GoalDeps, artifact_ref: str | None = None) -> dict:
     """Tiêu chí human_confirmation: met/not_met CHỈ khi người dùng (owner) đã xác nhận đúng tiêu chí này, đúng
     revision, đúng bản sản phẩm đang có. Im lặng, xác nhận cho bản cũ hay revision cũ đều là unknown."""
     if deps.store is None or deps.principal is None:
@@ -1668,18 +1670,18 @@ def observe_guards(goal: GoalRecord, deps: GoalDeps) -> tuple:
     return tuple(out)
 
 
-def _met_count(a: "Assessment") -> int:
+def _met_count(a: Assessment) -> int:
     return sum(1 for r in (a.criterion_results or ()) if r.get("verdict") == "met")
 
 
-def _signature(a: "Assessment", source_sha: str = "") -> str:
+def _signature(a: Assessment, source_sha: str = "") -> str:
     """Dấu vết của một lần đánh giá để biết lần xem lại có thấy gì đổi không (giãn nhịp, A2 mục 4)."""
     parts = {"v": a.verdict, "c": sorted((str(r.get("id")), str(r.get("verdict"))) for r in (a.criterion_results or ())),
              "g": sorted((str(x.get("id")), str(x.get("verdict"))) for x in (a.guards or ())), "s": source_sha}
     return _sha(json.dumps(parts, ensure_ascii=False, sort_keys=True).encode("utf-8"))[:24]
 
 
-def _revision_attempted(goal: "GoalRecord", deps: "GoalDeps") -> bool:
+def _revision_attempted(goal: GoalRecord, deps: GoalDeps) -> bool:
     """Revision hiện tại đã có lượt việc nền (mọi trạng thái) hay bản tiếp nhận từ chat chưa. Chưa có thì lý do bước
     đầu (`created`, `revised`, `assigned`) được mở lượt model (A2 mục 3)."""
     store, p = deps.store, deps.principal
@@ -1693,7 +1695,7 @@ def _ran(x: dict) -> bool:
     return x["kind"] == "work" and (x.get("receipt") or {}).get("error_code") != "not_run"
 
 
-def _chat_only_attempt(goal: "GoalRecord", deps: "GoalDeps") -> bool:
+def _chat_only_attempt(goal: GoalRecord, deps: GoalDeps) -> bool:
     """Revision hiện tại có bản tiếp nhận từ chat mà chưa có lượt việc nền nào."""
     store, p = deps.store, deps.principal
     if any(_ran(x) and x["revision"] == goal.revision for x in store.actions(p, goal.id)):
@@ -1701,7 +1703,7 @@ def _chat_only_attempt(goal: "GoalRecord", deps: "GoalDeps") -> bool:
     return bool(store.evidence_for(p, goal.id, goal.revision, kind="chat_output"))
 
 
-def _chain(store, p, goal: "GoalRecord") -> "HB.Chain":
+def _chain(store, p, goal: GoalRecord) -> HB.Chain:
     """Chuỗi lượt việc của revision hiện tại tính từ tin mới gần nhất (A2 mục 4). Đọc từ trạng thái chính sách BỀN
     (`heartbeat_state`), không từ sổ thức: sổ ghi kiểu cố gắng và bị cắt, không được quyết định có gọi model tiếp hay
     không (review mã P1-1)."""
@@ -1718,7 +1720,7 @@ def _prev_interval(store, p, goal_id: str, codes: tuple) -> tuple:
     return 0.0, ""
 
 
-def _log_wake(deps: "GoalDeps", goal_id: str, entry: dict) -> None:
+def _log_wake(deps: GoalDeps, goal_id: str, entry: dict) -> None:
     """Ghi sổ thức sau khi tính lại lịch vật lý, kèm lịch kế tiếp. Lỗi ghi sổ không được làm hỏng lần thức."""
     store, p = deps.store, deps.principal
     try:
@@ -1732,7 +1734,7 @@ def _log_wake(deps: "GoalDeps", goal_id: str, entry: dict) -> None:
         print(f"[resonance wake_log] {type(e).__name__}: {e}", file=sys.stderr)
 
 
-def _monitoring_lost(goal: "GoalRecord", deps: "GoalDeps", agent: Optional[dict], ablock: str) -> None:
+def _monitoring_lost(goal: GoalRecord, deps: GoalDeps, agent: dict | None, ablock: str) -> None:
     """Trợ lý tắt, mất file, nghỉ hay chưa gán: dừng quan sát guard (A2 mục 7) và, nếu mục tiêu có guard, báo MỘT LẦN
     mỗi đợt mất quyền (idem theo version của trợ lý). Không giả là guard vẫn ổn."""
     store, p = deps.store, deps.principal
@@ -1744,7 +1746,7 @@ def _monitoring_lost(goal: "GoalRecord", deps: "GoalDeps", agent: Optional[dict]
                      idem=f"monitoring_lost:{goal.agent_key or '-'}:{ver}:{ablock}")
 
 
-def _ensure_observe(goal: "GoalRecord", deps: "GoalDeps", now: float) -> None:
+def _ensure_observe(goal: GoalRecord, deps: GoalDeps, now: float) -> None:
     """Mục tiêu có guard luôn có một hẹn quan sát đang chờ. Không dời hẹn đang có (lịch quan sát không bị lượt việc
     đẩy lùi)."""
     if not goal.guards:
@@ -1754,7 +1756,7 @@ def _ensure_observe(goal: "GoalRecord", deps: "GoalDeps", now: float) -> None:
         store.add_timer(p, goal.id, "guard_observe", now + GUARD_OBSERVE_S, now)
 
 
-def _source_drift(goal: "GoalRecord", deps: "GoalDeps", now: float, a: "Assessment") -> dict:
+def _source_drift(goal: GoalRecord, deps: GoalDeps, now: float, a: Assessment) -> dict:
     """File sản phẩm bị sửa ngoài Javis (A2 mục 5): hash bytes thật khác mốc đã đăng. Mốc quan sát ghi riêng
     (`source_observations`), không đụng mốc được phép thay file. Hash mới thì báo một lần (cùng khoá với báo xung đột
     của `_publish`). File đã đăng mà bị xoá, và không còn đầu ra việc nền để đăng lại, cũng là sửa ngoài luồng."""
@@ -1784,7 +1786,7 @@ def _source_drift(goal: "GoalRecord", deps: "GoalDeps", now: float, a: "Assessme
     return {"drift": True, "sha": sha, "new": new}
 
 
-def _schedule_check(goal: "GoalRecord", a: "Assessment", deps: "GoalDeps", now: float, sig: str) -> None:
+def _schedule_check(goal: GoalRecord, a: Assessment, deps: GoalDeps, now: float, sig: str) -> None:
     """Hẹn nghĩa vụ `check`: xem lại giãn dần, hay kiểm hạn chót (A2 mục 4). Qua hạn mà chưa đạt thì báo một lần."""
     store, p = deps.store, deps.principal
     prev, prev_sig = _prev_interval(store, p, goal.id, ("review", "deadline"))
@@ -1825,7 +1827,7 @@ def _latest_output(goal: GoalRecord, deps: GoalDeps) -> tuple:
     return None, None
 
 
-def _rel_to_brain(path: Optional[Path], brain_root: str) -> str:
+def _rel_to_brain(path: Path | None, brain_root: str) -> str:
     try:
         return path.resolve().relative_to(Path(brain_root).resolve()).as_posix() if path else ""
     except Exception:  # noqa: BLE001
@@ -1860,8 +1862,8 @@ def _intent_text(store, p, intent_id: str) -> str:
     return "\n---\n".join(reversed(chain_txt))
 
 
-def _work_prompt(goal: GoalRecord, intent_text: str, last: Optional[Assessment], prev_text: str,
-                 method: str = DEFAULT_METHOD, review: Optional[dict] = None) -> str:
+def _work_prompt(goal: GoalRecord, intent_text: str, last: Assessment | None, prev_text: str,
+                 method: str = DEFAULT_METHOD, review: dict | None = None) -> str:
     crit = []
     for c in goal.criteria:
         if c.get("evaluator") == "human_confirmation":
@@ -1931,7 +1933,7 @@ def criteria_hash(criteria) -> str:
     return _sha(json.dumps(keep, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
-def review_criteria(goal: "GoalRecord") -> list:
+def review_criteria(goal: GoalRecord) -> list:
     """Tiêu chí gửi người review, đánh số từ 0. Bỏ `human_confirmation` (người dùng tự xác nhận)."""
     return [c for c in goal.criteria if c.get("evaluator") != "human_confirmation"]
 
@@ -1943,7 +1945,7 @@ def parse_review(text: Any, n: int) -> dict:
     trong `extra_keys` để ghi sự kiện; không trường nào đổi được tiêu chí, quyền, hạn mức hay vai."""
     bad = {"verdict": "unknown", "reason_code": "parse_error", "criteria": [], "fixes": ""}
     s = str(text or "").strip()
-    m = re.fullmatch(r"```(?:json)?[ \t]*\n?(.*?)\n?[ \t]*```", s, re.S)
+    m = re.fullmatch(r"```(?:json)?[ \t]*\n?(.*?)\n?[ \t]*```", s, re.DOTALL)
     if m:
         s = m.group(1).strip()
     try:
@@ -1979,7 +1981,7 @@ def parse_review(text: Any, n: int) -> dict:
     return out
 
 
-def _team(store, p, goal_id: str) -> Optional[dict]:
+def _team(store, p, goal_id: str) -> dict | None:
     """Đội `active` của mục tiêu, hay None (không có đội, đã tách, hay kho chưa có A5)."""
     if store is None or p is None or not hasattr(store, "goal_team"):
         return None
@@ -1987,7 +1989,7 @@ def _team(store, p, goal_id: str) -> Optional[dict]:
     return t if t and t.get("status") == "active" else None
 
 
-def accepted_snapshot(goal: "GoalRecord", deps: "GoalDeps") -> dict:
+def accepted_snapshot(goal: GoalRecord, deps: GoalDeps) -> dict:
     """Ảnh chụp của bản ĐƯỢC TIẾP NHẬN hiện tại (mục 5.5): mốc đăng A4 của file sản phẩm (hay đầu ra mới nhất của revision
     khi mục tiêu không có file đích), cùng bằng chứng của đúng bytes đó. Băm lại chữ trong bằng chứng: khác sha mốc là
     `snapshot_mismatch`; dài quá trần là `too_large`. Không đọc lại file đích: bản sửa ngoài luồng không bao giờ thành
@@ -2023,14 +2025,14 @@ def accepted_snapshot(goal: "GoalRecord", deps: "GoalDeps") -> dict:
     return {**base, "text": text, "error": ""}
 
 
-def bundle_ref(goal: "GoalRecord", snap: dict, reviewer_key: str, reviewer_version: int) -> str:
+def bundle_ref(goal: GoalRecord, snap: dict, reviewer_key: str, reviewer_version: int) -> str:
     """Định danh đủ bộ ghim của một lần review đầu (mục 5.6): revision, mốc đăng, sha, hash tiêu chí, mã và version
     reviewer. Revision mới cùng bytes, hay reviewer bật lại (version mới), cho ref khác nên được review lại."""
     return (f"rb:{int(goal.revision)}:{snap.get('accepted_ref') or ''}:{snap.get('artifact_sha') or ''}:"
             f"{criteria_hash(goal.criteria)}:{reviewer_key}:{int(reviewer_version)}")
 
 
-def _review_state(goal: "GoalRecord", deps: "GoalDeps", team: dict) -> dict:
+def _review_state(goal: GoalRecord, deps: GoalDeps, team: dict) -> dict:
     """Bộ ghim HIỆN TẠI và các hàng review của nó. `decisive`: hàng cuối có kết luận (done hay failed) mà không lỗi
     thời, không lệch; hàng `cancelled` (chưa chạy) bỏ qua."""
     store, p = deps.store, deps.principal
@@ -2047,7 +2049,7 @@ def _review_state(goal: "GoalRecord", deps: "GoalDeps", team: dict) -> dict:
             "decisive": decisive}
 
 
-def _reviewer_role_text(deps: "GoalDeps", slug: str) -> str:
+def _reviewer_role_text(deps: GoalDeps, slug: str) -> str:
     """Mô tả vai của reviewer: thân file agent (bỏ frontmatter), tối đa REVIEW_ROLE_MAX_CHARS, đưa vào như DỮ LIỆU."""
     if not agent_file_exists(deps.brain_root, slug):
         return ""
@@ -2063,7 +2065,7 @@ def _reviewer_role_text(deps: "GoalDeps", slug: str) -> str:
     return raw.strip()[:REVIEW_ROLE_MAX_CHARS]
 
 
-def _review_prompt(goal: "GoalRecord", text: str, role_text: str) -> str:
+def _review_prompt(goal: GoalRecord, text: str, role_text: str) -> str:
     crit = review_criteria(goal)
     lines = []
     for i, c in enumerate(crit):
@@ -2089,7 +2091,7 @@ def _review_prompt(goal: "GoalRecord", text: str, role_text: str) -> str:
     return "\n\n".join(parts)
 
 
-def _drift_wait(goal: "GoalRecord", deps: "GoalDeps", now: float, sha: str) -> None:
+def _drift_wait(goal: GoalRecord, deps: GoalDeps, now: float, sha: str) -> None:
     """Bản ở file đích khác bản được tiếp nhận (phương án A, mục 5.5): chờ, không gọi model, không chốt, không đăng đè.
     Mốc quan sát ghi riêng; hẹn kiểm lại bằng code như A2."""
     store, p = deps.store, deps.principal
@@ -2106,7 +2108,7 @@ def _drift_wait(goal: "GoalRecord", deps: "GoalDeps", now: float, sha: str) -> N
         store.add_timer(p, goal.id, "drift_recheck", now + step, now, expect_revision=goal.revision)
 
 
-def _disk_sha(goal: "GoalRecord", deps: "GoalDeps") -> Optional[str]:
+def _disk_sha(goal: GoalRecord, deps: GoalDeps) -> str | None:
     """Hash bytes ĐANG Ở ĐĨA của bản sản phẩm (file đích, hay đầu ra mới nhất của revision khi không có file đích), để so
     với bản được tiếp nhận (phương án A). Khác `current_artifact_ref`: hàm đó cố ý trả rỗng khi revision mới chưa có lượt
     làm nào; ở đây cần đúng bytes trên đĩa. None khi chưa có file, "unreadable" khi không đọc được."""
@@ -2117,7 +2119,7 @@ def _disk_sha(goal: "GoalRecord", deps: "GoalDeps") -> Optional[str]:
     return _file_sha(path) if path else None
 
 
-def _team_settle(goal: "GoalRecord", deps: "GoalDeps", now: float, team: dict) -> tuple:
+def _team_settle(goal: GoalRecord, deps: GoalDeps, now: float, team: dict) -> tuple:
     """Cổng chốt của mục tiêu có đội (mục 5.1, 5.5): bản đang ở file đích phải đúng bản được tiếp nhận, và bộ ghim hiện
     tại phải có kết luận `pass` hợp lệ. Trả (False, "") khi đã đặt trạng thái chờ hay chặn; (True, review_id) khi được
     chốt."""
@@ -2163,7 +2165,7 @@ def _team_settle(goal: "GoalRecord", deps: "GoalDeps", now: float, team: dict) -
     return False, ""
 
 
-def _team_review(g: "GoalRecord", a: "Assessment", team: dict, rv_snap: list, deps: "GoalDeps", now: float,
+def _team_review(g: GoalRecord, a: Assessment, team: dict, rv_snap: list, deps: GoalDeps, now: float,
                  owner: str, entry: dict, sig: str):
     """Phần chỉ chạy code của nhánh đội khi bản đạt kiểm khách quan (mục 5.1, 5.6). Trả:
     - `_WakeCtx(mode="review")` khi một lý do review của ĐÚNG bộ ghim hiện tại đến hạn và được phép chạy;
@@ -2290,7 +2292,7 @@ def _norm_bytes(text: str) -> tuple:
     return s.replace(_EM_DASH, "-").encode("utf-8"), s.count(_EM_DASH)
 
 
-def _file_sha(f: Optional[Path]) -> Optional[str]:
+def _file_sha(f: Path | None) -> str | None:
     """Hash bytes hiện tại của file đích; None khi chưa có file; "unreadable" khi không đọc được."""
     if f is None or not f.exists():
         return None
@@ -2321,7 +2323,7 @@ def _sub_read(sub: dict) -> tuple:
     return (data, "") if _sha(data) == sub.get("sha256") else (None, "draft_hash_mismatch")
 
 
-def _sub_bytes(sub: dict) -> Optional[bytes]:
+def _sub_bytes(sub: dict) -> bytes | None:
     return _sub_read(sub)[0]
 
 
@@ -2435,7 +2437,7 @@ def host_publish(goal: GoalRecord, sub: dict, deps: GoalDeps, now: float, source
             "action_id": aid}
 
 
-def _reconcile_publish(goal: GoalRecord, a: dict, deps: GoalDeps, now: Optional[float] = None) -> str:
+def _reconcile_publish(goal: GoalRecord, a: dict, deps: GoalDeps, now: float | None = None) -> str:
     """Đối soát một hành động đăng A4 dở (mục 4.7). Chưa qua mốc commit: huỷ, bản nộp về `candidate` hay `stale` theo
     quyền đã ghim. Đã commit (luật tác động đã commit, không kiểm lại quyền): đích bằng sha bản nộp thì ghi mốc; đích
     vẫn bằng baseline thì thay file từ bản nháp rồi ghi mốc; đọc được đích và nó khác cả hai thì `conflict`.
@@ -2539,7 +2541,7 @@ def _bad_deliverable(goal: GoalRecord, deps: GoalDeps, rel: str) -> dict:
 
 
 def _output_submission(goal: GoalRecord, deps: GoalDeps, action_id: str, text: str, output_ref: str,
-                       evidence_id: str) -> Optional[dict]:
+                       evidence_id: str) -> dict | None:
     """Đầu ra việc nền thành bản nộp `background_text` TRƯỚC bước đăng (mục 4.4). Không có đường sản phẩm hay lượt
     không có liên kết (mục tiêu không cần phạm vi, lượt có trước A4): None."""
     rel = _deliverable_rel(goal)
@@ -2718,7 +2720,7 @@ def _gate(goal_id: str, deps: GoalDeps, now: float) -> tuple:
     return cur, guards, ""
 
 
-def _latch_guard(goal: "GoalRecord", guards: tuple, hit: list, deps: "GoalDeps", now: float) -> None:
+def _latch_guard(goal: GoalRecord, guards: tuple, hit: list, deps: GoalDeps, now: float) -> None:
     """Guard bị chạm: chốt `blocked`/`guard`, báo, bỏ MỌI hẹn giờ (thử lại, kiểm, quan sát). Chỉ đường mở chặn có thẩm
     quyền hiện có (người dùng tiếp tục khi guard đã clear, hay bỏ guard) mới mở lại."""
     store, p = deps.store, deps.principal
@@ -2770,7 +2772,7 @@ def _after_publish(goal: GoalRecord, pub: dict, refs: tuple, deps: GoalDeps, now
 
 
 def _settle(goal: GoalRecord, a: Assessment, deps: GoalDeps, now: float, worked: bool, has_output: bool,
-            chain: Optional["HB.Chain"] = None, sig: str = "") -> Assessment:
+            chain: HB.Chain | None = None, sig: str = "") -> Assessment:
     """Ghi đánh giá và quyết định bước sau: kết thúc (chỉ khi met, mọi guard clear, không ở bước khám phá, revision
     còn đúng), chờ người dùng, hay hẹn lần thức kế tiếp theo chính sách `heartbeat.v1` (A2 mục 4).
 
@@ -2806,7 +2808,7 @@ def _settle(goal: GoalRecord, a: Assessment, deps: GoalDeps, now: float, worked:
             store.finish(p, goal.id, goal.revision, "succeeded",
                          {"evidence_ids": list(a.evidence_ids), "deliverable": _deliverable_rel(goal)},
                          **({"review_id": review_id} if team is not None else {}))
-        except Exception as e:  # noqa: BLE001 - kho chặn kết thúc (A5: review không còn hợp lệ trong giao dịch chốt)
+        except Exception as e:
             if team is None:
                 raise
             store.set_run_state(p, goal.id, "waiting", "review_pending", expect_revision=rev)
@@ -2870,12 +2872,12 @@ class _WakeCtx:
     snapshot: list
     owner: str
     log: dict
-    chain: "HB.Chain"
+    chain: HB.Chain
     trigger: str = ""
     sig: str = ""
     mode: str = "work"                 # work | trial (A3) | review (A5)
-    trial: Optional[dict] = None
-    review: Optional[dict] = None      # A5: lượt review (bundle_ref) hay góp ý cho lượt sửa (feedback)
+    trial: dict | None = None
+    review: dict | None = None      # A5: lượt review (bundle_ref) hay góp ý cho lượt sửa (feedback)
 
 
 class _CancelledWith(asyncio.CancelledError):
@@ -2883,7 +2885,7 @@ class _CancelledWith(asyncio.CancelledError):
     ngoại lệ nếu pha lỗi (khi đó `value` là None). Người gọi dọn đúng (nhả khoá, trả lượt chưa dùng, lưu receipt hay
     lỗi) rồi báo huỷ tiếp: lỗi của pha KHÔNG được che mất lời huỷ (review mã vòng 3)."""
 
-    def __init__(self, value, error: Optional[BaseException] = None):
+    def __init__(self, value, error: BaseException | None = None):
         super().__init__()
         self.value = value
         self.error = error
@@ -2970,7 +2972,7 @@ def _prepare_failed(goal: GoalRecord, deps: GoalDeps, act: dict, err: BaseExcept
     return Assessment(goal.id, goal.revision, "unknown", rationale=why, evaluated_at=now)
 
 
-def _work_pre(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: Optional[_WakeCtx]):
+def _work_pre(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: _WakeCtx | None):
     """Pha TRƯỚC lời gọi engine (luồng phụ): ghi ý định và giữ lượt, mở lượt trong chuỗi bền, dựng prompt.
     Trả (action, held, prompt) hay Assessment khi không được làm."""
     store, p = deps.store, deps.principal
@@ -3035,13 +3037,13 @@ def _work_pre(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ct
     return act, held, prompt
 
 
-def _chain_of(st: dict) -> "HB.Chain":
+def _chain_of(st: dict) -> HB.Chain:
     return HB.Chain(int(st.get("best", -1)), int(st.get("stall", 0)), int(st.get("fails", 0)),
                     str(st.get("last_error") or ""))
 
 
-def _work_post(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: Optional[_WakeCtx], act: dict,
-               held: dict, receipt: "ActionReceipt") -> Assessment:
+def _work_post(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: _WakeCtx | None, act: dict,
+               held: dict, receipt: ActionReceipt) -> Assessment:
     """Pha sau lời gọi engine; lượt dùng lượt giữ (A3) thì báo `goal.method_changed` kèm kết quả lượt đó (mục 6.6)."""
     a = _work_post_core(goal, last, deps, now, ctx, act, held, receipt)
     if act.get("hold_id"):
@@ -3055,8 +3057,8 @@ def _work_post(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, c
     return a
 
 
-def _work_post_core(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: Optional[_WakeCtx],
-                    act: dict, held: dict, receipt: "ActionReceipt") -> Assessment:
+def _work_post_core(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float, ctx: _WakeCtx | None,
+                    act: dict, held: dict, receipt: ActionReceipt) -> Assessment:
     """Pha SAU lời gọi engine (luồng phụ): receipt, bằng chứng, kết sổ chuỗi bền, cổng kiểm, đăng, đánh giá, hẹn tiếp.
 
     Receipt và kết sổ luôn ghi cho ĐÚNG action và revision gốc. Trạng thái chạy và lịch chỉ đổi khi mục tiêu còn ở
@@ -3170,7 +3172,7 @@ def _work_post_core(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: flo
 
 
 async def _work_step(goal: GoalRecord, last: Assessment, deps: GoalDeps, now: float,
-                     ctx: Optional[_WakeCtx] = None) -> Assessment:
+                     ctx: _WakeCtx | None = None) -> Assessment:
     """Một lượt việc: pha trước và pha sau chạy NGOÀI event loop (SQLite, đọc ghi file, bằng chứng, đăng, đánh giá);
     chỉ lời gọi engine chạy trên loop (A2, review mã P2-2).
 
@@ -3260,7 +3262,7 @@ def _review_cancelled(goal: GoalRecord, deps: GoalDeps, act: dict, now: float) -
     deps.store.review_interrupted(deps.principal, act["id"], "cancelled", now)
 
 
-def _review_post(goal: GoalRecord, ctx: _WakeCtx, deps: GoalDeps, now: float, act: dict, turn: "TextTurn") -> Assessment:
+def _review_post(goal: GoalRecord, ctx: _WakeCtx, deps: GoalDeps, now: float, act: dict, turn: TextTurn) -> Assessment:
     """Pha SAU lời gọi engine của lượt review (luồng phụ): bằng chứng của đầu ra thô, đọc kết luận đóng khi lỗi, ghi kết
     luận có CAS và kiểm bộ ghim HIỆN TẠI (lỗi thời thì lưu nhưng không dùng)."""
     store, p = deps.store, deps.principal
@@ -3659,7 +3661,7 @@ async def advance(goal_id: str, event: dict, deps: GoalDeps) -> Assessment:
     return out
 
 
-async def tick(store, now: float, deps_for: Callable[[str], Optional[GoalDeps]], limit: int = 3) -> int:
+async def tick(store, now: float, deps_for: Callable[[str], GoalDeps | None], limit: int = 3) -> int:
     """Một nhịp của scheduler: chỉ đọc lịch tới hạn (một truy vấn chỉ mục, rẻ). Không có gì tới hạn thì không dựng engine
     nào, không đọc file nào (A2 mục 11). Lịch xếp theo `due_at`, tối đa `limit` mỗi nhịp, nên không bỏ đói.
 
@@ -3679,7 +3681,7 @@ async def tick(store, now: float, deps_for: Callable[[str], Optional[GoalDeps]],
     return n
 
 
-def notice_text(goal: GoalRecord, kind: str, payload: dict, presentation: Optional[dict] = None) -> str:
+def notice_text(goal: GoalRecord, kind: str, payload: dict, presentation: dict | None = None) -> str:
     """Câu báo cho người dùng của một tin outbox. Chỉ báo việc có ý nghĩa (spec mục 8). `presentation` (A3 làn P):
     `detail=brief` dựng câu ngắn theo mẫu cố định cho các loại tin được rút gọn; tin bắt buộc luôn đầy đủ."""
     u = goal.understanding or goal.relevant_quote or goal.id
@@ -3804,7 +3806,7 @@ def notice_text(goal: GoalRecord, kind: str, payload: dict, presentation: Option
     return _t(f"Cập nhật mục tiêu: {u}.", f"Goal update: {u}.")
 
 
-async def drain_outbox(store, notify: Callable, limit: int = 50, already: Optional[Callable] = None) -> int:
+async def drain_outbox(store, notify: Callable, limit: int = 50, already: Callable | None = None) -> int:
     """Gửi các tin outbox có ý nghĩa cho người dùng rồi đánh dấu đã gửi. Tin nội bộ (goal.created, goal.revised) chỉ
     đánh dấu, không gửi. Mỗi tin mang thẻ mục tiêu kèm khoá báo cáo `outbox:<id>`; `already(goal, khoá)` cho biết tin
     đó đã nằm trong kho tin nhắn chưa (tiến trình chết giữa lúc lưu tin và lúc đánh dấu): có rồi thì chỉ đánh dấu,
@@ -3855,7 +3857,7 @@ async def drain_outbox(store, notify: Callable, limit: int = 50, already: Option
 # human_confirmation được chỉ định, cho ĐÚNG bản sản phẩm đang có, và không vượt kiểm tra khách quan hay guard.
 # Im lặng là unknown. Mọi phản hồi gắn revision: thẻ cũ không xác nhận được revision mới.
 
-GOAL_BLOCK_RE = re.compile(r"<!--\s*JAVIS_RESONANCE:\s*(\{.*?\})\s*-->", re.S)
+GOAL_BLOCK_RE = re.compile(r"<!--\s*JAVIS_RESONANCE:\s*(\{.*?\})\s*-->", re.DOTALL)
 
 
 def goal_block(goal_id: str, revision: int, report: str = "") -> str:
@@ -3881,7 +3883,7 @@ def parse_goal_blocks(text: str) -> list:
     return out
 
 
-def _artifact_file(store, principal, goal: GoalRecord, brain_root: str) -> Optional[Path]:
+def _artifact_file(store, principal, goal: GoalRecord, brain_root: str) -> Path | None:
     """File thẻ cho người dùng xem: file sản phẩm khai trong tiêu chí (trong brain), hoặc đầu ra mới nhất của
     revision trong vùng làm việc. None khi revision hiện tại chưa có lượt làm thành công nào: bản trên đĩa khi đó
     là của cách hiểu cũ, không được duyệt thay cho cách hiểu mới."""
@@ -4063,7 +4065,7 @@ def _scope_view(store, principal, g: GoalRecord) -> dict:
             "draft": draft, "pending_publish": len(waiting), "conflict": bool(conflict)}
 
 
-def _team_view(store, principal, g: GoalRecord) -> Optional[dict]:
+def _team_view(store, principal, g: GoalRecord) -> dict | None:
     """Dòng đội của thẻ (A5 mục 11): ai làm, ai review (theo mã bền, kèm slug hiện tại), lượt còn theo vai, vòng sửa, kết
     luận mới nhất của revision (mã ngắn của bản). Chỉ để hiển thị; kho mới là căn cứ. Tag không có ở đây."""
     if not hasattr(store, "goal_team"):
@@ -4098,7 +4100,7 @@ def _team_view(store, principal, g: GoalRecord) -> Optional[dict]:
             "latest": latest}
 
 
-def goal_view(store, principal, goal_id: str, brain_root: str) -> Optional[dict]:
+def goal_view(store, principal, goal_id: str, brain_root: str) -> dict | None:
     """Dữ liệu cho thẻ "Em đang hướng tới" (spec 13): cách hiểu, tình trạng, giả định, bằng chứng mới nhất, việc
     đang làm, điều đang chờ, lần thức tiếp theo. Không có phần trăm tiến độ giả."""
     g = store.get(principal, goal_id)
@@ -4279,7 +4281,7 @@ def _grade(text: str, rubric: list, expect: dict) -> tuple:
 
 
 def _trial_begin(goal: GoalRecord, exp_id: str, case: dict, arm: str, ref: str, deps: GoalDeps,
-                 pin: Optional[dict] = None) -> dict:
+                 pin: dict | None = None) -> dict:
     """Ghi ý định của MỘT lượt thử, TRƯỚC khi gọi model. `pin`: mã và version trợ lý GHIM lúc bắt đầu phép thử; kho kiểm
     lại trong giao dịch này (AgentStateError nếu đã tắt hay đổi). Hàm này ném lỗi thì CHẮC CHẮN model chưa được gọi cho
     lượt đó: đây là ranh giới duy nhất được coi là "chưa chạy" để hoàn hạn mức (review A1 tại 7d084394, P1)."""
@@ -4293,7 +4295,7 @@ def _trial_begin(goal: GoalRecord, exp_id: str, case: dict, arm: str, ref: str, 
 
 
 def _trial_post(goal: GoalRecord, case: dict, ref: str, rubric: list, rubric_hash: str, deps: GoalDeps, act: dict,
-                receipt: "ActionReceipt") -> dict:
+                receipt: ActionReceipt) -> dict:
     """Phần SAU lời gọi engine của một lượt thử, chạy ở luồng phụ (A3 review mã P2-3): đọc đầu ra, lưu bằng chứng,
     chốt action, chấm. Lỗi ở đây xảy ra khi model có thể đã chạy nên lượt vẫn tính."""
     store, p = deps.store, deps.principal
@@ -4317,7 +4319,7 @@ def _trial_post(goal: GoalRecord, case: dict, ref: str, rubric: list, rubric_has
 
 
 async def _trial_run(goal: GoalRecord, exp_id: str, case: dict, arm: str, ref: str, rubric: list, rubric_hash: str,
-                     deps: GoalDeps, usage: dict, act: dict, pgoal: Optional[GoalRecord] = None) -> dict:
+                     deps: GoalDeps, usage: dict, act: dict, pgoal: GoalRecord | None = None) -> dict:
     """Một lượt của phép thử, sau khi `_trial_begin` đã ghi ý định `act`. Từ đây model có thể đã được gọi: lỗi ở các
     bước sau (lưu bằng chứng, ghi receipt, chấm) KHÔNG được coi là chưa chạy. Chỉ lời gọi engine chạy trên event loop;
     phần sau chạy ở luồng phụ và luôn được chờ xong, kể cả khi lần thức bị huỷ (`_off_loop`)."""
@@ -4414,7 +4416,7 @@ def _compare_out(g: GoalRecord, baseline_ref: str, candidate_ref: str) -> dict:
             "scope": {"goal_id": g.id, "revision": g.revision, "applies_to": "this_goal"}, "applied": False}
 
 
-def _trial_stop(g: GoalRecord, deps: GoalDeps, pin: dict, lesson_id: Optional[str], exp: str = "") -> str:
+def _trial_stop(g: GoalRecord, deps: GoalDeps, pin: dict, lesson_id: str | None, exp: str = "") -> str:
     """Cổng của MỘT lượt thử, chạy ở luồng phụ (đọc kho, đọc file guard): cùng điều kiện với advance (can thiệp của
     người dùng, "Chưa đúng ý", guard, đổi cách hiểu), quyền trợ lý đã ghim, và bài học A3 còn đang thử (owner Bỏ qua
     giữa chừng thì dừng; CAS trong giao dịch chốt là chốt cuối cùng). Rỗng là được chạy tiếp."""
@@ -4434,7 +4436,7 @@ def _trial_stop(g: GoalRecord, deps: GoalDeps, pin: dict, lesson_id: Optional[st
 
 
 def _trial_open(g: GoalRecord, baseline_ref: str, candidate_ref: str, need: int, payload: dict, deps: GoalDeps,
-                now: float, pin: dict, lesson_id: Optional[str], wake_reasons: Optional[list]) -> Optional[str]:
+                now: float, pin: dict, lesson_id: str | None, wake_reasons: list | None) -> str | None:
     """Giao dịch giữ chỗ của phép thử, ở luồng phụ. CHỈ giao dịch: lỗi ở đây nghĩa là chưa có gì được commit. Thư mục
     làm việc tạo ở bước riêng SAU commit (`_trial_dir`), để lỗi file hệ thống không bị đọc nhầm thành "chưa tạo phép
     thử" (review mã A3 vòng 2, P2-1)."""
@@ -4457,8 +4459,8 @@ def _trial_not_run(deps: GoalDeps, act: dict) -> None:
 
 
 async def _compare_run(g: GoalRecord, baseline_ref: str, candidate_ref: str, items: list, deps: GoalDeps, *,
-                       now: float, lesson_id: Optional[str] = None, wake_reasons: Optional[list] = None,
-                       case_goals: Optional[dict] = None, case_meta: Optional[dict] = None) -> dict:
+                       now: float, lesson_id: str | None = None, wake_reasons: list | None = None,
+                       case_goals: dict | None = None, case_meta: dict | None = None) -> dict:
     """Thân phép thử M5, chạy khi người gọi ĐÃ giữ khoá lượt của mục tiêu. A3: `lesson_id` gắn bài học (CAS trong hai
     giao dịch giữ chỗ và chốt, giữ một lượt làm sản phẩm), `case_goals` là bản ghi revision dùng để dựng prompt của từng
     tình huống lịch sử, `case_meta` là hash đầu vào và bản ghi được ghim vào payload.
@@ -4650,7 +4652,7 @@ def _full_cycle(g: GoalRecord, n_cases: int) -> tuple:
                         int(g.budget_calls * EXPLORE_SHARE), int(HB.POLICY["AUTO_RESERVE_CALLS"]))
 
 
-def _method_proposal(goal: GoalRecord, chain: Optional["HB.Chain"], deps: GoalDeps) -> Optional[dict]:
+def _method_proposal(goal: GoalRecord, chain: HB.Chain | None, deps: GoalDeps) -> dict | None:
     """Đề xuất làn M khi bế tắc khách quan (mục 6.1), ghi cùng giao dịch `waiting/stalled`. `trial_pending` khi đủ mọi
     điều kiện; `skipped` kèm lý do (untestable, budget, no_holdout) để người dùng thấy vì sao không thử; None khi không
     có ứng viên, đã thử cặp này ở revision này, hay mục tiêu chưa thuộc trợ lý nào."""
@@ -4769,7 +4771,7 @@ def _method_changed_text(goal: GoalRecord, payload: dict, u: str) -> str:
               f"current understanding. {res_en} {calls} model calls in total. Use Revert method on the card to undo.")
 
 
-def _learning_view(store, principal, g: GoalRecord) -> Optional[dict]:
+def _learning_view(store, principal, g: GoalRecord) -> dict | None:
     """Khối `learning` của thẻ (A3 mục 10, 11): bài học làn M mới nhất của revision hiện tại và lượt giữ của nó."""
     if not hasattr(store, "method_lessons"):
         return None

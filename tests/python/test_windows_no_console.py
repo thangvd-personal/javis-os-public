@@ -22,9 +22,10 @@ Hai cách viết sai đã gặp thật, cả hai đều nằm trong danh sách c
   trong plugin `zalo-image`. Module `asyncio.subprocess` KHÔNG export cờ đó nên biểu thức luôn
   trả 0 - lời gọi trông như đã bảo vệ mà thật ra trần trụi.
 """
-from _paths import ROOT  # noqa: E402,F401
 import re
 import sys
+
+from _paths import ROOT
 
 _fails = []
 
@@ -59,7 +60,7 @@ _SPAWN = re.compile(r"(?:subprocess\.(?:run|Popen|call|check_output|check_call)"
 def _ham_chua(src: str, vt: int) -> str:
     """Tên hàm bao quanh vị trí này (dò ngược lên `def ...`). Rỗng nếu ở tầng module."""
     ten = ""
-    for m in re.finditer(r"^\s*(?:async\s+)?def\s+(\w+)", src[:vt], re.M):
+    for m in re.finditer(r"^\s*(?:async\s+)?def\s+(\w+)", src[:vt], re.MULTILINE):
         ten = m.group(1)
     return ten
 
@@ -112,10 +113,10 @@ check("CANARY: không lấy CREATE_NO_WINDOW từ asyncio.subprocess (ở đó n
 
 # Module dùng chung phải tồn tại và trả 0 ngoài Windows (truyền vô điều kiện được).
 sys.path.insert(0, str(ROOT / "server"))
-import winproc  # noqa: E402
-
 import os
 import subprocess
+
+import winproc
 
 expected_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 expected_kwargs = {"creationflags": expected_flags} if os.name == "nt" else {}

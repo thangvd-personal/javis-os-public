@@ -31,13 +31,13 @@ thanh gach moc tren bieu do theo ngay - nhin phat thay cot tut xuong dung hom ba
 """
 from __future__ import annotations
 
-import localefmt
 import json
-import os
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
+import localefmt
 from config import STATE_DIR
+
 
 # Múi giờ để cắt NGÀY của thống kê. Đọc từ cấu hình qua `localefmt`, KHÔNG còn là hằng số.
 #
@@ -72,9 +72,8 @@ def ghi_moc(loai: str, den: str, tu: str = "", nhan: str = "", now: datetime = N
            "loai": str(loai or "")[:20], "tu": str(tu or "")[:80],
            "den": str(den or "")[:80], "nhan": str(nhan or "")[:120]}
     try:
-        with _LOCK:
-            with open(MOC_PATH, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(moc, ensure_ascii=False) + "\n")
+        with _LOCK, open(MOC_PATH, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(moc, ensure_ascii=False) + "\n")
     except Exception:   # noqa: BLE001 - nhat ky phu, khong duoc chan viec chinh
         pass
     return moc

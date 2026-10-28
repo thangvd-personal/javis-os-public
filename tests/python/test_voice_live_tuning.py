@@ -6,11 +6,11 @@ No network. Proactive audio (the TV-in-the-room fix) and the turn presets are pr
 server that refuses them must not kill the call, so the provider reconnects once without them.
 "Normal" must leave today's payload untouched.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import unittest
 
 import voice_live
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def gemini(**kw):

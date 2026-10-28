@@ -1,15 +1,15 @@
 """Immutable technical evidence, settlement and cold authentication; no executor."""
 from __future__ import annotations
 
-from contextlib import closing
-from dataclasses import asdict, dataclass
 import hashlib
 import json
-from pathlib import Path
 import time
+from contextlib import closing
+from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
 from improvement_native_protocol import _canonical, _digest, _fields, _parse
 from improvement_qualification_records import read_attempt, read_run
 
@@ -205,10 +205,13 @@ def _stored(assets, principal, connection, operation, identity):
 
 def _authenticate(assets, principal, connection, stage, *, terminal):
     """No workspace/runtime/source observations: immutable joins remain cold."""
+    from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+    from improvement_native_trace_checks import (
+        reread_native_decisions,
+        validated_history,
+    )
     from improvement_qualification_protocol import validate_query_binding
     from improvement_trial_evidence import decode_trace
-    from improvement_native_trace_checks import validated_history, reread_native_decisions
-    from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
     _fields(stage, {'version', 'identity', 'binding', 'preflight', 'link', 'request', 'manifest', 'workspace',
         'contract', 'ack', 'trace_hashes', 'native_decisions', 'installation_hash', 'input_delivery_hash',
         'checks', 'execution_status', 'launch_nonce', 'environment_hash', 'usage_completion'})
@@ -280,8 +283,8 @@ def _authenticate(assets, principal, connection, stage, *, terminal):
 
 
 def _authenticate_preflight(assets, principal, connection, proof, scope):
-    from improvement_qualification_session import QualificationPreflight
     from improvement_native_decisions import NativeImageDecisionStore
+    from improvement_qualification_session import QualificationPreflight
     _fields(proof, set(QualificationPreflight.__dataclass_fields__))
     if (proof['version'] != 1 or type(proof['version']) is not int or proof['domain'] != 'qualification'
             or proof['supported'] is not False or proof['account_ready'] is not False or proof['technical_ready'] is not True
@@ -327,11 +330,15 @@ class QualificationQueryResults:
         self.session = session
 
     def stage(self, owner, principal, identifier, *, expected_generation, lease_token, binding, native_completion):
-        from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
         from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
-        from improvement_trial_evidence import decode_trace
-        from improvement_trial_checks import execution_invariants
+        from improvement_native_trace_checks import (
+            require_durable_allow,
+            validate_native_trace,
+            validated_history,
+        )
         from improvement_sandbox import trial_system_prompt
+        from improvement_trial_checks import execution_invariants
+        from improvement_trial_evidence import decode_trace
         session = self.session
         context = session._query_current(binding)
         if (context['owner'] is not owner or principal is not session.principal or identifier != binding.subject_id

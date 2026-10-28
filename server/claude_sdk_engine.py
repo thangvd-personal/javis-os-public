@@ -19,17 +19,17 @@ quyền enforce PER-CALL bằng callback can_use_tool - tool ngoài whitelist b�
 từng lần gọi (kể cả Bash/Write builtin) + ghi audit, thay vì chỉ dựa --allowedTools tĩnh.
 """
 import asyncio
-import re
 import collections
 import fnmatch
 import json
 import os
+import re
 import sys
 import threading
 import time
 
 try:
-    import claude_agent_sdk as _sdk   # noqa: F401
+    import claude_agent_sdk as _sdk
     _SDK_OK = True
     # Tắt cảnh báo "can_use_tool bị allowed_tools che": đó CHÍNH là thiết kế của gate -
     # tool trong whitelist tự duyệt, mọi tool khác rơi vào _permission_gate → deny.
@@ -38,9 +38,9 @@ try:
 except Exception:
     _SDK_OK = False
 
-from config import STATE_DIR
 import hub_trace
 import localefmt
+from config import STATE_DIR
 
 _AUDIT_PATH = STATE_DIR / "logs" / "sdk_tool_audit.jsonl"
 
@@ -294,8 +294,15 @@ def _la_dua_token(text: str, is_error: bool) -> bool:
 def map_message(msg):
     """Map 1 message SDK → (list event dict 'hợp đồng ClaudeCLI', session_id|None).
     PURE - test offline được, không cần CLI/auth."""
-    from claude_agent_sdk import (AssistantMessage, UserMessage, SystemMessage, ResultMessage,
-                                  TextBlock, ToolUseBlock, ToolResultBlock)
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ResultMessage,
+        SystemMessage,
+        TextBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
     events = []
     if isinstance(msg, SystemMessage):
         data = msg.data or {}
@@ -439,7 +446,13 @@ class _CompletionWatch:
             self.deadline = now + self.grace
 
     def observe(self, msg, tools_running, now):
-        from claude_agent_sdk import AssistantMessage, UserMessage, SystemMessage, StreamEvent, TextBlock
+        from claude_agent_sdk import (
+            AssistantMessage,
+            StreamEvent,
+            SystemMessage,
+            TextBlock,
+            UserMessage,
+        )
         if isinstance(msg, SystemMessage):
             data = msg.data or {}
             sub = msg.subtype
@@ -607,7 +620,8 @@ class ClaudeSDK:
         `only`: set of tool names a gated session was granted (plugins_host.grant_patterns);
         every other plugin tool stays out of the server."""
         import plugins_host
-        from claude_agent_sdk import tool as sdk_tool, create_sdk_mcp_server
+        from claude_agent_sdk import create_sdk_mcp_server
+        from claude_agent_sdk import tool as sdk_tool
         mode = (self.javis_mode or "full").strip().lower()
         # vault_root: CHỈ để ctx của plugin biết đang làm việc ở brain nào (vd image-chatgpt lưu
         # ảnh vào đúng attachments/). self.javis_vault do _apply_mcp đặt TƯỜNG MINH (main.py) -
@@ -960,7 +974,11 @@ class ClaudeSDK:
             from claude_cli import co_co
             if not co_co("--no-session-persistence") or not co_co("--fork-session"):
                 return {"ok": False, "reason": "this claude version cannot fork a session without saving it"}
-            from claude_agent_sdk import ClaudeSDKClient, ResultMessage, PermissionResultDeny
+            from claude_agent_sdk import (
+                ClaudeSDKClient,
+                PermissionResultDeny,
+                ResultMessage,
+            )
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "reason": f"{type(e).__name__}: {e}"}
 
@@ -1001,7 +1019,7 @@ class ClaudeSDK:
             return {"ok": False, "reason": "no result"}
         text = str(getattr(msg, "result", "") or "")
         if getattr(msg, "is_error", False):
-            limited = bool(re.search(r"usage limit|limit reached|hết lượt|rate limit", text, re.I))
+            limited = bool(re.search(r"usage limit|limit reached|hết lượt|rate limit", text, re.IGNORECASE))
             return {"ok": False, "reason": text[:200] or "API error", "limit": limited}
         u = getattr(msg, "usage", None) or {}
         return {"ok": True, "cache_read": int(u.get("cache_read_input_tokens") or 0),
@@ -1107,7 +1125,7 @@ class ClaudeSDK:
                     msg = await asyncio.wait_for(agen.__anext__(), timeout=tran)
                 except StopAsyncIteration:
                     break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if ly_do == "ket":
                         print(f"[claude completion] tag={self.tag} session={self.session_id} "
                               f"end_turn without result after {RESULT_IDLE}s", file=sys.stderr)

@@ -7,16 +7,17 @@ _scan_note_md (frontmatter, tag, task, bỏ qua code fence, số dòng theo file
 /files/mdindex trả chỉ mục, /files/taskcheck lật checkbox đúng dòng + rào expect
 (409 khi file đổi) + tự gắn/gỡ "✅ ngày" cho task kiểu obsidian-tasks.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-dvtest-"))
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

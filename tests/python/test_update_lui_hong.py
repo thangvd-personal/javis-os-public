@@ -15,15 +15,16 @@ cách chữa khác hẳn nhau, nên nói sai còn tệ hơn không nói.
 
 Test này CHẠY THẬT `updater.main()` với git/pip/server giả, rồi đọc trạng thái nó ghi ra.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-lui-test-")
 
-import update_state as us   # noqa: E402
-import updater              # noqa: E402
+import update_state as us
+import updater
 
 _fails = []
 

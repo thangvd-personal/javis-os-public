@@ -2,19 +2,20 @@
 
     python tests/run.py workflow_turn_ws
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-wfturn-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(_TMP) / "conv.db")
 
-import main  # noqa: E402
-import workflow_runs  # noqa: E402
+import main
+import workflow_runs
 
 fails = []
 
@@ -74,6 +75,7 @@ check("lan hai noi ket qua truoc + dem lan chay", goi[1]["input"].startswith("s�
 # kho lần chạy: cột `input` chính là dòng tóm tắt ở lịch sử chạy (cắt 60 ký tự đầu), nên dính
 # khối tài liệu vào là lịch sử không còn thấy người dùng đã yêu cầu gì.
 from unittest.mock import patch
+
 with patch.object(main, "_session_block", return_value="\n\nATTACHED_FILE_AND_LINK") as context:
     run("đọc tài liệu đã gắn")
     check("dong co nhan duoc khoi tai lieu", "ATTACHED_FILE_AND_LINK" in goi[-1]["input"])
@@ -168,7 +170,7 @@ check("vong nhan tin re nhanh workflow", "run_workflow_turn(" in ws and 'action 
 # xuống `step_done`, và câu báo hết lượt về theo đường câu trả lời bình thường nên không ai
 # nhận ra nó là lỗi. Khối này canh cả hai, chạy bản THẬT của _execute_workflow_raw với một
 # động cơ giả.
-import workflow_chat  # noqa: E402
+import workflow_chat
 
 wf_loi = Path(_TMP) / "brain-loi"
 (wf_loi / "workflows").mkdir(parents=True, exist_ok=True)

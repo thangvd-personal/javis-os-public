@@ -12,11 +12,12 @@ File này canh bốn chuyện, thiếu một là lỗi quay lại dưới dạng
 3. Nhớ TỪNG đoạn là tiếng vọng, không thì vòng đọc tưởng chủ nhắn tay và bot im 10 phút.
 4. Trong nhóm chỉ tag người được trả lời một lần.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zalo-dai-")
 
@@ -25,8 +26,8 @@ try:
 except Exception:
     pass
 
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 
@@ -122,7 +123,7 @@ TAG = []
 
 async def _tag_gia(conn, chat_id, text, mention):
     TAG.append(mention)
-    return None     # để gửi thường, chỉ ghi lại ai được tag
+    # để gửi thường, chỉ ghi lại ai được tag
 
 
 _goc = zp._send_tagged

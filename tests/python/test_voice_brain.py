@@ -12,15 +12,16 @@ bộ não API nhận `stream_fn` giả. Khoá:
   4. Sổ phiên: cùng sid dùng lại, đổi model thì dựng lại; thiếu key API -> lỗi câu người hiểu.
   5. main.py có nhánh voice: payload.voice + mode fast -> run_voice_turn; /stt; /ws/voice-live.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-vbrain-"))
 
-import voice_brain as vb  # noqa: E402
+import voice_brain as vb
 
 _fails = []
 
@@ -430,8 +431,10 @@ check("split_speakable: final thì bỏ hẳn dòng JAVIS_NGHE",
 check("split_speakable: dòng JAVIS_NGHE đã khép bị bỏ, câu sau vẫn đọc",
       vb.split_speakable("JAVIS_NGHE: Javis ơi.\nỪ, để xem.\n", 0, False)[0] == ["Ừ, để xem.\n"])
 
-from pathlib import Path as _P  # noqa: E402
-from sessions import SessionStore  # noqa: E402
+from pathlib import Path as _P
+
+from sessions import SessionStore
+
 _st = SessionStore(_P(os.environ["JAVIS_STATE_DIR"]) / "nghe.db")
 _sid = _st.create_session(brain="b", engine="e", model="m")
 _st.append_message(_sid, "user", "hey David mở lịch")

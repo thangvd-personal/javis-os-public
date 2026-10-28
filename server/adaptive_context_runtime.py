@@ -14,7 +14,6 @@ from pathlib import Path
 import context_compiler
 import context_runtime
 import limit_learner
-import localefmt
 import model_limits
 from context_compiler import ContextItem, HeuristicTokenizer
 from conversation_state import ConversationStateStore

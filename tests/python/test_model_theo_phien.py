@@ -16,10 +16,11 @@ Bẫy đã né mà test phải ghim chặt:
 - Ghim hỏng (provider bị gỡ key / không tồn tại) phải rơi về mặc định chung, không
   được chết lượt chat.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -35,8 +36,8 @@ def check(name, cond):
         _fails.append(name)
 
 
-from sessions import SessionStore  # noqa: E402
-import main  # noqa: E402
+import main
+from sessions import SessionStore
 
 with tempfile.TemporaryDirectory() as td:
     store = SessionStore(db_path=Path(td) / "conv.db")

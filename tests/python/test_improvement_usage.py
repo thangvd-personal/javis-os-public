@@ -1,17 +1,17 @@
 """Improvement attribution uses the existing event/index/call pipeline, never synthetic Team bills."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
 import json
-import sqlite3
 import os
+import sqlite3
 import tempfile
 import time
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-usage-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
@@ -19,11 +19,11 @@ for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_
                   "JAVIS_CODEX_SESSIONS_DIR": "empty-codex"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-import turn_context as TC
-import usage_store as US
-import usage_index as UI
-import resonance_store as RS
 import quota_scheduler as QS
+import resonance_store as RS
+import turn_context as TC
+import usage_index as UI
+import usage_store as US
 from agent_ledger import CallLedger
 
 if importlib.util.find_spec("improvement_usage"):
@@ -96,7 +96,7 @@ class ImprovementUsageTests(unittest.TestCase):
         raw.parent.mkdir(parents=True, exist_ok=True)
         with raw.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps({"type": "assistant", "entrypoint": "sdk-cli", "isSidechain": False,
-                "sessionId": sid, "cwd": str(raw.parent), "timestamp": datetime.now(timezone.utc).isoformat(),
+                "sessionId": sid, "cwd": str(raw.parent), "timestamp": datetime.now(UTC).isoformat(),
                 "message": {"id": rid, "model": "unpriced-selected-model", "usage": {
                     "input_tokens": tin, "output_tokens": tout, "cache_read_input_tokens": read,
                     "cache_creation_input_tokens": create}}}) + "\n")
@@ -129,7 +129,7 @@ class ImprovementUsageTests(unittest.TestCase):
         self.assertFalse(US._EVENTS_PATH.exists())
 
     def test_raw_sdk_profile_events_reach_shared_usage_without_summary_or_replay_overlap(self):
-        from claude_agent_sdk import AssistantMessage, SystemMessage, ResultMessage
+        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
         from improvement_claude import TrialProfile
         from improvement_sandbox import FixtureBroker
         recorder, ledger, call = self.native_recorder()
@@ -415,7 +415,7 @@ class ImprovementUsageTests(unittest.TestCase):
         self.record(100, 10, execution=execution("request-only"), event_kind="cli_detail",
                     event_id="sdk-event-a", request_id="same-provider-request")
         events = [json.loads(line) for line in UI._EVENTS_PATH.read_text().splitlines()]
-        first_ts = datetime(2026, 10, 20, 18, tzinfo=timezone.utc).timestamp()
+        first_ts = datetime(2026, 10, 20, 18, tzinfo=UTC).timestamp()
         for event in events:
             event.update(day="2026-10-21", ts=first_ts)
         UI._EVENTS_PATH.write_text("".join(json.dumps(event) + "\n" for event in events))
@@ -437,8 +437,8 @@ class ImprovementUsageTests(unittest.TestCase):
             connection.close()
 
     def test_old_attempt_replay_survives_retention_and_does_not_refresh_tpm(self):
-        old = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        recent = datetime(2026, 2, 3, tzinfo=timezone.utc)
+        old = datetime(2026, 1, 1, tzinfo=UTC)
+        recent = datetime(2026, 2, 3, tzinfo=UTC)
         with patch.object(US.localefmt, "now", return_value=old), patch("time.time", return_value=old.timestamp()):
             self.record(100, 10, event_kind="cli_fallback", event_id="old-summary")
         with patch.object(US.localefmt, "now", return_value=recent), patch("time.time", return_value=recent.timestamp()):
@@ -485,7 +485,7 @@ class ImprovementUsageTests(unittest.TestCase):
         raw = self.root / "raw-claude" / "project" / "chat.jsonl"
         raw.parent.mkdir(parents=True)
         raw.write_text(json.dumps({"type": "assistant", "entrypoint": "sdk-cli", "isSidechain": False,
-            "sessionId": "unrelated-chat", "cwd": str(raw.parent), "timestamp": datetime.now(timezone.utc).isoformat(),
+            "sessionId": "unrelated-chat", "cwd": str(raw.parent), "timestamp": datetime.now(UTC).isoformat(),
             "message": {"id": "chat-request", "model": "unpriced-selected-model", "usage": {
                 "input_tokens": 50, "output_tokens": 5, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}}) + "\n")
         UI.refresh()

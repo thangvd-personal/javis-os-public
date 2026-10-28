@@ -14,7 +14,7 @@ Chờ duyệt xếp lên đầu: đó là thứ chủ cần thấy trước.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import conversations
 
@@ -24,8 +24,8 @@ def _khop(danh_sach: Any, chat_id: str) -> bool:
     return bool(cid) and cid in {str(x).strip() for x in (danh_sach or [])}
 
 
-def danh_sach(accounts: List[dict], q: str = "", limit: int = 60,
-              cho: Optional[List[dict]] = None, bot: Optional[dict] = None) -> List[Dict[str, Any]]:
+def danh_sach(accounts: list[dict], q: str = "", limit: int = 60,
+              cho: list[dict] | None = None, bot: dict | None = None) -> list[dict[str, Any]]:
     """Các cuộc chat đã biết của `accounts` (bản công khai của tài khoản kênh, có `id` và `channel`).
 
     `cho`: hàng đợi duyệt của bot (`chatbot_runtime.nhom_cho`). `bot`: bản ghi bot, để đánh dấu
@@ -35,7 +35,7 @@ def danh_sach(accounts: List[dict], q: str = "", limit: int = 60,
     n = max(1, min(int(limit or 60), 200))
     groups = (bot or {}).get("groups") or []
     people = (bot or {}).get("people") or []
-    out: Dict[str, Dict[str, Any]] = {}
+    out: dict[str, dict[str, Any]] = {}
 
     def _them(cid, loai, ten, kenh, luc, cho_duyet, tk=""):
         d = out.get(cid)

@@ -1,9 +1,7 @@
 """Fresh worker protocol and descendant cleanup, without a provider/model call."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import importlib.util
 import asyncio
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -13,8 +11,10 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-worker-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
@@ -70,9 +70,9 @@ class WorkerProcessTests(unittest.TestCase):
             parent.wait(timeout=5)
 
     def payload(self):
+        import improvement_claude as IC
         from improvement_sandbox import TrialWorkspace
         from improvement_store import _hash
-        import improvement_claude as IC
         sha = lambda text: hashlib.sha256(text.encode()).hexdigest()
         root = Path(tempfile.mkdtemp(prefix="inputs-", dir=TEST_ROOT))
         pin = {"version": 1, "provider": "anthropic-cli", "engine_id": "claude-sdk", "model": "claude-opus-5-5",

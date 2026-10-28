@@ -12,10 +12,11 @@ limit to mà đọc hết cả năm lên rồi nhét vào một response.
 
 KHÔNG mạng. Vault nằm trong thư mục tạm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-hoclog-"))
 
@@ -28,11 +29,11 @@ def check(name, cond, them=""):
         fails.append(name)
 
 
-import main  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
-
 # 30 ngày nhật ký, mỗi ngày 2 mục -> 60 mục. Bản cũ (3 file) chỉ thấy được 6.
-from pathlib import Path  # noqa: E402
+from pathlib import Path
+
+import main
+from starlette.testclient import TestClient
 
 VAULT = Path(tempfile.mkdtemp(prefix="javis-hocvault-")) / "brain"
 log_dir = VAULT / "Javis" / "learn-log"

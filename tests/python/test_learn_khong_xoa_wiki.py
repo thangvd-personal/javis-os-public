@@ -10,12 +10,13 @@
   4. `hard_reset_paths` chạy `git checkout HEAD -- <cả lô>` (hỏng cả lệnh vì trang chưa có trong HEAD) rồi
      `git clean -fd`: trang bị xoá trắng, dòng câu hỏi mở vẫn còn. Đúng như ảnh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-learnwiki-"))
 try:
@@ -23,9 +24,9 @@ try:
 except Exception:
     pass
 
-import git_brain  # noqa: E402
-from learn import LearnDeps, LearnFeature  # noqa: E402
-import main  # noqa: E402  - dùng ĐÚNG hàm tìm thư mục con thật (không phân biệt hoa thường), là một nửa của lỗi
+import git_brain
+import main
+from learn import LearnDeps, LearnFeature
 
 _fails = []
 

@@ -7,8 +7,14 @@ import improvement_store as IM
 from improvement_claude import ClaudeTrialAdapter
 from improvement_comparison_plans import ExperimentPlans
 from improvement_comparison_schedule import ComparisonSchedule
-from improvement_experiment_protocol import definition, comparison_matrix, comparison_hash, matrix_cell, _digest
-from improvement_experiments import _identifier, _generation
+from improvement_experiment_protocol import (
+    _digest,
+    comparison_hash,
+    comparison_matrix,
+    definition,
+    matrix_cell,
+)
+from improvement_experiments import _generation, _identifier
 from improvement_trial_admission import AdmittedTrial
 from improvement_trial_records import _brain
 from improvement_trials import _request

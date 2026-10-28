@@ -17,7 +17,6 @@ Chạy được trên Linux/macOS. Trên Windows phần pty tự bỏ qua (ở �
 nhưng nhánh ống vẫn được test ở mọi hệ bằng cách ép CO_PTY=False, vì đó là nhánh không ai ngồi
 Linux chạy thử được.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import queue
@@ -26,7 +25,8 @@ import sys
 import threading
 import time
 
-import terminal  # noqa: E402
+import terminal
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 # Trần cho mọi phép đo "trả về NGAY, không chặn" trong file này. Thứ các phép đo đó
 # cần bác bỏ đều là một cú CHỜ tính bằng giây (chờ shell chết, chờ hàng ghi thông),
@@ -46,7 +46,7 @@ def check(name, cond, them=""):
 # 1. Hàng rào - quét mã nguồn (không import main: nó kéo cả app lên)
 # ============================================================
 SRC = (SERVER / "main.py").read_text(encoding="utf-8")
-_ws = re.search(r"@app\.websocket\(\"/ws/terminal\"\).*?(?=\n@app\.|\n# =====)", SRC, re.S)
+_ws = re.search(r"@app\.websocket\(\"/ws/terminal\"\).*?(?=\n@app\.|\n# =====)", SRC, re.DOTALL)
 _than = _ws.group(0) if _ws else ""
 
 check("có endpoint WebSocket /ws/terminal", bool(_than))
@@ -57,8 +57,8 @@ check("CANARY: WS terminal KHÔNG nhận token API (_token_ok là đường củ
       "_token_ok" not in _than)
 check("WS terminal tôn trọng công tắc tắt JAVIS_TERMINAL", "terminal.bat()" in _than)
 check("/terminal/status + /terminal/close không nằm trong danh sách khỏi đăng nhập",
-      "/terminal" not in re.search(r"_AUTH_PUBLIC_EXACT = \((.*?)\)", SRC, re.S).group(1)
-      and "/terminal" not in re.search(r"_AUTH_LOCAL_EXACT = \((.*?)\)", SRC, re.S).group(1))
+      "/terminal" not in re.search(r"_AUTH_PUBLIC_EXACT = \((.*?)\)", SRC, re.DOTALL).group(1)
+      and "/terminal" not in re.search(r"_AUTH_LOCAL_EXACT = \((.*?)\)", SRC, re.DOTALL).group(1))
 check("tắt server thì đóng hết shell (không bỏ lại tiến trình mồ côi)",
       "terminal.KHO.dong_het()" in SRC)
 check("rời tab chỉ GỠ NGƯỜI XEM, không giết shell",
@@ -121,7 +121,7 @@ async def _doc(q, dieu_kien, giay=6.0):
     while time.time() < het:
         try:
             g = await asyncio.wait_for(q.get(), timeout=0.4)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             continue
         if g["type"] == "out":
             buf += g["data"]

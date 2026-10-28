@@ -18,7 +18,7 @@ Test này quét bằng AST nên bắt được cả các khối khác, không ch
 import ast
 import sys
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -95,7 +95,7 @@ check("không chỗ nào gọi route handler như hàm thường"
       + ("\n       " + "\n       ".join(vi_pham) if vi_pham else ""), not vi_pham)
 
 # ---- Các hàm lõi phải tồn tại và gọi được KHÔNG cần đối số kiểu FastAPI ----
-import main  # noqa: E402
+import main
 
 for ten in ("agents_index", "workflows_index", "skills_index", "_list_brains_sync"):
     check(f"main.{ten} tồn tại (lõi thuần cho nội bộ dùng)", callable(getattr(main, ten, None)))

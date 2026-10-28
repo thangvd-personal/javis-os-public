@@ -9,25 +9,25 @@ Kho thật trên SQLite tạm, bộ chạy nhóm thật với engine GIẢ (đ�
 - Tin gắn goal: chỉ lý do `feedback` của goal ở A2, không lý do lớp 3 (không ba lượt cho một sự kiện).
 - Emoji không đổi trạng thái việc hay goal, không đổi ưu tiên, không cấp gì (cả chat riêng).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import os
 import tempfile
 import time
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fb-wake-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fb-wake-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_ledger as AL
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

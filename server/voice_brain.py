@@ -21,14 +21,13 @@ import difflib
 import json
 import os
 import re
-import sys
 import time
-from typing import AsyncIterator, Callable, Dict, List, Optional
+from collections.abc import AsyncIterator, Callable
 
-import winproc         # lệnh con câm lặng trên Windows (canary test_windows_no_console)
 import localefmt
 import nghe_sua
 import phien_am
+import winproc  # lệnh con câm lặng trên Windows (canary test_windows_no_console)
 
 MARKER = "JAVIS_ASK_MAIN:"
 # Đường TẮT cho việc chỉ đụng tới giao diện: bộ não giọng tự phát, server gọi thẳng dashboard,
@@ -162,9 +161,9 @@ GHI_CHU_CAU_NGHE = (
     "tin, đăng bài, tiêu tiền, xoá) vẫn nói lại ngắn điều sắp làm và hỏi xác nhận trước.]"
 )
 
-_MARK_RE = re.compile(r"^[ \t]*" + re.escape(MARKER) + r"[ \t]*(.+?)[ \t]*$", re.M)
-_NGHE_RE = re.compile(r"^[ \t]*" + re.escape(NGHE_MARKER) + r"[ \t]*(.*?)[ \t]*(?:\n|$)", re.M)
-_TRANSCRIPT_WORDS = re.compile(r"[+−-]?\d+(?:[.,:/-]\d+)*%?|[^\W\d_]+(?:['’][^\W\d_]+)?", re.U)
+_MARK_RE = re.compile(r"^[ \t]*" + re.escape(MARKER) + r"[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+_NGHE_RE = re.compile(r"^[ \t]*" + re.escape(NGHE_MARKER) + r"[ \t]*(.*?)[ \t]*(?:\n|$)", re.MULTILINE)
+_TRANSCRIPT_WORDS = re.compile(r"[+−-]?\d+(?:[.,:/-]\d+)*%?|[^\W\d_]+(?:['’][^\W\d_]+)?", re.UNICODE)
 
 
 # Rào cho câu bộ não giọng diễn giải (0.64.38). Đo trên cặp thật: "mô đồ"/Models 0,6,
@@ -310,7 +309,7 @@ def parse_nghe(text: str):
     return rest, (nghe or None)
 
 
-_BO_QUA_RE = re.compile(r"^[ \t]*" + re.escape(BO_QUA_MARKER) + r"[ \t]*(.*?)[ \t]*$", re.M)
+_BO_QUA_RE = re.compile(r"^[ \t]*" + re.escape(BO_QUA_MARKER) + r"[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 
 
 def parse_bo_qua(text: str):
@@ -338,7 +337,7 @@ def tach_nghe_dau(text: str):
         return t, None
     nghe = dau.lstrip()[len(NGHE_MARKER):].strip()
     return t[nl + 1:], (nghe or None)
-_UI_RE = re.compile(r"^[ \t]*" + re.escape(UI_MARKER) + r"[ \t]*(.+?)[ \t]*$", re.M)
+_UI_RE = re.compile(r"^[ \t]*" + re.escape(UI_MARKER) + r"[ \t]*(.+?)[ \t]*$", re.MULTILINE)
 
 
 def parse_marker(text: str):
@@ -391,7 +390,7 @@ def split_speakable(text: str, start: int, final: bool = False):
     Dòng marker `JAVIS_ASK_MAIN:` không bao giờ ra loa: dòng mới mà chữ đầu trùng đầu marker
     thì giữ lại tới khi biết chắc; đã là marker thì bỏ cả dòng.
     """
-    out: List[str] = []
+    out: list[str] = []
     while start < len(text):
         nl = text.find("\n", start)
         line_start = text.rfind("\n", 0, start) + 1
@@ -434,7 +433,7 @@ def split_speakable(text: str, start: int, final: bool = False):
     return out, start
 
 
-def seed_text(history: List[dict], text: str, with_prompt: bool = True) -> str:
+def seed_text(history: list[dict], text: str, with_prompt: bool = True) -> str:
     """Lượt ĐẦU của một tiến trình/mạch mới: hướng dẫn (nếu engine không nhận system prompt
     riêng) + mấy lượt gần nhất từ kho phiên + câu vừa nói. Dùng chung cho agy, Claude, Grok."""
     parts = []
@@ -450,7 +449,7 @@ def seed_text(history: List[dict], text: str, with_prompt: bool = True) -> str:
     return "\n\n".join(parts)
 
 
-def build_messages(history: List[dict], text: str, system: str = SYSTEM_PROMPT) -> List[dict]:
+def build_messages(history: list[dict], text: str, system: str = SYSTEM_PROMPT) -> list[dict]:
     msgs = [{"role": "system", "content": system}]
     for h in (history or [])[-HISTORY_N:]:
         role = "assistant" if h.get("role") == "assistant" else "user"
@@ -469,7 +468,7 @@ class VoiceBrain:
         self.last_used = time.time()
         self._lock = asyncio.Lock()
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:  # pragma: no cover
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:  # pragma: no cover
         raise NotImplementedError
         yield ""
 
@@ -480,7 +479,7 @@ class VoiceBrain:
 class ApiVoiceBrain(VoiceBrain):
     """Groq / Gemini / OpenAI / OpenRouter qua engine.<prov>_stream."""
 
-    def __init__(self, provider: str, api_key: str, model: str, stream_fn: Optional[Callable] = None):
+    def __init__(self, provider: str, api_key: str, model: str, stream_fn: Callable | None = None):
         super().__init__()
         self.provider = provider
         self.api_key = api_key
@@ -496,7 +495,7 @@ class ApiVoiceBrain(VoiceBrain):
             "openai": engine.openai_stream, "openrouter": engine.openrouter_stream,
         }[self.provider]
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:
         self.last_used = time.time()
         msgs = build_messages(history, text)
         async with self._lock:
@@ -521,7 +520,7 @@ class AntigravityVoiceBrain(VoiceBrain):
     """
     provider = "antigravity"
 
-    def __init__(self, model: str = "", cli_path: str = "", spawn: Optional[Callable] = None):
+    def __init__(self, model: str = "", cli_path: str = "", spawn: Callable | None = None):
         super().__init__()
         self.model = model
         self.cli_path = cli_path
@@ -530,7 +529,7 @@ class AntigravityVoiceBrain(VoiceBrain):
         self._seeded = False
         self.turns = 0
 
-    def _args(self) -> List[str]:
+    def _args(self) -> list[str]:
         args = [self.cli_path]
         if self.model:
             args += ["--model", self.model]
@@ -551,10 +550,10 @@ class AntigravityVoiceBrain(VoiceBrain):
         self._seeded = False
         self.turns = 0
 
-    def _seed_text(self, history: List[dict], text: str) -> str:
+    def _seed_text(self, history: list[dict], text: str) -> str:
         return seed_text(history, text, with_prompt=True)
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:
         self.last_used = time.time()
         async with self._lock:
             await self._ensure()
@@ -575,7 +574,7 @@ class AntigravityVoiceBrain(VoiceBrain):
                                                       "Antigravity did not answer within 90 seconds."))
                 try:
                     raw = await asyncio.wait_for(self.proc.stdout.readline(), timeout=left)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     await self.close()
                     raise RuntimeError(localefmt.chu("Antigravity không trả lời trong 90 giây.",
                                                       "Antigravity did not answer within 90 seconds."))
@@ -649,13 +648,13 @@ class CodexVoiceBrain(VoiceBrain):
     `engine.openai_responses_stream` mà bộ não chính dùng; ở đây chỉ khác system prompt ngắn."""
     provider = "codex"
 
-    def __init__(self, model: str = "", creds_fn: Optional[Callable] = None, stream_fn: Optional[Callable] = None):
+    def __init__(self, model: str = "", creds_fn: Callable | None = None, stream_fn: Callable | None = None):
         super().__init__()
         self.model = model
         self._creds_fn = creds_fn
         self._stream_fn = stream_fn
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:
         self.last_used = time.time()
         creds = (self._creds_fn or _codex_creds)() or {}
         if not creds.get("access_token"):
@@ -707,7 +706,7 @@ class ClaudeVoiceBrain(VoiceBrain):
     nên lượt sau chỉ còn độ trễ của model. Mạch giữ trong client nên có ký ức giữa các lượt."""
     provider = "claude"
 
-    def __init__(self, model: str = "", client_factory: Optional[Callable] = None):
+    def __init__(self, model: str = "", client_factory: Callable | None = None):
         super().__init__()
         self.model = model
         self._factory = client_factory      # test tiêm client giả (async () -> client)
@@ -717,6 +716,7 @@ class ClaudeVoiceBrain(VoiceBrain):
 
     def _options(self):
         import tempfile
+
         from claude_agent_sdk import ClaudeAgentOptions
         fields = getattr(ClaudeAgentOptions, "__dataclass_fields__", {})
         kw = {"system_prompt": SYSTEM_PROMPT, "cwd": tempfile.gettempdir(),
@@ -769,7 +769,7 @@ class ClaudeVoiceBrain(VoiceBrain):
         self._seeded = False
         self.turns = 0
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:
         self.last_used = time.time()
         async with self._lock:
             await self._ensure()
@@ -785,7 +785,7 @@ class ClaudeVoiceBrain(VoiceBrain):
                 while True:
                     left = deadline - time.time()
                     if left <= 0:
-                        raise asyncio.TimeoutError()
+                        raise TimeoutError()
                     try:
                         msg = await asyncio.wait_for(agen.__anext__(), timeout=left)
                     except StopAsyncIteration:
@@ -802,7 +802,7 @@ class ClaudeVoiceBrain(VoiceBrain):
                                 raise RuntimeError(str(getattr(data, "result", "")
                                                                or localefmt.chu("Claude báo lỗi.", "Claude reported an error.")))
                             return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await self.close()
                 raise RuntimeError(localefmt.chu("Claude không trả lời trong 90 giây.",
                                                   "Claude did not answer within 90 seconds."))
@@ -829,7 +829,7 @@ class GrokVoiceBrain(VoiceBrain):
     từng mảnh, nhưng câu trả lời giọng ngắn nên chấp nhận được."""
     provider = "grok"
 
-    def __init__(self, model: str = "", cli_factory: Optional[Callable] = None):
+    def __init__(self, model: str = "", cli_factory: Callable | None = None):
         super().__init__()
         self.model = model
         self._factory = cli_factory
@@ -852,7 +852,7 @@ class GrokVoiceBrain(VoiceBrain):
             self.cli.max_turns = 1
             self.cli.timeout = TURN_TIMEOUT_S
 
-    async def stream(self, text: str, history: List[dict]) -> AsyncIterator[str]:
+    async def stream(self, text: str, history: list[dict]) -> AsyncIterator[str]:
         self.last_used = time.time()
         async with self._lock:
             self._ensure()
@@ -879,7 +879,7 @@ class GrokVoiceBrain(VoiceBrain):
 # Khi bộ não giọng phát JAVIS_ASK_MAIN, main.py giao yêu cầu đó cho bộ não chính chạy NỀN rồi
 # kết thúc lượt giọng ngay, để người dùng nói tiếp được. Sổ này cho bộ não giọng biết còn việc
 # gì đang chạy, để nó trả lời "đang chạy" thay vì bịa kết quả hay giao lại việc cũ.
-_PENDING: Dict[str, List[dict]] = {}
+_PENDING: dict[str, list[dict]] = {}
 PENDING_MAX_NOTE = 6
 
 
@@ -899,7 +899,7 @@ def note_task_done(session_id: str, request: str) -> None:
         _PENDING.pop(str(session_id or "default"), None)
 
 
-def pending_tasks(session_id: str) -> List[dict]:
+def pending_tasks(session_id: str) -> list[dict]:
     return list(_PENDING.get(str(session_id or "default")) or [])
 
 
@@ -967,7 +967,7 @@ def _chuan_viec(s: str) -> str:
     return re.sub(r"[^\w]+", " ", str(s or "").lower()).strip()
 
 
-def viec_trung(session_id: str, request: str) -> Optional[str]:
+def viec_trung(session_id: str, request: str) -> str | None:
     """Việc nền ĐANG CHẠY giống yêu cầu này (trả yêu cầu cũ), không có thì None."""
     moi = _chuan_viec(request)
     if not moi:
@@ -984,7 +984,7 @@ def day_viec_nen(session_id: str) -> bool:
     return len(pending_tasks(session_id)) >= VIEC_NEN_TOI_DA
 
 
-def pending_note(session_id: str, now: Optional[float] = None) -> str:
+def pending_note(session_id: str, now: float | None = None) -> str:
     """Dòng ghi chú ghép vào cuối câu người dùng gửi bộ não giọng; rỗng khi không có việc nền."""
     lst = pending_tasks(session_id)
     if not lst:
@@ -1008,7 +1008,7 @@ def pending_note(session_id: str, now: Optional[float] = None) -> str:
 # có làn nhanh - và không có cách nào biết vì sao (chủ dự án gặp 16/09 sau vài bản cập nhật).
 # Nên giữ lại lỗi gần nhất ở đây: khung chat nói ra ngay lượt đó, và thẻ Giọng nói ở trang
 # Cài đặt hiện lại cho tới khi một lượt làn nhanh chạy trót lọt.
-LOI_GAN_NHAT: Dict[str, object] = {}
+LOI_GAN_NHAT: dict[str, object] = {}
 _LOI_MAX_CHU = 300
 
 
@@ -1018,7 +1018,7 @@ def ten_bo_nao(provider: str) -> str:
     return (p or {}).get("label") or str(provider or "bộ não giọng")
 
 
-def ghi_loi_lan_nhanh(provider: str, err, now: Optional[float] = None) -> dict:
+def ghi_loi_lan_nhanh(provider: str, err, now: float | None = None) -> dict:
     """Nhớ cú rơi về bộ não chính vừa xảy ra. Trả về bản ghi (để test và để gửi đi)."""
     LOI_GAN_NHAT.clear()
     LOI_GAN_NHAT.update({
@@ -1052,7 +1052,7 @@ def cau_roi_ve_bo_nao_chinh(provider: str, err) -> str:
     # đọc "Kiểm tra ở trang Models" mà tưởng Antigravity bị đăng xuất.
     sua = (localefmt.chu("Chọn lại model ở Cài đặt, Giọng nói, Nâng cao.",
                          "Pick the model again in Settings, Voice, Advanced.")
-           if re.search(r"\bmodel\b", loi, re.I)
+           if re.search(r"\bmodel\b", loi, re.IGNORECASE)
            else localefmt.chu("Kiểm tra bộ não này ở trang Models.", "Check this brain on the Models page."))
     return localefmt.chu(
         f"Làn nhanh không chạy được: bộ não giọng {ten_bo_nao(provider)} báo \"{loi}\". "
@@ -1064,8 +1064,8 @@ def cau_roi_ve_bo_nao_chinh(provider: str, err) -> str:
 # ============================================================
 # Sổ phiên
 # ============================================================
-_BRAINS: Dict[str, VoiceBrain] = {}
-_REAPER: Optional[asyncio.Task] = None
+_BRAINS: dict[str, VoiceBrain] = {}
+_REAPER: asyncio.Task | None = None
 
 
 # Bộ não giọng TỰ CHỌN (0.65.19, docs/dev/2026-10-voice-call-spec.md mục 5): trang Cài đặt không còn
@@ -1074,7 +1074,7 @@ _REAPER: Optional[asyncio.Task] = None
 # Khoá đã lưu (chọn tay từ bản cũ) vẫn thắng: giá trị cũ được đọc và dùng tiếp.
 PLAN_BRAINS = ("antigravity", "codex", "claude", "grok")
 _AUTO_TTL = 60.0
-_AUTO_CACHE: Dict[str, object] = {"at": 0.0, "key": None, "value": ""}
+_AUTO_CACHE: dict[str, object] = {"at": 0.0, "key": None, "value": ""}
 
 
 def plan_brain_available(pid: str, cfg: dict) -> bool:

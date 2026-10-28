@@ -1,7 +1,7 @@
 """Closed v4 Trial shape and identity; no source, grant, SQL or native authority."""
 from improvement_cases import _fields
+from improvement_experiment_protocol import _digest, _freeze, _id, validate_request_v2
 from improvement_store import _hash, _json
-from improvement_experiment_protocol import _freeze, _id, _digest, validate_request_v2
 
 
 def validate_request_v4(value):

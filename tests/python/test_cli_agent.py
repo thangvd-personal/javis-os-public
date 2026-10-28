@@ -18,13 +18,14 @@ model engine faked:
   3. No `agent`: the turn is the old one (main model, Javis prompt, and a wrong brain still falls
      back to the default brain exactly as before).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-cli-agent-")
 # The default brain lives under BRAINS_DIR: point it at a scratch folder so this test never
@@ -36,8 +37,8 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 

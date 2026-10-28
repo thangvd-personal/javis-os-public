@@ -22,12 +22,12 @@ rằng mọi thứ ổn, nên không có đường nào để phát hiện ra ch
 Cách sửa: MỘT hàm dùng chung `mcp_client.co_server_de_dial`. File này canh cả hành vi lẫn
 việc ba chỗ đó thật sự gọi hàm chung, vì bệnh gốc chính là ba bản chép tay trôi lệch.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import sys
 from pathlib import Path
 
 import mcp_client
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 loi = []
 

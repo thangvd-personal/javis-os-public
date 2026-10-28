@@ -1,6 +1,4 @@
 """Canonical source capture is read-only, byte-exact and conservative about ownership."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import inspect
@@ -11,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="imp-assets-"))
 os.environ["JAVIS_STATE_DIR"] = str(TEST_ROOT / "state")

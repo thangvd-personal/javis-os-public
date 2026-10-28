@@ -13,12 +13,13 @@ Pins what the menu needs from the store and the routes:
   5. An existing store without the column is upgraded in place.
   6. The routes /unread and /hide, and the list route's hidden handling.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-inbox-menu-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -30,7 +31,7 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
+import conversations
 
 _fails = []
 
@@ -143,8 +144,8 @@ finally:
     conversations.DB_PATH = _orig
 
 # ---- 6. routes ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.post(f"/conversations/{a}/unread")

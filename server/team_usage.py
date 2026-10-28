@@ -5,8 +5,8 @@ remains partial until explicitly linked request detail reconciles its token coun
 """
 from __future__ import annotations
 
-from collections import defaultdict
 import sqlite3
+from collections import defaultdict
 
 import usage_index
 import usage_store

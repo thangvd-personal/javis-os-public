@@ -30,8 +30,8 @@ def fence_busy(lock_path):
 
 class NativeLifetime:
     def __init__(self, pid, fences, *, suspended=False):
-        from improvement_sandbox import worker_environment
         import winproc
+        from improvement_sandbox import worker_environment
         self._lock = threading.Lock()
         self._closed = False
         paths = [str(Path(value).absolute()) for value in fences]
@@ -79,9 +79,9 @@ class NativeLifetime:
 
 
 def supervise(packet=None):
-    from improvement_worker import WorkerGroup, WorkerGroupCleanupError
     from improvement_blobs import check_ancestry
     from improvement_sandbox import _private_directory
+    from improvement_worker import WorkerGroup, WorkerGroupCleanupError
     if packet is None:
         packet = json.loads(sys.stdin.buffer.readline(32768))
     if (type(packet) is not dict or set(packet) != {'pid', 'locks', 'suspended'} or type(packet['suspended']) is not bool
@@ -385,7 +385,8 @@ class GuardianV2:
     def __init__(self, policy, *, image_policy, fences, launch_nonce, invocations, timeout=15, close_timeout=8,
             lifetime_timeout=300):
         import math
-        from improvement_fixed_worker_launch import _policy, _path
+
+        from improvement_fixed_worker_launch import _path, _policy
         self._policy = _policy(policy)
         _v2_fields(image_policy, {'version', 'path', 'sha256'})
         if type(image_policy['version']) is not int or image_policy['version'] != 1:
@@ -661,6 +662,7 @@ class GuardianV2:
     def _share_images(self):
         import base64
         import socket
+
         from improvement_image_channel import ImageMetadataChannel
         for invocation in self._invocations:
             self._live_worker()
@@ -685,6 +687,7 @@ class GuardianV2:
 
     async def _prepare(self):
         import asyncio
+
         from improvement_fixed_worker_launch import FixedWorkerLaunch
         self._api, self._debug = _guardian_windows()
         self._creator = self._debug.current_thread()

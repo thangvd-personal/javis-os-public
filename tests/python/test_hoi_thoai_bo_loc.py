@@ -9,10 +9,11 @@ một ô chọn bot bị ẩn khi có dưới hai bot. Bản này canh phía ser
   3. `dem_bo_loc` đếm trên toàn hòm thư, không phụ thuộc bộ lọc đang chọn.
   4. Endpoint trả `bot_name` cho từng hàng, `facets`, và danh sách `bots` kèm tên; bot đã xoá không lòi id thô.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-htloc-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -22,11 +23,11 @@ try:
 except Exception:
     pass
 
-import time  # noqa: E402
+import time
 
-import chatbot_reply_policy_store as rps  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_reply_policy_store as rps
+import chatbot_store
+import conversations
 
 _fails = []
 
@@ -111,8 +112,8 @@ check("số đếm: theo bot, có cả khoá '' cho cuộc chat không bot",
       and f["bots"][bot_a]["unread"] == 1 and f["bots"][bot_b]["human"] == 1 and f["bots"][bot_b]["need_reply"] == 1, f["bots"])
 
 # ---- endpoint ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/conversations", params={"limit": 50}).json()

@@ -14,10 +14,11 @@ dưới hàng chục hình dạng (`vi-VN` ở giọng đọc, `"vi"` ở Whispe
 Test này KHÔNG cấm chữ "vi" xuất hiện. Nó cấm đúng một thứ: **rẽ nhánh hành vi theo một mã
 ngôn ngữ viết cứng**. Cần biết gì về một ngôn ngữ thì hỏi `lang_registry`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import pathlib
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 GOC = pathlib.Path(__file__).resolve().parents[2]
 
@@ -89,8 +90,8 @@ check("dashboard/ không rẽ nhánh theo mã ngôn ngữ viết cứng",
 
 # --- Sổ đăng ký và bộ từ vựng phải khớp nhau ---
 sys.path.insert(0, str(GOC / "server"))
-import lang_registry  # noqa: E402
-import lexicon        # noqa: E402
+import lang_registry
+import lexicon
 
 check("mọi ngôn ngữ trong sổ đăng ký đều có đủ trường để dựng prompt",
       all(lang_registry.get(m).nudge and lang_registry.get(m).weekdays

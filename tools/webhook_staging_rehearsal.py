@@ -19,12 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sqlite3
+import shutil
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
-import shutil
 import tempfile
 import threading
 import time

@@ -1,6 +1,4 @@
 """Actual SQLite projections stay read-only, scoped and internally consistent."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import ast
 import hashlib
 import importlib.util
@@ -15,13 +13,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 SCRATCH = Path(tempfile.mkdtemp(prefix="trial-sql-context-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
                   "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(SCRATCH / name)
 
-from evidence_store import redact  # noqa: E402
-from resonance_store import Principal  # noqa: E402
+from evidence_store import redact
+from resonance_store import Principal
 
 if importlib.util.find_spec("improvement_trial_sql_context"):
     import improvement_trial_sql_context as S

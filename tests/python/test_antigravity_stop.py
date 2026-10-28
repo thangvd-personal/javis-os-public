@@ -1,6 +1,4 @@
 """Real-process regressions for interrupted Antigravity turns, without a real model."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import os
 import subprocess
@@ -12,6 +10,7 @@ from unittest.mock import patch
 import antigravity_cli as agy
 import claude_cli
 import pytest
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 @pytest.fixture

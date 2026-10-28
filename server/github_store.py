@@ -23,7 +23,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from config import STATE_DIR
 
@@ -133,7 +133,7 @@ class Store:
 
     # ---- work rows ----
     @staticmethod
-    def _row(r: sqlite3.Row) -> Dict[str, Any]:
+    def _row(r: sqlite3.Row) -> dict[str, Any]:
         d = dict(r)
         for k in ("merge_block", "checks_summary"):
             try:
@@ -146,12 +146,12 @@ class Store:
             d["gate"] = {}
         return d
 
-    def get(self, sid: str, full_name: str) -> Optional[Dict[str, Any]]:
+    def get(self, sid: str, full_name: str) -> dict[str, Any] | None:
         with self._lock:
             r = self._db.execute("SELECT * FROM work WHERE sid=? AND full_name=?", (sid, full_name)).fetchone()
         return self._row(r) if r else None
 
-    def ensure(self, sid: str, full_name: str, **fields) -> Dict[str, Any]:
+    def ensure(self, sid: str, full_name: str, **fields) -> dict[str, Any]:
         now = time.time()
         with self._lock:
             self._db.execute("INSERT OR IGNORE INTO work (sid, full_name, created_at, updated_at) VALUES (?,?,?,?)",
@@ -161,7 +161,7 @@ class Store:
             return self.update(sid, full_name, **fields)
         return self.get(sid, full_name) or {}
 
-    def update(self, sid: str, full_name: str, **fields) -> Dict[str, Any]:
+    def update(self, sid: str, full_name: str, **fields) -> dict[str, Any]:
         sets, vals = [], []
         for k, v in fields.items():
             if k not in _COLS or k in ("sid", "full_name", "created_at"):
@@ -181,12 +181,12 @@ class Store:
             self._db.commit()
         return self.get(sid, full_name) or {}
 
-    def for_session(self, sid: str) -> List[Dict[str, Any]]:
+    def for_session(self, sid: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM work WHERE sid=? ORDER BY created_at", (sid,)).fetchall()
         return [self._row(r) for r in rows]
 
-    def active(self) -> List[Dict[str, Any]]:
+    def active(self) -> list[dict[str, Any]]:
         """Rows the watcher must look at: a pushed commit whose CI or PR is not settled yet."""
         with self._lock:
             rows = self._db.execute(
@@ -194,15 +194,15 @@ class Store:
                 "integ IN ('pr_open','ready') OR (integ='merged' AND post_merge='pending'))").fetchall()
         return [self._row(r) for r in rows]
 
-    def for_repo(self, brain: str, full_name: str) -> List[Dict[str, Any]]:
+    def for_repo(self, brain: str, full_name: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM work WHERE brain=? AND lower(full_name)=lower(?)",
                                     (brain, full_name)).fetchall()
         return [self._row(r) for r in rows]
 
-    def sessions(self, sids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    def sessions(self, sids: list[str]) -> dict[str, list[dict[str, Any]]]:
         """Rows of many sessions at once (the chat list draws an icon per conversation)."""
-        out: Dict[str, List[Dict[str, Any]]] = {}
+        out: dict[str, list[dict[str, Any]]] = {}
         ids = [s for s in sids if s][:500]
         if not ids:
             return out
@@ -233,7 +233,7 @@ class Store:
             return cur.rowcount == 1
 
     # ---- checks ----
-    def save_checks(self, full_name: str, sha: str, runs: List[Dict[str, Any]]) -> None:
+    def save_checks(self, full_name: str, sha: str, runs: list[dict[str, Any]]) -> None:
         now = time.time()
         with self._lock:
             for r in runs:
@@ -246,7 +246,7 @@ class Store:
                      r.get("url") or "", int(r.get("job_id") or 0), now))
             self._db.commit()
 
-    def checks(self, full_name: str, sha: str) -> List[Dict[str, Any]]:
+    def checks(self, full_name: str, sha: str) -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM checks WHERE full_name=? AND sha=? ORDER BY name",
                                     (full_name, sha)).fetchall()
@@ -259,12 +259,12 @@ class Store:
             self._db.commit()
             return int(cur.lastrowid)
 
-    def queue_list(self, sid: str, state: str = "waiting") -> List[Dict[str, Any]]:
+    def queue_list(self, sid: str, state: str = "waiting") -> list[dict[str, Any]]:
         with self._lock:
             rows = self._db.execute("SELECT * FROM queue WHERE sid=? AND state=? ORDER BY id", (sid, state)).fetchall()
         return [dict(r) for r in rows]
 
-    def queue_take(self, sid: str) -> Optional[Dict[str, Any]]:
+    def queue_take(self, sid: str) -> dict[str, Any] | None:
         """The oldest waiting job of a chat, marked started in the same transaction (never handed out twice)."""
         with self._lock:
             r = self._db.execute("SELECT * FROM queue WHERE sid=? AND state='waiting' ORDER BY id LIMIT 1",
@@ -295,14 +295,14 @@ class Store:
                  time.time()))
             self._db.commit()
 
-    def metrics(self, full_name: str = "") -> List[Dict[str, Any]]:
+    def metrics(self, full_name: str = "") -> list[dict[str, Any]]:
         q = "SELECT * FROM metrics" + (" WHERE lower(full_name)=lower(?)" if full_name else "") + " ORDER BY at DESC LIMIT 500"
         with self._lock:
             rows = self._db.execute(q, (full_name,) if full_name else ()).fetchall()
         return [dict(r) for r in rows]
 
 
-_STORE: Optional[Store] = None
+_STORE: Store | None = None
 _STORE_LOCK = threading.Lock()
 
 
@@ -314,7 +314,7 @@ def store() -> Store:
         return _STORE
 
 
-def icon(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def icon(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """The conversation's icon from its rows (spec 12.1). Worst state wins; running work shows with its count.
 
     Returns {state, running, merged_warning}. state: "" (no GitHub work), working, ready, merged, broken.

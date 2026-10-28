@@ -4,12 +4,12 @@
 tham số) trước khi gọi. Đã xong thì lần sau trả kết quả cũ; kẹt giữa chừng thì không tự làm lại mà
 hỏi chủ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 from pathlib import Path
 
 import once_ledger
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 from tasks import TasksDeps, TasksFeature
 
 JOB = "kanban:t_demo"

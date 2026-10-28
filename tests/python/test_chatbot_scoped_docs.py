@@ -15,13 +15,14 @@ Proposal from a user (2026-10-26); its acceptance checks are pinned here as writ
 Plus the rules that keep it fail-closed: the chat id comes from the turn the server bound, never from a tool
 argument; no turn means no scoped document; a scoped file is never part of the shared index or the role profile.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-scoped-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -30,11 +31,11 @@ try:
 except Exception:
     pass
 
-import chatbot_doc_tools as dt  # noqa: E402
-import chatbot_grounding as g  # noqa: E402
-import chatbot_reply_policy as rp  # noqa: E402
-import mcp_hub  # noqa: E402
-import turn_context  # noqa: E402
+import chatbot_doc_tools as dt
+import chatbot_grounding as g
+import chatbot_reply_policy as rp
+import mcp_hub
+import turn_context
 
 _fails = []
 
@@ -147,7 +148,7 @@ check("linked Google docs and the chat's file search together",
 # 4. The three tools, in-process (API engines): the chat comes from the bound turn
 # ============================================================
 tools, route = dt.build(BRAIN)
-call = lambda name, args=None: run(route[name]["call"](args or {}))  # noqa: E731
+call = lambda name, args=None: run(route[name]["call"](args or {}))
 
 
 def in_turn(chat, fn):
@@ -243,7 +244,7 @@ check("a brain whose only documents are scoped still has documents", g.has_scope
 # ============================================================
 # 7. The bot runtime passes the chat of the message into the pre-turn search
 # ============================================================
-import chatbot_runtime  # noqa: E402
+import chatbot_runtime
 
 chatbot_runtime._deps["brain_root"] = lambda _b: str(BRAIN)
 cfg = {"id": "bot_soho", "brain": "soho", "muc_quyen": "read_docs"}

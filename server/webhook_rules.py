@@ -47,7 +47,7 @@ import math
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import parse_qs
 
 RULES_MAX_BYTES = 16 * 1024
@@ -291,7 +291,7 @@ def type_of(v: Any) -> str:
     return "unknown"
 
 
-def _num(v: Any) -> Optional[Decimal]:
+def _num(v: Any) -> Decimal | None:
     """A number from a JSON number or a numeric string ("150000", "1.5e3"); None otherwise. Booleans are not
     numbers. NaN/Infinity are refused. Used by the mapping's typed conversions and by `as: number`, never by a plain
     comparison (spec §5: `1` is not `"1"`)."""
@@ -324,7 +324,7 @@ def _is_number(v: Any) -> bool:
     return isinstance(v, (int, float, Decimal)) and not isinstance(v, bool)
 
 
-def _strict_num(v: Any) -> Optional[Decimal]:
+def _strict_num(v: Any) -> Decimal | None:
     """Only a real number (JSON number), never a string."""
     return _num(v) if _is_number(v) else None
 
@@ -679,7 +679,7 @@ def _convert(v: Any, as_type: str) -> Any:
     return v
 
 
-def _test_one(op: str, v: Any, want: Any, cs: bool) -> Optional[bool]:
+def _test_one(op: str, v: Any, want: Any, cs: bool) -> bool | None:
     """One value against one condition. None = the types cannot be compared (type_mismatch)."""
     if op == "eq":
         return _same(v, want, cs)
@@ -785,7 +785,7 @@ def eval_leaf(cond: dict, doc: Any) -> tuple:
 _UNKNOWN_WHY = ("missing_field", "type_mismatch")
 
 
-def _eval_cond(cond: dict, doc: Any, steps: list, errors: list, reveal: bool) -> Optional[bool]:
+def _eval_cond(cond: dict, doc: Any, steps: list, errors: list, reveal: bool) -> bool | None:
     if "all" in cond:
         seen_unknown = False
         for c in cond["all"]:
@@ -957,7 +957,7 @@ def render_value(value: Any, ctx: dict) -> Any:
 
     def rep_old(m):
         k = m.group(1)
-        if k in legacy and legacy[k]:
+        if legacy.get(k):
             return str(legacy[k])
         if k in fields:
             v = fields[k]
@@ -1081,7 +1081,7 @@ def business_key(spec: dict, doc: Any, fields: dict) -> tuple:
             "ttl_s": int(spec["ttl_s"]), "parts": shape}, ""
 
 
-def evaluate(rules: dict, body: bytes, content_type: str, extra: Optional[dict] = None,
+def evaluate(rules: dict, body: bytes, content_type: str, extra: dict | None = None,
              reveal: bool = False) -> dict:
     """Run parse -> schema -> filter -> mapping -> dedup key. Pure and deterministic.
 

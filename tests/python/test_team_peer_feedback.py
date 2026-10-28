@@ -10,23 +10,24 @@ Bộ chạy nhóm thật, kho thật tạm, engine GIẢ theo từng trợ lý (
 - đầu ra đến muộn (người góp ý bị bỏ khỏi nhóm giữa lượt) và góp ý trỏ việc đã huỷ hay bản đã đổi: chỉ là bằng chứng;
 - không thành luật của chủ, không thành bài học, không thành tín hiệu hữu ích; nhiều trợ lý đồng ý không là bằng chứng độc lập.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-peer-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-peer-w-"))
 
-import agent_lessons as ALS  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_lessons as ALS
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

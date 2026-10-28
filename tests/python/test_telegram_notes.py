@@ -8,15 +8,16 @@ Phủ: BOT_COMMANDS có 'notes' và mọi tên lệnh hợp lệ (a-z0-9_); _cap
 (caption là lệnh → đưa lệnh lên đầu + marker path; caption thường/rỗng → giữ nguyên;
 đính kèm rỗng → rỗng) và kết quả nhánh lệnh parse ra đúng cmd 'notes' + arg còn path.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import re
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tgnotes-"))
 
-import telegram_bot as tb  # noqa: E402
+import telegram_bot as tb
 
 _fails = []
 

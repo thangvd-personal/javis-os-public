@@ -7,19 +7,27 @@ provider acceptance, loaded-page identity, or comprehension.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 import hashlib
 import inspect
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
+from dataclasses import replace
+from pathlib import Path
 
 from improvement_image_channel import ImageMetadataChannel
 from improvement_native_capture import NativeDebugInvocation
-from improvement_native_protocol import _ENV_FIXED, _ENV_OPTIONAL, _ENV_PATHS, _fields, _text, _digest, _tree
+from improvement_native_protocol import (
+    _ENV_FIXED,
+    _ENV_OPTIONAL,
+    _ENV_PATHS,
+    _digest,
+    _fields,
+    _text,
+    _tree,
+)
 from improvement_query_dispatch import validate_query_dispatch
 
 _PURPOSES = ('adapter_version', 'auth_status', 'sdk_version', 'query')
@@ -111,8 +119,11 @@ class NativeInvocationSet:
     def from_qualification_worker(cls, owner):
         from improvement_native_worker import NativeWorkerSessionV2
         from improvement_private_channel import PrivateWorkerChannelV2
-        from improvement_qualification_protocol import validate_startup3, worker_binding3
         from improvement_qualification_environment import validate_dummy_environment
+        from improvement_qualification_protocol import (
+            validate_startup3,
+            worker_binding3,
+        )
         if (cls is not NativeInvocationSet or type(owner) is not NativeWorkerSessionV2
                 or not owner._qualification or owner._namespace not in ('preflight', 'trial') or not owner._started
                 or owner._closing or owner._closed or owner._failed or owner._adopted
@@ -182,8 +193,8 @@ class NativeInvocationSet:
     def captures(self): return tuple(item['capture'] for item in self._entries)
 
     def _sdk(self):
-        from claude_agent_sdk._internal.transport import subprocess_cli
         from claude_agent_sdk import __version__
+        from claude_agent_sdk._internal.transport import subprocess_cli
         if __version__ != self._pin['sdk_version']: raise NativeSDKError('native_sdk_version_drift')
         return subprocess_cli
 

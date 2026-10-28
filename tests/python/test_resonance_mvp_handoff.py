@@ -8,7 +8,6 @@ bộ não chính sẽ gọi, nên kiểm được sổ lượt và tool nhận �
 giao diện, không kèm ghi chú host), và cùng một tin chỉ tạo một mục tiêu. Cách dựng theo script kiểm độc lập
 của ChatGPT ở vòng review 2. Không gọi model, micro hay dịch vụ giọng nói thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import asyncio
 import os
@@ -19,17 +18,19 @@ import types
 import uuid
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m2h-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import localefmt  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import nghe_sua  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import voice_brain  # noqa: E402
+import localefmt
+import luot_dang_chay
+import nghe_sua
+import plugins_host
+import resonance as R
+import resonance_store as RS
+import sessions
+import voice_brain
 
 _fails = []
 
@@ -43,7 +44,8 @@ def check(name, cond):
 BRAIN = str(Path(tempfile.mkdtemp(prefix="brain-h-")).resolve())
 P = RS.Principal("agent", "javis", BRAIN)
 goals = RS.GoalStore()
-import _resonance_agent as RA  # noqa: E402  - A1: tool chỉ chạy trong lượt của agent đã bật
+import _resonance_agent as RA
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 AG = RA.enable(goals, BRAIN)
 _, routes = plugins_host.plugin_tools("full", BRAIN, scope_vault=False)
@@ -94,7 +96,8 @@ proxy.xoa_loi_lan_nhanh = lambda *a: None
 proxy.ghi_loi_lan_nhanh = lambda *a: None
 runtime = types.SimpleNamespace(finish_job=lambda *a: None, get_job=lambda *a: None,
                                 register_job=lambda sid, task, *a, **kw: jobs.append(task))
-import turn_context  # noqa: E402  - run_turn gắn danh tính lượt cho hook tool (0.85.8)
+import turn_context
+
 namespace = dict(asyncio=asyncio, sys=sys, time=time, uuid=uuid, voice_brain=proxy, nghe_sua=nghe_sua, turn_context=turn_context,
                  localefmt=localefmt, store=session_store, send_raw=_noop, _persist_turn=_noop,
                  _CHAT_RUNTIME=runtime,

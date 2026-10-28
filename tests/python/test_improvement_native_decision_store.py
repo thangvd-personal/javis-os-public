@@ -1,6 +1,4 @@
 """Actual SQLite and encrypted blobs for host image decisions; no native launch."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib
@@ -9,9 +7,10 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import test_improvement_store as fixture
-import test_improvement_native_observation as grammar
 import improvement_store as IM
+import test_improvement_native_observation as grammar
+import test_improvement_store as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 
 try:

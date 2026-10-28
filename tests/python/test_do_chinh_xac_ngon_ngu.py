@@ -9,11 +9,11 @@ hành vi vì mọi ca mẫu ở đó đều dùng câu văn viết đầy đủ,
 Cả ba tìm ra trong lượt rà trước khi merge, và cả ba đều KHÔNG làm test nào đỏ - đó chính là
 lý do file này tồn tại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
-import lang as L
 import fast_path_runtime as FP
+import lang as L
+from _paths import ROOT, SERVER  # noqa: F401
 
 _loi = []
 
@@ -112,6 +112,7 @@ check("CANARY: 'het' không nằm trong danh sách chữ lạ", "het" not in L._
 
 # Chiều còn lại của cùng một cái bẫy: hư từ tiếng Việt cũng không được lấn sang tiếng khác.
 import lang_registry as LR
+
 _hu_vi = {w.lower() for w in LR.get("vi").stopwords}
 _hu_en = {w.lower() for w in LR.get("en").stopwords}
 check("CANARY: 'nao' không nằm trong hư từ tiếng Việt (là 'não' tiếng Bồ)",

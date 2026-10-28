@@ -1,11 +1,10 @@
 """Body proposals preserve raw bytes and discovery metadata without semantic claims."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
 import unittest
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import MAX_ASSET_BYTES
 
 if importlib.util.find_spec("improvement_skill_patch"):

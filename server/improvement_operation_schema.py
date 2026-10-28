@@ -211,7 +211,8 @@ def assert_installed(connection):
     blocking cancellation, policy-off and settlement. No cached ready verdict.
     """
     import re
-    from improvement_store import ConflictError, SchemaError, SCHEMA_VERSION
+
+    from improvement_store import SCHEMA_VERSION, ConflictError, SchemaError
     version = connection.execute('SELECT version FROM improvement_schema WHERE id=1').fetchone()
     if not version or version[0] not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, SCHEMA_VERSION):
         raise SchemaError('unsupported_improvement_schema')
@@ -223,28 +224,42 @@ def assert_installed(connection):
                 from improvement_recipe_schema import assert_installed as assert_recipes
                 assert_recipes(connection)
             elif version[0] in (10, 11, 12, 13, 14, 15, 16, 17):
-                from improvement_recipe_view_schema import assert_installed as assert_recipe_views
+                from improvement_recipe_view_schema import (
+                    assert_installed as assert_recipe_views,
+                )
                 assert_recipe_views(connection)
                 if version[0] >= 11:
-                    from improvement_activation_schema import assert_installed as assert_activations
+                    from improvement_activation_schema import (
+                        assert_installed as assert_activations,
+                    )
                     assert_activations(connection)
                 if version[0] >= 12:
-                    from improvement_canary_schema import assert_installed as assert_canaries
+                    from improvement_canary_schema import (
+                        assert_installed as assert_canaries,
+                    )
                     assert_canaries(connection)
                 if version[0] >= 13:
-                    from improvement_routing_schema import assert_installed as assert_routing
+                    from improvement_routing_schema import (
+                        assert_installed as assert_routing,
+                    )
                     assert_routing(connection)
                 if version[0] >= 14:
-                    from improvement_agent_schema import assert_installed as assert_agents
+                    from improvement_agent_schema import (
+                        assert_installed as assert_agents,
+                    )
                     assert_agents(connection)
                 if version[0] >= 15:
-                    from improvement_bundle_schema import assert_installed as assert_bundles
+                    from improvement_bundle_schema import (
+                        assert_installed as assert_bundles,
+                    )
                     assert_bundles(connection)
                 if version[0] >= 16:
                     from improvement_team_schema import assert_installed as assert_team
                     assert_team(connection)
                 if version[0] >= 17:
-                    from improvement_library_schema import assert_installed as assert_library
+                    from improvement_library_schema import (
+                        assert_installed as assert_library,
+                    )
                     assert_library(connection)
         except ConflictError as exc:
             raise ConflictError('operation_schema_changed') from exc

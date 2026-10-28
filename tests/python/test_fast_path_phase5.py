@@ -1,11 +1,10 @@
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
 import asyncio
 import inspect
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
+from _paths import ROOT, SERVER
 from capability_registry import CapabilityRegistry
 from capability_resolver import DeterministicResolver
 from context_compiler import ContextCompiler

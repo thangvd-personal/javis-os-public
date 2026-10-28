@@ -7,10 +7,11 @@ Owner, 16/10/2026: "việc đã hoàn thành thì cũng phải hiện ... khi �
 mục archive thôi chứ ko xóa hẳn ... rồi mới hiện nút xóa hoặc là xóa tất cả", "agent hiện tại không lựa chọn được mức suy
 luận, cần bổ sung ngay và mặc định là trung bình". Runs the real host, no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-job-archive-")
 BR = Path(tempfile.mkdtemp(prefix="javis-job-archive-brain-")).resolve()
@@ -19,9 +20,9 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Thành viên\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import job_marks  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import job_marks
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -93,7 +94,8 @@ check("setting the level writes only that key", r.status_code == 200 and meta.ge
 check("a bad level is refused", client.post("/agents/lan/reasoning", data={"level": "max!", "brain": B}).status_code == 400)
 # 0.284.0 (owner 22/10/2026): Javis Core has its own level. Before, it was refused here and its chat ran at, and its level
 # chip changed, the MAIN chat's level.
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+
 main_before = cfgmod.read_settings().get("model", {}).get("reasoning")
 r = client.post("/agents/javis-core/reasoning", data={"level": "low", "brain": B})
 mcfg = cfgmod.read_settings().get("model", {})

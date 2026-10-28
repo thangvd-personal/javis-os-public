@@ -75,10 +75,10 @@ def main_():
 
     print("Nạp main...", flush=True)
     t0 = time.perf_counter()
-    import main  # noqa: E402
-    import plugins_host  # noqa: E402
-    import skill_router  # noqa: E402
-    import usage_index  # noqa: E402
+    import main
+    import plugins_host
+    import skill_router
+    import usage_index
     print(f"  (lần nạp trong tiến trình này: {(time.perf_counter() - t0) * 1000:.0f} ms)\n")
 
     root = main._brain_root(brain)

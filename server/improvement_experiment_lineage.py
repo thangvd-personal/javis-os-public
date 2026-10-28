@@ -9,7 +9,13 @@ import json
 
 import improvement_store as IM
 from improvement_blobs import AssetUnavailable
-from improvement_experiment_protocol import definition, validate_request_v2, comparison_matrix, matrix_cell, comparison_hash
+from improvement_experiment_protocol import (
+    comparison_hash,
+    comparison_matrix,
+    definition,
+    matrix_cell,
+    validate_request_v2,
+)
 
 
 def _row(connection, table, brain, identifier):

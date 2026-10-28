@@ -50,9 +50,7 @@ def fit_memory_index(mem: str, cap: int) -> str:
                 out.append(l)
                 continue
             head, desc = m.group(1), m.group(2).strip()
-            if not desc:
-                out.append(head)
-            elif desc_cap is None:
+            if not desc or desc_cap is None:
                 out.append(head)
             elif len(desc) <= desc_cap:
                 out.append(f"{head} - {desc}")

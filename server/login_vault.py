@@ -28,15 +28,14 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 from urllib.parse import urlparse
 
+import localefmt
 from fastapi import APIRouter, Body, Request
 from fastapi.responses import JSONResponse
-
-import localefmt
 
 MAX_INPUT = 400_000          # characters of pasted text
 MAX_COOKIES = 600
@@ -48,7 +47,7 @@ _SAMESITE = {"strict": "Strict", "lax": "Lax", "none": "None", "no_restriction":
 # segments only: a blog post slug like "/mau-trang-login-dep" is not a sign-in page.
 _SIGNED_OUT_SEGMENTS = frozenset({"login", "log-in", "log_in", "signin", "sign-in", "sign_in", "dang-nhap",
                                   "dangnhap", "checkpoint", "servicelogin", "authenticate"})
-_SIGNED_OUT_TITLE = re.compile(r"\b(log ?in|sign ?in)\b|đăng nhập|dang nhap", re.I)
+_SIGNED_OUT_TITLE = re.compile(r"\b(log ?in|sign ?in)\b|đăng nhập|dang nhap", re.IGNORECASE)
 
 
 class VaultError(Exception):
@@ -67,7 +66,7 @@ def _host_of(hint: str) -> str:
     return (urlparse(hint).hostname or "").lower()
 
 
-def _clean_domain(domain: str, host_only: Optional[bool]) -> str:
+def _clean_domain(domain: str, host_only: bool | None) -> str:
     d = str(domain or "").strip().lower()
     if not d:
         return ""
@@ -81,7 +80,7 @@ def _clean_domain(domain: str, host_only: Optional[bool]) -> str:
 
 
 def _cookie(name, value, domain, path="/", expires=-1, http_only=False, secure=False, same_site="Lax",
-            host_only=None) -> Optional[dict]:
+            host_only=None) -> dict | None:
     name, value = str(name or ""), str(value if value is not None else "")
     if not name or _CTRL.search(name) or _CTRL.search(value) or ";" in name or "=" in name:
         return None
@@ -140,8 +139,8 @@ def _from_netscape(text: str) -> list:
 
 
 def _from_header(text: str, host: str) -> list:
-    body = re.sub(r"^\s*cookie\s*:\s*", "", text.strip(), flags=re.I)
-    base = host[4:] if host.startswith("www.") else host
+    body = re.sub(r"^\s*cookie\s*:\s*", "", text.strip(), flags=re.IGNORECASE)
+    base = host.removeprefix("www.")
     out = []
     for part in body.split(";"):
         if "=" not in part:
@@ -208,7 +207,7 @@ def last_expiry(cookies: list) -> float:
     return max(exps) if exps else 0.0
 
 
-def cookie_header(cookies: list, url: str, now: Optional[float] = None) -> str:
+def cookie_header(cookies: list, url: str, now: float | None = None) -> str:
     """The Cookie header a browser would send to `url`, or "" (RFC 6265 domain, path and secure rules)."""
     p = urlparse(str(url or ""))
     host = (p.hostname or "").lower()
@@ -302,12 +301,12 @@ class Store:
             self._db.commit()
         return self.get(row["id"])
 
-    def get(self, lid: str) -> Optional[dict]:
+    def get(self, lid: str) -> dict | None:
         with self._lock:
             r = self._db.execute("SELECT * FROM logins WHERE id=?", (str(lid or ""),)).fetchone()
         return dict(r) if r else None
 
-    def update(self, lid: str, **cols) -> Optional[dict]:
+    def update(self, lid: str, **cols) -> dict | None:
         cols = {k: v for k, v in cols.items() if k in _COLS and k != "id"}
         if cols:
             with self._lock:
@@ -327,7 +326,7 @@ class Store:
             rows = self._db.execute("SELECT * FROM logins ORDER BY name COLLATE NOCASE").fetchall()
         return [dict(r) for r in rows]
 
-    def find_name(self, name: str) -> Optional[dict]:
+    def find_name(self, name: str) -> dict | None:
         with self._lock:
             r = self._db.execute("SELECT * FROM logins WHERE lower(name)=lower(?)", (str(name or "").strip(),)).fetchone()
         return dict(r) if r else None
@@ -342,7 +341,7 @@ class LoginVaultDeps:
     # Request -> True only for a real dashboard sign-in (API tokens are refused)
     has_session: Callable[[Request], bool]
     # async fetch(url, cookies) -> (final_url, title, text); raises web_watch.FetchError
-    fetch: Optional[Callable] = None
+    fetch: Callable | None = None
 
 
 def _encrypt(obj) -> str:
@@ -392,7 +391,7 @@ class LoginVault:
         row = self.store.get(lid)
         return _decrypt(row["cookies_enc"]) if row else []
 
-    def pick(self, url: str, login: str = "", only_allowed: bool = True) -> tuple[Optional[dict], list, str]:
+    def pick(self, url: str, login: str = "", only_allowed: bool = True) -> tuple[dict | None, list, str]:
         """(row, cookies, error) for opening `url`. `login` = id or name; empty = the one whose cookies fit."""
         if login:
             row = self.store.get(login) or self.store.find_name(login)
@@ -460,7 +459,7 @@ class LoginVault:
         doms = domains_of(cookies)
         return ("https://" + doms[0] + "/") if doms else ""
 
-    def control(self, lid: str, action: str, payload: Optional[dict] = None) -> dict:
+    def control(self, lid: str, action: str, payload: dict | None = None) -> dict:
         p = payload or {}
         row = self.store.get(lid)
         if not row:
@@ -579,10 +578,10 @@ class LoginVault:
         return router
 
 
-_CURRENT: Optional[LoginVault] = None
+_CURRENT: LoginVault | None = None
 
 
-def current() -> Optional[LoginVault]:
+def current() -> LoginVault | None:
     return _CURRENT
 
 

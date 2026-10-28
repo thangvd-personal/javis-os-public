@@ -1,6 +1,4 @@
 """Final metadata cannot adopt genuine tuning or legacy holdout reservations."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import sqlite3
 import time
@@ -9,8 +7,9 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_cases import CaseStore
 import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_cases import CaseStore
 
 
 class ViewQualificationSchemaTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

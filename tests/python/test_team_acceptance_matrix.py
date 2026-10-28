@@ -11,15 +11,15 @@ thiếu khi phần sở hữu nó ĐÃ ghép thì là lỗi.
 
 Bảng docs/dev/team-chat-acceptance-matrix.md được sinh từ MATRIX dưới đây (`--write`); test kiểm bảng còn khớp ma trận.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import datetime
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 PY = Path(ROOT) / "tests" / "python"
 JS = Path(ROOT) / "tests" / "js"

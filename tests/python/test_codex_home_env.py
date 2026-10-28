@@ -18,12 +18,13 @@ Checks:
   5. The home-directory failure shows a plain-language message, raw Codex lines kept.
   6. Every Codex spawn site (models list, ChatGPT Live app-server) gets the same env.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TMP = Path(tempfile.mkdtemp(prefix="javis-codexhome-env-"))
 os.environ.setdefault("JAVIS_STATE_DIR", str(TMP / "state"))
@@ -33,8 +34,8 @@ HOME.mkdir()
 os.environ["USERPROFILE"] = str(HOME)
 os.environ["HOME"] = str(HOME)
 
-import claude_cli  # noqa: E402
-from claude_cli import CodexCLI  # noqa: E402
+import claude_cli
+from claude_cli import CodexCLI
 
 _fails = []
 
@@ -108,8 +109,8 @@ check("other exits keep the old message",
       claude_cli.codex_error_text(2, ["error: unexpected argument"]) == "Codex lỗi (exit 2):\nerror: unexpected argument")
 
 # ---- 6. every spawn site gets the env ----
-import codex_models  # noqa: E402
-import codex_realtime  # noqa: E402
+import codex_models
+import codex_realtime
 
 seen = {}
 

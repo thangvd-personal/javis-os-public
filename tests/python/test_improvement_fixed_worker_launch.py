@@ -1,18 +1,17 @@
 """Fixed factory engineering fixtures only; no SDK, CLI or account execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import ctypes
 import hashlib
 import importlib
 import importlib.util
 import json
 import os
-from pathlib import Path
-import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def component(test):
@@ -98,9 +97,10 @@ class FixedWorkerWindowsTests(unittest.TestCase):
         from improvement_native_capture_win32 import backend
         self.debug = backend()
         self.api = self.mod._backend()
-        from improvement_native_bootstrap import _runtime_paths
-        import improvement_native_image as image
         import msvcrt
+
+        import improvement_native_image as image
+        from improvement_native_bootstrap import _runtime_paths
         self.image, self.msvcrt = image, msvcrt
         short = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / 'AppData/Local'))) / 'Temp'
         self.temp = tempfile.TemporaryDirectory(prefix='jf-', dir=short)

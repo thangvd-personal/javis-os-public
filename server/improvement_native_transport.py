@@ -2,17 +2,17 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import aclosing
 import json
 import subprocess
 import sys
 import time
+from contextlib import aclosing
 from pathlib import Path
 
 import winproc
 from improvement_cases import _fields
 from improvement_claude import _settled_owned
-from improvement_sandbox import _private_directory, worker_environment, _bytes_hash
+from improvement_sandbox import _bytes_hash, _private_directory, worker_environment
 from improvement_store import _json
 
 
@@ -421,8 +421,9 @@ class GuardianSessionV2:
                  persist_before_allow, timeout=15, close_timeout=8, lifetime_timeout=300):
         import inspect
         import math
+
+        from improvement_fixed_worker_launch import _path, _policy
         from improvement_native_bootstrap import validate_bootstrap_manifest
-        from improvement_fixed_worker_launch import _policy, _path
         guardian = validate_bootstrap_manifest(guardian_manifest)
         policy = _policy(policy)
         if guardian['entrypoint'] != 'guardian' or guardian['runtime'] != policy['bootstrap']['runtime']:
@@ -541,8 +542,9 @@ class GuardianSessionV2:
         return guard
 
     def _prepare_guards(self):
-        import os
         import msvcrt
+        import os
+
         from improvement_native_bootstrap import _runtime_paths
         actual = _runtime_paths()
         runtime = self._guardian_manifest['runtime']
@@ -677,6 +679,7 @@ class GuardianSessionV2:
 
     async def start(self, startup):
         import base64
+
         from improvement_native_protocol import validate_startup2
         if self._used or self._qualification_boundary is not None: raise self._error()
         _v2_fields(startup, {'kind', 'request', 'environment'})
@@ -693,6 +696,7 @@ class GuardianSessionV2:
 
     async def start_qualification(self, boundary):
         import base64
+
         from improvement_native_parent import NativeParentBoundary
         from improvement_qualification_protocol import validate_startup3
         if (self._used or self.closed or type(boundary) is not NativeParentBoundary
@@ -737,6 +741,7 @@ class GuardianSessionV2:
 
     async def _start_owned(self):
         import base64
+
         from improvement_native_bootstrap import encode_bootstrap_frame
         from improvement_native_protocol import encode_startup2, worker_binding
         from improvement_private_channel import PrivateWorkerChannelV2
@@ -791,7 +796,10 @@ class GuardianSessionV2:
             'launch_nonce': self._nonce, **self._worker_identity,
             'private_share': base64.b64encode(private_share).decode('ascii'), 'images': self._offer['images']}
         if self._qualification_boundary is not None:
-            from improvement_qualification_protocol import encode_startup3, worker_binding3
+            from improvement_qualification_protocol import (
+                encode_startup3,
+                worker_binding3,
+            )
             startup.update(version=3, type='startup3')
             self._startup_raw = encode_startup3(startup); self._binding = worker_binding3(startup)
         else:
@@ -1212,9 +1220,10 @@ async def execute_worker_v2(kind_namespace, request, receipt, *, config_pin, wor
 
 
 async def execute_worker_qualification(boundary, *, before_engine_start, on_closing_observations):
-    from improvement_native_parent import NativeParentBoundary
-    import secrets
     import inspect
+    import secrets
+
+    from improvement_native_parent import NativeParentBoundary
     if type(boundary) is not NativeParentBoundary or not hasattr(boundary, '_query_binding'):
         raise TypeError('retained_qualification_query_required')
     context = boundary._assert_query_current()

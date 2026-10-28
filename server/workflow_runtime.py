@@ -22,8 +22,9 @@ import asyncio
 import hashlib
 import json
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 import context_runtime
 import secrets_store
@@ -37,7 +38,7 @@ STATE_SCHEMA_VERSION = "workflow-state-v1"
 NodeExecutor = Callable[[WorkflowNode, str], Awaitable[dict]]
 # Chạy một node capability. `approved` chỉ True khi người dùng đã duyệt đúng mã.
 CapabilityRunner = Callable[[WorkflowNode, bool], Awaitable[dict]]
-GraphLoader = Callable[[str], Optional[WorkflowGraph]]
+GraphLoader = Callable[[str], WorkflowGraph | None]
 
 
 def _int(value: Any, default: int) -> int:
@@ -81,7 +82,7 @@ class WorkflowPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "WorkflowPolicy":
+    def from_settings(cls, settings: dict) -> WorkflowPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         runtime = runtime if isinstance(runtime, dict) else {}
         raw = runtime.get("workflow_canary")
@@ -120,7 +121,7 @@ class WorkflowAdmission:
     action: str
     reason: str
     graph: WorkflowGraph | None = None
-    bucket: Optional[int] = None
+    bucket: int | None = None
     policy_version: str = WORKFLOW_POLICY_VERSION
     message: str = ""
 
@@ -262,7 +263,7 @@ class WorkflowCanary:
             else:
                 result = await asyncio.wait_for(
                     executor(node, prompt), timeout=policy.node_timeout_seconds)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"status": "FAILED", "output": "", "error": "node_timeout"}
         except asyncio.CancelledError:
             raise

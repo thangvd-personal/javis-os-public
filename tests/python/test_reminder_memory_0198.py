@@ -4,15 +4,16 @@ dates, and a late firing says so in the prompt.
 Run:
     python tests/run.py reminder_memory
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-reminder-memory-state-")
 
-import reminders  # noqa: E402
+import reminders
 
 fails = []
 brain = Path(tempfile.mkdtemp(prefix="javis-reminder-memory-brain-"))

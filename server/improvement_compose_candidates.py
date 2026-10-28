@@ -94,10 +94,10 @@ def _load(authoring, brain, digest):
 def read_provenance(authoring, connection, principal, candidate, provenance, patch, after):
     """Cold immutable lineage, in addition to the caller's current source guard."""
     from improvement_compose_permissions import ComposePermissions, _permission_metadata
-    from improvement_operation_results import OperationResults
     from improvement_operation_execution import OperationExecution
-    from improvement_trial_records import HostContextRecords
+    from improvement_operation_results import OperationResults
     from improvement_role_workflow import _product_checks
+    from improvement_trial_records import HostContextRecords
     brain = _brain(principal)
     require_product_store(authoring.assets, principal, connection=connection)
     row = connection.execute('SELECT * FROM improvement_compositions WHERE id=? AND brain_id=?',

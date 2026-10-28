@@ -15,11 +15,12 @@ Ba trần, ba mục đích khác nhau:
   2. `CORE_CONTRACT` - khoá thành quả của đường biên dịch, thứ làm Groq chạy được.
   3. Schema tool hạt nhân - khoá thành quả của tầng lazy (Việc 1).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-budget-"))
 
@@ -108,7 +109,7 @@ check(
 # 1b. Trần phải ĐÔNG, và tổng thật phải đo được
 # ------------------------------------------------------------
 # Hai phép thử dưới đây là cái biến trần trên từ "lời dặn" thành "cái chặn".
-import main  # noqa: E402
+import main
 
 check(
     "trần trong code và trần trong test vẫn khớp nhau",
@@ -167,7 +168,7 @@ if "loi" not in _pb:
 # mất luôn lý do tồn tại của cả nhánh.
 CORE_CONTRACT_MAX_CHARS = 2_000
 
-import context_compiler  # noqa: E402
+import context_compiler
 
 _core = context_compiler.CORE_CONTRACT
 check(
@@ -195,8 +196,8 @@ check(
 # một tool hạt nhân dài ra theo số thứ user cắm thêm).
 CORE_TOOLS_MAX_CHARS = 3_000
 
-import mcp_hub  # noqa: E402
-import config  # noqa: E402
+import config
+import mcp_hub
 
 _vault = tempfile.mkdtemp(prefix="javis-budget-vault-")
 os.makedirs(os.path.join(_vault, "skills"), exist_ok=True)

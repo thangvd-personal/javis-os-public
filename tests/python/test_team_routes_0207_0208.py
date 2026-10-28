@@ -4,11 +4,12 @@
 
 Fake engine for team turns (same harness as test_team_api.py); real stores in a temporary state folder.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-routes-")
 os.environ.setdefault("JAVIS_NO_REAL_TEAM_ENGINE", "1")
@@ -20,8 +21,8 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
 (BR / "bao-cao").mkdir()
 (BR / "bao-cao" / "a.md").write_text("1", encoding="utf-8")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

@@ -28,8 +28,8 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Dict, List, Optional
 
 import steer_inbox
 
@@ -73,7 +73,7 @@ def _toml_value(v) -> str:
     raise ValueError(f"unsupported TOML value {type(v).__name__}")
 
 
-def _flatten(prefix: str, d: dict, out: List[str]) -> None:
+def _flatten(prefix: str, d: dict, out: list[str]) -> None:
     for k, v in d.items():
         k = str(k)
         if "." in k or not k:
@@ -87,7 +87,7 @@ def _flatten(prefix: str, d: dict, out: List[str]) -> None:
             out.append(f"{key}={_toml_value(v)}")
 
 
-def profile_overrides(profile: Optional[str], codex_home: Path) -> List[str]:
+def profile_overrides(profile: str | None, codex_home: Path) -> list[str]:
     """`-c` overrides equal to `codex -p <profile>` (app-server refuses -p). Raises Fallback when unreadable."""
     if not profile:
         return []
@@ -101,7 +101,7 @@ def profile_overrides(profile: Optional[str], codex_home: Path) -> List[str]:
             try:
                 with open(p, "rb") as f:
                     data = tomllib.load(f) or {}
-                out: List[str] = []
+                out: list[str] = []
                 _flatten("", data, out)
                 return out
             except Exception as e:
@@ -148,7 +148,7 @@ class _Rpc:
         self.proc = proc
         self.loop = loop
         self.queue: asyncio.Queue = asyncio.Queue()
-        self.stderr: List[str] = []
+        self.stderr: list[str] = []
         self._ids = 0
         self._lock = threading.Lock()
         threading.Thread(target=self._read_out, daemon=True).start()
@@ -297,7 +297,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             turn_id = str(((res.get("turn") or {}).get("id")) or "")
             if not turn_id:
                 raise Fallback("no turn id")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise Fallback("start timed out")
         except (OSError, ValueError) as e:
             raise Fallback(f"{type(e).__name__}: {e}")
@@ -313,7 +313,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
         tok_in = tok_out = tok_cache = 0
         error_msg = ""
         sandbox_broken = False
-        steering: Dict[int, list] = {}   # steer request id -> inbox items, put back if Codex refuses
+        steering: dict[int, list] = {}   # steer request id -> inbox items, put back if Codex refuses
         done = False
         settle_until = 0.0
         pending = list(seen)
@@ -336,7 +336,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             else:
                 try:
                     line = await asyncio.wait_for(rpc.queue.get(), timeout=POLL_S)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     limit, why = (TOOL_IDLE, "tool") if busy else (IDLE, "im")
                     if limit and time.monotonic() - last > limit and not done:
                         cc._kill_tree(proc)

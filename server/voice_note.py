@@ -24,7 +24,7 @@ from pathlib import Path
 MAX_CHARS = 1000
 VI_VOICE = "vi-VN-HoaiMyNeural"
 DEFAULT_VOICE = "en-US-EmmaMultilingualNeural"
-_VI_CHARS = re.compile(r"[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", re.I)
+_VI_CHARS = re.compile(r"[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", re.IGNORECASE)
 _VOICE_RE = re.compile(r"^[a-z]{2,3}-[A-Z]{2}-[A-Za-z]+Neural$")
 
 
@@ -53,7 +53,7 @@ def pick_voice(text: str, voice: str = "", chosen: str = "") -> str:
 
 def spoken(text: str) -> str:
     """What the voice reads: markdown syntax and links dropped, the words kept."""
-    t = re.sub(r"```.*?```", " ", str(text or ""), flags=re.S)
+    t = re.sub(r"```.*?```", " ", str(text or ""), flags=re.DOTALL)
     t = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", t)
     t = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", t)
     t = re.sub(r"[*_`#>|]+", " ", t)
@@ -126,7 +126,7 @@ def _chosen_synth():
 
 
 async def _edge(text: str, voice: str) -> bytes:
-    import edge_tts   # lazy: optional feature, kept off the startup path (see test_khoi_dong_nhe)
+    import edge_tts  # lazy: optional feature, kept off the startup path (see test_khoi_dong_nhe)
     try:
         import phien_am
         text = phien_am.doc_viet(text)

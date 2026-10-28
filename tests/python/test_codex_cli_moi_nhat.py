@@ -6,13 +6,13 @@ Chủ repo đo 03/10/2026: ~/.codex/.sandbox-bin (Codex Desktop) kẹt ở 0.147
 `find_codex_cli` lấy bản đứng đầu nên `model/list` chỉ trả đời GPT-5.6, thiếu GPT-6.1-Sol.
 Không chạy Codex thật: số phiên bản được giả lập.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
-import claude_cli as cc  # noqa: E402
+import claude_cli as cc
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

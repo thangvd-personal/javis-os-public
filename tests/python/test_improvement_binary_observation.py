@@ -1,6 +1,4 @@
 """Bounded read-only CLI observations; synthetic files, no native/model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import os
@@ -9,9 +7,10 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-import improvement_trial_selection as selection
 import improvement_claude as native
+import improvement_trial_selection as selection
 import test_improvement_trial_selection as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class BinaryObservationTests(unittest.TestCase):

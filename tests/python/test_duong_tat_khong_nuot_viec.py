@@ -25,8 +25,7 @@ Luật chốt ở đây: trỏ vào BỘ NÃO (dữ liệu, dự án, ghi chú),
 (workflow, skill, agent, plugin), hoặc trỏ vào LƯỢT TRƯỚC (câu nối) thì đi đường đầy đủ. Trả
 giá bằng token, không trả giá bằng một câu trả lời rỗng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
+from _paths import ROOT, SERVER  # noqa: F401
 from capability_registry import CapabilityRegistry
 from capability_resolver import ActorPolicy, DeterministicResolver
 from context_compiler import ContextCompiler

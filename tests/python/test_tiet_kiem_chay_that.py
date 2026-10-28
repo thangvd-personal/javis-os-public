@@ -25,7 +25,6 @@ xanh, người dùng vẫn trả tiền như cũ:
 File này chạy THẬT: dựng máy sạch, bấm mức như người dùng bấm, rồi hỏi thẳng lớp quyết định
 xem lượt này đi đường nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -33,12 +32,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tkct-")
 
-import adaptive_context_runtime as acr  # noqa: E402
-import config as cfg  # noqa: E402
-import context_runtime  # noqa: E402
-import main  # noqa: E402
+import adaptive_context_runtime as acr
+import config as cfg
+import context_runtime
+import main
 
 _fails = []
 

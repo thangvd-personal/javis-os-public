@@ -1,15 +1,15 @@
 """Team usage projections: real files/index, fake providers, no model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import json
 import os
-import tempfile
 import sqlite3
+import tempfile
 import unittest
 from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import patch
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 TMP = Path(tempfile.mkdtemp(prefix="team-quality-usage-"))
 os.environ["JAVIS_STATE_DIR"] = str(TMP)
@@ -17,10 +17,10 @@ os.environ["JAVIS_CLAUDE_PROJECTS_DIR"] = str(TMP / "claude")
 os.environ["JAVIS_CODEX_SESSIONS_DIR"] = str(TMP / "codex")
 os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
-import usage_store as us
-import usage_index as ui
-import turn_context as tc
 import team_usage
+import turn_context as tc
+import usage_index as ui
+import usage_store as us
 
 
 class UsageTests(unittest.TestCase):
@@ -180,9 +180,9 @@ class UsageTests(unittest.TestCase):
     def test_real_api_tool_loop_counts_http_retry_and_each_internal_request(self):
         import aux_engine
         import engine
-        import mcp_hub
-        import mcp_client
         import httpx
+        import mcp_client
+        import mcp_hub
         responses = [httpx.ReadError("connection cut"),
                      {"id": "req-1", "usage": {"prompt_tokens": 100, "completion_tokens": 10, "cost": 0.5},
                       "choices": [{"message": {"tool_calls": [{"id": "call-1", "type": "function",

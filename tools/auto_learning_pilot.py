@@ -22,8 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import auto_learning as A  # noqa: E402
-from self_learning_pilot import CliEngine  # noqa: E402
+import auto_learning as A
+from self_learning_pilot import CliEngine
 
 SKILL = """---
 name: bao-gia-cua

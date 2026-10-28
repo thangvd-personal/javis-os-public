@@ -35,7 +35,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import winproc
 
@@ -55,13 +55,13 @@ _OLD_INSTALL_DIRS = ("zalo-agent-cli",)  # thư mục cài của gói cũ trong 
 _CMD_UNSAFE = re.compile(r'[&|<>^%!"\r\n]')
 
 
-def home_of(conn: Optional[dict]) -> str:
+def home_of(conn: dict | None) -> str:
     """Thư mục phiên Zalo của một kết nối (bản đầy đủ có `env`, như `zalo_personal_channel.ket_noi_theo_id` trả). Rỗng nếu không rõ."""
     env = (conn or {}).get("env") or {}
     return str(env.get("HOME") or env.get("USERPROFILE") or "")
 
 
-def connections() -> List[dict]:
+def connections() -> list[dict]:
     """Các kết nối Zalo đang BẬT: `[{id, label, home}]`, `home` là thư mục phiên của kết nối.
 
     Dùng `mcp_store.resolved()` chứ không `list_connections()`: bản public che mất `config`, mà đường dẫn HOME nằm trong đó.
@@ -81,7 +81,7 @@ def connections() -> List[dict]:
     return out
 
 
-def pick_connection(conns: List[dict], connection_id: str = "") -> Tuple[Optional[dict], str]:
+def pick_connection(conns: list[dict], connection_id: str = "") -> tuple[dict | None, str]:
     """Chọn MỘT kết nối để gửi. Nhiều tài khoản mà đoán bừa là gửi đi dưới danh tính người khác, hỏi lại rẻ hơn nhiều.
     Trả `(kết nối, "")` hoặc `(None, lý do)`."""
     cid = str(connection_id or "").strip()
@@ -94,7 +94,7 @@ def pick_connection(conns: List[dict], connection_id: str = "") -> Tuple[Optiona
     return None, f"đang có {len(conns)} tài khoản Zalo, hãy nêu rõ connection_id. Danh sách: {ds}"
 
 
-def check() -> Optional[str]:
+def check() -> str | None:
     """Lý do CHƯA dùng được (người đọc hiểu và làm theo), hoặc None nếu ổn."""
     if not shutil.which("npx"):
         return ("Máy chạy Javis chưa có Node.js 20+ (lệnh npx) nên chưa dùng được tính năng này. "
@@ -111,7 +111,7 @@ def install_dir() -> Path:
     return Path(config.STATE_DIR) / "tools" / CLI_NAME
 
 
-def cli_entry() -> Optional[Path]:
+def cli_entry() -> Path | None:
     """`index.js` của bản đã cài, hoặc None nếu chưa cài xong / cài bản khác (đổi phiên bản ghim thì cài lại)."""
     root = install_dir()
     try:
@@ -123,14 +123,14 @@ def cli_entry() -> Optional[Path]:
     return entry if entry.is_file() else None
 
 
-def direct_command() -> Optional[List[str]]:
+def direct_command() -> list[str] | None:
     """`[node, index.js]` khi đã cài sẵn: bỏ bước npx tìm gói mỗi lần. Windows cũng không qua cmd.exe."""
     entry = cli_entry()
     node = shutil.which("node")
     return [node, str(entry)] if entry and node else None
 
 
-def npm_command() -> Optional[List[str]]:
+def npm_command() -> list[str] | None:
     """Đầu lệnh chạy npm, cùng cách với `npx_command`. Windows không tìm thấy npm-cli.js thì trả None: bỏ qua việc cài ngầm
     (đường npx vẫn chạy được) chứ không đưa đường dẫn vào cmd.exe."""
     npm = shutil.which("npm")
@@ -167,7 +167,7 @@ async def _install() -> bool:
         stdin=asyncio.subprocess.DEVNULL, **winproc.kwargs_no_window())
     try:
         _out, err = await asyncio.wait_for(proc.communicate(), timeout=INSTALL_TIMEOUT)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         try:
             proc.kill()
         except Exception:
@@ -229,7 +229,7 @@ def start_install() -> None:
     _install_state["task"] = loop.create_task(_install_guarded())
 
 
-def npx_command() -> Optional[List[str]]:
+def npx_command() -> list[str] | None:
     """Đầu lệnh chạy npx. Windows thì chạy `node npx-cli.js` THẲNG để không qua cmd.exe (xem đầu file); rơi về
     `cmd.exe /c npx.cmd` chỉ khi không tìm thấy, và khi đó `run_cli` từ chối tham số nguy hiểm."""
     npx = shutil.which("npx")
@@ -245,8 +245,8 @@ def npx_command() -> Optional[List[str]]:
     return ["cmd.exe", "/c", npx]
 
 
-def build_argv(command: List[str], positionals: Optional[List[str]] = None,
-               options: Optional[List[str]] = None) -> Optional[List[str]]:
+def build_argv(command: list[str], positionals: list[str] | None = None,
+               options: list[str] | None = None) -> list[str] | None:
     """Dựng `node index.js --json <lệnh con> …` (bản đã cài sẵn) hoặc `npx -y --prefer-offline <gói> --json <lệnh con> …`.
 
     `command` là lệnh con (`["msg", "send"]`), `positionals` là chữ TỰ DO (nội dung tin), `options` là các cờ do mã Javis viết
@@ -276,11 +276,11 @@ def build_argv(command: List[str], positionals: Optional[List[str]] = None,
     return argv
 
 
-def uses_cmd(argv: List[str]) -> bool:
+def uses_cmd(argv: list[str]) -> bool:
     return bool(argv) and os.path.basename(argv[0]).lower() == "cmd.exe"
 
 
-def unsafe_for_cmd(argv: List[str]) -> Optional[str]:
+def unsafe_for_cmd(argv: list[str]) -> str | None:
     """Nếu lệnh sẽ đi qua cmd.exe mà có tham số chứa ký tự cmd diễn giải thì trả lý do, để chặn trước khi chạy."""
     if not uses_cmd(argv):
         return None
@@ -291,7 +291,7 @@ def unsafe_for_cmd(argv: List[str]) -> Optional[str]:
     return None
 
 
-async def run(argv: List[str], home: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[Optional[int], Optional[str], str]:
+async def run(argv: list[str], home: str, timeout: int = DEFAULT_TIMEOUT) -> tuple[int | None, str | None, str]:
     """Chạy một lệnh con với HOME trỏ vào phiên Zalo. Trả `(mã thoát, stdout, stderr)`; hết giờ thì `(None, None, lý do)`."""
     env = dict(os.environ)
     env["HOME"] = home
@@ -301,7 +301,7 @@ async def run(argv: List[str], home: str, timeout: int = DEFAULT_TIMEOUT) -> Tup
         stdin=asyncio.subprocess.DEVNULL, env=env, **winproc.kwargs_no_window())
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         try:
             proc.kill()
         except Exception:
@@ -342,7 +342,7 @@ def parse_json(text: str) -> Any:
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
-def interpret(rc: Optional[int], out: Optional[str], err: str) -> Tuple[bool, Any, str]:
+def interpret(rc: int | None, out: str | None, err: str) -> tuple[bool, Any, str]:
     """Đọc kết quả một lệnh `--json` của CLI thành `(ok, dữ liệu, lỗi)`.
 
     QUAN TRỌNG: CLI này KHÔNG đặt mã thoát khác 0 khi lệnh hỏng. Mọi lệnh bọc trong `try { ... } catch (e) { error(e.message) }` mà
@@ -371,8 +371,8 @@ def is_timeout(err: str) -> bool:
     return TIMEOUT_MARK in str(err or "")
 
 
-async def run_cli(conn: dict, command: List[str], positionals: Optional[List[str]] = None,
-                  options: Optional[List[str]] = None, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, Any, str]:
+async def run_cli(conn: dict, command: list[str], positionals: list[str] | None = None,
+                  options: list[str] | None = None, timeout: int = DEFAULT_TIMEOUT) -> tuple[bool, Any, str]:
     """Chạy một lệnh Zalo trong phiên của `conn` (`{"home": ...}`) và trả `(ok, dữ liệu JSON, lỗi)`. Lỗi luôn là câu người đọc hiểu
     được (không phải traceback)."""
     home = str((conn or {}).get("home") or "")
@@ -414,8 +414,8 @@ def _old_mcp(why: str) -> bool:
     return SEND_FILE_TOOL in w and ("not found" in w or "unknown" in w)
 
 
-async def send_files(conn_id: str, home: str, thread_id: str, files: List[Path], thread_type: int = 0,
-                     caption: str = "") -> Tuple[bool, Any, str]:
+async def send_files(conn_id: str, home: str, thread_id: str, files: list[Path], thread_type: int = 0,
+                     caption: str = "") -> tuple[bool, Any, str]:
     """Gửi file (không phải ảnh) bằng tool MCP `zalo_send_file` của kết nối `conn_id`. Trả `(ok, dữ liệu, lỗi)` như `run_cli`.
 
     Chép file vào một thư mục con riêng của hộp gửi rồi gọi tool, xong (được hay hỏng) thì xoá thư mục đó. MCP tự bỏ sau 60

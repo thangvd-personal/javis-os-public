@@ -21,7 +21,6 @@ Ba luật, và test canh cả ba:
 Kèm hai phần nhỏ đi cùng đợt: token cho kho riêng (mã hoá khi ghi, đi bằng header, và RƠI khi
 chuyển hướng sang host khác) và nhãn nguồn chính chủ / cộng đồng.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import json
 import re
 import sys
@@ -29,6 +28,7 @@ import tempfile
 from pathlib import Path
 
 import pack_vault as pv
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -146,8 +146,8 @@ with tempfile.TemporaryDirectory() as td:
         pv.HIEU_UNG_DIR = goc_so
 
 # ─────────────── 6. Token cho kho riêng ───────────────
-import config as cfgmod  # noqa: E402
-import packs_fetch  # noqa: E402
+import config as cfgmod
+import packs_fetch
 
 check("packs.tokens nằm trong danh sách trường được mã hoá",
       "packs.tokens.*" in cfgmod._SECRET_PATHS)

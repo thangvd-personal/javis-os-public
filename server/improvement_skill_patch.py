@@ -8,11 +8,10 @@ from __future__ import annotations
 import hashlib
 import re
 
-import yaml
 import fastyaml
-
 import improvement_cases as IC
 import improvement_store as IM
+import yaml
 from improvement_blobs import MAX_ASSET_BYTES
 
 _FIELDS = {"version", "target_id", "base_revision_id", "before_hash", "operation", "start", "end", "replacement",
@@ -22,7 +21,7 @@ _CLOSE = re.compile(rb"---[ \t]*(?:\r?\n|$)")
 _REFERENCES = re.compile(
     r"(?<![\w])(?:[A-Za-z]:[\\/][^\s`<>\"'()\[\]{}]+"
     r"|(?:\.{1,2}[\\/])*(?:\.claude[\\/]|\.agents[\\/])?(?:skills|agents|scripts|helpers|references|assets)[\\/][^\s`<>\"'()\[\]{}]+"
-    r"|(?:[\w.-]+/)*[\w.-]+\.(?:py|sh|ps1|exe|bat|cmd|js|mjs|cjs)\b)", re.I)
+    r"|(?:[\w.-]+/)*[\w.-]+\.(?:py|sh|ps1|exe|bat|cmd|js|mjs|cjs)\b)", re.IGNORECASE)
 
 
 def _digest(raw):

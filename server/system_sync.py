@@ -38,7 +38,6 @@ Manifest lo phần còn lại cho mọi brain đã sync ít nhất một lần.
 """
 from __future__ import annotations
 
-import localefmt   # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
 import hashlib
 import json
 import os
@@ -46,12 +45,11 @@ import re
 import shutil
 import sys
 import threading
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
 
-import yaml
 import fastyaml
+import localefmt  # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
+import yaml
 
 PROJECT_ROOT = Path(__file__).parent.parent
 SYSTEM_SKILLS_DIR = PROJECT_ROOT / ".claude" / "skills"
@@ -136,7 +134,7 @@ def system_skill_slugs() -> set:
     return _SKILL_SLUGS_CACHE
 
 
-_SKILL_SLUGS_CACHE: Optional[set] = None
+_SKILL_SLUGS_CACHE: set | None = None
 
 
 def is_system_skill(slug: str) -> bool:
@@ -279,7 +277,7 @@ def _het_frontmatter(text: str) -> int:
     return (end + 4) if end >= 0 else 0
 
 
-def _cap_mot(text: str, m, cap: int) -> Optional[tuple]:
+def _cap_mot(text: str, m, cap: int) -> tuple | None:
     """Cắt một khoá mô tả. None = khoá này không cần/không sửa được.
     Trả (text mới, vị trí quét tiếp)."""
     raw = m.group(2).strip()
@@ -325,7 +323,7 @@ def _cap_mot(text: str, m, cap: int) -> Optional[tuple]:
     return text[:m.start(2)] + thay + text[end:], m.start(2) + len(thay)
 
 
-def _cap_desc(text: str, cap: int) -> Optional[str]:
+def _cap_desc(text: str, cap: int) -> str | None:
     """Rút mọi khoá mô tả trong frontmatter xuống <= cap ký tự. None = không có gì phải sửa.
 
     Vì sao chỉ sửa BẢN MIRROR: Claude Code nạp native đọc frontmatter ở `.claude/skills`, và
@@ -650,7 +648,7 @@ def sync_brain(brain_root) -> dict:
     return result
 
 
-def ensure_synced(brain_root) -> Optional[dict]:
+def ensure_synced(brain_root) -> dict | None:
     """Sync 1 lần cho mỗi brain root trong vòng đời process (gọi được ở hot path).
     Bao phủ brain ngoài chọn qua 'path:' ngay lượt dùng đầu tiên."""
     try:

@@ -4,11 +4,11 @@
 
 plan_deletions là hàm THUẦN nên phần lớn test không chạm đĩa; phần quét/xoá dùng thư mục tạm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import sys
 import time
 
-import media_gc   # noqa: E402
+import media_gc
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _fails = []
 
@@ -70,10 +70,10 @@ check("tat ca hai -> khong xoa gi",
 check("danh sach rong", media_gc.plan_deletions([], NOW, 30, 300) == [])
 
 # ---- 8. Quét đĩa + xoá thật (thư mục tạm) ----
-import os        # noqa: E402
-import tempfile  # noqa: E402
+import os
+import tempfile
 
-import config    # noqa: E402
+import config
 
 _brain = tempfile.mkdtemp(prefix="javis-mediagc-")
 
@@ -156,9 +156,9 @@ check("staging khong ton tai khong no",
       media_gc.sweep_staging(os.path.join(_stg, "khong-co")) == {"files": 0, "bytes": 0})
 
 # ---- 10. Gitignore + gỡ index ----
-import subprocess   # noqa: E402
+import subprocess
 
-import git_brain    # noqa: E402
+import git_brain
 
 for _dong in ("attachments/", "Attachments/", "*attachments/", "*Attachments/", "inbox/"):
     check(f"gitignore co dong {_dong}", _dong + "\n" in git_brain._GITIGNORE)

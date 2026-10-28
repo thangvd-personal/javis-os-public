@@ -9,14 +9,13 @@ Trạng thái nằm trong settings.json (khối `star_nudge`), nên mọi thiế
 """
 import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
 
 import star_nudge as sn
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 
 @dataclass

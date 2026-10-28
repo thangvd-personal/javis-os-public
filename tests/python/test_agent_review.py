@@ -12,7 +12,6 @@ engine GIẢ và bộ phán xử GIẢ (tiêm, không model):
 - bận: lý do giữ `pending`, không tốn lần thử; hết hạn mức: "Chờ hạn mức", không sổ lượt;
 - quyết định ghi vào `agent_pulse_events`; host nhịp của P điều phối lý do sang bộ xử lý đã đăng ký.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,22 +19,24 @@ import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-review-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-review-w-"))
 
-import agent_budget as AB  # noqa: E402
-import agent_ledger as ALG  # noqa: E402
-import agent_lessons as ALS  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as PH  # noqa: E402
-import agent_review as AR  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_budget as AB
+import agent_ledger as ALG
+import agent_lessons as ALS
+import agent_pulse as AP
+import agent_pulse_host as PH
+import agent_review as AR
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -421,7 +422,8 @@ cl = w14["W"].claim(rid, purpose="reaction_review", obligation=False)
 w14["W"].ledger.mark_engine(cl["call_id"])
 check("giả tiến trình chết: lý do claimed, dòng sổ running", w14["W"].get(rid)["status"] == "claimed")
 check("chưa quá một lượt: không gỡ", w14["host"].recover_stale_claims() == [])
-import time as _time  # noqa: E402
+import time as _time
+
 got = w14["host"].recover_stale_claims(now=_time.time() + AR.REVIEW_TIMEOUT_S + 120)
 row = ALG.CallLedger(w14["gs"]).get(cl["call_id"])
 check("quá một lượt: lý do về pending (attempt giữ), dòng sổ interrupted (vẫn tính), reaction 'Chờ xem xét'",

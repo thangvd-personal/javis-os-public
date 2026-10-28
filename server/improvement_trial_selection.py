@@ -6,9 +6,10 @@ Runtime versions below come from the verified hash allowlist, not a CLI invocati
 """
 from __future__ import annotations
 
-import hashlib
 import ast
+import hashlib
 import importlib.metadata
+import inspect
 import json
 import math
 import os
@@ -16,9 +17,8 @@ import re
 import shutil
 import stat
 import sys
-import types
 import threading
-import inspect
+import types
 from functools import wraps
 from pathlib import Path
 

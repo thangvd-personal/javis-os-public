@@ -1,17 +1,15 @@
 """Actual owner HTTP creation preserves the reserved policy; no native work."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import unittest
 from contextlib import closing
 
 import httpx
+import test_improvement_comparison_plans as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from fastapi import FastAPI
-
-from improvement_experiment_api import register, ExperimentApiDeps
+from improvement_experiment_api import ExperimentApiDeps, register
 from improvement_experiment_service import ExperimentService
 from improvement_trial_service import OwnerTrialService
-import test_improvement_comparison_plans as fixtures
 
 
 class ComposedApiTests(unittest.IsolatedAsyncioTestCase):

@@ -12,12 +12,12 @@ không được phục vụ, và cả server biến mất khỏi Traefik.
 
 Hai điều kiện phải giữ: đếm có TRẦN THẬT (dừng giữa chừng), và quét chạy ngoài event loop.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import inspect
 import time
 
 import main
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 
 def _cay_sau(root, nhanh: int, moi_nhanh: int):

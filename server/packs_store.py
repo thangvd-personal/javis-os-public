@@ -35,8 +35,8 @@ import json
 import time
 from urllib.parse import urljoin, urlparse
 
-from config import STATE_DIR
 import localefmt
+from config import STATE_DIR
 
 CACHE = STATE_DIR / "packs-store-cache.json"
 TTL = 6 * 3600

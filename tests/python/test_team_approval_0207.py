@@ -6,7 +6,6 @@ Fake engines only (the runner's `engine_for` is a script; the main factory is dr
 swapped), real SQLite stores in a temporary folder. The hub path is the real `mcp_hub._guard` with the outbound call
 (`mcp_client.call_route`) replaced by a counter, so "the effect happened" is counted, not assumed.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -15,22 +14,24 @@ import threading
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-approval-")
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 if os.environ.get("JAVIS_NO_REAL_TEAM_ENGINE") is None:
     os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 
-import mcp_catalog  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_approval  # noqa: E402
-import team_gate  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
-import turn_context  # noqa: E402
+import mcp_catalog
+import mcp_client
+import mcp_hub
+import plugins_host
+import sessions
+import task_store
+import team_approval
+import team_gate
+import team_runner as TR
+import team_store
+import turn_context
 
 fails = []
 

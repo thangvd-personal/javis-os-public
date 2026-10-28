@@ -114,5 +114,5 @@ MO_TA_EN = {
 
 def mo_ta_van_de(van_de) -> str:
     """Câu chữ cho người đọc, không phải mã lỗi."""
-    import localefmt   # lười: file này chỉ dùng stdlib ở mức module
+    import localefmt  # lười: file này chỉ dùng stdlib ở mức module
     return " · ".join(localefmt.chu(MO_TA.get(v, v), MO_TA_EN.get(v, v)) for v in van_de)

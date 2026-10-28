@@ -1,18 +1,16 @@
 """View-format ownership guards with genuine existing Trial/CallLedger history."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import sqlite3
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
+import test_improvement_view_schema as schema_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_experiment_admission import ExperimentAdmission
 from improvement_experiment_protocol import matrix_cell
-import test_improvement_view_sources as sources
-import test_improvement_view_schema as schema_fixtures
 
 
 class ViewAdmissionSchemaTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

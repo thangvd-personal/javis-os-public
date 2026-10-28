@@ -2,7 +2,6 @@
 
     python tests/run.py javis_workflow_plugin
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
@@ -11,10 +10,12 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-wfplug-")
 
-import workflow_runs  # noqa: E402
-import plugins_host  # noqa: E402
+import plugins_host
+import workflow_runs
 
 fails = []
 
@@ -57,8 +58,8 @@ ctx2 = plugins_host.PluginContext("javis-workflow", "bundled", ROOT / "system/pl
 check("khong co vault_root -> loi ro", "ERROR" in asyncio.run(h({"op": "runs"}, ctx2)))
 
 # Dòng trong system prompt
-import main  # noqa: E402
-import localefmt  # noqa: E402  - da nap san server/ vao sys.path qua _paths
+import localefmt
+import main
 
 d = main._dong_lan_chay_gan_nhat(B)
 check("dong lan chay gan nhat", d.startswith("Lần chạy quy trình gần nhất: Bản tin") and "lỗi" in d and "javis_workflow" in d)

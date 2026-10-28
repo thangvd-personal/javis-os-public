@@ -5,16 +5,17 @@
 KHÔNG mạng: gọi thẳng hàm endpoint. Phủ: thư mục thật → is_dir True; path đã xoá → is_dir
 False + exists False; file (không phải thư mục) → exists True nhưng is_dir False; path rỗng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-pathtest-"))
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

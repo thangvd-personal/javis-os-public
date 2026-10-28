@@ -8,11 +8,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-an-file-"))
 
-import main  # noqa: E402
+import main
 
 fails = []
 

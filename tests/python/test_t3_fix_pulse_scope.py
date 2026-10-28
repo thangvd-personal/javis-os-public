@@ -7,20 +7,21 @@ quét trên `team:T1`. Nay dòng ngoài phạm vi bị gỡ lịch (sự kiện 
 trở lại phạm vi thì có lịch lại. Phần main.py (đăng tin, đề xuất, xếp việc chỉ khi nhóm hoạt động và còn là thành viên) ở
 test_t3_fix_pulse_main. Kho thật, đồng hồ giả, engine GIẢ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fix-scope-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fix-scope-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as H  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_ledger as AL
+import agent_pulse as AP
+import agent_pulse_host as H
+import resonance_store as RS
 
 fails = []
 D = 86400.0

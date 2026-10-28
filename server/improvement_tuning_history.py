@@ -8,8 +8,8 @@ from improvement_trial_records import _brain
 
 
 def sealed_history(inputs, connection, principal, experiment_id, generation):
-    from improvement_improver_inputs import ImproverInputs
     from improvement_experiment_protocol import definition
+    from improvement_improver_inputs import ImproverInputs
     if type(inputs) is not ImproverInputs:
         raise TypeError('concrete_improver_inputs_required')
     brain = _brain(principal)

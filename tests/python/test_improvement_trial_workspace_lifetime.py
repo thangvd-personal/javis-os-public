@@ -1,6 +1,4 @@
 """Synthetic worker lifetimes retain plaintext only while its owning host needs it."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import json
 import queue
@@ -10,12 +8,11 @@ import threading
 import time
 import unittest
 from contextlib import closing
-from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_trial_runner as fixtures
 import test_improvement_trials as store_fixtures
-import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_trial_service import recover_trials
 
 

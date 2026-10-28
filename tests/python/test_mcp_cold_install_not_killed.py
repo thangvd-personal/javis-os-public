@@ -23,7 +23,6 @@ leaves the process running, and the next caller gets the tools from the same pro
 the reason the invalidation exists: a server stuck in the middle of a request after its handshake
 is still thrown away, and a handshake that never answers is still bounded.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import glob
 import os
@@ -32,6 +31,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 # Hard-set before importing server modules: mcp_orphans writes STATE_DIR, npx_cache reads HOME.
 _TMP = Path(tempfile.mkdtemp(prefix="javis-cold-install-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
@@ -39,7 +40,7 @@ os.environ["HOME"] = str(_TMP / "home")
 for _d in ("state", "home"):
     (_TMP / _d).mkdir(parents=True, exist_ok=True)
 
-import mcp_client  # noqa: E402
+import mcp_client
 
 HELPER = str(Path(__file__).resolve().parent / "_slow_start_mcp_server.py")
 fails = []
@@ -186,7 +187,7 @@ async def scenario_handshake_still_bounded():
     check("the failure is remembered for the health check", bool(getattr(sess, "last_init_error", "")))
     try:
         await asyncio.wait_for(sess.ensure_init(), timeout=0.3)
-    except (asyncio.TimeoutError, TimeoutError):
+    except TimeoutError:
         pass
     await wait_until(lambda: len(markers(marker, "started")) == 2)
     check("the next attempt starts a fresh process", len(markers(marker, "started")) == 2,
@@ -231,7 +232,7 @@ async def scenario_deferred_invalidation():
     sess = mcp_client.pool._get(spec)[1]
     try:
         await asyncio.wait_for(sess.ensure_init(), timeout=0.2)
-    except (asyncio.TimeoutError, TimeoutError):
+    except TimeoutError:
         pass
     try:
         mcp_client.pool.invalidate("cold7", defer_if_starting=True)
@@ -320,7 +321,7 @@ async def scenario_cancelled_waiter_keeps_handshake():
     sess = mcp_client.pool._get(spec)[1]
     try:
         await asyncio.wait_for(sess.ensure_init(), timeout=0.3)
-    except (asyncio.TimeoutError, TimeoutError):
+    except TimeoutError:
         pass
     # Read with getattr so this file still runs (and turns red) on a tree without the fix.
     sess_starting = getattr(sess, "is_starting", lambda: False)

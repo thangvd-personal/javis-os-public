@@ -1,6 +1,4 @@
 """Metadata-only private socketpairs; no SDK, subprocess, or account access."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib
 import importlib.util
@@ -10,6 +8,7 @@ import struct
 import unittest
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
 
 NONCE = 'a' * 64
 

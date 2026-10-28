@@ -33,7 +33,6 @@ import sys
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Optional
 
 SNAPSHOT_SUFFIX = ".pre-0.140.0"
 POST_TAG = ".post-0.140.0-"
@@ -103,7 +102,7 @@ def _tables(path: Path) -> dict:
         return {n: c.execute(f'SELECT COUNT(*) FROM "{n}"').fetchone()[0] for n in names}
 
 
-def _put_back(store: Path, copy: Optional[Path]) -> str:
+def _put_back(store: Path, copy: Path | None) -> str:
     """Trả `store` về `copy` (bản sao trước khi khôi phục); `copy` None nghĩa là trước đó kho không có: gỡ đi. Kiểm lại
     sau khi trả. Trả "" nếu đúng, còn không thì lý do."""
     try:

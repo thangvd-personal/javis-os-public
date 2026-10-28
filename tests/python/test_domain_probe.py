@@ -11,12 +11,12 @@ Settings only said "SSL: qua Hostinger" with a hint that DNS might be wrong. Thi
 3. a domain that already answers over HTTPS is never reported as "needs Redeploy", even when DOMAIN_NAME in the
    container env is still "localhost" (owners without an Environment box edit the Host line in the YAML directly).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-domain-probe-test-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
@@ -27,11 +27,11 @@ try:
 except Exception:
     pass
 
-import httpx                                  # noqa: E402
-from fastapi.testclient import TestClient     # noqa: E402
-import config as c                            # noqa: E402
-import main                                   # noqa: E402
-import routes.domain as dom                   # noqa: E402
+import config as c
+import httpx
+import main
+import routes.domain as dom
+from fastapi.testclient import TestClient
 
 _fails = []
 

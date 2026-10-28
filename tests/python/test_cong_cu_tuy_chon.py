@@ -16,14 +16,15 @@ Ràng buộc không lách được, và nó quyết định cách chia:
 Và một chốt dễ bỏ sót: máy cá nhân thường đã có sẵn Google Chrome, Playwright lái được luôn.
 Mời họ tải thêm một bản Chromium nữa là mời một việc vô nghĩa, nên phải DÒ trước khi mời.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-congcu-"))
 
-import optional_tools as ct  # noqa: E402
+import optional_tools as ct
 
 _fails = []
 
@@ -128,12 +129,13 @@ check("tick rồi thì gọi cài ở nền, không chặn đường vào app",
       re.search(r'_ctB && _ctB\.checked[\s\S]{0,300}/tools/optional/install', ap) is not None)
 
 # ---- 10. Chữ hiện cho người dùng phải có dấu, và không có em dash ----
-import json  # noqa: E402
+import json
+
 vi = json.load(open(os.path.join(ROOT, "dashboard", "i18n", "vi.json"), encoding="utf-8"))
 en = json.load(open(os.path.join(ROOT, "dashboard", "i18n", "en.json"), encoding="utf-8"))
 khoa = [k for k in vi if k.startswith(("cs.ct_", "wz.ct_"))]
 check("có đủ chuỗi cho cả hai ngôn ngữ", len(khoa) >= 10 and all(k in en for k in khoa), len(khoa))
-check("chuỗi tiếng Việt CÓ DẤU", any(re.search(r"[ạảãáàâăêôơưđ]", vi[k], re.I) for k in khoa))
+check("chuỗi tiếng Việt CÓ DẤU", any(re.search(r"[ạảãáàâăêôơưđ]", vi[k], re.IGNORECASE) for k in khoa))
 check("không có em dash trong chuỗi mới",
       not any("\u2014" in vi[k] or "\u2014" in en[k] for k in khoa))
 

@@ -21,11 +21,11 @@ chưa) đi theo dữ liệu sang repo kho `thangvd-personal/javis-store-public`,
 trên mọi Pull Request. Giữ bản chụp của chúng ở đây chỉ là tự trấn an: kho đổi được mà không
 cần bản Javis mới, nên test ở repo này không canh nổi thứ người dùng thật sự cài.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import sys
 
 import mcp_catalog as mc
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 loi = []
 
@@ -305,9 +305,9 @@ check("CANARY: url kiểu dán-link-kèm-token bị bắt",
 # Chạy trên một catalog GIẢ ghi ra thư mục tạm: sau 0.55.36 không còn connector thật nào khai
 # `url_template`, mà cơ chế thì vẫn phải sống - gói trong kho dùng nó.
 # ============================================================
-import os        # noqa: E402
-import tempfile  # noqa: E402
-from pathlib import Path  # noqa: E402
+import os
+import tempfile
+from pathlib import Path
 
 CATALOG_GIA = {"version": 1, "connectors": [dict(KHUON_URL, name="Giả URL", category="Khác",
                                                  status="ready", default_perm="readonly")]}
@@ -330,11 +330,11 @@ with tempfile.TemporaryDirectory() as tmp:
     duong_gia.write_text(json.dumps(CATALOG_GIA, ensure_ascii=False), encoding="utf-8")
     for mod in ("mcp_store", "secrets_store", "config"):
         sys.modules.pop(mod, None)
-    import config as _cfg_moi   # noqa: E402
+    import config as _cfg_moi
     check("STATE_DIR trỏ vào thư mục tạm", str(_cfg_moi.STATE_DIR) == tmp, _cfg_moi.STATE_DIR)
     mc.CATALOG_PATH = duong_gia
     mc._cache.update(sig=None, by_id={})
-    import mcp_store  # noqa: E402
+    import mcp_store
     check("kho tạm rỗng - không đọc nhầm kho thật", not mcp_store.list_connections())
 
     cid, err = mcp_store.add_connection("gia-url", {

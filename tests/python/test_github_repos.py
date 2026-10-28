@@ -10,13 +10,13 @@ Spec docs/dev/2026-10-github-trong-chat-spec.md, acceptance criteria covered her
 Plus: the token is stored encrypted and never appears in git's argv or the clone's remote URL; clones live outside the
 brain tree; a pinned folder and attached repos coexist.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-gh-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -26,14 +26,14 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN, git  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub, git
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import config  # noqa: E402
-import coding_store  # noqa: E402
-import github_repos  # noqa: E402
+import coding_store
+import config
+import github_repos
 
 _fails = []
 

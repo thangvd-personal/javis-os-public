@@ -40,8 +40,8 @@ import shutil
 import sys
 from pathlib import Path
 
-import system_sync
 import localefmt
+import system_sync
 from config import STATE_DIR
 
 HIEU_UNG_DIR = STATE_DIR / "packs-state"

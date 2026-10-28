@@ -1,7 +1,8 @@
-from _paths import SERVER  # noqa: F401
 import logging
 import unittest
+
 import voice_privacy
+from _paths import SERVER  # noqa: F401
 
 
 class AccessPrivacy(unittest.TestCase):

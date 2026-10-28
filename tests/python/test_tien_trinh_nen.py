@@ -11,14 +11,14 @@ import sys
 import tempfile
 import time
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ttn-")
-import asyncio  # noqa: E402
-import subprocess  # noqa: E402
+import asyncio
+import subprocess
 
-import background_status  # noqa: E402
-import tien_trinh_nen as T  # noqa: E402
+import background_status
+import tien_trinh_nen as T
 
 fails = []
 

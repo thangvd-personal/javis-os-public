@@ -7,7 +7,6 @@ still be saved on the reminder record so the run can be reviewed.
 Run:
     python tests/run.py reminder_task_silent
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import asyncio
 import json
 import os
@@ -15,9 +14,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-reminder-silent-state-")
 
-import reminders  # noqa: E402
+import reminders
 
 fails = []
 sent = []
@@ -49,7 +50,7 @@ deps = reminders.RemindersDeps(
     aux_model=lambda: None,
     safe_tools=[],
     readonly_tools=[],
-    scheduler_brains=lambda: [],
+    scheduler_brains=list,
 )
 feature = reminders.RemindersFeature(deps)
 

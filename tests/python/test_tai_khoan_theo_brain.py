@@ -16,10 +16,11 @@ loại hỏng lặng lẽ nếu sai:
   3. Bot nhận tài khoản thì tài khoản nhận brain của bot, NHƯNG không ghi đè chủ đã có.
   4. Không truyền brain (mã nội bộ, poller) thì vẫn trả HẾT như cũ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tkbrain-"))
 os.environ.setdefault("BRAINS_DIR", tempfile.mkdtemp(prefix="javis-tkbrains-"))
@@ -28,8 +29,8 @@ try:
 except Exception:
     pass
 
-import channel_accounts as ca  # noqa: E402
-import chatbot_store  # noqa: E402
+import channel_accounts as ca
+import chatbot_store
 
 _fails = []
 
@@ -101,7 +102,8 @@ check("sửa nhãn mà KHÔNG gửi brain thì không đụng tới brain",
       ok and ca.get_account(a_shop).get("brain") == "")
 
 # ---- 5. Di trú bản ghi cũ (không có trường brain) -------------------------------
-import json  # noqa: E402
+import json
+
 d = json.loads(ca.STORE_PATH.read_text(encoding="utf-8"))
 for a in d["accounts"]:
     a.pop("brain", None)

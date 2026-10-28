@@ -88,8 +88,9 @@ class NativeDebugInvocation:
             raise NativeCaptureError('native_capture_scope_invalid')
         if os.name != 'nt' or not sys.flags.isolated:
             raise NativeCaptureError('native_capture_isolated_windows_required')
-        from improvement_native_capture_win32 import backend
         import _winapi
+
+        from improvement_native_capture_win32 import backend
         self._api, self._winapi = backend(), _winapi
         self._creator, self._loop = self._api.current_thread(), asyncio.get_running_loop()
         self._captured, self._stop, self._gate = asyncio.Event(), asyncio.Event(), asyncio.Event()

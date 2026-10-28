@@ -1,6 +1,4 @@
 """Developer smoke gates never discover auth or query a model in these tests."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import os
 import subprocess
@@ -8,6 +6,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRIPT = ROOT / "tools" / "run_agent_skill_trial_smoke.py"
 

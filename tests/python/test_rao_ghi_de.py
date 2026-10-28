@@ -7,7 +7,6 @@ Coding, `javis_write_file` chỉ ghi đè một file ĐÃ CÓ khi phiên đã đ
 lúc đọc. Rào này phải từ chối TRƯỚC khi chạm đĩa, và KHÔNG áp cho brain (luồng ghi ghi chú, ghi
 nhớ, báo cáo xưa nay không phải đọc trước).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -15,12 +14,14 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-raoghide-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_checkpoint  # noqa: E402
-import mcp_hub  # noqa: E402
-from coding_ctx import CodingToolContext  # noqa: E402
+import coding_checkpoint
+import mcp_hub
+from coding_ctx import CodingToolContext
 
 _fails = []
 

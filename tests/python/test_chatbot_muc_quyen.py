@@ -25,11 +25,12 @@ này từng có, nên file này canh đúng bốn chỗ mà một lần sửa �
    Cấp tool cho sáu engine API rồi bỏ hai gói thuê bao lại là kiểu hỏng im lặng tệ nhất - chủ
    đặt Toàn quyền, bot vẫn lễ phép trả lời, và không làm gì cả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-mucquyen-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -39,7 +40,7 @@ try:
 except Exception:
     pass
 
-import chatbot_store  # noqa: E402
+import chatbot_store
 
 _fails = []
 
@@ -164,8 +165,8 @@ check("KHÔNG có em dash trong cảnh báo",
 # ============================================================
 # 3. Lượt chạy: rẽ đúng đường, và fail-closed
 # ============================================================
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
+import main
+import mcp_hub
 
 BOT = {"id": "bot_x", "name": "Bot", "brain": "brain-bot",
        "agent": {"brain": "brain", "slug": "coach"},
@@ -347,7 +348,7 @@ for prov, kind in [(d["id"], d["kind"]) for d in main.PROVIDER_DEFS if d["id"] n
     r = chay(prov, kind, {**BOT, "muc_quyen": "auto"})
     if not (_goi and _goi[-1]["co_tool"] and isinstance(r, dict) and r.get("text")):
         _thieu.append(prov)
-check(f"mọi bộ não có đường hẹp đều gọi được tool ở mức Được ghi", _thieu == [])
+check("mọi bộ não có đường hẹp đều gọi được tool ở mức Được ghi", _thieu == [])
 if _thieu:
     print("     bị bỏ lại: " + ", ".join(_thieu))
 _ao = {"anthropic_chat_with_mcp": main.engine.anthropic_chat_with_mcp}
@@ -401,7 +402,7 @@ check("cảnh báo nói luôn việc cần làm", "trang Models" in _cb or "hạ
 
 # Cảnh báo phải đi tới THẺ BOT, không chỉ nằm trong biến. Và phải tách khỏi `loi` - `loi` kéo
 # theo bộ đếm bí rồi kéo theo gọi người trực, trong khi đây là lượt trả lời bình thường.
-import chatbot_log  # noqa: E402
+import chatbot_log
 
 chatbot_log.ghi("bot_cb", {"hoi": "x", "dap": "y", "canh_bao": "chạy thiếu quyền"})
 check("nhật ký giữ cảnh báo tách khỏi lỗi",
@@ -462,7 +463,7 @@ mcp_hub.discover_all = _discover_gia
 # 6. Nhật ký ghi lại mức lượt đó CHẠY THẬT
 # ============================================================
 # Chủ hạ mức sau một sự cố thì cấu hình hiện tại không còn nói lên được "hôm đó bot làm gì".
-import chatbot_log  # noqa: E402
+import chatbot_log
 
 chatbot_log.ghi("bot_test_muc", {"hoi": "x", "dap": "y", "muc_quyen": "full"})
 check("nhật ký giữ mức quyền của từng lượt",

@@ -19,16 +19,16 @@ import os
 import tempfile
 import threading
 import time
+from collections.abc import Callable, Iterable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Optional
 
 FILE = "agent_notify.json"
 MUTE_FOREVER = -1.0
 CHOICES = ("1h", "4h", "8am", "forever", "off")
 
 
-def mute_until(choice: str, now: Optional[datetime] = None) -> float:
+def mute_until(choice: str, now: datetime | None = None) -> float:
     """The muted_until value for a menu choice. `now` is an aware datetime in the owner's time zone; "8am" means the
     next 08:00 there (tomorrow when it is already past 08:00)."""
     c = str(choice or "").strip().lower()
@@ -50,7 +50,7 @@ def mute_until(choice: str, now: Optional[datetime] = None) -> float:
     return at.timestamp()
 
 
-def is_muted(muted_until: float, now_ts: Optional[float] = None) -> bool:
+def is_muted(muted_until: float, now_ts: float | None = None) -> bool:
     m = float(muted_until or 0)
     if m == MUTE_FOREVER:
         return True
@@ -66,14 +66,14 @@ class AgentNotify:
     def _path(self) -> Path:
         return Path(self._dir()) / FILE
 
-    def _load(self) -> Dict[str, dict]:
+    def _load(self) -> dict[str, dict]:
         try:
             d = json.loads(self._path().read_text(encoding="utf-8"))
             return d if isinstance(d, dict) else {}
         except (OSError, ValueError):
             return {}
 
-    def _save(self, data: Dict[str, dict]) -> None:
+    def _save(self, data: dict[str, dict]) -> None:
         p = self._path()
         p.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=".agent_notify-", dir=str(p.parent))
@@ -92,10 +92,10 @@ class AgentNotify:
     def key(brain: str, slug: str) -> str:
         return f"{brain}|{slug}"
 
-    def records(self, brain: str, slugs: Iterable[str]) -> Dict[str, dict]:
+    def records(self, brain: str, slugs: Iterable[str]) -> dict[str, dict]:
         """{slug: {read_at, muted_until}} for these partners; a partner seen for the first time starts as read now."""
         now = self._clock()
-        out: Dict[str, dict] = {}
+        out: dict[str, dict] = {}
         with self._lock:
             data = self._load()
             changed = False

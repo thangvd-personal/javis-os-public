@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Plugin bundled: đọc nội dung video YouTube cho MỌI engine.
 
 Đăng ký tool `javis_youtube_read`, gọi youtube_read.read() (lấy phụ đề qua InnerTube, dự phòng

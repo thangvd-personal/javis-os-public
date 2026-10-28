@@ -4,8 +4,6 @@ The main lifecycle test executes the real run_turn function extracted from its
 AST with an inert _do_turn seam. It proves owner wiring/finally, not main engine
 selection, provider dispatch, native/HTTP propagation or account readiness.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import ast
 import asyncio
 import contextvars
@@ -14,16 +12,17 @@ import importlib
 import importlib.util
 import threading
 import time
-from types import SimpleNamespace
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import context_runtime as CR
-from lazy_skill_runtime import LazySkillSource
 import mcp_hub
 import skill_router
 import test_improvement_task_skill_scope as fixture
 import turn_context as TC
+from _paths import ROOT, SERVER  # noqa: F401
+from lazy_skill_runtime import LazySkillSource
 
 
 class TaskSkillTurnTests(unittest.IsolatedAsyncioTestCase):

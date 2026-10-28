@@ -14,7 +14,6 @@ P3 incident triage from a pass where only non-AI branches ran; header values wit
    key still blocks resends pruned; 4xx refusals opening the breaker; receivers echoing the decrypted key into the
    log; an unbounded body read before the size check.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -22,6 +21,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-chain-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -32,10 +33,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 

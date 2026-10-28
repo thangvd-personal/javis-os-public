@@ -1,16 +1,13 @@
 """Comparison reports pin missing/exact cells without running a model."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import json
-import asyncio
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_comparison_results as C
 import improvement_store as IM
-from improvement_claude import ClaudeTrialAdapter
 import test_improvement_experiment_lineage as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_claude import ClaudeTrialAdapter
 
 
 class ComparisonReportTests(unittest.TestCase):

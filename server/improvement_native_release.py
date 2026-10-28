@@ -10,17 +10,16 @@ from __future__ import annotations
 import ast
 import base64
 import csv
-from email.parser import BytesParser
 import hashlib
 import io
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
 import sysconfig
-
+from email.parser import BytesParser
+from pathlib import Path, PurePosixPath
 
 _MAX_FILES = 4096
 _MAX_BYTES = 64 * 1024 * 1024
@@ -250,8 +249,8 @@ def _inventory(source, packages, seeds, *, sdk_version=None):
     for module in external:
         if module not in modules: _fail('dependency_missing')
         for name in modules[module]: pending_dist.setdefault(name, set())
-    from packaging.requirements import Requirement, InvalidRequirement
     from packaging.markers import default_environment
+    from packaging.requirements import InvalidRequirement, Requirement
     environment = default_environment()
     environment.update(os_name='nt', sys_platform='win32', platform_system='Windows', platform_machine='AMD64')
     selected = {}
@@ -295,9 +294,10 @@ def _inventory(source, packages, seeds, *, sdk_version=None):
 
 def _runtime_pins():
     if os.name != 'nt': raise OSError('native_release_windows_required')
+    import msvcrt
+
     from improvement_native_bootstrap import _runtime_paths, _same_path
     from improvement_native_image import ImageReadGuard
-    import msvcrt
     paths = _runtime_paths()
     if not _same_path(paths['executable'], getattr(sys, '_base_executable', sys.executable)):
         _fail('base_executable_mismatch')
@@ -337,8 +337,8 @@ def observe_release(pin, *, source_root=None, site_packages=None):
 def qualified_launch(pin, *, kind, scratch):
     """Only a matching external reviewed registration authorizes these pins."""
     pin = _pin(pin)
-    from improvement_native_bootstrap import _absolute
     from improvement_fixed_worker_launch import _policy
+    from improvement_native_bootstrap import _absolute
     from improvement_native_qualifications import REVIEWED_RELEASES
     if type(kind) is not str or kind not in ('trial', 'operation', 'preflight'): _fail()
     _absolute(scratch)

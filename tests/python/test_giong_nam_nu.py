@@ -10,12 +10,13 @@ notes Javis records for Telegram and Zalo. Checks:
   3. every live voice the server offers has male/female in dashboard/voice-catalog.js (only alloy is neutral), so
      the Settings list never shows a bare name again.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-gioi-")
 try:
@@ -23,11 +24,11 @@ try:
 except Exception:
     pass
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c   # noqa: E402
-import main          # noqa: E402
-import voice_live    # noqa: E402
-import voice_note    # noqa: E402
+import config as c
+import main
+import voice_live
+import voice_note
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -86,7 +87,7 @@ tts_voices = re.search(r"OPENAI_TTS_VOICES = \[([^\]]*)\]", cs).group(1)
 miss_tts = [v for v in re.findall(r'"([a-z]+)"', tts_voices) if v not in known]
 check("every OpenAI reading voice has a gender", not miss_tts, miss_tts)
 html = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
-edge = re.search(r'<select id="voiceSel".*?</select>', html, re.S).group(0)
+edge = re.search(r'<select id="voiceSel".*?</select>', html, re.DOTALL).group(0)
 miss_edge = [v for v in re.findall(r'value="([^"]+)"', edge) if v.lower() not in known]
 check("every Edge voice in the list has a gender", not miss_edge, miss_edge)
 

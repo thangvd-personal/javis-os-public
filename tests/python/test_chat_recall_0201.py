@@ -3,15 +3,16 @@
 Run:
     python tests/run.py chat_recall
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-recall-")
 
-import chat_recall as cr  # noqa: E402
-import sessions  # noqa: E402
+import chat_recall as cr
+import sessions
 
 fails = []
 

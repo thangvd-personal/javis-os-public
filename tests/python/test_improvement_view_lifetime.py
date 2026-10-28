@@ -1,17 +1,16 @@
 """Retained host reconstruction may replace only fully closed concrete lifetimes."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import unittest
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_view_next as next_fixtures
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_experiment_service import ExperimentService
 from improvement_trial_service import OwnerTrialService
 from improvement_views import EffectiveViews
-import test_improvement_view_next as next_fixtures
-import test_improvement_view_sources as sources
 
 
 class ViewLifetimeTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

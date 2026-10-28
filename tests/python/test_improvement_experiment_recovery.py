@@ -1,11 +1,10 @@
 """Experiment recovery touches only its actual immutable trial links."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import test_improvement_experiment_service as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ExperimentRecoveryScopeTests(unittest.IsolatedAsyncioTestCase):

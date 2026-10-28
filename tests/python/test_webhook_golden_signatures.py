@@ -8,13 +8,14 @@ documentation (an independent check of the scheme); the others were computed onc
 schemes; `systeme_io_synthetic` is an assumed scheme until a real Systeme.io delivery replaces it.
 Each fixture also goes through the real receive path (WebhookFeature.accept) with Starlette-style headers.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-golden-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -25,10 +26,10 @@ try:
 except Exception:
     pass
 
-import webhook_rules as wr  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
-import webhook_verify as wv  # noqa: E402
-from starlette.datastructures import Headers  # noqa: E402
+import webhook_rules as wr
+import webhook_triggers as wt
+import webhook_verify as wv
+from starlette.datastructures import Headers
 
 fails = []
 
@@ -73,7 +74,6 @@ async def through_accept():
         return True, ""
     feat = wt.WebhookFeature(wt.WebhookDeps(state_dir=lambda: STATE, run_task=run_task, run_workflow=nop, send=send,
                                             base_url=lambda r: ""))
-    import time as _t
     for f in FX:
         if f["provider"] == "stripe" and f["valid"]:
             continue                                # its timestamp is fixed in the past: covered by verify() above

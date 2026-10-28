@@ -14,7 +14,6 @@ What is proven here:
      configuration or secrets, bodies only on request, spreadsheet formulas neutralised;
   6. benchmarks of receive and of the whole pipeline (printed; generous bounds).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -22,6 +21,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m5-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
@@ -32,11 +33,10 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
-import webhook_worker as ww  # noqa: E402
+import httpx
+import webhook_store as ws
+import webhook_triggers as wt
+import webhook_worker as ww
 
 fails = []
 

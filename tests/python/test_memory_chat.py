@@ -6,13 +6,14 @@ Owner, 16/10/2026: "thà nhắn tin bảo xóa sửa thu hồi rồi AI làm gi�
 left the settings column; this tool does the same work from chat, on any engine. Runs the bundled plugin through the
 real host (`main` wires `memory_chat`), no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 STATE = tempfile.mkdtemp(prefix="javis-memchat-")
 os.environ["JAVIS_STATE_DIR"] = STATE
@@ -21,10 +22,10 @@ BR = Path(tempfile.mkdtemp(prefix="javis-memchat-brain-"))
 (BR / "agents" / "viet-bai.md").write_text("---\nname: Viết bài\nrole: Viết bài Facebook\n---\nViết ngắn.\n",
                                            encoding="utf-8")
 
-import agent_lessons as AL  # noqa: E402
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import memory_control as MC  # noqa: E402
+import agent_lessons as AL
+import main
+import mcp_hub
+import memory_control as MC
 
 fails = []
 
@@ -127,8 +128,10 @@ check("an unknown assistant says so", call({"op": "lessons", "agent": "Không ai
 
 src = (ROOT / "server" / "main.py").read_text(encoding="utf-8")
 # ---- the receipt under an answer, and no empty "đã quên" (memory_receipt) ----
-import memory_receipt as R  # noqa: E402
-import time as _t  # noqa: E402
+import time as _t
+
+import memory_receipt as R
+
 (mem / "facts" / "gio-mo-cua.md").write_text("---\ntype: business\n---\nMở cửa 8h-21h.\n", encoding="utf-8")
 (mem / "facts" / "xung-ho.md").write_text("---\ntype: preference\n---\nGọi là anh.\n", encoding="utf-8")
 (mem / "MEMORY.md").write_text("# Bộ nhớ\n- [Giờ mở cửa](facts/gio-mo-cua.md)\n- [Xưng hô](facts/xung-ho.md)\n", encoding="utf-8")

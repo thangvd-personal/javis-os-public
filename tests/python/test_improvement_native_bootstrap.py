@@ -1,18 +1,17 @@
 """Fixed bootstrap contracts only; no SDK client, native child, or account probe."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import struct
 import sys
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_native_bootstrap"):
     import improvement_native_bootstrap as BOOT
@@ -217,6 +216,7 @@ class WindowsBootstrapTests(unittest.TestCase):
         # are simulated. Runtime module paths and NTFS file guards are actual.
         paths = BOOT._runtime_paths()
         import msvcrt
+
         import improvement_native_image as image
         before_sdk = {name for name in sys.modules if name.startswith("claude_agent_sdk")}
         # _paths may inherit a deep runner JAVIS_TEST_TMP. Keep this owned Windows

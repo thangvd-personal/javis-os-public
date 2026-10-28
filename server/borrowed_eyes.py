@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
 import vision_input
 
@@ -39,7 +39,7 @@ INSTRUCTIONS = (
 PER_LOOK_TIMEOUT_S = 75.0       # one candidate; the customer is waiting for the reply
 MAX_DESCRIPTION_CHARS = 6000    # a description longer than this is a transcription of a whole document, enough is enough
 HISTORY_CHARS = 1200            # what is kept in the conversation history so later turns still know what the photo showed
-_CACHE: Dict[tuple, Tuple[str, str]] = {}
+_CACHE: dict[tuple, tuple[str, str]] = {}
 _CACHE_MAX = 300
 
 # Providers whose path can carry image input. Same list as vision_input; repeated by name here so a test reads one place.
@@ -49,11 +49,11 @@ StreamFn = Callable[[str, str, list], object]   # (provider, model, messages) ->
 
 
 def candidates(bot_prov: str, bot_model: str, *, main_prov: str = "", main_model: str = "", main_ok: bool = False,
-               chatgpt_ok: bool = False, chatgpt_model: str = "", claude_ok: bool = False) -> List[Tuple[str, str, str]]:
+               chatgpt_ok: bool = False, chatgpt_model: str = "", claude_ok: bool = False) -> list[tuple[str, str, str]]:
     """Ordered `(label, provider, model)` list of brains that may look at the photo. Never the exact provider+model that failed;
     never a provider without an image path. Pure function: the caller decides what is connected."""
     failed = (str(bot_prov or ""), str(bot_model or ""))
-    out: List[Tuple[str, str, str]] = []
+    out: list[tuple[str, str, str]] = []
 
     def add(label: str, prov: str, model: str) -> None:
         key = (prov, model)
@@ -81,7 +81,7 @@ def build_prompt(caption: str, count: int) -> str:
     return "\n".join(lines)
 
 
-def _cache_key(paths: Iterable[str]) -> Optional[tuple]:
+def _cache_key(paths: Iterable[str]) -> tuple | None:
     key = []
     for p in paths:
         try:
@@ -92,13 +92,13 @@ def _cache_key(paths: Iterable[str]) -> Optional[tuple]:
     return tuple(key)
 
 
-def cached(paths: List[str]) -> Optional[Tuple[str, str]]:
+def cached(paths: list[str]) -> tuple[str, str] | None:
     """`(description, who)` when these exact files were described before (the inbox 'reply for me' redoes a turn)."""
     k = _cache_key(paths)
     return _CACHE.get(k) if k else None
 
 
-def _remember(paths: List[str], text: str, who: str) -> None:
+def _remember(paths: list[str], text: str, who: str) -> None:
     k = _cache_key(paths)
     if not k:
         return
@@ -107,10 +107,10 @@ def _remember(paths: List[str], text: str, who: str) -> None:
     _CACHE[k] = (text, who)
 
 
-async def _one_look(stream_fn: StreamFn, prov: str, model: str, messages: list) -> Tuple[str, str]:
+async def _one_look(stream_fn: StreamFn, prov: str, model: str, messages: list) -> tuple[str, str]:
     """Run one candidate: `(text, "")` or `("", error)`."""
-    parts: List[str] = []
-    errors: List[str] = []
+    parts: list[str] = []
+    errors: list[str] = []
     async for ev in stream_fn(prov, model, messages):
         t = (ev or {}).get("type")
         if t == "text":
@@ -121,7 +121,7 @@ async def _one_look(stream_fn: StreamFn, prov: str, model: str, messages: list) 
     return (text, "") if text else ("", errors[0] if errors else "không trả lời gì")
 
 
-async def describe(paths: List[str], caption: str, cands: List[Tuple[str, str, str]], stream_fn: StreamFn,
+async def describe(paths: list[str], caption: str, cands: list[tuple[str, str, str]], stream_fn: StreamFn,
                    timeout_s: float = PER_LOOK_TIMEOUT_S) -> dict:
     """Ask each candidate in turn to describe the photos. `{ok, text, who}` on the first answer, `{ok: False, errors}` when
     none could. `who` names the brain that looked ("openai-oauth/gpt-5.5"), for the log and the bot card."""
@@ -137,12 +137,12 @@ async def describe(paths: List[str], caption: str, cands: List[Tuple[str, str, s
     if not cands:
         return {"ok": False, "errors": ["không có bộ não nào khác nhìn được ảnh đang kết nối"]}
     messages = [{"role": "system", "content": INSTRUCTIONS}, {"role": "user", "content": parts}]
-    errors: List[str] = []
+    errors: list[str] = []
     for _label, prov, model in cands:
         who = f"{prov}/{model}" if model else prov
         try:
             text, err = await asyncio.wait_for(_one_look(stream_fn, prov, model, messages), timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             text, err = "", f"quá {int(timeout_s)} giây"
         except Exception as e:      # noqa: BLE001 - one broken brain must not stop the next one from looking
             text, err = "", f"{type(e).__name__}: {e}"

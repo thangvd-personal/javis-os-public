@@ -1,6 +1,4 @@
 """Synthetic host callbacks bind real encrypted context/grant records, without engines."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -8,8 +6,9 @@ import sqlite3
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 
-import test_improvement_trials as fixtures
 import improvement_store as IM
+import test_improvement_trials as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_trial_host"):
     import improvement_trial_host as HOST

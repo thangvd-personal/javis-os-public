@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from math import comb
 
-from improvement_store import _hash
-from improvement_experiment_protocol import definition, comparison_matrix, matrix_cell
+from improvement_experiment_protocol import comparison_matrix, definition, matrix_cell
 from improvement_qualification_records import require_product_store
+from improvement_store import _hash
 
 _VERDICTS = {"pass", "fail", "unknown"}
 _SPLITS = ("tuning", "qualification", "regression")
@@ -186,8 +186,9 @@ def project_result(value, contract, request, trial_id, attempt, report):
     from improvement_experiment_protocol import validate_request_v2
     from improvement_result_domain import NATIVE_GATES, require_product_report
     require_product_report(report)
-    from improvement_view_trial_protocol import validate_request_v4
     import re
+
+    from improvement_view_trial_protocol import validate_request_v4
     value = definition(value)
     identifiers, _ = _contract(value, contract)
     view_runtime = type(request) is dict and type(request.get('version')) is int and request['version'] == 4
@@ -270,8 +271,8 @@ class ComparisonResults:
         """Cold historical reader: no Host/Plans factory, migration or recovery."""
         import improvement_store as IM
         from improvement_experiments import ExperimentRecords
-        from improvement_trials import TrialStore
         from improvement_trial_results import TrialResults
+        from improvement_trials import TrialStore
         if type(assets) is not IM.ImprovementStore:
             raise TypeError("concrete_comparison_assets_required")
         reader = cls.__new__(cls)
@@ -283,8 +284,9 @@ class ComparisonResults:
 
     def _metadata(self, connection, brain, comparison_id):
         import json
-        import improvement_store as IM
+
         import improvement_cases as IC
+        import improvement_store as IM
         from improvement_blobs import AssetUnavailable
         comparison = connection.execute("SELECT * FROM improvement_comparisons WHERE id=? AND brain_id=?",
                                         (comparison_id, brain)).fetchone()
@@ -321,8 +323,8 @@ class ComparisonResults:
                 "matrix": matrix, "arm": json.loads(arm["envelope_json"])}
 
     def _guard(self, connection, principal, metadata, expected_generation):
-        from improvement_experiment_lineage import current_fences
         from improvement_comparison_links import has_view_binding
+        from improvement_experiment_lineage import current_fences
         value, comparison = metadata["definition"], metadata["comparison"]
         view_runtime = has_view_binding(connection, principal.brain_id, comparison['id'])
         source = {'source_split': 'tuning'} if view_runtime else {}
@@ -350,11 +352,13 @@ class ComparisonResults:
     def _snapshot(self, connection, brain, metadata):
         """SQL-only capture, including missing/nonterminal slots, for publication CAS."""
         import json
-        from improvement_experiment_protocol import validate_request_v2, comparison_hash
-        from improvement_view_trial_protocol import validate_request_v4
-        from improvement_comparison_links import comparison_table
-        from improvement_view_history import metadata as view_metadata, require_publication
+
         from improvement_blobs import AssetUnavailable
+        from improvement_comparison_links import comparison_table
+        from improvement_experiment_protocol import comparison_hash, validate_request_v2
+        from improvement_view_history import metadata as view_metadata
+        from improvement_view_history import require_publication
+        from improvement_view_trial_protocol import validate_request_v4
         comparison, value, matrix = metadata["comparison"], metadata["definition"], metadata["matrix"]
         table = comparison_table(connection, brain, comparison['id'])
         view_runtime = table == 'improvement_view_trial_links'
@@ -409,11 +413,12 @@ class ComparisonResults:
     def _policy(value):
         import hashlib
         from pathlib import Path
+
+        import improvement_experiment_protocol as protocol
         import improvement_trial_checks as checks
         import improvement_trial_results as results
-        import improvement_experiment_protocol as protocol
-        import improvement_view_trial_protocol as view_protocol
         import improvement_view_protocol as manifest_protocol
+        import improvement_view_trial_protocol as view_protocol
         return {"id": "complete-paired-results", "version": 1, "decision_policy": value["decision_policy"],
             "evaluator": value["evaluator"], "source_hash": _hash({name: hashlib.sha256(Path(path).read_bytes()).hexdigest()
                 for name, path in {"comparison": __file__, "protocol": protocol.__file__, "checks": checks.__file__, "results": results.__file__,
@@ -423,10 +428,10 @@ class ComparisonResults:
         # Domain refusal is categorical, outside per-cell UNKNOWN recovery.
         require_product_store(self.assets, principal)
         import json
-        import improvement_store as IM
+
+        from cryptography.fernet import InvalidToken
         from improvement_blobs import AssetUnavailable
         from improvement_trials import TERMINAL
-        from cryptography.fernet import InvalidToken
         rows, selected = [], []
         for position, item in enumerate(captured):
             ref = None if refs is None else refs[position]
@@ -465,6 +470,7 @@ class ComparisonResults:
 
     def _result_row(self, brain, trial_id, result_id, result_hash):
         from contextlib import closing
+
         from improvement_blobs import AssetUnavailable
         with closing(self.store._conn()) as connection:
             row = connection.execute("SELECT r.* FROM improvement_trial_results r "
@@ -481,6 +487,7 @@ class ComparisonResults:
 
     def _artifact(self, brain, result, report):
         from contextlib import closing
+
         from improvement_blobs import AssetUnavailable
         with closing(self.store._conn()) as connection:
             row = connection.execute("SELECT * FROM improvement_trial_artifacts WHERE brain_id=? AND trial_id=? AND attempt=?",
@@ -497,6 +504,7 @@ class ComparisonResults:
             raise PermissionError("comparison_write_unavailable")
         import time
         from contextlib import closing
+
         import improvement_store as IM
         from improvement_experiments import _generation, _identifier
         _identifier(comparison_id)
@@ -551,10 +559,11 @@ class ComparisonResults:
     def read(self, principal, report_id):
         import json
         from contextlib import closing
+
         import improvement_store as IM
         from improvement_blobs import AssetUnavailable
-        from improvement_experiments import _identifier
         from improvement_experiment_protocol import comparison_hash
+        from improvement_experiments import _identifier
         _identifier(report_id)
         brain = IM._brain(principal)
         self.records._available()

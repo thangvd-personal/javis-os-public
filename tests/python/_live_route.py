@@ -18,7 +18,6 @@ real SessionStore in a temp directory.
   progress            n -> the `progress` callback the route gave the n-th brain call
   frames, inbox       frames sent to the browser / frames the browser sends up
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import ast
 import asyncio
 import json
@@ -31,6 +30,7 @@ import lang
 import localefmt
 import sessions
 import voice_live
+from _paths import ROOT, SERVER  # noqa: F401
 
 # What the route reads from the `voice_live` module. Missing names stay None so a route that has
 # not been changed yet fails on behaviour, not on a harness AttributeError.

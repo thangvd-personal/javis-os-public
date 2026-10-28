@@ -14,7 +14,6 @@
 Kho thật, bộ chiếu T2 thật, hạn mức thật (`agent_budget`), lớp `agent_judge.Judge` THẬT với hàm hỏi model GIẢ (đánh dấu),
 engine lượt xem xét GIẢ. Không model thật nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -22,19 +21,21 @@ import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fix-learn-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fix-learn-w-"))
 
-import agent_budget as AB  # noqa: E402
-import agent_judge as AJ  # noqa: E402
-import agent_judge_store as AJS  # noqa: E402
-import agent_ledger as ALG  # noqa: E402
-import agent_review as AR  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import team_store  # noqa: E402
+import agent_budget as AB
+import agent_judge as AJ
+import agent_judge_store as AJS
+import agent_ledger as ALG
+import agent_review as AR
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import team_store
 
 MARK = getattr(AJ, "mark_test_fake", lambda f: f)
 fails = []
@@ -166,7 +167,8 @@ check("chỉ còn 1 lượt: lý do giữ pending, nguồn chưa tiêu thụ",
       and all(s["consumed_at"] is None for s in w2["W"].sources(rs2[0]["id"])), w2["W"].get(rs2[0]["id"]))
 check("chỉ còn 1 lượt: trạng thái 'Chờ hạn mức'", w2["ss"].dm_reaction_of(w2["dsid"], mid2)["status"] == "waiting_quota",
       w2["ss"].dm_reaction_of(w2["dsid"], mid2))
-import agent_pulse as AP  # noqa: E402
+import agent_pulse as AP
+
 n_ev = len(AP.events(w2["gs"], w2["key"], kinds=("quota",)))
 n_ws = len(w2["box"]["events"])
 for _ in range(3):
@@ -204,7 +206,7 @@ check("không gửi tin nào", w3["box"]["sent"] == [])
 res3b = run(w3["host"].serve_reaction_review(again[0]))
 check("lùi lại: lý do vừa trả về không bị phục vụ lại ngay ở nhịp kế (backoff)", res3b.get("outcome") == "backoff", res3b)
 
-import time  # noqa: E402
+import time
 
 # ═════ L P2-3: tự rà soát không học lại phản hồi của lượt xem xét reaction chưa xong ═════
 w4 = world()

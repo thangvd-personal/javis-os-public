@@ -20,7 +20,6 @@ Bốn chỗ dễ hỏng của mọi driver CLI, cộng hai chỗ riêng của en
 
 Test dựng một `grok` GIẢ bằng script Python nên chạy được ở CI không có binary thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -29,10 +28,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-groktest-")
 
-import grok_cli          # noqa: E402
-import main              # noqa: E402
+import grok_cli
+import main
 
 _fails = []
 
@@ -277,7 +278,8 @@ check("và nói rõ là bị cắt vì quá giờ, không im lặng",
       any("quá 2s" in str(e.get("content", "")) for e in _evsh), _evsh)
 
 # File prompt tạm phải được dọn, kể cả ở lượt bị cắt giữa chừng
-import glob  # noqa: E402
+import glob
+
 check("CANARY: file prompt tạm được dọn, không tích rác trong thư mục tạm",
       glob.glob(os.path.join(tempfile.gettempdir(), "javis-grok-*.txt")) == [])
 
@@ -328,7 +330,8 @@ Path(_p).write_text(Path(_p).read_text(encoding="utf-8")
                     + '\n[models]\ndefault = "grok-4.6"\n\n[tools]\nbash_timeout = 60\n'
                       'flag = true\ndomains = ["a.com", "b.com"]\n', encoding="utf-8")
 grok_cli.ghi_mcp_settings(_brain, _hub)
-import tomllib  # noqa: E402
+import tomllib
+
 _lai = tomllib.load(open(_p, "rb"))
 check("CANARY: ghi lại hub KHÔNG xoá mất cấu hình sẵn có của người dùng",
       _lai.get("models", {}).get("default") == "grok-4.6"
@@ -386,21 +389,25 @@ check("có hàm gắn MCP hub riêng", "def _apply_grok_hub(" in _MAIN)
 check("có nhánh _set_main_model", 'm["engine"] = "grok-cli"' in _MAIN)
 check("có nhánh _provider_models_live", "grok_cli.list_models" in _MAIN)
 
-import config as _cfgmod          # noqa: E402
+import config as _cfgmod
+
 check("có ô catalog trong config mặc định",
       "grok-cli" in (_cfgmod._DEFAULT["model"]["catalog"]))
 
-import sessions as _sess          # noqa: E402
+import sessions as _sess
+
 check("CANARY: có cột mạch RIÊNG (dùng chung cột là đưa id engine này cho engine kia resume)",
       _sess.SessionStore._MACH_NATIVE.get("grok-cli") == "grok_session_id")
 check("và có hàm ghi/xoá cột đó",
       hasattr(_sess.SessionStore, "set_grok_session_id")
       and hasattr(_sess.SessionStore, "clear_grok_session_id"))
 
-import connect_health as _ch      # noqa: E402
+import connect_health as _ch
+
 check("đèn 'mất đăng nhập' nhận ra engine mới", "grok-cli" in _ch._PROVIDER_ENGINE)
 
-import usage_index as _ui         # noqa: E402
+import usage_index as _ui
+
 check("báo cáo token có cột riêng", "grok-cli" in _ui._EVENT_GROK_CLI)
 
 _CONSOLE = Path(ROOT, "dashboard", "console.js").read_text(encoding="utf-8")
@@ -514,7 +521,8 @@ check("CANARY: chuỗi dài trông như token thì CHE trước khi hiện ra m�
 check("mã device code ngắn không bị che nhầm",
       "N3FJ-B2J7" in grok_cli._che_bi_mat("code: N3FJ-B2J7"))
 
-from collections import deque as _dq      # noqa: E402
+from collections import deque as _dq
+
 grok_cli._LOGIN["log"] = _dq(maxlen=grok_cli.NHAT_KY_TOI_DA)
 for _i in range(grok_cli.NHAT_KY_TOI_DA + 25):
     grok_cli._ghi_nhat_ky(f"dòng {_i}")

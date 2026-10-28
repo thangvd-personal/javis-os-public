@@ -7,15 +7,16 @@ Không cần pytest, KHÔNG chạm mạng (handler thật được thay bằng h
 Bất biến quan trọng nhất được phủ ở đây: App Password NGƯỜI DÙNG NHẬP KHÔNG BAO GIỜ ĐƯỢC LƯU.
 Nó chỉ dùng một lần để đổi lấy master token rồi bị xoá khỏi dữ liệu trước khi ghi xuống đĩa.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-credtest-"))
 
-import cred_exchange  # noqa: E402
-import mcp_catalog  # noqa: E402
+import cred_exchange
+import mcp_catalog
 
 _fails = []
 
@@ -97,7 +98,7 @@ check("BẢO MẬT: nhánh này app_password vẫn bị xoá", "app_password" no
 
 # ---- handler google_master_token THẬT: đường lui oauth_token (EmbeddedSetup) ----
 # gpsoauth được import TRONG handler -> nhét module giả vào sys.modules là chặn được mạng.
-import types  # noqa: E402
+import types
 
 _calls = {}
 _fake_gps = types.ModuleType("gpsoauth")
@@ -185,10 +186,9 @@ check("google-keep có nút mở trang EmbeddedSetup lấy oauth_token",
 # ---- ĐẦU-CUỐI: app_password có bao giờ chạm tới ĐĨA không? ----
 # Đi đúng đường của endpoint /connect/add: cred_exchange.run -> mcp_store.add_connection,
 # rồi đọc THẲNG file trên đĩa xem chuỗi bí mật có lọt ra không.
-import json as _json  # noqa: E402
-from pathlib import Path as _Path  # noqa: E402
+from pathlib import Path as _Path
 
-import mcp_store  # noqa: E402
+import mcp_store
 
 _BI_MAT = "ZZZbimatZZZ1234"          # 16 ký tự, dễ tìm trong file
 cred_exchange.HANDLERS["google_master_token"] = lambda f: ("aas_et/gia-lap", "")
@@ -284,9 +284,10 @@ check("skip_if_output=False: token đích đúng vẫn được giữ", not erro
 cred_exchange.HANDLERS.pop("strict_test", None)
 
 # ---- /connect/add: token sai không được chạm tới kho lưu ----
-import asyncio as _asyncio  # noqa: E402
-from unittest.mock import patch as _patch  # noqa: E402
-import main as _main  # noqa: E402
+import asyncio as _asyncio
+from unittest.mock import patch as _patch
+
+import main as _main
 
 
 class _ConnectRequest:

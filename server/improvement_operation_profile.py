@@ -5,8 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from improvement_claude import TrialProfile
 from improvement_cases import _digest, _frozen
+from improvement_claude import TrialProfile
 from improvement_operation_workspace import OperationWorkspace
 from improvement_sandbox import FixtureBroker
 from improvement_store import _hash, _json
@@ -31,8 +31,8 @@ def operation_system_prompt(manifest):
 
 def operation_user_prompt(manifest):
     if manifest['request']['kind'] == 'compose':
-        from improvement_operation_protocol import operation_request
         from improvement_compose_protocol import render_compose_input
+        from improvement_operation_protocol import operation_request
         operation_request(manifest['request'])
         if manifest['version'] != 2:
             raise ValueError('compose_native_input2_required')

@@ -11,12 +11,12 @@ brain turn, spoken in English). Two answers over each other. The contract now:
   - while that runs, and a short while after, an ask_javis about the image is acknowledged, not run again;
   - the reply language falls back to the configured one when the spoken line gives none.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import unittest
 
 import voice_live
-from _live_route import LiveRouteMixin, DeferringProvider
+from _live_route import DeferringProvider, LiveRouteMixin
+from _paths import ROOT, SERVER
 
 FULL = ("[File đính kèm để ĐỌC (đường dẫn):\n- /brain/attachments/mi-sot.png\nMặc định: chỉ đọc file rồi trả lời.]"
         "\n\nxem giúp anh ảnh này")

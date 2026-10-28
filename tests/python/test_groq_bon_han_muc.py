@@ -21,17 +21,18 @@ Và hệ quả dây chuyền: đọc không ra số thì shrink_to = 0; shrink_t
 chỉ bỏ lịch sử rồi trả về, KHÔNG đụng system prompt - đúng chỗ phình. Nên "đã tự rút gọn"
 thực ra gần như không rút gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-groq4-")
 
-import adaptive_context_runtime as acr  # noqa: E402
-import config as cfg  # noqa: E402
-import limit_learner as ll  # noqa: E402
-import main  # noqa: E402
+import adaptive_context_runtime as acr
+import config as cfg
+import limit_learner as ll
+import main
 
 _fails = []
 

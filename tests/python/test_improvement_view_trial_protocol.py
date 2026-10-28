@@ -1,13 +1,12 @@
 """Pure v4 identity; fixture shapes are never grants, Trial rows or readiness."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib
 import importlib.util
 import unittest
 
 import improvement_store as IM
-from improvement_experiment_protocol import validate_request_v2, logical_key_v2
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_experiment_protocol import logical_key_v2, validate_request_v2
 
 
 def request(variant='baseline'):

@@ -30,7 +30,7 @@ import secrets
 import shlex
 import threading
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import team_approval
 import turn_context
@@ -92,7 +92,7 @@ NO_GATE_NOTE = ("ERROR: Hành động ra ngoài của nhóm cần chủ nhóm du
 
 
 class Gate:
-    __slots__ = ("gate_id", "team_id", "task_id", "step_id", "store", "roots", "blocked", "passed", "lock", "snap")
+    __slots__ = ("blocked", "gate_id", "lock", "passed", "roots", "snap", "step_id", "store", "task_id", "team_id")
 
     def __init__(self, store, team_id: str, task_id: str, step_id: str):
         self.gate_id = "tg_" + secrets.token_hex(8)
@@ -102,7 +102,7 @@ class Gate:
         self.blocked: list = []
         self.passed: list = []
         self.lock = threading.Lock()
-        self.snap: Optional[dict] = None
+        self.snap: dict | None = None
 
 
 _GATES: dict = {}
@@ -146,14 +146,14 @@ def close_gate(gate_id: str) -> dict:
         return {"blocked": list(g.blocked), "passed": list(g.passed), "protected_changed": changed}
 
 
-def get(gate_id: Optional[str]) -> Optional[Gate]:
+def get(gate_id: str | None) -> Gate | None:
     if not gate_id:
         return None
     with _LOCK:
         return _GATES.get(gate_id)
 
 
-def current() -> Optional[Gate]:
+def current() -> Gate | None:
     """The gate of the turn this call belongs to, or None (no turn, not a team step, or the turn key was not sent)."""
     t = turn_context.current()
     return get((t or {}).get("team_gate"))
@@ -345,7 +345,7 @@ def classify_native(tool: str, inp: dict, roots: list) -> str:
     return "outside"
 
 
-def native_check(gate_id: Optional[str], tool: str, inp: dict) -> tuple:
+def native_check(gate_id: str | None, tool: str, inp: dict) -> tuple:
     g = get(gate_id)
     if g is None:
         return False, NO_GATE_NOTE
@@ -417,7 +417,7 @@ GROK = "grok-cli"
 ANTIGRAVITY = "antigravity-cli"
 
 
-def provider_support(provider: str, *, codex_sandbox: Optional[str] = "workspace-write", grok_deny: bool = True,
+def provider_support(provider: str, *, codex_sandbox: str | None = "workspace-write", grok_deny: bool = True,
                      api_providers: tuple = ()) -> dict:
     """{"ok": can run a gated tool step, "approved_actions": an approved outside action can run on it, "reason": ...}."""
     p = str(provider or CLAUDE)

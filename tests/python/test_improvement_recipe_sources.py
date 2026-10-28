@@ -1,6 +1,4 @@
 """Concrete retained source authority; synthetic fixtures never query a provider."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -10,13 +8,13 @@ import unittest
 from contextlib import closing, contextmanager
 from unittest.mock import patch
 
+import improvement_store as IM
+import test_improvement_trial_service as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_assets import capture_source
 from improvement_blobs import AssetUnavailable
 from improvement_trial_records import HostContextRecords
 from resonance_store import Principal
-
-import improvement_store as IM
-from improvement_assets import capture_source
-import test_improvement_trial_service as fixtures
 
 
 @contextmanager
@@ -316,8 +314,8 @@ class RecipeSourceTests(unittest.TestCase):
                 self.capture(observer)
 
     def test_corrupt_historical_ciphertext_is_integrity_error(self):
-        from improvement_recipe_sources import RecipeSourceUnavailable
         from cryptography.fernet import InvalidToken
+        from improvement_recipe_sources import RecipeSourceUnavailable
         observer = self.observer()
         with closing(self.f.assets.store._conn()) as connection:
             context = self.host._row(connection, IM._brain(self.owner), self.meta['experiment_id'])

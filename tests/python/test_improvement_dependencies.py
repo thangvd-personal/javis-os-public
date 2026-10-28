@@ -1,6 +1,4 @@
 """Read only actual captured dependency bytes; never execute model-selected paths."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import tempfile
@@ -9,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_trial_context import ContextSource, capture_context
 
 

@@ -1,9 +1,6 @@
 """V2 baseline uses real Runner/workspace/encryption/usage with synthetic packets only."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
-import json
 import subprocess
 import threading
 import unittest
@@ -11,16 +8,17 @@ from contextlib import ExitStack, closing
 from pathlib import Path
 from unittest.mock import patch
 
-import test_improvement_experiment_lineage as fixtures
-import improvement_store as IM
 import improvement_evaluation as EVAL
-import usage_store as US
+import improvement_store as IM
+import test_improvement_experiment_lineage as fixtures
 import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
 from agent_ledger import CallLedger
+from improvement_claude import ClaudeTrialAdapter
+from improvement_experiment_admission import ExperimentAdmission
 from improvement_trial_runner import TrialRunner
 from improvement_trials import TrialStore
-from improvement_experiment_admission import ExperimentAdmission
-from improvement_claude import ClaudeTrialAdapter
 
 _REAL_RUN, _REAL_POPEN = subprocess.run, subprocess.Popen
 

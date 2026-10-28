@@ -5,14 +5,14 @@
 Chỉ test các hàm PURE (parse output `codex mcp list --json` / bảng text, dựng argv `mcp add`) -
 không cần cài Codex CLI, không spawn tiến trình.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
-import os
 import sys
 
-
-from claude_cli import (   # noqa: E402
-    codex_mcp_parse_list, codex_mcp_parse_list_text, _codex_mcp_add_args,
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+from claude_cli import (
+    _codex_mcp_add_args,
+    codex_mcp_parse_list,
+    codex_mcp_parse_list_text,
 )
 
 _fails = []

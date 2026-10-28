@@ -19,11 +19,9 @@ nhóm việc:
 3. **Gỡ sạch.** Thư mục gói biến mất, sổ cài đặt bỏ hàng, và kết nối tạo từ connector của gói
    bị xoá THEO - để lại một hàng kết nối chết vẫn là để lại credential của nó trên đĩa.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import io
 import json
-import shutil
 import sys
 import tempfile
 import zipfile
@@ -32,6 +30,7 @@ from pathlib import Path
 import mcp_catalog
 import pack_install
 import packs
+from _paths import DASHBOARD, ROOT, SERVER
 
 _fails = []
 
@@ -228,7 +227,7 @@ with tempfile.TemporaryDirectory() as td:
         lam_moi()
 
 # ─────────────── 6. Plugin đi kèm app phải gỡ được ───────────────
-import plugins_host  # noqa: E402
+import plugins_host
 
 with tempfile.TemporaryDirectory() as td:
     goc_state = plugins_host._STATE_PATH

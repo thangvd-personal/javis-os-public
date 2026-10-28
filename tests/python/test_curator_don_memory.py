@@ -11,8 +11,7 @@ vẫn đúng, y như lập luận một chiều của `skill_usage`.
 
 Và không bao giờ xoá file fact: chỉ gỡ dòng mục lục.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
+from _paths import ROOT, SERVER  # noqa: F401
 from learn import LearnDeps, LearnFeature, _da_bi_thay
 
 

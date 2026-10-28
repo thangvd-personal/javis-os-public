@@ -5,12 +5,13 @@
 Tu co lap: JAVIS_STATE_DIR + thu muc nguon (Claude/Codex) tro vao temp. Khong mang.
 Exit code != 0 neu fail.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-uidx-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
@@ -18,7 +19,7 @@ os.environ["JAVIS_CLAUDE_PROJECTS_DIR"] = str(_TMP / "claude")
 os.environ["JAVIS_CODEX_SESSIONS_DIR"] = str(_TMP / "codex")
 (_TMP / "state").mkdir(parents=True, exist_ok=True)
 
-import usage_index as ui  # noqa: E402
+import usage_index as ui
 
 _fails = []
 
@@ -88,7 +89,7 @@ check("refresh3: van 1 phien (cung file)", ui.totals_by("provider")["claude"]["s
 # ============================================================
 # Task 5: usage_store forward-log + nap nhanh API (khong dem trung)
 # ============================================================
-import usage_store  # noqa: E402  (dung chung JAVIS_STATE_DIR temp)
+import usage_store
 
 _evp = Path(os.environ["JAVIS_STATE_DIR"]) / "usage-events.jsonl"
 usage_store.record("openrouter", "deepseek/x", 100, 50, 0)
@@ -116,7 +117,10 @@ check("api: dong codex trong events KHONG lan vao api", ui.totals_by("provider")
 # ============================================================
 # Task 5b: cli/codex events lam NGUON DU PHONG khi THIEU log tho (fix VPS bao cao 0 token)
 # ============================================================
-from datetime import datetime as _dt, timezone as _tz, timedelta as _td  # noqa: E402
+from datetime import datetime as _dt
+from datetime import timedelta as _td
+from datetime import timezone as _tz
+
 _today_vn = _dt.now(_tz(_td(hours=7))).strftime("%Y-%m-%d")
 # luot Claude qua SDK ghi provider "cli" vao usage-events; ngay HOM NAY khong co log tho claude
 _claude_before = ui.totals_by("provider")["claude"]["input"]        # 150 (log tho 2026-07-05)
@@ -139,8 +143,8 @@ check("events: dedup - log tho phu ngay nao thi go event ngay do (khong dem trun
 # ============================================================
 # Task 6: summary() - ky + so sanh + breakdowns
 # ============================================================
-import sqlite3 as _sq  # noqa: E402
-from datetime import date as _date  # noqa: E402
+import sqlite3 as _sq
+from datetime import date as _date
 
 
 def _seed(path, day, provider, model, inp, out, cread=0, ccreate=0, source="javis", activity="chat", project="Demo"):

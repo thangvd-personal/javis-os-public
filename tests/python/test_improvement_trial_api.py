@@ -1,6 +1,4 @@
 """Owner transport with real encrypted scratch stores; no main lifespan or engine calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -12,13 +10,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
+import improvement_store as IM
 import test_improvement_host_snapshots as fixtures
 import test_improvement_trial_requests as requests_fixture
-import improvement_store as IM
-from improvement_trial_records import HostContextRecords
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from improvement_trial_service import OwnerTrialService
 
 _REAL_RUN, _REAL_POPEN = subprocess.run, subprocess.Popen

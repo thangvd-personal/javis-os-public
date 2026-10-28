@@ -8,12 +8,12 @@
 
 Chạy: python tests/run.py backup_sync_anh (pytest style, cần git cho nhóm force-add).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import subprocess
 
 import git_brain
 import media_gc
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def _w(path, data=b"x"):

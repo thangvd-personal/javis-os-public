@@ -19,16 +19,17 @@ Bốn chỗ dễ vỡ khi sửa code sau này, test khoá cả bốn:
 Không chạm mạng: httpx của stt.py bị thay bằng client giả, phần tải file của hai kênh bị thay
 bằng hàm trả bytes sẵn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-thoai-"))
 
-import stt  # noqa: E402
-import telegram_bot as tb  # noqa: E402
-import zalo_bot as zb  # noqa: E402
+import stt
+import telegram_bot as tb
+import zalo_bot as zb
 
 MAIN = (ROOT / "server" / "main.py").read_text(encoding="utf-8")
 

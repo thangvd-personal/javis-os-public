@@ -25,8 +25,9 @@ import asyncio
 import json
 import re
 import shutil
-import winproc         # lệnh con câm lặng trên Windows
 from urllib.parse import quote
+
+import winproc  # lệnh con câm lặng trên Windows
 
 # LƯU Ý: gọi API Substack qua CURL, KHÔNG dùng httpx/requests. Substack đứng sau Cloudflare,
 # chặn client Python theo TLS fingerprint (trả 403 kèm trang HTML) trong khi curl thì qua được.

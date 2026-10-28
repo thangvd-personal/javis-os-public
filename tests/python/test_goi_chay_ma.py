@@ -21,7 +21,6 @@ và test này canh đúng chỗ nhất quán nằm ở đâu:
 Chốt thứ hai kiểm lúc NẠP chứ không chỉ lúc cài, vì ai ghi được `plugin.py` thì cũng ghi được
 `packs.json` - một chốt chỉ nằm ở trình cài thì chỉ gác được trình cài.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import io
 import json
@@ -33,6 +32,7 @@ from pathlib import Path
 import pack_install
 import packs
 import plugins_host
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 _fails = []
 

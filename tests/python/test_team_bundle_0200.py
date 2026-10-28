@@ -3,15 +3,15 @@
 Run:
     python tests/run.py team_bundle
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import json
 import tempfile
 import zipfile
 from pathlib import Path
 
-import share_bundle  # noqa: E402
-import team_bundle as tb  # noqa: E402
+import share_bundle
+import team_bundle as tb
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

@@ -26,7 +26,6 @@ theo GB. Dùng để lọc "có vừa máy không", nên xê xích vài trăm MB
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 

@@ -1,6 +1,4 @@
 """Concrete private session/M0 owners; static observer seams, no native child."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib
 import importlib.util
@@ -14,6 +12,7 @@ from unittest.mock import patch
 
 import improvement_native_qualifications as registry
 import test_improvement_native_sdk as native
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class QualificationSessionTests(unittest.TestCase):

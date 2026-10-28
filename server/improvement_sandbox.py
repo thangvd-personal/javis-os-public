@@ -14,15 +14,15 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-import winproc
 
+import winproc
+from evidence_store import redact
 from improvement_blobs import MAX_ASSET_BYTES, check_ancestry
 from improvement_cases import _digest, _fields, _frozen, _text, validate_public_contract
 from improvement_store import _SOURCE, _hash, _json
-from evidence_store import redact
 
 _IDENTITY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
-_DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", re.I)
+_DEVICE = re.compile(r"(?:con|prn|aux|nul|com[1-9]|lpt[1-9])", re.IGNORECASE)
 _SOURCE_FIELDS = {"source_version", "data_period", "timezone", "cutoff", "schema"}
 
 

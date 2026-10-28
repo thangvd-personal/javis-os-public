@@ -27,13 +27,13 @@ import re
 import secrets
 import sys
 import time
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
-
-from fastapi import Request
+from typing import Any
 
 import agent_pulse as AP
+from fastapi import Request
 from io_offload import call_hook
 
 TICK_S = 30.0
@@ -53,7 +53,7 @@ def register_view_part(name: str, fn: Callable[[Any, str], Any]) -> None:
     _VIEW_PARTS[str(name)] = fn
 
 
-def register_reason_handler(code: str, fn: Callable[["PulseHost", dict], Any]) -> None:
+def register_reason_handler(code: str, fn: Callable[[PulseHost, dict], Any]) -> None:
     """Phần sở hữu một loại lý do lớp 3 đăng ký hàm phục vụ: `fn(host, reason)` (async hay thường). Host chỉ ĐIỀU PHỐI:
     hàm tự nhận lý do bằng `agent_ledger.WakeReasons.claim(..., try_busy, release_busy)` với cặp khoá của
     `host.busy_pair(agent_key)`. Loại chưa có ai đăng ký thì lý do nằm `pending`, không tốn lần thử."""
@@ -64,7 +64,7 @@ def view_parts() -> dict:
     return dict(_VIEW_PARTS)
 
 
-def view(store, agent_key: str, at: Optional[float] = None) -> dict:
+def view(store, agent_key: str, at: float | None = None) -> dict:
     """Khung của nhịp kèm mục của J/L (theo sổ đăng ký)."""
     out = AP.view(store, agent_key, at=at)
     parts = {}
@@ -82,7 +82,7 @@ async def _maybe(v: Any) -> Any:
 
 
 async def _judge_proactive(*, agent_key: str, context_ref: str, draft: str, source_event: str, origin: str = "pulse",
-                           payload: Optional[dict] = None, engine: Any = None) -> dict:
+                           payload: dict | None = None, engine: Any = None) -> dict:
     """Bộ chuyển tới `agent_judge.judge_proactive` (phần J), import lười. Thiếu module, lỗi, sai cấu trúc: `silent` có lý do,
     KHÔNG BAO GIỜ gửi khi chưa được phán xử.
 
@@ -109,7 +109,7 @@ async def _judge_proactive(*, agent_key: str, context_ref: str, draft: str, sour
     return d
 
 
-def _budget_try_spend(agent_key: str, purpose: str, at: Optional[float] = None) -> tuple:
+def _budget_try_spend(agent_key: str, purpose: str, at: float | None = None) -> tuple:
     """Bộ chuyển tới `agent_budget.try_spend` (phần L, trần `agent_daily_calls`), import lười. Chưa có module thì cho qua
     (trần chung của máy chủ ở sổ lượt vẫn áp và lượt tự phát chỉ dùng tới 80%)."""
     try:
@@ -137,10 +137,10 @@ SCAN_RULES = (
 )
 
 
-def parse_action(text: str) -> Optional[dict]:
+def parse_action(text: str) -> dict | None:
     """Khối JSON hành động của lượt quét (chấp nhận nằm trong ```json). Sai cấu trúc: None."""
     s = str(text or "")
-    m = re.search(r"\{.*\}", s, re.S)
+    m = re.search(r"\{.*\}", s, re.DOTALL)
     if not m:
         return None
     try:
@@ -160,29 +160,29 @@ class PulseHostDeps:
     busy: Callable[[str], bool] = lambda key: False            # đang có lượt nhóm/A2 hay việc nhóm/goal xếp hàng
     # Một lần mỗi nhịp: () -> hàm agent_key -> bận (đọc kho MỘT lần cho mọi agent thay vì mỗi agent quét lại). None:
     # dùng `busy` từng agent.
-    busy_snapshot: Optional[Callable[[], Callable[[str], bool]]] = None
+    busy_snapshot: Callable[[], Callable[[str], bool]] | None = None
     try_busy: Callable[[str, str], bool] = lambda key, tok: True
     release_busy: Callable[[str, str], Any] = lambda key, tok: None
     opportunities: Callable[[str, str, float], list] = lambda key, ctx, iv: []
     persona: Callable[[str], str] = lambda key: ""
-    engine_for: Optional[Callable[[str, str, str], tuple]] = None   # (key, ctx, purpose) -> (engine, model, run)
+    engine_for: Callable[[str, str, str], tuple] | None = None   # (key, ctx, purpose) -> (engine, model, run)
     can_enqueue: Callable[[str, str], bool] = lambda key, ctx: False
-    enqueue: Optional[Callable[[str, str, dict, str], Any]] = None
-    propose: Optional[Callable[[str, str, dict, str], Any]] = None
-    send: Optional[Callable[[str, str, str, dict], Any]] = None     # -> {"session_id", "message_id"} | None
-    notify: Optional[Callable[[str, str, str], Any]] = None
+    enqueue: Callable[[str, str, dict, str], Any] | None = None
+    propose: Callable[[str, str, dict, str], Any] | None = None
+    send: Callable[[str, str, str, dict], Any] | None = None     # -> {"session_id", "message_id"} | None
+    notify: Callable[[str, str, str], Any] | None = None
     interacted: Callable[[dict], bool] = lambda p: False
     # ctx -> {"judge_daily": ...} cho lượt phán xử tin chủ động trong nhóm (trần của nhóm, kể cả Toàn quyền đè); {} ở chat riêng.
     judge_payload: Callable[[str], dict] = lambda ctx: {}
-    project_pending: Optional[Callable[[], Any]] = None
+    project_pending: Callable[[], Any] | None = None
     brain_of: Callable[[str], str] = lambda key: ""
     clock: Callable[[], float] = time.time
     spawn: Callable[[Any], Any] = field(default=asyncio.ensure_future)
 
 
 class PulseHost:
-    def __init__(self, deps: PulseHostDeps, judge: Optional[Callable[..., Any]] = None,
-                 budget: Optional[Callable[..., tuple]] = None):
+    def __init__(self, deps: PulseHostDeps, judge: Callable[..., Any] | None = None,
+                 budget: Callable[..., tuple] | None = None):
         self.deps = deps
         self.judge = judge or _judge_proactive
         self.budget = budget or _budget_try_spend
@@ -195,7 +195,7 @@ class PulseHost:
 
     # ───────────── khoá bận ─────────────
 
-    def busy_pair(self, agent_key: str, token: Optional[str] = None) -> tuple:
+    def busy_pair(self, agent_key: str, token: str | None = None) -> tuple:
         """(try_fn, release_fn) cho `WakeReasons.claim`: thử khoá bận KHÔNG chờ của agent (khoá dùng chung với lượt nhóm)."""
         tok = token or f"{self.host_id}:{secrets.token_hex(4)}"
         return (lambda: bool(self.deps.try_busy(agent_key, tok)), lambda: self.deps.release_busy(agent_key, tok))
@@ -269,7 +269,7 @@ class PulseHost:
                     print(f"[pulse contexts] {key}: {type(ex).__name__}: {ex}", file=sys.stderr)
         scope_cache: dict = {}
 
-        def in_scope(key: str, ctx: str) -> Optional[bool]:
+        def in_scope(key: str, ctx: str) -> bool | None:
             """Ngữ cảnh còn trong phạm vi đã giao của agent (5.5): nhóm đang hoạt động mà agent là thành viên đang tham
             gia, hay chat riêng (review T3 P P2-1). None khi không đọc được phạm vi (lỗi tạm): bỏ qua lần này, không gỡ."""
             if key not in scope_cache:
@@ -321,7 +321,7 @@ class PulseHost:
                 busy_fn = self.deps.busy_snapshot()
             except Exception as ex:  # noqa: BLE001
                 print(f"[pulse busy] {type(ex).__name__}: {ex}", file=sys.stderr)
-                busy_fn = lambda key: True  # noqa: E731 - kho lỗi: coi như bận, dời lịch (an toàn)
+                busy_fn = lambda key: True
 
         def is_busy(key):
             if key not in busy_cache:
@@ -403,7 +403,7 @@ class PulseHost:
 
     # ───────────── lần thức ─────────────
 
-    def _finish(self, store, cl: dict, now: float, defer: Optional[float] = None) -> None:
+    def _finish(self, store, cl: dict, now: float, defer: float | None = None) -> None:
         """Nhả lịch đã nhận: mốc kế tiếp theo bậc hiện tại (hay dời `defer` giây khi bận)."""
         with store._Tx(store) as c:
             r = AP._row(c, cl["agent_key"], cl["context_ref"])
@@ -562,7 +562,7 @@ class PulseHost:
                "turn_id": due_ref, "agent_key": key, "context_ref": ctx, "purpose": "scan"}
         try:
             out = await asyncio.wait_for(run(req), timeout=SCAN_TIMEOUT_S)
-        except BaseException as ex:  # noqa: BLE001
+        except BaseException as ex:
             if state["started"]:
                 await asyncio.to_thread(ledger.settle, cid, "interrupted" if isinstance(ex, asyncio.CancelledError)
                                         else "error")
@@ -603,7 +603,7 @@ class PulseHost:
             print(f"[pulse judge payload] {type(ex).__name__}: {ex}", file=sys.stderr)
             return {}
 
-    async def _act(self, store, cl, act: Optional[dict], fresh: list, bounded: bool, due_ref: str, now: float) -> dict:
+    async def _act(self, store, cl, act: dict | None, fresh: list, bounded: bool, due_ref: str, now: float) -> dict:
         key, ctx = cl["agent_key"], cl["context_ref"]
         if act is None:
             return {"action": "none", "reason": "invalid_output"}
@@ -682,20 +682,20 @@ class PulseHost:
 class PulseRouteDeps:
     brain_key: Callable[[str], str]                         # brain trên dashboard -> đường dẫn đã resolve
     agent_exists: Callable[[str, str], bool]                # (root, slug) -> file trợ lý có thật
-    agent_key: Callable[[str, str], Optional[str]]          # (root, slug) -> agent_key đang hoạt động | None
+    agent_key: Callable[[str, str], str | None]          # (root, slug) -> agent_key đang hoạt động | None
     store: Callable[[], Any]                                # () -> GoalStore | None (không tạo kho chỉ để đọc)
     seen_resolve: Callable[[str, list, str], list]          # (context_ref, ids, session_id) -> [(ctx, mid, key, sid)]
     # (đề xuất, "accepted"|"rejected") -> {"task_id"?}: chấp nhận thì xếp việc qua hàng đợi chung với quyền của chủ.
-    proposal_action: Optional[Callable[[dict, str], Optional[dict]]] = None
+    proposal_action: Callable[[dict, str], dict | None] | None = None
     # agent_key -> ngữ cảnh trong phạm vi (nhóm đang tham gia, chat riêng). None: không kiểm thêm (test cũ).
-    contexts: Optional[Callable[[str], list]] = None
+    contexts: Callable[[str], list] | None = None
 
 
 def register(app, deps: PulseRouteDeps) -> None:
     """Route của nhịp. Middleware auth + CSRF của main chặn trước (route chỉ của chủ). Hành động chỉ báo thành công sau
     khi kho đã ghi (trả 200 kèm khung mới)."""
-    from fastapi.responses import JSONResponse
     import localefmt
+    from fastapi.responses import JSONResponse
 
     def err(code, vi, en):
         return JSONResponse({"ok": False, "error": localefmt.chu(vi, en)}, status_code=code)

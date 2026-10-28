@@ -24,10 +24,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 _runtime: Any = None
-_pending: Dict[str, asyncio.Future] = {}
+_pending: dict[str, asyncio.Future] = {}
 TIMEOUT_S = 4.0
 
 
@@ -46,7 +46,7 @@ def has_clients() -> bool:
 
 
 async def request(action: str, target: str = "", session_id: str = "",
-                  extra: Optional[dict] = None, timeout: float = TIMEOUT_S) -> dict:
+                  extra: dict | None = None, timeout: float = TIMEOUT_S) -> dict:
     """Bảo dashboard làm một việc rồi đợi nó trả lời.
 
     Trả dict `{"ok": bool, "detail": str, ...}`. Không bao giờ ném lỗi ra ngoài: tool phải
@@ -67,7 +67,7 @@ async def request(action: str, target: str = "", session_id: str = "",
     try:
         await _runtime.publish(frame)
         return await asyncio.wait_for(fut, timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"ok": False, "detail": f"dashboard không phản hồi trong {timeout:g} giây"}
     except Exception as e:  # pragma: no cover - phòng writer lạ
         return {"ok": False, "detail": f"{type(e).__name__}: {e}"}

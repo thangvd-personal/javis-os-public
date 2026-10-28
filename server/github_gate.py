@@ -23,7 +23,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import winproc
 
@@ -42,7 +42,7 @@ GENERATED = re.compile(r"(\.min\.(js|css)$|(^|/)dist/|(^|/)build/|(^|/)vendor/|\
 # ============================================================
 
 
-def repo_rules(worktree: str, max_chars: int = RULES_MAX_CHARS) -> Dict[str, Any]:
+def repo_rules(worktree: str, max_chars: int = RULES_MAX_CHARS) -> dict[str, Any]:
     """The rule files a repo carries, trimmed to `max_chars` in total. Returns {files: [paths], text}."""
     root = Path(worktree)
     found, chunks, used = [], [], 0
@@ -89,7 +89,7 @@ def _workflow_triggers_on_change(on: Any) -> bool:
     return False
 
 
-def commands_from_workflow(text: str) -> List[Dict[str, str]]:
+def commands_from_workflow(text: str) -> list[dict[str, str]]:
     """`run:` steps of a workflow that make sense on this machine, in order. Each item: {name, run}."""
     import fastyaml
     try:
@@ -102,7 +102,7 @@ def commands_from_workflow(text: str) -> List[Dict[str, str]]:
     on = doc.get("on", doc.get(True))
     if not _workflow_triggers_on_change(on):
         return []
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     jobs = doc.get("jobs") or {}
     if not isinstance(jobs, dict):
         return []
@@ -125,8 +125,8 @@ def commands_from_workflow(text: str) -> List[Dict[str, str]]:
     return out
 
 
-def _manifest_checks(root: Path) -> List[Dict[str, str]]:
-    out: List[Dict[str, str]] = []
+def _manifest_checks(root: Path) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
     pkg = root / "package.json"
     if pkg.is_file():
         try:
@@ -144,17 +144,17 @@ def _manifest_checks(root: Path) -> List[Dict[str, str]]:
     mk = root / "Makefile"
     if mk.is_file():
         try:
-            if re.search(r"^test:", mk.read_text(encoding="utf-8", errors="replace"), re.M):
+            if re.search(r"^test:", mk.read_text(encoding="utf-8", errors="replace"), re.MULTILINE):
                 out.append({"name": "make test", "run": "make test"})
         except OSError:
             pass
     return out
 
 
-def suggest_checks(worktree: str) -> List[Dict[str, str]]:
+def suggest_checks(worktree: str) -> list[dict[str, str]]:
     """Proposed local check commands: the repo's CI steps first, then usual manifest commands CI does not cover."""
     root = Path(worktree)
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     wf = root / ".github" / "workflows"
     if wf.is_dir():
         for p in sorted(list(wf.glob("*.yml")) + list(wf.glob("*.yaml"))):
@@ -200,9 +200,9 @@ def _kill_tree(p: subprocess.Popen) -> None:
             pass
 
 
-def run_checks(worktree: str, checks: List[Dict[str, str]], timeout_s: int = CHECK_TIMEOUT_S) -> List[Dict[str, Any]]:
+def run_checks(worktree: str, checks: list[dict[str, str]], timeout_s: int = CHECK_TIMEOUT_S) -> list[dict[str, Any]]:
     """Run each check in the worktree, sharing one time budget. Stops at the first real failure."""
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     deadline = time.monotonic() + max(10, int(timeout_s))
     env = dict(os.environ, CI="true", GIT_TERMINAL_PROMPT="0")
     for c in checks:
@@ -238,7 +238,7 @@ def run_checks(worktree: str, checks: List[Dict[str, str]], timeout_s: int = CHE
 # ============================================================
 # Diff helpers
 # ============================================================
-def _git(args: List[str], cwd: str) -> str:
+def _git(args: list[str], cwd: str) -> str:
     p = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                        timeout=60, env=dict(os.environ, LC_ALL="C", GIT_TERMINAL_PROMPT="0"),
                        creationflags=winproc.no_window())
@@ -252,10 +252,10 @@ def branch_diff(worktree: str, base: str) -> str:
     return _git(["diff", "--no-color", "-U0", mb], worktree)
 
 
-def changed_files(diff: str) -> List[Dict[str, str]]:
+def changed_files(diff: str) -> list[dict[str, str]]:
     """[{path, status}] from a unified diff; status A, D or M."""
-    out: List[Dict[str, str]] = []
-    cur: Optional[Dict[str, str]] = None
+    out: list[dict[str, str]] = []
+    cur: dict[str, str] | None = None
     for line in diff.splitlines():
         if line.startswith("diff --git "):
             m = re.match(r"diff --git a/(.+?) b/(.+)$", line)
@@ -308,9 +308,9 @@ _SECRET_FILES = re.compile(r"(^|/)(\.env(\.[^/]*)?|id_rsa|id_ed25519|.*\.pem|.*\
 _SECRET_FILE_OK = re.compile(r"\.env\.(example|sample|template|dist)$")
 
 
-def secret_scan(diff: str) -> List[Dict[str, Any]]:
+def secret_scan(diff: str) -> list[dict[str, Any]]:
     """Credentials in ADDED lines or added credential files. Each finding: {path, line, kind} (never the value)."""
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     for f in changed_files(diff):
         if f["status"] == "A" and _SECRET_FILES.search(f["path"]) and not _SECRET_FILE_OK.search(f["path"]):
             found.append({"path": f["path"], "line": 0, "kind": "credential file"})
@@ -331,14 +331,14 @@ _SKIP_MARKERS = re.compile(
     r"#\[ignore\]|@Disabled\b|@Ignore\b)")
 _FILE_LINT_OFF = re.compile(r"(/\*\s*eslint-disable\s*\*/|^\s*//\s*eslint-disable\s*$|#\s*(ruff|flake8):\s*noqa\s*$|"
                             r"#\s*pylint:\s*skip-file|@ts-nocheck|#\s*type:\s*ignore\s*$)")
-_COVERAGE = re.compile(r"(fail_under|fail-under|coverageThreshold|--cov-fail-under|min_coverage|minimum_coverage)", re.I)
+_COVERAGE = re.compile(r"(fail_under|fail-under|coverageThreshold|--cov-fail-under|min_coverage|minimum_coverage)", re.IGNORECASE)
 _TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec)(/|$)|(^|/)test_[^/]+\.py$|_test\.(py|go)$|\.(test|spec)\.[jt]sx?$")
 _TEST_DEF = re.compile(r"^\s*(def test_\w+|async def test_\w+|(it|test)\(\s*['\"`]|func Test\w+\()")
 
 
-def cheat_scan(diff: str) -> List[Dict[str, Any]]:
+def cheat_scan(diff: str) -> list[dict[str, Any]]:
     """Signs that CI was made green without a fix. Each finding: {path, line, kind}."""
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     for f in changed_files(diff):
         if f["path"].startswith(".github/workflows/"):
             found.append({"path": f["path"], "line": 0, "kind": "workflow edited"})
@@ -351,11 +351,11 @@ def cheat_scan(diff: str) -> List[Dict[str, Any]]:
             found.append({"path": path, "line": no, "kind": "lint disabled for a whole file"})
         elif _COVERAGE.search(text):
             found.append({"path": path, "line": no, "kind": "coverage threshold changed"})
-    removed_tests: Dict[str, int] = {}
+    removed_tests: dict[str, int] = {}
     for path, text in _removed_lines(diff):
         if _TEST_DEF.search(text):
             removed_tests[path] = removed_tests.get(path, 0) + 1
-    added_tests: Dict[str, int] = {}
+    added_tests: dict[str, int] = {}
     for path, _no, text in _added_lines(diff):
         if _TEST_DEF.search(text):
             added_tests[path] = added_tests.get(path, 0) + 1
@@ -386,8 +386,8 @@ def diff_size(diff: str) -> int:
 # ============================================================
 # The gate
 # ============================================================
-def run_gate(worktree: str, base: str, checks: Optional[List[Dict[str, str]]] = None,
-             timeout_s: int = CHECK_TIMEOUT_S, threshold: int = DIFF_THRESHOLD) -> Dict[str, Any]:
+def run_gate(worktree: str, base: str, checks: list[dict[str, str]] | None = None,
+             timeout_s: int = CHECK_TIMEOUT_S, threshold: int = DIFF_THRESHOLD) -> dict[str, Any]:
     """Everything section 7 asks, in one report.
 
     `ok` False means: do not push (a check failed, or a secret is in the diff). `merge_block` lists 7.4 findings, which
@@ -414,7 +414,7 @@ def run_gate(worktree: str, base: str, checks: Optional[List[Dict[str, str]]] = 
     }
 
 
-def summary(report: Dict[str, Any]) -> str:
+def summary(report: dict[str, Any]) -> str:
     """Short summary for the chat, in the machine's UI language (localefmt)."""
     import localefmt
     c = localefmt.chu

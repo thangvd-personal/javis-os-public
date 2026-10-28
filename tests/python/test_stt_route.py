@@ -6,16 +6,17 @@ Không chạm mạng: `stt.groq_nghe` bị thay bằng hàm giả ghi lại tham
 thay bằng danh sách giả. Khoá: file lên đúng byte, ngôn ngữ vi-VN rút thành "vi", thiếu key thì
 ok=false kèm ly_do; /voice/options trả đúng cờ available theo key đã có.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-stt-"))
 
-import main  # noqa: E402
-import stt  # noqa: E402
-import antigravity_cli  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import antigravity_cli
+import main
+import stt
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []

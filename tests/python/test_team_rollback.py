@@ -13,7 +13,6 @@ chat) qua `git show`:
 5. nâng lại: snapshot đã có thì không chép lại.
 Không gọi model. Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import os
 import sqlite3
@@ -22,14 +21,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-rb-")
 
-import sessions as NEW_SS  # noqa: E402
-import task_store as NEW_TS  # noqa: E402
-import team_migration as TM  # noqa: E402
+import sessions as NEW_SS
+import task_store as NEW_TS
+import team_migration as TM
 
 sys.path.insert(0, str(ROOT / "tools"))
-import team_chat_restore_pre as RESTORE  # noqa: E402
+import team_chat_restore_pre as RESTORE
 
 OLD_SHA = "be1f8aa215395471c4640e5e8e109d44e02dc190"
 fails = []
@@ -158,10 +159,10 @@ check("công cụ báo rõ khi không có snapshot", RESTORE.restore(str(fresh))
 
 
 # ═════════════ R6 (review T1 vòng 1): vòng hạ, nâng với NHÓM THẬT, cả bộ ba kho ═════════════
-import asyncio  # noqa: E402
+import asyncio
 
-import team_runner as NEW_TR  # noqa: E402
-import team_store as NEW_TEAM  # noqa: E402
+import team_runner as NEW_TR
+import team_store as NEW_TEAM
 
 
 def fake_engine_for(team, key, role):
@@ -270,7 +271,7 @@ try:
 except Exception as ex:  # noqa: BLE001
     err7 = type(ex).__name__
 check("R6 nhóm mồ côi: gửi tin trả TeamError, không IntegrityError", err7 == "TeamError", err7)
-import team_api as NEW_API  # noqa: E402
+import team_api as NEW_API
 
 api = NEW_API.TeamApi(NEW_API.TeamApiDeps(
     brain_key=lambda b: b, session_store=lambda: ss, task_store=lambda: ts, resonance_store=lambda: None,

@@ -9,19 +9,18 @@ import asyncio
 import json
 import os
 import re
-import sys
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import traceback
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional
 
 # Chỉ để dùng strip_provider_markers. engine KHÔNG import ngược claude_cli nên không có vòng.
 import engine
 import localefmt
-
 
 # Registry các tiến trình Claude đang chạy - để ngắt giữa chừng.
 # Map proc -> tag ("chat" | "metrics" | "workflow" | "loop" | ...) để ngắt CÓ CHỌN LỌC.
@@ -281,7 +280,7 @@ def _nho_binary(ten: str, duong_dan: str) -> None:
         pass          # không ghi được thì thôi, bản nhớ chỉ là tiện ích
 
 
-def _binary_da_nho(ten: str) -> Optional[str]:
+def _binary_da_nho(ten: str) -> str | None:
     p = str(_doc_bin_nho().get(ten) or "")
     if not p:
         return None
@@ -294,7 +293,7 @@ def _binary_da_nho(ten: str) -> Optional[str]:
     return p
 
 
-def tim_binary(ten: str) -> Optional[str]:
+def tim_binary(ten: str) -> str | None:
     """`shutil.which` nhưng soi thêm thư mục cài quen thuộc, và nhớ chỗ đã từng thấy."""
     p = shutil.which(ten) or shutil.which(ten, path=_duong_dan_tim_binary())
     if p:
@@ -303,7 +302,7 @@ def tim_binary(ten: str) -> Optional[str]:
     return _binary_da_nho(ten)
 
 
-def find_claude_cli() -> Optional[str]:
+def find_claude_cli() -> str | None:
     """Tìm claude CLI trên máy. Cửa thoát JAVIS_CLAUDE_BIN cho máy cài chỗ lạ.
 
     Có env override để ĐỒNG BỘ với `grok` (JAVIS_GROK_BIN), `agy` (JAVIS_AGY_BIN) và `codex`
@@ -466,7 +465,7 @@ def _doc_id_model(path: Path) -> list:
     return ra
 
 
-def _file_co_danh_muc() -> Optional[Path]:
+def _file_co_danh_muc() -> Path | None:
     """File chứa danh mục model: binary native, hoặc `cli.js` khi cài bằng npm.
 
     Bản npm trên Windows là một file .cmd vài trăm byte trỏ sang cli.js, nên quét thẳng nó thì
@@ -497,7 +496,7 @@ def _file_co_danh_muc() -> Optional[Path]:
     return p if p.is_file() else None
 
 
-def list_models() -> Optional[list]:
+def list_models() -> list | None:
     """Model của gói Claude Code: alias đứng trước, rồi id đầy đủ MỚI NHẤT trước.
 
     None = không đọc được (chưa cài CLI, file lạ, hoặc bản CLI không nhúng danh mục) - caller
@@ -595,7 +594,8 @@ def _no_window():
 # assert path này trước khi spawn; None/rỗng ⇒ TỪ CHỐI spawn, không để fork nuốt MCP máy).
 import tempfile as _tempfile
 
-def _empty_mcp_file() -> Optional[str]:
+
+def _empty_mcp_file() -> str | None:
     try:
         p = Path(_tempfile.gettempdir()) / "javis-empty-mcp.json"
         if not (p.exists() and p.stat().st_size > 0):
@@ -846,11 +846,12 @@ def auth_login():
 # Chạy `claude auth login --claudeai` với pipe: đọc LINK nó in cho user mở, nhận CODE user dán rồi
 # ghi vào stdin. Trạng thái giữ ở _LOGIN (1 phiên 1 lúc là đủ). KHÔNG mở browser trên server.
 import re as _re_login
+
 _LOGIN = {"proc": None, "url": "", "done": False, "error": "", "lines": []}
 _LOGIN_URL_RE = _re_login.compile(r"https?://\S+")
 
 
-def auth_login_ui_start(env: Optional[dict] = None):
+def auth_login_ui_start(env: dict | None = None):
     """`env`: extra variables for the login process; an extra Claude account passes its CLAUDE_CONFIG_DIR
     (plan_accounts, 0.353.0) so the login lands in that account's folder."""
     cli = find_claude_cli()
@@ -1193,7 +1194,7 @@ def _home_dir() -> Path:
 _CODEX_VERSIONS: dict = {}
 
 
-def _codex_version(path: str) -> Optional[tuple]:
+def _codex_version(path: str) -> tuple | None:
     """(major, minor, patch) của một binary Codex, nhớ theo (đường dẫn, mtime) để chỉ tốn một
     tiến trình `--version` mỗi bản, và tự đo lại khi bản đó được cập nhật."""
     try:
@@ -1211,7 +1212,7 @@ def _codex_version(path: str) -> Optional[tuple]:
     return _CODEX_VERSIONS[key]
 
 
-def find_codex_cli() -> Optional[str]:
+def find_codex_cli() -> str | None:
     envp = os.environ.get("JAVIS_CODEX_BIN")     # cửa thoát: chỉ thẳng chỗ cài lạ
     if envp:
         try:
@@ -1463,7 +1464,7 @@ def codex_mcp_open_login_terminal(name):
 # Hệ quả: TRONG DOCKER, hai mức sandbox `read-only` (mode suggest) và `workspace-write` (mode
 # auto) của Codex không bao giờ chạy được. Mà loop tạo từ chat mặc định là suggest, nên mọi
 # việc nền chạy bằng ChatGPT trong Docker đều câm theo đúng kiểu này.
-_SANDBOX_HONG = re.compile(r"bwrap:|Failed to make / slave", re.I)
+_SANDBOX_HONG = re.compile(r"bwrap:|Failed to make / slave", _re_login.IGNORECASE)
 
 _NOTE_SANDBOX_HONG = (
     "⚠ Javis tự kiểm: rào sandbox riêng của Codex (ChatGPT) KHÔNG khởi động được trong môi "
@@ -1481,7 +1482,7 @@ _NOTE_SANDBOX_HONG_EN = (
 )
 
 
-def codex_sandbox_cho_mode(mode: str) -> Optional[str]:
+def codex_sandbox_cho_mode(mode: str) -> str | None:
     """Cờ `--sandbox` của Codex cho một mức quyền của Javis. None = không đặt rào riêng.
 
     `JAVIS_CODEX_SANDBOX=off` bỏ hẳn rào của Codex ở MỌI mức. Cần cho Docker, nơi bubblewrap
@@ -1511,7 +1512,7 @@ def codex_sandbox_cho_mode(mode: str) -> Optional[str]:
 CODEX_HTTP_PROVIDER = "javis-chatgpt-http"
 _WS_HONG_FILE = "codex_ws_hong.json"
 _WS_HONG_TTL = 3 * 86400        # hết hạn thì thử lại WebSocket: lỗi phía mạng hay phía OpenAI đều có lúc hết
-_RECONNECT_RE = re.compile(r"^\s*(Reconnecting\.\.\.|Falling back from WebSockets)", re.I)
+_RECONNECT_RE = re.compile(r"^\s*(Reconnecting\.\.\.|Falling back from WebSockets)", _re_login.IGNORECASE)
 
 
 def _codex_home() -> Path:
@@ -1526,7 +1527,7 @@ def _codex_home() -> Path:
 # tài khoản không có hồ sơ là Codex mù home, không thấy auth.json, trong khi Javis (đọc
 # USERPROFILE/HOME qua `_home_dir`) vẫn thấy đăng nhập ChatGPT đầy đủ. Đặt CODEX_HOME thì Codex
 # bỏ qua hẳn bước hỏi Windows, và cả hai bên nhìn cùng một thư mục.
-def codex_env(codex_home: Optional[str] = None) -> dict:
+def codex_env(codex_home: str | None = None) -> dict:
     """Biến môi trường cho MỌI tiến trình Codex mà Javis bật.
 
     `codex_home`: the folder of an extra ChatGPT account (plan_accounts, 0.353.0). None = account 1, as before."""
@@ -1673,8 +1674,8 @@ def _codex_tool_name(it: dict) -> str:
 
 
 class CodexCLI:
-    def __init__(self, cwd: Optional[str] = None, tag: str = "chat", model: Optional[str] = None,
-                 instructions: Optional[str] = None):
+    def __init__(self, cwd: str | None = None, tag: str = "chat", model: str | None = None,
+                 instructions: str | None = None):
         self.cli_path = find_codex_cli()
         self.cwd = cwd or os.getcwd()
         self.tag = tag

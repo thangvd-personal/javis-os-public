@@ -16,12 +16,13 @@ knows which platform account sent the message, so a plugin (not the core) can tu
      line cannot close the fence.
   6. The "reply for me" inbox turn and the "Try bot" turn fire it too; Try uses the synthetic try sender.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-turnctx-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -32,9 +33,9 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import plugins_host  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import plugins_host
 
 fails = []
 
@@ -210,7 +211,8 @@ write_plugin("ctx-3-slow-async", 'import asyncio\ndef register(ctx):\n'
              '    ctx.register_hook("chatbot_turn_context", _c)\n')
 write_plugin("ctx-4-bad-type", 'def register(ctx):\n    ctx.register_hook("chatbot_turn_context", lambda **kw: {"x": 1})\n')
 write_plugin("ctx-5-good", 'def register(ctx):\n    ctx.register_hook("chatbot_turn_context", lambda **kw: "STILL HERE")\n')
-import time as _time  # noqa: E402
+import time as _time
+
 t0 = _time.time()
 p = turn()
 took = _time.time() - t0

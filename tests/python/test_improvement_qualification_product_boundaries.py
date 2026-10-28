@@ -6,21 +6,19 @@ reservation seams. No successful native verifier/product/quality is fabricated.
 Seeded immutable replay events and pending join tasks are CONTROL-FLOW fixtures,
 not eligible reports or evidence that a model was executed.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-from contextlib import closing
-import json
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
+import improvement_store as IM
+import test_improvement_qualification_operation_binding as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 from improvement_comparison_results import ComparisonResults
 from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
 from improvement_role_workflow import RoleWorkflow
-import improvement_store as IM
-import test_improvement_qualification_operation_binding as fixture
 
 
 class QualificationProductBoundaryTests(unittest.TestCase):
@@ -121,7 +119,7 @@ class QualificationProductBoundaryTests(unittest.TestCase):
             workflow = RoleWorkflow(self.execution, OperationTasks(self.execution, OperationRunner(self.execution)))
             payload = {'engineering_control_fixture': 'no model or product'}
             calls = []
-            async def factory(): calls.append(True); return None
+            async def factory(): calls.append(True); 
             joined = None
             try:
                 with self.subTest(path='new_factory'), self.assertRaisesRegex(PermissionError, 'non_product_execution_domain'):

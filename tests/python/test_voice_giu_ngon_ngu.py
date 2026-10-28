@@ -15,14 +15,13 @@ Sửa: lượt từ cuộc gọi ghim ngôn ngữ trả lời theo câu người
 không dò ra thì theo ngôn ngữ nhận dạng của mic), ở bậc "mặc định của kênh". Người dùng ra lệnh
 thẳng trong câu, hoặc đã ghim ngôn ngữ ở Cài đặt, thì vẫn thắng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import sys
 import unittest
 
 import lang
 import voice_live
 from _live_route import LiveRouteMixin
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

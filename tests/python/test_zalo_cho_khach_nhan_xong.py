@@ -9,12 +9,13 @@ là máy. Từ 0.128.0 tin khách chat riêng được gom theo cuộc chat và 
 
 Test KHÔNG chờ giờ thật: giờ tin đặt lùi về quá khứ, và mốc xả hàng chờ truyền tay vào `xa_hang_cho`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpcho-")
 try:
@@ -22,11 +23,11 @@ try:
 except Exception:
     pass
 
-import bot_gateway  # noqa: E402
-import channels  # noqa: E402,F401
-import conversations  # noqa: E402,F401
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import bot_gateway
+import channels  # noqa: F401
+import conversations  # noqa: F401
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

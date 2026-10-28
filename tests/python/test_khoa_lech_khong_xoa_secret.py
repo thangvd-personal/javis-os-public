@@ -14,11 +14,12 @@ report after 0.80.0 ("lost the model connections from the previous version") mad
 Contract: when writing, a secret whose OLD value is an encrypted blob this machine cannot decrypt is kept as it is if the new
 value is empty or missing. With the right key, clearing a secret still clears it.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-khoalech-")
 os.environ.pop("JAVIS_ADMIN_PASSWORD", None)
@@ -27,8 +28,8 @@ try:
 except Exception:
     pass
 
-import config as c  # noqa: E402
-import secrets_store as ss  # noqa: E402
+import config as c
+import secrets_store as ss
 
 fails = []
 
@@ -50,7 +51,7 @@ def use_key(key: bytes):
     c._SETTINGS_CACHE["sig"] = None
 
 
-from cryptography.fernet import Fernet  # noqa: E402
+from cryptography.fernet import Fernet
 
 KEY_A, KEY_B = Fernet.generate_key(), Fernet.generate_key()
 use_key(KEY_A)

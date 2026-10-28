@@ -1,6 +1,4 @@
 """Opt-in native process enforcement test, with dummy auth and a localhost fake provider."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import gzip
 import hashlib
@@ -16,12 +14,14 @@ import threading
 import unittest
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 
 def worker(root):
+    from claude_cli import claude_engine
     from improvement_claude import TrialProfile
     from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
     from improvement_store import _hash
-    from claude_cli import claude_engine
 
     async def run():
         grant = hashlib.sha256(b"synthetic grant").hexdigest()

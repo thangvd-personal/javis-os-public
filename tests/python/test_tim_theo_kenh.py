@@ -7,16 +7,17 @@ chế độ lọc kênh. Danh sách thì `/sessions?channel=` lo từ trước, 
 `/sessions/search` vốn quét cả brain - gõ một chữ vào đó mà nhảy ra hội thoại của người dùng
 với bộ não chính thì bấm vào là văng khỏi trợ lý đang mở.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-timkenh-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(_TMP) / "conv.db")
 
-import sessions  # noqa: E402
+import sessions
 
 fails = []
 

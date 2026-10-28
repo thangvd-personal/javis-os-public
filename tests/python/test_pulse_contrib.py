@@ -8,23 +8,24 @@ tổng hợp có `input_refs` do host ghi. Không tự thưởng, không đếm 
 thay bản kết quả thì phân bổ cũ `superseded`, tổng hợp nhiều tầng không nhân điểm. Sự kiện host: chấp nhận đề xuất, chốt
 quyết định, sửa yêu cầu sau kết quả, huỷ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import random
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-contrib-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-contrib-w-"))
 
-import agent_pulse as AP  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_pulse as AP
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -240,9 +241,10 @@ check("bỏ chốt quyết định: tín hiệu void", [s["status"] for s in AP.
                                             if s["source_ref"] == f"decision:{tid}:2"] == ["void"])
 
 # ═════ kiểm khách quan: chỉ kết luận CUỐI của mỗi (mục tiêu, revision) ═════
-import inspect  # noqa: E402
-import time as _t  # noqa: E402
-import resonance as R  # noqa: E402
+import inspect
+import time as _t
+
+import resonance as R
 
 go = TEMP / "goal"
 go.mkdir()

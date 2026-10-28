@@ -22,9 +22,9 @@ import hashlib
 import json
 import math
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Callable
 
 ANGLES = {
     "INV": ("how the work is done: the steps, checks and output discipline that would have avoided the failures "
@@ -130,7 +130,7 @@ def sign_test(wins: int, losses: int) -> float:
     if n == 0:
         return 1.0
     k = min(wins, losses)
-    tail = sum(math.comb(n, i) for i in range(0, k + 1)) / 2 ** n
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n
     return min(1.0, 2 * tail)
 
 

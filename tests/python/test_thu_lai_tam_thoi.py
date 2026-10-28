@@ -24,11 +24,12 @@ File này canh ba tầng, vì sửa hụt một tầng là lỗi quay lại nguy
    chạy tool thì càng thôi (lượt đó đã gửi tin, đã ghi file, đã đặt lịch).
 3. **Cả tám bộ não.** Sửa cho Anthropic rồi bỏ bảy đường kia là đúng kiểu hỏng đang sửa.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-thulai-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -38,8 +39,8 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import engine  # noqa: E402
+import engine
+import httpx
 
 _fails = []
 
@@ -71,7 +72,7 @@ BODY_429 = ('{"type":"error","error":{"type":"rate_limit_error","message":"Error
 # ============================================================
 # 1. Dấu "tạm thời" đặt tại nguồn
 # ============================================================
-import limit_learner  # noqa: E402
+import limit_learner
 
 check("429 kiểu Anthropic không rút ra hạn mức nào -> phải coi là tạm thời",
       limit_learner.parse_limit_error(429, BODY_429) is None)
@@ -191,7 +192,7 @@ check("lỗi không mang dấu -> không chạy lại", len(_dem) == 1)
 # ============================================================
 # 3. Cả tám bộ não đều được thử lại, không con nào bị bỏ lại
 # ============================================================
-import main  # noqa: E402
+import main
 
 main.openai_oauth.valid_creds = lambda: {"access_token": "tok", "account_id": "acc"}
 
@@ -304,11 +305,11 @@ check("KHÔNG có em dash trong câu lỗi trả ra", "—" not in (_r if isinst
 # Nghĩa là máy thử lại đủ ba lần rồi vẫn ăn 429. Nhìn con số thì thấy ngay vì sao: nhịp chờ
 # mặc định là 1s, 2s, 4s, nên cả ba lần hỏi lại gói gọn trong bảy giây, trong khi cửa sổ hạn
 # mức của Anthropic tính bằng phút. Ba lần hỏi trong bảy giây chỉ là ăn đúng cú 429 đó ba lần.
-from datetime import datetime, timedelta, timezone  # noqa: E402
+from datetime import UTC, datetime, timedelta
 
 
 def _moc(sau_bao_giay):
-    return (datetime.now(timezone.utc) + timedelta(seconds=sau_bao_giay)) \
+    return (datetime.now(UTC) + timedelta(seconds=sau_bao_giay)) \
         .strftime("%Y-%m-%dT%H:%M:%SZ")
 
 

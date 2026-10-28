@@ -9,15 +9,16 @@ bằng một request còn to hơn, và provider trả lỗi.
 
 Đây đúng là tình huống đã chặn Javis với gói Groq 12.000 TPM khi một lượt cần 21.446 token.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-quotadir-")
 
-import context_compiler  # noqa: E402
-import model_limits  # noqa: E402
+import context_compiler
+import model_limits
 
 _fails = []
 
@@ -95,13 +96,13 @@ check("chưa cấu hình provider nào khác → không bịa ra lựa chọn",
 # Phase 8 (context_sources): nó tồn tại để THAY CLAUDE.md bằng capsule nhỏ, mà khi compiler
 # từ chối vì quá to thì nó rơi về legacy - đường gửi nguyên CLAUDE.md cộng MEMORY.md, tức
 # là còn to hơn hẳn cái vừa bị từ chối.
-import shutil  # noqa: E402
-from pathlib import Path  # noqa: E402
+import shutil
+from pathlib import Path
 
-from adaptive_context_runtime import AdaptiveContextCanary  # noqa: E402
-from capability_registry import CapabilityRegistry  # noqa: E402
-from context_compiler import ContextCompiler  # noqa: E402
-from context_runtime import ObserveRuntime  # noqa: E402
+from adaptive_context_runtime import AdaptiveContextCanary
+from capability_registry import CapabilityRegistry
+from context_compiler import ContextCompiler
+from context_runtime import ObserveRuntime
 
 
 def _p8_settings(rolling_tpm, max_input, providers=("groq", "openai", "gemini")):
@@ -167,9 +168,9 @@ shutil.rmtree(_tmp, ignore_errors=True)
 
 # Đường gọi trong main phải THẬT SỰ xử lý action reject, nếu không thì mọi thứ trên vô
 # nghĩa: plan trả reject mà chỗ gọi vẫn coi "khác use thì dùng legacy".
-import inspect  # noqa: E402
+import inspect
 
-import main  # noqa: E402
+import main
 
 _ws_src = inspect.getsource(main)
 _i_reject = _ws_src.find('_phase8_plan.action == "reject"')

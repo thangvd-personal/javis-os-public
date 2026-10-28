@@ -1,6 +1,4 @@
 """M6 agent-skill bundle: manifest validation (A04) and attribution labels (Q06, Q07)."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 from contextlib import closing
@@ -10,6 +8,7 @@ import improvement_bundle as B
 import improvement_store as IM
 import test_improvement_activation as activation_base
 import test_improvement_agent_procedures as procedure_base
+from _paths import ROOT, SERVER  # noqa: F401
 
 PROC = "iap_" + "a" * 32
 
@@ -234,9 +233,9 @@ class BundleServiceTests(procedure_base.AgentProcedureBase):
             IM.ensure(self.store)
 
     def test_http_routes_and_member_revert_refusal(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: self.activations,
             resolve_brain=lambda value: self.owner.brain_id, agents=lambda: self.service, bundles=lambda: self.bundles))

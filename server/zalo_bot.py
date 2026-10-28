@@ -44,9 +44,8 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
-import stt
 import localefmt
+import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
 
 ZALO_API = "https://bot-api.zaloplatforms.com/bot{token}/{method}"
@@ -368,7 +367,7 @@ class ZaloBot(HangLuot):
         if not ten:
             return False
         s = str(msg.get("text") or msg.get("caption") or "")
-        return bool(re.search(re.escape(ten) + r"(?![A-Za-zÀ-ỹ0-9_])", s, re.I))
+        return bool(re.search(re.escape(ten) + r"(?![A-Za-zÀ-ỹ0-9_])", s, re.IGNORECASE))
 
     # ---- File người dùng gửi lên ------------------------------------------------------
     async def _nghe_tin_thoai(self, client, msg, caption):

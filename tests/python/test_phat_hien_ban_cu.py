@@ -29,9 +29,9 @@ Bốn nhánh của lớp này đã được chạy thử bằng Chromium thật 
 im lặng; một file bị giữ bản cũ -> gọi đúng tên file; tải lại rồi vẫn cũ -> đổi sang câu chỉ
 thẳng cách làm; máy chủ đổi phiên bản -> mời tải lại.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
-import re
 import zlib
+
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 MAIN = (SERVER / "main.py").read_text(encoding="utf-8")
 FRESH = (DASHBOARD / "freshness.js").read_text(encoding="utf-8")
@@ -119,7 +119,7 @@ for _ten in ("freshness.js", "sessions-ui.js", "style.css"):
     check(f"crc32 kiểu JS khớp zlib.crc32 trên {_ten}",
           _crc32_kieu_js(_b) == format(zlib.crc32(_b) & 0xFFFFFFFF, "08x"))
 # Chuỗi có dấu tiếng Việt: hai bên phải cùng băm trên BYTE UTF-8, không phải trên ký tự.
-_vn = "Bấm để chọn file từ máy (chọn được nhiều)".encode("utf-8")
+_vn = "Bấm để chọn file từ máy (chọn được nhiều)".encode()
 check("và khớp cả trên chuỗi UTF-8 có dấu (băm theo byte, không theo ký tự)",
       _crc32_kieu_js(_vn) == format(zlib.crc32(_vn) & 0xFFFFFFFF, "08x"))
 

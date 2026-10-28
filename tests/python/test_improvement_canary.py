@@ -3,8 +3,6 @@
 A fake clock drives the 7-day window here. That is a technical check of the rule, never a live
 canary: real promotion needs real days and real owner verdicts.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 import unittest.mock
@@ -14,6 +12,7 @@ import improvement_canary as CN
 import improvement_store as IM
 import test_improvement_activation as base
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401
 
 DAY = 86400
 
@@ -290,10 +289,10 @@ class CanaryApiTests(CanaryBase):
     """Owner routes over the same service; writes need the browser session."""
 
     def client(self, denied=False):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.responses import JSONResponse
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: self.activations,
             resolve_brain=lambda value: self.owner.brain_id, canaries=lambda: self.canaries,
@@ -338,10 +337,10 @@ class CanaryApiTests(CanaryBase):
 
 class AfterReportHookTests(unittest.TestCase):
     def test_report_publication_calls_hook_and_survives_its_failure(self):
-        import asyncio
+
+        import improvement_experiment_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_experiment_api as API
         from improvement_experiment_service import ExperimentService
         service = object.__new__(ExperimentService)
         service.control = unittest.mock.AsyncMock(return_value={"report_id": "icr_" + "1" * 32, "complete": True})

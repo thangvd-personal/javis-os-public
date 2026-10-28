@@ -11,7 +11,6 @@ Không đặt JAVIS_RESONANCE_PILOT=1 thì bỏ qua (CI không gọi model). Khi
 - Hạn mức của mục tiêu 3 lượt; kịch bản cần 2 lượt gọi model thật.
 JAVIS_RESONANCE_PILOT_OUT: nơi ghi báo cáo JSON (không có đường dẫn cá nhân).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import json
@@ -21,6 +20,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 PILOT = os.environ.get("JAVIS_RESONANCE_PILOT") == "1"
 if not PILOT:
@@ -39,9 +40,9 @@ Path(_STATE, "settings.json").write_text(json.dumps({"model": {k: _m[k] for k in
                                                                                    "claude_model") if k in _m}},
                                                     ensure_ascii=False), encoding="utf-8", newline="\n")
 
-import main  # noqa: E402  - nạp SAU khi JAVIS_STATE_DIR tạm đã đặt
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import main
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -63,7 +64,7 @@ P = RS.Principal("agent", "javis", KEY)
 USER1 = ("Dữ liệu mô phỏng, không phải việc thật. Duy trì giúp anh ghi chú Inbox/viec-tuan.md liệt kê việc đang dở: "
          "gửi báo giá cho khách B, kiểm kho bút bi, đặt lịch họp nhóm thứ Năm. Đừng xoá ghi chú cũ.")
 USER2 = "Thêm việc: gia hạn tên miền trước cuối tháng."
-CRIT = lambda words: [{"description": "Ghi chú việc đang dở có đủ các việc", "evaluator": "artifact_contract",  # noqa: E731
+CRIT = lambda words: [{"description": "Ghi chú việc đang dở có đủ các việc", "evaluator": "artifact_contract",
                        "params": {"path": "Inbox/viec-tuan.md", "min_chars": 60, "must_contain": words}}]
 
 store = main._resonance_store()

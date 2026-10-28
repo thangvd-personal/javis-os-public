@@ -15,7 +15,6 @@ What is guarded:
   4. The Models page reads those states: "installing", "failed", "ok", a stuck "installing" turns
      into "failed", and outside Docker (no state folder) the answer is "".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import subprocess
@@ -23,6 +22,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

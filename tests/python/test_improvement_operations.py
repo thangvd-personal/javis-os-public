@@ -1,9 +1,6 @@
 """Schema6 preserves actual released history; metadata cannot impersonate calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
-import json
 import sqlite3
 import subprocess
 import sys
@@ -17,6 +14,7 @@ from unittest.mock import patch
 
 import improvement_store as IM
 import test_improvement_experiments as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 RELEASED_B = "47f50f707268681dd4cbe8c7e443945155376237"
 if importlib.util.find_spec("improvement_operation_schema"):

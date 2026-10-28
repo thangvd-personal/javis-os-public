@@ -12,8 +12,15 @@ import inspect
 from contextlib import closing
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
-from improvement_native_protocol import _canonical, _digest, _fields, _parse, _uint, MAX_PRIVATE_BYTES
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
+from improvement_native_protocol import (
+    MAX_PRIVATE_BYTES,
+    _canonical,
+    _digest,
+    _fields,
+    _parse,
+    _uint,
+)
 
 
 def attempt_scope(*, kind, brain_id, receipt, config_pin, capability_hash):
@@ -57,7 +64,7 @@ def _joined(value):
         raise ValueError('invalid_native_decision')
     # Reuse the actual host control grammar/hash recipe. Supplied consistency
     # does not authenticate a peer, launch or native image by itself.
-    from improvement_native_transport import _decode_guardian_control2, _control_json
+    from improvement_native_transport import _control_json, _decode_guardian_control2
     _decode_guardian_control2(_control_json(image), launch_nonce=value['launch_nonce'],
         expected_sequence=image.get('sequence'), invocations=[{'purpose': value['purpose'], 'nonce': value['nonce']}],
         worker_identity={key: value[key] for key in ('worker_pid', 'worker_birth')})

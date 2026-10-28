@@ -1,6 +1,4 @@
 """Actual preparation/role ownership participates in the experiment stop fence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import threading
 import unittest
@@ -8,9 +6,10 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_proposals as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_experiment_service import ExperimentService
 from improvement_trial_service import OwnerTrialService
-import test_improvement_proposals as fixtures
 
 
 class ExperimentCStopTests(unittest.IsolatedAsyncioTestCase):

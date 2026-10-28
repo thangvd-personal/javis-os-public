@@ -15,14 +15,15 @@ Chữa bằng một đường đọc lại chính file trong thư mục stage t�
 trả 404 khi file đã bị `media_gc.sweep_staging` dọn - 404 là TÍN HIỆU để dashboard vẽ khung
 "không còn xem lại được", nên nó phải là 404 chứ không phải 500 hay một trang lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anhchat-test-")
 
-import main  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+from starlette.testclient import TestClient
 
 _fails = []
 
@@ -89,8 +90,9 @@ check("file đã dọn -> 404 (không phải 500)", r3.status_code == 404, r3.st
 
 # Dọn thật bằng chính hàm media_gc chạy trong đời thật, rồi kiểm lại - để test không chỉ tin
 # vào một cái tên bịa ra.
-import media_gc  # noqa: E402
-import time  # noqa: E402
+import time
+
+import media_gc
 
 # Lùi mtime 10 ngày = đúng cảnh đời thật (file nằm đó vài ngày rồi vòng dọn chạy qua), thay vì
 # ép max_age_days=0 - hạn 0 ngày là ca không bao giờ xảy ra và nó không chứng minh được gì.

@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
-from pathlib import Path, PureWindowsPath
 import socket
 import sys
+from pathlib import Path, PureWindowsPath
 
 from improvement_native_protocol import validate_startup2, worker_binding
 
@@ -52,7 +52,10 @@ class NativeWorkerSessionV2:
 
     @classmethod
     def from_startup3(cls, packet, *, namespace):
-        from improvement_qualification_protocol import validate_startup3, worker_binding3
+        from improvement_qualification_protocol import (
+            validate_startup3,
+            worker_binding3,
+        )
         copied = validate_startup3(packet)
         if (cls is not NativeWorkerSessionV2 or namespace not in ('preflight', 'trial') or copied['kind'] != namespace
                 or (namespace == 'trial' and copied['qualification']['version'] != 2)):
@@ -142,9 +145,9 @@ class NativeWorkerSessionV2:
         self._environment_installed = True
         # These modules are pure on import. No SDK/application configuration is
         # imported before installing the authenticated startup environment.
-        from improvement_private_channel import PrivateWorkerChannelV2
         from improvement_image_channel import ImageMetadataChannel
         from improvement_native_sdk import NativeInvocationSet
+        from improvement_private_channel import PrivateWorkerChannelV2
         record = self._fromshare('private', self._packet['private_share'])
         private = PrivateWorkerChannelV2(record['socket'], binding=self._binding, role='worker')
         record['channel'], record['state'] = private, 'channel_owned'

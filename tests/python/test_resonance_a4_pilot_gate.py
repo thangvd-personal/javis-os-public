@@ -16,7 +16,6 @@ chờ gửi đều không đạt; ca hợp lệ đạt.
 Sau pilot real-1: thẻ `turn:` host đặt sau lượt chat được nhận khi biên nhận khớp chính tin, phiên, mục tiêu và nối được
 sự kiện lập hay sửa mục tiêu cùng revision; không bao giờ thay tin outbox bắt buộc. Fixture là ba thẻ thật của lần chạy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import asyncio
 import json
@@ -27,6 +26,8 @@ import time
 import types
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SRC = Path(__file__).with_name("test_resonance_a4_pilot.py")
 TREE = ast.parse(SRC.read_text(encoding="utf-8"))
@@ -412,8 +413,10 @@ REAL_OUTBOX = [(1, "goal.created", 1), (2, "goal.revised", 2), (3, "goal.waiting
 REAL_EVENTS = [(1, "created", f"msg:{RSID}:1"), (1, "submission_received", ""), (2, "reframe", f"msg:{RSID}:4"),
                (2, "artifact_adopted", f"msg:{RSID}:4")]
 
-import sqlite3  # noqa: E402
-import resonance as R  # noqa: E402
+import sqlite3
+
+import resonance as R
+
 NS = load({})
 # Mã trước bản sửa không có read_notice_evidence: phần hàm thuần vẫn chạy bằng audit_notices cũ (để chạy đối chứng),
 # phần đọc SQLite báo hỏng.

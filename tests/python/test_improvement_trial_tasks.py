@@ -1,6 +1,4 @@
 """Real trial storage/runner ownership without native processes or model queries."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -10,6 +8,7 @@ from unittest.mock import patch
 
 import improvement_store as IM
 import test_improvement_trial_runner as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_trial_tasks"):
     import improvement_trial_tasks as runtime

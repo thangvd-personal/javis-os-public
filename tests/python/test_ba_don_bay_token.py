@@ -25,7 +25,6 @@ lại toàn bộ ngữ cảnh đã tích. Javis không nhìn thấy các vòng �
   3. HIỆU CHỈNH BỘ ĐOÁN: đoán thấp hơn thật bảy lần thì hàng rào chặn-trước-khi-vượt gần như
      không tồn tại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -33,16 +32,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-3db-")
 
-from fastapi import WebSocketDisconnect  # noqa: E402
-
-import compaction  # noqa: E402
-import config as cfg  # noqa: E402
-import context_runtime  # noqa: E402
-import main  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
-from sessions import SessionStore  # noqa: E402
+import compaction
+import config as cfg
+import context_runtime
+import main
+from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
+from sessions import SessionStore
 
 _fails = []
 
@@ -330,7 +330,7 @@ check("và vẫn giữ lại con số thô để lần ngược được",
 # nó đi thẳng vào lịch sử hội thoại, nên lượt sau chính Javis đọc lại rồi tưởng "turn4view0"
 # là nguồn có thật. Được hỏi lấy tin ở đâu, nó trả lời "mình chỉ còn mã tham chiếu
 # turn4view0, không có URL nguồn gốc".
-import engine  # noqa: E402
+import engine
 
 _ban = "Do am cao 70-99%. \ue200cite\ue202turn4view0\ue201\n\nAnh nen mang ao mua."
 _sach = engine.strip_provider_markers(_ban)
@@ -463,7 +463,7 @@ check("CANARY: mấy mã hay gặp nhất vẫn được sinh ra",
 # token đó (Anthropic cấm) và thay bằng chính binary `claude`. Kết quả với người dùng không
 # đổi qua cả ba bản: cả ba loại bộ não đều ăn được mức Siêu tiết kiệm.
 check("CANARY: đường tắt mở cho cả ba loại bộ não",
-      set((cfg._DEFAULT["context_runtime"]["canary"]["provider_kinds"]))
+      set(cfg._DEFAULT["context_runtime"]["canary"]["provider_kinds"])
       >= {"api", "oauth", "cli"})
 check("CANARY: rào cứng chặn 'cli' đã gỡ",
       'cli_khong_co_duong_goi_thang' not in

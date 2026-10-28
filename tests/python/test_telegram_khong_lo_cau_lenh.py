@@ -12,12 +12,12 @@ Gốc: CodexCLI lấy `command` làm TÊN công cụ, Telegram ghép các tên t
 tầng: Codex đặt tên theo loại việc (`command_execution`), và lớp bot rút mọi tên về nhãn ngắn
 (`bot_gateway.nhan_ngan`) nên dù engine nào lọt câu lệnh lên thì dòng vết vẫn sạch.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
 from bot_gateway import dong_vet, nhan_ngan, ten_tool
 from claude_cli import CodexCLI
 from telegram_bot import TelegramBot

@@ -92,8 +92,15 @@ class TrialProducts:
         native_history = first.get('version') == 2
         if native_history:
             packets = [first, *(reader._decode(row['brain_id'], record) for record in records[1:])]
-            from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
-            from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+            from improvement_native_decisions import (
+                NativeImageDecisionStore,
+                attempt_scope,
+            )
+            from improvement_native_trace_checks import (
+                require_durable_allow,
+                validate_native_trace,
+                validated_history,
+            )
             from improvement_sandbox import trial_system_prompt
             attempt = connection.execute('SELECT workspace_json,materialization_hash FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?',
                 (row['id'], row['attempt'])).fetchone()

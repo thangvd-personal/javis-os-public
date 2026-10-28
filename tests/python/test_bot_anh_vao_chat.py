@@ -13,17 +13,17 @@ with the turn to whatever model runs the bot. Pinned here:
   4. chatbot_runtime: a group photo sent untagged is remembered for the same person's next message that calls the bot.
   5. Telegram: replying to a photo while tagging the bot brings that photo along.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import base64
 import io
 import os
+import struct
 import sys
 import tempfile
-import struct
-import time
 import zlib
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anhchat-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -33,12 +33,12 @@ except Exception:
     pass
 
 try:
-    from PIL import Image  # noqa: E402
+    from PIL import Image
 except Exception:      # noqa: BLE001 - Pillow is NOT a dependency of Javis (CI and the Docker image run without it)
     Image = None
 
-import vision_input as vi  # noqa: E402
-import engine  # noqa: E402
+import engine
+import vision_input as vi
 
 fails = []
 
@@ -145,8 +145,8 @@ check("Claude Code engine sends a list prompt as ONE user message of content blo
       "isinstance(prompt, list)" in csrc and '"content": blocks' in csrc)
 
 # ---- 3. main: the bot turn ---------------------------------------------------------------------------------------------
-import main  # noqa: E402
-import chatbot_runtime as cr  # noqa: E402
+import chatbot_runtime as cr
+import main
 
 SENT = []
 SCRIPT = {"replies": []}
@@ -240,7 +240,8 @@ check("both the precheck (silent, untagged) and the answer path remember untagge
       rsrc.count("_nho_neu_khong_goi(bot_id, cfg, meta, text)") == 2)
 
 # ---- 5. Telegram: reply to a photo + tag the bot -----------------------------------------------------------------------
-import telegram_bot  # noqa: E402
+import telegram_bot
+
 tb = telegram_bot.TelegramBot.__new__(telegram_bot.TelegramBot)
 tb.bot_username, tb.bot_id = "hamyseego_bot", 42
 photo = [{"file_id": "s", "file_size": 10}, {"file_id": "big", "file_size": 999}]

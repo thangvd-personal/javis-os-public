@@ -1,20 +1,18 @@
 """Real role runner/storage and actual worker/profile code; synthetic SDK engine."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-import importlib.util
 import hashlib
-import json
+import importlib.util
 import threading
 import unittest
 from contextlib import closing
 from unittest.mock import AsyncMock, patch
 
-from improvement_operation_worker import run_request
 import improvement_store as IM
 import test_improvement_operation_execution as F
-import usage_store as US
 import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_operation_worker import run_request
 
 
 class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
@@ -57,7 +55,11 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
                 self.cwd = options["cwd"]
 
             async def query(self, prompt):
-                from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
+                from claude_agent_sdk import (
+                    AssistantMessage,
+                    ResultMessage,
+                    SystemMessage,
+                )
                 try:
                     self.trial_profile.options(self)
                     await self.trial_profile.before_query()
@@ -250,8 +252,8 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
             held.close()
 
     async def test_cleanup_failure_is_explicit_and_actual_recovery_preserves_result(self):
-        from improvement_operation_workspace import OperationWorkspaceCleanupError
         from improvement_operation_recovery import OperationRecovery
+        from improvement_operation_workspace import OperationWorkspaceCleanupError
         with patch.object(self.execution.workspace, "cleanup_owned", side_effect=OSError("synthetic unlink fault")):
             with self.assertRaises(OperationWorkspaceCleanupError):
                 await self.runner().run(self.owner, self.row["operation_id"])
@@ -331,8 +333,8 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
         await self._production_isolation("recover", semantic=True)
 
     def _select_reviewer(self):
-        from improvement_operation_records import OperationRecords
         from improvement_operation_adapter import ClaudeOperationAdapter
+        from improvement_operation_records import OperationRecords
         definition = self.execution.guard(self.owner, self.row["operation_id"])[0]
         self.execution.cancel(self.owner, self.row["operation_id"], expected_generation=self.row["generation"], event_key="cancel-unused-proposer-fixture")
         authoring = self.f.f.plans.authoring
@@ -419,7 +421,9 @@ class OperationRunnerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(self.execution.get(self.owner, self.row["operation_id"])["status"], "interrupted")
             else:
                 from improvement_operation_recovery import OperationRecovery
-                from improvement_operation_workspace import OperationWorkspaceCleanupError
+                from improvement_operation_workspace import (
+                    OperationWorkspaceCleanupError,
+                )
                 with patch.object(self.execution.workspace, "cleanup_owned", side_effect=OSError("synthetic leftover plaintext")):
                     with self.assertRaises(OperationWorkspaceCleanupError):
                         await runner.run(self.owner, self.row["operation_id"])

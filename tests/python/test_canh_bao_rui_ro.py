@@ -9,13 +9,11 @@ hộp thoại đổi quyền. 15/16 connector có cảnh báo thì không bao gi
 gồm cả google-keep (token toàn quyền tài khoản Google) và zalo. Test này giữ cho lỗi đó không
 quay lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
-import os
 import re
 import sys
-from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 

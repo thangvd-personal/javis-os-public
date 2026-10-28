@@ -24,8 +24,9 @@ State is in memory only: after a restart the next message misses the cache anywa
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 PING_AFTER_S = 50 * 60
 DEFAULT_WINDOW_MIN = 120
@@ -56,7 +57,7 @@ class KeepWarm:
     window_min: Callable[[], int] = lambda: DEFAULT_WINDOW_MIN
     busy: Callable[[str], bool] = lambda key: False
     now: Callable[[], float] = time.time
-    windows: Dict[str, _Window] = field(default_factory=dict)
+    windows: dict[str, _Window] = field(default_factory=dict)
     limited_until_real: bool = False
     log: list = field(default_factory=list)
 

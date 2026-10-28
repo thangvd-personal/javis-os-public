@@ -1,14 +1,13 @@
 """Actual bounded retry consumes stored observation2 infrastructure evidence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
-from contextlib import closing
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
-from improvement_operation_adapter import ClaudeOperationAdapter
 import test_improvement_native_runner_evidence as fixture
 import test_improvement_operation_execution as legacy_fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_operation_adapter import ClaudeOperationAdapter
 
 
 class NativeRetryHistoryTests(unittest.IsolatedAsyncioTestCase):
@@ -47,8 +46,8 @@ class NativeRetryHistoryTests(unittest.IsolatedAsyncioTestCase):
 
 class LegacyRetryHistoryTests(unittest.TestCase):
     def test_legacy_transient_proof_does_not_eagerly_decrypt_non_engine_records(self):
-        from improvement_operation_evidence import OperationEvidence
         import improvement_operation_retry as retry
+        from improvement_operation_evidence import OperationEvidence
         fixture = legacy_fixture.OperationExecutionTests()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)

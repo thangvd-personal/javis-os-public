@@ -24,7 +24,6 @@ Ba lỗi gốc, và ba thứ test này canh:
 3. CHỐT AN TOÀN. `config.home_dir` người dùng sửa được qua `POST /connect/update`. Không có
    chốt thì "xoá kết nối" là một lệnh rmtree trỏ đi đâu cũng được.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import json
 import sys
@@ -32,6 +31,7 @@ import tempfile
 from pathlib import Path
 
 import purge
+from _paths import DASHBOARD, ROOT, SERVER
 
 _fails = []
 
@@ -102,13 +102,12 @@ with tempfile.TemporaryDirectory() as td:
 
 # ─────────────── 3. THỨ TỰ: làm im trước, xoá sau ───────────────
 # Đây là lỗi gốc, nên canh bằng cách ghi lại trình tự lời gọi thật chứ không đọc mã nguồn.
-import capability_registry  # noqa: E402
-import connect_health  # noqa: E402
-import mcp_catalog  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
-import oauth_mcp  # noqa: E402
+import capability_registry
+import connect_health
+import mcp_client
+import mcp_hub
+import mcp_store
+import oauth_mcp
 
 with tempfile.TemporaryDirectory() as td:
     tmp = Path(td)

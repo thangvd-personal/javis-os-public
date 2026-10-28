@@ -3,13 +3,13 @@
 Run:
     python tests/run.py change_receipt
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import tempfile
 import time
 from pathlib import Path
 
-import change_receipt as cr  # noqa: E402
+import change_receipt as cr
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

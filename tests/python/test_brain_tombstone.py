@@ -1,10 +1,13 @@
 """Test helpers giấy báo tử (tombstone) của git_brain. Chạy:
     python tests/run.py brain_tombstone
 KHÔNG mạng."""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, time, tempfile
+import sys
+import tempfile
+import time
 from pathlib import Path
-import git_brain as gb  # noqa: E402
+
+import git_brain as gb
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 def check(name, cond):
@@ -32,6 +35,7 @@ check("clear tên không tồn tại không ném", (gb.clear_tombstone(str(BR), 
 gb.write_tombstone(str(BR), "Cu")
 old = BR / gb.TOMBSTONE_DIR / "Cu.json"
 import json
+
 d = json.loads(old.read_text(encoding="utf-8")); d["deleted_at"] = int(time.time()) - (181 * 86400)
 old.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
 gb.write_tombstone(str(BR), "Moi")

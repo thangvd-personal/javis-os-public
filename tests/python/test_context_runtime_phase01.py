@@ -1,9 +1,7 @@
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
 import json
 import sqlite3
-from pathlib import Path
 
+from _paths import ROOT, SERVER
 from context_runtime import (
     ObserveRuntime,
     bind_trace,

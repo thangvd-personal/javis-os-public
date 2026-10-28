@@ -1,6 +1,4 @@
 """Observe actual prewarmed plugin metadata without invoking any plugin callback."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import ast
 import contextlib
 import hashlib
@@ -13,13 +11,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER
+
 SCRATCH = Path(tempfile.mkdtemp(prefix="trial-plugins-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "BRAIN_PATH": "brain",
                    "OBSIDIAN_VAULT_PATH": "vault", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(SCRATCH / child)
 
-import plugins_host as H
 import packs
+import plugins_host as H
 import turn_context
 from evidence_store import redact
 

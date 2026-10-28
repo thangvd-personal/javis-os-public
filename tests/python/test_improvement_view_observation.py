@@ -1,14 +1,13 @@
 """Real view/source service with an inert synthetic CLI observer; no native query."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import improvement_trial_selection as selection
 import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ViewObservationTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

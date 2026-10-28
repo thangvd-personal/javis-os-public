@@ -6,7 +6,6 @@ The same bot answers a parent at its own level ("Read only") and the owner's mot
 exception ("Full power"), through the real read loop, Transport and bot runtime. Her exception also sets her own
 wait (10 s) while everyone else keeps the channel default (`CHO_KHACH_IM`).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -14,17 +13,19 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpngoaile-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402,F401
-import channels  # noqa: E402,F401
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import channel_accounts  # noqa: F401
+import channels  # noqa: F401
+import chatbot_runtime
+import chatbot_store
+import zalo_personal_channel as zc
 
 _fails = []
 

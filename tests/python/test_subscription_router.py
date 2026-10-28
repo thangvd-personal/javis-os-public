@@ -19,7 +19,6 @@ Cộng thêm một lỗi ngân sách phát hiện lúc làm: mức "Tiết kiệ
 mà ba đường Phase 8 lại đọc hạn mức ké từ `context_sources`, nên bấm mức xong vẫn không có
 gì chạy - đúng câu "ấn vào đặt thì không có gì diễn ra".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -27,13 +26,15 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-sub-")
 
-import adaptive_context_runtime as acr  # noqa: E402
-import config as cfg  # noqa: E402
-import limit_learner  # noqa: E402
-import main  # noqa: E402
-import model_limits  # noqa: E402
+import adaptive_context_runtime as acr
+import config as cfg
+import limit_learner
+import main
+import model_limits
 
 _fails = []
 

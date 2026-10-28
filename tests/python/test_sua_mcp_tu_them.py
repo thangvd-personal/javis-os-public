@@ -6,12 +6,12 @@ Trước 0.64.31 `update_connection` chỉ gộp thêm header: một header gõ 
 Composio vào `Authorization` thay vì `x-consumer-api-key`) nằm lì trong kết nối, không có đường
 gỡ ngoài xoá cả kết nối đi làm lại. Form Sửa mới gửi `prune: true` kèm đủ danh sách tên còn giữ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import tempfile
 from pathlib import Path
 
 import mcp_store
 import secrets_store
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

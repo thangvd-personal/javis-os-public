@@ -1,6 +1,4 @@
 """Host evaluation and call settlement remain atomic, without any model execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -8,9 +6,10 @@ import sqlite3
 import unittest
 from unittest.mock import patch
 
-import test_improvement_trials as fixtures
-import improvement_store as IM
 import improvement_evaluation as EVAL
+import improvement_store as IM
+import test_improvement_trials as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_trial_results"):
     import improvement_trial_results as RESULTS

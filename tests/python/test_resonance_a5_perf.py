@@ -7,19 +7,20 @@
 2. Event loop không bị chặn khi lượt review chạy: pha trước và pha sau (SQLite, băm ảnh chụp, lưu bằng chứng giả lập chậm
    0,2 giây) ở luồng phụ; một timer 10 ms vẫn đúng giờ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a5perf-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_team as T
+import resonance as R
 
 _fails = []
 

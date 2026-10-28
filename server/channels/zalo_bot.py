@@ -2,8 +2,9 @@
 đang mang đúng chuỗi này). Long-poll bằng `zalo_bot.ZaloBot`."""
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 ZALO_API = "https://bot-api.zaloplatforms.com/bot{token}/{method}"
 

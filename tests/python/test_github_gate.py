@@ -10,7 +10,6 @@ Plus: repo rules reach every engine (trimmed, paths listed), CI commands are rea
 that must not run on the owner's machine, a missing tool is "skipped" not "passed", and the 400-line diff threshold
 ignores lockfiles.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import subprocess
@@ -18,13 +17,15 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-gate-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import github_gate as g  # noqa: E402
+import github_gate as g
 
 _fails = []
 

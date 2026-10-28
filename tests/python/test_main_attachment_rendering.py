@@ -1,5 +1,4 @@
 """Frozen legacy attachment templates plus actual main scratch-file parity."""
-from _paths import ROOT, SERVER  # noqa: F401
 import ast
 import importlib.util
 import os
@@ -9,6 +8,8 @@ import weakref
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="main-attachments-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",

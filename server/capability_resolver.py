@@ -6,16 +6,14 @@ tool và không học trọng số online. Query chỉ tồn tại trong RAM; re
 from __future__ import annotations
 
 import hashlib
-import math
 import re
 import time
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Optional, Protocol
+from typing import Protocol
 
 import capability_index
 from capability_registry import CapabilityRegistry, get_registry
-
 
 RESOLVER_POLICY_VERSION = "deterministic-shadow-v1"
 _TOKEN_RE = re.compile(r"[a-z0-9]{2,}")
@@ -55,7 +53,7 @@ class ActorPolicy:
     allowed_effects: frozenset[str] = field(
         default_factory=lambda: frozenset({"none", "read", "write", "danger"})
     )
-    allowed_source_types: Optional[frozenset[str]] = None
+    allowed_source_types: frozenset[str] | None = None
 
 
 class DeterministicResolver:

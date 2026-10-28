@@ -24,7 +24,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-botnguoi-"))
 
@@ -33,7 +33,7 @@ try:
 except Exception:
     pass
 
-from telegram_bot import CAU_LOI_NGUOI_THAT, TelegramBot  # noqa: E402
+from telegram_bot import CAU_LOI_NGUOI_THAT, TelegramBot
 
 _fails = []
 

@@ -16,7 +16,6 @@ No network. What is guarded here, in order of what would hurt most if it broke:
   5. Credentials typed into one field split correctly, secrets are masked on read and kept
      when the form sends an empty field.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import hmac
@@ -25,14 +24,16 @@ import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-slackwa-"))
 
-import channel_context  # noqa: E402
-import channels  # noqa: E402
-import chatbot_store  # noqa: E402
-import owner_channels  # noqa: E402
-import slack_bot  # noqa: E402
-import whatsapp_bot  # noqa: E402
+import channel_context
+import channels
+import chatbot_store
+import owner_channels
+import slack_bot
+import whatsapp_bot
 
 _fails = []
 
@@ -179,7 +180,7 @@ check("answer prefixes the chat id (session, brain and owner_chat key)",
 # ============================================================
 # 6. Background results route back by prefix (main._gui_qua_kenh)
 # ============================================================
-import main  # noqa: E402
+import main
 
 sent = []
 
@@ -200,7 +201,7 @@ check("reminder for whatsapp:... goes to WhatsApp", ok2 == (True, "") and ("8490
 # ============================================================
 # 7. Webhook endpoints (TestClient)
 # ============================================================
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://localhost")
 orig_rs = main.cfgmod.read_settings
@@ -362,7 +363,7 @@ check("WhatsApp prompt warns about the 24-hour window",
 # ============================================================
 # 10. Settings: masked on read, kept when the form sends nothing
 # ============================================================
-import config as cfgmod  # noqa: E402
+import config as cfgmod
 
 # Back to the real (temp-dir) settings: saving restarts the channel, and with the fake settings
 # above it would be "enabled" and try to reach Slack. The real ones stay disabled.

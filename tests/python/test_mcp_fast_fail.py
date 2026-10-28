@@ -11,11 +11,12 @@ The pool now remembers a STARTUP failure (the request was never sent) for `_DOWN
 those calls immediately. It does not remember a failure in the middle of a call: the server may only be
 slow, and that case already has its own rule (no resend of a tool that may have taken effect).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-mcp-fast-fail-"))
 try:
@@ -23,7 +24,7 @@ try:
 except Exception:
     pass
 
-import mcp_client  # noqa: E402
+import mcp_client
 
 _fails = []
 

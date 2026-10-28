@@ -7,8 +7,9 @@ account. `whatsapp_bot.split_credentials` tells the parts apart by shape.
 """
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 SPEC = KenhSpec(
     id="whatsapp", nhan="WhatsApp", kind="bot", logo="whatsapp", mau="#25D366",

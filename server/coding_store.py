@@ -46,11 +46,11 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import winproc            # lệnh con chạy câm trên Windows (không nháy cửa sổ console đen)
-from config import STATE_DIR
 import localefmt
+import winproc  # lệnh con chạy câm trên Windows (không nháy cửa sổ console đen)
+from config import STATE_DIR
 
 STORE_PATH = STATE_DIR / "coding.json"
 _lock = threading.RLock()
@@ -177,7 +177,7 @@ def _save(d: dict) -> None:
 # ============================================================
 # Git - thuộc tính của thư mục, KHÔNG phải điều kiện vào cửa
 # ============================================================
-def _git(args: List[str], cwd: str) -> str:
+def _git(args: list[str], cwd: str) -> str:
     """Chạy một lệnh git, trả stdout đã strip. Lỗi thì ném LoiCoding kèm stderr của git.
 
     Nguyên văn stderr của git đi thẳng ra giao diện là CỐ Ý: "fatal: 'x' is already checked
@@ -223,7 +223,7 @@ def nhanh_hien_tai(duong_dan: str) -> str:
         return ""
 
 
-def danh_sach_nhanh(duong_dan: str) -> List[str]:
+def danh_sach_nhanh(duong_dan: str) -> list[str]:
     if not la_git(duong_dan):
         return []
     try:
@@ -250,13 +250,13 @@ def cay_sach(duong_dan: str) -> bool:
 # ============================================================
 # Sổ thư mục
 # ============================================================
-def danh_sach_thu_muc(brain: str = "") -> List[Dict[str, Any]]:
+def danh_sach_thu_muc(brain: str = "") -> list[dict[str, Any]]:
     d = _load()
     ds = [r for r in d["thu_muc"] if not brain or (r.get("brain") or "") == brain]
     return [dict(r) for r in ds]
 
 
-def thu_muc(tid: str) -> Optional[Dict[str, Any]]:
+def thu_muc(tid: str) -> dict[str, Any] | None:
     for r in _load()["thu_muc"]:
         if r.get("id") == tid:
             return dict(r)
@@ -264,7 +264,7 @@ def thu_muc(tid: str) -> Optional[Dict[str, Any]]:
 
 
 def them_thu_muc(duong_dan: str, brain: str = "", ten: str = "", nguon: str = "",
-                 repo: str = "") -> Dict[str, Any]:
+                 repo: str = "") -> dict[str, Any]:
     """Khai một thư mục làm chỗ làm việc. KHÔNG đòi nó là repo git.
 
     Chỉ từ chối ba thứ không thể làm việc được: chuỗi rỗng, đường dẫn đọc không ra, và thứ
@@ -320,13 +320,13 @@ def bo_thu_muc(tid: str) -> bool:
 # ============================================================
 # Ràng buộc của một phiên
 # ============================================================
-def rang_buoc(sid: str) -> Dict[str, Any]:
+def rang_buoc(sid: str) -> dict[str, Any]:
     return dict(_load()["phien"].get(str(sid or ""), {}))
 
 
-def dat_rang_buoc(sid: str, *, thu_muc_id: Optional[str] = None, nhanh: Optional[str] = None,
-                  muc_quyen: Optional[str] = None, worktree: Optional[str] = None,
-                  thu_muc_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+def dat_rang_buoc(sid: str, *, thu_muc_id: str | None = None, nhanh: str | None = None,
+                  muc_quyen: str | None = None, worktree: str | None = None,
+                  thu_muc_ids: list[str] | None = None) -> dict[str, Any]:
     """Ghi đè từng trường một. Trường nào truyền None thì giữ nguyên giá trị cũ.
 
     `thu_muc_id=""` là hợp lệ và có nghĩa: GỠ thư mục khỏi phiên, quay về chat trong brain.
@@ -387,7 +387,7 @@ def dat_rang_buoc(sid: str, *, thu_muc_id: Optional[str] = None, nhanh: Optional
         return dict(cu)
 
 
-def sessions_using(tid: str) -> List[str]:
+def sessions_using(tid: str) -> list[str]:
     """Session ids whose binding still lists folder `tid` (main or extra), 0.159.0."""
     out = []
     for sid, rb in _load()["phien"].items():
@@ -434,7 +434,7 @@ def muc_quyen_cua_phien(sid: str) -> str:
     return rang_buoc(sid).get("muc_quyen") or MUC_QUYEN_MAC_DINH
 
 
-def thu_muc_cua_phien(sid: str) -> List[Dict[str, Any]]:
+def thu_muc_cua_phien(sid: str) -> list[dict[str, Any]]:
     """Mọi thư mục phiên đang gắn, theo đúng thứ tự. Cái ĐẦU TIÊN là thư mục chính.
 
     Chỉ trả về thư mục còn trong sổ: gỡ một thư mục khỏi Javis mà vẫn để lại id chết trong
@@ -497,7 +497,7 @@ def _can_git(sid: str, viec: str) -> str:
 # ============================================================
 # Worktree
 # ============================================================
-def tao_worktree(sid: str) -> Dict[str, Any]:
+def tao_worktree(sid: str) -> dict[str, Any]:
     """Mở một worktree riêng cho phiên, trên nhánh mới `javis/<phiên>` tách từ nhánh đã chọn.
 
     Nhánh MỚI chứ không phải nhánh gốc: git từ chối checkout một nhánh ở hai worktree cùng
@@ -528,7 +528,7 @@ def tao_worktree(sid: str) -> Dict[str, Any]:
     return {"worktree": str(dich), "nhanh": ten_nhanh, "da_co": False}
 
 
-def go_worktree(sid: str, ep: bool = False) -> Dict[str, Any]:
+def go_worktree(sid: str, ep: bool = False) -> dict[str, Any]:
     """Gỡ worktree của phiên.
 
     Còn sửa đổi chưa commit mà không `ep` thì TỪ CHỐI và nói rõ đang giữ ở đâu. Gỡ im lặng một
@@ -568,7 +568,7 @@ def _tag_moi(sid: str, cwd: str) -> str:
     return f"{tien_to}{so + 1}"
 
 
-def tao_diem_hoi(sid: str) -> Dict[str, Any]:
+def tao_diem_hoi(sid: str) -> dict[str, Any]:
     """Đặt một tag lên HEAD hiện tại để rollback được. KHÔNG commit hộ.
 
     Repo chưa có commit nào thì không có HEAD để gắn tag: nói thẳng chứ không ném lỗi git thô,
@@ -596,11 +596,11 @@ def tao_diem_hoi(sid: str) -> Dict[str, Any]:
     return {"tag": tag, "commit": head, "cwd": cwd}
 
 
-def danh_sach_diem_hoi(sid: str) -> List[Dict[str, Any]]:
+def danh_sach_diem_hoi(sid: str) -> list[dict[str, Any]]:
     return list(rang_buoc(sid).get("diem_hoi") or [])
 
 
-def rollback(sid: str, tag: str) -> Dict[str, Any]:
+def rollback(sid: str, tag: str) -> dict[str, Any]:
     """`git reset --hard <tag>`. Chỉ nhận tag CỦA CHÍNH phiên này.
 
     Giới hạn đó không phải hình thức: nhận tag bất kỳ thì một cú bấm nhầm kéo cả cây về một

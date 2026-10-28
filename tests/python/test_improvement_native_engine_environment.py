@@ -1,12 +1,11 @@
 """Actual engine setup must not alter an owned client's sealed environment."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import os
 import unittest
 from unittest.mock import patch
 
 import test_improvement_claude as fixture
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class EngineEnvironmentTests(unittest.TestCase):

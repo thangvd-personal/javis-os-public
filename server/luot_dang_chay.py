@@ -19,13 +19,12 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from typing import Dict
 
-_DANG: Dict[str, dict] = {}
+_DANG: dict[str, dict] = {}
 # Sổ SỐNG riêng cho vòng đời lượt (review mã bàn giao vòng 2, P2-1): chỉ `ket_thuc` (gọi trong finally của lượt) mới gỡ,
 # KHÔNG dọn theo tuổi. _DANG ở trên dọn theo tuổi vì chỉ dùng để ĐOÁN người giao việc; tuổi bản ghi không chứng minh
 # lượt đã dừng, nên không được dùng để quyết định quyền thực thi.
-_SONG: Dict[str, dict] = {}
+_SONG: dict[str, dict] = {}
 TUOI_TOI_DA = 3 * 3600      # lượt kẹt quá lâu (không ai gạch) thì coi như đã chết
 
 
@@ -99,7 +98,7 @@ def dang_chay(chat_id: str, msg_id: int) -> bool:
     return bool(cid and mid) and any(x["chat_id"] == cid and x["msg_id"] == mid for x in _SONG.values())
 
 
-def loi_cua_luot(chat_id: str, msg_id: int, vault) -> "str | None":
+def loi_cua_luot(chat_id: str, msg_id: int, vault) -> str | None:
     """Lời người dùng của ĐÚNG lượt (khung chat + id tin + brain), đọc theo khoá mà ngữ cảnh lượt (`turn_context`) mang
     tới; None khi lượt đó không còn trong sổ. Khác `doan_luot`: không đoán "lượt duy nhất của brain", nên hai lượt chạy
     song song không đọc nhầm lời của nhau (Resonance A1, tool javis_goal)."""

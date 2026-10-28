@@ -11,28 +11,28 @@ Nạp `server/resonance*.py` của commit phát hành 0.95.1 (`adb103ed` trên m
    ở trạng thái lúc nâng.
 Engine giả, không model thật. Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import importlib.util
 import os
-import shutil
 import sqlite3
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a4rb-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance as R
+import resonance_store as RS
 
 sys.path.insert(0, str(ROOT / "tools"))
-import resonance_restore_pre_a4 as RESTORE  # noqa: E402
+import resonance_restore_pre_a4 as RESTORE
 
 OLD_SHA = "adb103ed7f1c61eb21127afd1ba746ee130c6439"
 _fails = []

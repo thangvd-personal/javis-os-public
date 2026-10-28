@@ -66,27 +66,16 @@ NGUONG_GOI_TEN = 0.8
 KHOA_MIN_MO = 4
 
 # Từ đứng TRƯỚC vị trí gọi tên: "hey Javis", "ok Javis", "này Javis", "cảm ơn Javis".
-_MO_DAU = frozenset("""
-hey hi hello ok okay alo alô này ê ơi à ừ ờ ừm um rồi thôi nào chào ơn xin cám cảm thanks thank
-""".split())
+_MO_DAU = frozenset(["hey", "hi", "hello", "ok", "okay", "alo", "alô", "này", "ê", "ơi", "à", "ừ", "ờ", "ừm", "um", "rồi", "thôi", "nào", "chào", "ơn", "xin", "cám", "cảm", "thanks", "thank"])
 # Từ đứng SAU vị trí gọi tên: "Javis ơi", "Javis à", "Javis này".
-_KET_GOI = frozenset("ơi à ạ nhé nha này ei ê hey".split())
+_KET_GOI = frozenset(["ơi", "à", "ạ", "nhé", "nha", "này", "ei", "ê", "hey"])
 # Từ đứng trước cho biết đang nói về NGƯỜI THỨ BA, không phải gọi trợ lý.
-_NGOI_THU_BA = frozenset("""
-cho với của gặp tên ông bà chú cô bác cậu mợ dì thằng con
-to with for from named mr mrs ms miss
-""".split())
+_NGOI_THU_BA = frozenset(["cho", "với", "của", "gặp", "tên", "ông", "bà", "chú", "cô", "bác", "cậu", "mợ", "dì", "thằng", "con", "to", "with", "for", "from", "named", "mr", "mrs", "ms", "miss"])
 # Ranh giới câu trong đoạn ngăn cách giữa hai từ.
 _RANH_CAU = re.compile(r"[.!?…\n,;:()\[\]\"“”]")
-_TU = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?", re.U)   # một "tiếng": chữ cái, không số
+_TU = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)?", re.UNICODE)   # một "tiếng": chữ cái, không số
 # Hotwords are spelling hints, never permission to change a command or amount.
-PROTECTED_WORDS = frozenset("""
-không chẳng chưa đừng chớ dừng hủy huỷ bật tắt mở đóng xóa xoá gửi chuyển
-thêm bớt tăng giảm mua bán đặt đọc ghi lưu sửa xong chỉ trừ trước sau
-một hai ba bốn tư năm sáu bảy tám chín mười mươi trăm nghìn ngàn triệu tỷ
-no not never don't stop cancel enable disable open close delete send transfer
-one two three four five six seven eight nine ten hundred thousand million
-""".split())
+PROTECTED_WORDS = frozenset(["không", "chẳng", "chưa", "đừng", "chớ", "dừng", "hủy", "huỷ", "bật", "tắt", "mở", "đóng", "xóa", "xoá", "gửi", "chuyển", "thêm", "bớt", "tăng", "giảm", "mua", "bán", "đặt", "đọc", "ghi", "lưu", "sửa", "xong", "chỉ", "trừ", "trước", "sau", "một", "hai", "ba", "bốn", "tư", "năm", "sáu", "bảy", "tám", "chín", "mười", "mươi", "trăm", "nghìn", "ngàn", "triệu", "tỷ", "no", "not", "never", "don't", "stop", "cancel", "enable", "disable", "open", "close", "delete", "send", "transfer", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "hundred", "thousand", "million"])
 # Khối ngữ cảnh dashboard chèn TRƯỚC lời nói: FILE ĐANG MỞ (đang mở file trong trình sửa) rồi
 # NGỮ CẢNH GIAO DIỆN. Cả hai không phải lời nói. 0.65.29: trước chỉ nhận khối sau, nên khi đang mở
 # file thì khối FILE bị tính là lời nói; dòng JAVIS_NGHE (chỉ có lời nói) bị coi là cắt chữ, và

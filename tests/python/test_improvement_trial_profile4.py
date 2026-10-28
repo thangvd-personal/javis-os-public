@@ -1,6 +1,4 @@
 """Actual TrialProfile4/options/handlers with engineering binding, no native call."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -8,12 +6,12 @@ import json
 import unittest
 from unittest.mock import patch
 
-from improvement_claude import TrialProfile
-from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
-from improvement_read_outcome_proof import correlate_read_outcomes
-from improvement_store import _hash, _json
 import test_improvement_native_skill_reads as L
 import test_improvement_read_outcome_broker as F
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
+from improvement_read_outcome_proof import correlate_read_outcomes
+from improvement_store import _json
 
 BASE = {'version', 'trial_id', 'attempt', 'session_id', 'input_hash', 'effective_hash', 'bundle_hash',
     'contract_hash', 'public_contract_hash', 'engine_config_hash', 'grant_hash', 'capability_hash',
@@ -106,7 +104,14 @@ class TrialProfileFourTests(unittest.TestCase):
         self.assertEqual(profile.broker.events[-1]['status'], 'fixture_miss')
 
     def complete(self, *, flag=None, early=False, tool=F.SKILL):
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolUseBlock, ToolResultBlock, UserMessage
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         profile, engine, manifest, workspace = self.installation(); binding, _ = self.bind(profile)
         _, handlers = self.handlers(profile, engine)
         args = F.skill_args(manifest) if tool == F.SKILL else F.fixture_args()

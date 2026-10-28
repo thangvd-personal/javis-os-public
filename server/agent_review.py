@@ -34,14 +34,17 @@ import re
 import secrets
 import sys
 import time
+from collections.abc import Callable, Iterable
 from contextlib import closing
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
 import agent_lessons as AL
 
 try:
-    from fastapi import Request  # chú thích kiểu của route phải ở mức module (annotations dạng chuỗi)
+    from fastapi import (
+        Request,  # chú thích kiểu của route phải ở mức module (annotations dạng chuỗi)
+    )
 except ImportError:  # pragma: no cover - test thuần không cần fastapi
     Request = Any  # type: ignore
 
@@ -167,9 +170,9 @@ def ensure(store, force: bool = False) -> None:
 
 # ═══════════════════════════ kiểm đầu ra ═══════════════════════════
 
-def _json_block(text: Any) -> Optional[dict]:
+def _json_block(text: Any) -> dict | None:
     s = str(text or "")
-    m = re.search(r"\{.*\}", s, re.S)
+    m = re.search(r"\{.*\}", s, re.DOTALL)
     if not m:
         return None
     try:
@@ -263,7 +266,7 @@ class JudgeAdapter:
             return None
 
     async def proactive(self, *, agent_key: str, context_ref: str, draft: str, source_event: str, origin: str,
-                        payload: Optional[dict] = None) -> dict:
+                        payload: dict | None = None) -> dict:
         mod = self._mod()
         fn = getattr(mod, "judge_proactive", None) if mod is not None else None
         if fn is None:
@@ -350,13 +353,13 @@ def judge_errors(rows: Iterable[dict]) -> tuple:
 class ReviewDeps:
     store: Callable[[], Any]                                    # () -> GoalStore (resonance.sqlite3) | None
     reactions: Any                                              # FeedbackProjector: review_source / set_review_status
-    engine_for: Optional[Callable[[str, str, str], tuple]] = None   # (key, ctx, purpose) -> (engine, model, run)
+    engine_for: Callable[[str, str, str], tuple] | None = None   # (key, ctx, purpose) -> (engine, model, run)
     persona: Callable[[str], str] = lambda key: ""
     try_busy: Callable[[str, str], bool] = lambda key, tok: True
     release_busy: Callable[[str, str], Any] = lambda key, tok: None
-    send: Optional[Callable[[str, str, str, dict], Any]] = None     # -> {"session_id", "message_id"} | None
+    send: Callable[[str, str, str, dict], Any] | None = None     # -> {"session_id", "message_id"} | None
     judge: Any = field(default_factory=JudgeAdapter)
-    budget: Optional[Callable[..., tuple]] = None               # (key, purpose, at, reason_ref=) -> (ok, why)
+    budget: Callable[..., tuple] | None = None               # (key, purpose, at, reason_ref=) -> (ok, why)
     publish: Callable[[dict], Any] = lambda ev: None
     judge_payload: Callable[[str], dict] = lambda ctx: {}
     contexts: Callable[[str], list] = lambda key: []
@@ -721,7 +724,7 @@ class ReviewHost:
         return {"status": "no_change", "verdict": "speak", "decision_id": did,
                 "status_reason": _chu("Chưa gửi được tin mới", "The new message could not be sent")}
 
-    def _send(self, key, ctx, text, outcome, reply_to, rid, did, session_id="") -> Optional[dict]:
+    def _send(self, key, ctx, text, outcome, reply_to, rid, did, session_id="") -> dict | None:
         if self.deps.send is None:
             return None
         try:
@@ -753,7 +756,7 @@ class ReviewHost:
                                         {"reason_id": rv.get("reason_id"), "message_id": sent["message_id"],
                                          "decision_id": (decision or {}).get("decision_id")})
 
-    def recover_stale_claims(self, now: Optional[float] = None) -> list:
+    def recover_stale_claims(self, now: float | None = None) -> list:
         """Lý do `reaction_review` còn `claimed` quá một lượt (10 phút + 60 giây) mà tiến trình này không còn chạy lượt đó
         (tiến trình cũ chết giữa lượt): chốt `interrupted` để nguồn về `pending` (hay `failed` khi đã thử đủ), không kẹt mãi.
         Dòng sổ đã qua mốc engine vẫn tính (đối soát T2), chưa qua thì đối soát hoàn. Trả mã lý do đã gỡ; gói WS của trạng
@@ -914,7 +917,7 @@ class ReviewHost:
         n, e = judge_errors(rows)
         return (e / n) if n else 0.0
 
-    def _link_policy(self, store, key, ctx, kind, cid, before, after, now) -> Optional[int]:
+    def _link_policy(self, store, key, ctx, kind, cid, before, after, now) -> int | None:
         """Cửa sổ quan sát 6.4 ở phần P: dùng dòng J đã ghi qua móc của nó (nguồn `self_review:<mã>`), chưa có thì tự ghi.
         Tỷ lệ lỗi phán xử nền ghi vào dòng đó để luật "+0,15 khi ≥ 6 nhãn" có mốc so."""
         import agent_pulse as AP
@@ -1042,7 +1045,7 @@ class ReviewHost:
         self._update_change(store, cid, status="applied", after_json=a, policy_change_id=pc)
         return {"status": "applied", "change_id": cid, "policy_change_id": pc, "kind": kind, "before": b, "after": a}
 
-    def _save_proposal(self, store, key, review_ref, area, text, evidence, now) -> Optional[int]:
+    def _save_proposal(self, store, key, review_ref, area, text, evidence, now) -> int | None:
         body = AL.clean_text(text, 600)
         if not body:
             return None
@@ -1205,7 +1208,7 @@ class ReviewHost:
         self._update_change(store, cid, status="reverted", reverted_at=now,
                             revert_reason=note or ("owner" if by_owner else "policy_revert"))
 
-    def refresh_policy_labels(self, now: Optional[float] = None) -> int:
+    def refresh_policy_labels(self, now: float | None = None) -> int:
         """Trước khi P đóng cửa sổ quan sát: số nhãn và số lỗi phán xử từ sau mỗi thay đổi đang quan sát của tự rà soát
         (`agent_pulse.record_policy_labels`); đồng bộ trạng thái kept/reverted từ P. Trả số thay đổi đã cập nhật."""
         import agent_pulse as AP
@@ -1246,7 +1249,7 @@ class ReviewHost:
             n += 1
         return n
 
-    async def tick(self, agents: Optional[Iterable[str]] = None) -> dict:
+    async def tick(self, agents: Iterable[str] | None = None) -> dict:
         """Một nhịp (gọi trước `PulseHost.tick` mỗi 30 giây): cập nhật nhãn cho cửa sổ quan sát, rồi kiểm agent nào đến
         hạn tự rà soát (mỗi agent tối đa một lần kiểm mỗi 10 phút) và chạy ở tác vụ riêng."""
         store = await asyncio.to_thread(self._store)
@@ -1344,13 +1347,13 @@ class _Reject(Exception):
 _DEFAULT: list = [None]
 
 
-def wire(host: Optional[ReviewHost]) -> Optional[ReviewHost]:
+def wire(host: ReviewHost | None) -> ReviewHost | None:
     """`main.py` nối host học mặc định (một lần lúc khởi động) rồi gọi `register_with_pulse()`."""
     _DEFAULT[0] = host
     return host
 
 
-def default() -> Optional[ReviewHost]:
+def default() -> ReviewHost | None:
     return _DEFAULT[0]
 
 
@@ -1382,7 +1385,7 @@ def view(store, agent_key: str) -> dict:
 class LearnRouteDeps:
     brain_key: Callable[[str], str]                         # brain trên dashboard -> đường dẫn đã resolve
     agent_exists: Callable[[str, str], bool]                # (root, slug) -> file trợ lý có thật
-    agent_key: Callable[[str, str], Optional[str]]          # (root, slug) -> agent_key đang hoạt động | None
+    agent_key: Callable[[str, str], str | None]          # (root, slug) -> agent_key đang hoạt động | None
     store: Callable[[], Any]                                # () -> GoalStore | None
 
 
@@ -1393,9 +1396,9 @@ def register_routes(app, deps: LearnRouteDeps) -> None:
     - `POST /agents/{slug}/lessons/{lesson_id}/promote`: chủ đưa một bài học nhóm/chat riêng lên dùng mọi nơi.
     - `POST /agents/{slug}/budget` {daily_calls: số | "unlimited"}: hạn mức lượt tự phát mỗi ngày của trợ lý.
     Quay lại một thay đổi của tự rà soát dùng route của P (`POST /agents/{slug}/pulse/revert` kèm `change_id`)."""
-    from fastapi.responses import JSONResponse
-    import localefmt
     import agent_budget as AB
+    import localefmt
+    from fastapi.responses import JSONResponse
 
     def err(code, vi, en):
         return JSONResponse({"ok": False, "error": localefmt.chu(vi, en)}, status_code=code)

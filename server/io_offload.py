@@ -8,10 +8,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 import threading
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 
-async def run_io(fn: Callable, *args, undo: Optional[Callable[[Any], Any]] = None, **kwargs) -> Any:
+async def run_io(fn: Callable, *args, undo: Callable[[Any], Any] | None = None, **kwargs) -> Any:
     """Chạy một đơn vị I/O chặn (SQLite, file) ở luồng phụ, không chặn event loop (review T1, R5).
 
     Bị huỷ (kể cả huỷ lặp) khi luồng phụ còn đang ghi: KHÔNG bỏ đi giữa chừng. Chờ luồng phụ xong hẳn, chạy `undo(kết
@@ -80,7 +81,7 @@ class LoopMarker:
     def __init__(self, write: Callable[[], Any]):
         self._write = write
         self.marked = False
-        self._fut: Optional[asyncio.Future] = None
+        self._fut: asyncio.Future | None = None
         try:
             self._loop = asyncio.get_running_loop()
             self._loop_thread = threading.get_ident()

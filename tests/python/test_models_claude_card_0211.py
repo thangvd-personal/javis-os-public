@@ -25,7 +25,7 @@ def check(name, cond, detail=""):
 
 
 # ---- 1. The server says plainly that the CLI is missing ----
-import claude_cli as cc  # noqa: E402
+import claude_cli as cc
 
 _orig = cc.find_claude_cli
 cc.find_claude_cli = lambda: None
@@ -81,7 +81,7 @@ check("provider buttons are 16px", ".prov-action .gcard-btn { width: auto; flex:
 check("commands do not break mid-word", "break-all" not in css[css.index(".prov-steps {"):css.index("/* Nguồn xác thực")])
 
 # ---- 4. Strings ----
-import json  # noqa: E402
+import json
 
 for lang in ("vi", "en"):
     d = json.loads((ROOT / "dashboard" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))

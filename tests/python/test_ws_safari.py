@@ -7,7 +7,6 @@
 - JAVIS_WS_DEFLATE=1 keeps compression for whoever needs it.
 - A page that got its socket back reports how it lost it; /health/loop shows the last reports, bounded.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import socket
@@ -16,6 +15,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 fails = []
 
@@ -104,9 +105,9 @@ check("python main.py starts uvicorn without compression too",
 
 # ═════ drop reports ═════
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ws-drops-")
-import main  # noqa: E402
-import loop_watch  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import loop_watch
+import main
+from fastapi.testclient import TestClient
 
 c = TestClient(main.app, base_url="http://127.0.0.1:8080")
 H = {"origin": "http://127.0.0.1:8080"}

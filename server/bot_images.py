@@ -20,7 +20,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import List, Tuple
 from urllib.parse import unquote
 
 import channel_context
@@ -75,14 +74,14 @@ def _resolve(raw: str, brain_root: str) -> str:
     return ""
 
 
-def pick(text: str, brain_root: str) -> Tuple[str, List[dict]]:
+def pick(text: str, brain_root: str) -> tuple[str, list[dict]]:
     """Split the images the Agent asked to send out of `text`.
 
     Returns `(text without those images, [{"path": absolute path, "caption": alt text}])`. Images that fail a gate,
     links that are not images, and web URLs are left in the text untouched."""
     if not text or not brain_root or "![" not in text:
         return text or "", []
-    files: List[dict] = []
+    files: list[dict] = []
     seen = set()
 
     def repl(m):

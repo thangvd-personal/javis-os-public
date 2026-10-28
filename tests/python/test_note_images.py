@@ -15,16 +15,17 @@ sweeper's reach.
 This file locks both: the logical folder `images` exists and works, and the sweeper does not touch
 it even when the files are old. It also locks that the images folder stores raster formats only.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-note-images-"))
 
-import media_gc  # noqa: E402
+import media_gc
 
 fails = []
 
@@ -36,14 +37,14 @@ def check(name, cond, extra=""):
 
 
 # ── 1. The logical folder `images` ───────────────────────────────────────────────────
-import main as _main  # noqa: E402
+import main as _main
 
 check("there is a logical folder 'images' the client can name", "images" in _main._THU_MUC_LOGIC)
 check("'sources' and 'attachments' are still there",
       "sources" in _main._THU_MUC_LOGIC and "attachments" in _main._THU_MUC_LOGIC)
 
 # ── 2. One real upload: the image lands in the right place ──────────────────────────
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 brain = tempfile.mkdtemp(prefix="brain-img-")
 c = TestClient(_main.app, base_url="http://127.0.0.1")

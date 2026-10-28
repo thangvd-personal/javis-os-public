@@ -29,7 +29,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 
 # Hạn mức học được sống bao lâu trước khi coi là cũ. Nhà cung cấp đổi gói, nâng tier, hoặc
 # hạn mức khác nhau theo giờ - giữ vĩnh viễn là tự khoá mình vào một con số đã lỗi thời.
@@ -125,7 +125,7 @@ class LimitFact:
 # bốn mẫu rời, vì bốn mẫu rời là bốn cơ hội quên một cái.
 _GROQ_DIM_RE = re.compile(
     r"\bon\s+(tokens?|requests?)\s+per\s+(minute|hour|day)[^:]{0,40}:\s*"
-    r"Limit\s+(\d+)\s*,\s*(?:Used\s+(\d+)\s*,\s*)?Requested\s+(\d+)", re.I)
+    r"Limit\s+(\d+)\s*,\s*(?:Used\s+(\d+)\s*,\s*)?Requested\s+(\d+)", re.IGNORECASE)
 _DIM_KIND = {("token", "minute"): "tpm", ("token", "day"): "tpd", ("token", "hour"): "tpm",
              ("request", "minute"): "rpm", ("request", "day"): "rpd",
              ("request", "hour"): "rpm"}
@@ -133,16 +133,16 @@ _DIM_KIND = {("token", "minute"): "tpm", ("token", "day"): "tpd", ("token", "hou
 _PATTERNS: tuple[tuple[str, str, re.Pattern], ...] = (
     # OpenAI: "maximum context length is 8192 tokens, however you requested 9000 tokens"
     ("openai_context", "context", re.compile(
-        r"maximum\s+context\s+length\s+is\s+(\d+)\s+tokens?.{0,40}?requested\s+(\d+)", re.I | re.S)),
+        r"maximum\s+context\s+length\s+is\s+(\d+)\s+tokens?.{0,40}?requested\s+(\d+)", re.IGNORECASE | re.DOTALL)),
     # OpenAI rate limit: "Limit 30000, Requested 31000"
     ("openai_tpm", "tpm", re.compile(
-        r"rate\s+limit[^.]{0,80}?Limit\s+(\d+)[^0-9]{1,20}Requested\s+(\d+)", re.I | re.S)),
+        r"rate\s+limit[^.]{0,80}?Limit\s+(\d+)[^0-9]{1,20}Requested\s+(\d+)", re.IGNORECASE | re.DOTALL)),
     # Anthropic: "prompt is too long: 210000 tokens > 200000 maximum"  (thứ tự NGƯỢC)
     ("anthropic_context", "context", re.compile(
-        r"prompt\s+is\s+too\s+long:\s*(\d+)\s+tokens?\s*>\s*(\d+)\s+maximum", re.I)),
+        r"prompt\s+is\s+too\s+long:\s*(\d+)\s+tokens?\s*>\s*(\d+)\s+maximum", re.IGNORECASE)),
     # Gemini / chung: "input token count (12345) exceeds the maximum ... (8192)"  (thứ tự NGƯỢC)
     ("gemini_context", "context", re.compile(
-        r"input\s+token\s+count\s*\((\d+)\)\s*exceeds[^()]{0,60}\((\d+)\)", re.I)),
+        r"input\s+token\s+count\s*\((\d+)\)\s*exceeds[^()]{0,60}\((\d+)\)", re.IGNORECASE)),
 )
 
 # Mẫu có thứ tự (requested, limit) thay vì (limit, requested). Tách ra thành dữ liệu thay vì
@@ -167,7 +167,7 @@ _SIZE_ERROR_HINTS = (
 _RATE_HINTS = ("rate limit reached", "rate_limit_exceeded", "too many requests")
 
 
-_RETRY_AFTER_RE = re.compile(r"try\s+again\s+in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s|m)?\b", re.I)
+_RETRY_AFTER_RE = re.compile(r"try\s+again\s+in\s+([0-9]+(?:\.[0-9]+)?)\s*(ms|s|m)?\b", re.IGNORECASE)
 
 
 def parse_retry_after(body: str) -> float:
@@ -283,40 +283,40 @@ class SubscriptionLimit:
 
 
 # Claude Code in ra dạng máy đọc được: "Claude AI usage limit reached|1730000000"
-_CLAUDE_EPOCH_RE = re.compile(r"usage\s+limit\s+reached\s*\|\s*(\d{9,})", re.I)
+_CLAUDE_EPOCH_RE = re.compile(r"usage\s+limit\s+reached\s*\|\s*(\d{9,})", re.IGNORECASE)
 # Và các dạng chữ. Mỗi mẫu kèm cửa sổ mà nó nói tới (nếu câu đó có nói).
 _SUB_PATTERNS: tuple[tuple[str, str, str, re.Pattern], ...] = (
     ("claude_weekly", "claude-code", "tuần",
-     re.compile(r"(weekly|per\s+week)\s+limit\s+reached|reached\s+your\s+weekly\s+limit", re.I)),
+     re.compile(r"(weekly|per\s+week)\s+limit\s+reached|reached\s+your\s+weekly\s+limit", re.IGNORECASE)),
     ("claude_5h", "claude-code", "5 giờ",
-     re.compile(r"\b5[\s-]?hour\s+limit\s+reached", re.I)),
+     re.compile(r"\b5[\s-]?hour\s+limit\s+reached", re.IGNORECASE)),
     ("claude_usage", "claude-code", "",
-     re.compile(r"claude\s+(ai\s+)?(usage|api)?\s*limit\s+reached", re.I)),
+     re.compile(r"claude\s+(ai\s+)?(usage|api)?\s*limit\s+reached", re.IGNORECASE)),
     ("claude_reached", "claude-code", "",
-     re.compile(r"(you'?ve\s+)?reached\s+your\s+(current\s+)?usage\s+limit", re.I)),
+     re.compile(r"(you'?ve\s+)?reached\s+your\s+(current\s+)?usage\s+limit", re.IGNORECASE)),
     ("codex_hit", "codex", "",
-     re.compile(r"(you'?ve\s+)?(hit|reached)\s+your\s+(usage|plan|weekly)\s+limit", re.I)),
+     re.compile(r"(you'?ve\s+)?(hit|reached)\s+your\s+(usage|plan|weekly)\s+limit", re.IGNORECASE)),
     ("codex_quota", "codex", "",
-     re.compile(r"usage\s+limit\s+reached|quota\s+exceeded\s+for\s+your\s+plan", re.I)),
+     re.compile(r"usage\s+limit\s+reached|quota\s+exceeded\s+for\s+your\s+plan", re.IGNORECASE)),
     # "You've hit your session limit · resets 12pm (UTC)". Câu này KHÔNG tự nói nhà nào, nên
     # engine để rỗng: gọi nó là "gói ChatGPT" khi thật ra là gói Claude thì người dùng đi sửa
     # nhầm chỗ. Rỗng thì `engine_hint` của chỗ gọi quyết, không có hint thì hiện nhãn chung
     # "gói thuê bao đang dùng" - thà nói ít hơn là nói sai.
     ("sub_session", "", "",
-     re.compile(r"(you'?ve\s+)?(hit|reached)\s+your\s+session\s+limit", re.I)),
+     re.compile(r"(you'?ve\s+)?(hit|reached)\s+your\s+session\s+limit", re.IGNORECASE)),
     # "You've hit your limit · resets 1:50am (Asia/Bangkok)": the Pro plan form, no window named
     # (field report 0.270, code 25). Same reason as above for the empty engine.
     ("sub_limit", "", "",
-     re.compile(r"you'?ve\s+hit\s+your\s+limit\b", re.I)),
+     re.compile(r"you'?ve\s+hit\s+your\s+limit\b", re.IGNORECASE)),
     # Gemini CLI. Câu chữ lấy từ chính bundle @google/gemini-cli và từ lỗi backend Google trả
     # về ("Quota exceeded for quota metric...", RESOURCE_EXHAUSTED). Gói đăng nhập Google có
     # hạn mức theo NGÀY, nên nói được "hết lượt hôm nay" là đúng chuyện đang xảy ra.
     ("gemini_daily", "gemini-cli", "ngày",
      re.compile(r"exhausted\s+your\s+daily\s+quota|daily\s+(?:quota|limit)\s+(?:limit\s+)?"
-                r"(?:reached|exceeded)", re.I)),
+                r"(?:reached|exceeded)", re.IGNORECASE)),
     ("gemini_quota", "gemini-cli", "",
      re.compile(r"quota\s+exceeded\s+for\s+quota\s+metric|resource[_\s]has[_\s]been[_\s]exhausted"
-                r"|RESOURCE_EXHAUSTED", re.I)),
+                r"|RESOURCE_EXHAUSTED", re.IGNORECASE)),
 )
 
 # "resets at 3pm", "resets in 2 hours 15 minutes", "try again in 45 minutes", và dạng KHÔNG có
@@ -328,10 +328,10 @@ _SUB_PATTERNS: tuple[tuple[str, str, str, re.Pattern], ...] = (
 _RESET_TEXT_RE = re.compile(
     r"(resets?\s+(?:at|in|on)\s+[^.\n|]{1,60}"
     r"|resets?\s+(?=\d|midnight|noon|tomorrow)[^.\n|]{1,60}"
-    r"|try\s+again\s+in\s+[^.\n|]{1,40})", re.I)
+    r"|try\s+again\s+in\s+[^.\n|]{1,40})", re.IGNORECASE)
 _RESET_IN_RE = re.compile(
     r"\b(?:resets?|try\s+again)\s+in\s+"
-    r"(?:(\d+)\s*(?:hours?|hrs?|h|giờ)\s*)?(?:(\d+)\s*(?:minutes?|mins?|m|phút))?", re.I)
+    r"(?:(\d+)\s*(?:hours?|hrs?|h|giờ)\s*)?(?:(\d+)\s*(?:minutes?|mins?|m|phút))?", re.IGNORECASE)
 
 
 # A clock time instead of a delay: "resets 1:50am (Asia/Bangkok)", "resets 1am", "resets 13:50",
@@ -348,8 +348,8 @@ _RESET_CLOCK_RE = re.compile(
     r"(?:(?P<word>midnight|noon)\b"
     r"|(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ap>[ap])\.?m\b\.?"
     r"|(?P<h24>\d{1,2}):(?P<m24>\d{2})\b)"
-    r"(?:\s*\((?P<tz>[^()\n]{1,40})\))?", re.I)
-_UTC_OFFSET_RE = re.compile(r"^(?:utc|gmt)?\s*([+-])(\d{1,2})(?::?(\d{2}))?$", re.I)
+    r"(?:\s*\((?P<tz>[^()\n]{1,40})\))?", re.IGNORECASE)
+_UTC_OFFSET_RE = re.compile(r"^(?:utc|gmt)?\s*([+-])(\d{1,2})(?::?(\d{2}))?$", re.IGNORECASE)
 
 
 def _zone(name: str) -> tzinfo | None:
@@ -363,7 +363,7 @@ def _zone(name: str) -> tzinfo | None:
     except Exception:   # noqa: BLE001 - unknown name or no tzdata on this machine
         pass
     if raw.upper() in ("UTC", "GMT", "Z"):
-        return timezone.utc
+        return UTC
     m = _UTC_OFFSET_RE.match(raw)
     if m and int(m.group(2)) <= 14:
         delta = timedelta(hours=int(m.group(2)), minutes=int(m.group(3) or 0))

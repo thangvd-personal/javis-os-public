@@ -6,14 +6,15 @@ Không cần pytest, không chạm mạng, không cần master token thật.
 Phủ: entry tồn tại + đúng runner, map env của 3 ô đăng nhập, luật opt-in của UNSAFE_MODE
 (mấu chốt giữ bản fork sạch), và lớp chặn cứng theo 3 mức quyền + trần của mode.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-keeptest-"))
 
-import mcp_catalog  # noqa: E402
+import mcp_catalog
 
 _fails = []
 

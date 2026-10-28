@@ -160,7 +160,7 @@ def _hoi_github(timeout: float = 5.0) -> int:
     mỗi ngày). urllib tự đi qua HTTPS_PROXY của máy nếu có."""
     req = urllib.request.Request(API_URL, headers={
         "Accept": "application/vnd.github+json", "User-Agent": "javis-os"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:      # noqa: S310 - URL cố định https
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         n = json.loads(r.read().decode("utf-8")).get("stargazers_count")
     if not isinstance(n, int) or n < 0:
         raise ValueError("stargazers_count không hợp lệ")

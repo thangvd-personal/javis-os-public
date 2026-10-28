@@ -43,7 +43,7 @@ class _Deps:
     """Attributes set on `feature.deps` before the platform loads (main sets `incident_hook`) are applied to the real
     deps when it does."""
 
-    def __init__(self, owner: "LazyWebhooks"):
+    def __init__(self, owner: LazyWebhooks):
         object.__setattr__(self, "_owner", owner)
         object.__setattr__(self, "_pending", {})
 
@@ -90,6 +90,7 @@ class LazyWebhooks:
 
     async def call(self, name: str, request):
         import inspect
+
         from fastapi.encoders import jsonable_encoder
         from starlette.responses import JSONResponse, Response
         self.get()

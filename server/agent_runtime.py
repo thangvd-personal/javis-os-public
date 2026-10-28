@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 import localefmt
 import workflow_graph
@@ -73,7 +74,7 @@ class AgentPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "AgentPolicy":
+    def from_settings(cls, settings: dict) -> AgentPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         runtime = runtime if isinstance(runtime, dict) else {}
         raw = runtime.get("agent_canary")
@@ -113,7 +114,7 @@ class CapabilityGrant:
     allows_nested_workflow: bool
 
     @classmethod
-    def from_graph(cls, graph: WorkflowGraph) -> "CapabilityGrant":
+    def from_graph(cls, graph: WorkflowGraph) -> CapabilityGrant:
         return cls(
             agent_slugs=frozenset(x.agent for x in graph.nodes if x.agent),
             capability_names=frozenset(x.capability_name for x in graph.nodes if x.capability_name),

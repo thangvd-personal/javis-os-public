@@ -14,9 +14,10 @@ không ai lấy được, và không có một dòng lỗi nào. Bộ test cũ c
 Đây là loại lỗi test phải bắt chứ không phải người phải nhớ: nó không làm hỏng chức năng
 nào, chỉ làm đường phát hành đứt, nên chạy thử trên máy dev không đời nào lộ ra.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -28,7 +29,7 @@ def check(name, cond):
 
 
 _VER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
-_MUC_RE = re.compile(r"^## \[(.+?)\](?:\s*-\s*(\S+))?", re.M)
+_MUC_RE = re.compile(r"^## \[(.+?)\](?:\s*-\s*(\S+))?", re.MULTILINE)
 
 _ver_path = ROOT / "VERSION"
 _cl_path = ROOT / "CHANGELOG.md"
@@ -67,7 +68,7 @@ check("nhật ký xếp mới nhất trên cùng", _ds == sorted(_ds, reverse=Tr
 check("không có phiên bản trùng trong nhật ký", len(_ds) == len(set(_ds)))
 
 # Và endpoint phải đọc ĐÚNG file đó, chứ không phải một hằng số chép tay ở đâu đó.
-import main  # noqa: E402
+import main
 
 check("máy chủ báo đúng phiên bản trong file VERSION", main._read_version() == _ver)
 

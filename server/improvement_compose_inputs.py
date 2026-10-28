@@ -5,7 +5,6 @@ candidate, executable bundle, inherited assessment or activation is created.
 """
 from __future__ import annotations
 
-import json
 import time
 from contextlib import closing
 
@@ -16,7 +15,7 @@ from improvement_comparison_plans import ExperimentPlans
 from improvement_comparison_results import ComparisonResults
 from improvement_compose_protocol import render_compose_input
 from improvement_experiment_lineage import current_fences
-from improvement_experiments import _identifier, _generation
+from improvement_experiments import _generation, _identifier
 from improvement_generation_protocol import input_bytes
 from improvement_improver_inputs import _bytes, project_packet
 from improvement_qualification_records import require_product_store

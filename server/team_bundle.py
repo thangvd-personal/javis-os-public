@@ -21,7 +21,7 @@ import io
 import json
 import re
 import zipfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import fastyaml
 
@@ -74,7 +74,7 @@ def _dump(meta: dict) -> str:
     return yaml.safe_dump(meta, allow_unicode=True, sort_keys=False)
 
 
-def team_manifest(team: dict, members: List[str], leader: str, instructions: List[str]) -> dict:
+def team_manifest(team: dict, members: list[str], leader: str, instructions: list[str]) -> dict:
     return {
         "format": "javis-team", "version": 1,
         "name": scrub(str(team.get("name") or ""))[:120],
@@ -102,7 +102,7 @@ def add_team_entry(zip_bytes: bytes, manifest: dict) -> bytes:
     return buf.getvalue()
 
 
-def read_team_entry(data: bytes) -> Optional[dict]:
+def read_team_entry(data: bytes) -> dict | None:
     """The team manifest of a file, or None when it is a plain bundle (or not a zip)."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
@@ -121,7 +121,7 @@ def read_team_entry(data: bytes) -> Optional[dict]:
     return m
 
 
-def preview(data: bytes) -> Dict[str, Any]:
+def preview(data: bytes) -> dict[str, Any]:
     """What the file holds, for the review step before adding it."""
     m = read_team_entry(data)
     if m is None:
@@ -135,7 +135,7 @@ def preview(data: bytes) -> Dict[str, Any]:
             "leader": m.get("leader", ""), "skills": skills, "instructions": len(m["instructions"])}
 
 
-def resolve_members(manifest: dict, imported: List[str], skipped: List[str], existing: set) -> Tuple[List[str], List[str]]:
+def resolve_members(manifest: dict, imported: list[str], skipped: list[str], existing: set) -> tuple[list[str], list[str]]:
     """Members to put in the new team: partners now present in the brain (imported now, or already there
     under that slug). Returns (members, missing)."""
     have = set(existing) | {k.split(":", 1)[1] for k in imported + skipped if k.startswith("agent:")}

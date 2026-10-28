@@ -12,11 +12,12 @@ bộ lọc theo brain. Không thấy tool chỉ có hai lý do: nguồn đang t�
 File này canh (1) kiến trúc vẫn không lọc theo brain, (2) javis_connections nói ra hai lý do
 đó thay vì để model tự bịa lý do thứ ba.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-mcpchung-"))
 try:
@@ -24,8 +25,8 @@ try:
 except Exception:
     pass
 
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
+import mcp_hub
+import mcp_store
 
 _fails = []
 

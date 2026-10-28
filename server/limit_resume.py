@@ -27,8 +27,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 # Đợi thêm sau mốc reset. Nhà cung cấp làm tròn mốc về phút và đồng hồ hai bên lệch nhau,
 # gọi đúng giây 0 là ăn thêm một lỗi hết lượt nữa và mất một lần thử.
@@ -57,9 +58,9 @@ class PendingResume:
     reason: str = ""            # vì sao KHÔNG tự chạy: no_reset | too_far | max_attempts | off | partial
     scope: str = ""
     created: float = field(default_factory=time.time)
-    task: Optional[asyncio.Task] = None
+    task: asyncio.Task | None = None
 
-    def payload(self, now: Optional[float] = None) -> dict:
+    def payload(self, now: float | None = None) -> dict:
         """Dạng gửi cho dashboard. Không kèm closure."""
         ts = time.time() if now is None else float(now)
         return {
@@ -90,7 +91,7 @@ class LimitResumeRegistry:
     def schedule(self, session_id: str, resume_at: float, runner: Runner, *,
                  engine: str = "", notice: str = "", scope: str = "",
                  attempt: int = 0, auto_default: bool = True,
-                 now: Optional[float] = None, partial: bool = False) -> PendingResume:
+                 now: float | None = None, partial: bool = False) -> PendingResume:
         """Ghi một mục chờ cho phiên. Mục cũ của cùng phiên bị thay.
 
         `auto_default` là ý người dùng đã chọn (ô "tự tiếp tục"); các rào bên dưới chỉ có
@@ -117,7 +118,7 @@ class LimitResumeRegistry:
             self._arm(item)
         return item
 
-    def set_auto(self, session_id: str, enabled: bool) -> Optional[PendingResume]:
+    def set_auto(self, session_id: str, enabled: bool) -> PendingResume | None:
         """Bật/tắt hẹn tự chạy của một mục đang chờ. Tắt thì giữ mục để còn "Chạy lại ngay"."""
         item = self._items.get(session_id)
         if not item:
@@ -135,14 +136,14 @@ class LimitResumeRegistry:
             item.auto, item.reason = False, "off"
         return item
 
-    def cancel(self, session_id: str) -> Optional[PendingResume]:
+    def cancel(self, session_id: str) -> PendingResume | None:
         """Bỏ mục chờ (người dùng gửi tin mới, hoặc lượt được chạy lại)."""
         item = self._items.pop(session_id, None)
         if item:
             self._disarm(item)
         return item
 
-    async def run_now(self, session_id: str) -> Optional[PendingResume]:
+    async def run_now(self, session_id: str) -> PendingResume | None:
         """Chạy lại ngay, không đợi mốc reset. Trả mục vừa chạy, None nếu không có."""
         item = self.cancel(session_id)
         if not item:
@@ -151,10 +152,10 @@ class LimitResumeRegistry:
         return item
 
     # ---- đọc ----
-    def get(self, session_id: str) -> Optional[PendingResume]:
+    def get(self, session_id: str) -> PendingResume | None:
         return self._items.get(session_id)
 
-    def snapshot(self, now: Optional[float] = None) -> list[dict]:
+    def snapshot(self, now: float | None = None) -> list[dict]:
         """Danh sách mục chờ cho khung `hello`, đã dọn mục quá cũ."""
         ts = time.time() if now is None else float(now)
         out = []

@@ -1,6 +1,4 @@
 """Bounded real ASGI request streams; no main startup, storage or engine execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -10,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 BOOT = Path(tempfile.mkdtemp(prefix="trial-request-test-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",

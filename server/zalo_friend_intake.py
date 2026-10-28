@@ -35,7 +35,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import conversations
 import localefmt
@@ -53,12 +53,12 @@ MAX_INTRO = 500            # characters kept from the request message (untrusted
 MAX_NAME = 100             # characters kept from the display name
 RECEIVED_REQUEST = 2       # zca-js FriendRecommendationsType.ReceivedFriendRequest
 
-_poll: Dict[str, Dict[str, float]] = {}            # conn_id -> {"next": ts, "gap": seconds}
-_fails: Dict[Tuple[str, str], Dict[str, float]] = {}  # (conn_id, uid) -> {"n": failures, "until": ts}
-_tasks: Dict[str, "asyncio.Task"] = {}              # conn_id -> running round
+_poll: dict[str, dict[str, float]] = {}            # conn_id -> {"next": ts, "gap": seconds}
+_fails: dict[tuple[str, str], dict[str, float]] = {}  # (conn_id, uid) -> {"n": failures, "until": ts}
+_tasks: dict[str, asyncio.Task] = {}              # conn_id -> running round
 
 
-def _bot_cfg(conn_id: str) -> Optional[dict]:
+def _bot_cfg(conn_id: str) -> dict | None:
     import zalo_personal_channel as zc
     tb = zc._BOTS.get(str(conn_id))
     fn = getattr(tb, "cfg_fn", None)
@@ -99,12 +99,12 @@ def enabled_for(conn_id: str, luc=None) -> bool:
     return not why_not(conn_id, luc)
 
 
-def due(conn_id: str, now: Optional[float] = None) -> bool:
+def due(conn_id: str, now: float | None = None) -> bool:
     now = time.time() if now is None else now
     return now >= float((_poll.get(str(conn_id)) or {}).get("next") or 0)
 
 
-def _schedule(conn_id: str, found: bool, now: float, wait: Optional[float] = None) -> None:
+def _schedule(conn_id: str, found: bool, now: float, wait: float | None = None) -> None:
     """Next check of this account: `POLL_SECONDS` from now, or `wait` when given. `found` is kept for callers and logs;
     the interval is the same either way (an hour is already as quiet as the owner wants)."""
     st = _poll.setdefault(str(conn_id), {"gap": POLL_SECONDS, "next": 0.0})
@@ -112,7 +112,7 @@ def _schedule(conn_id: str, found: bool, now: float, wait: Optional[float] = Non
     st["next"] = now + (POLL_SECONDS if wait is None else wait)
 
 
-def skipped(conn_id: str, uid: str, now: Optional[float] = None) -> bool:
+def skipped(conn_id: str, uid: str, now: float | None = None) -> bool:
     """Is this person backed off after failed accepts?"""
     f = _fails.get((str(conn_id), str(uid)))
     if not f:
@@ -128,7 +128,7 @@ def _note_failure(conn_id: str, uid: str, now: float) -> None:
     f["until"] = now + FAIL_BACKOFF * (2 ** (f["n"] - 1))
 
 
-def received_requests(data: Any) -> List[dict]:
+def received_requests(data: Any) -> list[dict]:
     """Pending requests sent TO this account, as [{uid, name, message, time}], oldest first."""
     items = (data or {}).get("recommItems") if isinstance(data, dict) else None
     out = []
@@ -164,7 +164,7 @@ def intro_text(message: str) -> str:
                          "[Just became friends, this person sent no introduction]")
 
 
-def intro_event(conn: dict, req: dict, now: Optional[float] = None) -> dict:
+def intro_event(conn: dict, req: dict, now: float | None = None) -> dict:
     """The introduction as an inbox event, same shape as `zalo_personal_channel.chuan_hoa_tin`."""
     import zalo_personal_channel as zc
     now = time.time() if now is None else now
@@ -195,7 +195,7 @@ def _unsupported(err: str) -> bool:
     return "unknown command" in w or "unknown option" in w
 
 
-async def run_once(conn: dict, now: Optional[float] = None) -> Dict[str, Any]:
+async def run_once(conn: dict, now: float | None = None) -> dict[str, Any]:
     """One round for one account. Returns counts (and `error` when Zalo could not be read). Schedules the next round."""
     import zalo_personal_channel as zc
     cid = str(conn["id"])
@@ -254,7 +254,7 @@ async def _round(conn: dict) -> None:
             print(f"[zalo-friend {label}] {kq}", file=sys.stderr)
     except asyncio.CancelledError:
         raise
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(f"[zalo-friend {label}] round over {ROUND_TIMEOUT}s, stopped", file=sys.stderr)
     except Exception as e:      # noqa: BLE001 - a side job: log it, never take the read loop down with it
         print(f"[zalo-friend {label}] error: {type(e).__name__}: {e}", file=sys.stderr)
@@ -265,7 +265,7 @@ def running(conn_id: str) -> bool:
     return bool(t) and not t.done()
 
 
-def start_round(conn: dict, now: Optional[float] = None) -> bool:
+def start_round(conn: dict, now: float | None = None) -> bool:
     """Called from the read loop after a successful read. Starts a round in its OWN task when one is due and none is
     running for this account; returns at once either way. True when a round was started."""
     cid = str(conn.get("id") or "")

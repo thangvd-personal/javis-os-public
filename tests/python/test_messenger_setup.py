@@ -13,12 +13,13 @@ No network: a fake Graph API answers every call. Guarded, in order of what hurt 
   5. Inputs are checked before any call, and plain HTTP is refused (Meta only calls HTTPS).
   6. No token ever appears in what the checklist returns.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-messenger-setup-")
 
@@ -27,9 +28,8 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import messenger_setup  # noqa: E402
+import httpx
+import messenger_setup
 
 _fails = []
 
@@ -198,11 +198,10 @@ check("http refusal names the step", r.get("step") == "https", r)
 # 7. Routes: the account is stored with the Page token, a second connect updates it,
 #    and no response carries a secret
 # ============================================================
-from fastapi.testclient import TestClient  # noqa: E402
-
-import channel_accounts  # noqa: E402
-import main  # noqa: E402
-import messenger_bot  # noqa: E402
+import channel_accounts
+import main
+import messenger_bot
+from fastapi.testclient import TestClient
 
 seen = {}
 

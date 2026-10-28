@@ -3,15 +3,13 @@
 Trọng tâm là ba bất biến: workflow cũ chạy tương đương qua adapter, node đã xong
 không chạy lại sau restart, và node ghi không bao giờ tự chạy.
 """
-from _paths import SERVER  # noqa: E402,F401
-
 import asyncio
 import json
 
-from cryptography.fernet import Fernet
-
 import workflow_graph as wg
+from _paths import SERVER  # noqa: F401
 from context_runtime import ObserveRuntime
+from cryptography.fernet import Fernet
 from workflow_runtime import WorkflowCanary, WorkflowPolicy
 
 
@@ -360,6 +358,7 @@ def test_graph_validation_rejects_every_malformed_shape():
 
 def test_defaults_do_not_admit_any_workflow(tmp_path):
     import copy
+
     import config as cfgmod
 
     settings = copy.deepcopy(cfgmod._DEFAULT)
@@ -489,6 +488,7 @@ def _drain(gen):
 def test_graph_path_and_legacy_runner_agree(tmp_path, monkeypatch):
     """Bất biến của spec: workflow hiện tại chạy TƯƠNG ĐƯƠNG qua adapter."""
     import copy
+
     import config as cfgmod
 
     # Đường cũ: mặc định repo (allocation 0).
@@ -516,6 +516,7 @@ def test_graph_path_and_legacy_runner_agree(tmp_path, monkeypatch):
 
 def test_repo_defaults_keep_workflows_on_the_legacy_runner(tmp_path, monkeypatch):
     import copy
+
     import config as cfgmod
 
     settings = copy.deepcopy(cfgmod._DEFAULT)
@@ -530,6 +531,7 @@ def test_repo_defaults_keep_workflows_on_the_legacy_runner(tmp_path, monkeypatch
 def test_graph_failure_falls_back_to_legacy_runner(tmp_path, monkeypatch):
     """Lỗi ở đường mới không được cướp lượt chạy của người dùng."""
     import copy
+
     import config as cfgmod
 
     on = copy.deepcopy(cfgmod._DEFAULT)
@@ -549,6 +551,7 @@ def test_graph_failure_falls_back_to_legacy_runner(tmp_path, monkeypatch):
 
 def test_workflow_source_exposes_manifest_without_node_bodies(tmp_path, monkeypatch):
     import copy
+
     import config as cfgmod
 
     main, brain, _ = _brain_with_workflow(
@@ -567,6 +570,7 @@ def test_workflow_source_exposes_manifest_without_node_bodies(tmp_path, monkeypa
 def test_failure_after_events_does_not_run_the_workflow_twice(tmp_path, monkeypatch):
     """Lỗi giữa chừng KHÔNG được kéo theo một lượt legacy đầy đủ nữa."""
     import copy
+
     import config as cfgmod
 
     on = copy.deepcopy(cfgmod._DEFAULT)
@@ -616,6 +620,7 @@ def test_each_brain_loads_its_own_nested_workflows(tmp_path, monkeypatch):
 def test_graph_path_events_carry_the_step_index_studio_needs(tmp_path, monkeypatch):
     """Studio định vị chỗ đổ chữ bằng `i`. Thiếu nó thì chữ bị vứt lặng lẽ."""
     import copy
+
     import config as cfgmod
 
     on = copy.deepcopy(cfgmod._DEFAULT)
@@ -774,6 +779,7 @@ def test_main_capability_runner_refuses_a_write_before_approval(tmp_path, monkey
     Đây là đường đi thật (qua mcp_hub), không phải runner giả của test.
     """
     import copy
+
     import config as cfgmod
     import main
 
@@ -844,5 +850,6 @@ def test_the_second_layer_write_guard_is_testable_and_works():
 
 if __name__ == "__main__":
     import sys
+
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))

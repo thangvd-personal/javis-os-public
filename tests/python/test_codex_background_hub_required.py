@@ -22,7 +22,6 @@ Since 0.117.0 every `_build_codex` lane also pins the job's own permission level
 
     python tests/run.py codex_background_hub_required      (no network, does not spawn codex)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -32,6 +31,8 @@ import tempfile
 import time
 import tomllib
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 # Hard-set, not setdefault: inside the production container JAVIS_STATE_DIR, BRAINS_DIR and HOME
 # point at live data, and this test writes a Codex profile under HOME and a reminders.json.
@@ -50,11 +51,11 @@ try:
 except Exception:
     pass
 
-import claude_cli  # noqa: E402
-import config as cfgmod  # noqa: E402
-import mcp_hub  # noqa: E402
-import aux_engine  # noqa: E402
-import reminders  # noqa: E402
+import aux_engine
+import claude_cli
+import config as cfgmod
+import mcp_hub
+import reminders
 
 claude_cli.find_codex_cli = lambda: "codex"   # CI has no codex binary
 
@@ -399,7 +400,8 @@ callers = sorted(n for n, s in SRC.items() if re.search(r"\b_build_codex\(", s))
 # ("team-<id>-<turn>") is not a scheduled background lane, so the hub-required and no-app overrides stay off for them.
 check("_build_codex is only called by the background router and the team Work turn builder",
       callers == ["aux_engine.py", "team_engine.py"], callers)
-import aux_engine as _ae  # noqa: E402
+import aux_engine as _ae
+
 check("a team turn tag is not a scheduled background lane (no hub-required override)",
       not _ae.la_viec_nen_theo_lich("team-1d2c3b4a-tu_0a1b2c3d") and not _ae.la_viec_nen_theo_lich("team-x-y-main"))
 # The allowlist (reminder, loop, dispatch:*) only works while these lanes keep passing those tags.

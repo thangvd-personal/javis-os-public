@@ -23,12 +23,13 @@ Giải pháp (Phương án A):
     khỏi bộ đếm note dropdown (`_count_md`), và được `media_gc` dọn tự động sau `staging_days` (3 ngày,
     xoá cả `.txt` và `.md`).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP_STATE = tempfile.mkdtemp(prefix="javis-temp-state-")
 _TMP_BRAINS = tempfile.mkdtemp(prefix="javis-temp-brains-")
@@ -40,11 +41,11 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
-import media_gc  # noqa: E402
-import git_brain  # noqa: E402
-import graph_builder  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import git_brain
+import graph_builder
+import main
+import media_gc
+from starlette.testclient import TestClient
 
 _fails = []
 

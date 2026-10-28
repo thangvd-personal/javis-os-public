@@ -17,16 +17,16 @@ import argparse
 import asyncio
 import contextlib
 import hashlib
-import io
 import inspect
+import io
 import json
 import os
 import re
-import stat
 import sqlite3
+import stat
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -211,8 +211,8 @@ def _write_report(root, report):
 
 def _run_one(options, pin, capability, *, selected_engine, adapter_factory, synthetic_no_inference=False):
     """Trusted harness seam. Test adapters are programmatic only, never CLI options."""
-    from cryptography.fernet import Fernet
     import improvement_store as IM
+    from cryptography.fernet import Fernet
     from improvement_assets import capture_source
     from improvement_blobs import RevisionBlobs
     from improvement_cases import CaseStore
@@ -220,7 +220,7 @@ def _run_one(options, pin, capability, *, selected_engine, adapter_factory, synt
     from improvement_telemetry import NativeUsageRecorder
     from improvement_trial_context import ContextSource, capture_context
     from improvement_trial_file_sources import BrainFileFixtures
-    from improvement_trial_host import HostContextStore, TARGET_FIELDS
+    from improvement_trial_host import TARGET_FIELDS, HostContextStore
     from improvement_trial_runner import TrialRunner
     from improvement_trials import TrialStore
     from improvement_usage import trial_usage
@@ -273,7 +273,7 @@ def _run_one(options, pin, capability, *, selected_engine, adapter_factory, synt
             raise IM.ConflictError("synthetic_smoke_selection_changed")
         return current
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     metadata = {"timezone": "UTC", "data_period": "synthetic-smoke", "cutoff": now,
                 "schema": "application/json", "freshness_policy": "require_current_version"}
     refs, expected = [], []

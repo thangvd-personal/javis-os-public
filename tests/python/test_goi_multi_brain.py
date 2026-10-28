@@ -4,15 +4,12 @@
 - Tự động đồng bộ pack vào brain mới qua sync_brain_packs.
 - Gỡ lẻ từng brain qua go(pack_id, brain_root=...).
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
-import json
-import os
-import shutil
 import sys
 import tempfile
 from pathlib import Path
 
 import pack_vault as pv
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 _fails = []
 

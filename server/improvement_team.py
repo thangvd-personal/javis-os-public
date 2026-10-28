@@ -23,8 +23,8 @@ import json
 import re
 import secrets
 import time
+from collections.abc import Callable
 from contextlib import closing
-from typing import Callable
 
 import improvement_store as IM
 

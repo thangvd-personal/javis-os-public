@@ -15,7 +15,6 @@ Phủ:
 - op=create nhắc -> KHÔNG ghi .md (phải đi đường reminders).
 - Tool đăng ký đúng tên + min_mode.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import inspect
 import os
@@ -23,12 +22,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-schedtest-"))
 sys.path.insert(0, str(ROOT / "system" / "plugins" / "javis-schedule"))
 
-import yaml  # noqa: E402
-import plugin as sched  # noqa: E402
-import self_improve  # noqa: E402 - dùng để chặn C2 bằng LƯỚI THẬT (self_improve._norm_loop qua get_loop)
+import plugin as sched
+import self_improve
+import yaml
 
 _fails = []
 

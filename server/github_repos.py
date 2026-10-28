@@ -33,7 +33,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import coding_store
 import localefmt
@@ -47,10 +47,10 @@ GIT_TIMEOUT = 60
 CLONE_TIMEOUT = 600
 _lock = threading.RLock()
 # Serialises git work per clone: two chats attaching the same repo at once must not run two `git worktree add` in it.
-_repo_locks: Dict[str, threading.Lock] = {}
+_repo_locks: dict[str, threading.Lock] = {}
 SOURCE = "github"
 # Slow-changing list: cache the account's repos for a minute so typing in the search box costs no API calls.
-_REPO_CACHE: Dict[str, Any] = {"at": 0.0, "token": "", "items": []}
+_REPO_CACHE: dict[str, Any] = {"at": 0.0, "token": "", "items": []}
 REPO_CACHE_S = 60.0
 
 
@@ -74,11 +74,11 @@ def _settings():
     return cfgmod
 
 
-def _read_conn() -> Dict[str, Any]:
-    return dict((_settings().read_settings().get("github") or {}))
+def _read_conn() -> dict[str, Any]:
+    return dict(_settings().read_settings().get("github") or {})
 
 
-def _write_conn(conn: Dict[str, Any]) -> None:
+def _write_conn(conn: dict[str, Any]) -> None:
     """Replace the whole `github` section. The token is encrypted at rest by config (`github.token` is in
     `_SECRET_PATHS`), so it is written here in clear and never by hand-rolled crypto."""
     empty = {"source": "", "token": "", "login": "", "user_id": 0, "missing": [], "connected_at": 0}
@@ -105,7 +105,7 @@ def user_id() -> int:
         return 0
 
 
-def _check_token(tok: str) -> Dict[str, Any]:
+def _check_token(tok: str) -> dict[str, Any]:
     """Validate a token against GitHub. Returns {login, scopes_ok, missing} or raises RepoError."""
     if not tok:
         raise RepoError(_c("Chưa có token.", "No token given."))
@@ -117,7 +117,7 @@ def _check_token(tok: str) -> Dict[str, Any]:
                                "GitHub rejected this token (wrong or expired)."))
         raise RepoError(_c(f"Không kiểm tra được token: {e}", f"Could not check the token: {e}"))
     scopes = u.get("_scopes")
-    missing: List[str] = []
+    missing: list[str] = []
     # Classic tokens list their scopes; fine-grained tokens do not (scopes is None) and are checked per repo instead.
     if scopes is not None and "repo" not in scopes:
         missing.append("repo")
@@ -127,7 +127,7 @@ def _check_token(tok: str) -> Dict[str, Any]:
             "classic": scopes is not None}
 
 
-def connect(tok: str) -> Dict[str, Any]:
+def connect(tok: str) -> dict[str, Any]:
     tok = (tok or "").strip()
     info = _check_token(tok)
     _write_conn({"source": "own", "token": tok, "login": info["login"], "user_id": info["id"],
@@ -136,7 +136,7 @@ def connect(tok: str) -> Dict[str, Any]:
     return status()
 
 
-def connect_backup() -> Dict[str, Any]:
+def connect_backup() -> dict[str, Any]:
     tok = backup_token()
     if not tok:
         raise RepoError(_c("Chưa có token sao lưu brain để dùng chung.", "There is no brain-backup token to reuse."))
@@ -147,13 +147,13 @@ def connect_backup() -> Dict[str, Any]:
     return status()
 
 
-def disconnect() -> Dict[str, Any]:
+def disconnect() -> dict[str, Any]:
     _write_conn({})
     _REPO_CACHE.update(at=0.0, items=[])
     return status()
 
 
-def status() -> Dict[str, Any]:
+def status() -> dict[str, Any]:
     conn = _read_conn()
     tok = token()
     return {
@@ -178,7 +178,7 @@ def client() -> GitHub:
 # ============================================================
 # Git helpers (token in the environment, never in argv)
 # ============================================================
-def git_env(tok: Optional[str] = None) -> Dict[str, str]:
+def git_env(tok: str | None = None) -> dict[str, str]:
     env = dict(os.environ)
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["LC_ALL"] = "C"
@@ -202,7 +202,7 @@ def _redact(text: str) -> str:
     return out
 
 
-def git(args: List[str], cwd: str, *, timeout: int = GIT_TIMEOUT, auth: bool = False,
+def git(args: list[str], cwd: str, *, timeout: int = GIT_TIMEOUT, auth: bool = False,
         check: bool = True) -> subprocess.CompletedProcess:
     try:
         p = subprocess.run(["git"] + list(args), cwd=cwd, capture_output=True, text=True, encoding="utf-8",
@@ -220,7 +220,7 @@ def git(args: List[str], cwd: str, *, timeout: int = GIT_TIMEOUT, auth: bool = F
     return p
 
 
-def git_out(args: List[str], cwd: str, **kw) -> str:
+def git_out(args: list[str], cwd: str, **kw) -> str:
     return (git(args, cwd, **kw).stdout or "").strip()
 
 
@@ -274,8 +274,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 def norm_full_name(full_name: str) -> str:
     s = str(full_name or "").strip().strip("/")
-    if s.endswith(".git"):
-        s = s[:-4]
+    s = s.removesuffix(".git")
     if not _NAME_RE.match(s) or ".." in s:
         raise RepoError(_c(f"Tên repo không hợp lệ: {full_name}", f"Invalid repo name: {full_name}"))
     return s
@@ -291,11 +290,11 @@ def clone_path(brain_root: str, full_name: str) -> Path:
     return REPOS_DIR / _brain_slug(brain_root) / owner / name
 
 
-def list_local(brain: str = "") -> List[Dict[str, Any]]:
+def list_local(brain: str = "") -> list[dict[str, Any]]:
     return [dict(r) for r in _load()["repos"] if not brain or r.get("brain") == brain]
 
 
-def find(brain: str, full_name: str) -> Optional[Dict[str, Any]]:
+def find(brain: str, full_name: str) -> dict[str, Any] | None:
     fn = norm_full_name(full_name).lower()
     for r in _load()["repos"]:
         if r.get("brain") == brain and str(r.get("full_name") or "").lower() == fn:
@@ -303,7 +302,7 @@ def find(brain: str, full_name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _put(rec: Dict[str, Any]) -> None:
+def _put(rec: dict[str, Any]) -> None:
     with _lock:
         d = _load()
         d["repos"] = [r for r in d["repos"] if r.get("id") != rec["id"]]
@@ -329,7 +328,7 @@ def _repo_lock(path: str) -> threading.Lock:
 # ============================================================
 # Remote list
 # ============================================================
-def remote_repos(q: str = "", brain: str = "") -> List[Dict[str, Any]]:
+def remote_repos(q: str = "", brain: str = "") -> list[dict[str, Any]]:
     tok = token()
     if not tok:
         raise RepoError(_c("Chưa kết nối GitHub.", "GitHub is not connected."))
@@ -357,7 +356,7 @@ def remote_repos(q: str = "", brain: str = "") -> List[Dict[str, Any]]:
 # ============================================================
 # Clone
 # ============================================================
-def ensure_clone(brain: str, brain_root: str, full_name: str) -> Dict[str, Any]:
+def ensure_clone(brain: str, brain_root: str, full_name: str) -> dict[str, Any]:
     """Clone the repo into this brain's repo folder, or fetch it when it is already there. Returns the record."""
     full_name = norm_full_name(full_name)
     gh = client()
@@ -409,11 +408,11 @@ def session_branch(sid: str) -> str:
     return f"javis/{_sid8(sid)}"
 
 
-def _worktree_dir(rec: Dict[str, Any], sid: str) -> Path:
+def _worktree_dir(rec: dict[str, Any], sid: str) -> Path:
     return coding_store.WORKTREE_DIR / f"gh-{rec['id']}-{_sid8(sid)}"
 
 
-def ensure_worktree(sid: str, rec: Dict[str, Any]) -> Dict[str, str]:
+def ensure_worktree(sid: str, rec: dict[str, Any]) -> dict[str, str]:
     """This conversation's worktree of the repo, created on `javis/<session>` from origin's default branch."""
     existing = coding_store.worktree_thu_muc(sid, rec["folder_id"])
     if existing and Path(existing).is_dir():
@@ -437,7 +436,7 @@ def ensure_worktree(sid: str, rec: Dict[str, Any]) -> Dict[str, str]:
     return {"worktree": str(dest), "branch": branch}
 
 
-def attach(sid: str, brain: str, brain_root: str, full_names: List[str]) -> Dict[str, Any]:
+def attach(sid: str, brain: str, brain_root: str, full_names: list[str]) -> dict[str, Any]:
     """Set the GitHub repos of a conversation (clone what is missing, one worktree each).
 
     Non-GitHub folders the conversation already has stay where they are (a pinned folder stays the main one). Repos no
@@ -446,7 +445,7 @@ def attach(sid: str, brain: str, brain_root: str, full_names: List[str]) -> Dict
     sid = str(sid or "").strip()
     if not sid:
         raise RepoError(_c("Thiếu mã cuộc trò chuyện.", "Missing conversation id."))
-    wanted: List[str] = []
+    wanted: list[str] = []
     for fn in full_names or []:
         n = norm_full_name(fn)
         if n.lower() not in {w.lower() for w in wanted}:
@@ -464,7 +463,7 @@ def attach(sid: str, brain: str, brain_root: str, full_names: List[str]) -> Dict
     return session_view(sid, brain)
 
 
-def _rec_for_folder(brain: str, folder: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _rec_for_folder(brain: str, folder: dict[str, Any]) -> dict[str, Any] | None:
     fn = folder.get("repo") or ""
     if not fn:
         return None
@@ -494,7 +493,7 @@ def _remove_worktree(clone: str, wt: str) -> None:
         shutil.rmtree(wt, ignore_errors=True)
 
 
-def detach(sid: str, full_name: str, brain: str = "", force: bool = False) -> Dict[str, Any]:
+def detach(sid: str, full_name: str, brain: str = "", force: bool = False) -> dict[str, Any]:
     """Remove a repo from ONE conversation. The clone stays in the brain; this chat's worktree goes when it is safe."""
     full_name = norm_full_name(full_name)
     folders = [r for r in coding_store.thu_muc_cua_phien(sid)
@@ -516,7 +515,7 @@ def detach(sid: str, full_name: str, brain: str = "", force: bool = False) -> Di
     return {"ok": True, "detached": True}
 
 
-def remove_from_brain(brain: str, full_name: str, busy: Optional[List[str]] = None) -> Dict[str, Any]:
+def remove_from_brain(brain: str, full_name: str, busy: list[str] | None = None) -> dict[str, Any]:
     """Delete the local clone and every worktree of it. GitHub is never called (section 5.3).
 
     Refuses, naming each place, while a job runs on it (`busy`), or while the clone or any worktree holds
@@ -525,7 +524,7 @@ def remove_from_brain(brain: str, full_name: str, busy: Optional[List[str]] = No
     rec = find(brain, full_name)
     if not rec:
         raise RepoError(_c(f"Brain này không có repo {full_name}.", f"This brain has no repo {full_name}."))
-    problems: List[str] = []
+    problems: list[str] = []
     for b in busy or []:
         problems.append(_c(f"đang có việc chạy: {b}", f"a job is running: {b}"))
     risk = _work_at_risk(rec["path"])
@@ -569,7 +568,7 @@ def _force_remove(func, path, _exc):
 # ============================================================
 # Views
 # ============================================================
-def session_repos(sid: str, brain: str = "") -> List[Dict[str, Any]]:
+def session_repos(sid: str, brain: str = "") -> list[dict[str, Any]]:
     """GitHub repos attached to a conversation, with this chat's worktree and branch."""
     out = []
     for folder in coding_store.thu_muc_cua_phien(sid):
@@ -585,11 +584,11 @@ def session_repos(sid: str, brain: str = "") -> List[Dict[str, Any]]:
     return out
 
 
-def session_view(sid: str, brain: str = "") -> Dict[str, Any]:
+def session_view(sid: str, brain: str = "") -> dict[str, Any]:
     return {"ok": True, "repos": session_repos(sid, brain)}
 
 
-def local_view(brain: str) -> List[Dict[str, Any]]:
+def local_view(brain: str) -> list[dict[str, Any]]:
     out = []
     for r in list_local(brain):
         users = coding_store.sessions_using(r.get("folder_id") or "")
@@ -640,13 +639,13 @@ def prompt_block(sid: str, brain: str = "") -> str:
     return "\n".join(lines) + "\n"
 
 
-def forget_session(sid: str) -> Dict[str, Any]:
+def forget_session(sid: str) -> dict[str, Any]:
     """A deleted conversation: remove its worktrees that hold nothing unsaved; keep (and report) the others.
 
     A worktree with work left is kept on disk on purpose: deleting a chat must never delete code. The branch stays in
     the clone either way, so the work is still reachable from the repo.
     """
-    kept: List[str] = []
+    kept: list[str] = []
     for folder in coding_store.thu_muc_cua_phien(sid):
         if folder.get("nguon") != SOURCE:
             continue
@@ -663,7 +662,7 @@ def forget_session(sid: str) -> Dict[str, Any]:
     return {"kept": kept}
 
 
-def set_checks(brain: str, full_name: str, checks: Optional[List[Dict[str, str]]]) -> Dict[str, Any]:
+def set_checks(brain: str, full_name: str, checks: list[dict[str, str]] | None) -> dict[str, Any]:
     """Save the repo's local check commands (None = go back to the suggested ones)."""
     rec = find(brain, full_name)
     if not rec:
@@ -681,7 +680,7 @@ def set_checks(brain: str, full_name: str, checks: Optional[List[Dict[str, str]]
     return get_checks(brain, full_name)
 
 
-def get_checks(brain: str, full_name: str) -> Dict[str, Any]:
+def get_checks(brain: str, full_name: str) -> dict[str, Any]:
     rec = find(brain, full_name)
     if not rec:
         raise RepoError(_c(f"Brain này không có repo {full_name}.", f"This brain has no repo {full_name}."))
@@ -692,12 +691,12 @@ def get_checks(brain: str, full_name: str) -> Dict[str, Any]:
             "checks": saved if isinstance(saved, list) else suggested, "suggested": suggested}
 
 
-def auto_merge_on(rec: Dict[str, Any]) -> bool:
+def auto_merge_on(rec: dict[str, Any]) -> bool:
     """Spec 11.1 (owner 2026-10-27): green CI merges on its own; a per-repo switch turns it off. Default on."""
     return rec.get("auto_merge", True) is not False
 
 
-def set_auto_merge(brain: str, full_name: str, on: bool) -> Dict[str, Any]:
+def set_auto_merge(brain: str, full_name: str, on: bool) -> dict[str, Any]:
     rec = find(brain, full_name)
     if not rec:
         raise RepoError(_c(f"Brain này không có repo {full_name}.", f"This brain has no repo {full_name}."))

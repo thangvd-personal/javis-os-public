@@ -17,10 +17,9 @@ Chạy:
 """
 import re
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
-
-import connect_health  # noqa: E402
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+import connect_health
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 fails = []
 

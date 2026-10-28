@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
 
 MAX_LEN = 60
 FILE = Path("Javis") / "brain.json"
@@ -71,7 +70,7 @@ def write(root, label) -> str:
     return display(root)
 
 
-def taken_by(brains_dir, label, except_root=None) -> Optional[str]:
+def taken_by(brains_dir, label, except_root=None) -> str | None:
     """The folder of another brain already shown under this name (case-insensitive), or None. Two brains with the same
     name in the picker would be told apart only by guessing."""
     want = clean(label).casefold()

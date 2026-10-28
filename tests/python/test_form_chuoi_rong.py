@@ -27,15 +27,16 @@ token là `Form(...)`, nhưng nó chỉ rỗng khi hàng token không có id, v�
 File này ghim LUẬT, để lần sau ai thêm một endpoint `Form(None)` rồi cho dashboard gửi ô rỗng
 vào đó thì còn có chỗ đọc mà hiểu vì sao trường của mình tự về mặc định.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-formrong-"))
 
-from fastapi import FastAPI, Form   # noqa: E402
-from fastapi.testclient import TestClient   # noqa: E402
+from fastapi import FastAPI, Form
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -106,7 +107,7 @@ GUI_O_RONG = [
 def khai_cua(duong, o):
     """Chuỗi khai tham số `o` trong hàm ngay dưới @app.post(duong). None nếu không thấy."""
     m = re.search(r'@app\.post\("' + re.escape(duong) + r'"\)\s*\n(?:async )?def [^(]+\((.*?)\)\s*(?:->[^:]+)?:',
-                  SRC, re.S)
+                  SRC, re.DOTALL)
     if not m:
         return None
     m2 = re.search(re.escape(o) + r"\s*:\s*[^=,]+=\s*(Form\([^)]*\))", m.group(1))

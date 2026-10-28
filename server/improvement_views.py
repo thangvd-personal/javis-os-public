@@ -1,8 +1,8 @@
 """Atomic host-derived baseline/candidate views in the existing shared store."""
 from __future__ import annotations
 
-import hashlib
 import asyncio
+import hashlib
 import json
 import secrets
 import time
@@ -13,10 +13,11 @@ from improvement_comparison_plans import ExperimentPlans
 from improvement_experiments import _generation, _identifier
 from improvement_semantic_review import SemanticReview
 from improvement_trial_records import _brain
-from improvement_view_protocol import view_manifest, view_hash
-from improvement_view_sources import capture_sources, ResolvedView
-from improvement_view_history import metadata as view_metadata, require_publication
 from improvement_trial_selection import _bounded_binary_reads
+from improvement_view_history import metadata as view_metadata
+from improvement_view_history import require_publication
+from improvement_view_protocol import view_hash, view_manifest
+from improvement_view_sources import ResolvedView, capture_sources
 
 
 class EffectiveViews:

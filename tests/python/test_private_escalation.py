@@ -11,12 +11,13 @@ Agent writes [BAO_CHU] plus a note, the customer receives nothing and the owner 
   4. the marker never leaks to a customer, even from a turn that did not get the paragraph;
   5. "Reply for me" and "Try bot" treat the marker as silence, and Try says it would alert the owner.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-esc-")
 try:
@@ -24,11 +25,11 @@ try:
 except Exception:
     pass
 
-import chatbot_log  # noqa: E402
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import chatbot_tu_dong  # noqa: E402
+import chatbot_log
+import chatbot_reply_policy as rp
+import chatbot_runtime
+import chatbot_store
+import chatbot_tu_dong
 
 _fails = []
 

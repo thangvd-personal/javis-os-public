@@ -15,7 +15,6 @@ Pinned:
   5. The bot's turn says the photo is the quoted one, both when it can see it and when the download fails.
   6. "Reply for me" in the inbox resolves the quote too.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -24,17 +23,19 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anhquote-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import chatbot_runtime as cr  # noqa: E402
-import conversations  # noqa: E402
-import image_vision  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels.zalo_personal import Transport  # noqa: E402
+import chatbot_runtime as cr
+import conversations
+import image_vision
+import zalo_personal_channel as zc
+from channels.zalo_personal import Transport
 
 _fails = []
 

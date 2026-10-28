@@ -6,17 +6,18 @@ Chuyện thật (chủ dự án báo 15/09): gõ "/quy-trinh" ở khung Trò chu
 Cộng sự, việc chạy ở đó, và khung vừa rời đi không bao giờ biết kết quả ra sao. Nay mỗi lần
 chạy xong (hoặc hỏng) đẩy một tin ngược về đúng khung đó, kèm link mở lại hội thoại đã làm việc.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-goc-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(_TMP) / "conv.db")
 
-import main  # noqa: E402
+import main
 
 fails = []
 

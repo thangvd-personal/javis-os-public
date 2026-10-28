@@ -7,18 +7,19 @@ refreshing it..."). Câu lỗi đi ra như một câu trả lời thường, r�
 tưởng bộ não đã chạy mà không lập mục tiêu. Sửa: mapper SDK giữ `is_error`, `subtype` và cờ cuộc đua token; main ghi kết
 cục engine của lượt và gửi kèm `turn_done` thành `engine_status` ("ok" | "error" | "unknown"). Không gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-turn-engine-"))
 
-import claude_sdk_engine  # noqa: E402
-import claude_token_gate  # noqa: E402
-import main  # noqa: E402
-from claude_agent_sdk import ResultMessage  # noqa: E402
+import claude_sdk_engine
+import claude_token_gate
+import main
+from claude_agent_sdk import ResultMessage
 
 _fails = []
 
@@ -117,18 +118,19 @@ check("kết cục được xoá sau khi gửi (không rò sang lượt sau)", m
       == "unknown")
 
 # Review sửa pilot 4, P2-2: chạy THÂN THẬT của run_turn (trích từ main.py) với dịch vụ giả, huỷ trước và sau final.
-import asyncio  # noqa: E402
-import sys  # noqa: E402
-import time  # noqa: E402
-import types  # noqa: E402
-import uuid  # noqa: E402
-import localefmt  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import nghe_sua  # noqa: E402
+import asyncio
+import sys
+import time
+import types
+import uuid
+
+import localefmt
+import luot_dang_chay
+import nghe_sua
 
 sys.path.insert(0, str(Path(__file__).parent))
-import _e2e_achieve_harness as H  # noqa: E402
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_achieve_harness as H
+import _e2e_pilot_guard as G
 
 frames = []
 
@@ -153,7 +155,8 @@ def _make_do_turn(mode):
     return _do_turn
 
 
-import turn_context  # noqa: E402  - run_turn gắn danh tính lượt cho hook tool (0.85.8)
+import turn_context
+
 _ns = dict(asyncio=asyncio, sys=sys, time=time, uuid=uuid, nghe_sua=nghe_sua, localefmt=localefmt, turn_context=turn_context,
            store=types.SimpleNamespace(get_session=lambda sid: None), send_raw=_send_raw, _persist_turn=_noop,
            _resonance_turn_agent=lambda *a: None,  # A1: agent của phiên, test riêng ở test_resonance_a1_turn_agent

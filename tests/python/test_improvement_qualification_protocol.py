@@ -1,7 +1,4 @@
 """Pure engineering wire consistency; no authority, filesystem or native calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
 import hashlib
 import importlib
 import importlib.util
@@ -9,6 +6,7 @@ import unittest
 
 import test_improvement_native_protocol as P
 import test_improvement_native_sdk as N
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_qualification_environment import dummy_environment
 
 

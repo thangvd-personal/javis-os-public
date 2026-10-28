@@ -132,8 +132,7 @@ def _icon_goi(con, gia_tri):
     if not pid or not v or v.startswith(("http://", "https://", "/")):
         return v
     v = v.lstrip("./")
-    if v.startswith("assets/"):
-        v = v[len("assets/"):]
+    v = v.removeprefix("assets/")
     return f"/packs/{pid}/asset/{v}"
 
 
@@ -185,7 +184,7 @@ def public_catalog():
             # Nguồn: connector do GÓI cấp không bao giờ được trông y hệt hàng chính chủ.
             "pack": c.get("_pack", ""), "pack_name": c.get("_pack_name", ""),
         })
-    import catalog_i18n   # lazy: catalog_i18n -> localefmt -> config, tránh vòng import
+    import catalog_i18n  # lazy: catalog_i18n -> localefmt -> config, tránh vòng import
     return catalog_i18n.phu(out)
 
 

@@ -7,16 +7,17 @@ KHÔNG mạng. Phủ: _check_structure nhận diện linh hoạt tên có số t
 khi thiếu, chạy lại lần 2 không tạo trùng (idempotent), vault đã có sổ theo
 tên khác thì KHÔNG đẻ thêm bản "01 - ...".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-scaftest-"))
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

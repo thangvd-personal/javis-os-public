@@ -11,8 +11,6 @@ Scenarios:
   loss     candidate breaks a required criterion -> rejected -> apply and selection refused
   unknown  candidate cells carry unknown verdicts -> inconclusive, coverage kept, baseline kept
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
@@ -28,6 +26,7 @@ import improvement_experiment_protocol as P
 import improvement_store as IM
 import test_improvement_experiment_lineage as fixtures
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401
 from agent_ledger import CallLedger
 
 AGENT = {"key": "agent-ke-toan-1", "slug": "ke-toan"}

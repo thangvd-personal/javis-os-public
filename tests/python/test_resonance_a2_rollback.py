@@ -10,7 +10,6 @@ model thừa. Không gọi model thật.
 Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ, vì CI phải lấy commit đó trước.
 OLD_SHA là commit squash của PR #590 trên main (cây trùng với head A1 `077bcf73` đã review).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
@@ -18,15 +17,16 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a2rb-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import resonance as R
+import resonance_store as RS
 
 OLD_SHA = "fdfec7c5c84c2663276d088194844e058d9a22aa"
 _fails = []

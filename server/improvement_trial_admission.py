@@ -17,9 +17,9 @@ from dataclasses import dataclass
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_claude import ClaudeTrialAdapter
-from improvement_trial_associations import TrialCaseAssociations, _association, _FIELDS
+from improvement_trial_associations import _FIELDS, TrialCaseAssociations, _association
 from improvement_trial_host import HostContextStore, _brain
-from improvement_trial_requests import validate_body, MAX_TIMEOUT_SECONDS
+from improvement_trial_requests import MAX_TIMEOUT_SECONDS, validate_body
 from improvement_trials import TrialStore, _request
 
 _START = "trial_owner_start"

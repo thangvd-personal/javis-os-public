@@ -3,15 +3,14 @@
 The existing in-memory cardinality fixture supplies SQL rows only. Real Records
 request parsing remains active; no operation, provider or qualification runs.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from types import SimpleNamespace
 
 import improvement_store as IM
+import test_improvement_experiment_bounds as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_experiment_service import ExperimentService
 from improvement_operation_records import OperationRecords
-import test_improvement_experiment_bounds as fixtures
 
 
 class ComposedBoundsTests(unittest.TestCase):

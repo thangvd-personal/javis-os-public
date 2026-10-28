@@ -13,15 +13,16 @@ Không pytest, không mạng (gọi GitHub được thay bằng hàm giả). Nh�
 4. Số sao không viết cứng: đọc từ GitHub, nhớ 1 ngày (lỗi nhớ 1 giờ), mốc kế tiếp tự tính.
 5. Route nhận đúng lý do và hành động, ghi trạng thái vào settings.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-star-")
 
-import star_nudge as sn  # noqa: E402
+import star_nudge as sn
 
 fails = []
 
@@ -135,10 +136,9 @@ check("kho lỗi: coi như chưa dùng, không vỡ",
       sn.dem_dung(lambda *a: (_ for _ in ()).throw(RuntimeError("x")), NOW) == {"turns": 0, "first_ts": 0.0, "days": 0})
 
 # ── 6. Route ─────────────────────────────────────────────────────────────────────────────────
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-import routes.star_nudge as rsn  # noqa: E402
+import routes.star_nudge as rsn
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 cfg = {}
 
@@ -155,7 +155,8 @@ def ghi_cfg(patch):
 sdir = Path(tempfile.mkdtemp(prefix="javis-star-state-"))
 # Số sao đã nhớ, ghi đúng lúc này: route không bao giờ gọi GitHub thật trong test (một mốc thời gian ở
 # tương lai bị coi là hỏng và hỏi lại mạng, đã từng làm test này đọc 287 sao thật thay vì 286).
-import time  # noqa: E402
+import time
+
 (sdir / "github_stars.json").write_text(json.dumps({"n": 286, "at": time.time()}), encoding="utf-8")
 sn._DUNG_CACHE.update(at=0.0, v=None)
 app = FastAPI()

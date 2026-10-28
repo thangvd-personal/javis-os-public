@@ -11,17 +11,18 @@ tốn 60.808 token. Ba thứ ghim ở đây:
   3. Khung chat tách phần token chỉ đọc lại từ cache (`ctx_cache`), để "60k token" không bị đọc như
      60k token mới.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import datetime
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tokluot-"))
-import context_compiler  # noqa: E402
-import fast_mode  # noqa: E402
-import main  # noqa: E402
-import claude_cli  # noqa: E402
+import claude_cli
+import context_compiler
+import fast_mode
+import main
 
 fails = []
 
@@ -104,8 +105,8 @@ check("mọi khung kết thúc lượt chat mang theo cache",
       SRC.count("_ctx_frame(runtime_trace, _ctx_in, _ctx_cache)") >= 10
       and "_ctx_frame(runtime_trace, _ctx_in)" not in SRC)
 # Engine Claude Code: bọc map_message từ ngoài (như plan_limits), chạy trên ResultMessage THẬT của SDK.
-import claude_sdk_engine as ENG  # noqa: E402
-from claude_agent_sdk import ResultMessage  # noqa: E402
+import claude_sdk_engine as ENG
+from claude_agent_sdk import ResultMessage
 
 
 def _chuoi_boc():

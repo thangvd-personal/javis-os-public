@@ -7,15 +7,16 @@ sau khi phát hành 0.64.67, chủ dự án mở trang Cập nhật trên VPS: k
 số cũ) báo "Đang dùng bản mới nhất (v0.64.66)" và KHÔNG có nút cập nhật, trong khi danh sách
 bên dưới (đọc CHANGELOG.md, đã mới) báo "Có bản mới: v0.64.67". Không chạm mạng: httpx giả.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-banmoi-"))
 
-import httpx  # noqa: E402
-import main  # noqa: E402
+import httpx
+import main
 
 _fails = []
 

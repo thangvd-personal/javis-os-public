@@ -12,13 +12,12 @@ thêm transport stdio (MCP local như javis-zalo, webcake-landing-mcp) và
 Lỗi 1 lần → đóng session, dựng lại, retry ĐÚNG 1 lần rồi mới trả "ERROR: ...".
 """
 import asyncio
-import itertools
 import hashlib
 import importlib
+import itertools
 import json
 import os
 import re
-import signal
 import shutil
 import subprocess
 import sys
@@ -27,7 +26,6 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
 import mcp_orphans
 import winproc
 
@@ -1015,7 +1013,7 @@ async def warm_pool(conns):
                     await asyncio.wait_for(_lay(), timeout=tran)
                 nong.append(conn["id"])
                 return
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 # Cùng lý do như `discover_resolved`: huỷ từ ngoài giữa một request NDJSON là
                 # ống stdio lệch pha vĩnh viễn - vứt phiên chứ đừng tái dùng. TRỪ khi phiên
                 # đang chạy dở một tool call: lúc đó `tools/list` mới chỉ chờ khoá, chưa gửi
@@ -1075,7 +1073,7 @@ async def discover_resolved(conns, bo_qua=None):
                 if tran is None:
                     return spec, await _lay()
                 return spec, await asyncio.wait_for(_lay(), timeout=tran)
-            except (asyncio.TimeoutError, TimeoutError):
+            except TimeoutError:
                 # Quá hạn ở đây có HAI nghĩa khác hẳn nhau, và trước 0.52.8 cả hai bị xử như một.
                 #
                 # (a) Phiên ĐANG CHẠY DỞ một tool call thật (tạo đơn POS, gửi tin...). Khoá

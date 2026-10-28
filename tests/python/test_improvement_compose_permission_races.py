@@ -1,12 +1,11 @@
 """Late consent/source races over actual private host SQL/Fernet; no query."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import time
 import unittest
 from unittest.mock import patch
 
 import test_improvement_compose_permissions as permissions
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class ComposePermissionRaceTests(unittest.TestCase):

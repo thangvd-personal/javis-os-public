@@ -18,10 +18,10 @@ Bốn điều file này ghim lại:
   3. lần sửa CUỐI biến nó thành dòng vết công cụ, và câu trả lời là một tin MỚI;
   4. tên công cụ được gom TRƯỚC cửa throttle, nên tool chạy nhanh không rụng khỏi dòng vết.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import sys
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 from bot_gateway import RE_TEN_TOOL
 from telegram_bot import TelegramBot
 

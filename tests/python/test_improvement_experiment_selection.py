@@ -3,8 +3,6 @@
 The complete reports below are deliberately seeded host-storage states. No
 native/model execution or business acceptance is claimed by those fixture rows.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
@@ -13,13 +11,14 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
+import improvement_comparison_results as C
 import improvement_evaluation as E
 import improvement_experiment_protocol as P
-import improvement_comparison_results as C
+import improvement_store as IM
+import test_improvement_experiment_lineage as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from agent_ledger import CallLedger
 from improvement_blobs import AssetUnavailable
-import test_improvement_experiment_lineage as fixtures
 
 
 class ExperimentSelectionTests(unittest.TestCase):

@@ -1,6 +1,4 @@
 """Actual frozen B plans bind v2 requests to scoped immutable SQL/blob history."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import importlib.util
 import json
@@ -9,9 +7,10 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_experiment_protocol as P
+import improvement_store as IM
 import test_improvement_comparison_plans as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_trials import TrialStore, _request
 
 if importlib.util.find_spec("improvement_experiment_lineage"):

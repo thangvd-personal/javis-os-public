@@ -1,6 +1,4 @@
 """Schema4 preserves actual M1 records; candidate metadata never decrypts private bodies."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import json
@@ -11,14 +9,15 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_case_schema as CASE_SCHEMA
+import improvement_store as IM
 import improvement_trial_schema as TRIAL_SCHEMA
 import test_improvement_trial_host as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_candidate_records"):
-    from improvement_candidate_records import CandidateRecords
     import improvement_candidate_schema as CANDIDATE_SCHEMA
+    from improvement_candidate_records import CandidateRecords
 else:
     CandidateRecords = CANDIDATE_SCHEMA = None
 

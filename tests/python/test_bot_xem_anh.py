@@ -11,7 +11,6 @@ caption. Two breaks, both pinned here:
 The download keeps the same rails as everywhere a chat link is fetched: https on a hostname, every redirect hop checked BEFORE it is
 requested, a size cap, image content only.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -20,18 +19,19 @@ import time
 import types
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-bxa-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import chatbot_runtime as cr  # noqa: E402
-import image_vision as iv  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import chatbot_runtime as cr
+import httpx
+import image_vision as iv
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 fails = []
 

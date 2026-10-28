@@ -6,7 +6,6 @@ KHÔNG mạng. Phủ: localhost mở tới ổ đĩa (out được ra root), pub
 JAVIS_FILES_ROOT override, _safe_path chặn vượt trần, điểm vào mặc định = brain,
 parent=None khi ở trần (ẩn nút Lên).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
@@ -14,10 +13,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-filestest-"))
 
-import main            # noqa: E402
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+import main
 
 _fails = []
 

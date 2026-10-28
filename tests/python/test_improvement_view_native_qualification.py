@@ -8,8 +8,6 @@ from pathlib import Path
 
 if '--qualification-worker' in sys.argv:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _paths import ROOT, SERVER  # noqa: F401,E402
-
 import asyncio
 import copy
 import gzip
@@ -27,9 +25,10 @@ from unittest.mock import patch
 
 import improvement_claude as native
 import improvement_worker as worker
+import test_improvement_runtime_qualification as runtime
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_sandbox import FixtureBroker, TrialWorkspace, trial_system_prompt
 from improvement_store import _hash, _json
-import test_improvement_runtime_qualification as runtime
 
 EVIDENCE = []
 
@@ -124,10 +123,10 @@ def spawn_for_view(manifest, pin, trial_id):
 
 
 if '--qualification-worker' not in sys.argv:
-    import test_improvement_view_sources as sources
-    import test_improvement_view_materialization as materialization
     import test_improvement_host_snapshots as host_fixtures
-    from test_improvement_experiment_execution import _REAL_RUN, _REAL_POPEN
+    import test_improvement_view_materialization as materialization
+    import test_improvement_view_sources as sources
+    from test_improvement_experiment_execution import _REAL_POPEN, _REAL_RUN
     from test_improvement_role_qualification import qualification_directory
 
     @unittest.skipUnless(os.environ.get('JAVIS_TEST_NATIVE_QUALIFICATION_CLI'), 'Explicit pinned local native qualification only')

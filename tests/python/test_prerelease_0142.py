@@ -5,21 +5,22 @@
 - Việc giao bằng nút Giao việc báo về phiên chưa lưu trữ, ưu tiên phiên đã có tin, đúng mã trợ lý.
 - Trần 10 phút chỉ cho lượt trả lời chat; bước của việc nhóm có trần riêng rộng hơn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-prerelease-0142-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-prerelease-0142-w-"))
 
-import agent_jobs  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_jobs
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -41,7 +42,8 @@ key = gs.agent_register(P, "lan")["agent_key"]
 sids = [ss.create_session(brain=B, engine="cli", channel="agent:lan") for _ in range(30)]
 other = sids[3]
 gs.session_agent(B, sids[0], "lan", 0)          # ghim đúng mã của Lan
-import sqlite3  # noqa: E402
+import sqlite3
+
 with sqlite3.connect(gs.path) as cx:            # phiên của trợ lý cũ cùng slug (mã khác)
     cx.execute("INSERT INTO session_agents(session_id,brain_id,agent_key,by,created_at) VALUES(?,?,?,?,?)",
                (other, B, "ag_khac", "host", 1.0))

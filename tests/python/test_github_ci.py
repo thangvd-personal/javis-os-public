@@ -10,12 +10,13 @@ Acceptance criteria covered here:
 Plus: the red-on-base rule, one rerun for runner failures, cancelled CI, required checks, PR merged or closed by a
 person, and the "no automatic turn possible" fallback.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghci-")
 try:
@@ -23,14 +24,14 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN, git  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub, git
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos  # noqa: E402
-import github_store  # noqa: E402
-import github_work as w  # noqa: E402
+import github_repos
+import github_store
+import github_work as w
 
 _fails = []
 
@@ -55,7 +56,7 @@ async def start_turn(sid, text):
 
 w.configure(notify=notify, start_turn=start_turn,
             session_info=lambda sid: {"title": "Sửa lỗi đăng nhập", "engine": "anthropic-cli", "model": "opus"})
-run = lambda coro: asyncio.run(coro)  # noqa: E731
+run = lambda coro: asyncio.run(coro)
 BRAIN = tempfile.mkdtemp(prefix="brain-")
 fake.add_repo("acme/app", files={"README.md": "app\n", "src/a.py": "a = 1\n"})
 github_repos.connect(GOOD_TOKEN)
@@ -72,7 +73,7 @@ def row():
 
 
 # ---- aggregate (pure) ----
-mk = lambda n, s, c: {"name": n, "status": s, "conclusion": c, "url": "", "job_id": 0}  # noqa: E731
+mk = lambda n, s, c: {"name": n, "status": s, "conclusion": c, "url": "", "job_id": 0}
 check("no checks is 'none'", w.aggregate([], None) == "none")
 check("one running check is 'running'", w.aggregate([mk("a", "completed", "success"), mk("b", "in_progress", "")], None) == "running")
 check("a failure is 'red'", w.aggregate([mk("a", "completed", "failure"), mk("b", "completed", "success")], None) == "red")
@@ -253,7 +254,7 @@ check("a running job blocks removal from the brain", w.busy_jobs(BRAIN, "acme/li
 
 # ---- icons ----
 ic = github_store.icon
-row_ = lambda **k: dict({"exec": "done", "ci": "green", "integ": "ready", "head_sha": "x", "post_merge": ""}, **k)  # noqa: E731
+row_ = lambda **k: dict({"exec": "done", "ci": "green", "integ": "ready", "head_sha": "x", "post_merge": ""}, **k)
 check("icon: running work shows as working with its count", ic([row_(ci="running"), row_()]) == {
     "state": "working", "running": 1, "sub": "waiting_ci", "merged_warning": False})
 check("icon: all ready is ready", ic([row_()])["state"] == "ready")

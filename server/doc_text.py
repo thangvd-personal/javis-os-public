@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from html import unescape
 from pathlib import Path
 

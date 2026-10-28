@@ -7,17 +7,29 @@ nhiều tab, mất kết nối rồi nối lại, khởi động lại (mở l�
 Auto (Cộng hưởng), thu hồi Toàn quyền, lỗi kho khi chiếu tác động, lệch đồng hồ, nhóm bị chặn hay agent ngủ không chiếm suất
 của nhóm có việc. Ca nào đã có test chuyên sâu ở T1-T3 thì ở đây chỉ kiểm lại MỘT lần qua đường host đầy đủ sau khi ghép.
 """
-from _t4_host import (BR, Q, api, c, check, dispatch, drain, fakes, finish, main, new_team, send, sent,  # noqa: E402
-                      toggle_auto)
-import asyncio  # noqa: E402
-import sqlite3  # noqa: E402
-import time  # noqa: E402
-from pathlib import Path  # noqa: E402
+import asyncio
+import sqlite3
+import time
+from pathlib import Path
 
-import agent_pulse as AP  # noqa: E402
-import config as cfgmod  # noqa: E402
-import sessions as SS  # noqa: E402
-import team_store as TS  # noqa: E402
+import agent_pulse as AP
+import config as cfgmod
+import team_store as TS
+from _t4_host import (
+    Q,
+    api,
+    c,
+    check,
+    dispatch,
+    drain,
+    fakes,
+    finish,
+    main,
+    new_team,
+    send,
+    sent,
+    toggle_auto,
+)
 
 STATE = Path(cfgmod.STATE_DIR)
 toggle_auto("minh", True)
@@ -120,7 +132,8 @@ check("khởi động lại: reaction còn nguyên sau khi mở lại kho nhóm"
 ps = main._pulse_store()
 AP.ensure(ps)
 AP.wake(ps, K["minh"], f"team:{TID}", "direct")
-import resonance_store as RS  # noqa: E402
+import resonance_store as RS
+
 gs2 = RS.GoalStore(STATE / "resonance.sqlite3")
 AP.ensure(gs2, force=True)
 v = AP.view(gs2, K["minh"])
@@ -129,7 +142,6 @@ check("khởi động lại: trạng thái nhịp theo ngữ cảnh còn sau khi
 
 # Khởi động lại thật: bộ chạy MỚI (như tiến trình mới) trên một việc đang chạy chưa tới engine và một việc có lượt đã
 # tới mốc engine. Việc thứ nhất chạy tiếp tới xong; việc thứ hai bị chặn "interrupted", lượt tính một lần.
-import team_runner as TRM  # noqa: E402
 tsx = main.tasks_feature.store
 RT, RK = new_team("Khởi động lại", members=("lan", "minh"), leader="lan")
 j_resume = send(RT["team_id"], "Việc dở trước khi tắt", mentions=[RK["minh"]], as_job=True, cm="rs-1", run=False)
@@ -262,7 +274,7 @@ t0 = time.time()
 AP.wake(ps, K["minh"], f"team:{TID}", "direct", at=t0)
 try:
     out = AP.evaluate(ps, K["minh"], f"team:{TID}", at=t0 - 3600)
-    ok = out["tier"] in range(0, 10) and out["state"] in AP.STATES
+    ok = out["tier"] in range(10) and out["state"] in AP.STATES
 except Exception as ex:  # noqa: BLE001
     ok, out = False, f"{type(ex).__name__}: {ex}"
 check("đồng hồ lùi 1 giờ: đánh giá nhịp không lỗi, bậc và trạng thái hợp lệ", ok, out)
@@ -313,8 +325,9 @@ check("không nhóm bị chặn nào giữ chỗ trong pool sau lượt", not ru
 check("pulse ngủ đông không giữ khoá bận của agent", api.teams().busy_of(KC["lan"]) is None)
 
 # ═════ kịch bản đo VPS: chuẩn bị sẵn, không tự chạy ═════
-import subprocess  # noqa: E402
-import sys  # noqa: E402
+import subprocess
+import sys
+
 VPS = Path(__file__).resolve().parents[2] / "tools" / "team_adaptive_vps_measure.py"
 p1 = subprocess.run([sys.executable, "-X", "utf8", str(VPS)], capture_output=True, text=True, encoding="utf-8", timeout=60)
 check("kịch bản VPS không có duyệt của chủ: dừng mã 2, không đo gì", p1.returncode == 2 and "duyệt" in p1.stderr,

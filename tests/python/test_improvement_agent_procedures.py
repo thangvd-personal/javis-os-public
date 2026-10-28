@@ -1,6 +1,4 @@
 """M5 agent procedure overlays: owner-approved procedure text on chosen surfaces of one assistant (spec 9.3, 16.2)."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 from contextlib import closing
@@ -9,6 +7,7 @@ from unittest.mock import patch
 import improvement_agent as AG
 import improvement_store as IM
 import test_improvement_activation as base
+from _paths import ROOT, SERVER  # noqa: F401
 
 PROCEDURE = ("Truoc khi tra loi: liet ke nguon so lieu da doc, doi chieu tong voi ky truoc, "
              "ghi ro gia dinh, ket thuc bang mot dong viec can lam tiep.")
@@ -221,9 +220,9 @@ class AgentProcedureTests(AgentProcedureBase):
                          (self.keys["ke-toan"], ""))
 
     def test_http_routes_round_trip(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: self.activations,
             resolve_brain=lambda value: self.owner.brain_id, agents=lambda: self.service,

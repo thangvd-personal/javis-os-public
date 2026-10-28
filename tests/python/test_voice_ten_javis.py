@@ -12,8 +12,8 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "server"))
 
-import nghe_sua  # noqa: E402
-import voice_brain  # noqa: E402
+import nghe_sua
+import voice_brain
 
 
 class TenJavis(unittest.TestCase):

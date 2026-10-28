@@ -14,10 +14,10 @@ mục mỗi trang, nên mục mới nhất nằm lẫn đâu đó giữa hai ch�
 chính là để xem Javis vừa học gì và có lỗi gì khi chạy model nền - thứ họ cần luôn là mục mới
 nhất, mà đó lại là thứ khó tìm nhất.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
-import learn  # noqa: E402
+import learn
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -68,7 +68,7 @@ check("learn_log sắp theo dấu thời gian chứ không tin thứ tự file",
 # nhưng phải có mã đứng sau nó.
 check("và docstring vẫn hứa mới nhất trước", "mới nhất trước" in _src)
 
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

@@ -22,10 +22,11 @@ Cả ba đều là loại "chạy trên máy dev không đời nào lộ ra":
 
 KHÔNG mạng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import re
 import sys
+
+from _paths import ROOT, SERVER
 
 fails = []
 
@@ -87,7 +88,7 @@ check("dòng khai báo là comment, không thành một requirement", dong1.star
 # ============================================================
 # 2. Câu từ chối ghi file phải NÓI ĐÚNG nguyên nhân và VIỆC CẦN LÀM
 # ============================================================
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 src = (SERVER / "mcp_hub.py").read_text(encoding="utf-8")
 # 0.256.0: mọi rào trước khi ghi dời vào `_kiem_ghi`, dùng chung cho javis_write_file và
@@ -105,9 +106,9 @@ check("dặn model đừng thử ghi lại mà trả nội dung ra câu trả l�
       "ĐỪNG thử ghi lại" in khoi)
 
 # Chạy THẬT nhánh từ chối, không chỉ đọc chữ trong nguồn.
-import asyncio  # noqa: E402
-import tempfile  # noqa: E402
-from pathlib import Path  # noqa: E402
+import asyncio
+import tempfile
+from pathlib import Path
 
 vault = Path(tempfile.mkdtemp(prefix="javis-write-test-"))
 tools, route = mcp_hub._builtin_tools("suggest", str(vault))
@@ -129,7 +130,7 @@ check("mức auto thì ghi được thật", not kq2.startswith("ERROR") and (va
 # ============================================================
 # 3. Trần vòng gọi tool: một chỗ khai, chỉnh được, và báo có việc-cần-làm
 # ============================================================
-import engine  # noqa: E402
+import engine
 
 esrc = (SERVER / "engine.py").read_text(encoding="utf-8")
 check("CANARY: không còn chỗ nào ghim cứng range(8)", "for _ in range(8):" not in esrc)

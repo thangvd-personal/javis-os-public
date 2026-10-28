@@ -8,15 +8,16 @@ Vì sao file này tồn tại: `read_settings()` từng gộp cấu hình ngư�
 sub-dict, làm `quota_profiles` biến mất; mà fail-closed nói thiếu quota thì rơi về legacy.
 Kết quả: bật canary lên rồi ngồi đợi một thứ không bao giờ chạy, im lặng, không lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-merge-")
 
-import config as cfg  # noqa: E402
+import config as cfg
 
 _fails = []
 
@@ -97,7 +98,7 @@ check("sửa settings.json ăn ngay, không cần restart",
 
 # ---- 4. Endpoint đặt canary ----
 os.environ.setdefault("JAVIS_SKIP_HEAVY_IMPORT", "1")
-import main  # noqa: E402
+import main
 
 check("_canary_keys lấy từ _DEFAULT, phủ đủ 10 đường",
       len(main._canary_keys()) == 10 and "write_canary" in main._canary_keys())
@@ -198,7 +199,7 @@ async def _endpoint_tests():
           getattr(r, "status_code", 0) == 400)
 
 
-import asyncio  # noqa: E402
+import asyncio
 
 asyncio.run(_endpoint_tests())
 

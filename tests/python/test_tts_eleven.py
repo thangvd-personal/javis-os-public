@@ -5,17 +5,17 @@
 Owner, 2026-10-20: "đang thiếu mất ElevenLabs để làm giọng của Javis". No network: httpx is replaced
 by a fake client that records what would be sent to api.elevenlabs.io.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-eleven-"))
 
-import httpx  # noqa: E402
-
-import tts_eleven as te  # noqa: E402
+import httpx
+import tts_eleven as te
 
 _fails = []
 
@@ -113,8 +113,8 @@ FakeClient.get_resp = httpx.ConnectError("down")
 check("list_voices: network error -> network", run(te.list_voices("sk_1")) == {"ok": False, "reason": "network"})
 
 # ---- the route and the settings save ----
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _read = main.cfgmod.read_settings
@@ -130,7 +130,7 @@ check("/voice/options carries the saved model and the model list",
       '"elevenlabs_model": v.get("elevenlabs_model") or "",' in src and '"elevenlabs_models": _eleven_models(),' in src)
 
 # ---- voice notes speak with ElevenLabs when chosen, fall back to Edge ----
-import voice_note  # noqa: E402
+import voice_note
 
 FakeClient.post_resp = FakeResp(200, b"ID3note")
 main.cfgmod.read_settings = lambda: cfg

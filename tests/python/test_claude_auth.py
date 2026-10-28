@@ -12,10 +12,10 @@ thứ phải luôn đúng, và đó là những gì file này canh:
   2. Cảnh báo phải hiện ĐÚNG lúc đáng lo (gói subscription đang gánh việc nền) và im lúc
      không đáng - cảnh báo nhá suốt thì người ta học cách bỏ qua nó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
-import claude_auth   # noqa: E402
+import claude_auth
+from _paths import ROOT, SERVER
 
 _fails = []
 

@@ -21,10 +21,10 @@ Contract:
   older hash stored with a space still works when typed exactly;
 - a wrong password is still wrong, and an all-space password never matches.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-login-")
 # Public-server mode, like the customer's VPS (and lets TestClient's host through the DNS-rebinding guard).
@@ -32,7 +32,7 @@ os.environ["JAVIS_REQUIRE_LOGIN"] = "1"
 os.environ.pop("JAVIS_ADMIN_PASSWORD", None)
 os.environ.pop("JAVIS_ADMIN_USER", None)
 
-import config as c   # noqa: E402
+import config as c
 
 _fails = []
 
@@ -110,8 +110,8 @@ os.environ.pop("JAVIS_ADMIN_PASSWORD", None)
 os.environ.pop("JAVIS_ADMIN_USER", None)
 
 # ---- 5. The real endpoints ----
-import main   # noqa: E402
-from fastapi.testclient import TestClient   # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cfg = c.read_settings()
 cfg.pop("auth", None)

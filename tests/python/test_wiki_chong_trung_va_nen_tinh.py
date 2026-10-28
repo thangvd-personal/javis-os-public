@@ -32,16 +32,17 @@ Starlette NUỐT TRỌN response streaming. Đo trên SSE 5 chunk cách nhau 0,3
 Javis có 4 endpoint text/event-stream. Bật nén toàn cục là người dùng gõ câu hỏi rồi nhìn
 màn hình trống tới khi trả lời xong - đổi lỗi chậm lấy lỗi nặng hơn hẳn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 _TMP = tempfile.mkdtemp(prefix="javis-wikidup-")
 os.environ.setdefault("JAVIS_STATE_DIR", _TMP)
 
-import learn  # noqa: E402
+import learn
 
 fails = []
 
@@ -149,7 +150,7 @@ check(f"tôn trọng trần {learn.LearnFeature.WIKI_INDEX_MAX} ký tự",
 check("chứa được >200 tên trong ngân sách (bản cũ 6000 ký tự chỉ ~62 dòng)",
       idx2.count("\n- ") > 200, idx2.count("\n- "))
 
-print("")
+print()
 
 # ============================================================
 # 4. (B) Nén tài sản tĩnh - CỔNG CHẶN THEO ĐƯỜNG DẪN
@@ -161,17 +162,19 @@ check("có middleware nén cho tài sản tĩnh", "class _NenTinh" in _src_main)
 # chat streaming chết câm. Chặn ngay tại đây.
 # Bắt LỆNH GỌI ở đầu dòng, không bắt chuỗi trong chú thích - chính chú thích của bản vá này
 # giải thích vì sao không được gọi như vậy, và nó phải được phép nhắc tới cú pháp đó.
-import re as _re  # noqa: E402
+import re as _re
+
 check("CANARY: KHÔNG bật GZip toàn cục (sẽ nuốt trọn SSE, chết chat streaming)",
-      not _re.search(r"^app\.add_middleware\(GZipMiddleware", _src_main, _re.M))
+      not _re.search(r"^app\.add_middleware\(GZipMiddleware", _src_main, _re.MULTILINE))
 check("cổng chặn theo ĐƯỜNG DẪN /static/, không theo content-type",
       'scope.get("path", "").startswith("/static/")' in _src_main)
 check("chú thích ghi lại số đo SSE để người sau không gỡ nhầm",
       "CẢ NĂM chunk cùng về" in _src_main)
 
 # Kiểm THẬT hành vi định tuyến của middleware, không chỉ đọc chữ.
-import asyncio  # noqa: E402
-import main as main_mod  # noqa: E402
+import asyncio
+
+import main as main_mod
 
 
 def _di_qua(path):
@@ -259,7 +262,7 @@ check("quá hạn thì VẼ TIẾP chứ không dừng (claudeSt khởi tạo nu
 check("refreshClaudeCard vẫn hỏi trạng thái (bất đồng bộ, không chặn)",
       "/claude/status" in _con)
 
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

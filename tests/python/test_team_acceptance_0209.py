@@ -4,7 +4,6 @@
 
 Fake engines that write real product files into a temporary brain; real SQLite stores. No model is called.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import errno
 import json
@@ -12,14 +11,16 @@ import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-acc-")
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_acceptance as TA  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_acceptance as TA
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -271,7 +272,8 @@ except Exception:  # noqa: BLE001
 check("criteria can still be set on a stopped job (owner retries with new criteria)", not blocked)
 
 # ═════ 7. Review 0.209.0 fixes ═════
-import threading  # noqa: E402
+import threading
+
 held = {}
 
 

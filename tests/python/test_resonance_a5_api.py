@@ -7,21 +7,21 @@ kho SQLite thật và engine giả; không gọi model thật. Kiểm: chọn v�
 từ chối trợ lý chưa bật hay chính nó, dòng `reviewer` trong danh sách trợ lý, khối `team` của goal view, lệnh
 `team_detach` của chủ dự án.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a5api-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import resonance_api as RAPI  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_agent as RA
+import _resonance_team as T
+import resonance_api as RAPI
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 _fails = []
 

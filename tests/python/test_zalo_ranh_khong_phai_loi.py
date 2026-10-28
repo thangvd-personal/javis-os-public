@@ -20,11 +20,12 @@ Phần khó của bản sửa không nằm ở chỗ nhận ra chữ "timeout", 
 thật: máy chủ Javis mất mạng cũng đẻ ra một chuỗi có chữ timeout, và đó là hỏng thật. Ranh
 giới là ai đang nói: Zalo đáp bằng một body JSON, còn mất mạng thì chỉ có ngoại lệ phía mình.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-zaloranh-"))
 
@@ -33,8 +34,8 @@ try:
 except Exception:
     pass
 
-import zalo_bot  # noqa: E402
-from zalo_bot import ZaloBot, _la_het_gio_cho  # noqa: E402
+import zalo_bot
+from zalo_bot import ZaloBot, _la_het_gio_cho
 
 _fails = []
 

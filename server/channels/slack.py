@@ -5,8 +5,9 @@ the channel-account store keeps exactly one encrypted secret per account.
 """
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 SPEC = KenhSpec(
     id="slack", nhan="Slack", kind="bot", logo="slack", mau="#4A154B",
@@ -39,7 +40,7 @@ Transport = _Lazy()
 async def verify_token(token: str) -> dict:
     """Check the bot token with auth.test and that an app token is present."""
     import httpx
-    from slack_bot import split_tokens, _explain_error
+    from slack_bot import _explain_error, split_tokens
     bot, app = split_tokens(token)
     if not bot or not app:
         return {"ok": False, "error": localefmt.chu(

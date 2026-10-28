@@ -31,19 +31,20 @@ Kèm hai chỗ hỏng theo cùng một dàn model mới:
 - Bảng giá gộp cả dòng Opus vào một mức 15$, trong khi Opus từ 4.5 đã còn 5$ và Fable thì
   10$. Sai theo cả hai chiều, và sai thẳng vào con số tiền trên trang Mức dùng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-model-moi-")
 
-import claude_cli  # noqa: E402
-import config as cfg  # noqa: E402
-import engine  # noqa: E402
-import main  # noqa: E402
-import usage_parsers as up  # noqa: E402
+import claude_cli
+import config as cfg
+import engine
+import main
+import usage_parsers as up
 
 _fails = []
 

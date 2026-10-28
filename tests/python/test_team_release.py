@@ -6,7 +6,6 @@ mã phát hành thì tự nâng, giữ nguyên dữ liệu, và mọi thao tác 
 Các cột thêm sau T1: `team_turns.committed_at` (bài học ghi một lần), `teams.pinned_at` (ghim), `team_members.identity_json`
 (nhân dạng lịch sử theo agent_key). Lược đồ T1 chép nguyên văn dưới đây để test không cần lịch sử git. SQLite tạm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import tempfile
@@ -14,9 +13,11 @@ import time
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-release-")
 
-import team_store  # noqa: E402
+import team_store
 
 fails = []
 
@@ -101,7 +102,8 @@ check("mở lại lần hai: không lỗi, dữ liệu mới còn", ts2.get("tm_
 
 # Review tích hợp 0.140.0: snapshot và bản giữ lại của MỌI kho bị nâng (chứa toàn bộ chat, việc) không được lên git khi
 # Javis chạy với thư mục state mặc định server/ (bản fork phải sạch).
-import subprocess  # noqa: E402
+import subprocess
+
 names = [f"server/{base}{tag}" for base in ("conversations.db", "kanban.sqlite3", "team.sqlite3")
          for tag in (".pre-0.140.0", ".post-0.140.0-20261014-120000")]
 not_ignored = [n for n in names if subprocess.run(["git", "check-ignore", "-q", n], cwd=str(ROOT)).returncode != 0]
@@ -109,7 +111,8 @@ check("snapshot .pre-0.140.0 và bản giữ lại .post-0.140.0-* của ba kho 
 
 # Review tích hợp 0.140.0: bí danh "nhom" trơn của trang Nhóm khớp cụm con nên cướp các câu nói về NHÓM thanh bên ("nhóm
 # việc", "nhóm code"...). Kết quả của những câu đó phải giữ như 0.139.0; chỉ câu gọi đúng trang Nhóm mới ra trang Nhóm.
-import ui_targets  # noqa: E402
+import ui_targets
+
 same_as_0137 = {"nhóm việc": "kanban", "nhóm code": "terminal", "mở nhóm trợ lý": "workspace", "nhóm hệ thống": "",
                 "nhóm kết nối": "mcp", "nhóm bộ não": "models", "mở cộng sự": "workspace", "trang việc": "kanban"}
 got = {s: ui_targets.resolve_page(s) for s in same_as_0137}

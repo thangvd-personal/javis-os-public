@@ -5,16 +5,17 @@
 Không chạm mạng: chỉ test hàm THUẦN dựng và dịch thông điệp của hai nhà cung cấp, chuyển mẫu
 16k -> 24k, và make_provider đọc cài đặt. Thêm nhà cung cấp thứ ba thì thêm một khối ở đây.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import array
 import base64
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-vlive-"))
 
-import voice_live as vl  # noqa: E402
+import voice_live as vl
 
 _fails = []
 

@@ -22,25 +22,25 @@ import re
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Form, Query
-
-from claude_cli import claude_engine, cancel_all, _empty_mcp_file
 import aux_engine
 import channel_context
-import localefmt          # giờ hiển thị theo múi giờ người dùng, không phải giờ máy chủ
-import limit_learner      # nhận diện "gói thuê bao hết lượt" - CÙNG bộ mẫu với khung chat
-import limit_resume       # mượn hằng trừ hao / trần chờ của khung chat, không đẻ bộ số thứ hai
-import plugins_host
+import limit_learner  # nhận diện "gói thuê bao hết lượt" - CÙNG bộ mẫu với khung chat
+import limit_resume  # mượn hằng trừ hao / trần chờ của khung chat, không đẻ bộ số thứ hai
+import localefmt  # giờ hiển thị theo múi giờ người dùng, không phải giờ máy chủ
 import once_ledger
+import plugins_host
 import task_store
 import turn_context
-from task_store import TaskStore, VALID_STATUS, agent_prefix as _agent_prefix
-
+from claude_cli import _empty_mcp_file, cancel_all, claude_engine
+from fastapi import APIRouter, Form, Query
+from task_store import VALID_STATUS, TaskStore
+from task_store import agent_prefix as _agent_prefix
 
 LEASE_SECONDS = 90
 HEARTBEAT_SECONDS = 20
@@ -155,22 +155,22 @@ class TasksDeps:
     execute_workflow: Callable
     workflows_dir: Callable[[str], Path]
     build_system_prompt: Callable[[str], str]
-    aux_model: Callable[[], Optional[str]]
-    safe_tools: List[str]
-    state_dir: Optional[Path] = None
-    scheduler_brains: Optional[Callable[[], List[str]]] = None
-    apply_mcp: Optional[Callable] = None
-    mcp_allow_patterns: Optional[Callable[[], List[str]]] = None
-    report: Optional[Callable] = None
-    aux_swap: Optional[Callable] = None
+    aux_model: Callable[[], str | None]
+    safe_tools: list[str]
+    state_dir: Path | None = None
+    scheduler_brains: Callable[[], list[str]] | None = None
+    apply_mcp: Callable | None = None
+    mcp_allow_patterns: Callable[[], list[str]] | None = None
+    report: Callable | None = None
+    aux_swap: Callable | None = None
     # Nối Kanban → tự học: việc nền chạy xong/vướng thì xếp vào hàng đợi học (learn.enqueue_job).
     # Tiêm sau khi learn_feature sẵn sàng (main gán). None = chưa nối → bỏ qua, worker chạy như cũ.
-    learn_hook: Optional[Callable] = None
+    learn_hook: Callable | None = None
     # 0.142.0: việc giao cho một trợ lý (nút Giao việc ở tab Công việc) chạy với vai của trợ lý đó. (root, slug) -> đoạn
     # lời nhắc vai trò, rỗng khi không có. Engine, quyền và trần của Kanban giữ nguyên.
-    agent_persona: Optional[Callable[[str, str, str], str]] = None
+    agent_persona: Callable[[str, str, str], str] | None = None
     # 0.199.0: (source, ref, brain=, title=, error=, request=) -> report a broken job to Javis Core (incident_desk.py).
-    incident_hook: Optional[Callable] = None
+    incident_hook: Callable | None = None
 
 
 class TasksFeature:
@@ -184,7 +184,7 @@ class TasksFeature:
         self._workers: dict[str, asyncio.Task] = {}
         self._worker_ids: dict[str, str] = {}
         self._worker_brains: dict[str, str] = {}
-        self._dispatcher_task: Optional[asyncio.Task] = None
+        self._dispatcher_task: asyncio.Task | None = None
         self._wake = asyncio.Event()
         self._closing = False
         self._snap_locks: dict[str, asyncio.Lock] = {}
@@ -286,7 +286,7 @@ class TasksFeature:
         intent: str,
         route: str = "auto",
         priority: int = 2,
-        deps: Optional[List[str]] = None,
+        deps: list[str] | None = None,
         needs_approval: bool = False,
         created_by: str = "user",
         chat_id: str = "",
@@ -354,7 +354,7 @@ class TasksFeature:
     def wake(self) -> None:
         self._wake.set()
 
-    async def tick(self, brains: Optional[List[str]] = None) -> None:
+    async def tick(self, brains: list[str] | None = None) -> None:
         """Compatibility hook for the old 30-second scheduler.
 
         It only registers/migrates boards and wakes the independent dispatcher. It
@@ -384,7 +384,7 @@ class TasksFeature:
                 await asyncio.wait_for(
                     self._wake.wait(), timeout=DISPATCH_INTERVAL_SECONDS
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             except asyncio.CancelledError:
                 break
@@ -476,7 +476,7 @@ class TasksFeature:
         heartbeat = asyncio.create_task(
             self._heartbeat(tid, worker_id), name=f"javis-heartbeat-{tid}"
         )
-        final_task: Optional[dict] = None
+        final_task: dict | None = None
         try:
             # New goals first pass through an AI specifier. This keeps raw Learn
             # suggestions out of the executable queue.
@@ -645,7 +645,7 @@ class TasksFeature:
     def _base_cli(
         self,
         task: dict,
-        allowed_tools: Optional[list[str]],
+        allowed_tools: list[str] | None,
         mode: str,
         tag_suffix: str,
     ):
@@ -831,7 +831,7 @@ nói rõ đã được phép tự hành động; nếu không thì để auto đ
         }
 
     @staticmethod
-    def _extract_json(text: str) -> Optional[dict]:
+    def _extract_json(text: str) -> dict | None:
         value = (text or "").strip()
         candidates = [value]
         match = re.search(r"\{[\s\S]*\}", value)
@@ -846,7 +846,7 @@ nói rõ đã được phép tự hành động; nếu không thì để auto đ
                 continue
         return None
 
-    def _lane_tools(self, task: dict) -> tuple[Optional[list[str]], str, list[str]]:
+    def _lane_tools(self, task: dict) -> tuple[list[str] | None, str, list[str]]:
         """(allowlist, mode, danh sách chặn) cho một việc. allowlist None = KHÔNG rào.
 
         `full` trả về None, giống hệt nhánh full của loop (`self_improve._make_cli`) và nhắc
@@ -1048,7 +1048,7 @@ gì, dữ liệu/file/artifact nào được tạo và cách đã kiểm chứng
                 return hit
         return None
 
-    def _hoan_vi_het_luot(self, tid: str, worker_id: str, hit) -> Optional[dict]:
+    def _hoan_vi_het_luot(self, tid: str, worker_id: str, hit) -> dict | None:
         """Hoãn việc tới lúc gói mở lại. Trả task sau khi ghi kho (ready + not_before, hoặc
         blocked nếu mốc quá xa). Việc về ready lặng lẽ: thẻ trên trang Việc hiện lý do và giờ
         chạy lại, không bắn thông báo vì chưa có gì cần người dùng làm."""
@@ -1826,10 +1826,10 @@ Trả DUY NHẤT một dòng JSON, không markdown:
 # đăng nhập, và cách duy nhất để mở là thêm nó vào `_AUTH_LOCAL_EXACT` (danh sách miễn auth cho
 # localhost). Làm vậy nghĩa là BẤT KỲ tiến trình nào trên cùng máy chủ cũng giao được việc cho
 # Javis mà không cần credential - một lỗ hổng thật, chỉ để tránh ba dòng code này.
-_FEATURE: Optional["TasksFeature"] = None
+_FEATURE: TasksFeature | None = None
 
 
-def current() -> Optional["TasksFeature"]:
+def current() -> TasksFeature | None:
     """Hàng đợi đang chạy, hoặc None nếu chưa register (test nạp lẻ module này)."""
     return _FEATURE
 

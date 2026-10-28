@@ -19,17 +19,18 @@ Gỡ một model có ba cái bẫy, và file này khoá cả ba:
   3. **Mảnh sót.** Một route, một import, một khối giao diện còn trỏ vào thứ đã xoá là lỗi chờ
      ngày nổ.
 """
-from _paths import ROOT, SERVER, moi_route  # noqa: E402,F401
 import importlib.util
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER, moi_route
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-gocgw-")
 
-import config as cfg  # noqa: E402
-import main  # noqa: E402
-import optional_tools as ot  # noqa: E402
+import config as cfg
+import main
+import optional_tools as ot
 
 _fails = []
 

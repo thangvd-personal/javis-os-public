@@ -1,6 +1,4 @@
 """Standalone broker evidence, without SDK, engine, or native receipt claims."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -12,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_sandbox as SB
-import mcp_client
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_skill_asset_broker"):
     from improvement_skill_asset_broker import SkillAssetBroker

@@ -9,12 +9,13 @@ Plus spec 10 (cross review by another engine family, findings back to the author
 noted on the PR), 13.1 (lessons written to the brain after a real failure, then fed to the next turn) and 13.2
 (metrics per engine and model).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghr-")
 try:
@@ -22,14 +23,14 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos  # noqa: E402
-import github_store  # noqa: E402
-import github_work as w  # noqa: E402
+import github_repos
+import github_store
+import github_work as w
 
 _fails = []
 
@@ -65,7 +66,7 @@ w.configure(notify=notify, start_turn=start_turn, review=review,
             reviewers=lambda: ["anthropic-cli", "openai", "gemini"],
             session_info=lambda sid: {"title": f"Việc {sid}", "engine": ENGINES.get(sid[:2], "anthropic-cli"),
                                       "model": "m-" + sid[:2]})
-run = lambda coro: asyncio.run(coro)  # noqa: E731
+run = lambda coro: asyncio.run(coro)
 BRAIN = tempfile.mkdtemp(prefix="brain-")
 github_repos.connect(GOOD_TOKEN)
 S = github_store.store

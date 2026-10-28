@@ -13,17 +13,18 @@ bằng hàm giả và ghi lại lời gọi. Test khoá:
      lịch sự còn sống thì báo và gợi ý force; force=true gọi _kill với force.
   5. Manifest: enabled, ba tool, min_mode đúng mức (list readonly, open safe, close full).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-dapps-")
 
-import plugins_host  # noqa: E402
-import deploy_info  # noqa: E402
+import deploy_info
+import plugins_host
 
 _fails = []
 
@@ -227,6 +228,7 @@ check("mô tả tool dặn [unverified] không được nói là xong", "[unveri
 
 # ---- 5. Liệt kê ----
 import json
+
 state["running"] = list(RUNNING)   # các test đóng ở trên đã "tắt" chrome trong danh sách giả
 d = json.loads(m._list({"filter": "chrome"}, ctx))
 check("list lọc: installed chỉ còn Chrome", d["installed"] == ["Google Chrome"])

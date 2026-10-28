@@ -14,13 +14,14 @@ File này canh bốn thứ:
   4. Không bao giờ thành câu lộ máy trước cả nhóm: nhóm chưa cho phép thì im và không tính là
      một lần gọi bot; engine lỗi cũng im, không "trục trặc". (Hạn mức câu trả lời mỗi giờ đã gỡ ở 0.85.4.)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpjoin-")
 os.environ["JAVIS_REPLY_POLICY_SHADOW"] = "1"
@@ -29,13 +30,13 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import chatbot_tu_dong  # noqa: E402
-import conversations  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import chatbot_tu_dong
+import conversations
+import zalo_cli
+import zalo_personal_channel as zc
+from channels import zalo_personal
 
 _fails = []
 

@@ -10,15 +10,16 @@ làm nằm trong trình duyệt, nên phải có chỗ ĐỢI trình duyệt tr�
   4. Không ai đáp -> hết giờ, trả câu lỗi có ghi số giây.
 Cộng: javis_ui chặn trang lạ và đường dẫn `..` TRƯỚC khi hỏi dashboard; /ws có nhánh ui_result.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-uib-"))
 
-import ui_bridge  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
+import ui_bridge
+from chat_runtime import ChatRuntime
 
 _fails = []
 

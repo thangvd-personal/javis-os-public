@@ -7,20 +7,20 @@ bỏ chúng qua bản cập nhật (vòng 3: câu trích có mặt trong tin kh�
 chỉ dẫn mới. Phần chưa áp dụng được báo lại. P2-2: tiêu chí mô tả rỗng không qua cổng M.
 Đi qua kho SQLite thật và plugin javis_goal thật (plugins_host); không gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m2r-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import luot_dang_chay  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import plugins_host
+import resonance as R
+import resonance_store as RS
 
 _fails = []
 
@@ -206,7 +206,7 @@ check("bộ não gửi constraints=[]: không gỡ được ràng buộc nào, k
       set(gc4.constraints) == set(gc3.constraints) and rel_c4 == "none")
 
 # Ý định ghi cùng transaction với revision: kho từ chối thì không để lại ý định mồ côi.
-import sqlite3  # noqa: E402
+import sqlite3
 
 _db = Path(_STATE) / "resonance.sqlite3"
 
@@ -243,7 +243,8 @@ check("danh sách pha trộn: chỉ giữ tiêu chí có nội dung, id đánh l
       [(c["id"], c["description"]) for c in fr_mix["criteria"]] == [("c1", "Báo cáo có đủ 10 hồ sơ")])
 
 # Qua tool thật: đề xuất delivery với tiêu chí rỗng không để lại mục tiêu nào.
-import _resonance_agent as RA  # noqa: E402  - A1: tool chỉ chạy trong lượt của agent đã bật
+import _resonance_agent as RA
+
 AG = RA.enable(store, BRAIN)
 _, route = plugins_host.plugin_tools("full", BRAIN, scope_vault=False)
 call = route["javis_goal"]["call"]

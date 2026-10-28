@@ -4,7 +4,6 @@
 
 Kho và bộ chạy thật trên SQLite tạm, engine giả. Không gọi model: thả cảm xúc không mở lượt nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import os
@@ -12,13 +11,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-react-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-react-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -89,7 +90,7 @@ st = r.react(A["team_id"], m1, "sad", reasons=["too_long", "missing"], comment="
 row = tm.reaction_of(A["session_id"], m1)
 check("lưu đúng người, tin, agent, nhóm, content_sha", row and row["reactor"] == "owner"
       and row["agent_key"] == "lan" and row["team_id"] == A["team_id"] and row["message_id"] == m1
-      and row["content_sha"] == hashlib.sha256("Câu chuyện buồn về cửa hàng".encode("utf-8")).hexdigest(), row)
+      and row["content_sha"] == hashlib.sha256("Câu chuyện buồn về cửa hàng".encode()).hexdigest(), row)
 check("lý do và góp ý lưu kèm", row["reasons"] == ["too_long", "missing"] and row["comment"] == "Ngắn hơn nhé", row)
 again = r.react(A["team_id"], m1, "like", nonce="n-full")
 check("gửi lại cùng nonce: không đổi gì", again["value"] == "sad" and tm.reaction_of(A["session_id"], m1)["value"]
@@ -182,15 +183,15 @@ run(r.run_replies(r.submit(A["team_id"], "Lần bốn", client_msg_id="s4")))
 check("chỉ 30 ngày gần nhất", "OLD_31_DAYS" not in rec.reqs[-1]["prompt"])
 
 # ═════ T2 (0.154.0): trường mới, nonce dùng lại, lệnh react của agent (thiết kế 4.1, hợp đồng mục 5) ═════
-import json  # noqa: E402
+import json
 
-import resonance_store as RS  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import feedback_projector as FP  # noqa: E402
+import agent_ledger as AL
+import feedback_projector as FP
+import resonance_store as RS
 
 r, tm, ts, ss, rec, pub, (A, B) = world("t2-fields")
 m = agent_msg(ss, A, "lan", "Nội dung gốc")
-sha = hashlib.sha256("Nội dung gốc".encode("utf-8")).hexdigest()
+sha = hashlib.sha256("Nội dung gốc".encode()).hexdigest()
 st = r.react(A["team_id"], m, "love", reasons=["on_point"], axis="should_speak", nonce="f1", seen_sha=sha)
 check("R mang trường mới: axis, stale, status, status_reason, source_kind, revision",
       st["axis"] == "should_speak" and st["stale"] is False and st["status"] == "received"

@@ -26,9 +26,10 @@ import re
 import secrets
 import sqlite3
 import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 KINDS = ("action", "plan", "question")
 OPEN = ("pending",)
@@ -68,7 +69,7 @@ def fingerprint(kind: str, name: str, args: Any) -> str:
         canon = json.dumps(args, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     except (TypeError, ValueError):
         canon = str(args)
-    return hashlib.sha256(f"{kind}|{name}|{canon}".encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(f"{kind}|{name}|{canon}".encode()).hexdigest()[:32]
 
 
 def _clip(v: Any, n: int = TEXT_MAX) -> str:
@@ -89,7 +90,7 @@ ASKS_DECISION_RE = re.compile(
     re.IGNORECASE)
 
 
-_CODE_RE = re.compile(r"```.*?```|`[^`\n]*`", re.S)
+_CODE_RE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
 
 
 def _own_words(text: str) -> str:
@@ -113,7 +114,7 @@ def excerpt(text: str, n: int = 600) -> str:
     return t[start:start + n].strip()
 
 
-def parse_request(op: dict) -> Optional[dict]:
+def parse_request(op: dict) -> dict | None:
     """Validate an `ask_approval` directive. None when it says nothing an owner could decide on."""
     if not isinstance(op, dict):
         return None
@@ -167,7 +168,7 @@ class ApprovalStore:
                 self.c.close()
 
     @staticmethod
-    def _row(r) -> Optional[dict]:
+    def _row(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
@@ -176,15 +177,15 @@ class ApprovalStore:
         d["held_ops"] = json.loads(d.pop("held_ops_json") or "[]")
         return d
 
-    def _event(self, c, aid: str, kind: str, by: str = "", detail: Optional[dict] = None) -> None:
+    def _event(self, c, aid: str, kind: str, by: str = "", detail: dict | None = None) -> None:
         c.execute("INSERT INTO team_approval_events(approval_id, at, kind, by, detail_json) VALUES(?,?,?,?,?)",
                   (aid, self.clock(), kind, by, _j(detail or {})))
 
     # ---- create ----
     def create(self, *, team_id: str, task_id: str, step_id: str, team_rev: int, requested_by: str, kind: str,
-               title: str, action: str, scope: str = "", impact: str = "", evidence: Optional[list] = None,
-               deadline_at: Optional[float] = None, fingerprints: Optional[list] = None,
-               held_ops: Optional[list] = None) -> dict:
+               title: str, action: str, scope: str = "", impact: str = "", evidence: list | None = None,
+               deadline_at: float | None = None, fingerprints: list | None = None,
+               held_ops: list | None = None) -> dict:
         """A new pending request, or the job's existing pending one (at most one per job): a second ask while the job
         already waits is folded into the first, never a second card."""
         if kind not in KINDS:
@@ -209,7 +210,7 @@ class ApprovalStore:
             return self._row(c.execute("SELECT * FROM team_approvals WHERE approval_id=?", (aid,)).fetchone())
 
     def join(self, aid: str, *, step_id: str, requested_by: str, who: str, action: str,
-             fingerprints: Optional[list] = None) -> Optional[dict]:
+             fingerprints: list | None = None) -> dict | None:
         """0.271.0: fold the request of another step of the same job into this pending request (the job waits for one
         card at a time). Before this, a sibling step of the same wave that also needed approval was parked and its request
         dropped: the member said it filed one and no card ever showed it (customer report, codes 5 and 22). The joined
@@ -247,11 +248,11 @@ class ApprovalStore:
             c.execute("UPDATE team_approvals SET message_id=? WHERE approval_id=?", (int(message_id), aid))
 
     # ---- read ----
-    def get(self, aid: str) -> Optional[dict]:
+    def get(self, aid: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._row(c.execute("SELECT * FROM team_approvals WHERE approval_id=?", (aid,)).fetchone())
 
-    def pending_for_task(self, task_id: str) -> Optional[dict]:
+    def pending_for_task(self, task_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._row(c.execute("SELECT * FROM team_approvals WHERE task_id=? AND status='pending'",
                                        (task_id,)).fetchone())
@@ -261,7 +262,7 @@ class ApprovalStore:
             return [self._row(r) for r in c.execute(
                 "SELECT * FROM team_approvals WHERE task_id=? ORDER BY created_at", (task_id,)).fetchall()]
 
-    def for_team(self, team_id: str, statuses: Optional[tuple] = None, limit: int = 50) -> list:
+    def for_team(self, team_id: str, statuses: tuple | None = None, limit: int = 50) -> list:
         q = "SELECT * FROM team_approvals WHERE team_id=?"
         args: list = [team_id]
         if statuses:
@@ -278,7 +279,7 @@ class ApprovalStore:
                 "SELECT id, approval_id, at, kind, by, detail_json FROM team_approval_events WHERE approval_id=? "
                 "ORDER BY id", (aid,)).fetchall()]
 
-    def approved_for_step(self, step_id: str) -> Optional[dict]:
+    def approved_for_step(self, step_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._row(c.execute(
                 "SELECT * FROM team_approvals WHERE status='approved' AND approval_id IN "
@@ -287,7 +288,7 @@ class ApprovalStore:
 
     # ---- decide ----
     def decide(self, aid: str, decision: str, *, by: str, note: str = "", decision_key: str,
-               current_rev: Optional[int] = None) -> dict:
+               current_rev: int | None = None) -> dict:
         """{"ok", "status", "approval", "replay", "error"}. CAS on pending + job revision; `decision_key` makes a retry
         return the first answer."""
         target = DECISIONS.get(str(decision or "").strip().lower())
@@ -333,7 +334,7 @@ class ApprovalStore:
             self._event(c, aid, "granted_step", "host", {"step_id": step_id})
 
     # ---- use ----
-    def consume_fingerprint(self, step_id: str, fp: str) -> Optional[str]:
+    def consume_fingerprint(self, step_id: str, fp: str) -> str | None:
         """Let ONE approved action through: the approval granted to this step lists this fingerprint and it was not used
         yet. Marked used in the same transaction, before the tool runs. Returns the approval id, or None."""
         now = self.clock()
@@ -407,7 +408,7 @@ class ApprovalStore:
             return out
 
 
-def view(ap: Optional[dict]) -> Optional[dict]:
+def view(ap: dict | None) -> dict | None:
     """What the dashboard shows: no internal fingerprints, only their labels and whether each was used."""
     if not ap:
         return None

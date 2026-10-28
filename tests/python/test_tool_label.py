@@ -6,11 +6,11 @@ Chủ repo báo 2026-09-24: khối "Đang chạy công cụ" chỉ ghi "Đang g�
 lặp lại, không biết lệnh nào, file nào. `tool_label.chi_tiet` rút từ tham số lệnh gọi ra một
 dòng người đọc được; main.py gửi nó xuống dashboard trong trường `detail`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import re
 import sys
 
-import tool_label  # noqa: E402
+import tool_label
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 fails = []
 
@@ -63,7 +63,7 @@ check("tham số khác dài quá thì cắt theo trần", len(qua_khac) == tool_
 
 # main.py gửi `detail` ở mọi chỗ đẩy tool_call xuống khung chat từ engine có tham số
 MAIN = (SERVER / "main.py").read_text(encoding="utf-8")
-check("main.py import tool_label", re.search(r"^import tool_label", MAIN, re.M) is not None)
+check("main.py import tool_label", re.search(r"^import tool_label", MAIN, re.MULTILINE) is not None)
 check("main.py gửi detail ở >= 7 chỗ", MAIN.count('"detail": tool_label.chi_tiet(') >= 7,
       str(MAIN.count('"detail": tool_label.chi_tiet(')))
 ENG = (SERVER / "engine.py").read_text(encoding="utf-8")

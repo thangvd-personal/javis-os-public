@@ -7,10 +7,11 @@
 
 Không model nào được gọi: chốt chặn làm test DỪNG NGAY nếu có đường nào dựng engine thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fix-jm-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
@@ -18,8 +19,8 @@ BR = Path(tempfile.mkdtemp(prefix="javis-fix-jm-brain-"))
 (BR / "agents").mkdir()
 (BR / "agents" / "lan.md").write_text("---\nname: Lan\nrole: Trợ lý\n---\nBạn là Lan.\n", encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import main
+import resonance_store as RS
 
 fails = []
 
@@ -68,8 +69,8 @@ check("mode send vẫn gửi bản nháp của chính agent",
       and main.get_store().get_messages(S)[-1]["content"] == "Bản nháp của Lan")
 
 # ═════ vòng 2 P3: chốt engine nhóm thật, khoá dựng lười ═════
-import asyncio  # noqa: E402
-import threading  # noqa: E402
+import asyncio
+import threading
 
 check("_paths đặt chốt JAVIS_NO_REAL_TEAM_ENGINE=1", os.environ.get("JAVIS_NO_REAL_TEAM_ENGINE") == "1")
 main.team_engine.build = main._TEAM_ENGINE_BUILD_REAL      # như một test quên thay engine

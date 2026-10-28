@@ -17,7 +17,6 @@ import json
 import re
 import threading
 from contextvars import ContextVar
-from typing import Dict, List, Optional, Tuple
 
 CURRENT: ContextVar[bool] = ContextVar("javis_fast_mode", default=False)
 
@@ -32,7 +31,7 @@ ANTHROPIC_BETA = "fast-mode-2026-02-01"
 _COMPAT = {"openai": "fast", "openrouter": "priority", "gemini": "priority"}
 
 _lock = threading.Lock()
-_states: Dict[str, Dict[str, str]] = {}
+_states: dict[str, dict[str, str]] = {}
 
 
 def use(on: bool):
@@ -67,7 +66,7 @@ def normal(coro):
     return _run()
 
 
-def anthropic_params(model: str, on: bool) -> Tuple[dict, dict]:
+def anthropic_params(model: str, on: bool) -> tuple[dict, dict]:
     """(extra headers, extra body) for the Anthropic Messages API."""
     if on and claude_supports(model):
         return {"anthropic-beta": ANTHROPIC_BETA}, {"speed": "fast"}
@@ -85,7 +84,7 @@ def responses_params(on: bool) -> dict:
     return {"service_tier": "priority"} if on else {}
 
 
-def codex_override(model: str, on: bool, tiers: List[str]) -> Optional[str]:
+def codex_override(model: str, on: bool, tiers: list[str]) -> str | None:
     """`-c` override for Codex CLI.
 
     On: `service_tier="priority"` when the model declares that tier, otherwise nothing.
@@ -116,6 +115,6 @@ def remember(provider: str, state: str, reason: str = "") -> None:
         _states[str(provider)] = {"state": str(state), "reason": str(reason or "")[:200]}
 
 
-def states() -> Dict[str, Dict[str, str]]:
+def states() -> dict[str, dict[str, str]]:
     with _lock:
         return {k: dict(v) for k, v in _states.items()}

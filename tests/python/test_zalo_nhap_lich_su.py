@@ -11,12 +11,13 @@ Các rào file này canh:
   3. Đọc đủ các trang (mới trước, lùi dần bằng `before`), có trần, bấm lại không nhân đôi.
   4. MCP hỏng thì báo rõ, không ném.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-znhap-")
 try:
@@ -24,9 +25,9 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import channels
+import conversations
+import zalo_personal_channel as zc
 
 _fails = []
 

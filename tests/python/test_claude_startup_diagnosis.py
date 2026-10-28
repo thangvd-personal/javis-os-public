@@ -17,7 +17,6 @@ that message, both covered here:
 
 The hub-side trace lives in `hub_trace`, the diagnosis in `claude_sdk_engine`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import contextlib
 import io
@@ -25,6 +24,8 @@ import os
 import re
 import sys
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -35,9 +36,9 @@ def check(name, cond):
         _fails.append(name)
 
 
-import claude_sdk_engine as eng  # noqa: E402
-import hub_trace  # noqa: E402
-import mcp_hub  # noqa: E402
+import claude_sdk_engine as eng
+import hub_trace
+import mcp_hub
 
 TIMEOUT = Exception("Control request timeout: initialize")
 # The dashboard card cuts last_error at 160 characters (dashboard/chatbots.js), so the verdict

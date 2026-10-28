@@ -8,13 +8,14 @@ Claude/Codex, engine Cộng hưởng). Các ca: sáu giá trị, đổi/bỏ, no
 trả lời 409, content_sha/seen_sha (stale), lịch sử mang reaction, gói WS chat_reaction và turn_saved, giữ qua mở lại kho,
 khối phản hồi vào lượt `agent:<slug>` kế tiếp của ĐÚNG trợ lý, mốc bật lại Cộng hưởng ở route chủ và lệnh trưởng nhóm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import inspect
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-dm-react-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
@@ -24,11 +25,11 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {name}\nrole: Trợ lý\n---\nBạn là {name}.\n",
                                               encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import agent_ledger as AL
+import main
+import resonance_store as RS
+import sessions
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -125,7 +126,7 @@ for label, sid, mid, body, code in (
 
 # content_sha, seen_sha, lịch sử
 page = c.get(f"/sessions/{S_LAN}/messages").json()["messages"]
-sha_a2 = hashlib.sha256("Bản thứ hai của Lan".encode("utf-8")).hexdigest()
+sha_a2 = hashlib.sha256("Bản thứ hai của Lan".encode()).hexdigest()
 m2 = next(m for m in page if m["id"] == a2)
 check("GET messages: mỗi tin có content_sha của nội dung đã lưu", m2["content_sha"] == sha_a2
       and all(m.get("content_sha") for m in page))

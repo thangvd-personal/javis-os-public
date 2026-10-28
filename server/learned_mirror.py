@@ -45,9 +45,10 @@ import sqlite3
 import sys
 import threading
 import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import brain_ident
 import config as cfgmod
@@ -61,11 +62,11 @@ AGENT_CASES_MAX = 500       # newest per-agent judge cases imported
 AGENT_REVOKED_MAX = 200     # newest revoked agent lessons imported
 
 _lock = threading.RLock()
-_providers: Dict[str, Optional[Callable[[bool], Any]]] = {"resonance": None, "judge": None}
-_cache: Dict[str, Any] = {}
+_providers: dict[str, Callable[[bool], Any] | None] = {"resonance": None, "judge": None}
+_cache: dict[str, Any] = {}
 
 
-def configure(resonance: Optional[Callable[[bool], Any]] = None, judge: Optional[Callable[[bool], Any]] = None) -> None:
+def configure(resonance: Callable[[bool], Any] | None = None, judge: Callable[[bool], Any] | None = None) -> None:
     """main.py hands over its lazily-built stores so this module reuses them. Each provider takes `create` and returns
     the store, or None when it does not exist and `create` is False."""
     _providers["resonance"] = resonance
@@ -82,7 +83,7 @@ def learned_dir(root: Any) -> Path:
     return Path(root) / "Javis" / "learned"
 
 
-def _paths(root: str, kind: str, name: str) -> Tuple[Path, Path]:
+def _paths(root: str, kind: str, name: str) -> tuple[Path, Path]:
     d = learned_dir(root) / ("bots" if kind == "bot" else "agents")
     return d / f"{name}.json", d / f"{name}{PRIVATE_SUFFIX}"
 
@@ -106,14 +107,14 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _file_sha(p: Path) -> Optional[str]:
+def _file_sha(p: Path) -> str | None:
     try:
         return _sha(p.read_bytes())
     except OSError:
         return None
 
 
-def _iso(ts: Optional[float] = None) -> str:
+def _iso(ts: float | None = None) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() if ts is None else ts))
 
 
@@ -158,7 +159,7 @@ class _State:
         if self.files.pop(str(p), None) is not None:
             self.dirty = True
 
-    def roots(self) -> List[str]:
+    def roots(self) -> list[str]:
         out = []
         for k in self.files:
             try:
@@ -221,7 +222,7 @@ def _has_table(c, name: str) -> bool:
     return c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
 
-def _teams() -> List[dict]:
+def _teams() -> list[dict]:
     """Teams from `team.sqlite3`, read-only; [] when the store does not exist."""
     p = Path(cfgmod.STATE_DIR) / "team.sqlite3"
     if not p.is_file():
@@ -240,16 +241,16 @@ def _teams() -> List[dict]:
 class _TeamMap:
     """team_id <-> team name within one brain. A name shared by two live teams maps to nothing."""
 
-    def __init__(self, root: str, teams: List[dict]):
+    def __init__(self, root: str, teams: list[dict]):
         mine = [t for t in teams if brain_ident.same_brain(t.get("brain_id"), root)]
         self.name_of = {t["team_id"]: str(t.get("name") or "").strip() for t in mine}
-        by_name: Dict[str, List[str]] = {}
+        by_name: dict[str, list[str]] = {}
         for t in mine:
             if t.get("status") != "archived":
                 by_name.setdefault(str(t.get("name") or "").strip(), []).append(t["team_id"])
         self.id_of = {n: ids[0] for n, ids in by_name.items() if n and len(ids) == 1}
 
-    def scope_out(self, scope: str, key: str) -> Optional[str]:
+    def scope_out(self, scope: str, key: str) -> str | None:
         s = str(scope or "")
         if s == "*":
             return "*"
@@ -261,7 +262,7 @@ class _TeamMap:
                 return "team-name:" + name
         return None
 
-    def scope_in(self, scope: str, key: str) -> Optional[str]:
+    def scope_in(self, scope: str, key: str) -> str | None:
         s = str(scope or "")
         if s == "*":
             return "*"
@@ -283,10 +284,10 @@ def _json_obj(s: Any) -> Any:
 
 # ───────────── bots: read ─────────────
 
-def _bot_knowledge(bot_id: str) -> Tuple[dict, List[dict]]:
+def _bot_knowledge(bot_id: str) -> tuple[dict, list[dict]]:
     """(public sections, private cases) of one bot. Empty when the judge store does not exist."""
     pub: dict = {"role_profile": None, "tuning": {}, "lessons": [], "threshold_offsets": [], "cases": []}
-    priv: List[dict] = []
+    priv: list[dict] = []
     if not _rps_exists():
         return pub, priv
     rps = _rps()
@@ -312,7 +313,7 @@ def _bot_knowledge(bot_id: str) -> Tuple[dict, List[dict]]:
     return pub, priv
 
 
-def _bot_docs(bot: dict) -> Tuple[Optional[dict], Optional[dict]]:
+def _bot_docs(bot: dict) -> tuple[dict | None, dict | None]:
     pub, priv = _bot_knowledge(bot["id"])
     has_pub = any(pub[k] for k in ("role_profile", "tuning", "lessons", "threshold_offsets", "cases"))
     head = {"slug": bot.get("slug") or "", "name": bot.get("name") or "",
@@ -356,7 +357,7 @@ def _insert_bot_cases(con, bot_id: str, rows: list, bootstrap: bool, now: float,
     return added
 
 
-def _import_bot(bot_id: str, pub: Optional[dict], priv: Optional[dict]) -> Dict[str, int]:
+def _import_bot(bot_id: str, pub: dict | None, priv: dict | None) -> dict[str, int]:
     """Fill the empty sections of one local bot from mirror documents. Returns counts of imported rows."""
     rps = _rps()
     b = str(bot_id)
@@ -420,7 +421,7 @@ def _import_bot(bot_id: str, pub: Optional[dict], priv: Optional[dict]) -> Dict[
 
 # ───────────── agents: read ─────────────
 
-def _agent_rows(rs) -> Optional[List[dict]]:
+def _agent_rows(rs) -> list[dict] | None:
     """Live agent rows, or None when the registry cannot be read (callers then leave agent files alone)."""
     try:
         with closing(rs._conn()) as c:
@@ -431,10 +432,10 @@ def _agent_rows(rs) -> Optional[List[dict]]:
         return None
 
 
-def _agent_docs(agent: dict, teams: _TeamMap) -> Tuple[Optional[dict], Optional[dict]]:
+def _agent_docs(agent: dict, teams: _TeamMap) -> tuple[dict | None, dict | None]:
     key, brain_id = agent["agent_key"], agent["brain_id"]
-    lessons: List[dict] = []
-    presentation: List[dict] = []
+    lessons: list[dict] = []
+    presentation: list[dict] = []
     rs = _resonance(False)
     if rs is not None:
         with closing(rs._conn()) as c:
@@ -456,7 +457,7 @@ def _agent_docs(agent: dict, teams: _TeamMap) -> Tuple[Optional[dict], Optional[
                                      "decided_by": r["decided_by"], "decided_at": r["decided_at"],
                                      "created_at": r["created_at"]})
     judge: dict = {}
-    cases: List[dict] = []
+    cases: list[dict] = []
     js = _judge(False)
     if js is not None:
         with closing(js._conn()) as c:
@@ -491,7 +492,7 @@ def _agent_docs(agent: dict, teams: _TeamMap) -> Tuple[Optional[dict], Optional[
 
 # ───────────── agents: import ─────────────
 
-def _import_agent(agent: dict, teams: _TeamMap, pub: Optional[dict], priv: Optional[dict]) -> Dict[str, int]:
+def _import_agent(agent: dict, teams: _TeamMap, pub: dict | None, priv: dict | None) -> dict[str, int]:
     key, brain_id = agent["agent_key"], agent["brain_id"]
     out = {"lessons": 0, "presentation": 0, "judge_profile": 0, "judge_offsets": 0, "judge_cases": 0}
     pub = pub if isinstance(pub, dict) and pub.get("kind") == "agent" else {}
@@ -505,8 +506,8 @@ def _import_agent(agent: dict, teams: _TeamMap, pub: Optional[dict], priv: Optio
         AL.ensure(rs)
         with rs._Tx(rs) as c:
             if lessons and not c.execute("SELECT 1 FROM agent_lessons WHERE agent_key=? LIMIT 1", (key,)).fetchone():
-                active: Dict[str, List[tuple]] = {}
-                revoked: List[tuple] = []
+                active: dict[str, list[tuple]] = {}
+                revoked: list[tuple] = []
                 for x in lessons:
                     scope = teams.scope_in(x.get("scope"), key)
                     body = AL.clean_text(x.get("text"))
@@ -518,9 +519,9 @@ def _import_agent(agent: dict, teams: _TeamMap, pub: Optional[dict], priv: Optio
                         revoked.append(row)
                     elif x.get("status") == "active":
                         active.setdefault(scope, []).append(row)
-                picked: List[tuple] = []
+                picked: list[tuple] = []
                 for scope, rows in active.items():
-                    uniq: Dict[str, tuple] = {}
+                    uniq: dict[str, tuple] = {}
                     for r in rows:
                         uniq[r[3]] = r                       # the newest copy of the same words wins
                     ranked = sorted(uniq.values(), key=lambda r: (r[4] == "owner", r[5]), reverse=True)
@@ -585,12 +586,12 @@ def _import_agent(agent: dict, teams: _TeamMap, pub: Optional[dict], priv: Optio
 # ───────────── the sync core ─────────────
 
 class _Entity:
-    def __init__(self, kind: str, name: str, ident: str, build: Callable[[], Tuple[Optional[dict], Optional[dict]]],
-                 load: Callable[[Optional[dict], Optional[dict]], Dict[str, int]]):
+    def __init__(self, kind: str, name: str, ident: str, build: Callable[[], tuple[dict | None, dict | None]],
+                 load: Callable[[dict | None, dict | None], dict[str, int]]):
         self.kind, self.name, self.ident, self.build, self.load = kind, name, ident, build, load
 
 
-def _read_doc(p: Path) -> Optional[dict]:
+def _read_doc(p: Path) -> dict | None:
     try:
         d = json.loads(p.read_text(encoding="utf-8"))
         return d if isinstance(d, dict) and int(d.get("version") or 0) <= VERSION else None
@@ -598,7 +599,7 @@ def _read_doc(p: Path) -> Optional[dict]:
         return None
 
 
-def _write_or_delete(st: _State, p: Path, doc: Optional[dict], force: bool) -> str:
+def _write_or_delete(st: _State, p: Path, doc: dict | None, force: bool) -> str:
     """Bring one mirror file in line with local data. Returns 'wrote', 'deleted' or ''."""
     rec = st.get(p)
     sha = _file_sha(p)
@@ -634,8 +635,8 @@ def _write_or_delete(st: _State, p: Path, doc: Optional[dict], force: bool) -> s
     return "wrote"
 
 
-def _process(st: _State, root: str, kind: str, name: str, ent: Optional[_Entity], *, blocked: bool = False,
-             force: bool = False, report: Optional[dict] = None) -> None:
+def _process(st: _State, root: str, kind: str, name: str, ent: _Entity | None, *, blocked: bool = False,
+             force: bool = False, report: dict | None = None) -> None:
     """Import foreign mirror content into `ent` (empty slots only), then export `ent`'s data. Without an entity, a
     file this machine wrote is deleted (its bot moved, was deleted or its agent was retired); `blocked` (ambiguous slug,
     unreadable registry) leaves the files alone."""
@@ -648,8 +649,8 @@ def _process(st: _State, root: str, kind: str, name: str, ent: Optional[_Entity]
             if _write_or_delete(st, p, None, False) == "deleted":
                 report["deleted"] = report.get("deleted", 0) + 1
         return
-    docs: Dict[str, Optional[dict]] = {"pub": None, "priv": None}
-    fresh: List[Tuple[Path, str]] = []
+    docs: dict[str, dict | None] = {"pub": None, "priv": None}
+    fresh: list[tuple[Path, str]] = []
     for tag, p in (("pub", pub_p), ("priv", priv_p)):
         sha = _file_sha(p)
         if sha is None or sha == st.get(p).get("seen"):
@@ -679,9 +680,9 @@ def _process(st: _State, root: str, kind: str, name: str, ent: Optional[_Entity]
             report[r] = report.get(r, 0) + 1
 
 
-def _listed(root: str) -> Dict[Tuple[str, str], bool]:
+def _listed(root: str) -> dict[tuple[str, str], bool]:
     """(kind, name) of every mirror file present in the brain."""
-    out: Dict[Tuple[str, str], bool] = {}
+    out: dict[tuple[str, str], bool] = {}
     for kind, sub in (("bot", "bots"), ("agent", "agents")):
         d = learned_dir(root) / sub
         try:
@@ -705,7 +706,7 @@ def _bot_root(bot: dict) -> str:
     return c if c and os.path.isdir(c) else ""
 
 
-def _load_bots() -> Optional[List[dict]]:
+def _load_bots() -> list[dict] | None:
     try:
         import chatbot_store
         with chatbot_store._lock:
@@ -721,7 +722,7 @@ class _World:
     def __init__(self):
         self.bots = _load_bots()
         self.bot_ok = self.bots is not None
-        self.bot_by: Dict[str, Dict[str, List[dict]]] = {}
+        self.bot_by: dict[str, dict[str, list[dict]]] = {}
         for b in self.bots or []:
             root, name = _bot_root(b), _safe_name(b.get("slug"))
             if root and name:
@@ -729,19 +730,19 @@ class _World:
         rs = _resonance(False)
         rows = _agent_rows(rs) if rs is not None else []
         self.agent_ok = rows is not None
-        self.agent_by: Dict[str, Dict[str, dict]] = {}
+        self.agent_by: dict[str, dict[str, dict]] = {}
         for a in rows or []:
             root, name = brain_ident.canonical(a.get("brain_id")), _safe_name(a.get("slug"))
             if root and name and os.path.isdir(root):
                 self.agent_by.setdefault(root, {})[name] = a
-        self._teams: Optional[List[dict]] = None
+        self._teams: list[dict] | None = None
 
     def teams(self, root: str) -> _TeamMap:
         if self._teams is None:
             self._teams = _teams()
         return _TeamMap(root, self._teams)
 
-    def roots(self, extra: List[str]) -> List[str]:
+    def roots(self, extra: list[str]) -> list[str]:
         out = []
         for r in list(self.bot_by) + list(self.agent_by) + extra:
             c = brain_ident.canonical(r)
@@ -749,7 +750,7 @@ class _World:
                 out.append(c)
         return out
 
-    def entity(self, root: str, kind: str, name: str) -> Tuple[Optional[_Entity], bool]:
+    def entity(self, root: str, kind: str, name: str) -> tuple[_Entity | None, bool]:
         """(entity, blocked). Blocked = the files must be left alone (ambiguous slug or unreadable store)."""
         if kind == "bot":
             if not self.bot_ok:
@@ -773,7 +774,7 @@ class _World:
                        lambda pub, priv: _import_agent(a, tm, pub, priv)), False
 
 
-def sync_brain(root: Any, world: Optional[_World] = None, st: Optional[_State] = None) -> dict:
+def sync_brain(root: Any, world: _World | None = None, st: _State | None = None) -> dict:
     """Import then export every mirrored bot and agent of one brain. Returns counts."""
     report: dict = {}
     with _lock:

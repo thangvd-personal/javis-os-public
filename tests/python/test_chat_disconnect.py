@@ -1,13 +1,12 @@
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import time
 from types import SimpleNamespace
 
-from fastapi import WebSocketDisconnect
-
 import main
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
 from sessions import SessionStore
 
 

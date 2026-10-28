@@ -1,15 +1,13 @@
 """Native record consistency using synthetic captures; no native/provider use."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib
-import json
 import subprocess
 import unittest
 
-from improvement_store import _hash, _json
 import test_improvement_native_observation as G
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_store import _hash, _json
 
 try:
     trace_checks = importlib.import_module('improvement_native_trace_checks')
@@ -196,10 +194,10 @@ class NativeTraceChecksTests(unittest.TestCase):
 
 class TrialFourConsumerTests(unittest.TestCase):
     def records(self):
-        from test_improvement_trial_checks import TrialChecksTests
-        from improvement_sandbox import _effective_hash, trial_system_prompt
         from improvement_read_outcome_broker import PinnedReadOutcomeBroker
         from improvement_read_outcome_proof import correlate_read_outcomes
+        from improvement_sandbox import _effective_hash, trial_system_prompt
+        from test_improvement_trial_checks import TrialChecksTests
         record = TrialChecksTests(); record.setUp()
         view = {'view_id': 'view-a', 'view_hash': 'a' * 64, 'binding_hash': 'b' * 64}
         record.manifest.update(version=4, effective_view=view)

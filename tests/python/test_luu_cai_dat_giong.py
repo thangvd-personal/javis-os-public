@@ -14,17 +14,18 @@ Hai lớp canh:
      nhánh voice của main.py. Thêm ô mới mà quên server là test đỏ ngay, không đợi người dùng
      phát hiện.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-voicecfg-")
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c   # noqa: E402
-import main          # noqa: E402
+import config as c
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 

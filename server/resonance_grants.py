@@ -17,7 +17,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 POLICY_VERSION = "grants.v1"
 ACTIONS = ("read_deliverable", "submit", "publish")
@@ -26,7 +26,7 @@ ROOT_ACTIONS = ("read_deliverable", "submit", "publish")
 SOURCES = ("owner_approved", "legacy_frozen")
 
 
-def path_key(brain_root: str, rel: Any) -> Optional[str]:
+def path_key(brain_root: str, rel: Any) -> str | None:
     """Khoá đường của một đích sản phẩm, hay None khi đường không được nhận.
 
     Từ chối trước khi resolve: rỗng, đường tuyệt đối, bắt đầu bằng gạch chéo, ký tự điều khiển, đoạn `.` hay `..`
@@ -100,7 +100,7 @@ def narrow(parent: dict, request: dict) -> tuple:
     return out, ""
 
 
-def allows(grant: Optional[dict], action: str, key: str) -> bool:
+def allows(grant: dict | None, action: str, key: str) -> bool:
     """Quyền `grant` có cho `action` trên đích `key` (khoá đường) không. Thiếu gì cũng là không."""
     if not grant or action not in ACTIONS or not key:
         return False

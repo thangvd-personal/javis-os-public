@@ -5,16 +5,17 @@ nothing when it is off, and one retry without it when the provider refuses.
 
 No network: engine.httpx.AsyncClient is replaced by a fake that records every request.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-fastapi-"))
-import engine  # noqa: E402
-import fast_mode  # noqa: E402
+import engine
+import fast_mode
 
 fails = []
 

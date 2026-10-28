@@ -14,7 +14,6 @@
    không đăng, không chốt đạt; sổ chuyển missing; đổi tên tay hay đặt file lại vẫn bị chặn tới khi chủ xác nhận.
    `/goal-requests` cũng bị chặn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -23,18 +22,21 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a1x-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import engine  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import engine
+import main
+import resonance as R
+import resonance_store as RS
+import turn_context
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
-from chat_runtime import ChatRuntime  # noqa: E402
-from fastapi import WebSocketDisconnect  # noqa: E402
+from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
 
 _fails = []
 
@@ -221,7 +223,8 @@ check("1 phiên trợ lý TẮT: nếu model vẫn tìm và gọi javis_goal (da
 
 # Engine gói thuê bao (Claude Code, Codex) dựng prompt ở _subscription_system_prompt: phiên trợ lý phải về đúng
 # _legacy_system_prompt, mà nhánh trợ lý của nó là _agent_chat_prompt (đã kiểm ở trên qua engine API).
-import ast  # noqa: E402
+import ast
+
 _src = (SERVER / "main.py").read_text(encoding="utf-8")
 _fns = {n.name: ast.get_source_segment(_src, n) for n in ast.walk(ast.parse(_src))
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in ("_legacy_system_prompt",
@@ -231,8 +234,8 @@ check("1 mọi nhánh engine của phiên trợ lý dùng _agent_chat_prompt (g�
       and "if _persona:\n                    return _legacy_system_prompt(), None" in _fns.get("_subscription_system_prompt", ""))
 
 # ───────────── Claude SDK: server MCP trong tiến trình, gọi qua bộ điều phối của chính nó ─────────────
-import claude_sdk_engine  # noqa: E402
-from mcp.types import CallToolRequest, CallToolRequestParams  # noqa: E402
+import claude_sdk_engine
+from mcp.types import CallToolRequest, CallToolRequestParams
 
 SDK = {}
 
@@ -321,7 +324,8 @@ tick()
 check("4 đặt file lại đúng tên: vẫn chặn tới khi chủ dự án xác nhận", calls["n"] == 0
       and store.agent_by_key(BRAIN, B["agent_key"])["status"] == "missing")
 mid_r = ss.append_message(SB, "user", USER)
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
+
 r = TestClient(main.app, base_url="http://127.0.0.1:8080").post(
     "/goal-requests", params={"brain": BRAIN}, json={"message_ref": R.message_ref(SB, mid_r)})
 check("4 /goal-requests trên phiên của trợ lý đang missing: 403", r.status_code == 403, r.status_code)

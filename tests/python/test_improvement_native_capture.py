@@ -1,18 +1,18 @@
 """Isolated capture component; private cmd echo only, no SDK client or account."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib
 import importlib.util
 import math
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def capture_class(test):

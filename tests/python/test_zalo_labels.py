@@ -11,12 +11,13 @@ Công ty...). Checks:
   4. the tags of the chat reach the bot prompt on personal Zalo only;
   5. a live turn in a skipped chat never reaches the engine.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-labels-")
 try:
@@ -24,9 +25,9 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import zalo_personal_channel as zc
 
 _fails = []
 

@@ -27,7 +27,7 @@ import sys
 import threading
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 DUOI = (".md", ".txt", ".markdown")
 
@@ -114,11 +114,11 @@ def _bo_dau(s: str) -> str:
     return s.replace("đ", "d").replace("Đ", "D")
 
 
-def _tach_tu(s: str) -> List[str]:
+def _tach_tu(s: str) -> list[str]:
     return [a for a, _ in _tach_cap(s)]
 
 
-def _tach_cap(s: str) -> List[tuple]:
+def _tach_cap(s: str) -> list[tuple]:
     """Cắt thành các cặp (bỏ dấu, giữ dấu).
 
     Phải giữ CẢ HAI dạng vì bỏ dấu là con dao hai lưỡi. Nó cho khách gõ "gia si bao nhieu" mà
@@ -145,7 +145,7 @@ def _tach_cap(s: str) -> List[tuple]:
 # Chỉ mục, dựng lười và tự làm mới khi file đổi
 # ============================================================
 _lock = threading.Lock()
-_CACHE: Dict[str, dict] = {}
+_CACHE: dict[str, dict] = {}
 _CACHE_MAX = 64     # one slot per brain, plus one per chat with scoped documents (0.338.0); oldest dropped first
 
 
@@ -221,11 +221,11 @@ def _duyet(root: Path):
 SCOPED_DIR = "rieng-theo-nhom"
 MAX_SCOPED_FILES = 5_000    # walk cap for scoped files; one per customer, so far more than general documents
 _HEAD_BYTES = 4_096         # how much of a file is read to find its frontmatter
-_SCOPE_CACHE: Dict[str, tuple] = {}     # path -> ((mtime_ns, size), scope)
+_SCOPE_CACHE: dict[str, tuple] = {}     # path -> ((mtime_ns, size), scope)
 _SCOPE_CACHE_MAX = 20_000
 
 
-def _parse_scope(fm: str) -> Optional[tuple]:
+def _parse_scope(fm: str) -> tuple | None:
     """The `chat_scope` value of one frontmatter block: None when the key is absent, else a tuple of ids. Parsed by
     hand rather than with YAML: a chat id is an opaque string, and YAML would turn `0123` or `-100123` into a number
     and lose the exact text."""
@@ -255,7 +255,7 @@ def _parse_scope(fm: str) -> Optional[tuple]:
     return None
 
 
-def file_scope(p: Path) -> Optional[tuple]:
+def file_scope(p: Path) -> tuple | None:
     """The chat ids a file's frontmatter `chat_scope` names, None when it has no such line. Cached on
     (mtime, size), so the per-message scan reads each file's head once until it changes. A file that cannot be
     read reads as "nobody" (an empty tuple), never as a document every chat may see."""
@@ -290,7 +290,7 @@ def _clean_chat_id(chat_id: Any) -> str:
     return str(chat_id or "").strip()
 
 
-def scoped_paths(root: Any, chat_id: Any) -> List[str]:
+def scoped_paths(root: Any, chat_id: Any) -> list[str]:
     """Relative posix paths of the scoped documents of ONE chat. Empty without a chat id."""
     cid = _clean_chat_id(chat_id)
     if not cid:
@@ -318,7 +318,7 @@ def has_scoped_docs(root: Any) -> bool:
         return False
 
 
-def scoped_docs(root: Any, chat_id: Any) -> List[dict]:
+def scoped_docs(root: Any, chat_id: Any) -> list[dict]:
     """The scoped documents of ONE chat as extra documents ({path, title, text}) for `chi_muc`/`tim`/`thu_thap`,
     frontmatter stripped. Empty without a chat id."""
     r = Path(str(root))
@@ -333,7 +333,7 @@ def scoped_docs(root: Any, chat_id: Any) -> List[dict]:
     return out
 
 
-def ds_tai_lieu(root: Any, chat_id: Any = None) -> List[str]:
+def ds_tai_lieu(root: Any, chat_id: Any = None) -> list[str]:
     """Đường dẫn tương đối (dạng posix) của mọi file được tính là tài liệu của bot. Bộ công cụ đọc
     tài liệu ở mức "Đọc tài liệu" (`chatbot_doc_tools`) chỉ mở được đúng những file trong danh sách
     này, nên nó không bao giờ thấy nhiều hơn phần tra sẵn đã thấy.
@@ -347,7 +347,7 @@ def ds_tai_lieu(root: Any, chat_id: Any = None) -> List[str]:
         return []
 
 
-def _cat_manh(text: str, tieu_de: str) -> List[dict]:
+def _cat_manh(text: str, tieu_de: str) -> list[dict]:
     """Cắt một file thành các MẢNH theo tiêu đề markdown.
 
     Cắt theo tiêu đề chứ không cắt cứng theo số ký tự: một mảnh nên là một ý trọn vẹn ("Chính
@@ -371,8 +371,8 @@ def _cat_manh(text: str, tieu_de: str) -> List[dict]:
     return [p for p in phan if p["text"]]
 
 
-def _dung_chi_muc(root: Path, extra: Optional[List[dict]] = None) -> dict:
-    manh: List[dict] = []
+def _dung_chi_muc(root: Path, extra: list[dict] | None = None) -> dict:
+    manh: list[dict] = []
     # Documents that are not files of the brain (Google Docs/Sheets linked from the bot's Agent, see
     # bot_linked_docs). Indexed together with the files so IDF weighs a word against everything the
     # bot knows, not against two separate piles.
@@ -395,14 +395,14 @@ def _dung_chi_muc(root: Path, extra: Optional[List[dict]] = None) -> dict:
             m["cap"] = _tach_cap(m["ten"] + " " + p.stem + " " + m["text"])
             manh.append(m)
 
-    df: Dict[str, int] = {}
+    df: dict[str, int] = {}
     for m in manh:
         for t, _ in set(m["cap"]):
             df[t] = df.get(t, 0) + 1
     n = max(1, len(manh))
     idf = {t: math.log(1 + n / (1 + c)) for t, c in df.items()}
     for m in manh:
-        dem: Dict[str, int] = {}
+        dem: dict[str, int] = {}
         for t, _ in m["cap"]:
             dem[t] = dem.get(t, 0) + 1
         m["dem"] = dem
@@ -412,13 +412,13 @@ def _dung_chi_muc(root: Path, extra: Optional[List[dict]] = None) -> dict:
     return {"manh": manh, "idf": idf}
 
 
-def _van_extra(extra: Optional[List[dict]]) -> tuple:
+def _van_extra(extra: list[dict] | None) -> tuple:
     """Fingerprint of the extra documents: which ones, and their exact text."""
     return tuple((str(d.get("path") or ""), hashlib.sha1(str(d.get("text") or "").encode(
         "utf-8", "replace")).hexdigest()) for d in (extra or []))
 
 
-def chi_muc(root: Any, extra: Optional[List[dict]] = None) -> dict:
+def chi_muc(root: Any, extra: list[dict] | None = None) -> dict:
     """Chỉ mục của một brain, dựng lười và dùng lại cho tới khi file đổi.
 
     `extra`: documents that are not files (see `_dung_chi_muc`). A brain with extras gets its own
@@ -456,8 +456,8 @@ def xoa_cache() -> None:
 # ============================================================
 # Tìm
 # ============================================================
-def tim(root: Any, cau_hoi: str, k: int = 4, extra: Optional[List[dict]] = None,
-        chat_id: Any = None) -> List[dict]:
+def tim(root: Any, cau_hoi: str, k: int = 4, extra: list[dict] | None = None,
+        chat_id: Any = None) -> list[dict]:
     """Các mảnh tài liệu khớp nhất với câu hỏi, sắp theo điểm giảm dần.
 
     `chat_id` (0.338.0): also search the scoped documents of that chat, and only that chat."""
@@ -469,7 +469,7 @@ def tim(root: Any, cau_hoi: str, k: int = 4, extra: Optional[List[dict]] = None,
     idf = ix["idf"]
     # Một từ bỏ dấu có thể ứng với nhiều dạng có dấu trong CÙNG câu hỏi; giữ tất cả để chỉ cần
     # tài liệu khớp một dạng là tính khớp thật.
-    hoi: Dict[str, set] = {}
+    hoi: dict[str, set] = {}
     for t, a in cap:
         hoi.setdefault(t, set()).add(a)
     # Từ nào không có trong brain thì IDF không tra được. Cho nó sức nặng TRUNG BÌNH thay vì 0:
@@ -512,7 +512,7 @@ def tim(root: Any, cau_hoi: str, k: int = 4, extra: Optional[List[dict]] = None,
             for d, p, n, m in ra[:k]]
 
 
-def thu_thap(root: Any, cau_hoi: str, k: int = 4, extra: Optional[List[dict]] = None,
+def thu_thap(root: Any, cau_hoi: str, k: int = 4, extra: list[dict] | None = None,
              chat_id: Any = None) -> dict:
     """Khối tài liệu nhét vào prompt cho MỘT câu hỏi.
 

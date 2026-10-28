@@ -16,21 +16,21 @@ File này dựng đúng cảnh đó (CODEX_HOME tạm + một Codex CLI giả in
   5. Chạy lại không đẻ bản sao; phiên Coding (cwd là repo) vẫn đổ ảnh về brain.
   6. Lớp soát link của main không còn báo "không tìm thấy" cho câu đã viết lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TMP = Path(tempfile.mkdtemp(prefix="javis-anhcodex-"))
 os.environ["CODEX_HOME"] = str(TMP / "codexhome")
 os.environ.setdefault("JAVIS_STATE_DIR", str(TMP / "state"))
 
-import anh_codex  # noqa: E402
-from claude_cli import CodexCLI  # noqa: E402
+import anh_codex
+from claude_cli import CodexCLI
 
 _fails = []
 
@@ -111,7 +111,8 @@ check("không có ảnh thì trả nguyên văn", anh_codex.dua_anh_ve_brain(van
 check("thread id lạ (trèo thư mục) bị bỏ qua", anh_codex.anh_moi_cua_thread("../x", 0) == [])
 
 # Lớp soát link của main không còn báo thiếu.
-import main  # noqa: E402
+import main
+
 # File lạ cố tình nằm ngoài brain nên vẫn phải bị báo; chỉ ảnh Codex là hết bị báo.
 _bao = main._link_file_khong_thay(str(vault), moi)
 check("main không còn báo 'không tìm thấy trong brain' cho ảnh Codex",

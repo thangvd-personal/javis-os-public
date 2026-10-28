@@ -13,10 +13,10 @@ import improvement_evaluation as EVAL
 import improvement_store as IM
 import improvement_usage as IU
 from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
+from improvement_qualification_records import require_product_store
 from improvement_trial_checks import execution_invariants
 from improvement_trial_evidence import TrialEvidence
 from improvement_trial_products import TrialProducts
-from improvement_qualification_records import require_product_store
 
 
 def _guard(callback, request):
@@ -95,8 +95,14 @@ class TrialResults:
             records = list(connection.execute('SELECT * FROM improvement_trial_observations WHERE trial_id=? AND attempt=? ORDER BY sequence',
                 (identifier, attempt))) if 'native_decisions' in report else []
             if 'native_decisions' in report:
-                from improvement_native_trace_checks import validated_history, reread_native_decisions
-                from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+                from improvement_native_decisions import (
+                    NativeImageDecisionStore,
+                    attempt_scope,
+                )
+                from improvement_native_trace_checks import (
+                    reread_native_decisions,
+                    validated_history,
+                )
                 stored_attempt = connection.execute('SELECT workspace_json FROM improvement_trial_attempts WHERE trial_id=? AND attempt=?',
                     (identifier, attempt)).fetchone()
                 workspace = json.loads(stored_attempt['workspace_json'])
@@ -232,8 +238,15 @@ class TrialResults:
             native = None
             decision_reader = None
             if manifest['version'] in (4, 5):
-                from improvement_native_trace_checks import validated_history, validate_native_trace, require_durable_allow
-                from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
+                from improvement_native_decisions import (
+                    NativeImageDecisionStore,
+                    attempt_scope,
+                )
+                from improvement_native_trace_checks import (
+                    require_durable_allow,
+                    validate_native_trace,
+                    validated_history,
+                )
                 from improvement_sandbox import trial_system_prompt
                 decoded = {record['sequence']: packet for record, packet in zip(records, packets)}
                 validated_history(records, lambda record: decoded[record['sequence']], kind='trial', receipt=workspace)

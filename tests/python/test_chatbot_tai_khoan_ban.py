@@ -10,10 +10,11 @@ mở) đang giữ. Server cấp danh sách đó; hai chỗ dễ hỏng:
   2. Lọc theo brain như cũ: kênh của brain khác không lọt vào danh sách của brain đang mở (kênh chưa gán brain thì hiện ở mọi brain),
      nhưng kênh Ở brain này mà bot giữ nó nằm brain khác thì vẫn hiện khoá kèm `bot_brain` khác.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-tkban-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -23,10 +24,10 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import chatbot_store  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import channel_accounts
+import chatbot_store
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

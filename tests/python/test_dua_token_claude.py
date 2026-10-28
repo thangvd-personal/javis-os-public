@@ -15,14 +15,14 @@ Hai thứ phải đúng, và chúng NGƯỢC CHIỀU nhau nên phải canh cả 
   2. Mất đăng nhập THẬT vẫn phải bị bắt như cũ. Nới tay ở (1) mà nuốt luôn ca này là giấu
      mất một lỗi người dùng buộc phải xử lý.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 import time
 
-import claude_token_gate as gate  # noqa: E402
+import claude_token_gate as gate
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

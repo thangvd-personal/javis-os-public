@@ -1,14 +1,15 @@
 """No provider network: validate silent history restore and wake text dispatch."""
-from _paths import ROOT, SERVER  # noqa: F401
-import json
 import ast
 import asyncio
+import json
 import tempfile
 import types
-from pathlib import Path
 import unittest
-import voice_live as vl
+from pathlib import Path
+
 import sessions
+import voice_live as vl
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class LiveFocusTests(unittest.IsolatedAsyncioTestCase):
@@ -50,7 +51,7 @@ class LiveFocusTests(unittest.IsolatedAsyncioTestCase):
                 async def close(self): pass
             provider = Provider()
             namespace = dict(asyncio=asyncio, json=json, WebSocket=Socket, Query=lambda x: x,
-                             cfgmod=types.SimpleNamespace(gate_active=lambda: False, read_settings=lambda: {}),
+                             cfgmod=types.SimpleNamespace(gate_active=lambda: False, read_settings=dict),
                              voice_live=types.SimpleNamespace(make_provider=lambda *a, **k: provider),
                              voice_call=types.SimpleNamespace(live_settings=lambda c: c),
                              get_store=lambda: store, _brain_key=lambda b: b)

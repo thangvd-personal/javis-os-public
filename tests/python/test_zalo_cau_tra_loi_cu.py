@@ -7,12 +7,13 @@ SOẠN nên câu gửi đi lỗi thời ("chị gửi thêm số điện thoại
 một lượt riêng. Giờ lượt soạn xong mà khách đã nhắn thêm chữ thì câu đó không gửi, chữ khách được giữ cho lượt
 kế tiếp đọc cùng tin mới.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpcu-")
 try:
@@ -20,11 +21,11 @@ try:
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import chatbot_runtime  # noqa: E402
-import conversations  # noqa: E402,F401
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import chatbot_runtime
+import conversations  # noqa: F401
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

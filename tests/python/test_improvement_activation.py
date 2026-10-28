@@ -1,6 +1,4 @@
 """M2E manual activation: one owner-chosen assistant scope, pointer-only revert, drift suspends."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import shutil
 import sqlite3
@@ -14,6 +12,7 @@ import improvement_store as IM
 import skill_router as SR
 import test_improvement_comparison_plans as fixtures
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401
 
 AGENTS = {"ke-toan": "agent-ke-toan-1", "ban-hang": "agent-ban-hang-1"}
 
@@ -348,6 +347,7 @@ class ActivationConsumerTests(ActivationBase):
     def test_lazy_router_stays_canonical(self):
         """Phase 8 runs for CLI engines too and never for assistant chats, so it is not a covered path."""
         import hashlib
+
         from capability_registry import CapabilityRegistry
         from lazy_skill_runtime import LazySkillSource
         self.apply()
@@ -390,9 +390,9 @@ class ActivationApiTests(ActivationBase):
 
     def setUp(self):
         super().setUp()
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         brains = {"brain": self.owner.brain_id, "other": self.c.f.other.brain_id}
 
@@ -432,10 +432,10 @@ class ActivationApiTests(ActivationBase):
         self.assertIn(foreign.status_code, (403, 404))
 
     def test_http_writes_require_a_browser_session(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.responses import JSONResponse
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(activations=lambda: self.activations,
             resolve_brain=lambda value: self.owner.brain_id,

@@ -12,7 +12,6 @@ Phần đông người dùng chạy Javis trong Docker/VPS, nơi `localhost` là
 Đó đúng là lý do provider ollama local bị chặn cố ý từ đầu (server/config.py), nên mọi thứ ở
 đây phải chứng minh là nó không lặp lại giả định cũ.
 """
-from _paths import ROOT, SERVER, moi_duong_dan  # noqa: E402,F401
 import json
 import os
 import sys
@@ -20,12 +19,14 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ollama-"))
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import ollama_local  # noqa: E402
-import ollama_catalog  # noqa: E402
+import main
+import ollama_catalog
+import ollama_local
+from fastapi.testclient import TestClient
 
 fails = []
 
@@ -175,7 +176,7 @@ check("biết model nào đang nạp sẵn trong bộ nhớ",
 # ---- 3b. Model nào CHAT được: hỏi Ollama, không đoán qua tên -------------------
 # 02/09: chủ repo cài 2 model, một cái là embeddinggemma, và hỏi vì sao chỉ một cái đặt được
 # làm model chính. Câu trả lời đúng, nhưng phép lọc lúc đó chỉ dò chữ "embed" trong tên.
-import asyncio as _aio1  # noqa: E402
+import asyncio as _aio1
 
 check("Ollama nói embedding thì KHÔNG cho làm model chính",
       not ollama_local.chat_duoc("bat-ky-ten-gi", ["embedding"]))
@@ -249,7 +250,7 @@ srv2 = HTTPServer(("127.0.0.1", 0), WebServerGia)
 threading.Thread(target=srv2.serve_forever, daemon=True).start()
 EP2 = f"http://127.0.0.1:{srv2.server_address[1]}"
 
-import asyncio as _aio  # noqa: E402
+import asyncio as _aio
 
 _p = _aio.run(ollama_local.probe(EP2))
 check("301 không còn báo bằng mã số trần", "301" in (_p["error"] or "")
@@ -300,7 +301,8 @@ check("không để một họ model chiếm quá nửa danh sách",
 # nên máy Windows luôn trả 0 GB - mà "máy cá nhân cài Javis" thì Windows là ca thường gặp
 # nhất. Tệ hơn: nó vẫn khai source="auto", tức máy 64GB bị mời toàn model dưới 8GB mà không
 # có dấu hiệu nào cho thấy sai. Đó là hỏng lặng lẽ, loại khó phát hiện nhất.
-import unittest.mock as _mock  # noqa: E402
+import unittest.mock as _mock
+
 with _mock.patch.object(ollama_local, "_ram_gb", lambda: 0.0):
     _hut = ollama_local.detect_specs()
 check("CANARY: đọc hụt RAM thì KHÔNG được khai là 'auto'", _hut["source"] == "unknown", _hut)
@@ -318,12 +320,14 @@ check("và gợi ý lúc đó nói rõ là đang đoán ở mức an toàn",
 # docker-compose thì nằm trên mạng RIÊNG của project (dải cấp phát từ 172.18.0.0/16 trở đi vì
 # 172.17 đã bị docker0 chiếm). Nên con số viết cứng đó SAI với gần như mọi bản cài theo đúng
 # hướng dẫn - người dùng điền y như bảo mà vẫn không nối được.
-import deploy_info  # noqa: E402
-import re as _re  # noqa: E402
+import re as _re
+
+import deploy_info
+
 # Soi phần MÃ THẬT: chú thích vẫn được nhắc con số cũ để giải thích vì sao nó sai, nhưng
 # nhắc trong chú thích thì không ai điền nhầm được.
 _ma_js = _re.sub(r"^\s*//.*$", "", (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8"),
-                 flags=_re.M)
+                 flags=_re.MULTILINE)
 check("CANARY: không còn viết cứng 172.17.0.1 ở giao diện", "172.17.0.1" not in _ma_js)
 check("không chạy Docker thì không có cổng cầu nối", deploy_info.docker_gateway() == "")
 with _mock.patch.object(deploy_info, "deploy_mode", lambda: "docker"):
@@ -362,10 +366,12 @@ check("ollama-local là một provider như mọi provider khác",
       any(p["id"] == "ollama-local" for p in main.PROVIDER_DEFS))
 check("nó KHÔNG dùng ô API key (thứ xác thực nó là địa chỉ)",
       [p for p in main.PROVIDER_DEFS if p["id"] == "ollama-local"][0]["key_field"] is None)
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+
 check("khoá của nó vẫn được mã hoá at rest như mọi khoá khác",
       "model.ollama_local_key" in cfgmod._SECRET_PATHS)
-import engine  # noqa: E402
+import engine
+
 check("chat dùng lại nguyên đường OpenAI-compat, chỉ đổi URL",
       callable(engine.ollama_local_stream) and callable(engine.ollama_local_chat_with_mcp))
 check("URL chat dựng từ cấu hình, không hằng số hoá",
@@ -420,7 +426,7 @@ check("không còn 'máy nhà' trong chuỗi giao diện tab Local",
 check("có nút đặt làm model chính ngay trong tab Local", "ol.use_main" in _vi and "ol.use_main" in _en)
 
 srv.shutdown()
-print("")
+print()
 if fails:
     print(f"ĐỎ {len(fails)} mục")
     sys.exit(1)

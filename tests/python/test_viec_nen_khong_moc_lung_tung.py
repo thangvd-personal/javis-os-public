@@ -13,13 +13,13 @@ cơ chế tạo việc khó hiểu và hay làm sai. Audit ra bốn chỗ, test 
 4. Kết quả việc nền về khung chat không mang trạng thái để vẽ thẻ, và dòng trống bị xoá sạch
    thành bức tường chữ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import re
 import sys
 
-import voice_brain as vb  # noqa: E402
-import channel_context  # noqa: E402
+import channel_context
+import voice_brain as vb
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -108,7 +108,7 @@ check("giao việc bằng giọng: lưu dòng giao để mở lại còn thấy"
 
 # Kanban: giữ dòng trống, kèm thẻ + bản web
 sys.path.insert(0, str(SERVER))
-import tasks as tasks_mod  # noqa: E402
+import tasks as tasks_mod
 
 gui = []
 

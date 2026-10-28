@@ -1,6 +1,4 @@
 """Encrypted actual role evidence, scoped writer replay and late observations."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import json
@@ -9,8 +7,9 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
 import test_improvement_operation_execution as F
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
 
 
 class OperationEvidenceTests(unittest.TestCase):

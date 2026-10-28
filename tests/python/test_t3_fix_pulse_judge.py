@@ -7,23 +7,23 @@ chữ ký `async (prompt, purpose, started) -> str`: `_run_engine` ném TypeErro
 vẫn bị tính. Test này nối `PulseHost` (bộ chuyển mặc định, không tiêm phán xử giả) với lớp `agent_judge.Judge` THẬT, kho phán
 xử thật, sổ lượt thật; chỉ hàm hỏi model là GIẢ (đánh dấu `mark_test_fake`). Không có model thật nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fix-pj-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fix-pj-w-"))
 
-import agent_judge as AJ  # noqa: E402
-import agent_judge_store as AJS  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as H  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_judge as AJ
+import agent_judge_store as AJS
+import agent_ledger as AL
+import agent_pulse as AP
+import agent_pulse_host as H
+import resonance_store as RS
 
 # Chạy được cả trên mã TRƯỚC bản sửa (chưa có mark_test_fake) để chứng minh test đỏ vì đúng lỗi chữ ký engine.
 MARK = getattr(AJ, "mark_test_fake", lambda f: f)

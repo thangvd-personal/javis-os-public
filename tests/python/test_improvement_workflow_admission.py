@@ -1,14 +1,13 @@
 """New role workflows must reject stale schema before any native preflight."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import unittest
 import json
+import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
 import test_improvement_proposals as proposer
 import test_improvement_semantic_review as reviewer
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 async def wrong_input_product(test, subject, snapshot, *, kind, candidate_id=None):

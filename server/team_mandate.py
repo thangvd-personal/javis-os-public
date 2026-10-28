@@ -41,9 +41,10 @@ import secrets
 import sqlite3
 import threading
 import time
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 STATUSES = ("off", "active", "paused", "revoked")
 SOURCE_TYPES = ("folder", "kanban", "mcp", "test")
@@ -123,7 +124,7 @@ def team_lock(team_id: str) -> threading.RLock:
         return lk
 
 
-def parse_source(raw: Any) -> Optional[dict]:
+def parse_source(raw: Any) -> dict | None:
     """`folder:<rel>`, `kanban`, `mcp:<id>`, `test:<cmd>` -> {"type", "ref", "raw"}; None when not a granted source."""
     s = str(raw or "").strip()
     if not s:
@@ -219,7 +220,7 @@ class MandateStore:
                 self.c.close()
 
     @staticmethod
-    def _m(r) -> Optional[dict]:
+    def _m(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
@@ -227,11 +228,11 @@ class MandateStore:
             d[k] = json.loads(d.pop(k + "_json") or ("[]" if k in ("metrics", "sources") else "{}"))
         return d
 
-    def _event(self, c, team_id: str, kind: str, by: str, detail: Optional[dict] = None) -> None:
+    def _event(self, c, team_id: str, kind: str, by: str, detail: dict | None = None) -> None:
         c.execute("INSERT INTO team_mandate_events(team_id, kind, by, detail_json, at) VALUES(?,?,?,?,?)",
                   (team_id, kind, by, _j(detail or {}), self.clock()))
 
-    def get(self, team_id: str) -> Optional[dict]:
+    def get(self, team_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._m(c.execute("SELECT * FROM team_mandates WHERE team_id=?", (team_id,)).fetchone())
 
@@ -239,7 +240,7 @@ class MandateStore:
         with closing(self._conn()) as c:
             return [self._m(r) for r in c.execute("SELECT * FROM team_mandates WHERE status='active'").fetchall()]
 
-    def put(self, team_id: str, body: dict, by: str = "owner", status: Optional[str] = None) -> dict:
+    def put(self, team_id: str, body: dict, by: str = "owner", status: str | None = None) -> dict:
         """Create or edit (a new version). A new mandate starts `off` unless `status` says otherwise."""
         m = clean(body)
         if status not in (None, "off", "active", "paused"):
@@ -262,7 +263,7 @@ class MandateStore:
             self._event(c, team_id, "edited" if old else "created", by, {"version": ver, "status": st})
         return self.get(team_id)
 
-    def set_status(self, team_id: str, status: str, by: str = "owner") -> Optional[dict]:
+    def set_status(self, team_id: str, status: str, by: str = "owner") -> dict | None:
         if status not in STATUSES:
             raise MandateError("trạng thái không hợp lệ")
         with team_lock(team_id), self._Tx(self) as c:
@@ -291,7 +292,7 @@ class MandateStore:
             c.execute("UPDATE team_mandates SET last_observed_at=? WHERE team_id=?", (at, team_id))
 
     # ---- observations ----
-    def last_observation(self, team_id: str, source: str, ref: str) -> Optional[dict]:
+    def last_observation(self, team_id: str, source: str, ref: str) -> dict | None:
         """The baseline for the next comparison: the last observation whose change was not held back by a cooldown
         (review 0.208.0: a change seen during the cooldown must still come out once the cooldown is over)."""
         with closing(self._conn()) as c:
@@ -300,7 +301,7 @@ class MandateStore:
                           (team_id, source, ref)).fetchone()
             return dict(r, summary=json.loads(r["summary_json"])) if r else None
 
-    def observation(self, obs_id: int) -> Optional[dict]:
+    def observation(self, obs_id: int) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM mandate_observations WHERE id=?", (int(obs_id or 0),)).fetchone()
             return dict(r, summary=json.loads(r["summary_json"])) if r else None
@@ -334,18 +335,18 @@ class MandateStore:
 
     # ---- opportunities ----
     @staticmethod
-    def _o(r) -> Optional[dict]:
+    def _o(r) -> dict | None:
         if r is None:
             return None
         d = dict(r)
         d["evidence"] = json.loads(d.pop("evidence_json") or "[]")
         return d
 
-    def opportunity(self, opp_id: str) -> Optional[dict]:
+    def opportunity(self, opp_id: str) -> dict | None:
         with closing(self._conn()) as c:
             return self._o(c.execute("SELECT * FROM mandate_opportunities WHERE opp_id=?", (opp_id,)).fetchone())
 
-    def opportunities(self, team_id: str, statuses: Optional[tuple] = None, limit: int = 50) -> list:
+    def opportunities(self, team_id: str, statuses: tuple | None = None, limit: int = 50) -> list:
         q, args = "SELECT * FROM mandate_opportunities WHERE team_id=?", [team_id]
         if statuses:
             q += f" AND status IN ({','.join('?' * len(statuses))})"
@@ -378,7 +379,7 @@ class MandateStore:
                                                              "version_key": version_key, "kind": kind})
             return self._o(c.execute("SELECT * FROM mandate_opportunities WHERE opp_id=?", (oid,)).fetchone())
 
-    def update_opportunity(self, opp_id: str, *, expect: Optional[tuple] = None, **fields) -> bool:
+    def update_opportunity(self, opp_id: str, *, expect: tuple | None = None, **fields) -> bool:
         allowed = {"decision", "status", "task_id", "approval_id", "message_id", "decided_by"}
         if set(fields) - allowed:
             raise MandateError("trường không đổi được")
@@ -414,7 +415,7 @@ class MandateStore:
 
 # ───────────── observers (code only) ─────────────
 
-def folder_listing(root: Path, rel: str, limit: int = FOLDER_MAX_FILES) -> Optional[dict]:
+def folder_listing(root: Path, rel: str, limit: int = FOLDER_MAX_FILES) -> dict | None:
     """{path: [size, int(mtime)]} of the files under `root/rel`, or None when the folder is not there."""
     base = (Path(root) / rel).resolve()
     try:
@@ -511,7 +512,7 @@ class MandateEngine:
                 print(f"[team mandate] {m.get('team_id')}: {type(ex).__name__}: {ex}", file=sys.stderr)
         return [d for d in done if d]
 
-    def _still(self, m: dict) -> Optional[dict]:
+    def _still(self, m: dict) -> dict | None:
         """The mandate as it is NOW, only if still active and the same version (call under team_lock)."""
         cur = self.store.get(m["team_id"])
         if not cur or cur["status"] != "active" or int(cur["version"]) != int(m["version"]):
@@ -616,13 +617,13 @@ class MandateEngine:
                 n += 1
         return n
 
-    def _act(self, team: dict, m: dict, ev: dict, now: float) -> Optional[dict]:
+    def _act(self, team: dict, m: dict, ev: dict, now: float) -> dict | None:
         with team_lock(team["team_id"]):
             if self._still(m) is None:
                 return None   # paused, revoked or edited while the sources were read: act on nothing
             return self._act_locked(team, m, ev, now)
 
-    def _act_locked(self, team: dict, m: dict, ev: dict, now: float) -> Optional[dict]:
+    def _act_locked(self, team: dict, m: dict, ev: dict, now: float) -> dict | None:
         reason = f"{KIND_LABEL[ev['kind']]}: {ev['detail']}. Gắn với mục tiêu: {m['outcome'][:200]}"
         opp = self.store.add_opportunity(team_id=team["team_id"], version=int(m["version"]), source=ev["source"],
                                          ref=ev["ref"], version_key=ev["version_key"], kind=ev["kind"], reason=reason,
@@ -650,7 +651,7 @@ class MandateEngine:
                 f"\nBằng chứng:\n{ev}\n\nDấu vết: mục tiêu v{m['version']} -> quan sát #{opp['observation_id']} -> cơ hội "
                 f"{opp['opp_id']} ({opp['source']}:{opp['ref']} @ {opp['version_key']}).")
 
-    def _open(self, team: dict, m: dict, opp: dict, *, by: str, ask: bool) -> Optional[str]:
+    def _open(self, team: dict, m: dict, opp: dict, *, by: str, ask: bool) -> str | None:
         title = f"[Mục tiêu] {KIND_LABEL[opp['kind']].capitalize()}: {opp['ref']}"[:160]
         # Opening and stopping for approval happen under the runner's pool lock, so the dispatcher cannot claim the job
         # in between and run it before the owner decides.
@@ -741,7 +742,7 @@ class MandateEngine:
                         cancelled.append(o["task_id"])
         return {"ok": True, "mandate": m, "cancelled": cancelled, "closed": closed}
 
-    def trace(self, team_id: str, opp_id: str) -> Optional[dict]:
+    def trace(self, team_id: str, opp_id: str) -> dict | None:
         """goal -> observation -> opportunity -> decision -> approval -> job -> steps -> result."""
         opp = self.store.opportunity(opp_id)
         if not opp or opp["team_id"] != team_id:
@@ -761,7 +762,7 @@ class MandateEngine:
                                if opp.get("task_id") and getattr(self.runner, "acceptance", None) is not None else None)}
 
 
-def view(opp: Optional[dict]) -> Optional[dict]:
+def view(opp: dict | None) -> dict | None:
     if not opp:
         return None
     return {k: opp.get(k) for k in ("opp_id", "team_id", "mandate_version", "source", "ref", "version_key", "kind",
@@ -769,7 +770,7 @@ def view(opp: Optional[dict]) -> Optional[dict]:
                                     "created_at", "expires_at", "decided_by")}
 
 
-def sources_view(store: MandateStore, m: Optional[dict]) -> list:
+def sources_view(store: MandateStore, m: dict | None) -> list:
     """Each granted source with its last observation: read fine, or missing (what is missing), or not observed yet."""
     if not m:
         return []

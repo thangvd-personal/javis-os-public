@@ -1,12 +1,12 @@
 """Read-only real agentic inventories, never a claim of complete main context."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="trial-catalog-"))
 for key, child in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",

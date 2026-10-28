@@ -7,7 +7,6 @@ import re
 import subprocess
 from pathlib import PureWindowsPath
 
-
 _FLAGS = 0x08000006  # CREATE_NO_WINDOW | CREATE_SUSPENDED | DEBUG_ONLY_THIS_PROCESS
 _TOOLS = ("mcp__fixture__fixture_read", "mcp__skill__skill_asset_read")
 _POLICIES = {"fixture_only": (_TOOLS[:1], ("fixture",)), "pinned_skill": (_TOOLS, ("fixture", "skill")),

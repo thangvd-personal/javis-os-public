@@ -10,7 +10,6 @@ Kiểm ba tầng, không gọi model:
 3. Thân THẬT của `run_turn` (trích từ main.py) với kho phiên thật: `_do_turn` giả đọc `turn_context.current()`
    như tool sẽ đọc. Hai lượt của hai agent chạy xen nhau thì mỗi lượt chỉ thấy agent của mình.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import asyncio
 import os
@@ -21,16 +20,18 @@ import types
 import uuid
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a1t-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import localefmt  # noqa: E402
-import nghe_sua  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import turn_context  # noqa: E402
+import localefmt
+import luot_dang_chay
+import main
+import nghe_sua
+import resonance_store as RS
+import sessions
+import turn_context
 
 _fails = []
 

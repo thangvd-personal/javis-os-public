@@ -17,12 +17,13 @@ Vì tin gửi đi mang TÊN CHỦ nên các rào dưới đây là phần quan t
      tính là "chủ tự nhắn" - nếu tính thì bot tự khoá miệng mình sau câu đầu tiên.
   5. Bot viết [IM_LANG] nghĩa là không gửi gì, không ghi như một câu bot nói.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpbot-")
 try:
@@ -30,12 +31,12 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import channels  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import channel_accounts
+import channels
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zc
 
 _fails = []
 

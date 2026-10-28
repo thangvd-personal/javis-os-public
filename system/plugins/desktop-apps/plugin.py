@@ -35,7 +35,6 @@ import sys
 import time
 import unicodedata
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
 
 try:
     import deploy_info
@@ -53,7 +52,7 @@ IS_WIN = os.name == "nt"
 IS_MAC = sys.platform == "darwin"
 
 # Bí danh người dùng hay nói -> chuỗi tìm trong tên app / ảnh tiến trình. Không dấu, thường.
-ALIASES: Dict[str, Tuple[str, ...]] = {
+ALIASES: dict[str, tuple[str, ...]] = {
     "chrome": ("google chrome", "chrome"),
     "trinh duyet": ("google chrome", "chrome", "microsoft edge", "msedge", "firefox"),
     "browser": ("google chrome", "chrome", "microsoft edge", "msedge", "firefox"),
@@ -125,17 +124,15 @@ def khong_dau(s: str) -> str:
 def _stem_khong_ext(name: str) -> str:
     n = khong_dau(name)
     for ext in (".exe", ".lnk", ".app", ".desktop", ".url"):
-        if n.endswith(ext):
-            n = n[: -len(ext)]
+        n = n.removesuffix(ext)
     return n.strip()
 
 
-def _cum_tim(name: str) -> List[str]:
+def _cum_tim(name: str) -> list[str]:
     """Từ tên người dùng nói ra các cụm sẽ đem đi khớp: chính nó + bí danh."""
     q = khong_dau(name)
     for tien_to in ("app ", "ung dung ", "phan mem ", "chuong trinh ", "application "):
-        if q.startswith(tien_to):
-            q = q[len(tien_to):]
+        q = q.removeprefix(tien_to)
     out = [q]
     out.extend(ALIASES.get(q, ()))
     return [x for x in out if x]
@@ -157,7 +154,7 @@ def score(query: str, candidate: str) -> float:
     return difflib.SequenceMatcher(None, q, c).ratio()
 
 
-def best_match(name: str, candidates: List[str], nguong: float = 0.75) -> Tuple[str, float]:
+def best_match(name: str, candidates: list[str], nguong: float = 0.75) -> tuple[str, float]:
     best, best_s = "", 0.0
     for cum in _cum_tim(name):
         short = len(cum.replace(" ", "")) < SHORT_NAME
@@ -194,7 +191,7 @@ def image_matches(name: str, image: str) -> bool:
 # ============================================================
 # Lớp hệ thống (thay được trong test)
 # ============================================================
-def _start_menu_dirs() -> List[Path]:
+def _start_menu_dirs() -> list[Path]:
     out = []
     for env, sub in (("ProgramData", "Microsoft/Windows/Start Menu/Programs"),
                      ("APPDATA", "Microsoft/Windows/Start Menu/Programs")):
@@ -206,9 +203,9 @@ def _start_menu_dirs() -> List[Path]:
     return out
 
 
-def _scan_installed() -> List[dict]:
+def _scan_installed() -> list[dict]:
     """[{name, path}] app đã cài. Windows: .lnk trong Start Menu; mac: /Applications; Linux: .desktop."""
-    apps: List[dict] = []
+    apps: list[dict] = []
     seen = set()
     if IS_WIN:
         for d in _start_menu_dirs():
@@ -246,7 +243,7 @@ def _scan_installed() -> List[dict]:
     return apps
 
 
-def _installed() -> List[dict]:
+def _installed() -> list[dict]:
     now = time.time()
     if now - _CACHE["t"] > _CACHE_TTL or not _CACHE["apps"]:
         try:
@@ -257,7 +254,7 @@ def _installed() -> List[dict]:
     return _CACHE["apps"]
 
 
-def _run(cmd: List[str], timeout: float = 8.0) -> str:
+def _run(cmd: list[str], timeout: float = 8.0) -> str:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
                            encoding="utf-8", errors="ignore", creationflags=_no_window())
@@ -266,9 +263,9 @@ def _run(cmd: List[str], timeout: float = 8.0) -> str:
         return f"__ERR__ {type(e).__name__}: {e}"
 
 
-def _list_running() -> List[dict]:
+def _list_running() -> list[dict]:
     """[{image, pid, title}] tiến trình đang chạy (Windows kèm tiêu đề cửa sổ)."""
-    out: List[dict] = []
+    out: list[dict] = []
     if IS_WIN:
         # KHÔNG dùng `tasklist /V`: nó phải hỏi tiêu đề từng cửa sổ và trên máy nhiều tiến
         # trình mất quá 8 giây (đo 2026-09-14). Get-Process trả cùng thông tin trong dưới 1 giây.
@@ -333,7 +330,7 @@ def _kill(image: str, force: bool) -> str:
     return _run(["pkill", "-f" if force else "-x", image])
 
 
-def _raise_window(entry: dict, running: List[dict]) -> Tuple[bool, bool]:
+def _raise_window(entry: dict, running: list[dict]) -> tuple[bool, bool]:
     """Bring an already running app to the front. Returns (asked, verified): `asked` when the OS
     accepted the request, `verified` when the foreground window was read back as that app."""
     image = str(entry.get("image") or "")
@@ -368,7 +365,7 @@ def _raise_window(entry: dict, running: List[dict]) -> Tuple[bool, bool]:
 # ============================================================
 # Điều kiện chạy
 # ============================================================
-def check_ready() -> Optional[str]:
+def check_ready() -> str | None:
     mode = deploy_info.deploy_mode() if deploy_info else ("windows" if IS_WIN else "native")
     if mode == "docker":
         return ("Javis đang chạy trong Docker trên máy chủ, không phải trên máy của bạn, nên không "
@@ -403,7 +400,7 @@ def _la_file_chay_duoc(p: Path) -> bool:
     return False
 
 
-def _duong_dan_cho_phep(p: Path, vault_root: Optional[str]) -> bool:
+def _duong_dan_cho_phep(p: Path, vault_root: str | None) -> bool:
     try:
         rp = p.resolve()
     except Exception:
@@ -431,7 +428,7 @@ def _list(args, ctx) -> str:
     installed = [a["name"] for a in _installed()]
     running = _list_running()
     # Gom tiến trình theo ảnh, giữ tiêu đề cửa sổ có nghĩa nhất.
-    by_image: Dict[str, dict] = {}
+    by_image: dict[str, dict] = {}
     for r in running:
         img = r["image"]
         ent = by_image.setdefault(img, {"image": img, "count": 0, "title": ""})
@@ -452,7 +449,7 @@ def _list(args, ctx) -> str:
     }, ensure_ascii=False)
 
 
-def resolve_open(name: str, vault_root: Optional[str]) -> Tuple[str, str, str]:
+def resolve_open(name: str, vault_root: str | None) -> tuple[str, str, str]:
     """(target, kind, mô tả) hoặc ("", "", lý do không tìm thấy)."""
     n = str(name or "").strip()
     if not n:
@@ -494,7 +491,7 @@ def resolve_open(name: str, vault_root: Optional[str]) -> Tuple[str, str, str]:
     return "", "", (f"không thấy app nào tên giống '{n}' trong máy. Gọi javis_app_list để xem danh sách.")
 
 
-def _running_for(name: str, running: List[dict]) -> List[dict]:
+def _running_for(name: str, running: list[dict]) -> list[dict]:
     return [r for r in running if image_matches(name, r.get("image", ""))
             and _stem_khong_ext(r.get("image", "")) + ".exe" not in _PROTECTED
             and str(r.get("image", "")).lower() not in _PROTECTED]
@@ -542,7 +539,7 @@ def _open(args, ctx) -> str:
             "Có thể app khởi động chậm, hoặc lối tắt đã hỏng. Đừng nói là đã mở.")
 
 
-def resolve_close(name: str, running: List[dict]) -> Tuple[str, str]:
+def resolve_close(name: str, running: list[dict]) -> tuple[str, str]:
     """(image, lý do rỗng) hoặc ("", lý do)."""
     n = str(name or "").strip()
     if not n:

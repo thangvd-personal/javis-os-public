@@ -1,5 +1,4 @@
 """Cold record owner controls use real encrypted archive records and SQL CAS."""
-from _paths import ROOT, SERVER  # noqa: F401
 import importlib.util
 import tempfile
 import threading
@@ -10,8 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_store as IM
-from resonance_store import GoalStore
 import test_improvement_recipe_archive as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from resonance_store import GoalStore
 
 
 class RecipeRecordTests(unittest.TestCase):

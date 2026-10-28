@@ -7,10 +7,11 @@ Kênh bot (Telegram, Zalo Bot, Slack, WhatsApp...) tải file khách về brain 
 cần một đường phát file đó. Đường này đọc đĩa theo một tham số người gọi đưa vào, nên test chủ yếu là test an toàn:
 chỉ file nằm THẬT trong inbox/ hoặc attachments/ của brain của CHÍNH hội thoại đó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-ht-media-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-ht-media-brains-")
@@ -30,10 +31,10 @@ for f, b in ((ANH, b"\xff\xd8\xff" + b"0" * 40), (FILE, b"PK" + b"0" * 40), (GHI
     with open(f, "wb") as fh:
         fh.write(b)
 
-from fastapi.testclient import TestClient   # noqa: E402
-import chatbot_store                        # noqa: E402
-import conversations                        # noqa: E402
-import main                                 # noqa: E402
+import chatbot_store
+import conversations
+import main
+from fastapi.testclient import TestClient
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

@@ -15,10 +15,11 @@ Những chỗ phải đúng:
   3. Ảnh trơn vẫn bị bỏ qua.
   4. Lượt chủ nhờ bot trả lời từ Hòm thư cũng hiểu tin ảnh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-anh-")
 try:
@@ -26,9 +27,9 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import chatbot_runtime
+import conversations
+import zalo_personal_channel as zc
 
 fails = []
 
@@ -82,7 +83,8 @@ m_anh = chatbot_runtime.manual_meta(conv, {"sender_id": "7770555", "sender_name"
 m_chu = chatbot_runtime.manual_meta(conv, {"sender_id": "7770555", "sender_name": "Ngợi", "external_message_id": "m3", "created_at": 1.0, "message_type": "text"})
 check("manual_meta đánh dấu tin ảnh, tin chữ thì không", m_anh.get("co_anh") is True and "co_anh" not in m_chu)
 
-import asyncio  # noqa: E402
+import asyncio
+
 r = asyncio.run(chatbot_runtime.manual_answer({"id": 7, "bot_id": "khong-co"}, [{"sender_type": "customer", "message_type": "image", "text": "[chat.photo]"}]))
 check("(nền) không có bot thì báo no_bot trước", r.get("code") == "no_bot", r)
 

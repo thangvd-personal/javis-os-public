@@ -19,7 +19,6 @@ File này dựng một WebSocket giả và một Codex CLI giả, rồi đẩy t
   3. Câu trả lời được LƯU vào kho phiên (`_persist_turn` nằm sau chỗ nổ, nên lỗi kia làm
      lượt biến mất khỏi lịch sử).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -27,13 +26,14 @@ import sys
 import tempfile
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-codex-"))
 
-from fastapi import WebSocketDisconnect  # noqa: E402
-
-import main  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
-from sessions import SessionStore  # noqa: E402
+import main
+from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
+from sessions import SessionStore
 
 _fails = []
 

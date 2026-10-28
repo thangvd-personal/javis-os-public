@@ -10,13 +10,14 @@ tick từng thẻ hoặc Chọn tất cả → MỘT gói javis-bundle duy nhấ
 mở được bằng cả bản Javis cũ - items vốn là danh sách từ đầu, phía nhập không cần biết
 gì mới.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import json
 import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -32,7 +33,7 @@ def check(name, cond):
         _fails.append(name)
 
 
-import share_bundle  # noqa: E402
+import share_bundle
 
 
 def _dung_brain(td):

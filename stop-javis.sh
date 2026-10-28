@@ -40,34 +40,102 @@ if [ -f "$PIDF" ]; then
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
     kill "$OLD_PID" 2>/dev/null || true
   fi
-  rm -f "$PIDF"
 fi
 
 # 4. Giai phong bat ky tien trinh nao dang chiem cong PORT
-PIDS=""
-if command -v lsof >/dev/null 2>&1; then
-  PIDS="$(lsof -ti tcp:"$PORT" 2>/dev/null || true)"
-elif command -v fuser >/dev/null 2>&1; then
-  PIDS="$(fuser "$PORT/tcp" 2>/dev/null || true)"
-fi
+_is_port_open() {
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -i tcp:"$PORT" -sTCP:LISTEN >/dev/null 2>&1
+  elif command -v fuser >/dev/null 2>&1; then
+    fuser "$PORT/tcp" >/dev/null 2>&1
+  elif command -v ss >/dev/null 2>&1; then
+    ss -tlH "sport = :$PORT" 2>/dev/null | grep -q .
+  else
+    (echo > /dev/tcp/127.0.0.1/"$PORT") >/dev/null 2>&1
+  fi
+}
 
+_get_pids() {
+  local pids=""
+  if [ -f "$PIDF" ]; then
+    local fpid
+    fpid="$(cat "$PIDF" 2>/dev/null || true)"
+    if [ -n "$fpid" ] && kill -0 "$fpid" 2>/dev/null; then
+      pids="$pids $fpid"
+    fi
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    local lpids
+    lpids="$(lsof -ti tcp:"$PORT" 2>/dev/null || true)"
+    [ -n "$lpids" ] && pids="$pids $lpids"
+  elif command -v fuser >/dev/null 2>&1; then
+    local fpids
+    fpids="$(fuser "$PORT/tcp" 2>/dev/null || true)"
+    [ -n "$fpids" ] && pids="$pids $fpids"
+  elif command -v ss >/dev/null 2>&1; then
+    local spids
+    spids="$(ss -tlpn "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 || true)"
+    [ -n "$spids" ] && pids="$pids $spids"
+  fi
+  if command -v pgrep >/dev/null 2>&1; then
+    local ppids
+    ppids="$(pgrep -f "$APP_DIR/.*uvicorn.*main:app.*$PORT" 2>/dev/null || true)"
+    [ -n "$ppids" ] && pids="$pids $ppids"
+  fi
+  if [ -n "$pids" ]; then
+    echo "$pids" | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -u || true
+  fi
+}
+
+PIDS="$(_get_pids)"
 if [ -n "$PIDS" ]; then
   kill $PIDS 2>/dev/null || true
-  for _ in {1..5}; do
-    sleep 0.5
-    PIDS_REMAINING=""
-    if command -v lsof >/dev/null 2>&1; then
-      PIDS_REMAINING="$(lsof -ti tcp:"$PORT" 2>/dev/null || true)"
-    fi
-    [ -z "$PIDS_REMAINING" ] && break
-  done
-  if [ -n "${PIDS_REMAINING:-}" ]; then
-    kill -9 $PIDS_REMAINING 2>/dev/null || true
-  fi
 fi
 
 # 5. Don dep tien trinh uvicorn main:app lien quan neu con sot
 pkill -f "$APP_DIR/.*uvicorn.*main:app.*$PORT" 2>/dev/null || true
 
-echo "Xong."
+# 6. Cho va xac nhan tat ca PID da dong that su, port da closed
+_stopped=false
+for _ in {1..10}; do
+  CURRENT_PIDS="$(_get_pids)"
+  if [ -z "$CURRENT_PIDS" ] && ! _is_port_open; then
+    _stopped=true
+    break
+  fi
+  sleep 0.5
+done
+
+if [ "$_stopped" != "true" ]; then
+  CURRENT_PIDS="$(_get_pids)"
+  if [ -n "$CURRENT_PIDS" ]; then
+    kill -9 $CURRENT_PIDS 2>/dev/null || true
+  fi
+  pkill -9 -f "$APP_DIR/.*uvicorn.*main:app.*$PORT" 2>/dev/null || true
+
+  for _ in {1..10}; do
+    CURRENT_PIDS="$(_get_pids)"
+    if [ -z "$CURRENT_PIDS" ] && ! _is_port_open; then
+      _stopped=true
+      break
+    fi
+    sleep 0.5
+  done
+fi
+
+FINAL_PIDS="$(_get_pids)"
+if [ -n "$FINAL_PIDS" ] || _is_port_open; then
+  echo ""
+  echo "============================================================"
+  echo "  [LOI] Khong the tat hoan toan Javis OS:"
+  [ -n "$FINAL_PIDS" ] && echo "  - PID van con chay: $FINAL_PIDS"
+  if _is_port_open; then
+    echo "  - Port $PORT van chua closed (dang mo)."
+  fi
+  echo "============================================================"
+  exit 1
+fi
+
+rm -f "$PIDF"
+echo "Xong (PID da dong, port $PORT da closed)."
 exit 0

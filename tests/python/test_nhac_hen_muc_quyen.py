@@ -22,7 +22,7 @@ import os
 import sys
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER
 
 _STATE = tempfile.mkdtemp(prefix="javis-nhachen-")
 os.environ.setdefault("JAVIS_STATE_DIR", _STATE)
@@ -32,7 +32,7 @@ try:
 except Exception:
     pass
 
-import reminders as R  # noqa: E402
+import reminders as R
 
 _fails = []
 

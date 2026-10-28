@@ -16,11 +16,12 @@ Hai thứ test này canh:
    đoán cũ ("có dấu / là OpenRouter, còn lại là Claude") gán tên model Antigravity thành model
    Claude một cách im lặng, và lượt chat sau mới báo lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tgmodel-"))
 
@@ -29,7 +30,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

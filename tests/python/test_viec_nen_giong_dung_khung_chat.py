@@ -24,7 +24,6 @@ Hai chỗ sửa, test canh cả hai:
     NGAY TRONG hội thoại người dùng đang nói, còn `push_to_chat` vẫn là nơi duy nhất ghi kết
     quả xuống - không đẻ phiên, không ghi đôi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import inspect
 import os
@@ -33,6 +32,8 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-vnkc-"))
 
 try:
@@ -40,7 +41,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

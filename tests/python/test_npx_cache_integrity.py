@@ -11,7 +11,6 @@ Locked here: the folder name matches npm's own hash (real values from a live npm
 the npx command line is parsed or refused (never guessed), the broken shapes are found and the
 healthy ones are not, and a folder is never moved while it may still be written to.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -21,6 +20,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = Path(tempfile.mkdtemp(prefix="javis-npx-cache-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
 os.environ["HOME"] = str(_TMP / "home")
@@ -29,7 +30,7 @@ for _d in ("state", "home"):
 os.environ.pop("npm_config_cache", None)
 os.environ.pop("NPM_CONFIG_CACHE", None)
 
-import npx_cache  # noqa: E402
+import npx_cache
 
 fails = []
 
@@ -177,7 +178,7 @@ else:
     print("skip symlink cycle check on Windows (symlinks need extra rights)")
 
 # ---------- 6. A real session: the broken folder is gone before npx runs ----------
-import mcp_client  # noqa: E402
+import mcp_client
 
 bin_dir = _TMP / "bin"
 bin_dir.mkdir()

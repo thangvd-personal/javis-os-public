@@ -8,13 +8,14 @@ fell to `danger`, so listing a folder or downloading a scan was blocked at Read-
 and ran only at Full access. The rule now merges the words of known app names (`joined_words`)
 before matching verbs, while real share, upload and delete commands stay blocked.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-composio-verbs-"))
 
-import mcp_catalog  # noqa: E402
+import mcp_catalog
 
 _fails = []
 

@@ -9,7 +9,6 @@ Hai lỗi gốc (biên bản docs/dev/team-chat-0142.md):
 `read-only` kể cả khi máy tắt sandbox, kết cục từng lượt trả lời lưu bền (chờ, đang trả lời, xong, lỗi kèm lý do), Thử
 lại không nhân đôi tin, lượt hay kết quả, và khởi động lại không để lượt nào quay mãi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -18,16 +17,18 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-0142-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-0142-w-"))
 
-import aux_engine  # noqa: E402
-import main  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_engine  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import aux_engine
+import main
+import sessions
+import task_store
+import team_engine
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -44,7 +45,7 @@ def run(coro):
 
 # ───────────── 1. chọn model: trợ lý trước, rồi model chính; KHÔNG model việc nền ─────────────
 
-OK = lambda sp: (True, "")  # noqa: E731
+OK = lambda sp: (True, "")
 resolve = main._agent_model_provider
 MAIN = {"provider": "anthropic-cli", "model": "opus"}
 
@@ -362,7 +363,8 @@ r, tm, ts, ss, t, ev = world("grant", Script({}))
 r.grant_authority(t["team_id"], {"caps": {"daily_turns": {"unlimited": True}}, "providers_unlimited": ["anthropic-cli"]})
 check("quyền mới (providers_v=2) vẫn cho Không giới hạn với provider đã tích",
       r.effective_caps(t["team_id"], "anthropic-cli")["daily_turns"] is None)
-import sqlite3 as _sq  # noqa: E402
+import sqlite3 as _sq
+
 with _sq.connect(str(tm.path)) as c:
     g = json.loads(c.execute("SELECT grant_json FROM team_authority WHERE team_id=?", (t["team_id"],)).fetchone()[0])
     g.pop("providers_v", None)

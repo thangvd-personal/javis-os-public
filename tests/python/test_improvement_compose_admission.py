@@ -6,8 +6,6 @@ only actual reservation/lease/refund; the format2 selector seam tests storage an
 PREPARED ownership, never source qualification, a native ACK or a model call.
 Positive operations and immutable creation events are written by OperationRecords.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import inspect
 import json
 import sqlite3
@@ -15,8 +13,11 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-import improvement_store as IM
 import improvement_native_protocol as native_wire
+import improvement_store as IM
+import test_improvement_compose_permissions as permissions
+import test_improvement_operation_workspace as workspace
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_compose_inputs import ComposeInputs
 from improvement_compose_permissions import ComposePermissions
 from improvement_native_formats import input_version
@@ -25,9 +26,6 @@ from improvement_operation_execution import OperationExecution
 from improvement_operation_profile import operation_user_prompt
 from improvement_operation_records import OperationRecords
 from improvement_trial_service import OwnerTrialService
-import test_improvement_compose_permissions as permissions
-import test_improvement_operation_workspace as workspace
-
 
 DENIED = (*permissions.DENIED, sqlite3.IntegrityError)
 

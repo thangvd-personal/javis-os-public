@@ -26,7 +26,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import fastyaml
 import main_prompt_rendering
@@ -77,7 +77,7 @@ def _forgotten_path(mem_dir: Path) -> Path:
     return Path(mem_dir) / FORGOTTEN
 
 
-def forgotten(mem_dir: Path) -> List[dict]:
+def forgotten(mem_dir: Path) -> list[dict]:
     try:
         d = json.loads(_forgotten_path(mem_dir).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -107,7 +107,7 @@ def _remember_forgotten(mem_dir: Path, slug: str, title: str, body: str) -> None
 # ── memory writes that leave no file behind (0.190.0) ─────────────────────────
 # A lesson revoked or added through the memory tool lives in the lesson store, not under memory/. The turn's receipt
 # and the empty-claim check (memory_receipt) still have to know something was written, so the tools note it here.
-_ACTIVITY: Dict[str, float] = {}
+_ACTIVITY: dict[str, float] = {}
 
 
 def note_change(mem_dir) -> None:
@@ -142,7 +142,7 @@ LEARNING_OFF_NOTE = ("\n\n# === GHI NHỚ MỚI ĐANG TẮT ===\n"
 
 # ── list / edit / forget ──────────────────────────────────────────────────────
 
-def _index_titles(mem_dir: Path) -> Dict[str, str]:
+def _index_titles(mem_dir: Path) -> dict[str, str]:
     out = {}
     try:
         for line in (Path(mem_dir) / "MEMORY.md").read_text(encoding="utf-8").splitlines():
@@ -154,7 +154,7 @@ def _index_titles(mem_dir: Path) -> Dict[str, str]:
     return out
 
 
-def list_memories(mem_dir: Path) -> List[Dict[str, Any]]:
+def list_memories(mem_dir: Path) -> list[dict[str, Any]]:
     facts = Path(mem_dir) / "facts"
     titles = _index_titles(mem_dir)
     out = []
@@ -183,7 +183,7 @@ def list_memories(mem_dir: Path) -> List[Dict[str, Any]]:
     return out
 
 
-def edit_memory(mem_dir: Path, slug: str, body: str, type_: Optional[str] = None) -> dict:
+def edit_memory(mem_dir: Path, slug: str, body: str, type_: str | None = None) -> dict:
     if not valid_slug(slug):
         raise ValueError("bad slug")
     body = str(body or "").strip()
@@ -262,7 +262,7 @@ def profile_block() -> str:
 
 # ── 0.188.0: hard block for Claude Code, and a source on every new memory ─────────────────────────────────────────
 
-def claude_deny_rules(vault_root) -> List[str]:
+def claude_deny_rules(vault_root) -> list[str]:
     """Permission rules for a Claude Code turn in this brain (`disallowed_tools`; deny rules hold even in
     bypassPermissions). The switch file and the forgotten list are never the model's to write; with learning off
     nothing under memory/ is. Paths are given both relative to the brain (the turn's cwd) and absolute."""
@@ -283,7 +283,7 @@ def claude_deny_rules(vault_root) -> List[str]:
     return out
 
 
-def stamp_new_facts(mem_dir, *, source: str, since: float) -> List[str]:
+def stamp_new_facts(mem_dir, *, source: str, since: float) -> list[str]:
     """Give a source to memories written during a turn that did not record one (spec 12.3): the chat and the date.
     The model is asked to, but the server makes sure. Returns the slugs it stamped."""
     facts = Path(mem_dir) / "facts"

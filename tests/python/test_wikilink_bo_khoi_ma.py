@@ -19,11 +19,11 @@ Sửa hai tầng: server thôi gửi rác (bỏ khối mã trước khi dò), v�
 nối tới node có thật). Tầng hai quan trọng riêng: note bị lọc khỏi đồ thị vì không có liên kết
 nào cũng tạo ra đầu dây trỏ vào hư không, và một đầu dây hỏng không được phép giết cả đồ thị.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 
-from graph_builder import bo_khoi_ma, doc_wikilink  # noqa: E402
+from _paths import ROOT, SERVER  # noqa: F401
+from graph_builder import bo_khoi_ma, doc_wikilink
 
 _fails = []
 

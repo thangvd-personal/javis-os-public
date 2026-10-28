@@ -12,16 +12,17 @@ Phủ:
 - plugin_tools(mode, vault) dựng ctx có vault đó (không None).
 - _resolve_vault: có vault hợp lệ thì KHÔNG rơi về Brain Default (khẳng định tiền đề của bug).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-pvault-"))
 
-import plugins_host  # noqa: E402
-import image_gen     # noqa: E402
+import image_gen
+import plugins_host
 
 _fails = []
 
@@ -66,7 +67,8 @@ check("bug: _load_all(None) -> ctx.vault_root là None (tiền đề của lỗi
 
 
 # ---- 4. scope_vault=False: ctx VẪN thấy vault nhưng KHÔNG nạp plugin riêng-của-vault ----
-import inspect  # noqa: E402
+import inspect
+
 sig = inspect.signature(plugins_host.plugin_tools)
 check("plugin_tools: có tham số scope_vault", "scope_vault" in sig.parameters)
 check("plugin_tools: scope_vault mặc định True (giữ hành vi cũ cho hub)",
@@ -77,7 +79,7 @@ check("plugin_tools: scope_vault mặc định True (giữ hành vi cũ cho hub)
 # (CLAUDE_CWD, main.py:318) - không phải thư mục brain - nên vault_root luôn None ở đường chat.
 # Test này monkeypatch plugin_tools để BẮT tham số vault_root nó thực sự nhận, thay vì đọc
 # chuỗi trong source (giòn, không chứng minh hành vi).
-import claude_sdk_engine  # noqa: E402
+import claude_sdk_engine
 
 _seen = {}
 _orig_plugin_tools = plugins_host.plugin_tools

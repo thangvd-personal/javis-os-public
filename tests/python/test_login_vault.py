@@ -5,19 +5,18 @@ and to watch them. These tests keep what makes it safe and usable: the four past
 to the host they belong to (every redirect hop is checked again), values are encrypted and never come back
 out of the API or a tool, routes need a real dashboard session, and an expired sign-in is said plainly.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path
 import asyncio
 import importlib.util
 import json
 import time
 
 import httpx
+import login_vault as lv
 import pytest
+import web_watch as ww
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import login_vault as lv
-import web_watch as ww
 
 FUTURE = time.time() + 30 * 86400
 PAST = time.time() - 86400

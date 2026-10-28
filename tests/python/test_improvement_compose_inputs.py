@@ -6,10 +6,7 @@ are explicit storage/lineage controls, never real native/account/business proof.
 Both A patches are actually staged; domain_process is set before arm2 staging.
 No fabricated compose operation, third candidate or inherited pass is supplied.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
-import hashlib
 import importlib
 import importlib.util
 import json
@@ -19,13 +16,12 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import improvement_cases as IC
-import improvement_comparison_results as C
 import improvement_experiment_protocol as P
 import improvement_store as IM
+import test_improvement_experiment_selection as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 from improvement_compose_protocol import render_compose_input
-import test_improvement_experiment_selection as fixtures
-
 
 DENIED = (PermissionError, IM.ConflictError, AssetUnavailable, ValueError)
 

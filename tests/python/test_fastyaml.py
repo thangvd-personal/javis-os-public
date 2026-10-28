@@ -7,19 +7,18 @@
 diện rộng và im lặng. Test đối chiếu trên chính corpus thật của repo chứ không phải
 ví dụ tự bịa, cộng vài góc hiểm mà hai bộ nạp hay lệch nhau.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os
 import sys
 from pathlib import Path
 
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import yaml            # noqa: E402  - bộ nạp Python làm CHUẨN đối chiếu
-import fastyaml        # noqa: E402
+import fastyaml
+import yaml
 
 _fails = []
 
@@ -146,7 +145,8 @@ finally:
 check("khôi phục lại bộ nạp C sau khi giả lập", fastyaml._CLoader is _that)
 
 # ---- 5. Không còn ai gọi yaml.safe_load trần trong mã nguồn (ngoài test) ----
-import re  # noqa: E402
+import re
+
 con_sot = []
 for f in sorted(SERVER.glob("*.py")):
     if f.name.startswith("test_") or f.name == "fastyaml.py":

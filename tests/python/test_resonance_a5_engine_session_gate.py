@@ -18,13 +18,14 @@ file Cộng hưởng nào:
    CI chỉ fetch nông một commit nền, nên kho kiểu cũ được tạo bằng cách bỏ đúng bảng mới; đó là khác biệt schema
    duy nhất của #623 trong `sessions.py`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import json
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _STATE = tempfile.mkdtemp(prefix="javis-a5-engine-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -33,16 +34,16 @@ Path(_STATE, "settings.json").write_text(json.dumps({
               "main": {"provider": "anthropic-cli", "model": "sonnet"}},
     "setup_done": True}), encoding="utf-8")
 
-import main  # noqa: E402
-import aux_engine  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import sessions  # noqa: E402
-import workflow_chat  # noqa: E402
-import claude_agent_sdk  # noqa: E402
-from claude_agent_sdk import PermissionResultDeny, ResultMessage  # noqa: E402
-from claude_cli import claude_engine  # noqa: E402
-from claude_sdk_engine import ClaudeSDK  # noqa: E402
+import aux_engine
+import claude_agent_sdk
+import main
+import plugins_host
+import resonance as R
+import sessions
+import workflow_chat
+from claude_agent_sdk import PermissionResultDeny, ResultMessage
+from claude_cli import claude_engine
+from claude_sdk_engine import ClaudeSDK
 
 fails = []
 

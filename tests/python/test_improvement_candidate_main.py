@@ -1,13 +1,12 @@
 """Real application owner/CSRF gates and lazy candidate shutdown wiring."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import unittest
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-import test_improvement_trial_service as fixtures
 import improvement_candidate_api as API
+import test_improvement_trial_service as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi.testclient import TestClient
 
 
 class MainCandidateTests(unittest.TestCase):

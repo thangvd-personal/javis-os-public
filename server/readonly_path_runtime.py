@@ -8,20 +8,19 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import math
-import re
 import unicodedata
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 import capability_resolver
 import context_compiler
 import context_runtime
+import fast_path_runtime
 import lang as lang_mod
 import lang_registry
 import lexicon
-import fast_path_runtime
 from capability_executor import CapabilityExecutor, CapabilityLease
-
 
 READONLY_POLICY_VERSION = "readonly-single-step-v1"
 Discoverer = Callable[[str, str], Awaitable[tuple[list[dict], dict]]]
@@ -78,7 +77,7 @@ class ReadonlyPolicy:
     version: str
 
     @classmethod
-    def from_settings(cls, settings: dict) -> "ReadonlyPolicy":
+    def from_settings(cls, settings: dict) -> ReadonlyPolicy:
         runtime = (settings or {}).get("context_runtime") or {}
         raw = runtime.get("readonly_canary")
         raw = raw if isinstance(raw, dict) else {}
@@ -118,7 +117,7 @@ class ReadonlyPolicy:
             version=str(raw.get("policy_version") or READONLY_POLICY_VERSION)[:120],
         )
 
-    def profile_for(self, capability: dict) -> Optional[dict]:
+    def profile_for(self, capability: dict) -> dict | None:
         source = str(capability.get("source_type") or "")
         name = str(capability.get("name") or "")
         cap_id = str(capability.get("capability_id") or "")
@@ -148,7 +147,7 @@ class ReadonlyPathPlan:
     action: str
     reason: str
     execution_path: str = "unassigned"
-    bucket: Optional[int] = None
+    bucket: int | None = None
     messages: tuple[dict, ...] = ()
     tool_spec: dict | None = None
     lease: CapabilityLease | None = None
@@ -176,7 +175,7 @@ class ReadonlyPathCanary:
 
     @staticmethod
     def _plan(action: str, reason: str, policy: ReadonlyPolicy,
-              bucket: Optional[int] = None, path: str = "unassigned",
+              bucket: int | None = None, path: str = "unassigned",
               rejection: str = "") -> ReadonlyPathPlan:
         return ReadonlyPathPlan(
             action, reason, path, bucket=bucket, policy_version=policy.version,

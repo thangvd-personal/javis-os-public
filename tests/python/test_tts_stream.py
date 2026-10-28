@@ -9,11 +9,12 @@ mất 1-2 giây im lặng. Nay Edge trả `StreamingResponse`. Hai chỗ dễ v�
   2. Header stream: Accept-Ranges none (trình duyệt đừng hỏi Range), Cache-Control no-cache.
 Không chạm mạng: `edge_tts` bị thay bằng module giả trong sys.modules.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import types
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tts-"))
 
@@ -45,8 +46,8 @@ fake = types.ModuleType("edge_tts")
 fake.Communicate = _FakeCommunicate
 sys.modules["edge_tts"] = fake
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")   # host lạ bị web_security chặn 403
 

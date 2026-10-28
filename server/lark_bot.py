@@ -36,7 +36,6 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import httpx
-
 import localefmt
 import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
@@ -401,7 +400,7 @@ class LarkBot(HangLuot):
                 if len(names) > 500:
                     names.clear()
                 d = await self._api(client, "GET", path)
-                names[key] = str(pick((d.get("data") or {})) or "") if d.get("code") == 0 else ""
+                names[key] = str(pick(d.get("data") or {}) or "") if d.get("code") == 0 else ""
             return names[key]
 
         uid = meta.get("user_id") or ""

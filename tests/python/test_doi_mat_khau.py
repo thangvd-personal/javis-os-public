@@ -18,19 +18,20 @@ File này canh cái đường mới (`/auth/password`) và bốn thứ dễ làm
 4. **Cửa sau qua /settings.** Nhánh `section=password` cũ không đòi mật khẩu hiện tại và nhận
    cả token API scope `full` - một token rò ra là đổi được mật khẩu chủ máy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-pwtest-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c   # noqa: E402
-import main          # noqa: E402
-import totp          # noqa: E402
+import config as c
+import main
+import totp
+from fastapi.testclient import TestClient
 
 _fails = []
 

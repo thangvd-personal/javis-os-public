@@ -9,14 +9,15 @@ Hai thứ đó cộng lại: câu trạng thái bị nối thẳng vào ĐẦU b
 Trọng tài là `response` trong sự kiện `result` - `agy` mang toàn văn câu trả lời cuối ở đó.
 Test này canh đúng một điều: gọt được phần thừa ĐẦU mà không bao giờ tự xén mất phần đuôi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-agychot-"))
 
-from antigravity_cli import _chot_van, AntigravityCLI  # noqa: E402
+from antigravity_cli import AntigravityCLI, _chot_van
 
 _fails = []
 

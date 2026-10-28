@@ -13,14 +13,14 @@ from contextlib import closing
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_comparison_plans import ExperimentPlans
-from improvement_experiments import _identifier, _generation
+from improvement_experiments import _generation, _identifier
 from improvement_generation_protocol import input_bytes
 from improvement_preparation import PreparationService
 from improvement_preparation_lineage import load_preparation_lineage
+from improvement_result_domain import require_product_report
 from improvement_skill_patch import body_layout
 from improvement_trial_evidence import decode_trace
 from improvement_trial_records import _brain
-from improvement_result_domain import require_product_report
 from improvement_tuning_history import sealed_history
 
 

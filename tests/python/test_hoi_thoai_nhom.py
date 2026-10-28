@@ -18,13 +18,13 @@ Ba thứ này đi chung một bảng nên test chung một chỗ. Những gì fi
 
 KHÔNG mạng, DB nằm trong thư mục tạm.
 """
-from _paths import ROOT, SERVER, moi_duong_dan  # noqa: E402,F401  - nạp server/ vào sys.path
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 
 import sessions
+from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401  - nạp server/ vào sys.path
 
 fails = []
 
@@ -69,7 +69,7 @@ check("bỏ ghim thì về đúng thứ tự thời gian",
 # On a fast machine two writes in a row can read the same time.time() value. Ordering only
 # by pinned and updated_at then leaves the tie to SQLite, which returned the older row first
 # in about two runs out of three. Freeze the clock so every row gets the SAME timestamp.
-from unittest import mock  # noqa: E402
+from unittest import mock
 
 with mock.patch.object(sessions.time, "time", return_value=1_700_000_000.0):
     tie = store()
@@ -195,7 +195,7 @@ check("hội thoại của DB cũ ghim được ngay", st2.list_sessions(brain="
 # ============================================================
 # 6. Endpoint có mặt đúng đường dẫn
 # ============================================================
-import main  # noqa: E402
+import main
 
 duong = moi_duong_dan(main.app)
 for p in ("/projects", "/projects/{project_id}/update", "/projects/{project_id}/delete",

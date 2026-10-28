@@ -10,18 +10,19 @@ nên test không bao giờ gọi model thật.
 - thu hồi giữ lịch sử; nâng lên `*` chỉ do chủ hay tự rà soát có bằng chứng ≥ 2 ngữ cảnh; khôi phục;
 - bài học cũ trong MEMORY.md đọc được để giao diện ghi "bài học cũ chưa có phạm vi".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-lessons-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-lessons-w-"))
 
-import agent_lessons as AL  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_lessons as AL
+import resonance_store as RS
 
 fails = []
 
@@ -144,8 +145,8 @@ AL.mark_peer_delivered(st, [f1], "turn:t9")
 check("đã giao thì lượt sau không hiện lại", AL.pending_peer_feedback(st, "A", K, 0) == [])
 
 # ═════ qua main.py: chat riêng và lượt nhóm (engine GIẢ, dựng engine thật thì ném ngay) ═════
-import main  # noqa: E402
-import team_engine  # noqa: E402
+import main
+import team_engine
 
 
 def _no_real_engine(*a, **k):

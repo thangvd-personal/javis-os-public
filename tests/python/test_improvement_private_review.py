@@ -1,20 +1,17 @@
 """Exact private review rechecks real sources; synthetic products are not solver runs."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import json
 import stat
 import time
 import unittest
-from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
-from improvement_trial_file_sources import BrainFileFixtures
 import test_improvement_skill_candidates as candidates
 import test_improvement_trial_admission as admission
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
 
 if importlib.util.find_spec("improvement_private_review"):
     from improvement_private_review import PrivateReview

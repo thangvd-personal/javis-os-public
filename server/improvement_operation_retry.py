@@ -6,14 +6,14 @@ import time
 from contextlib import closing
 
 import improvement_store as IM
-from improvement_experiments import _generation
 from improvement_experiment_protocol import _digest
+from improvement_experiments import _generation
+from improvement_observation_history import is_observation2, validate_history
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_execution import OperationExecution
 from improvement_operation_protocol import operation_packet
 from improvement_trial_evidence import decode_trace
 from improvement_trial_records import _brain
-from improvement_observation_history import is_observation2, validate_history
 
 _STATUS = {429, 500, 502, 503, 504}
 _NETWORK = {"ConnectionError", "ConnectionResetError", "APITimeoutError", "ConnectError", "ReadTimeout", "ConnectTimeout"}

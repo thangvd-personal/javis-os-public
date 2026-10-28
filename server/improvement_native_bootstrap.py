@@ -10,12 +10,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path, PureWindowsPath
 import re
 import struct
 import sys
 import types
-
+from pathlib import Path, PureWindowsPath
 
 _NAME = "improvement_native_bootstrap.py"
 _IMAGE = "improvement_native_image.py"

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 BUCKETS = ("running", "waiting", "needs_you", "done")
 SOURCES = ("team", "chat", "auto")
@@ -67,11 +67,11 @@ def _uniq(xs: list) -> list:
 VERIFY_LINE = "Loại việc: Kiểm chứng"
 LINK_PREFIX = "Kiểm chứng cho:"
 CRITERIA_PREFIX = "Tiêu chí xong:"
-_LINK_RE = re.compile(r"^" + re.escape(LINK_PREFIX) + r" .*\(((?:goal|team|kanban):[A-Za-z0-9_-]+)\)\s*$", re.M)
+_LINK_RE = re.compile(r"^" + re.escape(LINK_PREFIX) + r" .*\(((?:goal|team|kanban):[A-Za-z0-9_-]+)\)\s*$", re.MULTILINE)
 _LINK_TOKEN_RE = re.compile(r"^(goal|team|kanban):([A-Za-z0-9_-]{1,64})$")
 
 
-def brief(text: str, criteria: str = "", kind: str = "task", link: Optional[dict] = None) -> str:
+def brief(text: str, criteria: str = "", kind: str = "task", link: dict | None = None) -> str:
     """Nội dung việc: yêu cầu trước (việc nhóm lấy đầu tin làm tiêu đề), rồi kiểu việc, mục được kiểm, tiêu chí xong."""
     out = [str(text or "").strip()]
     tail = []
@@ -91,7 +91,7 @@ def brief(text: str, criteria: str = "", kind: str = "task", link: Optional[dict
 def parse_brief(text: Any) -> dict:
     """{kind, link} đọc ngược từ nội dung việc (việc nhóm)."""
     s = str(text or "")
-    kind = "verify" if re.search(r"^" + re.escape(VERIFY_LINE) + r"\s*$", s, re.M) else "task"
+    kind = "verify" if re.search(r"^" + re.escape(VERIFY_LINE) + r"\s*$", s, re.MULTILINE) else "task"
     m = _LINK_RE.search(s)
     return {"kind": kind, "link": m.group(1) if m else ""}
 
@@ -102,7 +102,7 @@ def clean_link(token: Any) -> str:
     return t if _LINK_TOKEN_RE.match(t) else ""
 
 
-def resolve_link(token: str, root: str, *, tasks=None, goals=None, principal=None) -> Optional[dict]:
+def resolve_link(token: str, root: str, *, tasks=None, goals=None, principal=None) -> dict | None:
     """{id, title, owner_key, open} của mục được kiểm, chỉ trong đúng brain. None khi không còn hay khác brain."""
     m = _LINK_TOKEN_RE.match(str(token or ""))
     if not m:
@@ -142,7 +142,7 @@ def resolve_link(token: str, root: str, *, tasks=None, goals=None, principal=Non
 
 # ───────────── các nguồn ─────────────
 
-def _team_jobs(agent_key: str, root: str, teams, tasks, window: int = TEAM_HISTORY, flags: Optional[dict] = None) -> list:
+def _team_jobs(agent_key: str, root: str, teams, tasks, window: int = TEAM_HISTORY, flags: dict | None = None) -> list:
     out = []
     if teams is None:
         return out
@@ -241,7 +241,7 @@ def _chat_sessions(agent_key: str, slug: str, brain_keys: Any, sessions, goals) 
     return out
 
 
-def report_session(agent_key: str, slug: str, brain_keys: Any, sessions, goals) -> Optional[str]:
+def report_session(agent_key: str, slug: str, brain_keys: Any, sessions, goals) -> str | None:
     """Phiên chat riêng nhận báo cáo của việc giao bằng nút Giao việc: phiên CHƯA lưu trữ của đúng mã này, ưu tiên phiên đã
     có tin (phiên trống là phiên trang tạo sẵn khi bấm vào trợ lý). Không có thì None, người gọi mở phiên mới."""
     if sessions is None or not slug:
@@ -260,7 +260,7 @@ def report_session(agent_key: str, slug: str, brain_keys: Any, sessions, goals) 
 
 
 def _kanban_jobs(agent_key: str, slug: str, root: str, brain_keys: Any, tasks, sessions, goals,
-                 history: bool = True, rows: Optional[list] = None) -> list:
+                 history: bool = True, rows: list | None = None) -> list:
     out = []
     chats = _chat_sessions(agent_key, slug, brain_keys, sessions, goals)
     board_off = False
@@ -320,7 +320,7 @@ def _kanban_jobs(agent_key: str, slug: str, root: str, brain_keys: Any, tasks, s
     return out
 
 
-def _auto_jobs(agent_key: str, goals, principal, window: int = GOAL_LIMIT, flags: Optional[dict] = None) -> list:
+def _auto_jobs(agent_key: str, goals, principal, window: int = GOAL_LIMIT, flags: dict | None = None) -> list:
     out = []
     if goals is None:
         return out
@@ -372,9 +372,9 @@ def _cursor(cursor: Any) -> int:
 
 
 def collect(agent_key: str, slug: str, root: str, *, brain_keys: Any = None, teams=None, tasks=None, sessions=None,
-            goals=None, principal=None, now: Optional[float] = None, source: str = "all", bucket: str = "",
-            cursor: Any = None, limit: int = PAGE, history: bool = True, kanban_rows: Optional[list] = None,
-            resolve: bool = True, done_since: float = 0, marks: Optional[dict] = None) -> dict:
+            goals=None, principal=None, now: float | None = None, source: str = "all", bucket: str = "",
+            cursor: Any = None, limit: int = PAGE, history: bool = True, kanban_rows: list | None = None,
+            resolve: bool = True, done_since: float = 0, marks: dict | None = None) -> dict:
     """Một trang việc của một trợ lý.
 
     Trả {"jobs": trang, "counts": {ngăn: số} theo nguồn đang lọc, "source_counts": {nguồn: số}, "total", "next": cursor
@@ -439,7 +439,7 @@ def collect(agent_key: str, slug: str, root: str, *, brain_keys: Any = None, tea
 
 
 def active_counts(agents: dict, root: str, *, brain_keys: Any = None, teams=None, tasks=None, sessions=None, goals=None,
-                  principal=None, now: Optional[float] = None) -> dict:
+                  principal=None, now: float | None = None) -> dict:
     """{slug: {"running", "needs_you", "waiting", "done", "failed"}} cho huy hiệu và chấm trạng thái trên thẻ trợ lý;
     "done" và "failed" chỉ đếm việc xong (hay hỏng) trong DONE_FRESH giây gần nhất. Nhẹ: đọc Kanban một lần cho cả brain, mỗi nguồn chỉ vài việc xong mới nhất.
     Trợ lý không có việc nào thì không có mặt. `agents`: {slug: agent_key hay ""}."""
@@ -460,7 +460,7 @@ def active_counts(agents: dict, root: str, *, brain_keys: Any = None, teams=None
     return out
 
 
-def verify_targets(agents: dict, exclude_slug: str, root: str, *, names: Optional[dict] = None, brain_keys: Any = None,
+def verify_targets(agents: dict, exclude_slug: str, root: str, *, names: dict | None = None, brain_keys: Any = None,
                    teams=None, tasks=None, sessions=None, goals=None, principal=None, per_agent: int = 10,
                    limit: int = 30) -> list:
     """Việc gần đây của các trợ lý KHÁC trong brain (để chọn mục cần kiểm chứng). Việc người kiểm đang tham gia thì bỏ."""
@@ -512,7 +512,7 @@ def clean_nonce(nonce: Any) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "", str(nonce or ""))[:64]
 
 
-def parse_assign(key: Any) -> Optional[dict]:
+def parse_assign(key: Any) -> dict | None:
     """{agent_key, slug, kind, link, nonce} từ khoá của việc giao cho trợ lý, None nếu không phải."""
     k = str(key or "")
     if not k.startswith(ASSIGN_PREFIX):
@@ -528,13 +528,13 @@ def parse_assign(key: Any) -> Optional[dict]:
     return {"agent_key": parts[0], "slug": parts[1], "kind": kind, "link": link, "nonce": parts[-1]}
 
 
-def parse_assign_key(key: Any) -> Optional[tuple]:
+def parse_assign_key(key: Any) -> tuple | None:
     """(agent_key, slug) từ khoá của việc giao cho trợ lý, None nếu không phải."""
     got = parse_assign(key)
     return (got["agent_key"], got["slug"]) if got else None
 
 
-def assigned_key(task: dict) -> Optional[str]:
+def assigned_key(task: dict) -> str | None:
     got = parse_assign(task.get("idempotency_key"))
     return got["agent_key"] if got else None
 

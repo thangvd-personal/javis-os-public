@@ -1,16 +1,15 @@
 """Actual resume/proposal/review/retry preflight fences without a native query."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-from contextlib import closing
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
-from improvement_claude import ClaudeTrialAdapter
-from improvement_operation_adapter import ClaudeOperationAdapter
 import test_improvement_experiment_service as resume_fixture
+import test_improvement_operation_retry as retry_fixture
 import test_improvement_proposals as proposal_fixture
 import test_improvement_semantic_review as semantic_fixture
-import test_improvement_operation_retry as retry_fixture
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_claude import ClaudeTrialAdapter
+from improvement_operation_adapter import ClaudeOperationAdapter
 
 
 def counts(assets):

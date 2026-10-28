@@ -15,15 +15,16 @@ LIÊN ĐỚI: chính việc đưa builtin vào tầng lazy (0.10.0) làm lỗi n
 `javis_search_tools` chỉ xuất hiện khi có trên 40 tool MCP; giờ nó luôn có mặt, nên model yếu
 gặp nó mọi lượt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-toolsyn-"))
 
-import engine  # noqa: E402
-import limit_learner  # noqa: E402
+import engine
+import limit_learner
 
 _fails = []
 

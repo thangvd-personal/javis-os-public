@@ -2,10 +2,11 @@
 
     python tests/run.py reply_policy_tuning      (no network)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-tuning-")
 try:
@@ -13,8 +14,8 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
 
 _fails = []
 

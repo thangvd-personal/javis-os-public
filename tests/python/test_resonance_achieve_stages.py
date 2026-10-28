@@ -14,19 +14,21 @@ Test này kiểm đúng cơ chế đó trên kho SQLite thật, đường advanc
   bản trước; lần đánh thức sau không gọi thêm.
 Không gọi model thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-stages-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402  - A1: Cộng hưởng bật theo trợ lý
+import _resonance_agent as RA
+import resonance as R
+import resonance_store as RS
+
 RA.preapprove()  # A4: chủ dự án cho phép phạm vi ngay sau khi lập (D1); xem _resonance_agent.preapprove
 
 _fails = []
@@ -215,9 +217,10 @@ check("giai đoạn 2: lượt thứ ba không giữ được chỗ trước lư
     intent=RA.pin(st, b2)) is None)
 
 # ═══════════ Sổ lượt chat của bộ chạy ═══════════
-import sys  # noqa: E402
+import sys
+
 sys.path.insert(0, str(Path(__file__).parent))
-import _e2e_pilot_guard as G  # noqa: E402
+import _e2e_pilot_guard as G
 
 lp = _STATE / "chat-turns.json"
 L = G.TurnLedger(lp, 2)

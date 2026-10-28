@@ -14,9 +14,10 @@ from types import SimpleNamespace
 import improvement_harness2_compose as upstream
 from improvement_blobs import MAX_ASSET_BYTES
 from improvement_cases import _fields, _text
-from improvement_experiment_protocol import _id, _digest
+from improvement_experiment_protocol import _digest, _id
 from improvement_generation_protocol import input_bytes
-from improvement_skill_patch import body_layout, validate_body_patch, _FIELDS as PATCH_FIELDS
+from improvement_skill_patch import _FIELDS as PATCH_FIELDS
+from improvement_skill_patch import body_layout, validate_body_patch
 from improvement_store import _hash, _json
 
 

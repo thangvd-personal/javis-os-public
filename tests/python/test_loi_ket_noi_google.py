@@ -11,13 +11,12 @@ Người dùng theo guide cũ chỉ bật Google Calendar API nên OAuth xong v�
 và Javis chỉ báo "Key chưa đúng hoặc chưa đủ quyền" - khách hiểu nhầm là hỏng key, có người
 còn nghi tại não OpenRouter free. Test này giữ cho thông báo lỗi chỉ đúng chỗ cần sửa.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os
 import re
 import sys
 from pathlib import Path
 
 import mcp_hub
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 
@@ -109,7 +108,7 @@ check("chỉ gắn khi thật sự là lỗi", 'startswith("ERROR:")' in than_gu
 
 # ---- 5. validate_connection phải THẬT SỰ đi qua bộ dịch này ----
 src = Path(mcp_hub.__file__).read_text(encoding="utf-8")
-m = re.search(r"async def validate_connection.*?(?=\nasync def |\ndef |\Z)", src, re.S)
+m = re.search(r"async def validate_connection.*?(?=\nasync def |\ndef |\Z)", src, re.DOTALL)
 check("validate_connection gọi _friendly_tool_error (không tự nối chuỗi cũ)",
       m is not None and "_friendly_tool_error" in m.group(0))
 

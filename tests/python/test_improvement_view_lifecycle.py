@@ -1,19 +1,18 @@
 """Stop/next consumers must own genuine v4 reservations, without native queries."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_experiment_service import ExperimentService
-from improvement_experiment_admission import ExperimentAdmission
-from improvement_experiment_protocol import matrix_cell
-from improvement_claude import ClaudeTrialAdapter
-from improvement_trial_service import OwnerTrialService
 import test_improvement_view_reservations as reservations
 import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_claude import ClaudeTrialAdapter
+from improvement_experiment_admission import ExperimentAdmission
+from improvement_experiment_protocol import matrix_cell
+from improvement_experiment_service import ExperimentService
+from improvement_trial_service import OwnerTrialService
 
 
 class ViewLifecycleTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

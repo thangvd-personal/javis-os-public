@@ -1,17 +1,16 @@
 """Owned next admission over the real brain barrier, Trials and CallLedger."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import threading
 import unittest
 from contextlib import closing
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import improvement_store as IM
+import test_improvement_view_sources as sources
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 from improvement_experiment_service import ExperimentService
 from improvement_trial_service import OwnerTrialService
-import test_improvement_view_sources as sources
 
 
 class ViewNextTests(sources.SourceFixture, unittest.IsolatedAsyncioTestCase):

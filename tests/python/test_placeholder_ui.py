@@ -16,11 +16,12 @@ Số này rất ít, phải tự nhớ khi sửa.
 """
 import re
 
-from _paths import ROOT  # noqa: E402,F401
+from _paths import ROOT
 
 DASH = ROOT / "dashboard"
 # Tra khoá i18n ra chữ tiếng Việt thật (xem chú thích trong quet()).
 import json
+
 VI = json.loads((ROOT / "dashboard" / "i18n" / "vi.json").read_text(encoding="utf-8"))
 KHOA_I18N = re.compile(r'(?:window\.)?(?:t|tw|dich)\(\s*"([a-z0-9_.]+)"')
 
@@ -36,7 +37,7 @@ RUT = [
     re.compile(r"\.placeholder\s*=\s*`([^`]*)`"),
 ]
 
-VIET_TAT = re.compile(r"\bvd\b", re.I)
+VIET_TAT = re.compile(r"\bvd\b", re.IGNORECASE)
 
 fails = []
 

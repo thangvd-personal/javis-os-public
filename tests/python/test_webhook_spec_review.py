@@ -6,7 +6,6 @@ Each check names the finding it pins (R1 = store and rules review, R2 = delivery
 UI and whole-chain review). The harness is the spec matrix's: the real feature and router, temporary SQLite, fake HTTP,
 plugin, tool and model runners, and a model guard.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
@@ -14,8 +13,9 @@ import tempfile
 import time
 from pathlib import Path
 
-import test_webhook_spec_matrix as mx  # noqa: E402  (the harness; its main() runs only as a script)
-import webhook_rules as wr  # noqa: E402
+import test_webhook_spec_matrix as mx
+import webhook_rules as wr
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -64,7 +64,7 @@ async def rules_and_triage():
           and st.get(r4["event_id"])["status"] == "done")
 
     # R1 P2-3: `not` over a missing field or another type is not a match.
-    ev = lambda rules, d: wr.evaluate(wr.validate(rules), d.encode(), "application/json")  # noqa: E731
+    ev = lambda rules, d: wr.evaluate(wr.validate(rules), d.encode(), "application/json")
     r = ev({"filter": {"not": {"path": "status", "op": "eq", "value": 4}}}, "{}")
     r2_ = ev({"filter": {"not": {"path": "total", "op": "gt", "value": 100}}}, '{"total": "500"}')
     r3_ = ev({"filter": {"not": {"path": "status", "op": "eq", "value": 4}}}, '{"status": 1}')
@@ -82,7 +82,7 @@ async def rules_and_triage():
     # R1 P2-4: empty / not_empty on a [*] path apply the quantifier.
     all_empty = '{"items": [{"note": ""}, {"note": null}]}'
     one = '{"items": [{"note": ""}, {"note": "gói quà"}]}'
-    cond = lambda op, q: {"filter": {"path": "items[*].note", "op": op, "quantifier": q}}  # noqa: E731
+    cond = lambda op, q: {"filter": {"path": "items[*].note", "op": op, "quantifier": q}}
     check("R1 P2-4: [*] empty all / any / not_empty any follow the items",
           ev(cond("empty", "all"), all_empty)["decision"] == "run" and ev(cond("empty", "all"), one)["decision"] == "filtered"
           and ev(cond("empty", "any"), one)["decision"] == "run" and ev(cond("not_empty", "any"), one)["decision"] == "run"
@@ -94,7 +94,7 @@ async def rules_and_triage():
     r = ev({"filter": {"path": "a", "op": "eq", "value": "1e999"}}, '{"a": 1e999}')
     check("R1 P3: 1e999 never equals the text \"1e999\" (the payload is quarantined: number_out_of_range)",
           r["decision"] == "invalid" and r["reason"] == "number_out_of_range")
-    k = lambda v: ev({"dedup": {"business_paths": ["id"]}}, '{"id": ' + v + "}")["business_key"]["hash"]  # noqa: E731
+    k = lambda v: ev({"dedup": {"business_paths": ["id"]}}, '{"id": ' + v + "}")["business_key"]["hash"]
     check("R1 P3: 1 and 1.0 are one business key (as eq says), \"1\" another", k("1") == k("1.0") != k('"1"'))
     decomposed = '{"items": [{"name": "Gói TRỢ LÝ AI JAVIS"}]}'
     r = ev({"filter": {"path": "items[*].name", "op": "contains", "value": "TRỢ LÝ AI JAVIS", "quantifier": "any"}},
@@ -105,6 +105,7 @@ async def rules_and_triage():
 async def receiving():
     import hashlib
     import hmac
+
     import httpx
     from fastapi import FastAPI
     f = fresh()
@@ -440,6 +441,7 @@ async def plugin_fairness():
 async def second_round():
     """Findings of the review of the fixes (R4)."""
     import threading
+
     import httpx
     from fastapi import FastAPI
     f = fresh()
@@ -550,8 +552,8 @@ async def second_round():
 async def whole_chain():
     """Findings of the whole-chain review (R6)."""
     import httpx
-    from fastapi import FastAPI
     import webhook_worker as ww
+    from fastapi import FastAPI
     f = fresh()
     st = f.store()
     app = FastAPI()
@@ -742,11 +744,11 @@ async def whole_chain():
 async def fix_review():
     """Findings of the review of the R6 fixes (R7)."""
     import threading
+
     import httpx
-    from fastapi import FastAPI
     import webhook_actions as wa
     import webhook_store as wst
-    import webhook_worker as ww
+    from fastapi import FastAPI
     f = fresh()
     st = f.store()
     app = FastAPI()
@@ -884,10 +886,10 @@ async def fix_review():
 async def chain_review_two():
     """Findings of the second whole-chain review at ac47dac1 (R8: M1-M3 and M4-M5)."""
     import httpx
-    from fastapi import FastAPI
     import webhook_rollback as wrb
     import webhook_store as wst
     import webhook_triggers as wt
+    from fastapi import FastAPI
     f = fresh()
     st = f.store()
     app = FastAPI()

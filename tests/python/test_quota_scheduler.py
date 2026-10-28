@@ -11,14 +11,15 @@ token hơn thực tế rồi cho qua đúng request làm vỡ hạn mức.
 Phần dễ sai nhất là ĐẾM HAI LẦN: một lượt canary vừa đặt chỗ vừa báo mức dùng thật. Ranh
 giới là đặt chỗ chỉ đếm phần ĐANG BAY, còn phần đã tiêu do sổ cái nắm.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-qsched-")
 
-import quota_scheduler as qs  # noqa: E402
+import quota_scheduler as qs
 
 _fails = []
 
@@ -58,7 +59,7 @@ check("snapshot nêu đúng mức dùng",
 
 # ---- 2. Móc PHỔ QUÁT: mọi lượt đi qua usage_store.record đều vào sổ ----
 qs.reset()
-import usage_store  # noqa: E402
+import usage_store
 
 usage_store.record("groq", "llama-3.3-70b-versatile", 4000, 500)
 check("usage_store.record tự nạp vào sổ cái dùng chung",
@@ -71,9 +72,9 @@ check("nguồn thứ hai (loop nền) cộng dồn vào cùng sổ",
       qs.used("groq", "llama-3.3-70b-versatile", 60) == 6500)
 
 # ---- 3. admit_quota phải TRỪ phần các nguồn khác đã đốt ----
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
-from context_runtime import ObserveRuntime  # noqa: E402
+from context_runtime import ObserveRuntime
 
 _settings = {"context_runtime": {"mode": "canary", "retention_days": 14}}
 _tmp = Path(tempfile.mkdtemp(prefix="javis-qsched-rt-"))
@@ -120,7 +121,6 @@ check("used chỉ tính 1.200 chứ không phải 2.400",
 # "đã tiêu bao nhiêu", còn bảng đặt chỗ chỉ giữ phần đang bay. Một chỗ gọi tương lai ghi
 # vào runtime mà quên usage_store sẽ tạo ra mức dùng VÔ HÌNH y như cũ, và không có gì
 # báo động vì cả hai lời gọi đều "chạy đúng".
-import re  # noqa: E402
 
 _main_src = (ROOT / "server" / "main.py").read_text(encoding="utf-8")
 _lines = _main_src.split("\n")

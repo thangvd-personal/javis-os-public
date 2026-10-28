@@ -11,7 +11,6 @@ refused request backs off instead of blocking newer ones, polling is once an hou
 active hours or for a bot that answers only chosen people, intro text is capped, Inbox text is localized, and the form
 shows the switch only for a personal Zalo account.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import datetime
 import os
@@ -19,20 +18,22 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zpkb-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import localefmt  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_friend_intake as fi  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import chatbot_store
+import conversations
+import localefmt
+import zalo_cli
+import zalo_friend_intake as fi
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

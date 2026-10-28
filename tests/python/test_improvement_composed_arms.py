@@ -4,8 +4,6 @@ Fresh policy is supplied at the public create-request boundary before the real
 immutable experiment definition exists. Frozen definitions are never patched.
 Later publication fixtures explicitly use synthetic unexecuted native controls.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib
 import json
 import time
@@ -15,6 +13,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_comparison_plans as plans_fixture
+import test_improvement_compose_admission as admission_fixture
+import test_improvement_compositions as publication_fixture
+import test_improvement_native_trace_checks as native_fixture
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_comparison_plans import ExperimentPlans
 from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
 from improvement_native_trace_checks import validate_native_trace
@@ -23,12 +26,7 @@ from improvement_operation_runner import OperationRunner
 from improvement_operation_tasks import OperationTasks
 from improvement_semantic_review import SemanticReview
 from improvement_views import EffectiveViews
-import test_improvement_comparison_plans as plans_fixture
-import test_improvement_compositions as publication_fixture
-import test_improvement_compose_admission as admission_fixture
-import test_improvement_native_trace_checks as native_fixture
 from test_improvement_operation_profile2 import EngineeringOperationBinding
-
 
 POLICY = 'two_proposals_and_one_compose'
 PUBLIC = {'experiment_id': 'policy-experiment', 'contract_id': 'policy-contract', 'case_set_id': 'policy-cases',
@@ -202,7 +200,11 @@ class ComposedArmTests(unittest.IsolatedAsyncioTestCase):
                 return {'supported': True, 'capability_hash': 'c' * 64}
 
             async def execute(self, request, receipt, *, on_closing_observations=None):
-                from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage
+                from claude_agent_sdk import (
+                    AssistantMessage,
+                    ResultMessage,
+                    SystemMessage,
+                )
                 manifest = workspace.validate(receipt)
                 test.assertEqual((manifest['version'], manifest['request']['kind']), (2, 'semantic'))
                 test.assertEqual(manifest['request']['candidate_id'], test.candidate['id'])
@@ -269,8 +271,8 @@ class ComposedArmTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.queries, 1)
 
     async def test_reserved_three_requires_new_exact_diff_and_cannot_run_without_independent_semantic_view(self):
-        from improvement_experiment_admission import ExperimentAdmission
         from improvement_claude import ClaudeTrialAdapter
+        from improvement_experiment_admission import ExperimentAdmission
         await self.published()
         with closing(self.store._conn()) as connection:
             original = connection.execute('SELECT authority_id FROM improvement_experiment_arms WHERE ordinal=1').fetchone()[0]

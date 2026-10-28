@@ -17,7 +17,6 @@ anywhere. This file pins what that must and must not do:
    retries by itself, switches `tailscale serve` off on disable, mode switch and password loss, and keeps it across a
    server restart.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import base64
 import json
 import os
@@ -26,6 +25,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-remote-tunnel-test-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
@@ -38,10 +39,10 @@ try:
 except Exception:
     pass
 
-from fastapi.testclient import TestClient   # noqa: E402
-import config as c                           # noqa: E402
-import main                                  # noqa: E402
-import remote_tunnel as rt                   # noqa: E402
+import config as c
+import main
+import remote_tunnel as rt
+from fastapi.testclient import TestClient
 
 _fails = []
 

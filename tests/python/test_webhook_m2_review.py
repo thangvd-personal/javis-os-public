@@ -13,7 +13,6 @@ P3   unchecked business_key.field, cut long keys, TTL ending before the holder r
      events, ignored events evicted last, card history flooded, simulate probing another brain, schema marker
      lowered, ttl_s 0, required null, rule size in bytes, Test button text.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -24,6 +23,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-m2r-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"
@@ -33,9 +34,9 @@ try:
 except Exception:
     pass
 
-import webhook_rules as wr  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
+import webhook_rules as wr
+import webhook_store as ws
+import webhook_triggers as wt
 
 fails = []
 
@@ -109,7 +110,7 @@ r = ev({"mapping": {"a": "a", "b": "b"}}, '{"a": NaN, "b": Infinity}')
 check("P2-4: NaN/Infinity literals are not numbers nor text: quarantined, valid JSON",
       r["decision"] == "invalid" and r["reason"] == "number_out_of_range" and json.dumps(r, allow_nan=False))
 bk = {"business_key": {"entity": "o", "path": "id"}}
-k = lambda v: ev(bk, '{"id": ' + v + "}")["business_key"]["hash"]  # noqa: E731
+k = lambda v: ev(bk, '{"id": ' + v + "}")["business_key"]["hash"]
 check("P2-4: 12345678901234567.5 and .7 are two keys", k("12345678901234567.5") != k("12345678901234567.7"),
       (k("12345678901234567.5"), k("12345678901234567.7")))
 check("P2-4: 1e50 and 1e60 are two keys", k("1e50") != k("1e60"))

@@ -1,12 +1,11 @@
 """Automatic learning from chat: episodes, judge, caps, learning runs for skills/agents/workflows, apply, undo, HTTP."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 import auto_learning as A
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_store import ConflictError
 
 SKILL = "---\nname: bao-gia\ndescription: Bao gia\ngroup: Sales\n---\nWrite the quote for the customer.\n"
@@ -391,9 +390,9 @@ class AutoLearningTests(unittest.TestCase):
             A.build_cases({"testable": True, "cases": []})
 
     def test_http_routes(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         self.mistakes()
         run = self.learner.step()["run"]
         app = FastAPI()

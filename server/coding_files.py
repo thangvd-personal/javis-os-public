@@ -33,9 +33,8 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-import winproc         # lệnh con chạy câm trên Windows (không nháy cửa sổ console đen)
+import winproc  # lệnh con chạy câm trên Windows (không nháy cửa sổ console đen)
 
 # ---------------------------------------------------------------------------------------
 # Đọc theo đoạn
@@ -49,7 +48,7 @@ DOC_KY_TU_TOI_DA = 50_000
 _SO_DONG_RE = re.compile(r"^\s*\d+\|")
 
 
-def doc_theo_dong(text: str, offset: int = 1, limit: int = DOC_DONG_MAC_DINH) -> Tuple[str, int, int]:
+def doc_theo_dong(text: str, offset: int = 1, limit: int = DOC_DONG_MAC_DINH) -> tuple[str, int, int]:
     """Trả (chữ có số dòng "N|nội dung", dòng cuối đã đọc, tổng số dòng).
 
     Cắt theo RANH GIỚI DÒNG khi chạm trần ký tự, không bao giờ cắt giữa dòng: một dòng bị cắt
@@ -93,7 +92,7 @@ def doc_theo_dong(text: str, offset: int = 1, limit: int = DOC_DONG_MAC_DINH) ->
 # ---------------------------------------------------------------------------------------
 # Khoá theo (phiên, đường dẫn tuyệt đối). Chỉ phiên Coding dùng sổ này: brain vẫn ghi ghi chú
 # như cũ, không bắt đọc trước, vì luồng đó (ghi nhớ, báo cáo, nháp) chưa bao giờ cần.
-_SO_DOC: Dict[Tuple[str, str], dict] = {}
+_SO_DOC: dict[tuple[str, str], dict] = {}
 _SO_DOC_KHOA = threading.Lock()
 _SO_DOC_TRAN = 4096          # đủ cho một ngày làm việc dài, không thành chỗ rò bộ nhớ
 
@@ -197,21 +196,21 @@ def _unicode_chuan(s: str) -> str:
     return s
 
 
-def _dong_pattern(pattern: str) -> List[str]:
+def _dong_pattern(pattern: str) -> list[str]:
     ds = pattern.split("\n")
     if len(ds) > 1 and ds[-1] == "":
         ds.pop()
     return ds
 
 
-def _span_dong(lines: List[str], i: int, n: int) -> Tuple[int, int]:
+def _span_dong(lines: list[str], i: int, n: int) -> tuple[int, int]:
     """Vị trí ký tự của cửa sổ dòng [i, i+n), không gồm ký tự xuống dòng cuối."""
     bat_dau = sum(len(x) + 1 for x in lines[:i])
     ket_thuc = bat_dau + sum(len(x) + 1 for x in lines[i:i + n]) - 1
     return bat_dau, max(bat_dau, ket_thuc)
 
 
-def _khop_chinh_xac(content: str, pattern: str) -> List[Tuple[int, int]]:
+def _khop_chinh_xac(content: str, pattern: str) -> list[tuple[int, int]]:
     ra, i = [], 0
     if not pattern:
         return ra
@@ -223,7 +222,7 @@ def _khop_chinh_xac(content: str, pattern: str) -> List[Tuple[int, int]]:
         i = j + len(pattern)
 
 
-def _khop_theo_dong(content: str, pattern: str, bien) -> List[Tuple[int, int]]:
+def _khop_theo_dong(content: str, pattern: str, bien) -> list[tuple[int, int]]:
     lines = content.split("\n")
     pat = [bien(x) for x in _dong_pattern(pattern)]
     n = len(pat)
@@ -341,7 +340,7 @@ CHIEN_LUOC = (
 TUONG_TU = {"block_anchor", "context_aware"}
 
 
-def tim_khop(content: str, pattern: str, replace_all: bool = False) -> Tuple[List[Tuple[int, int]], str]:
+def tim_khop(content: str, pattern: str, replace_all: bool = False) -> tuple[list[tuple[int, int]], str]:
     """(các vị trí khớp, tên chiến lược). Rỗng nếu không chiến lược nào khớp."""
     for ten, fn in CHIEN_LUOC:
         if replace_all and ten in TUONG_TU:
@@ -369,7 +368,7 @@ def _can_le(new: str, old: str, doan_khop: str) -> str:
     """
     o_lines = old.split("\n")
     m_lines = doan_khop.split("\n")
-    bang: Dict[str, str] = {}
+    bang: dict[str, str] = {}
     for a, b in zip(o_lines, m_lines):
         if a.strip() and b.strip():
             bang.setdefault(_thut_le(a), _thut_le(b))
@@ -416,7 +415,7 @@ def _goi_y_gan_nhat(content: str, pattern: str, tran: int = 3) -> str:
 
 
 # Đếm số lần sửa hỏng liên tiếp trên cùng file trong một phiên: lần thứ 3 thì bảo đọc lại.
-_HONG: Dict[Tuple[str, str], int] = {}
+_HONG: dict[tuple[str, str], int] = {}
 
 
 def _dem_hong(sid: str, p: Path, tang: bool) -> int:
@@ -487,7 +486,7 @@ def diff_ngan(truoc: str, sau: str, ten: str, tran: int = 4000) -> str:
 # ---------------------------------------------------------------------------------------
 # Kiểm lỗi sau khi sửa
 # ---------------------------------------------------------------------------------------
-def _loi_cu_phap(duoi: str, text: str, ten: str) -> Optional[str]:
+def _loi_cu_phap(duoi: str, text: str, ten: str) -> str | None:
     """Lỗi cú pháp của `text` theo loại file, hoặc None. Chỉ các loại kiểm được trong tiến trình."""
     try:
         if duoi == ".py":
@@ -517,7 +516,7 @@ def _loi_cu_phap(duoi: str, text: str, ten: str) -> Optional[str]:
     return None
 
 
-def _loi_node(text: str) -> Optional[str]:
+def _loi_node(text: str) -> str | None:
     node = shutil.which("node")
     if not node:
         return None
@@ -607,7 +606,7 @@ def _bieu_thuc(pattern: str):
 
 
 def _tim_rg(rg: str, goc: Path, pattern: str, target: str, glob: str, context: int,
-            hien_thi: Path) -> Optional[List[str]]:
+            hien_thi: Path) -> list[str] | None:
     """Tìm bằng ripgrep, chạy TỪ `hien_thi` để rg tự in đường dẫn tương đối. None nếu rg lỗi
     (để rơi về bản Python)."""
     try:
@@ -645,8 +644,7 @@ def _tim_rg(rg: str, goc: Path, pattern: str, target: str, glob: str, context: i
     for x in (r.stdout or "").splitlines():
         if not x:
             continue
-        if x.startswith("./"):
-            x = x[2:]
+        x = x.removeprefix("./")
         if os.sep == "\\":
             dau, sep, duoi = x.partition(":") if target != "files" else (x, "", "")
             x = dau.replace("\\", "/") + sep + duoi
@@ -663,7 +661,7 @@ def _tim_rg(rg: str, goc: Path, pattern: str, target: str, glob: str, context: i
 
 
 def tim(goc: Path, pattern: str, target: str = "content", file_glob: str = "", limit: int = TIM_MAC_DINH,
-        offset: int = 0, context: int = 0, hien_thi: Optional[Path] = None, dung_rg: bool = True) -> str:
+        offset: int = 0, context: int = 0, hien_thi: Path | None = None, dung_rg: bool = True) -> str:
     """Tìm theo nội dung (`content`) hoặc theo tên file (`files`). Trả chữ cho model đọc.
 
     `hien_thi`: gốc để in đường dẫn tương đối (đường dẫn model dùng lại được với tool khác).
@@ -693,7 +691,7 @@ def tim(goc: Path, pattern: str, target: str = "content", file_glob: str = "", l
     else:
         return f"ERROR: không có thư mục hay file '{goc.name}'."
 
-    ket_qua: Optional[List[str]] = None
+    ket_qua: list[str] | None = None
     rg = shutil.which("rg") if dung_rg else None
     if rg and files_goc is None:
         ket_qua = _tim_rg(rg, goc, pattern, target, file_glob, context, hien_thi)

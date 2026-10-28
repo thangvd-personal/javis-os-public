@@ -11,11 +11,10 @@ import math
 import re
 from collections.abc import Mapping
 
-from starlette.requests import Request
-
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_blobs import MAX_ASSET_BYTES
+from starlette.requests import Request
 
 MAX_BODY_BYTES = 2 * MAX_ASSET_BYTES
 MAX_JSON_DEPTH = 32
@@ -109,9 +108,7 @@ def _json_tree(value):
                 visit(child, depth + 1)
         elif type(item) is str:
             item.encode("utf-8", errors="strict")
-        elif item is not None and type(item) not in (bool, int, float):
-            _invalid()
-        elif type(item) is float and not math.isfinite(item):
+        elif item is not None and type(item) not in (bool, int, float) or type(item) is float and not math.isfinite(item):
             _invalid()
     visit(value, 0)
 

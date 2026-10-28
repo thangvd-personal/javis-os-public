@@ -11,7 +11,7 @@ Chạy:
 """
 import re
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 APP = (ROOT / "dashboard" / "app.js").read_text(encoding="utf-8")
 CONSOLE = (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8")
@@ -39,7 +39,7 @@ check("/files/read trả thêm khoá 'abs'", '"abs": str(f)' in _read)
 
 # --- app.js: trạng thái ghim ------------------------------------------------
 check("có state pinnedNote riêng, không nhét chung pendingAttachments",
-      re.search(r"^let pinnedNote = null;", APP, re.M) is not None)
+      re.search(r"^let pinnedNote = null;", APP, re.MULTILINE) is not None)
 check("mở API JavisPin cho console.js gọi",
       "window.JavisPin = JavisPin;" in APP
       and re.search(r"const JavisPin = \{[\s\S]*?get\(\)[\s\S]*?set\(note\)[\s\S]*?clear\(\)", APP) is not None)

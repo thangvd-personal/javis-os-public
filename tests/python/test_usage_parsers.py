@@ -5,14 +5,13 @@
 Khong pytest, khong cham mang. Exit code != 0 neu fail. Tu co lap temp dir cho phan
 co doc file (Codex).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
 
-import usage_parsers as up  # noqa: E402
+import usage_parsers as up
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 

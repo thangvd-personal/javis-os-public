@@ -1,9 +1,10 @@
 """Release must refresh Codex even when the Docker install layer was cached."""
-from _paths import ROOT
 import os
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
+
+from _paths import ROOT
 
 docker = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 workflow = (ROOT / ".github/workflows/docker-publish.yml").read_text(encoding="utf-8")

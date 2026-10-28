@@ -3,7 +3,6 @@
 Chạy:
     python tests/run.py tool_reliability
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
@@ -11,12 +10,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tool-reliability-")
 
-import engine  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-from claude_cli import CodexCLI  # noqa: E402
+import engine
+import mcp_client
+import mcp_hub
+from claude_cli import CodexCLI
 
 fails = []
 

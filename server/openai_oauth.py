@@ -35,19 +35,19 @@ khác (máy tự `codex login`) thì KHÔNG đụng vào; refresh hỏng thì KH
 tự refresh khi nó là bên duy nhất giữ mã, vì tạo ảnh và giọng nói cũng ăn token này và
 không đi qua Codex CLI.
 """
-import os
-import time
-import json
 import base64
 import hashlib
+import json
+import os
 import secrets
-import httpx
+import time
 from pathlib import Path
-from urllib.parse import urlencode, urlparse, parse_qs
+from urllib.parse import parse_qs, urlencode, urlparse
 
-import config as cfgmod
-import localefmt
 import codex_models
+import config as cfgmod
+import httpx
+import localefmt
 
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 AUTH_BASE = "https://auth.openai.com"

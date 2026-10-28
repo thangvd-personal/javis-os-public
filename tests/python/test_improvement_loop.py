@@ -1,9 +1,8 @@
 """Self-learning loop over fake engines: shape, evidence boundary, baseline rule, fallback, paired report."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 
 import improvement_loop as L
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def cases(n_tuning=4, n_qual=6):

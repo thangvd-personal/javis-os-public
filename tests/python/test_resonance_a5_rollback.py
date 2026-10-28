@@ -11,7 +11,6 @@ Nạp `server/resonance*.py` của commit phát hành 0.108.0 (`c4fb614d` trên 
 5. nâng lại: snapshot đã có thì không chép lại.
 Engine giả, không model thật. Máy không có lịch sử git của commit đó thì in SKIP; trên CI (biến CI) thì ĐỎ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import importlib.util
@@ -22,17 +21,19 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a5rb-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_agent as RA
+import _resonance_team as T
+import resonance as R
+import resonance_store as RS
 
 sys.path.insert(0, str(ROOT / "tools"))
-import resonance_restore_pre_a5 as RESTORE  # noqa: E402
+import resonance_restore_pre_a5 as RESTORE
 
 OLD_SHA = "c4fb614d30b63e592e66a8f943cf2749bb33a412"
 _fails = []

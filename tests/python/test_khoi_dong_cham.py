@@ -21,12 +21,13 @@ Chuỗi nhân quả, đọc từ dưới lên:
 Ba chỗ đều sai nên test khoá cả ba: dò song song có trần từng nguồn (bước 3), nới trần chờ
 khởi động (bước 4), và dịch lỗi ra câu chỉ được việc phải làm (bước 5).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import re
 import sys
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -37,8 +38,8 @@ def check(name, cond):
         _fails.append(name)
 
 
-import mcp_client  # noqa: E402
-import claude_sdk_engine as eng  # noqa: E402
+import claude_sdk_engine as eng
+import mcp_client
 
 
 def _conn(i, **kw):

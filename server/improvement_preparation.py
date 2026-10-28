@@ -8,15 +8,22 @@ from contextlib import closing
 import improvement_store as IM
 from improvement_claude import ClaudeTrialAdapter
 from improvement_comparison_plans import ExperimentPlans
-from improvement_experiments import _identifier, _generation
+from improvement_execution_limits import MAX_ATTEMPTS_PER_TRIAL, MAX_PREPARATION_TRIALS
 from improvement_experiment_protocol import _digest
-from improvement_preparation_lineage import load_preparation_lineage, current_preparation_fences
-from improvement_preparation_protocol import PINS, preparation_schedule, validate_preparation_request_v3
+from improvement_experiments import _generation, _identifier
+from improvement_preparation_lineage import (
+    current_preparation_fences,
+    load_preparation_lineage,
+)
+from improvement_preparation_protocol import (
+    PINS,
+    preparation_schedule,
+    validate_preparation_request_v3,
+)
 from improvement_preparation_records import PreparationRecords
 from improvement_trial_admission import AdmittedTrial
 from improvement_trial_records import _brain
-from improvement_trials import _request, TERMINAL
-from improvement_execution_limits import MAX_PREPARATION_TRIALS, MAX_ATTEMPTS_PER_TRIAL
+from improvement_trials import TERMINAL, _request
 
 
 class PreparationService:

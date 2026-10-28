@@ -12,11 +12,12 @@ File này GỌI THẬT endpoint ở chế độ public và khoá lại:
   3. Client cũ còn gửi `setup_token` thì vẫn chạy, không lỗi.
   4. Giao diện và máy chủ không còn dấu vết mã: không ô nhập, không in ra log, file mã cũ bị dọn.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 state = tempfile.mkdtemp(prefix="javis-setup-")
 os.environ["JAVIS_STATE_DIR"] = state
@@ -24,10 +25,10 @@ os.environ["BRAINS_DIR"] = str(Path(state) / "brains")
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(state) / "sessions.db")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"      # giả lập deploy public
 
-import main  # noqa: E402
-import config as cfgmod  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import config as cfgmod
+import main
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 fails = []
 

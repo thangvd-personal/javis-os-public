@@ -11,21 +11,22 @@ Kho thật (resonance.sqlite3, team.sqlite3, kanban, phiên chat tạm), đồng
 - `say` luôn qua bộ phán xử; thiếu bộ phán xử thì `silent` (`judge_unavailable`), không gửi;
 - điều phối lý do lớp 3 cho phần đăng ký; nhắc chờ chủ một lần sau 24 giờ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-pulse-host-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-pulse-host-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as H  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_ledger as AL
+import agent_pulse as AP
+import agent_pulse_host as H
+import resonance_store as RS
 
 fails = []
 D = 86400.0
@@ -290,7 +291,7 @@ for j in range(3):
 check("quét giới hạn tối đa một lần mỗi ngày mỗi ngữ cảnh", len(eng.calls) == 1, len(eng.calls))
 
 # ═════ say: luôn qua bộ phán xử; thiếu bộ phán xử thì silent, không gửi ═════
-import sys as _sys  # noqa: E402
+import sys as _sys
 
 
 def say_world():
@@ -387,10 +388,10 @@ check("tắt Cộng hưởng: lời gọi trực tiếp không tự bật lại 
       is False and AP.row(st, k, "team:tH")["state"] == "off")
 
 # Nghĩa vụ không bị lớp 3 làm chậm: bộ chạy nhóm thật, engine giả, agent đang tạm dừng / ngủ đông / tắt nhịp.
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 
 class TeamFake:
@@ -528,8 +529,8 @@ BR = (TEMP / "brain-main").resolve()
 (BR / "agents").mkdir(parents=True)
 (BR / "agents" / "viet.md").write_text("---\nname: Viết\nrole: Viết bài\n---\nBạn là Viết.\n", encoding="utf-8",
                                        newline="\n")
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 built = []
 

@@ -22,24 +22,23 @@ Errors from github_repos are already localized and safe to show (no token in the
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, List, Optional
 
+import github_repos
 from fastapi import APIRouter, Form, Query
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
-
-import github_repos
 
 
 @dataclass
 class GitHubDeps:
     brain_root: Callable[[str], str]
     # Names of jobs still running on a repo (phase G3 fills this in); removal refuses while any is listed.
-    busy_jobs: Optional[Callable[[str, str], List[str]]] = None
+    busy_jobs: Callable[[str, str], list[str]] | None = None
 
 
-_DEPS: Optional[GitHubDeps] = None
+_DEPS: GitHubDeps | None = None
 
 
 def _err(msg: str, status: int = 400):

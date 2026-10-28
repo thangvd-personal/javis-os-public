@@ -18,8 +18,6 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Tuple
-
 
 # Ngôn ngữ dùng khi không biết gì cả. Cố ý là tiếng Việt: đây là brain của người Việt, và
 # rơi về tiếng Việt thì tệ nhất cũng chỉ là trả lời sai ngôn ngữ cho một người nước ngoài,
@@ -45,14 +43,14 @@ class Lang:
     # --- dò ngôn ngữ ---
     # Hư từ để chấm điểm văn bản chữ Latin. Với tiếng Việt phải có CẢ dạng bỏ dấu, vì người
     # Việt gõ không dấu rất nhiều ("toi muon xem doanh thu").
-    stopwords: Tuple[str, ...] = ()
+    stopwords: tuple[str, ...] = ()
     # Cách người dùng YÊU CẦU ngôn ngữ này, viết bằng bất kỳ tiếng nào. Dùng cho mức ưu tiên
     # cao nhất: câu lệnh thẳng trong lượt ("trả lời bằng tiếng Anh").
-    request_words: Tuple[str, ...] = ()
+    request_words: tuple[str, ...] = ()
 
     # --- giọng nói ---
     stt: str = ""                 # mã cho Whisper. "" = để Whisper tự dò.
-    tts: Dict[str, str] = field(default_factory=dict)   # nhà cung cấp -> giọng
+    tts: dict[str, str] = field(default_factory=dict)   # nhà cung cấp -> giọng
 
     # --- locale (tách khỏi ngôn ngữ, xem spec mục 4.6) ---
     tz_default: str = "UTC"
@@ -67,12 +65,12 @@ class Lang:
     # Một câu viết bằng CHÍNH ngôn ngữ này. Model mạnh không cần, nhưng model nhỏ (Groq,
     # Ollama Cloud) trôi theo ngôn ngữ của prompt, và prompt của Javis là tiếng Việt.
     nudge: str = ""
-    weekdays: Tuple[str, ...] = ()          # thứ 2 -> chủ nhật, đúng thứ tự datetime.weekday()
+    weekdays: tuple[str, ...] = ()          # thứ 2 -> chủ nhật, đúng thứ tự datetime.weekday()
     clock_template: str = ""                # chỗ điền: {hm} {weekday} {date} {tz}
     lang_directive: str = ""                # câu nói rõ phải trả lời bằng ngôn ngữ nào
 
 
-LANGS: Dict[str, Lang] = {
+LANGS: dict[str, Lang] = {
     "vi": Lang(
         code="vi",
         native="Tiếng Việt",
@@ -213,7 +211,7 @@ def chon_ban_dich(code: str, ban: dict) -> str:
     return next((v for v in ban.values() if v), "")
 
 
-def ma_list() -> Tuple[str, ...]:
+def ma_list() -> tuple[str, ...]:
     return tuple(LANGS.keys())
 
 

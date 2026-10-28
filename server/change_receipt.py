@@ -21,16 +21,15 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import localefmt
 
 MAX_ITEMS = 6
 KINDS = ("reminder", "loop", "agent", "workflow", "skill")
-_NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.M)
+_NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
 
-def _mtimes(folder: Path, pattern: str) -> Dict[str, int]:
+def _mtimes(folder: Path, pattern: str) -> dict[str, int]:
     out = {}
     if not folder.is_dir():
         return out
@@ -47,7 +46,7 @@ def _mtimes(folder: Path, pattern: str) -> Dict[str, int]:
     return out
 
 
-def _pending_reminders(root: Path) -> Dict[str, str]:
+def _pending_reminders(root: Path) -> dict[str, str]:
     try:
         d = json.loads((root / "Javis" / "reminders.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -81,13 +80,13 @@ def _title(root: Path, kind: str, slug: str) -> str:
     return (m.group(1).strip().strip("\"'") if m else slug)[:120]
 
 
-def diff(before: Optional[dict], brain_root) -> List[dict]:
+def diff(before: dict | None, brain_root) -> list[dict]:
     """[{kind, id, title, act: new|updated|removed}] for the turn, at most MAX_ITEMS."""
     if not before:
         return []
     root = Path(brain_root)
     after = snapshot(root)
-    items: List[dict] = []
+    items: list[dict] = []
     for kind in KINDS:
         old, new = before.get(kind) or {}, after.get(kind) or {}
         for key in new:
@@ -103,7 +102,7 @@ def diff(before: Optional[dict], brain_root) -> List[dict]:
     return items[:MAX_ITEMS]
 
 
-def receipt_block(items: List[dict], brain_key: str) -> str:
+def receipt_block(items: list[dict], brain_key: str) -> str:
     gon = [{"kind": i["kind"], "id": str(i["id"])[:120], "title": str(i.get("title") or "")[:120],
             "act": i["act"] if i.get("act") in ("new", "updated", "removed") else "updated"} for i in items]
     data = {"brain": str(brain_key or ""), "items": gon}
@@ -114,7 +113,7 @@ _KIND_VI = {"reminder": "lịch", "loop": "việc lặp", "agent": "cộng sự"
 _KIND_EN = {"reminder": "schedule", "loop": "loop", "agent": "partner", "workflow": "workflow", "skill": "skill"}
 
 
-def receipt_text(items: List[dict]) -> str:
+def receipt_text(items: list[dict]) -> str:
     """Plain line under the hidden block, for channels without the block (Telegram) and screen readers."""
     parts = []
     for i in items:

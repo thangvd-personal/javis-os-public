@@ -6,10 +6,11 @@ Không model nào được gọi: chốt chặn làm test DỪNG NGAY nếu có 
 phán xử). Kiểm: vòng nhịp dựng bộ phán xử, lý do related_review/wait_unblocked có người phục vụ, hàm gửi của bộ phán xử
 đăng tin chủ động đúng ngữ cảnh, mục "judge" của trang nhịp không lỗi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-t3-int-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
@@ -17,10 +18,9 @@ BR = Path(tempfile.mkdtemp(prefix="javis-t3-int-brain-"))
 (BR / "agents").mkdir()
 (BR / "agents" / "lan.md").write_text("---\nname: Lan\nrole: Trợ lý\n---\nBạn là Lan.\n", encoding="utf-8", newline="\n")
 
-import main  # noqa: E402
-import agent_judge  # noqa: E402
-import agent_pulse_host  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_pulse_host
+import main
+import resonance_store as RS
 
 fails = []
 
@@ -75,10 +75,11 @@ check("hàm gửi bỏ qua bản nháp rỗng", main._judge_send({"agent_key": l
                                                        "send") is None)
 
 # ═════ phần L: lượt xem xét reaction, mục bài học, hạn mức, bộ gửi riêng ═════
-import asyncio  # noqa: E402
-import agent_budget  # noqa: E402
-import agent_ledger  # noqa: E402
-import agent_review  # noqa: E402
+import asyncio
+
+import agent_budget
+import agent_ledger
+import agent_review
 
 check("lý do reaction_review có hàm phục vụ của phần L", "reaction_review" in agent_pulse_host._REASON_HANDLERS)
 check("trang nhịp có mục 'lessons' của phần L (chữ ký fn(store, agent_key)), không lỗi",

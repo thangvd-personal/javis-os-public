@@ -36,13 +36,12 @@ import sys
 import time
 from pathlib import Path
 
-import yaml
-
 import fastyaml
 import localefmt
 import pack_install
 import packs
 import plugins_host
+import yaml
 from config import STATE_DIR
 
 STAGING = STATE_DIR / "plugins-staging"

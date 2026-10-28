@@ -12,12 +12,13 @@ Ba nhóm ý được canh:
   3. CÁCH LY: ba bot khác lĩnh vực không đọc được ca, bài học hay hồ sơ vai của nhau, và ngưỡng của
      nhóm này không đổi nhóm kia.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-decide-")
 try:
@@ -25,8 +26,8 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
+import chatbot_reply_policy as rp
+import chatbot_reply_policy_store as st
 
 _fails = []
 
@@ -137,7 +138,6 @@ d = run(rp.decide(ev(Q, ts=NOW + 4), P, store=st, ask=None, doc_search=docs_yes,
 check("chưa nối model: im", d.verdict == "silent" and d.silence_code == "policy_error")
 old_t = rp.JUDGE_TIMEOUT_S
 rp.JUDGE_TIMEOUT_S = 0.05
-import inspect  # noqa: E402
 _orig = rp.run_judge
 
 
@@ -177,7 +177,8 @@ check("tin nối tiếp sau lượt bot: level possible, hỏi model, không đ�
 
 # Hạn mức tự nói đã gỡ (0.85.5, chủ 2026-10-07): bot không còn bộ đếm nào, và runtime không truyền
 # rate_check nữa. `decide` vẫn nhận rate_check (tuỳ chọn) nên phần dưới vẫn canh đúng hợp đồng đó.
-import chatbot_tu_dong as td  # noqa: E402
+import chatbot_tu_dong as td
+
 check("không còn bộ đếm hạn mức tự nói", not hasattr(td, "duoc_tra_loi") and not hasattr(td, "TRAN_NHOM_GIO"))
 check("runtime không truyền rate_check cho bộ phán xử nữa",
       "rate_check=" not in (SERVER / "chatbot_runtime.py").read_text(encoding="utf-8"))
@@ -545,8 +546,9 @@ rp.reset_runtime_state()
 # ============================================================
 # 10. Soạn hồ sơ vai thất bại thì lùi, không thử lại mỗi 5 phút
 # ============================================================
-import time as _time  # noqa: E402
-import chatbot_runtime as _crt  # noqa: E402
+import time as _time
+
+import chatbot_runtime as _crt
 
 
 async def _hong(prompt, purpose=""):

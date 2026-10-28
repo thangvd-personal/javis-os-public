@@ -1,6 +1,4 @@
 """M0 immutable improvement history uses the real shared SQLite store, without engines."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import hashlib
 import importlib.util
 import os
@@ -13,12 +11,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="imp-store-"))
 os.environ["JAVIS_STATE_DIR"] = str(TEST_ROOT / "state")
 os.environ["BRAINS_DIR"] = str(TEST_ROOT / "brains")
 os.environ["OBSIDIAN_VAULT_PATH"] = str(TEST_ROOT / "vault")
 
-import resonance_store as RS  # noqa: E402
+import resonance_store as RS
 
 if importlib.util.find_spec("improvement_store"):
     import improvement_store as IM

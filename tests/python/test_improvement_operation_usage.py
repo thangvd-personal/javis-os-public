@@ -1,16 +1,15 @@
 """Genuine role identity uses the existing turn/ledger/usage pipeline, without Trials."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import unittest
 
-import test_improvement_usage as fixtures
-from agent_ledger import CallLedger
-import resonance_store as RS
-import turn_context as TC
-import usage_store as US
-import usage_index as UI
 import improvement_usage as IU
+import resonance_store as RS
+import test_improvement_usage as fixtures
+import turn_context as TC
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
 
 
 def execution(operation="operation-1", *, role="improver", **changes):

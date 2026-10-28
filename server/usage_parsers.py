@@ -17,11 +17,13 @@ mau so dung de tinh "token moi luot", tuc dung thu ma phan tiet kiem ngu canh ta
 """
 from __future__ import annotations
 
-import localefmt
+import hashlib
 import json
 import os
-import hashlib
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
+
+import localefmt
+
 
 # Múi giờ để cắt NGÀY của thống kê. Đọc từ cấu hình qua `localefmt`, KHÔNG còn là hằng số.
 #
@@ -144,7 +146,7 @@ def _parse_ts(s: str):
     try:
         dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return int(dt.timestamp()), dt.astimezone(_tz()).strftime("%Y-%m-%d")
     except Exception:
         return None

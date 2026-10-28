@@ -13,7 +13,6 @@ that walks hour by hour, one restart in the middle):
 
 Fail fast if anything tries to build a real engine: JAVIS_NO_REAL_TEAM_ENGINE=1 and the runner only gets the fake.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -21,6 +20,8 @@ import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 # Day boundaries are local time in the code (budgets per day); pin the zone so the simulated days are the same on
 # every machine (review 0.210.0: Tokyo or Auckland crossed midnight inside "day 1").
@@ -31,16 +32,15 @@ os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-multiday-")
 os.environ["JAVIS_NO_REAL_TEAM_ENGINE"] = "1"
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import mcp_catalog  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_approval  # noqa: E402
-import team_mandate as TM  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_gate  # noqa: E402
-import team_store  # noqa: E402
+import mcp_catalog
+import mcp_client
+import mcp_hub
+import sessions
+import task_store
+import team_gate
+import team_mandate as TM
+import team_runner as TR
+import team_store
 
 fails = []
 LOG = []
@@ -182,8 +182,9 @@ C = team(B2, "Vận hành", ["ag_tu"], "ag_tu", mode="full")
 r, st, eng = make_runner()
 # Fail fast: the REAL engine factory refuses to build anything in this test (review 0.210.0: comparing the runner's
 # factory with itself proved nothing).
-import main  # noqa: E402
-import team_engine  # noqa: E402
+import main
+import team_engine
+
 real_built = []
 with patch.object(main, "_team_agent_info", side_effect=info):
     _p, _m, real_run = main._team_engine_for(A, "ag_lan", "plan")
@@ -397,7 +398,8 @@ summary = {"opportunities": sum(len(st.opportunities(x["team_id"], limit=500)) f
 print("summary", json.dumps(summary, ensure_ascii=False))
 
 # The pilot's trace export reads this week back, read-only, as the chain the report will use.
-import importlib.util  # noqa: E402
+import importlib.util
+
 spec = importlib.util.spec_from_file_location("trace_export", ROOT / "pilot" / "team-multiday" / "trace_export.py")
 te = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(te)

@@ -28,7 +28,8 @@ import hashlib
 import re
 import threading
 import time
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import github_gate
 import github_repos
@@ -47,14 +48,14 @@ FIX_MARKER = "[Javis GitHub]"
 
 Notify = Callable[[str, str, bool], Awaitable[Any]]
 StartTurn = Callable[[str, str], Awaitable[bool]]
-SessionInfo = Callable[[str], Dict[str, Any]]
+SessionInfo = Callable[[str], dict[str, Any]]
 # review(prompt, provider) -> raw text of a text-only turn on THAT provider (phase G5, spec section 10).
 Review = Callable[[str, str], Awaitable[str]]
-_notify: Optional[Notify] = None
-_start_turn: Optional[StartTurn] = None
-_session_info: Optional[SessionInfo] = None
-_review: Optional[Review] = None
-_reviewers: Optional[Callable[[], List[str]]] = None
+_notify: Notify | None = None
+_start_turn: StartTurn | None = None
+_session_info: SessionInfo | None = None
+_review: Review | None = None
+_reviewers: Callable[[], list[str]] | None = None
 _brain_root: Callable[[str], str] = lambda b: b
 REVIEW_DIFF_MAX = 60000
 REVIEW_TIMEOUT_S = 600
@@ -63,8 +64,8 @@ LESSONS_MAX = 30
 _FAMILY = {"anthropic-cli": "claude", "anthropic-api": "claude", "anthropic-compat": "claude",
            "openai-oauth": "openai", "openai": "openai"}
 
-_last_gate: Dict[str, str] = {}
-_running: Dict[str, bool] = {}
+_last_gate: dict[str, str] = {}
+_running: dict[str, bool] = {}
 _lock = threading.Lock()
 
 
@@ -72,10 +73,10 @@ def _c(vi: str, en: str) -> str:
     return localefmt.chu(vi, en)
 
 
-def configure(notify: Optional[Notify] = None, start_turn: Optional[StartTurn] = None,
-              session_info: Optional[SessionInfo] = None, review: Optional[Review] = None,
-              reviewers: Optional[Callable[[], List[str]]] = None,
-              brain_root: Optional[Callable[[str], str]] = None) -> None:
+def configure(notify: Notify | None = None, start_turn: StartTurn | None = None,
+              session_info: SessionInfo | None = None, review: Review | None = None,
+              reviewers: Callable[[], list[str]] | None = None,
+              brain_root: Callable[[str], str] | None = None) -> None:
     global _notify, _start_turn, _session_info, _review, _reviewers, _brain_root
     if notify is not None:
         _notify = notify
@@ -110,7 +111,7 @@ async def _say(sid: str, text: str, ok: bool, once: str = "") -> None:
 # ============================================================
 # Gate (phase G2)
 # ============================================================
-def checks_for(rec: Dict[str, Any], worktree: str) -> List[Dict[str, str]]:
+def checks_for(rec: dict[str, Any], worktree: str) -> list[dict[str, str]]:
     saved = rec.get("checks")
     if isinstance(saved, list):
         return [c for c in saved if isinstance(c, dict) and c.get("run")]
@@ -124,17 +125,17 @@ def fingerprint(worktree: str) -> str:
     return hashlib.sha256(f"{head}\n{status}\n{diff}".encode("utf-8", "replace")).hexdigest()
 
 
-def _base(repo: Dict[str, Any]) -> str:
+def _base(repo: dict[str, Any]) -> str:
     return f"origin/{repo.get('default_branch') or 'main'}"
 
 
-def _has_work(repo: Dict[str, Any]) -> bool:
+def _has_work(repo: dict[str, Any]) -> bool:
     wt = repo["worktree"]
     ahead = github_repos.git_out(["rev-list", "--count", f"{_base(repo)}..HEAD"], wt) or "0"
     return ahead != "0" or github_repos.is_dirty(wt)
 
 
-def _unpushed(repo: Dict[str, Any], row: Dict[str, Any]) -> bool:
+def _unpushed(repo: dict[str, Any], row: dict[str, Any]) -> bool:
     """Something here that GitHub does not have yet (uncommitted edits, or HEAD differs from the pushed commit)."""
     wt = repo["worktree"]
     if github_repos.is_dirty(wt):
@@ -143,7 +144,7 @@ def _unpushed(repo: Dict[str, Any], row: Dict[str, Any]) -> bool:
     return head != (row.get("head_sha") or "") and _has_work(repo)
 
 
-def gate_repo(sid: str, brain: str, repo: Dict[str, Any], force: bool = False) -> Optional[Dict[str, Any]]:
+def gate_repo(sid: str, brain: str, repo: dict[str, Any], force: bool = False) -> dict[str, Any] | None:
     """Run the gate on one attached repo if its worktree changed since the last run. None = nothing to do."""
     wt = repo.get("worktree") or ""
     if not wt:
@@ -184,7 +185,7 @@ def _slug(text: str) -> str:
     return "-".join(s.split("-")[:6])[:40].strip("-")
 
 
-def _identity_env() -> Dict[str, str]:
+def _identity_env() -> dict[str, str]:
     conn = github_repos.status()
     login = conn.get("login") or "javis"
     uid = github_repos.user_id()
@@ -196,6 +197,7 @@ def _identity_env() -> Dict[str, str]:
 def commit_all(worktree: str, message: str) -> str:
     """Commit every change in the worktree (respecting .gitignore). Returns HEAD."""
     import subprocess
+
     import winproc
     github_repos.git(["add", "-A"], worktree)
     if github_repos.git_out(["diff", "--cached", "--name-only"], worktree):
@@ -209,7 +211,7 @@ def commit_all(worktree: str, message: str) -> str:
     return github_repos.git_out(["rev-parse", "HEAD"], worktree)
 
 
-def _final_branch(sid: str, repo: Dict[str, Any], title: str) -> str:
+def _final_branch(sid: str, repo: dict[str, Any], title: str) -> str:
     """`javis/<slug>-<id6>` decided at the first push (spec 6); after that the branch never changes."""
     wt = repo["worktree"]
     cur = github_repos.git_out(["rev-parse", "--abbrev-ref", "HEAD"], wt)
@@ -222,7 +224,7 @@ def _final_branch(sid: str, repo: Dict[str, Any], title: str) -> str:
     return new if r.returncode == 0 else cur
 
 
-def push(repo: Dict[str, Any], branch: str) -> Tuple[str, bool]:
+def push(repo: dict[str, Any], branch: str) -> tuple[str, bool]:
     """Push HEAD to origin/<branch>. Returns (sha, pushed_now). Never forces."""
     wt = repo["worktree"]
     sha = github_repos.git_out(["rev-parse", "HEAD"], wt)
@@ -242,7 +244,7 @@ def push(repo: Dict[str, Any], branch: str) -> Tuple[str, bool]:
     return sha, True
 
 
-def pr_body(info: Dict[str, Any], report: Dict[str, Any], sid: str) -> str:
+def pr_body(info: dict[str, Any], report: dict[str, Any], sid: str) -> str:
     lines = ["Opened by Javis from a chat.", ""]
     if info.get("task"):
         lines += ["**Task**", "", "> " + str(info["task"])[:1500].replace("\n", "\n> "), ""]
@@ -268,7 +270,7 @@ def pr_body(info: Dict[str, Any], report: Dict[str, Any], sid: str) -> str:
     return "\n".join(lines)
 
 
-def ensure_pr(repo: Dict[str, Any], branch: str, title: str, body: str) -> Dict[str, Any]:
+def ensure_pr(repo: dict[str, Any], branch: str, title: str, body: str) -> dict[str, Any]:
     gh = github_repos.client()
     fn = repo["full_name"]
     pr = gh.find_pull(fn, branch)
@@ -277,14 +279,14 @@ def ensure_pr(repo: Dict[str, Any], branch: str, title: str, body: str) -> Dict[
     return gh.create_pull(fn, branch, repo.get("default_branch") or "main", title[:120] or branch, body, draft=True)
 
 
-def _session(sid: str) -> Dict[str, Any]:
+def _session(sid: str) -> dict[str, Any]:
     try:
         return dict((_session_info(sid) if _session_info else {}) or {})
     except Exception:
         return {}
 
 
-def ship(sid: str, brain: str, repo: Dict[str, Any], report: Dict[str, Any]) -> Dict[str, Any]:
+def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
     """Gate passed: commit, push, open or reuse the PR, record the pushed commit as CI pending."""
     fn = repo["full_name"]
     info = _session(sid)
@@ -320,7 +322,7 @@ def ship(sid: str, brain: str, repo: Dict[str, Any], report: Dict[str, Any]) -> 
 # ============================================================
 # Fix rounds
 # ============================================================
-async def request_fix(row: Dict[str, Any], why: str, details: str, key: str) -> bool:
+async def request_fix(row: dict[str, Any], why: str, details: str, key: str) -> bool:
     """Ask the chat's engine to fix something, as the next turn of that chat. Counted; stuck past the limit."""
     sid, fn = row["sid"], row["full_name"]
     if not st().mark_step("fix:" + key):
@@ -362,14 +364,14 @@ async def request_fix(row: Dict[str, Any], why: str, details: str, key: str) -> 
     return started
 
 
-def _pr_tail(row: Dict[str, Any]) -> str:
+def _pr_tail(row: dict[str, Any]) -> str:
     return f"\n{row['pr_url']}" if row.get("pr_url") else ""
 
 
 # ============================================================
 # after_turn
 # ============================================================
-async def after_turn(sid: str, brain: str, user_message: str = "") -> List[Dict[str, Any]]:
+async def after_turn(sid: str, brain: str, user_message: str = "") -> list[dict[str, Any]]:
     """Called after every saved web turn. Cheap when the chat has no GitHub repo (one registry read)."""
     try:
         repos = await asyncio.to_thread(github_repos.session_repos, sid, brain)
@@ -392,7 +394,7 @@ async def after_turn(sid: str, brain: str, user_message: str = "") -> List[Dict[
     return [x for x in out if x]
 
 
-async def _after_turn_repo(sid: str, brain: str, repo: Dict[str, Any], user_message: str = "") -> Optional[Dict[str, Any]]:
+async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_message: str = "") -> dict[str, Any] | None:
     fn = repo["full_name"]
     row = st().get(sid, fn) or {}
     if not await asyncio.to_thread(_unpushed, repo, row):
@@ -442,14 +444,14 @@ async def _after_turn_repo(sid: str, brain: str, repo: Dict[str, Any], user_mess
     return report
 
 
-def _fingerprint_short(repo: Dict[str, Any]) -> str:
+def _fingerprint_short(repo: dict[str, Any]) -> str:
     try:
         return fingerprint(repo["worktree"])[:12]
     except Exception:
         return str(time.time())
 
 
-def _fail_output(report: Dict[str, Any]) -> str:
+def _fail_output(report: dict[str, Any]) -> str:
     out = []
     for r in report.get("failed") or []:
         out.append(f"\nLệnh đỏ: `{r['run']}`\n```\n{_redact(r.get('output') or '')[-LOG_TAIL:]}\n```")
@@ -471,8 +473,8 @@ _BAD = {"failure", "timed_out", "action_required", "startup_failure"}
 _OK = {"success", "neutral"}
 
 
-def normalize_runs(runs: List[Dict[str, Any]], statuses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def normalize_runs(runs: list[dict[str, Any]], statuses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for r in runs:
         out.append({"name": r.get("name") or "", "status": r.get("status") or "",
                     "conclusion": r.get("conclusion") or "", "url": r.get("html_url") or r.get("details_url") or "",
@@ -483,13 +485,13 @@ def normalize_runs(runs: List[Dict[str, Any]], statuses: List[Dict[str, Any]]) -
                     "conclusion": {"success": "success", "failure": "failure", "error": "failure"}.get(state, ""),
                     "url": s.get("target_url") or "", "job_id": 0})
     # The same check can appear once per rerun: keep the last one per name.
-    seen: Dict[str, Dict[str, Any]] = {}
+    seen: dict[str, dict[str, Any]] = {}
     for x in out:
         seen[x["name"]] = x
     return list(seen.values())
 
 
-def aggregate(items: List[Dict[str, Any]], required: Optional[List[str]]) -> str:
+def aggregate(items: list[dict[str, Any]], required: list[str] | None) -> str:
     """CI verdict of ONE commit: none | running | red | cancelled | no_ci | green (spec 9.2-9.3)."""
     if required:
         by = {x["name"]: x for x in items}
@@ -509,10 +511,10 @@ def aggregate(items: List[Dict[str, Any]], required: Optional[List[str]]) -> str
 
 _INFRA = re.compile(r"(runner has received a shutdown signal|lost communication with the server|"
                     r"The operation was canceled|ECONNRESET|ETIMEDOUT|rate limit|503 Service Unavailable|"
-                    r"Could not resolve host|No space left on device|exit code 143)", re.I)
+                    r"Could not resolve host|No space left on device|exit code 143)", re.IGNORECASE)
 
 
-def _ci_snapshot(row: Dict[str, Any]) -> Dict[str, Any]:
+def _ci_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     """Read GitHub for a row: the PR, the checks of its CURRENT head, the base branch's checks when needed."""
     gh = github_repos.client()
     fn = row["full_name"]
@@ -528,7 +530,7 @@ def _ci_snapshot(row: Dict[str, Any]) -> Dict[str, Any]:
     return {"pr": pr, "head": head, "items": items, "required": required}
 
 
-def _failed_logs(row: Dict[str, Any], failed: List[Dict[str, Any]]) -> str:
+def _failed_logs(row: dict[str, Any], failed: list[dict[str, Any]]) -> str:
     gh = github_repos.client()
     parts = []
     for f in failed[:3]:
@@ -538,7 +540,7 @@ def _failed_logs(row: Dict[str, Any], failed: List[Dict[str, Any]]) -> str:
     return "\n\n".join(parts)
 
 
-def _base_also_red(row: Dict[str, Any], failed_names: List[str]) -> bool:
+def _base_also_red(row: dict[str, Any], failed_names: list[str]) -> bool:
     """The same checks fail on the base branch's head: not this chat's failure (spec 9.3)."""
     try:
         gh = github_repos.client()
@@ -552,7 +554,7 @@ def _base_also_red(row: Dict[str, Any], failed_names: List[str]) -> bool:
         return False
 
 
-async def check_row(row: Dict[str, Any]) -> Dict[str, Any]:
+async def check_row(row: dict[str, Any]) -> dict[str, Any]:
     """One watcher pass over one row. Returns the updated row."""
     sid, fn = row["sid"], row["full_name"]
     if row.get("integ") == "merged":
@@ -613,7 +615,7 @@ async def check_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return await on_green(row, pr)
 
 
-async def on_red(row: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, Any]:
+async def on_red(row: dict[str, Any], snap: dict[str, Any]) -> dict[str, Any]:
     sid, fn = row["sid"], row["full_name"]
     failed = [x for x in snap["items"] if x["conclusion"] in _BAD]
     if snap.get("required"):
@@ -648,7 +650,7 @@ async def on_red(row: Dict[str, Any], snap: Dict[str, Any]) -> Dict[str, Any]:
     return st().get(sid, fn) or row
 
 
-def _merge_blockers(row: Dict[str, Any], pr: Dict[str, Any]) -> List[str]:
+def _merge_blockers(row: dict[str, Any], pr: dict[str, Any]) -> list[str]:
     """Why Javis must not merge this PR on its own right now (spec 11.1). Empty list = it may."""
     out = []
     rec = github_repos.find(row.get("brain") or "", row["full_name"]) or {}
@@ -668,10 +670,10 @@ def _merge_blockers(row: Dict[str, Any], pr: Dict[str, Any]) -> List[str]:
     return out
 
 
-_MERGE_LOCKS: Dict[str, asyncio.Lock] = {}
+_MERGE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-async def merge_now(row: Dict[str, Any], pr: Dict[str, Any], by_person: bool = False) -> Dict[str, Any]:
+async def merge_now(row: dict[str, Any], pr: dict[str, Any], by_person: bool = False) -> dict[str, Any]:
     """Merge the PR at exactly the head CI was green on. One merge at a time per repo (spec 11.1 queue)."""
     sid, fn, head = row["sid"], row["full_name"], row["head_sha"]
     lock = _MERGE_LOCKS.setdefault(fn.lower(), asyncio.Lock())
@@ -721,7 +723,7 @@ async def merge_now(row: Dict[str, Any], pr: Dict[str, Any], by_person: bool = F
         return st().get(sid, fn) or row
 
 
-async def _conflict(row: Dict[str, Any]) -> Dict[str, Any]:
+async def _conflict(row: dict[str, Any]) -> dict[str, Any]:
     sid, fn = row["sid"], row["full_name"]
     reason = _c("PR bị xung đột với nhánh chính, cần làm lại.", "The PR conflicts with the base branch.")
     st().update(sid, fn, integ="conflict", stuck_reason=reason)
@@ -734,7 +736,7 @@ async def _conflict(row: Dict[str, Any]) -> Dict[str, Any]:
     return st().get(sid, fn) or row
 
 
-def _restart_branch(row: Dict[str, Any]) -> None:
+def _restart_branch(row: dict[str, Any]) -> None:
     """After a merge, move the chat's worktree to a fresh branch from the updated base, when nothing is left on it.
 
     The next job then starts clean instead of stacking on a branch whose history was squashed into the base.
@@ -757,7 +759,7 @@ def _restart_branch(row: Dict[str, Any]) -> None:
         pass
 
 
-async def on_green(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
+async def on_green(row: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
     """CI green on the current head: ready, and merged right away when nothing stands in the way (spec 11.1)."""
     sid, fn = row["sid"], row["full_name"]
     if pr.get("mergeable") is None:
@@ -794,7 +796,7 @@ async def on_green(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
-async def on_no_ci(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
+async def on_no_ci(row: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
     """No check ran on the commit. Never green: ready to merge by hand only (spec 17, proposal)."""
     sid, fn = row["sid"], row["full_name"]
     if pr.get("mergeable") is False:
@@ -808,7 +810,7 @@ async def on_no_ci(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
     return st().get(sid, fn) or row
 
 
-async def on_merged(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
+async def on_merged(row: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
     """The PR was merged on GitHub (by a person, or by Javis on an earlier tick)."""
     sid, fn = row["sid"], row["full_name"]
     if row.get("integ") == "merged":
@@ -825,7 +827,7 @@ async def on_merged(row: Dict[str, Any], pr: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
-async def check_post_merge(row: Dict[str, Any]) -> Dict[str, Any]:
+async def check_post_merge(row: dict[str, Any]) -> dict[str, Any]:
     """Checks of the merge commit on the base branch (spec 11.2): what next jobs wait for."""
     sid, fn, sha = row["sid"], row["full_name"], row.get("merged_sha") or ""
     if not sha:
@@ -890,7 +892,7 @@ async def maybe_next(sid: str) -> bool:
     return started
 
 
-def _record_metric(row: Dict[str, Any], outcome: str) -> None:
+def _record_metric(row: dict[str, Any], outcome: str) -> None:
     try:
         st().add_metric(sid=row["sid"], full_name=row["full_name"], engine=row.get("engine") or "",
                         model=row.get("model") or "", first_push_green=int(row.get("fix_rounds") or 0) == 0,
@@ -939,11 +941,11 @@ def pick_reviewer(author_provider: str) -> str:
     return ""
 
 
-def parse_findings(raw: str) -> Optional[List[Dict[str, Any]]]:
+def parse_findings(raw: str) -> list[dict[str, Any]] | None:
     """Findings from a reviewer's answer. None = not readable (counts as no review)."""
     import json
     text = str(raw or "")
-    m = re.search(r"\{.*\}", text, re.S)
+    m = re.search(r"\{.*\}", text, re.DOTALL)
     if not m:
         return None
     try:
@@ -958,14 +960,14 @@ def parse_findings(raw: str) -> Optional[List[Dict[str, Any]]]:
     return out[:10]
 
 
-def _review_diff(row: Dict[str, Any]) -> str:
+def _review_diff(row: dict[str, Any]) -> str:
     wt = row.get("worktree") or ""
     base = f"origin/{row.get('base_branch') or 'main'}"
     diff = github_repos.git_out(["diff", "--no-color", f"{base}...HEAD"], wt)
     return diff[:REVIEW_DIFF_MAX] + ("\n[... diff cắt bớt ...]" if len(diff) > REVIEW_DIFF_MAX else "")
 
 
-async def cross_review(row: Dict[str, Any]) -> Dict[str, Any]:
+async def cross_review(row: dict[str, Any]) -> dict[str, Any]:
     """Review the head commit once with another engine. Findings go back to the author as a fix round."""
     sid, fn, head = row["sid"], row["full_name"], row["head_sha"]
     gate = dict(row.get("gate") or {})
@@ -987,7 +989,7 @@ async def cross_review(row: Dict[str, Any]) -> Dict[str, Any]:
         return row
     gate["review_running"] = True
     st().update(sid, fn, gate=gate)
-    findings: Optional[List[Dict[str, Any]]] = None
+    findings: list[dict[str, Any]] | None = None
     try:
         diff = await asyncio.to_thread(_review_diff, row)
         task = str(_session(sid).get("task") or row.get("title") or "")[:2000]
@@ -1039,7 +1041,7 @@ def lessons_path(brain: str, full_name: str):
     return root / "Javis" / "learned" / "repos" / (full_name.replace("/", "__") + ".md")
 
 
-def read_lessons(brain: str, full_name: str) -> List[str]:
+def read_lessons(brain: str, full_name: str) -> list[str]:
     p = lessons_path(brain, full_name)
     try:
         return [ln[2:].strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.startswith("- ")]
@@ -1063,7 +1065,7 @@ def add_lesson(brain: str, full_name: str, lesson: str) -> bool:
     return True
 
 
-def learn_from_fix(row: Dict[str, Any], failed_before: List[Dict[str, Any]]) -> None:
+def learn_from_fix(row: dict[str, Any], failed_before: list[dict[str, Any]]) -> None:
     """CI went green after fix rounds: write down which checks broke, so the next turn runs them first."""
     brain, fn = row.get("brain") or "", row["full_name"]
     for f in failed_before[:3]:
@@ -1071,7 +1073,7 @@ def learn_from_fix(row: Dict[str, Any], failed_before: List[Dict[str, Any]]) -> 
                               "cho xanh trước khi kết thúc lượt.")
 
 
-def learn_from_gate(brain: str, full_name: str, report: Dict[str, Any]) -> None:
+def learn_from_gate(brain: str, full_name: str, report: dict[str, Any]) -> None:
     for r in (report.get("failed") or [])[:2]:
         add_lesson(brain, full_name, f"Lệnh `{r['run'].splitlines()[0][:120]}` từng đỏ ở máy: chạy nó trước khi "
                                      "kết thúc lượt.")
@@ -1080,9 +1082,9 @@ def learn_from_gate(brain: str, full_name: str, report: Dict[str, Any]) -> None:
 # ============================================================
 # Metrics (phase G5, spec 13.2)
 # ============================================================
-def metrics_summary(full_name: str = "") -> List[Dict[str, Any]]:
+def metrics_summary(full_name: str = "") -> list[dict[str, Any]]:
     """Per engine/model: jobs merged, share green on the first push, average fix rounds, review findings."""
-    agg: Dict[str, Dict[str, Any]] = {}
+    agg: dict[str, dict[str, Any]] = {}
     for m in st().metrics(full_name):
         k = f"{m['engine']}|{m['model']}"
         a = agg.setdefault(k, {"engine": m["engine"], "model": m["model"], "jobs": 0, "first_green": 0,
@@ -1145,13 +1147,13 @@ async def run_watcher() -> None:
 # ============================================================
 # Views
 # ============================================================
-def session_state(sid: str) -> Dict[str, Any]:
+def session_state(sid: str) -> dict[str, Any]:
     rows = st().for_session(sid)
     return {"icon": github_store.icon(rows), "repos": [_row_view(r) for r in rows],
             "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
 
-def queue_next(sid: str, text: str) -> Dict[str, Any]:
+def queue_next(sid: str, text: str) -> dict[str, Any]:
     text = str(text or "").strip()
     if not text:
         raise ValueError(_c("Chưa có nội dung việc kế tiếp.", "The next job has no text."))
@@ -1161,12 +1163,12 @@ def queue_next(sid: str, text: str) -> Dict[str, Any]:
     return {"id": qid, "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
 
-def cancel_next(sid: str, qid: int) -> Dict[str, Any]:
+def cancel_next(sid: str, qid: int) -> dict[str, Any]:
     return {"cancelled": st().queue_cancel(sid, qid),
             "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
 
-async def merge_by_person(sid: str, full_name: str) -> Dict[str, Any]:
+async def merge_by_person(sid: str, full_name: str) -> dict[str, Any]:
     row = st().get(sid, full_name)
     if not row or not row.get("pr_number"):
         raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repo đó.", "This chat has no PR for that repo."))
@@ -1180,13 +1182,13 @@ async def merge_by_person(sid: str, full_name: str) -> Dict[str, Any]:
     return {"row": _row_view(await merge_now(row, pr, by_person=True))}
 
 
-def _row_view(r: Dict[str, Any]) -> Dict[str, Any]:
+def _row_view(r: dict[str, Any]) -> dict[str, Any]:
     keep = ("full_name", "branch", "head_sha", "pr_number", "pr_url", "exec", "ci", "integ", "post_merge",
             "stuck_reason", "fix_rounds", "merge_block", "checks_summary", "gate", "updated_at")
     return {k: r.get(k) for k in keep}
 
 
-def busy_jobs(brain: str, full_name: str) -> List[str]:
+def busy_jobs(brain: str, full_name: str) -> list[str]:
     """Chats still working on a repo (removal from the brain refuses while any is listed)."""
     out = []
     for r in st().for_repo(brain, full_name):

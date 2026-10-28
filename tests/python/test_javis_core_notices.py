@@ -10,20 +10,21 @@ Spec: owner, 16/10/2026 (Javis Core goal, sections 7, 8 and 15).
 - a push device is bound to the login it subscribed under: logout drops it, and an ended login receives nothing;
 - "hide content" sends a push that only says something arrived.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = tempfile.mkdtemp(prefix="javis-core-notice-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 
-import inbox  # noqa: E402
-import javis_core  # noqa: E402
-import main  # noqa: E402
-import webpush  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import inbox
+import javis_core
+import main
+import webpush
+from starlette.testclient import TestClient
 
 fails = []
 

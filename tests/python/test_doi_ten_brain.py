@@ -7,11 +7,12 @@ THƯ MỤC ("brain" = Brain Default, còn lại `path:<thư mục>`), và địa
 vòng lặp, việc nền, sao lưu git, link `/brains/<thư mục>/...` trong note. Đổi tên thư mục là cắt hết. Nên đổi tên chỉ đổi
 TÊN HIỂN THỊ, lưu trong chính bộ não (`Javis/brain.json`), thư mục giữ nguyên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _STATE = tempfile.mkdtemp(prefix="javis-doiten-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -22,8 +23,8 @@ try:
 except Exception:
     pass
 
-import brain_label as bl  # noqa: E402
-import git_brain  # noqa: E402
+import brain_label as bl
+import git_brain
 
 _fails = []
 
@@ -53,8 +54,8 @@ check("giữ các khoá khác trong file", '"khac": 1' in (d / "Javis" / "brain.
 check("file hỏng: không vỡ, dùng tên thư mục", bl.display(d) == "Brain Default")
 
 # ---- 2. Endpoint ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/brains").json()
@@ -71,7 +72,8 @@ check("brain mặc định vẫn là thư mục cũ", Path(main._brain_root("bra
 v = cl.get("/viec/all").json()
 ten_viec = [x.get("name") for x in (v.get("brains") or []) if x.get("is_default")]
 check("trang Việc hiện tên mới của brain", ten_viec == ["Kho Gsmsuppliers"], (ten_viec, list(v)[:6]))
-import mcp_hub  # noqa: E402
+import mcp_hub
+
 check("ghi chú brain trong kết quả tool dùng tên mới",
       mcp_hub._ten_hien_brain(main._brain_root("brain")) == "Kho Gsmsuppliers")
 src = (SERVER / "main.py").read_text(encoding="utf-8")
@@ -107,7 +109,7 @@ check("nút đổi tên gọi đúng endpoint với địa chỉ brain đang ch�
       'fetch("/brains/label"' in js and 'fd.append("brain", sel.value)' in js)
 html = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
 check("có nút Đổi tên cạnh nút tạo và xoá brain", 'id="renameBrainBtn"' in html)
-import json  # noqa: E402
+import json
 
 for lang in ("vi", "en"):
     dd = json.loads((ROOT / "dashboard" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))

@@ -9,7 +9,6 @@ Không gọi model hay mạng thật. Ba đường mang danh tính lượt tới
 Rồi chủ dự án Cho phép qua `POST /goals/{id}/commands` của main.app (đăng đúng bản nháp, thẻ cũ 409) và xem trước bản
 nháp qua `GET /goals/{id}/drafts/{submission_id}`.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import contextvars
 import hashlib
@@ -18,19 +17,21 @@ import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a4x-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import turn_context  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import claude_sdk_engine  # noqa: E402
-from mcp.types import CallToolRequest, CallToolRequestParams  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import _resonance_agent as RA
+import claude_sdk_engine
+import main
+import mcp_hub
+import plugins_host
+import resonance as R
+import resonance_store as RS
+import turn_context
+from fastapi.testclient import TestClient
+from mcp.types import CallToolRequest, CallToolRequestParams
 
 _fails = []
 

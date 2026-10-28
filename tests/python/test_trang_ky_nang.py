@@ -9,7 +9,6 @@ Chủ repo 05/10/2026: "nhiều khi người ta import skill ra chỗ khác thì
      khác) trước đây chỉ vào được skill đầu tiên, phần còn lại mất im lặng.
 Kèm: trần mô tả 150 ký tự của trang (studio.js) phải bằng trần của router.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
 import re
 import sys
@@ -17,13 +16,15 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import share_bundle  # noqa: E402
-import skill_router  # noqa: E402
+import share_bundle
+import skill_router
 
 _fails = []
 

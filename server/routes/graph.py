@@ -14,15 +14,14 @@ y hệt, kể cả các chi tiết dễ tưởng là thừa:
 import asyncio
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
 
 import config as cfgmod
-from graph_builder import graph_with_etag, _color_for, _top_folder, doc_wikilink
+from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from graph_builder import _color_for, _top_folder, doc_wikilink, graph_with_etag
 
 
 @dataclass
@@ -185,7 +184,7 @@ def _make_router() -> APIRouter:
             if not live:
                 return
             try:
-                from watchfiles import awatch, Change
+                from watchfiles import Change, awatch
             except ImportError:   # môi trường thiếu watchfiles → còn mỗi quét thưa, vẫn chạy được
                 print("[ws_graph] thiếu watchfiles - node mọc theo nhịp quét thưa", file=__import__('sys').stderr)
                 return

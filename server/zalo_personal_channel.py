@@ -43,11 +43,11 @@ import json
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import config as cfgmod
-import localefmt
 import conversations
+import localefmt
 
 CONNECTOR_ID = "zalo"
 KENH = "zalo_personal"
@@ -62,11 +62,11 @@ THU_LAI_TEN_GIAY = 15     # giây tối thiểu giữa hai lần làm mới CƯ�
 THU_TEN_LAI = 600       # giây nhớ "đã làm mới bảng vì cuộc chat này mà vẫn không thấy tên", khỏi hỏi lại mỗi nhịp
 MAX_TEN = 2000
 
-_task: Optional[asyncio.Task] = None
+_task: asyncio.Task | None = None
 _stop = False
 # conn_id -> {"lan_cuoi": ts, "loi": str, "so_tin": int, "ten": {threadId: {...}}, "ten_ts": ts,
 #             "nghi_toi": ts}
-_TT: Dict[str, dict] = {}
+_TT: dict[str, dict] = {}
 
 
 # ============================================================
@@ -110,7 +110,7 @@ def bat(conn_id: str, on: bool) -> dict:
 # ============================================================
 # Kết nối Zalo đang có
 # ============================================================
-def _ket_noi() -> List[dict]:
+def _ket_noi() -> list[dict]:
     """Kết nối Zalo đang BẬT ở trang Kết nối, bản đầy đủ (có env HOME) cho dial spec."""
     try:
         import mcp_store
@@ -121,7 +121,7 @@ def _ket_noi() -> List[dict]:
         return []
 
 
-def ket_noi_theo_id(conn_id: str) -> Optional[dict]:
+def ket_noi_theo_id(conn_id: str) -> dict | None:
     """Bản đầy đủ (có env) của một kết nối Zalo đang bật, để gọi MCP. None nếu không có."""
     for c in _ket_noi():
         if c.get("id") == str(conn_id or ""):
@@ -129,7 +129,7 @@ def ket_noi_theo_id(conn_id: str) -> Optional[dict]:
     return None
 
 
-def tai_khoan() -> List[dict]:
+def tai_khoan() -> list[dict]:
     """Cho trang Hộp thư: mỗi tài khoản Zalo kèm cờ theo dõi và trạng thái vòng đọc."""
     cfg = _cau_hinh()
     out = []
@@ -165,7 +165,7 @@ async def _goi(conn: dict, tool: str, args: dict) -> Any:
 # every message just to learn there are no labels.
 LABEL_TTL_S = 60
 LABEL_RETRY_S = 600
-_LABELS: Dict[str, dict] = {}       # conn_id -> {"at", "names": [...], "by_thread": {thread_id: [names]}, "ok"}
+_LABELS: dict[str, dict] = {}       # conn_id -> {"at", "names": [...], "by_thread": {thread_id: [names]}, "ok"}
 
 
 def _label_map(data: Any) -> dict:
@@ -211,13 +211,13 @@ async def _labels_of_conn(conn_id: str) -> dict:
     return c
 
 
-async def labels_of_chat(conn_id: str, thread_id: str) -> List[str]:
+async def labels_of_chat(conn_id: str, thread_id: str) -> list[str]:
     """Names of the Zalo labels on one chat of a connection (e.g. ["Gia đình"]); [] when none or unknown."""
     m = await _labels_of_conn(str(conn_id or ""))
     return list((m.get("by_thread") or {}).get(str(thread_id or ""), []))
 
 
-async def label_names(conn_id: str) -> List[str]:
+async def label_names(conn_id: str) -> list[str]:
     """Every label name of a connection, for the bot form's picker; [] when unknown."""
     return list((await _labels_of_conn(str(conn_id or ""))).get("names") or [])
 
@@ -338,7 +338,7 @@ def _link_anh(msg: dict) -> str:
     return ""
 
 
-def _su_kien_vao_nhom(msg: dict) -> Optional[dict]:
+def _su_kien_vao_nhom(msg: dict) -> dict | None:
     """Someone joined the group (javis-zalo >= 1.1.0): `{time, added_by, added_by_me}` in seconds, else None.
 
     javis-zalo puts each join in the live feed as a message of type `group.join` sent BY the newcomer, with
@@ -350,7 +350,7 @@ def _su_kien_vao_nhom(msg: dict) -> Optional[dict]:
     return {"time": t, "added_by": str(ev.get("addedBy") or ""), "added_by_me": bool(ev.get("addedByMe"))}
 
 
-def _su_kien_xin_vao(msg: dict) -> Optional[dict]:
+def _su_kien_xin_vao(msg: dict) -> dict | None:
     """Someone asked to join a group that requires approval (javis-zalo >= 1.2.0): `{time, total_pending}`, else None.
 
     javis-zalo puts each request in the live feed as a message of type `group.join_request` sent BY the applicant."""
@@ -367,7 +367,7 @@ NOTIFY_OWNER = None
 XIN_VAO_TOI_DA_TEN = 10
 
 
-def cau_bao_xin_vao(conn: dict, chat_title: str, names: List[str]) -> str:
+def cau_bao_xin_vao(conn: dict, chat_title: str, names: list[str]) -> str:
     """Câu báo chủ: ai đang xin vào nhóm nào, và cách xử lý. Một câu cho cả lô của một nhóm."""
     ds = [n for n in names if n][:XIN_VAO_TOI_DA_TEN]
     them = len([n for n in names if n]) - len(ds)
@@ -381,7 +381,7 @@ def cau_bao_xin_vao(conn: dict, chat_title: str, names: List[str]) -> str:
         f"(this account must be the group's owner or a deputy).")
 
 
-def _bao_xin_vao(conn: dict, theo_nhom: Dict[str, dict]) -> None:
+def _bao_xin_vao(conn: dict, theo_nhom: dict[str, dict]) -> None:
     """Một thông báo cho mỗi nhóm có người mới xin vào trong lô vừa đọc. Không có vòng lặp sự kiện thì thôi."""
     if not theo_nhom or NOTIFY_OWNER is None:
         return
@@ -430,7 +430,7 @@ def _reaction_meta(conn: dict, msg: dict, thread: str, sender_id: str) -> dict:
     }
 
 
-def chuan_hoa_tin(conn: dict, msg: dict, ten: Dict[str, dict]) -> Optional[dict]:
+def chuan_hoa_tin(conn: dict, msg: dict, ten: dict[str, dict]) -> dict | None:
     """Một tin của `zalo_get_messages` -> sự kiện chung của kho. None nếu không biết thread."""
     if not isinstance(msg, dict):
         return None
@@ -530,10 +530,10 @@ async def nhap_lich_su(conn_id: str, ngay: int = NHAP_NGAY) -> dict:
     try:
         ngay = max(1, min(int(ngay or NHAP_NGAY), 30))
         tu = int((time.time() - ngay * 86400) * 1000)
-        tin: List[dict] = []
+        tin: list[dict] = []
         truoc, het_tran = None, False
         while True:
-            args: Dict[str, Any] = {"since": tu, "limit": NHAP_TRANG}
+            args: dict[str, Any] = {"since": tu, "limit": NHAP_TRANG}
             if truoc:
                 args["before"] = truoc
             try:
@@ -555,7 +555,7 @@ async def nhap_lich_su(conn_id: str, ngay: int = NHAP_NGAY) -> dict:
         if not tin:
             return {"ok": True, "so_tin": 0, "so_cuoc_chat": 0, "bo_qua": 0, "het_tran": False}
         ten = await _nap_ten(conn, {})
-        theo_chat: Dict[str, List[dict]] = {}
+        theo_chat: dict[str, list[dict]] = {}
         for m in tin:
             ev = chuan_hoa_tin(conn, m, ten)
             if ev and ev.get("external_message_id"):
@@ -598,7 +598,7 @@ def _thread_cua(msg: Any) -> str:
     return str(_lay(msg, "threadId", "thread_id", "chatId", mac_dinh="") or "").strip()
 
 
-async def _nap_ten(conn: dict, tt: dict, cuong_buc: bool = False) -> Dict[str, dict]:
+async def _nap_ten(conn: dict, tt: dict, cuong_buc: bool = False) -> dict[str, dict]:
     """Bảng threadId -> {name, type}. Hỏi lại sau TEN_TTL giây, hỏng thì giữ bảng cũ.
 
     `cuong_buc`: hỏi lại NGAY dù chưa hết hạn (nhưng không dồn quá một lần mỗi `THU_LAI_TEN_GIAY`),
@@ -615,7 +615,7 @@ async def _nap_ten(conn: dict, tt: dict, cuong_buc: bool = False) -> Dict[str, d
     try:
         d = await _goi(conn, "zalo_list_threads", {"limit": 200})
         ds = d.get("threads") if isinstance(d, dict) else d
-        bang: Dict[str, dict] = dict(tt.get("ten") or {})
+        bang: dict[str, dict] = dict(tt.get("ten") or {})
         for t in (ds or []):
             if not isinstance(t, dict):
                 continue
@@ -661,7 +661,7 @@ async def _lam_moi_ten_neu_thieu(conn: dict, tt: dict, tin: list, ten: dict) -> 
 def _ghi_lo(conn: dict, tin: list, ten: dict) -> tuple:
     """Ghi một lô tin vào kho và giao tin khách mới cho bot. Trả (số tin mới, số tin trùng)."""
     moi = trung = 0
-    xin_vao: Dict[str, dict] = {}
+    xin_vao: dict[str, dict] = {}
     for m in tin:
         ev = chuan_hoa_tin(conn, m, ten)
         if not ev:
@@ -724,7 +724,7 @@ def _ghi_lo(conn: dict, tin: list, ten: dict) -> tuple:
     return moi, trung
 
 
-def _so_nguyen(v: Any) -> Optional[int]:
+def _so_nguyen(v: Any) -> int | None:
     """Con trỏ đọc của MCP là số nguyên. Chuỗi không phải số (khuôn trong tài liệu ghi
     "cursor_abc") thì None: dùng bừa một con trỏ không hiểu còn tệ hơn đọc lại từ đầu."""
     if isinstance(v, bool):
@@ -753,7 +753,7 @@ async def doc_mot_lan(conn: dict) -> dict:
         since = int(tt["since"])
     for _ in range(MAX_TRANG):
         ep_truoc = _epoch(conn)
-        args: Dict[str, Any] = {"limit": LIMIT}
+        args: dict[str, Any] = {"limit": LIMIT}
         if since:
             args["since"] = since
         d = await _goi(conn, "zalo_get_messages", args)
@@ -792,14 +792,14 @@ async def doc_mot_lan(conn: dict) -> dict:
 
 # Lỗi chết của tiến trình javis-zalo (src/commands/mcp.js) mà người dùng tự xử được, dịch ra lời thường.
 _LOI_ZALO = (
-    (re.compile(r"duplicate zalo web session", re.I),
+    (re.compile(r"duplicate zalo web session", re.IGNORECASE),
      "Zalo đã ngắt phiên của Javis vì tài khoản này vừa được mở ở nơi khác: Zalo Web trên trình duyệt "
      "(chat.zalo.me) hoặc một máy Javis khác cũng đăng nhập tài khoản này. Mỗi tài khoản chỉ giữ được một "
      "phiên như vậy. Đóng nơi kia đi; Javis tự nối lại sau khoảng 2 phút.",
      "Zalo closed Javis's session because this account was just opened somewhere else: Zalo Web in a "
      "browser (chat.zalo.me) or another Javis machine signed in to the same account. An account keeps only "
      "one such session. Close the other one; Javis reconnects by itself in about 2 minutes."),
-    (re.compile(r"auto-login failed|re-login retry failed|re-login failed", re.I),
+    (re.compile(r"auto-login failed|re-login retry failed|re-login failed", re.IGNORECASE),
      "Phiên đăng nhập Zalo của tài khoản này đã hết hạn hoặc bị đăng xuất. Vào trang Kết nối, đăng nhập "
      "lại Zalo bằng mã QR.",
      "This account's Zalo sign-in has expired or was signed out. Go to the Connections page and sign in "
@@ -880,10 +880,10 @@ THRASH_RAPID = 3
 THRASH_SHOW_S = 900          # the bot card says "evicted" this long after the last rapid close
 THRASH_BELL_GAP_S = 6 * 3600
 _THRASH_RE = re.compile(r"reconnect #(\d+), rapid #(\d+)")
-_THRASH_SEEN: Dict[str, tuple] = {}      # conn_id -> (session pid, last reconnect number handled)
+_THRASH_SEEN: dict[str, tuple] = {}      # conn_id -> (session pid, last reconnect number handled)
 
 
-def thrash_of(lines: List[str]) -> Optional[tuple]:
+def thrash_of(lines: list[str]) -> tuple | None:
     """(reconnect number, rapid count) of the latest close line in a javis-zalo stderr tail, None when there is none."""
     for line in reversed(lines or []):
         m = _THRASH_RE.search(str(line))
@@ -1002,18 +1002,18 @@ TIENG_VONG_TOI_THIEU = 25   # tin của KHÁCH phải dài ít nhất chừng n�
 NHUONG_GIAY = 20        # giây bot chờ trước khi tự trả lời tin nhóm không ai gọi tên (chế độ Tự
                         # đánh giá): nếu trong lúc đó có người nhắn tay bằng nick này thì nhường
 
-_BOTS: Dict[str, Any] = {}          # conn_id -> Transport đang trực
-_DA_GUI: Dict[tuple, list] = {}     # (conn_id, thread) -> [(ts, chữ đã chuẩn hoá)]
-_DA_GUI_ANH: Dict[tuple, list] = {}  # (conn_id, thread) -> [ts mỗi ảnh bot vừa gửi] (xem ghi_da_gui_anh)
-_TAY: Dict[tuple, float] = {}       # (conn_id, thread) -> giờ tin chủ tự nhắn gần nhất
+_BOTS: dict[str, Any] = {}          # conn_id -> Transport đang trực
+_DA_GUI: dict[tuple, list] = {}     # (conn_id, thread) -> [(ts, chữ đã chuẩn hoá)]
+_DA_GUI_ANH: dict[tuple, list] = {}  # (conn_id, thread) -> [ts mỗi ảnh bot vừa gửi] (xem ghi_da_gui_anh)
+_TAY: dict[tuple, float] = {}       # (conn_id, thread) -> giờ tin chủ tự nhắn gần nhất
 # Ảnh khách gửi trong CHAT RIÊNG (nhớ cho các lượt chữ ngay sau, xem `Transport.xu_ly`). Ca thật 15/10/2026: giáo viên gửi
 # ảnh bài làm rồi nhắn "check xem đúng chưa", bot hỏi danh tính; trả lời xong thì ảnh đã ở tin trước nên bot nói "chưa đọc
 # được ảnh", và ảnh gửi lại KHÔNG kèm chữ thì bị bỏ hẳn. Nhóm có cơ chế riêng (`_nho_anh_tron`, bộ phán xử).
 ANH_RIENG_GIAY = 600    # giây một ảnh chat riêng còn được kèm vào các lượt chữ sau
-_ANH_RIENG: Dict[tuple, tuple] = {}  # (conn_id, thread) -> (giờ, link ảnh) ảnh gần nhất khách gửi
+_ANH_RIENG: dict[tuple, tuple] = {}  # (conn_id, thread) -> (giờ, link ảnh) ảnh gần nhất khách gửi
 
 
-def nho_anh_rieng(conn_id: str, thread: str, url: str, now: Optional[float] = None) -> None:
+def nho_anh_rieng(conn_id: str, thread: str, url: str, now: float | None = None) -> None:
     if url:
         _ANH_RIENG[(str(conn_id), str(thread))] = (time.time() if now is None else now, url)
         if len(_ANH_RIENG) > 500:
@@ -1021,7 +1021,7 @@ def nho_anh_rieng(conn_id: str, thread: str, url: str, now: Optional[float] = No
                 _ANH_RIENG.pop(k, None)
 
 
-def anh_rieng_gan_day(conn_id: str, thread: str, now: Optional[float] = None) -> tuple:
+def anh_rieng_gan_day(conn_id: str, thread: str, now: float | None = None) -> tuple:
     """(giờ, link) của ảnh khách gửi gần nhất trong chat riêng này nếu còn trong `ANH_RIENG_GIAY`, không thì ()."""
     v = _ANH_RIENG.get((str(conn_id), str(thread)))
     if not v:
@@ -1031,11 +1031,11 @@ def anh_rieng_gan_day(conn_id: str, thread: str, now: Optional[float] = None) ->
         return ()
     return v
 _VIEC: set = set()                  # giữ tham chiếu task đang chạy, kẻo bị thu gom giữa chừng
-_GOM: Dict[tuple, dict] = {}        # (conn_id, thread) -> {"evs": [...], "cuoi": ts}: chat riêng đang chờ khách nhắn xong
-_NONG: Dict[str, float] = {}        # conn_id -> giờ thấy tin khách chat riêng gần nhất (đọc dày, xem `_nhip_cua`)
-_SEQ: Dict[tuple, int] = {}         # (conn_id, thread) -> số tin khách chat riêng CÓ CHỮ đã thấy (xem "Câu trả lời đã cũ")
-_BO_DO: Dict[tuple, dict] = {}      # (conn_id, thread) -> {"texts": [...], "n": số lần bỏ, "luc": giờ}: tin khách của câu trả lời đã bỏ
-_ID_MINH: Dict[str, dict] = {}      # conn_id -> {"uid", "ten"} của CHÍNH nick này, học từ tin của nó
+_GOM: dict[tuple, dict] = {}        # (conn_id, thread) -> {"evs": [...], "cuoi": ts}: chat riêng đang chờ khách nhắn xong
+_NONG: dict[str, float] = {}        # conn_id -> giờ thấy tin khách chat riêng gần nhất (đọc dày, xem `_nhip_cua`)
+_SEQ: dict[tuple, int] = {}         # (conn_id, thread) -> số tin khách chat riêng CÓ CHỮ đã thấy (xem "Câu trả lời đã cũ")
+_BO_DO: dict[tuple, dict] = {}      # (conn_id, thread) -> {"texts": [...], "n": số lần bỏ, "luc": giờ}: tin khách của câu trả lời đã bỏ
+_ID_MINH: dict[str, dict] = {}      # conn_id -> {"uid", "ten"} của CHÍNH nick này, học từ tin của nó
 
 
 def _hoc_danh_tinh(conn_id: str, msg: dict) -> None:
@@ -1154,10 +1154,10 @@ def anh_duoc_quote(conn_id: str, thread: str, md: dict) -> str:
 # downloaded) and handed to the sender's next message that calls the bot; a message that QUOTES a file gets that file.
 BARE_FILE_TTL = 600         # seconds a bare group file waits for its sender to call the bot
 BARE_FILE_MAX = 3           # files kept per sender (the newest)
-_BARE_FILES: Dict[tuple, list] = {}     # (account, chat, sender) -> [(time, attachment)]
+_BARE_FILES: dict[tuple, list] = {}     # (account, chat, sender) -> [(time, attachment)]
 
 
-def remember_bare_file(conn_id: str, thread: str, sender: str, att, ts: Optional[float] = None) -> None:
+def remember_bare_file(conn_id: str, thread: str, sender: str, att, ts: float | None = None) -> None:
     if not sender or not isinstance(att, dict) or not str(att.get("url") or "").startswith("https://"):
         return
     now = time.time()
@@ -1170,7 +1170,7 @@ def remember_bare_file(conn_id: str, thread: str, sender: str, att, ts: Optional
             _BARE_FILES.pop(k, None)
 
 
-def take_bare_files(conn_id: str, thread: str, sender: str, now: Optional[float] = None) -> list:
+def take_bare_files(conn_id: str, thread: str, sender: str, now: float | None = None) -> list:
     """The sender's recent bare files in this group, oldest first, used up (a later call does not get them again)."""
     now = time.time() if now is None else now
     items = _BARE_FILES.pop((str(conn_id), str(thread), str(sender)), [])
@@ -1220,7 +1220,7 @@ def _chuan(text: str) -> str:
 # and outgoing (`channels.zalo_personal.gui`), leaving "@Minh Quý" for the real tag (`--mention`) to find.
 # Since 0.309.0 the stripping lives in `zalo_markup` (also used by the MCP pool for direct tool calls) and also
 # removes broken fragments such as a leftover `href="zm://...">`.
-from zalo_markup import strip_mention_markup  # noqa: E402,F401
+from zalo_markup import strip_mention_markup
 
 
 def ghi_da_gui(conn_id: str, thread: str, text: str) -> None:
@@ -1270,7 +1270,7 @@ def attach_echo_id(conn_id: str, ev: dict) -> bool:
     return False
 
 
-_BOT_REACTIONS: Dict[tuple, list] = {}     # (account, chat) -> [(time, target message id, reaction name, bot name)]
+_BOT_REACTIONS: dict[tuple, list] = {}     # (account, chat) -> [(time, target message id, reaction name, bot name)]
 
 
 def remember_bot_reaction(conn_id: str, thread: str, target_msg_id: str, name: str, bot_name: str) -> None:
@@ -1285,7 +1285,7 @@ def remember_bot_reaction(conn_id: str, thread: str, target_msg_id: str, name: s
             _BOT_REACTIONS.pop(k, None)
 
 
-def _bot_reaction_echo(conn_id: str, thread: str, reaction) -> Optional[str]:
+def _bot_reaction_echo(conn_id: str, thread: str, reaction) -> str | None:
     """The bot's name when this account's reaction is one the bot just put (used up), else None."""
     r = reaction if isinstance(reaction, dict) else {}
     key = (str(conn_id), str(thread))
@@ -1360,7 +1360,7 @@ def yield_explicit(conn_id: str) -> bool:
     return False
 
 
-def chu_vua_nhan_tay(conn_id: str, thread: str, now: Optional[float] = None) -> bool:
+def chu_vua_nhan_tay(conn_id: str, thread: str, now: float | None = None) -> bool:
     """Chủ vừa tự tay nhắn cuộc chat này (trong `tay_im_cua` giây) - bot nhường. Bot đặt nhường 0 phút thì không bao giờ."""
     t = _TAY.get((str(conn_id), str(thread)))
     if not t:
@@ -1455,7 +1455,7 @@ MAX_GOM_TIN = 50        # trần số tin giữ cho một cuộc chat đang gom 
 MAX_FILE_GOP = 5        # trần số file một lượt gộp mang theo để tải (gửi cả chục file thì lấy mấy file cuối)
 
 
-def _xep_cho(conn_id: str, ev: dict, now: Optional[float] = None) -> None:
+def _xep_cho(conn_id: str, ev: dict, now: float | None = None) -> None:
     """Đưa một tin khách chat riêng vào hàng chờ của cuộc chat đó."""
     now = time.time() if now is None else now
     # Giờ tin theo Zalo, nhưng không cho vượt giờ máy: đồng hồ máy chậm hơn Zalo thì tin "từ tương
@@ -1486,7 +1486,7 @@ def _co_chu(ev: dict) -> bool:
     return False
 
 
-def gop_tin(evs: List[dict]) -> dict:
+def gop_tin(evs: list[dict]) -> dict:
     """Nhiều tin khách liền nhau của MỘT cuộc chat riêng -> một sự kiện cho `Transport.xu_ly`.
 
     Khung là tin CUỐI (mã tin để Hộp thư nhận ra tin đã có, giờ tin cho rào `TUOI_TOI_DA`). Chữ là
@@ -1501,9 +1501,9 @@ def gop_tin(evs: List[dict]) -> dict:
     `metadata.react_to` = mã tin khách cuối có nội dung, tin bot được thả cảm xúc vào ("" khi lượt chỉ có cảm xúc)."""
     import bot_gateway
     cuoi = evs[-1]
-    phan: List[str] = []
+    phan: list[str] = []
     co_anh, link = False, ""
-    files: List[dict] = []
+    files: list[dict] = []
     react_to, react_to_cli = "", ""
     for e in evs:
         loai = e.get("message_type")
@@ -1540,7 +1540,7 @@ def gop_tin(evs: List[dict]) -> dict:
     return dict(cuoi, message_type=kieu, text=bot_gateway.noi_tin(phan), metadata=md)
 
 
-def xa_hang_cho(conn_id: str, luc: Optional[float] = None) -> int:
+def xa_hang_cho(conn_id: str, luc: float | None = None) -> int:
     """Giao cho bot những cuộc chat của tài khoản này mà khách đã im đủ `CHO_KHACH_IM` giây tính tới
     `luc` (mốc bắt đầu của lượt đọc vừa xong). Trả số lượt đã giao."""
     cid = str(conn_id)
@@ -1591,14 +1591,14 @@ def co_tin_moi(conn_id: str, thread: str, seq_cuoi: int) -> bool:
     return _SEQ.get((str(conn_id), str(thread)), 0) > int(seq_cuoi)
 
 
-def bo_do_gui(conn_id: str, thread: str, texts: List[str], n: int) -> None:
+def bo_do_gui(conn_id: str, thread: str, texts: list[str], n: int) -> None:
     """Giữ chữ của khách trong một lượt có câu trả lời đã bỏ, cho lượt kế tiếp đọc lại."""
     texts = [t for t in texts if str(t or "").strip()]
     if texts:
         _BO_DO[(str(conn_id), str(thread))] = {"texts": texts[-MAX_GOM_TIN:], "n": int(n), "luc": time.time()}
 
 
-def lay_bo_do(conn_id: str, thread: str, now: Optional[float] = None) -> dict:
+def lay_bo_do(conn_id: str, thread: str, now: float | None = None) -> dict:
     """Lấy (và xoá) chữ khách của các câu trả lời đã bỏ của cuộc chat này; trống nếu không có hay đã nguội."""
     o = _BO_DO.pop((str(conn_id), str(thread)), None) or {}
     now = time.time() if now is None else now
@@ -1629,10 +1629,10 @@ def lay_bo_do(conn_id: str, thread: str, now: Optional[float] = None) -> dict:
 # Hàng chờ chỉ nằm trong RAM: Javis khởi động lại thì mất, tệ nhất là một tin không được trả lời thay, không bao giờ
 # là trả lời hai lần.
 CHO_CHU_TRA_LOI = 600   # giây chờ chủ trả lời tin khách tới lúc chủ đang nhắn tay; 0 = tắt (bỏ tin như trước 0.136.0)
-_CHO_CHU: Dict[tuple, dict] = {}    # (conn_id, thread) -> {"evs": [...], "dau": giờ tin khách đầu tiên chưa ai trả lời}
+_CHO_CHU: dict[tuple, dict] = {}    # (conn_id, thread) -> {"evs": [...], "dau": giờ tin khách đầu tiên chưa ai trả lời}
 
 
-def _giu_cho_chu(conn_id: str, ev: dict, now: Optional[float] = None) -> None:
+def _giu_cho_chu(conn_id: str, ev: dict, now: float | None = None) -> None:
     """Giữ một tin khách chat riêng tới lúc chủ đang nhắn tay, chờ xem chủ có trả lời không."""
     now = time.time() if now is None else now
     ts = min(float(ev.get("created_at") or now), now)
@@ -1664,7 +1664,7 @@ def _ten_kem(e: dict) -> str:
     return {"audio": "một tin thoại", "video": "một video", "sticker": "một sticker"}.get(loai, "một tin không phải chữ")
 
 
-def gop_cho_chu(evs: List[dict], cho: int = 0, tay: float = 0) -> dict:
+def gop_cho_chu(evs: list[dict], cho: int = 0, tay: float = 0) -> dict:
     """Các tin khách đã chờ chủ trả lời -> một lượt cho `Transport.xu_ly` (dựa trên `gop_tin`), thêm một dòng ghi chú:
     khách nhắn lúc nào, đã chờ bao lâu, gửi kèm gì. `metadata.sau_chu_im` cho `xu_ly` biết lượt này cũ là có chủ ý.
 
@@ -1697,7 +1697,7 @@ def gop_cho_chu(evs: List[dict], cho: int = 0, tay: float = 0) -> dict:
 MAX_NGUOI_NHOM = 5     # nhóm: hết quãng nhường thì trả lời tối đa chừng này người (người nhắn sau cùng), mỗi người một lượt
 
 
-def xa_cho_chu(conn_id: str, luc: Optional[float] = None) -> int:
+def xa_cho_chu(conn_id: str, luc: float | None = None) -> int:
     """Giao cho bot các cuộc chat của tài khoản này mà quãng nhường đã hết: đủ `tay_im_cua` giây tính từ TIN NHẮN TAY
     cuối của chủ (0.172.0, chủ nick chốt 14/10/2026: "có nhắn tay thì 3 phút sau tin nhắn tay đó chủ động nhắn tiếp").
     Chat riêng: một lượt gộp. Nhóm: mỗi người một lượt gộp, đi qua đúng luật nhóm của bot. Trả số lượt đã giao."""
@@ -1725,7 +1725,7 @@ def xa_cho_chu(conn_id: str, luc: Optional[float] = None) -> int:
         if not evs:
             continue
         if evs[-1].get("chat_type") == "group":
-            theo_nguoi: Dict[str, list] = {}
+            theo_nguoi: dict[str, list] = {}
             for e in evs:
                 theo_nguoi.setdefault(str(e.get("sender_id") or ""), []).append(e)
             # Người nhắn sau cùng đứng sau trong dict (Python giữ thứ tự chèn theo lần đầu): sắp lại theo tin cuối.
@@ -1740,7 +1740,7 @@ def xa_cho_chu(conn_id: str, luc: Optional[float] = None) -> int:
     return n
 
 
-def _nhip_cua(conn_id: str, now: Optional[float] = None) -> int:
+def _nhip_cua(conn_id: str, now: float | None = None) -> int:
     """Nhịp đọc kế tiếp của một tài khoản: dày khi có cuộc chat đang chờ khách nhắn xong hoặc vừa có
     tin khách chat riêng, thường thì `NHIP`. Chỉ khi có bot trực và đang bật chờ."""
     cid = str(conn_id)

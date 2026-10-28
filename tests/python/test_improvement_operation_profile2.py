@@ -1,6 +1,4 @@
 """Actual operation2 workspace/profile, engineering binding seam, no native call."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -8,11 +6,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import improvement_operation_protocol as protocol
 import improvement_operation_profile as OP
+import improvement_operation_protocol as protocol
+import test_improvement_operation_workspace as W
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_native_protocol import _ENV_FIXED, _ENV_PATHS
 from improvement_store import _hash, _json
-import test_improvement_operation_workspace as W
 
 
 class EngineeringOperationBinding:
@@ -110,7 +109,12 @@ class OperationProfileTwoTests(unittest.TestCase):
         with self.assertRaises(ValueError): asyncio.run(profile.before_query())
 
     def test_observe_emits_receipt2_with_exact_old_fields_plus_delivery_and_raw_null_usage(self):
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            TextBlock,
+        )
         profile, engine, _, _ = self.installation(); binding, _ = self.bind(profile)
         profile.options(engine)
         events = profile.observe(SystemMessage('init', {'tools': ['mcp__fixture__fixture_read'], 'session_id': 'session-a'}))

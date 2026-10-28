@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import sqlite3
 
-from usage_execution import _aggregate
 import usage_index
 import usage_store
+from usage_execution import _aggregate
 
 
 def _execution_references(experiment_id, trial_id=None):

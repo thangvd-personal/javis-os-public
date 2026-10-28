@@ -32,9 +32,10 @@ import sys
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import localefmt
 
@@ -49,22 +50,22 @@ SOURCES = ("kanban", "loop", "reminder", "webhook", "workflow")
 PERSON_ONLY = re.compile(
     r"(not logged in|log ?in|sign[- ]?in|đăng nhập|unauthori[sz]ed|\b401\b|\b403\b|forbidden|permission|"
     r"api[ _-]?key|token (?:expired|invalid)|hết hạn|credential|chưa cài|not installed|chưa đấu|"
-    r"not connected|quota|hết lượt|insufficient|billing|thanh toán|switched off|đang tắt)", re.I)
+    r"not connected|quota|hết lượt|insufficient|billing|thanh toán|switched off|đang tắt)", re.IGNORECASE)
 TRANSIENT = re.compile(r"(timeout|timed out|temporar|connection|network|reset by peer|overloaded|"
-                       r"\b5\d\d\b|busy|unavailable|rate limit|\b429\b)", re.I)
+                       r"\b5\d\d\b|busy|unavailable|rate limit|\b429\b)", re.IGNORECASE)
 
 
 @dataclass
 class IncidentDeps:
     state_dir: Callable[[], Path]
     # async ask(prompt) -> model text; raise when no engine is ready
-    ask: Optional[Callable] = None
+    ask: Callable | None = None
     # async post(brain, text) -> None: one message in the brain's Javis Core chat (+ inbox)
-    post: Optional[Callable] = None
+    post: Callable | None = None
     # source -> async retry(incident) -> (ok, note)
-    retry: Dict[str, Callable] = field(default_factory=dict)
+    retry: dict[str, Callable] = field(default_factory=dict)
     enabled: Callable[[], bool] = lambda: True
-    atomic_write_text: Optional[Callable[[Any, str], None]] = None
+    atomic_write_text: Callable[[Any, str], None] | None = None
 
 
 def fallback_decision(error: str, can_retry: bool) -> str:
@@ -151,7 +152,7 @@ class IncidentDesk:
 
     # ── intake ──
     def report(self, source: str, ref: str, *, brain: str = "", title: str = "", error: str = "",
-               request: str = "") -> Optional[str]:
+               request: str = "") -> str | None:
         """Record a failure and schedule its handling. Never raises; returns the incident id, or None
         when the desk is off or the report only bumped an open incident. Safe to call from sync code
         running inside the event loop."""

@@ -22,7 +22,7 @@ import sqlite3
 import time
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import config as cfgmod
 import team_migration
@@ -134,8 +134,11 @@ CREATE TABLE IF NOT EXISTS team_reaction_log(
 # Sáu reaction (spec mục 14.1): lưu NGUYÊN giá trị, không gộp, không suy ra đánh giá. "none" là bỏ emoji. Lý do chất lượng
 # (chọn được nhiều) là tín hiệu ĐÁNH GIÁ, khác emoji. T2 (0.154.0, thiết kế 2026-10-15 mục 4.1): trục nói/im (chọn một
 # hoặc không), nguồn do host gán, trạng thái do host ghi. Một bảng giá trị chung cho chat riêng và chat nhóm.
-from reaction_values import (AXES as REACTION_AXES, COMMENT_MAX, REACTION_EMOJI, REACTIONS,  # noqa: E402
-                             REASONS as REACTION_REASONS, SOURCE_KINDS, STATUSES as REACTION_STATUSES)
+from reaction_values import AXES as REACTION_AXES
+from reaction_values import COMMENT_MAX, REACTIONS, SOURCE_KINDS
+from reaction_values import REASONS as REACTION_REASONS
+from reaction_values import STATUSES as REACTION_STATUSES
+
 T2_SNAPSHOT_SUFFIX = ".pre-0.154.0"
 GATE_SNAPSHOT_SUFFIX = ".pre-0.207.0"
 WORK_MODES = ("gated", "full")
@@ -216,7 +219,7 @@ def new_team_id() -> str:
 
 
 class TeamStore:
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else Path(cfgmod.STATE_DIR) / "team.sqlite3"
         self.path.parent.mkdir(parents=True, exist_ok=True)
         # T2: kho có từ trước thì chụp một bản trước khi thêm cột reaction (khôi phục khi hạ phiên bản).
@@ -315,25 +318,26 @@ class TeamStore:
         caps = dict(DEFAULT_CAPS)
         caps.update(json.loads(r["caps_json"] or "{}"))
         caps.update(FIXED_CAPS)   # dòng cũ từng lưu số khác vẫn hiện đúng giá trị đang áp
+        keys = set(r.keys())
         return {"team_id": r["team_id"], "brain_id": r["brain_id"], "name": r["name"], "description": r["description"],
                 "session_id": r["session_id"], "leader_key": r["leader_key"], "leader_mode": r["leader_mode"],
                 "status": r["status"], "caps": caps, "created_at": r["created_at"], "updated_at": r["updated_at"],
-                "pinned_at": r["pinned_at"], "created_by": r["created_by"] if "created_by" in r.keys() else "owner",
-                "avatar_image": (r["avatar_image"] or "") if "avatar_image" in r.keys() else "",
-                "tags": _tags_of(r["tags_json"] if "tags_json" in r.keys() else "[]"),
-                "owner_at": r["owner_at"] if "owner_at" in r.keys() else None,
+                "pinned_at": r["pinned_at"], "created_by": r["created_by"] if "created_by" in keys else "owner",
+                "avatar_image": (r["avatar_image"] or "") if "avatar_image" in keys else "",
+                "tags": _tags_of(r["tags_json"] if "tags_json" in keys else "[]"),
+                "owner_at": r["owner_at"] if "owner_at" in keys else None,
                 # A new team counts from its creation: nothing in it is unread until someone writes.
-                "read_at": (r["read_at"] if "read_at" in r.keys() else None) or r["created_at"],
-                "muted": bool(r["muted"]) if "muted" in r.keys() else False,
-                "work_mode": (r["work_mode"] if "work_mode" in r.keys() else "") or "gated"}
+                "read_at": (r["read_at"] if "read_at" in keys else None) or r["created_at"],
+                "muted": bool(r["muted"]) if "muted" in keys else False,
+                "work_mode": (r["work_mode"] if "work_mode" in keys else "") or "gated"}
 
     def _event(self, c, team_id: str, kind: str, by: str, before: Any = None, after: Any = None) -> None:
         c.execute("INSERT INTO team_events(team_id,kind,by,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)",
                   (team_id, kind, by, _j(before or {}), _j(after or {}), time.time()))
 
     def create_team(self, brain_id: str, name: str, description: str, session_id: str, by: str = "owner",
-                    team_id: Optional[str] = None, members: Optional[list] = None, leader_key: Optional[str] = None,
-                    client_req_id: Optional[str] = None) -> dict:
+                    team_id: str | None = None, members: list | None = None, leader_key: str | None = None,
+                    client_req_id: str | None = None) -> dict:
         """`team_id` cho trước khi phiên hội thoại đã tạo với kênh `team:<team_id>` (xem `new_team_id`).
 
         `members` [(agent_key, slug)] và `leader_key` ghi trong CÙNG giao dịch với nhóm (0.142.0): không còn nhóm nửa
@@ -369,7 +373,7 @@ class TeamStore:
                     self._event(c, tid, "leader_set", by, {"leader_key": None}, {"leader_key": leader_key})
         return self.get(tid)
 
-    def find_by_request(self, brain_id: str, client_req_id: str) -> Optional[dict]:
+    def find_by_request(self, brain_id: str, client_req_id: str) -> dict | None:
         req = str(client_req_id or "").strip()[:80]
         if not req:
             return None
@@ -382,12 +386,12 @@ class TeamStore:
         with closing(self._conn()) as c:
             return [self._team(r) for r in c.execute("SELECT * FROM teams WHERE status != 'archived'").fetchall()]
 
-    def get(self, team_id: str) -> Optional[dict]:
+    def get(self, team_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM teams WHERE team_id=?", (str(team_id or ""),)).fetchone()
             return self._team(r) if r else None
 
-    def list_teams(self, brain_id: str, limit: int = 50, before: Optional[float] = None,
+    def list_teams(self, brain_id: str, limit: int = 50, before: float | None = None,
                    include_archived: bool = False) -> list:
         """Nhóm của brain, mới cập nhật trước. Trang đầu (`before` trống) mở bằng các nhóm đã ghim (ghim sau đứng trước);
         phần còn lại (và mọi trang sau, theo con trỏ `updated_at`) chỉ gồm nhóm không ghim, nên không nhóm nào lặp."""
@@ -404,7 +408,7 @@ class TeamStore:
                 base + " AND pinned_at IS NOT NULL ORDER BY pinned_at DESC", (brain_id,)).fetchall()]
             return pinned + [self._team(r) for r in c.execute(q, args).fetchall()]
 
-    def set_pinned(self, team_id: str, on: bool, by: str = "owner") -> Optional[dict]:
+    def set_pinned(self, team_id: str, on: bool, by: str = "owner") -> dict | None:
         """Ghim (hay bỏ ghim) nhóm lên đầu danh sách. Không đổi `updated_at`."""
         with self._Tx(self) as c:
             r = c.execute("SELECT pinned_at FROM teams WHERE team_id=?", (team_id,)).fetchone()
@@ -423,7 +427,7 @@ class TeamStore:
         with closing(self._conn()) as c:
             c.execute("UPDATE teams SET owner_at=?, read_at=? WHERE team_id=?", (now, now, str(team_id or "")))
 
-    def set_muted(self, team_id: str, on: bool, by: str = "owner") -> Optional[dict]:
+    def set_muted(self, team_id: str, on: bool, by: str = "owner") -> dict | None:
         """Turn this team's notifications off (or back on), 0.197.0. A muted team never notifies the owner's devices, not
         even for a message that calls the owner; its unread count still shows. Not an edit: `updated_at` stays."""
         with self._Tx(self) as c:
@@ -434,7 +438,7 @@ class TeamStore:
             self._event(c, team_id, "muted" if on else "unmuted", by, {"muted": bool(r["muted"])}, {"muted": bool(on)})
         return self.get(team_id)
 
-    def set_work_mode(self, team_id: str, mode: str, by: str = "owner") -> Optional[dict]:
+    def set_work_mode(self, team_id: str, mode: str, by: str = "owner") -> dict | None:
         """Owner's switch for outside actions (0.207.0): `gated` asks for approval, `full` lets the team act. Logged as an
         event with the previous value, so the team history shows who opened or closed it and when."""
         mode = str(mode or "").strip().lower()
@@ -627,7 +631,7 @@ class TeamStore:
                     out.append(r["team_id"])
         return out
 
-    def set_leader(self, team_id: str, agent_key: Optional[str], by: str = "owner") -> dict:
+    def set_leader(self, team_id: str, agent_key: str | None, by: str = "owner") -> dict:
         now = time.time()
         with self._Tx(self) as c:
             t = c.execute("SELECT * FROM teams WHERE team_id=?", (team_id,)).fetchone()
@@ -656,7 +660,7 @@ class TeamStore:
         with closing(self._conn()) as c:
             return [self._member(r) for r in c.execute(q + " ORDER BY joined_at", (team_id,)).fetchall()]
 
-    def member(self, team_id: str, agent_key: str) -> Optional[dict]:
+    def member(self, team_id: str, agent_key: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_members WHERE team_id=? AND agent_key=?", (team_id, agent_key)).fetchone()
             return self._member(r) if r else None
@@ -664,11 +668,6 @@ class TeamStore:
     def is_active_member(self, team_id: str, agent_key: str) -> bool:
         m = self.member(team_id, agent_key)
         return bool(m and m["status"] == "active")
-
-    def teams_of_agent(self, agent_key: str) -> list:
-        with closing(self._conn()) as c:
-            return [r["team_id"] for r in c.execute(
-                "SELECT team_id FROM team_members WHERE agent_key=? AND status='active'", (agent_key,)).fetchall()]
 
     def active_member_slugs(self, brain_id: str) -> set[str]:
         """Tập các slug trợ lý đang là thành viên hoạt động của ít nhất một nhóm chưa lưu trữ trong brain."""
@@ -688,7 +687,7 @@ class TeamStore:
                         iden = json.loads(r["identity_json"])
                         if iden and iden.get("slug"):
                             slugs.add(iden["slug"])
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError, ValueError):
                         pass
             return slugs
 
@@ -707,7 +706,7 @@ class TeamStore:
                              "AND json_extract(after_json, '$.task_id')=? AND json_extract(after_json, '$.blocked_at')=? "
                              "LIMIT 1", (team_id, str(task_id), float(blocked_at))).fetchone() is not None
 
-    def cap_record(self, team_id: str, task_id: str) -> Optional[dict]:
+    def cap_record(self, team_id: str, task_id: str) -> dict | None:
         """Bản ghi `cap_blocked` mới nhất của ĐÚNG việc `task_id` (trần đã chạm, các bước bị từ chối), tra thẳng trong kho
         chứ không trong đuôi sự kiện của cả nhóm: nhóm bận có thể sinh hàng trăm sự kiện khác sau lần chặn (review
         b93c46bd #3). Không có thì None."""
@@ -728,7 +727,7 @@ class TeamStore:
                 "note": r["note"], "created_at": r["created_at"], "updated_at": r["updated_at"]}
 
     def add_step(self, task_id: str, team_id: str, kind: str, agent_key: str, job_revision: int, brief: str,
-                 input_refs: list, parent_step: Optional[str] = None, held: bool = False) -> dict:
+                 input_refs: list, parent_step: str | None = None, held: bool = False) -> dict:
         """`held` (customer report 0.270, Code 23): the step waits for every step before it. It is not queued, so no
         wave or tick picks it; `release_held_step` queues it once the job has nothing else left to run."""
         if kind not in STEP_KINDS:
@@ -749,12 +748,12 @@ class TeamStore:
             return [self._step(r) for r in c.execute("SELECT * FROM team_steps WHERE task_id=? ORDER BY seq",
                                                      (task_id,)).fetchall()]
 
-    def step(self, step_id: str) -> Optional[dict]:
+    def step(self, step_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_steps WHERE step_id=?", (step_id,)).fetchone()
             return self._step(r) if r else None
 
-    def next_queued_step(self, task_id: str) -> Optional[dict]:
+    def next_queued_step(self, task_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq LIMIT 1",
                           (task_id,)).fetchone()
@@ -766,7 +765,7 @@ class TeamStore:
             return [self._step(r) for r in c.execute(
                 "SELECT * FROM team_steps WHERE task_id=? AND status='queued' ORDER BY seq", (task_id,)).fetchall()]
 
-    def release_held_step(self, task_id: str, extra_inputs: Optional[list] = None) -> Optional[dict]:
+    def release_held_step(self, task_id: str, extra_inputs: list | None = None) -> dict | None:
         """Queue the FIRST held step of the job (lowest seq), its inputs extended with `extra_inputs` (the results of the
         steps before it, so the step sees what it waited for). None when no step is held."""
         with self._Tx(self) as c:
@@ -786,7 +785,7 @@ class TeamStore:
                             (time.time(), step_id))
             return cur.rowcount == 1
 
-    def finish_step(self, step_id: str, status: str, result_msg_id: Optional[int] = None, applied: bool = False,
+    def finish_step(self, step_id: str, status: str, result_msg_id: int | None = None, applied: bool = False,
                     note: str = "") -> None:
         with self._Tx(self) as c:
             c.execute("UPDATE team_steps SET status=?, result_msg_id=?, applied=?, note=?, updated_at=? "
@@ -812,9 +811,9 @@ class TeamStore:
 
     # ───────────── sổ lượt ─────────────
 
-    def reserve_turn(self, team_id: str, task_id: Optional[str], step_id: Optional[str], agent_key: str,
-                     role: str, *, daily_cap: Optional[int] = None, day_start: float = 0.0,
-                     task_cap: Optional[int] = None) -> str:
+    def reserve_turn(self, team_id: str, task_id: str | None, step_id: str | None, agent_key: str,
+                     role: str, *, daily_cap: int | None = None, day_start: float = 0.0,
+                     task_cap: int | None = None) -> str:
         """Giữ chỗ một lượt. Có trần thì đếm và ghi trong CÙNG một giao dịch BEGIN IMMEDIATE: hai lượt giữ chỗ đồng thời
         (hai luồng, hai tiến trình) không cùng lọt qua chỗ trống cuối cùng. Chạm trần thì ném `TurnCapReached`."""
         if role not in TURN_ROLES:
@@ -844,8 +843,8 @@ class TeamStore:
             c.execute("UPDATE team_turns SET status='running', engine=?, model=?, engine_at=? "
                       "WHERE turn_id=? AND status='reserved'", (engine, model, time.time(), turn_id))
 
-    def settle_turn(self, turn_id: str, status: str, tokens_in: Optional[int] = None, tokens_out: Optional[int] = None,
-                    cost_usd: Optional[float] = None) -> None:
+    def settle_turn(self, turn_id: str, status: str, tokens_in: int | None = None, tokens_out: int | None = None,
+                    cost_usd: float | None = None) -> None:
         if status not in ("ok", "error", "interrupted"):
             raise TeamError("kết cục lượt không hợp lệ")
         with self._Tx(self) as c:
@@ -870,7 +869,7 @@ class TeamStore:
             return c.execute("UPDATE team_turns SET committed_at=? WHERE turn_id=? AND status='ok' "
                              "AND committed_at IS NULL", (time.time(), turn_id)).rowcount == 1
 
-    def turn(self, turn_id: str) -> Optional[dict]:
+    def turn(self, turn_id: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_turns WHERE turn_id=?", (turn_id,)).fetchone()
             return dict(r) if r else None
@@ -975,7 +974,7 @@ class TeamStore:
         self._event(c, team_id, "authority_revoked", by, {"leader_key": old["leader_key"]}, {"reason": reason})
         return True
 
-    def active_authority(self, team_id: str) -> Optional[dict]:
+    def active_authority(self, team_id: str) -> dict | None:
         """Dòng Toàn quyền còn hiệu lực VÀ còn đúng trưởng nhóm hiện tại; None nếu nhóm ở Quyền giới hạn."""
         with closing(self._conn()) as c:
             r = self._active_authority_row(c, team_id)
@@ -986,7 +985,7 @@ class TeamStore:
                 return None
             return self._authority(r)
 
-    def update_authority_caps(self, authority_id: int, caps: dict, by: str, ceilings: Optional[dict] = None) -> bool:
+    def update_authority_caps(self, authority_id: int, caps: dict, by: str, ceilings: dict | None = None) -> bool:
         """Trưởng nhóm đổi trần trong trần trần (người gọi đã kiểm). CAS theo dòng còn hiệu lực: dòng đã thu hồi thì
         không đổi gì, trả False. `ceilings` chỉ chủ dùng (nút "Cho thêm lượt" nâng cả trần tối đa khi cần)."""
         with self._Tx(self) as c:
@@ -1044,21 +1043,21 @@ class TeamStore:
                 "log_id": r["log_id"] if "log_id" in keys else None}
 
     @staticmethod
-    def _state_json(r) -> Optional[dict]:
+    def _state_json(r) -> dict | None:
         """Ảnh chụp trạng thái cho nhật ký trước/sau (prev_json/next_json)."""
         if r is None:
             return None
         return {"value": r["value"], "reasons": json.loads(r["reasons_json"] or "[]"), "axis": r["axis"],
                 "comment": r["comment"], "content_sha": r["content_sha"], "source_kind": r["source_kind"]}
 
-    def set_reaction(self, **kw) -> Optional[dict]:
+    def set_reaction(self, **kw) -> dict | None:
         """Đặt trọn trạng thái phản hồi của `reactor` trên một tin (xem `set_reaction_ex`). Trả trạng thái hiện tại."""
         return self.set_reaction_ex(**kw)["state"]
 
     def set_reaction_ex(self, *, team_id: str, session_id: str, message_id: int, agent_key: str,
-                        task_id: Optional[str], content_sha: str, value: Optional[str], reasons: Optional[list] = None,
+                        task_id: str | None, content_sha: str, value: str | None, reasons: list | None = None,
                         comment: str = "", nonce: str, reactor: str = "owner", axis: str = "",
-                        seen_sha: Optional[str] = None, source_kind: str = "owner") -> dict:
+                        seen_sha: str | None = None, source_kind: str = "owner") -> dict:
         """Đặt trọn trạng thái phản hồi của `reactor` trên một tin: emoji (hay "none"), lý do, trục nói/im, góp ý. Trả
         {"state": trạng thái hiện tại (None khi đã bỏ hết), "log_id": dòng nhật ký của lần này, "replayed": gửi lại}.
 
@@ -1137,7 +1136,7 @@ class TeamStore:
         d["effect_refs"] = json.loads(d["effect_refs_json"]) if d.get("effect_refs_json") else {}
         return d
 
-    def reaction_log_row(self, log_id: int) -> Optional[dict]:
+    def reaction_log_row(self, log_id: int) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_reaction_log WHERE id=?", (int(log_id),)).fetchone()
             return self._log(r) if r else None
@@ -1155,7 +1154,7 @@ class TeamStore:
                 "SELECT * FROM team_reaction_log WHERE session_id=? AND message_id=? AND reactor=? ORDER BY id",
                 (session_id, int(message_id), reactor)).fetchall()]
 
-    def mark_reaction_effects(self, log_ids: list, state: str, refs: Optional[dict] = None) -> None:
+    def mark_reaction_effects(self, log_ids: list, state: str, refs: dict | None = None) -> None:
         ids = [int(x) for x in log_ids or []]
         if not ids:
             return
@@ -1163,8 +1162,8 @@ class TeamStore:
             c.execute(f"UPDATE team_reaction_log SET effect_state=?, effect_refs_json=COALESCE(?, effect_refs_json) "
                       f"WHERE id IN ({','.join('?' * len(ids))})", [state, _j(refs) if refs is not None else None] + ids)
 
-    def set_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: Optional[int], status: str,
-                            reason: str = "") -> Optional[dict]:
+    def set_reaction_status(self, session_id: str, message_id: int, reactor: str, log_id: int | None, status: str,
+                            reason: str = "") -> dict | None:
         """Host ghi trạng thái hiển thị của một reaction (bộ chiếu, lượt xem xét). Chỉ ghi khi reaction vẫn ở đúng lần
         đổi `log_id` (lần đổi mới hơn có trạng thái của nó). Trả trạng thái mới, None khi không ghi."""
         if status not in REACTION_STATUSES:
@@ -1225,7 +1224,7 @@ class TeamStore:
             out.setdefault(int(r["message_id"]), []).append(self._reaction(r))
         return out
 
-    def reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> Optional[dict]:
+    def reaction_of(self, session_id: str, message_id: int, reactor: str = "owner") -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_reactions WHERE session_id=? AND message_id=? AND reactor=?",
                           (session_id, int(message_id), reactor)).fetchone()
@@ -1247,7 +1246,7 @@ class TeamStore:
                                                "ORDER BY id", (session_id, int(message_id))).fetchall()]
 
     def recent_feedback(self, team_id: str, agent_key: str, since: float, limit: int = 5,
-                        reactor: Optional[str] = "owner") -> list:
+                        reactor: str | None = "owner") -> list:
         """Phản hồi còn hiệu lực trên tin của `agent_key` trong ĐÚNG nhóm `team_id`, mới nhất trước (spec 14.4 mục 3).
         Mặc định chỉ của chủ nhóm; `reactor=None` lấy mọi người phản hồi, `reactor="agent:%"` (LIKE) chỉ của agent."""
         q = "SELECT * FROM team_reactions WHERE team_id=? AND agent_key=? AND updated_at >= ?"
@@ -1309,7 +1308,7 @@ class TeamStore:
         return d
 
     def acquire_busy(self, agent_key: str, team_id: str, turn_id: str, lease_s: float = 300,
-                     now: Optional[float] = None, per_team: bool = False) -> bool:
+                     now: float | None = None, per_team: bool = False) -> bool:
         """Lấy khoá bận. `per_team=False` (nhịp, xem xét): dòng chung, chỉ lấy được khi agent không có dòng nào còn hạn.
         `per_team=True` (lượt nhóm): dòng mạch của `team_id`, chỉ vướng dòng chung và lượt khác của CHÍNH nhóm đó."""
         t = time.time() if now is None else float(now)
@@ -1327,7 +1326,7 @@ class TeamStore:
                       "lease_until=excluded.lease_until", (key, team_id, turn_id, t + float(lease_s)))
             return True
 
-    def renew_busy(self, agent_key: str, turn_id: str, lease_s: float, now: Optional[float] = None) -> bool:
+    def renew_busy(self, agent_key: str, turn_id: str, lease_s: float, now: float | None = None) -> bool:
         """Gia hạn khoá bận của ĐÚNG lượt `turn_id` trong lúc lượt còn chạy (GOAL T1, lượt dài tới STEP_TIMEOUT_S). Chỉ
         UPDATE: dòng đã nhả (lượt xong) hay đã thuộc lượt khác thì không làm gì, không bao giờ giành lại. Trả True khi đã
         gia hạn."""
@@ -1336,7 +1335,7 @@ class TeamStore:
             return c.execute(f"UPDATE agent_busy SET lease_until=? WHERE turn_id=? AND {self._AGENT_ROWS}",
                              (t + float(lease_s), turn_id) + self._agent_args(agent_key)).rowcount == 1
 
-    def busy_turn(self, agent_key: str, team_id: Optional[str] = None) -> Optional[str]:
+    def busy_turn(self, agent_key: str, team_id: str | None = None) -> str | None:
         """Lượt đang ghi trên dòng khoá bận của agent (kể cả dòng đã hết hạn mà chưa ai lấy), None khi không có dòng.
         Có `team_id`: dòng mạch của nhóm đó (lượt nhóm kiểm mình còn giữ khoá không)."""
         key = self.busy_slot(agent_key, team_id) if team_id is not None else agent_key
@@ -1349,7 +1348,7 @@ class TeamStore:
             c.execute(f"DELETE FROM agent_busy WHERE turn_id=? AND {self._AGENT_ROWS}",
                       (turn_id,) + self._agent_args(agent_key))
 
-    def busy_of(self, agent_key: str, now: Optional[float] = None) -> Optional[dict]:
+    def busy_of(self, agent_key: str, now: float | None = None) -> dict | None:
         """Một dòng còn hạn bất kỳ của agent (chung hay mạch): agent đang làm gì đó trong nhóm. `agent_key` của dòng trả
         về là mã agent trần, `slot` là khoá thật của dòng."""
         t = time.time() if now is None else float(now)
@@ -1358,7 +1357,7 @@ class TeamStore:
                           "ORDER BY lease_until DESC LIMIT 1", self._agent_args(agent_key) + (t,)).fetchone()
             return self._busy_row(r) if r else None
 
-    def busy_blocking(self, agent_key: str, team_id: str, now: Optional[float] = None) -> Optional[dict]:
+    def busy_blocking(self, agent_key: str, team_id: str, now: float | None = None) -> dict | None:
         """Dòng còn hạn đang CHẶN lượt nhóm của agent ở `team_id` (0.257.0): dòng chung, hay lượt khác cùng nhóm. Lượt của
         agent ở nhóm khác không chặn nên không trả về."""
         t = time.time() if now is None else float(now)
@@ -1368,7 +1367,7 @@ class TeamStore:
                           (agent_key, self.busy_slot(agent_key, team_id), t)).fetchone()
             return self._busy_row(r) if r else None
 
-    def busy_keys(self, now: Optional[float] = None) -> set:
+    def busy_keys(self, now: float | None = None) -> set:
         """Mọi agent đang giữ khoá bận còn hạn (một câu đọc cho cả nhịp lớp 3)."""
         t = time.time() if now is None else float(now)
         with closing(self._conn()) as c:
@@ -1392,7 +1391,7 @@ class TeamStore:
                              (team_id, int(message_id))).fetchall()
         return [dict(r) for r in rows]
 
-    def reply(self, team_id: str, message_id: int, agent_key: str) -> Optional[dict]:
+    def reply(self, team_id: str, message_id: int, agent_key: str) -> dict | None:
         with closing(self._conn()) as c:
             r = c.execute("SELECT * FROM team_replies WHERE team_id=? AND message_id=? AND agent_key=?",
                           (team_id, int(message_id), agent_key)).fetchone()
@@ -1411,7 +1410,7 @@ class TeamStore:
                 out.setdefault(int(r["message_id"]), []).append(dict(r))
         return out
 
-    def claim_reply(self, team_id: str, message_id: int, agent_key: str) -> Optional[int]:
+    def claim_reply(self, team_id: str, message_id: int, agent_key: str) -> int | None:
         """CAS queued -> running: mỗi lượt trả lời chạy tối đa một lần cho mỗi lần thử. Trả số lần thử (`attempt`) đã
         nhận, None khi không nhận được. Người gọi đưa lại số này khi ghi kết cục."""
         with self._Tx(self) as c:
@@ -1425,8 +1424,8 @@ class TeamStore:
         return int(r["attempt"])
 
     def settle_reply(self, team_id: str, message_id: int, agent_key: str, status: str, *, attempt: int,
-                     reason: str = "", detail: str = "", turn_id: Optional[str] = None,
-                     result_msg_id: Optional[int] = None, engine: str = "", model: str = "") -> bool:
+                     reason: str = "", detail: str = "", turn_id: str | None = None,
+                     result_msg_id: int | None = None, engine: str = "", model: str = "") -> bool:
         """Ghi kết cục của ĐÚNG lần thử `attempt` khi lượt còn mở (review 0.142.0, #3): một lượt cũ về muộn (đã bị coi là
         dở lúc khởi động lại, rồi chủ bấm Thử lại) không ghi đè kết cục của lần thử mới. Trả True khi đã ghi."""
         if status not in REPLY_STATUS:
@@ -1441,7 +1440,7 @@ class TeamStore:
         return n == 1
 
     def retry_reply(self, team_id: str, message_id: int, agent_key: str, stuck_after_s: float = STUCK_QUEUED_S
-                    ) -> Optional[dict]:
+                    ) -> dict | None:
         """Thử lại một lượt lỗi: CAS error -> queued, tăng `attempt`. Bấm hai lần, hay bấm khi lượt đang chạy hoặc đã
         xong, thì không làm gì (None): không có lượt thứ hai, không có kết quả trùng. Lượt nằm `queued` quá lâu (việc
         nền không tạo được) cũng thử lại được; lần thử cũ, nếu có lúc chạy, không ghi đè được kết cục mới (attempt)."""
@@ -1453,7 +1452,7 @@ class TeamStore:
                           (now, team_id, int(message_id), agent_key, now - float(stuck_after_s))).rowcount
         return self.reply(team_id, message_id, agent_key) if n == 1 else None
 
-    def interrupt_open_replies(self, before: Optional[float] = None) -> list:
+    def interrupt_open_replies(self, before: float | None = None) -> list:
         """Sau khi khởi động lại: lượt trả lời còn `queued`/`running` không ai chạy nữa. Đánh `error` lý do `restart`
         (có Thử lại) thay vì để quay mãi hay tự chạy lại ngoài ý chủ. Trả các dòng đã đổi."""
         with self._Tx(self) as c:

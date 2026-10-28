@@ -20,12 +20,12 @@ Năm cái tên toàn cục đó:
 Test khoá cả năm, và khoá luôn điều kiện quan trọng nhất: bỏ trống mọi biến thì mọi thứ phải
 render RA Y HỆT TRƯỚC ĐÂY - người đang chạy một bản không được bắt đi sửa gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 
 import yaml
+from _paths import ROOT, SERVER
 
 _fails = []
 
@@ -173,7 +173,7 @@ check("update.sh: dò container theo tên bản", 'grep -qx "$NAME"' in upd)
 # 5. Profile Codex: hai bản chung $HOME không được ghi đè nhau
 # ============================================================
 os.environ.pop("JAVIS_PORT", None)
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 check("cổng mặc định giữ nguyên tên 'javis' (máy đang chạy không phải sinh file mới)",
       mcp_hub.codex_profile_name() == "javis")

@@ -10,18 +10,18 @@ container: chỗ hứng đó nghe trên loopback của CONTAINER, còn trình du
   2. docker-compose.google.yml mở cổng 8000 CHỈ cho chính máy đó; update.sh giữ file này khi cổng đang mở.
   3. Bấm Kết nối lần đầu trong Docker thì Javis nói rõ phải làm gì thay vì để đâm vào ngõ cụt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-gdocker-"))
 
-import deploy_info  # noqa: E402
-import main  # noqa: E402
-import mcp_store  # noqa: E402
+import deploy_info
+import main
+import mcp_store
 
 _fails = []
 

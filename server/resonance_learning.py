@@ -11,7 +11,7 @@ Tham số là hằng có phiên bản, không phải ô cài đặt. Đổi mặ
 """
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 POLICY_VERSION = "learning.v2"
 
@@ -56,7 +56,7 @@ def default_presentation() -> dict:
     return {k: v["default"] for k, v in PRESENTATION.items()}
 
 
-def presentation_for(kind: str, active: Optional[dict]) -> dict:
+def presentation_for(kind: str, active: dict | None) -> dict:
     """Cách dựng MỘT tin: {"detail": full|brief, "quiet": bool}. Tin bắt buộc luôn đầy đủ và rung chuông."""
     eff = {**default_presentation(), **{k: v for k, v in dict(active or {}).items() if k in PRESENTATION}}
     if kind in MANDATORY_KINDS:
@@ -71,7 +71,7 @@ def _live(reactions: Iterable[dict], now: float, policy: dict) -> list:
     return [r for r in reactions if r.get("alive") and float(r.get("updated_at") or 0) >= lo]
 
 
-def _msgs(rows: list, reason: str, kinds: tuple, detail: Optional[str] = None) -> list:
+def _msgs(rows: list, reason: str, kinds: tuple, detail: str | None = None) -> list:
     """Số TIN khác nhau có giá trị hiện tại `down` + `reason`: bấm nhiều lần trên một tin vẫn là một tin."""
     seen = {}
     for r in rows:
@@ -84,7 +84,7 @@ def _msgs(rows: list, reason: str, kinds: tuple, detail: Optional[str] = None) -
 
 
 def propose(reactions: Iterable[dict], active: dict, pending_keys: Iterable[str], dismissed: Iterable[dict],
-            now: float, policy: dict = POLICY) -> Optional[dict]:
+            now: float, policy: dict = POLICY) -> dict | None:
     """Bộ học làn P. Đầu vào:
     - `reactions`: giá trị HIỆN TẠI của mỗi người trên mỗi tin của một trợ lý: {message, notice_kind, presentation,
       value, reason, alive, updated_at, ref}. `alive` False là mồ côi (tin bị xoá hay nội dung đổi): không đếm.

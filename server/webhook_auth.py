@@ -31,7 +31,7 @@ import hmac
 import json
 import secrets as _rand
 import time
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import parse_qs
 
 PROVIDERS = ("none", "hmac_sha256", "stripe", "github", "shopify", "systeme_io")
@@ -285,14 +285,14 @@ def _check(prov: str, cfg: dict, key: bytes, headers: Any, body: bytes, now: flo
     return False, "unknown provider", ""
 
 
-def verify(cfg: dict, secret: Any, headers: Any, body: bytes, now: Optional[float] = None,
+def verify(cfg: dict, secret: Any, headers: Any, body: bytes, now: float | None = None,
            previous: str = "") -> tuple:
     """(ok, reason) as before; see verify_ex for which key matched. Never raises."""
     ok, why, _, _ = verify_ex(cfg, secret, headers, body, now, previous)
     return ok, why
 
 
-def verify_ex(cfg: dict, secret: Any, headers: Any, body: bytes, now: Optional[float] = None,
+def verify_ex(cfg: dict, secret: Any, headers: Any, body: bytes, now: float | None = None,
               previous: str = "") -> tuple:
     """(ok, reason, key_version, scheme). `secret` is the resolved current secret; `previous` the resolved previous
     one, tried only while `previous_until` has not passed (the bounded overlap of a rotation)."""
@@ -345,13 +345,13 @@ def normalize(provider: str, headers: Any, doc: Any) -> dict:
 TRACE_EVENT_KEYS = ("provider", "type", "id", "occurred_at", "signed_form")
 
 
-def trace_event(ev: Optional[dict]) -> dict:
+def trace_event(ev: dict | None) -> dict:
     """What of the normalised event may be STORED (the trace, spec §5: no customer data): ids and the type. The
     contact block is derived again from the body whenever the event runs (`run_event`)."""
     return {k: ev[k] for k in TRACE_EVENT_KEYS if isinstance(ev, dict) and k in ev}
 
 
-def run_event(ev: Optional[dict], doc: Any) -> dict:
+def run_event(ev: dict | None, doc: Any) -> dict:
     """The event as rules and templates read it (`_event`): the stored part plus, for Systeme.io, the contact block
     taken from the body again (it is never stored in the trace)."""
     out = dict(ev or {})

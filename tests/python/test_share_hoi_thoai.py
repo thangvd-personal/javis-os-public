@@ -12,10 +12,11 @@ phần lớn test này là test an toàn:
   3. Ảnh chỉ đi qua được khi nằm trong attachments, và chỉ loại tài nguyên trình bày.
   4. Thu hồi là chết hẳn; trang không có script và mang header cách ly.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-share-ht-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-share-ht-brains-")
@@ -31,9 +32,9 @@ with open(os.path.join(BRAIN, "attachments", "ghi.md"), "w", encoding="utf-8") a
 with open(os.path.join(BRAIN, "bi-mat.png"), "wb") as f:
     f.write(b"\x89PNG\r\n\x1a\n" + b"1" * 40)
 
-from fastapi.testclient import TestClient   # noqa: E402
-import share_store                          # noqa: E402
-import main                                 # noqa: E402
+import main
+import share_store
+from fastapi.testclient import TestClient
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

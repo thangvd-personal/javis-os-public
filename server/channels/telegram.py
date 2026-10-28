@@ -1,8 +1,9 @@
 """Kênh Telegram (Bot API): bot chuyên trách long-poll bằng `telegram_bot.TelegramBot`."""
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 TG_API = "https://api.telegram.org/bot{token}/{method}"
 

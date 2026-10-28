@@ -10,7 +10,12 @@ from contextlib import closing
 import improvement_cases as IC
 import improvement_store as IM
 from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
-from improvement_observation_history import is_observation2, candidate, reject_v2_history, validate_history
+from improvement_observation_history import (
+    candidate,
+    is_observation2,
+    reject_v2_history,
+    validate_history,
+)
 
 MAX_PACKET_BYTES = 8 * 1024 * 1024
 

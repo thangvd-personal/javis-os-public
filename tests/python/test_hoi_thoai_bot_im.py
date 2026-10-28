@@ -8,11 +8,12 @@ Chủ dự án hay hỏi "sao bot im ở tin này". Dữ liệu vốn đã có �
   - không hiện khi bot đã đáp, người thật đang tiếp quản, quyết định là của tin cũ hơn, hay quyết định là `reply`;
   - kho bộ phán xử chưa có thì không hiện và KHÔNG tạo file; lỗi kho không làm hỏng việc đọc hội thoại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-htim-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -22,9 +23,9 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy_store as rps  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_reply_policy_store as rps
+import chatbot_store
+import conversations
 
 _fails = []
 
@@ -53,8 +54,8 @@ def quyet(chat, verdict="silent", code="below_threshold", dt=0, **kw):
                              "candidate": True, "silence_code": code, "mode": "on", "score": 0.52, "threshold": 0.6, **kw}, NOW - dt)
 
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 

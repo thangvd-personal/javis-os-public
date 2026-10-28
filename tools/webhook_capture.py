@@ -21,13 +21,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 from decimal import Decimal
-from typing import Optional
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
-import webhook_rules  # noqa: E402
+import webhook_rules
 
 _SECRET_HEADERS = ("authorization", "cookie", "x-javis-token", "x-hub-signature", "x-hub-signature-256",
                    "x-shopify-hmac-sha256", "stripe-signature", "x-webhook-signature")
@@ -63,7 +62,7 @@ def scrub(v, key: str = "", pii: bool = False, product: bool = False):
     return wt._payload_walk(v, key, 0, pii, False, product, hide, show)
 
 
-def rule_paths(rules: dict, actions: Optional[list] = None) -> list:
+def rule_paths(rules: dict, actions: list | None = None) -> list:
     """The payload paths a hook's rules read: filter and `when` paths, schema fields, mapping sources, business key
     parts. A fixture must keep those (else it no longer gets the decision the real event got)."""
     out = []
@@ -98,7 +97,7 @@ def rule_paths(rules: dict, actions: Optional[list] = None) -> list:
     return sorted(set(out))
 
 
-def rule_operands(rules: dict, actions: Optional[list] = None) -> dict:
+def rule_operands(rules: dict, actions: list | None = None) -> dict:
     """{path: [condition]} of the conditions in the filter and the actions' `when`: the constants the OWNER wrote."""
     out: dict = {}
 
@@ -152,7 +151,7 @@ def _operand_text(raw: str, conds: list):
     return None
 
 
-def restore_paths(scrubbed, raw, paths: list, operands: Optional[dict] = None) -> tuple:
+def restore_paths(scrubbed, raw, paths: list, operands: dict | None = None) -> tuple:
     """Put back, at each path the rules read, the value as received, so the fixture gets the real event's decision.
     Only a single value (never a whole object or list: those keep their scrubbed shape), never under an identity
     number, a customer block or a credential, never a link, and a kept text still loses any e-mail or phone inside it.
@@ -245,7 +244,7 @@ def _show_capture(x):
     return x
 
 
-def export(state_dir: Path, eid: str, expect: str, out: Path, config: Optional[dict] = None) -> dict:
+def export(state_dir: Path, eid: str, expect: str, out: Path, config: dict | None = None) -> dict:
     import webhook_store
     st = webhook_store.Store(state_dir / "webhook_events.sqlite3")
     try:

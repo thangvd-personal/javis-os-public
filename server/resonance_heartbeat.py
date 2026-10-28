@@ -12,8 +12,8 @@ Ba nguyên tắc:
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Optional
 
 # heartbeat.v2 (A3): thêm hai lớp sự kiện của làn học cách làm, `FOLLOWUP` (lượt làm sản phẩm bằng cách mới, dùng
 # lượt đã giữ sẵn) và `TRIAL` (phép thử M5). Các tham số còn lại giữ nguyên như v1.
@@ -196,14 +196,14 @@ def error_due(fails: int, now: float, reset_at: float = 0.0, policy: dict = POLI
     return float(now) + float(steps[min(max(0, int(fails) - 1), len(steps) - 1)])
 
 
-def next_interval(prev: Optional[float], changed: bool, lo: float, hi: float) -> float:
+def next_interval(prev: float | None, changed: bool, lo: float, hi: float) -> float:
     """Khoảng giãn dần: lần đầu hay có thay đổi thì `lo`; không đổi thì nhân đôi, tối đa `hi`."""
     if changed or not prev or prev < lo:
         return float(lo)
     return float(min(float(hi), float(prev) * 2))
 
 
-def check_due(now: float, review_interval: float, horizon: Optional[dict], policy: dict = POLICY) -> tuple:
+def check_due(now: float, review_interval: float, horizon: dict | None, policy: dict = POLICY) -> tuple:
     """Hẹn kiểm (nghĩa vụ `check`): (thời điểm, mã). Hạn chót gần thì ưu tiên theo mục 4.
 
     - Còn hơn 2 × CHECK_MIN_S: sớm nhất giữa lịch xem lại và nửa thời gian còn lại.
@@ -224,7 +224,7 @@ def check_due(now: float, review_interval: float, horizon: Optional[dict], polic
     return review, "review"
 
 
-def deadline_passed(now: float, horizon: Optional[dict]) -> bool:
+def deadline_passed(now: float, horizon: dict | None) -> bool:
     h = dict(horizon or {})
     if h.get("kind") != "deadline":
         return False

@@ -12,7 +12,6 @@ Test giữ hai thứ đối nghịch nhau:
 - ĐÚNG: đẩy ra thread rồi thì hai lần snapshot song song có thể ghi ĐÈ NGƯỢC nhau, để lại
   mirror thiu. Đó là lý do có khoá theo brain, và test phải chứng minh khoá hoạt động.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import json
 import os
@@ -21,6 +20,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-kbsnap-"))
 
 try:
@@ -28,8 +29,8 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI          # noqa: E402,F401
-from tasks import TasksDeps, TasksFeature   # noqa: E402
+from fastapi import FastAPI  # noqa: F401
+from tasks import TasksDeps, TasksFeature
 
 _fails = []
 

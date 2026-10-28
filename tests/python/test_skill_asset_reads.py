@@ -1,6 +1,4 @@
 """Ordinary hub/lazy reads authenticate one stable source without edit authority."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import os
@@ -11,14 +9,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.TemporaryDirectory(prefix='skill-read-import-')
 os.environ['JAVIS_STATE_DIR'] = _STATE.name
 os.environ['BRAIN_PATH'] = str(Path(_STATE.name) / 'brain')
 os.environ['BRAINS_DIR'] = str(Path(_STATE.name) / 'brains')
 
+import mcp_hub
 import skill_router
 import skill_usage
-import mcp_hub
 from capability_registry import CapabilityRegistry
 from lazy_skill_runtime import LazySkillSource
 

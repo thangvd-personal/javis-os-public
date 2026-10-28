@@ -5,7 +5,6 @@
 No network. Drives the tool through the same route every engine uses (plugins_host.plugin_tools),
 so the per-op permission levels are tested on the real call path.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -13,14 +12,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ptool-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import plugins_host  # noqa: E402
-import plugin_authoring  # noqa: E402
+import plugin_authoring
+import plugins_host
 
 fails = []
 
@@ -64,7 +65,8 @@ tools, route = plugins_host.plugin_tools("suggest", VAULT)
 check("javis_plugin is listed even at the read-only level", any(t["fn"] == "javis_plugin" for t in tools))
 check("route metadata says it can write", route["javis_plugin"]["effect"] == "write"
       and route["javis_plugin"]["required_mode"] == "safe")
-import mcp_hub  # noqa: E402
+import mcp_hub
+
 check("javis_plugin is owner-only (a customer bot never sees it)", "javis_plugin" in mcp_hub.OWNER_ONLY_TOOLS)
 
 # ---- 1. list/read work at every level; write/delete need safe ----
@@ -96,7 +98,8 @@ check("its tool is not served while off", "vat_calc" not in {t["fn"] for t in pl
 check("no staging leftovers are scanned as plugins",
       all(not x["slug"].startswith(".") for x in plugins_host.describe(VAULT)))
 
-import main  # noqa: E402  (GET /plugins and the operations index)
+import main
+
 lst = asyncio.run(main.plugins_list(brain=VAULT))
 check("GET /plugins lists it", any(p["slug"] == "vat-calc" and p["source"] == "user" for p in lst["plugins"]))
 plugin_authoring.rebuild_index(VAULT)

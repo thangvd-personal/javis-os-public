@@ -10,12 +10,12 @@ from contextlib import closing
 from dataclasses import dataclass
 
 import improvement_store as IM
-from improvement_experiments import _identifier, _generation
 from improvement_experiment_protocol import comparison_hash
+from improvement_experiments import _generation, _identifier
+from improvement_result_domain import NATIVE_GATES, require_product_report
 from improvement_trial_records import _brain
 from improvement_view_protocol import view_manifest
 from improvement_view_schema import assert_installed
-from improvement_result_domain import NATIVE_GATES, require_product_report
 
 _NATIVE_CHECKS = frozenset({'materialization', 'worker_protocol', 'installation', 'tool_inventory',
     'side_effects', 'completion', 'actual_model', 'actual_reasoning', 'native_session', 'actual_input_use'})

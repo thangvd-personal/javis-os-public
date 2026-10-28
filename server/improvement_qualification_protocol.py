@@ -9,11 +9,20 @@ from __future__ import annotations
 
 import hashlib
 import math
-from pathlib import PurePosixPath, PureWindowsPath
 import re
+from pathlib import PurePosixPath, PureWindowsPath
 
-from improvement_native_protocol import (_canonical, _digest, _fields, _parse,
-    _text, _tree, validate_startup2, worker_binding, MAX_PRIVATE_BYTES)
+from improvement_native_protocol import (
+    MAX_PRIVATE_BYTES,
+    _canonical,
+    _digest,
+    _fields,
+    _parse,
+    _text,
+    _tree,
+    validate_startup2,
+    worker_binding,
+)
 from improvement_qualification_environment import _endpoint, validate_dummy_environment
 
 

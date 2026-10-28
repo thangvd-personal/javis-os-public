@@ -22,15 +22,14 @@ import re
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import brain_ident       # one brain, many spellings (#716)
-import channel_accounts   # tài khoản kênh dạng token (0.61.0): bot chỉ TRỎ tới, không giữ token
-import channels          # sổ đăng ký kênh: nơi duy nhất biết kênh nào gắn được bot
-import lang_registry   # sổ đăng ký ngôn ngữ: hợp lệ hoá trường ngon_ngu của bot
-
-from config import STATE_DIR
+import brain_ident  # one brain, many spellings (#716)
+import channel_accounts  # tài khoản kênh dạng token (0.61.0): bot chỉ TRỎ tới, không giữ token
+import channels  # sổ đăng ký kênh: nơi duy nhất biết kênh nào gắn được bot
+import lang_registry  # sổ đăng ký ngôn ngữ: hợp lệ hoá trường ngon_ngu của bot
 import localefmt
+from config import STATE_DIR
 
 STORE_PATH = STATE_DIR / "chatbots.json"
 
@@ -194,7 +193,7 @@ _CANH_BAO_EN = {
 }
 
 
-def canh_bao_muc(muc: str) -> List[str]:
+def canh_bao_muc(muc: str) -> list[str]:
     """Những gì chủ đang trao đi khi đặt bot ở mức này. [] với mức chỉ-đọc (không mất gì).
 
     Theo ngôn ngữ giao diện: danh sách này chỉ để hiện cho chủ đọc trước khi bấm đồng ý."""
@@ -206,7 +205,7 @@ def canh_bao_muc(muc: str) -> List[str]:
     return [localefmt.chu(a, b) for a, b in zip(vi, en)]
 
 
-def _clean_muc(v: Any) -> Optional[str]:
+def _clean_muc(v: Any) -> str | None:
     s = str(v or "").strip().lower()
     return s if s in MUC_QUYEN else None
 
@@ -288,12 +287,12 @@ def _clean_name(v: Any) -> str:
     return str(v or "").strip()[:NAME_MAX]
 
 
-def _clean_icon(v: Any) -> Optional[str]:
+def _clean_icon(v: Any) -> str | None:
     s = str(v or "").strip().lower()
     return s if _ICON_RE.match(s) else None
 
 
-def _clean_groups(v: Any) -> List[str]:
+def _clean_groups(v: Any) -> list[str]:
     """Danh sách id nhóm Telegram. Bỏ thứ không phải số - dán nhầm tên nhóm vào đây thì bot
     im lặng mãi mà không ai hiểu vì sao, thà lọc ngay lúc lưu."""
     if isinstance(v, str):
@@ -341,7 +340,7 @@ _HHMM_RE = re.compile(r"^\s*(\d{1,2})\s*[:hH]\s*(\d{2})?\s*$")
 _RANGE_SPLIT = re.compile(r"\s*(?:-|–|to|den|đến)\s*", re.IGNORECASE)
 
 
-def _hhmm(v: Any) -> Optional[str]:
+def _hhmm(v: Any) -> str | None:
     """"8:00", "08:00", "8h", "8h30" -> "08:00"/"08:30"; anything else -> None."""
     m = _HHMM_RE.match(str(v or ""))
     if not m:
@@ -362,7 +361,7 @@ def _hhmm(v: Any) -> Optional[str]:
 NHUONG_TAY_TOI_DA = 240
 
 
-def clean_nhuong_tay(v: Any) -> Optional[int]:
+def clean_nhuong_tay(v: Any) -> int | None:
     """Số phút nhường hợp lệ (0 đến `NHUONG_TAY_TOI_DA`), hoặc None nếu giá trị không đọc được."""
     try:
         n = int(str(v).strip())
@@ -387,7 +386,7 @@ def _clean_ma(v: Any) -> str:
     return s if s and len(s) <= 64 and not any(c.isspace() for c in s) else ""
 
 
-def parse_ngoai_le(v: Any) -> tuple[Optional[list], str]:
+def parse_ngoai_le(v: Any) -> tuple[list | None, str]:
     """Validate the exception list (JSON text or list). Returns (list, "") or (None, reason).
 
     Each entry: {"account_id": the channel account the chat lives on, "chat_id": private chat id on that account,
@@ -458,7 +457,7 @@ def can_xac_nhan_ngoai_le(moi: list, cu: Any, xac_nhan: Any) -> bool:
                for e in moi or [])
 
 
-def ngoai_le_cua(cfg: dict, meta: Optional[dict]) -> Optional[dict]:
+def ngoai_le_cua(cfg: dict, meta: dict | None) -> dict | None:
     """The exception that applies to this turn, or None. Private chats only, and only on the channel account the
     exception names: both `chat_id` and `account_id` of the turn must match exactly."""
     m = meta or {}
@@ -483,7 +482,7 @@ def ngoai_le_nang(cfg: dict) -> bool:
     return _HANG_MUC.get(e.get("muc_quyen"), -1) > _HANG_MUC.get(cfg.get("_muc_bot"), len(MUC_QUYEN))
 
 
-def ap_ngoai_le(cfg: dict, meta: Optional[dict]) -> dict:
+def ap_ngoai_le(cfg: dict, meta: dict | None) -> dict:
     """A COPY of the bot record with this chat's exception applied (level replaced, `_ngoai_le` and the bot's own level
     `_muc_bot` set), or `cfg` itself when no exception applies. Every place that reads `muc_quyen` for a turn must go
     through this: the live turn, the inbox "Reply for me" / "Suggest a reply", and the file download."""
@@ -504,7 +503,7 @@ SKIP_LABELS_MAX = 30
 SKIP_LABEL_LEN = 60
 
 
-def clean_skip_labels(v: Any) -> List[str]:
+def clean_skip_labels(v: Any) -> list[str]:
     """Zalo chat labels the bot never answers in (0.281.0), e.g. ["Gia đình", "Bạn bè"].
 
     Accepts a list, a JSON list (what the dashboard form sends) or one name per line / comma-separated. Names are kept
@@ -547,7 +546,7 @@ def skips_by_label(bot: dict, labels: Any) -> str:
     return ""
 
 
-def parse_gio_truc(v: Any) -> tuple[Optional[dict], str]:
+def parse_gio_truc(v: Any) -> tuple[dict | None, str]:
     """Validate an active-hours value. Returns ({} for all day | {"tu", "den"}, "") or (None, error).
 
     Accepts a dict, a JSON string (what the dashboard form sends) or "08:00-02:00"."""
@@ -652,12 +651,12 @@ def _public(b: dict) -> dict:
 # ============================================================
 # Đọc
 # ============================================================
-def list_bots() -> List[Dict[str, Any]]:
+def list_bots() -> list[dict[str, Any]]:
     with _lock:
         return [_public(b) for b in _load()["bots"]]
 
 
-def get_bot(bot_id: str) -> Optional[Dict[str, Any]]:
+def get_bot(bot_id: str) -> dict[str, Any] | None:
     with _lock:
         for b in _load()["bots"]:
             if b.get("id") == bot_id:
@@ -673,7 +672,7 @@ def get_token(bot_id: str) -> str:
     return ""
 
 
-def tokens(bot_id: str) -> List[tuple]:
+def tokens(bot_id: str) -> list[tuple]:
     """[(tài khoản công khai, token thật)] của mọi tài khoản bot đang trực. Chỉ cho mã nội bộ."""
     with _lock:
         for b in _load()["bots"]:
@@ -687,11 +686,11 @@ def tokens(bot_id: str) -> List[tuple]:
     return []
 
 
-def enabled_bots() -> List[Dict[str, Any]]:
+def enabled_bots() -> list[dict[str, Any]]:
     return [b for b in list_bots() if b.get("enabled")]
 
 
-def token_owner(username: str, exclude_id: str = "", channel: str = "") -> Optional[Dict[str, Any]]:
+def token_owner(username: str, exclude_id: str = "", channel: str = "") -> dict[str, Any] | None:
     """Bot nào đang giữ đúng con bot này (so theo tên tài khoản lấy từ getMe, THEO KÊNH).
 
     Từ 0.61.0 tên tài khoản nằm ở `channel_accounts`; hàm này tra kho đó rồi tìm bot đang trỏ
@@ -714,7 +713,7 @@ def token_owner(username: str, exclude_id: str = "", channel: str = "") -> Optio
     return out
 
 
-def account_ids_of(b: dict) -> List[str]:
+def account_ids_of(b: dict) -> list[str]:
     """Id tài khoản của một bản ghi bot, dù bản ghi là thô (list id) hay công khai (list dict)."""
     out = []
     for a in (b or {}).get("accounts") or []:
@@ -724,12 +723,12 @@ def account_ids_of(b: dict) -> List[str]:
     return out
 
 
-def bots_using_account(account_id: str) -> List[Dict[str, Any]]:
+def bots_using_account(account_id: str) -> list[dict[str, Any]]:
     """Bot nào đang trực tài khoản kênh này. Một tài khoản token chỉ MỘT bot (xem owner_of)."""
     return [b for b in list_bots() if account_id in account_ids_of(b)]
 
 
-def _clean_account_ids(v: Any, exclude_bot: str = "") -> tuple[List[str], str]:
+def _clean_account_ids(v: Any, exclude_bot: str = "") -> tuple[list[str], str]:
     """Danh sách id tài khoản kênh cho một bot: phải tồn tại, phải là kênh gắn được bot, và
     chưa bot nào khác trực. Trả (ids, lỗi)."""
     if isinstance(v, str):
@@ -738,7 +737,7 @@ def _clean_account_ids(v: Any, exclude_bot: str = "") -> tuple[List[str], str]:
         items = list(v)
     else:
         items = []
-    out: List[str] = []
+    out: list[str] = []
     for x in items:
         x = str((x.get("id") if isinstance(x, dict) else x) or "").strip()
         if not x or x in out:
@@ -816,7 +815,7 @@ def can_xac_nhan_doi_tuong(audience: Any, xac_nhan: Any, hien_tai: Any = None) -
     return str(audience or "") == "all" and str(hien_tai or "") != "all" and not bool(xac_nhan)
 
 
-def create_bot(data: dict) -> tuple[Optional[str], str]:
+def create_bot(data: dict) -> tuple[str | None, str]:
     """Tạo bot. Trả (id, "") hoặc (None, lý do).
 
     Bot mới LUÔN tắt, bất kể người gọi gửi gì. Bot chăm sóc khách hàng bật lên là nói chuyện
@@ -1151,7 +1150,7 @@ def _xoa_du_lieu_phan_xu(bot_id: str) -> None:
         pass
 
 
-def bots_using_agent(brain: str, slug: str) -> List[Dict[str, Any]]:
+def bots_using_agent(brain: str, slug: str) -> list[dict[str, Any]]:
     """Bot nào đang trỏ vào Agent này. Dùng để CHẶN xoá Agent còn bot dùng, thay vì để bot
     thành mồ côi rồi im lặng trả lời sai."""
     out = []

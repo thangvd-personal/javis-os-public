@@ -23,10 +23,9 @@ import os
 import secrets
 import threading
 import time
-from pathlib import Path
 
-from config import STATE_DIR
 import localefmt
+from config import STATE_DIR
 
 _LOCK = threading.RLock()
 STORE = STATE_DIR / "share_links.json"

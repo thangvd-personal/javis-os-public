@@ -10,13 +10,14 @@ có sđt là tìm đc". Tin Zalo không mang số của người kia, nên kho p
   4. Gõ đủ một số chưa có trong kho: hỏi Zalo (`friend find`), gắn số vào khách, cuộc chat hiện ra; người chưa từng
      nhắn thì báo "chưa có cuộc chat"; không có Zalo thì báo rõ. Kết quả được nhớ, không hỏi Zalo lặp; có trần số lần.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-htsdt-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -26,10 +27,10 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-import zalo_phone_lookup as zpl  # noqa: E402
+import conversations
+import zalo_cli
+import zalo_personal_channel as zc
+import zalo_phone_lookup as zpl
 
 _fails = []
 
@@ -173,8 +174,8 @@ check("đọc được kết quả bọc data", zpl.parse_find({"data": {"uid": 
 check("không có uid thì rỗng", zpl.parse_find({"error": 1}) == ("", ""))
 
 # ---- 5. Endpoint ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 # Lan đã nhắn nhưng kho chưa biết số mới của chị: Zalo trả uid của Lan, số được gắn và cuộc chat hiện ra.
@@ -204,7 +205,7 @@ js = (ROOT / "dashboard" / "conversations.js").read_text(encoding="utf-8")
 check("ô tìm có dòng báo kết quả hỏi Zalo", 'class="ht-sdt"' in js and "function veSdt(" in js)
 check("kết quả cũ không đè kết quả mới khi gõ tiếp", "if (hoi !== _q) return;" in js)
 check("luật nhận số của giao diện khớp server", "84[35789]\\d{8}|0[35789]\\d{8}" in js)
-import json  # noqa: E402
+import json
 
 for lang in ("vi", "en"):
     d = json.loads((ROOT / "dashboard" / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))

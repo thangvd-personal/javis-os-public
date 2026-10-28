@@ -12,7 +12,6 @@ processes and synchronise on files (a barrier), never by closing a connection in
 Rows that need the owner's real data (POSCake payloads, a deployed Apps Script, a real Systeme.io delivery) are proven
 here with fakes and stay open in docs/webhook-platform/staging-pilot-pack.md.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import base64
 import hashlib
@@ -27,6 +26,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-wh-matrix-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 os.environ["JAVIS_NO_REAL_JUDGE_ENGINE"] = "1"      # incident triage raises instead of building an engine
@@ -37,13 +38,13 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-import webhook_actions as wa  # noqa: E402
-import webhook_auth as wau  # noqa: E402
-import webhook_rules as wr  # noqa: E402
-import webhook_store as ws  # noqa: E402
-import webhook_triggers as wt  # noqa: E402
-import webhook_worker as ww  # noqa: E402
+import httpx
+import webhook_actions as wa
+import webhook_auth as wau
+import webhook_rules as wr
+import webhook_store as ws
+import webhook_triggers as wt
+import webhook_worker as ww
 
 fails = []
 PY = sys.executable
@@ -963,7 +964,7 @@ async def matrix():
 
 # ---- §16.7: the real host app: the public door is /hooks/ only; admin, raw and replay need the login ----
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"
-import main  # noqa: E402
+import main
 
 
 async def host():

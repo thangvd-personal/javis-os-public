@@ -10,15 +10,16 @@ chat id, the Claude Code hook on channel turns, and the main.py wiring.
 Run:
     python tests/run.py steer_kenh
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-steer-kenh-"))
 
-import steer_inbox as si  # noqa: E402
-from telegram_bot import TelegramBot  # noqa: E402
+import steer_inbox as si
+from telegram_bot import TelegramBot
 
 fails = []
 

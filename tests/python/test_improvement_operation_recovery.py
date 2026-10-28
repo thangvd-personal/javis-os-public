@@ -1,6 +1,4 @@
 """Scoped actual role crash recovery preserves fresh/live owners and audit rows."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
 import time
 import unittest
@@ -8,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_operation_execution as F
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class OperationRecoveryTests(unittest.TestCase):

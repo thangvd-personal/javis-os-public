@@ -17,7 +17,7 @@ Chạy:
 """
 import re
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 CONSOLE_JS = (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8")
 CONSOLE_CSS = (ROOT / "dashboard" / "console.css").read_text(encoding="utf-8")

@@ -3,10 +3,9 @@
 Chạy:
     .venv/Scripts/python.exe server/test_mobile_layout.py
 """
-import re  # noqa: E402
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-from pathlib import Path
+import re
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 INDEX = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
 APP = (ROOT / "dashboard" / "app.js").read_text(encoding="utf-8")

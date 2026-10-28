@@ -29,11 +29,12 @@ File này quét bằng ast + symtable của thư viện chuẩn (không cần c�
 Cuối file có phần TỰ KIỂM: cố tình dựng lại đúng hai đoạn mã hỏng và bắt bộ quét phải kêu.
 Không có phần đó thì một bộ quét bị hỏng thầm lặng vẫn cho ra "0 lỗi" và test vẫn xanh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import builtins
 import symtable
 import sys
+
+from _paths import ROOT, SERVER
 
 _fails = []
 

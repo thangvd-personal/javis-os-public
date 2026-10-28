@@ -24,7 +24,6 @@ Ba chỗ dễ làm sai, và test canh cả ba:
 3. `custom` KHÔNG phải mồ côi. Connector do người dùng tự khai không bao giờ có trong catalog,
    nên chốt mồ côi phải tha nó ra, nếu không thì mọi kết nối "Tự thêm (nâng cao)" chết sạch.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import json
 import re
 import sys
@@ -34,6 +33,7 @@ from pathlib import Path
 import core_off
 import mcp_catalog
 import mcp_store
+from _paths import DASHBOARD, ROOT, SERVER
 
 _fails = []
 
@@ -50,7 +50,7 @@ truoc_khi_chay = CATALOG.read_bytes()
 with tempfile.TemporaryDirectory() as td:
     goc_store = core_off.STORE
     goc_lop_goi = mcp_catalog._lop_goi
-    mcp_catalog._lop_goi = lambda: {}
+    mcp_catalog._lop_goi = dict
     core_off.STORE = Path(td) / "core-off.json"
     core_off._cache.update(sig=None, data={})
     mcp_catalog._cache.update(sig=None, by_id={})
@@ -272,7 +272,7 @@ check("và có hàm thay thế được định nghĩa thật",
 # Lỗi THẬT ở bản dựng đầu: khoá loại gõ "connector" số ít trong khi `core_off.LOAI` là
 # "connectors" số nhiều. `da_go` trả rỗng hoàn toàn im lặng, nên MỌI connector mãi mãi hiện là
 # "đã cài", kể cả cái vừa bấm gỡ xong. Chỉ thấy được bằng cách mở trình duyệt ra bấm thử.
-import routes.packs as _rp   # noqa: E402
+import routes.packs as _rp
 
 # Thư mục tạm RIÊNG: khối `with tempfile...` ở trên đã đóng từ lâu, đường dẫn của nó không còn.
 _tmp_kho = tempfile.TemporaryDirectory()

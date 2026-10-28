@@ -1,20 +1,25 @@
 """Versioned native skill-tool installation; real SDK handlers, synthetic messages."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
-import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import TrialProfile
-from improvement_sandbox import FixtureBroker, TrialWorkspace, _effective_hash, _manifest, trial_system_prompt
+from improvement_sandbox import (
+    FixtureBroker,
+    TrialWorkspace,
+    _effective_hash,
+    _manifest,
+    trial_system_prompt,
+)
 from improvement_skill_asset_broker import SkillAssetBroker
 from improvement_store import _hash, _json
-from test_improvement_skill_asset_broker import manifest as make_manifest, request as asset_request
+from test_improvement_skill_asset_broker import manifest as make_manifest
+from test_improvement_skill_asset_broker import request as asset_request
 
 FIXTURE = 'mcp__fixture__fixture_read'
 SKILL = 'mcp__skill__skill_asset_read'
@@ -93,6 +98,7 @@ class NativeSkillProfileTests(unittest.TestCase):
     def handlers(self, profile, engine):
         # Capture the actual SDK @tool handler before create_sdk_mcp_server wraps it.
         from unittest.mock import patch
+
         import claude_agent_sdk
         actual = claude_agent_sdk.create_sdk_mcp_server
         handlers = {}
@@ -125,7 +131,14 @@ class NativeSkillProfileTests(unittest.TestCase):
                 self.assertNotIn(manifest['assets'][0]['content'], str(denied))
 
     def completed(self, *, native_error=False, alter=None):
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         profile, engine, manifest, workspace = self.installation()
         _, handlers = self.handlers(profile, engine)
         events = profile.observe(SystemMessage('init', {'tools': [FIXTURE, SKILL], 'session_id': 'session-a'}))
@@ -174,7 +187,14 @@ class NativeSkillProfileTests(unittest.TestCase):
 
 class NativeSkillCheckerTests(unittest.TestCase):
     def records(self):
-        from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, ToolResultBlock, ToolUseBlock, UserMessage
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ResultMessage,
+            SystemMessage,
+            ToolResultBlock,
+            ToolUseBlock,
+            UserMessage,
+        )
         from test_improvement_trial_checks import TrialChecksTests
         record = TrialChecksTests()
         record.setUp()

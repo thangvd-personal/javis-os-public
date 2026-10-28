@@ -14,12 +14,11 @@ không có dòng nào báo cho người dùng. Cách né tạm là đổi tên f
 chung giữa hai brain bị coi là lỗi. Ba bài kiểm dưới đây khóa lại: cả hai cùng dựng được,
 truy vấn always_on của mỗi scope chỉ trả bản ghi của scope đó, và chỉ mục cũ (v2) tự dựng lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sqlite3
 from pathlib import Path
 
 import pytest
-
+from _paths import ROOT, SERVER  # noqa: F401
 from capability_registry import brain_scope
 from memory_index import INDEX_SCHEMA_VERSION, MemoryIndex
 

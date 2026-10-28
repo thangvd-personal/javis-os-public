@@ -15,11 +15,10 @@ cái nhanh nhất.
 from __future__ import annotations
 
 import contextvars
-from datetime import datetime, timedelta, timezone, tzinfo
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 
 import config as cfgmod
 import lang_registry
-
 
 # Múi giờ dùng khi cấu hình trống hoặc hỏng. Việt Nam không có giờ mùa hè nên UTC+7 là hằng
 # số, không phụ thuộc tzdata của máy chủ - đó là lý do 12 chỗ cũ viết thẳng `hours=7` và
@@ -142,7 +141,7 @@ def doi_mui(moc: datetime) -> datetime:
     """Đưa một mốc thời gian về múi giờ đang cấu hình. Mốc không mang múi giờ được coi là UTC,
     cùng quy ước với `usage_parsers`."""
     if moc.tzinfo is None:
-        moc = moc.replace(tzinfo=timezone.utc)
+        moc = moc.replace(tzinfo=UTC)
     return moc.astimezone(tz())
 
 

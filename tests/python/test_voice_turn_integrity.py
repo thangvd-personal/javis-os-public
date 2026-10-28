@@ -1,5 +1,4 @@
 """Execute the production nested voice handler with real transcript guards and SQLite storage."""
-from _paths import ROOT, SERVER  # noqa: F401
 import ast
 import asyncio
 import sys
@@ -7,10 +6,12 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-import voice_brain
+
+import localefmt  # main.py dịch dòng trạng thái của handler bằng localefmt.chu (0.67.0)
 import nghe_sua
 import sessions
-import localefmt  # main.py dịch dòng trạng thái của handler bằng localefmt.chu (0.67.0)
+import voice_brain
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class VoiceTurnIntegrity(unittest.IsolatedAsyncioTestCase):

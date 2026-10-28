@@ -14,12 +14,13 @@ Hai báo cáo 16/08:
    thiếu binary vẫn xanh, vào chat mới vỡ. Fix: build thiếu codex phải ĐỎ, và thẻ
    Models lộ cli_found để cảnh báo ngay tại chỗ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

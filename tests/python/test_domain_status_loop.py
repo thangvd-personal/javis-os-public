@@ -12,7 +12,6 @@ other open page's ping went unanswered past its 20s wait and it dropped with cod
 2. a failed public IP lookup is remembered for a while, so the next visitors do not pay for it again;
 3. pages opened together share one lookup.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import socket
@@ -21,6 +20,8 @@ import tempfile
 import threading
 import time
 import urllib.request
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-domain-loop-test-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
@@ -32,10 +33,10 @@ try:
 except Exception:
     pass
 
-import httpx                                  # noqa: E402
-import config as c                            # noqa: E402
-import main                                   # noqa: E402
-import routes.domain as dom                   # noqa: E402
+import config as c
+import httpx
+import main
+import routes.domain as dom
 
 _fails = []
 

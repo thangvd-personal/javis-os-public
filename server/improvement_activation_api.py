@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 import re
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from fastapi import Request
-
 from improvement_api import _body, _error
 from improvement_blobs import AssetUnavailable
 from improvement_store import ConflictError, SchemaError

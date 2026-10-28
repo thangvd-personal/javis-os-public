@@ -1,6 +1,4 @@
 """Engineering capability seams at real owner/DB boundaries; no native readiness proof."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import subprocess
 import unittest
@@ -8,11 +6,11 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from unittest.mock import patch
 
-import test_improvement_trial_admission as admission_fixtures
 import test_improvement_operation_execution as operation_fixtures
-import test_improvement_trial_runner as trial_runner_fixtures
 import test_improvement_operation_runner as operation_runner_fixtures
-
+import test_improvement_trial_admission as admission_fixtures
+import test_improvement_trial_runner as trial_runner_fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 
 REFUSALS = (
     {"account_ready": False},

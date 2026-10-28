@@ -10,7 +10,6 @@ The owner asked on 2026-10-11 "can you make it see Zalo photos with any model". 
      (main brain with the owner's model, then the ChatGPT plan, then Claude Code), and the bot's own model answers from that.
   3. THE REAL ERROR WAS LOST. Every failure was logged as "model refused the image". The original error now reaches the bot card.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -18,16 +17,17 @@ import tempfile
 import types
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-matmuon-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import borrowed_eyes as be  # noqa: E402
-import image_vision as iv  # noqa: E402
+import borrowed_eyes as be
+import httpx
+import image_vision as iv
 
 _fails = []
 
@@ -105,7 +105,9 @@ check("a main brain that is not usable (no key) is not a candidate", c == [], c)
 # ============================================================
 IMG = D / "real.jpg"
 try:
-    from PIL import Image      # with Pillow, vision_input re-opens the file, so it must be a real JPEG
+    from PIL import (
+        Image,  # with Pillow, vision_input re-opens the file, so it must be a real JPEG
+    )
     Image.new("RGB", (8, 8), (200, 30, 30)).save(IMG, "JPEG")
 except Exception:              # noqa: BLE001 - no Pillow (CI): small files are sent as they are
     IMG.write_bytes(JPEG)
@@ -157,7 +159,7 @@ check("history keeps a short version of the description", "nội dung ảnh:" in
 # ============================================================
 # 4. The bot reply paths (main.py) use the borrowed eyes
 # ============================================================
-import main  # noqa: E402
+import main
 
 SENT = []
 

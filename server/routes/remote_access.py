@@ -4,15 +4,14 @@ The tunnel itself lives in remote_tunnel.py. This file only reads the form, enfo
 browser session, an admin password) and saves the settings the supervisor reads.
 """
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
-
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import JSONResponse
 
 import config as cfgmod
 import localefmt
 import remote_tunnel
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import JSONResponse
 
 
 @dataclass

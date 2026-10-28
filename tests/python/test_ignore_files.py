@@ -17,13 +17,12 @@ CHÂN LÝ. Phần .dockerignore kiểm bằng một bản mô phỏng luật kh�
 này - nó bám theo tài liệu (khớp theo từng đoạn, `**` nuốt số đoạn bất kỳ, khớp cả thư mục
 cha), nhưng vẫn là MÔ PHỎNG. Giá trị chính của nó là khoá cứng cái bẫy `**/` ở trên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import fnmatch
-import os
 import subprocess
 import sys
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

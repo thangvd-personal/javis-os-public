@@ -1,15 +1,16 @@
 """Failed custom MCP OAuth attempts report the auth mode left in storage."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-mcp-oauth-")
 
-import main  # noqa: E402
-import mcp_store  # noqa: E402
+import main
+import mcp_store
 
 
 class Request:

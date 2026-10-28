@@ -3,8 +3,6 @@
 This verifies integration and accounting, not native isolation, model feasibility,
 business quality, or a complete production Dashboard profile.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import hashlib
 import json
@@ -15,13 +13,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-import test_improvement_trial_service as fixtures
 import improvement_store as IM
+import test_improvement_trial_service as fixtures
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
+from agent_ledger import CallLedger
 from improvement_claude import ClaudeTrialAdapter
 from improvement_trials import TrialStore
-from agent_ledger import CallLedger
-import usage_store as US
-import usage_index as UI
 
 _REAL_RUN, _REAL_POPEN = subprocess.run, subprocess.Popen
 

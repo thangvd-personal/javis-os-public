@@ -26,8 +26,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
-import sessions  # noqa: E402
-import stt  # noqa: E402
+import sessions
+import stt
 
 CAT = 110   # cắt bớt khi in ra màn hình cho dễ đọc
 

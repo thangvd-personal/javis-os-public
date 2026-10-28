@@ -11,16 +11,15 @@ ai cố ý; nó tích tụ từng dòng một, mỗi lần một người cần 
 nhanh nhất. Hệ quả: đổi múi giờ ở trang Cài đặt không có tác dụng gì, và nhắc hẹn "7h sáng"
 là 7h sáng ở Hà Nội chứ không phải ở nơi người dùng ngồi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import pathlib
 import re
 import sys
-from datetime import datetime, timezone
 
 import config as cfgmod
-import localefmt
 import cron_util
 import lang_registry
+import localefmt
+from _paths import ROOT, SERVER
 
 _loi = []
 
@@ -70,7 +69,7 @@ check("trả về đúng múi giờ cũ sau khi hoàn tác", localefmt.ten_tz() 
 # điều hành, cũng bắt được khi ai đó gỡ dòng này.
 _req = (pathlib.Path(ROOT) / "requirements.txt").read_text(encoding="utf-8")
 check("requirements.txt khai tzdata (Windows và image Docker gọn cần nó để đổi múi giờ)",
-      re.search(r"^tzdata\b", _req, flags=re.M) is not None)
+      re.search(r"^tzdata\b", _req, flags=re.MULTILINE) is not None)
 
 # Máy thiếu tzdata hoặc người dùng gõ sai tên: KHÔNG được ném lỗi giữa lượt chat.
 _goc = _voi_locale(tz="Khong/CoThat")

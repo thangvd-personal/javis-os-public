@@ -10,13 +10,12 @@ File này canh:
   4. Nhóm: PATCH gắn và gỡ ảnh, ảnh không có trong kho bị từ chối.
   5. Route tải lên và đọc ảnh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import asyncio
 import io
-import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _state = tempfile.mkdtemp(prefix="javis-avatar-up-")
 os.environ["JAVIS_STATE_DIR"] = _state
@@ -27,8 +26,8 @@ try:
 except Exception:
     pass
 
-import avatar_upload  # noqa: E402
-import agent_avatar  # noqa: E402
+import agent_avatar
+import avatar_upload
 
 _fails = []
 
@@ -83,9 +82,9 @@ check("trợ lý: frontmatter trỏ ảnh đã mất thì về hình Javis, khô
       "image" not in agent_avatar.for_agent({"avatar": {"shape": "star", "image": "0" * 20 + ".png"}}, "minh"))
 
 # ---- 4 + 5. Route thật trên một app tạm (không khởi động job nền hay engine của app)
-import main  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 app = FastAPI()
 app.post("/avatars/upload")(main.avatar_upload_post)
@@ -124,7 +123,8 @@ check("POST /agents: gửi none thì về hình Javis", "image" not in doc()["av
 check("POST /agents: tên ảnh lạ 400",
       c.post("/agents", data={"name": "Người viết", "brain": "brain", "slug": slug, "avatar_image": "x.png"}).status_code == 400)
 
-import team_store  # noqa: E402
+import team_store
+
 ts = team_store.TeamStore()
 t = ts.create_team("brain", "Ra mắt", "", "sess-1")
 tid = t["team_id"] if isinstance(t, dict) else t

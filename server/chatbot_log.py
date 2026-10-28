@@ -25,7 +25,7 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from config import STATE_DIR
 
@@ -105,7 +105,7 @@ def _cat_bot(p: Path) -> None:
         print(f"[chatbot log cắt] {e}", file=sys.stderr)
 
 
-def _nap(bot_id: str) -> List[dict]:
+def _nap(bot_id: str) -> list[dict]:
     p = _path(bot_id)
     try:
         raw = p.read_text(encoding="utf-8", errors="replace")
@@ -126,7 +126,7 @@ def _nap(bot_id: str) -> List[dict]:
     return ra
 
 
-def doc(bot_id: str, limit: int = 50) -> List[dict]:
+def doc(bot_id: str, limit: int = 50) -> list[dict]:
     """Các lượt gần nhất, MỚI TRƯỚC."""
     n = max(1, min(int(limit or 50), 500))
     return list(reversed(_nap(bot_id)))[:n]
@@ -140,13 +140,13 @@ def _chuan(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
 
-def lo_hong(bot_id: str, limit: int = 30) -> List[dict]:
+def lo_hong(bot_id: str, limit: int = 30) -> list[dict]:
     """Câu bot trả lời không nổi, gom trùng và xếp theo SỐ LẦN HỎI giảm dần.
 
     Xếp theo số lần chứ không theo thời gian: thứ đáng viết tài liệu bổ sung trước là thứ
     nhiều khách hỏi nhất, không phải thứ vừa mới hỏi.
     """
-    gom: Dict[str, dict] = {}
+    gom: dict[str, dict] = {}
     for r in _nap(bot_id):
         # Lượt GÃY cũng có bi=True (bot đúng là không trả lời được), nhưng nó không phải chỗ
         # tài liệu thiếu - nó là bot hỏng. Để lẫn vào đây thì danh sách "viết thêm tài liệu"

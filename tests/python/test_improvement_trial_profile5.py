@@ -1,22 +1,19 @@
 """Owned baseline5 profile and original SDK write; no CLI/provider/account call."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
-from dataclasses import replace
 import hashlib
-import json
 import os
 import subprocess
 import sys
 import unittest
+from dataclasses import replace
 from unittest.mock import patch
 
-from improvement_store import _hash
 import test_improvement_manifest5 as baseline_fixture
+import test_improvement_native_profile as native
 import test_improvement_native_skill_reads as legacy
 import test_improvement_trial_profile4 as view
-import test_improvement_native_profile as native
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class TrialProfileFiveTests(unittest.TestCase):
@@ -73,7 +70,9 @@ class TrialProfileFiveTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'nt', 'query dispatch pins a Windows absolute CLI path and creation flags')
     def test_actual_sdk_command_accepts_only_declared_baseline_policy_and_fixture_tool(self):
-        from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
+        from claude_agent_sdk._internal.transport.subprocess_cli import (
+            SubprocessCLITransport,
+        )
         from improvement_query_dispatch import validate_query_dispatch
         profile, engine, _, _ = self.installation()
         binding, _ = self.bind(profile)

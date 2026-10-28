@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import hashlib
 
+from improvement_operation_profile import (
+    RECEIPT_FIELDS,
+    operation_system_prompt,
+    operation_user_prompt,
+)
 from improvement_operation_protocol import operation_materialization, operation_packet
-from improvement_operation_profile import RECEIPT_FIELDS, operation_system_prompt, operation_user_prompt
 from improvement_store import _hash, _json
-from improvement_trial_checks import _row, _inventory, _effects, _completion
+from improvement_trial_checks import _completion, _effects, _inventory, _row
 
 
 def _sha(value):

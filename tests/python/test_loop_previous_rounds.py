@@ -9,15 +9,16 @@ No Claude CLI, SDK or network: the engine is a fake that records the prompt it r
 
     python tests/python/test_loop_previous_rounds.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-prevrounds-"))
 
-import self_improve  # noqa: E402
+import self_improve
 
 _fails = []
 
@@ -126,7 +127,8 @@ check("failed rounds are left out", "Lỗi:" not in block)
 check("newest round is in the tail", "Đề xuất số 7" in block)
 
 # 5. No log on disk: fall back to the state's last summary.
-import shutil  # noqa: E402
+import shutil
+
 shutil.rmtree(Path(_BRAIN) / "Javis" / "loop-log")
 fb = feat._previous_rounds_block("brain", SLUG)
 check("without a log, the state's last summary is used", "Đề xuất số 7" in fb)

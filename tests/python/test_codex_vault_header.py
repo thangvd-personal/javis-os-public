@@ -17,12 +17,13 @@ phép kiểm cũ (`test_tool_reliability`) vẫn XANH suốt thời gian header 
 
     python tests/run.py codex_vault_header
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-codex-vault-"))
 os.environ.setdefault("JAVIS_STATE_DIR", str(_TMP / "state"))
@@ -30,7 +31,7 @@ os.environ.setdefault("JAVIS_SESSIONS_DB", str(_TMP / "conversations.db"))
 os.environ.setdefault("BRAINS_DIR", str(_TMP / "brains"))
 (_TMP / "state").mkdir(parents=True, exist_ok=True)
 
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 fails = []
 

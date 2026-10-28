@@ -19,27 +19,27 @@ Module KHÔNG import main (tránh vòng): mọi helper của main tiêm qua Lear
 """
 from __future__ import annotations
 
-import localefmt
 import asyncio
 import json
 import re
 import sys
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
-import yaml
-import fastyaml   # bộ nạp YAML dùng libyaml, tự rơi về bộ nạp Python khi thiếu
-from fastapi import APIRouter, Form, Query
-
-from claude_cli import claude_engine, cancel_all, _empty_mcp_file
-import system_sync   # is_system_skill: chặn tự học ghi đè skill do app ship
+import agent_rules  # sửa agent chỉ THÊM luật + chốt chặn giữ dòng của chủ
+import aux_engine  # engine viec nen theo model phu nguoi dung chon
+import fastyaml  # bộ nạp YAML dùng libyaml, tự rơi về bộ nạp Python khi thiếu
 import git_brain
-import aux_engine   # engine viec nen theo model phu nguoi dung chon
+import localefmt
 import skill_router
-import agent_rules   # sửa agent chỉ THÊM luật + chốt chặn giữ dòng của chủ
+import system_sync  # is_system_skill: chặn tự học ghi đè skill do app ship
+import yaml
+from claude_cli import _empty_mcp_file, cancel_all, claude_engine
+from fastapi import APIRouter, Form, Query
 
 
 def _now_vn() -> datetime:
@@ -152,7 +152,7 @@ _HISTORY_HEADER = "## Lịch sử (tự học)"
 _HISTORY_MAX = 10
 
 
-def read_md(path) -> Tuple[dict, str]:
+def read_md(path) -> tuple[dict, str]:
     """(frontmatter, thân) của một file .md. Không có/hỏng frontmatter → ({}, cả file)."""
     try:
         text = Path(path).read_text(encoding="utf-8")
@@ -197,7 +197,7 @@ def dump_fm(data: dict) -> str:
                           default_flow_style=False, width=1000).strip()
 
 
-def _split_history(body: str) -> Tuple[List[str], List[str], List[str]]:
+def _split_history(body: str) -> tuple[list[str], list[str], list[str]]:
     """(phần trước mục lịch sử, các dòng lịch sử, phần sau mục).
 
     Dùng chung ranh giới với chốt chặn (agent_rules.split_section, 0.172.0): mục chỉ gồm dải gạch
@@ -241,7 +241,7 @@ _AGENT_MANAGED = (_HISTORY_HEADER, agent_rules.LEARNED_ADDITIONS_HEADER)
 _AGENT_MEMORY_MANAGED = ("## Bài học (tự học)",)
 
 
-def _rule_list(raw) -> List[str]:
+def _rule_list(raw) -> list[str]:
     """add_rules/owner_rules từ manifest: chỉ chuỗi, đã cắt, tối đa 5 mục mỗi lần."""
     if isinstance(raw, str):
         raw = [raw]
@@ -290,11 +290,11 @@ _SECRET_RE = re.compile(
 )
 _JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_=-]{4,}){1,2}")
 _TG_RE = re.compile(r"\b\d{8,}:[-A-Za-z0-9_]{30,}\b")
-_DBURL_RE = re.compile(r"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^:\s]+:[^@\s]+@", re.I)
-_PW_RE = re.compile(r"(mật\s*khẩu|password|passwd|api[_\s-]?key|secret|token)\s*[:=]\s*\S{6,}", re.I)
+_DBURL_RE = re.compile(r"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^:\s]+:[^@\s]+@", re.IGNORECASE)
+_PW_RE = re.compile(r"(mật\s*khẩu|password|passwd|api[_\s-]?key|secret|token)\s*[:=]\s*\S{6,}", re.IGNORECASE)
 
 
-def secret_hits(text: str) -> List[str]:
+def secret_hits(text: str) -> list[str]:
     """Trả danh sách loại secret phát hiện trong text (rỗng = sạch). Chặn commit khi có."""
     if not text:
         return []
@@ -316,7 +316,7 @@ _INJECT_RE = re.compile(
     r"|new\s+system\s+prompt|system\s*:\s*you"
     r"|exfiltrat|gửi\s+.{0,20}(ra\s+ngoài|tới\s+http)"
     r"|<\s*/?\s*(system|assistant|tool_call|function_call)\s*>)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -327,7 +327,7 @@ def sanitize_source(text: str) -> str:
         return text
     def _defang(m):
         s = m.group(0)
-        return s[0] + "​" + s[1:]   # chèn zero-width space → vỡ pattern lệnh
+        return s[0] + "\u200b" + s[1:]   # chèn zero-width space → vỡ pattern lệnh
     return _INJECT_RE.sub(_defang, text)
 
 
@@ -342,17 +342,17 @@ def injection_in_output(text: str) -> bool:
 # auto nên kernel chặn external-write ở bước chạy), và không thấy repo nằm ngoài brain.
 # Việc thuộc các nhóm dưới đây vào hàng đợi là CHẮC CHẮN hỏng - chặn ngay ở cửa vào rẻ
 # hơn để nó chạy rồi chặn: đỡ một lượt worker, đỡ quota, đỡ một thông báo làm phiền.
-_TASK_GATES: List[tuple] = [
+_TASK_GATES: list[tuple] = [
     (re.compile(r"(cookie|đăng\s*nhập|login|oauth|xác\s*thực|otp|quét\s*mã|mã\s*qr"
-                r"|đổi\s*mật\s*khẩu|2fa)", re.I),
+                r"|đổi\s*mật\s*khẩu|2fa)", re.IGNORECASE),
      "cần chính chủ thao tác đăng nhập, worker nền không làm được"),
     (re.compile(r"(gửi|nhắn|đăng|publish|post|comment|trả\s*lời)\s+"
                 r"[^.\n]{0,40}(zalo|telegram|messenger|email|mail|fanpage|page|nhóm|khách"
-                r"|bình\s*luận|bài|lên\s+\w+)", re.I),
+                r"|bình\s*luận|bài|lên\s+\w+)", re.IGNORECASE),
      "gửi/đăng ra ngoài - việc này phải do chủ bấm, không tự chạy nền"),
-    (re.compile(r"(theo\s*dõi|chờ|đợi)\s+[^.\n]{0,30}(duyệt|phản\s*hồi|trả\s*lời|approve)", re.I),
+    (re.compile(r"(theo\s*dõi|chờ|đợi)\s+[^.\n]{0,30}(duyệt|phản\s*hồi|trả\s*lời|approve)", re.IGNORECASE),
      "chỉ là chờ người khác - nên đặt nhắc hẹn thay vì việc nền"),
-    (re.compile(r"(repo|repository|source\s*code|mã\s*nguồn|codebase|ipn|pull\s*request)", re.I),
+    (re.compile(r"(repo|repository|source\s*code|mã\s*nguồn|codebase|ipn|pull\s*request)", re.IGNORECASE),
      "đụng mã nguồn dự án ngoài brain - worker nền không có repo đó"),
 ]
 
@@ -368,7 +368,7 @@ def task_infeasible(title: str, intent: str = "") -> str:
     return ""
 
 
-def _extract_json(raw: str) -> Optional[dict]:
+def _extract_json(raw: str) -> dict | None:
     """Bóc manifest JSON từ output fork (ưu tiên fenced ```json, rồi {...} cân bằng cuối)."""
     if not raw:
         return None
@@ -397,21 +397,21 @@ class LearnDeps:
     brain_root: Callable[[str], str]
     brain_memory_dir: Callable[[str], Path]          # == main._brain_memory_dir (tôn trọng legacy Memory/)
     resolve_subfolder: Callable[[str, str, str], str]  # == main._resolve_subfolder (tìm Wiki/)
-    aux_model: Callable[[], Optional[str]]
+    aux_model: Callable[[], str | None]
     atomic_write_text: Callable[[Any, str], None]
     sessions_store: Any
     state_dir: Path
-    readonly_tools: List[str]
+    readonly_tools: list[str]
     # Nối learn → Kanban: enqueue_task(brain, title, intent, route, priority, deps, needs_approval, created_by)
     # → trả task id. Tiêm sau khi tasks_feature sẵn sàng (main gán). None = chưa nối (bỏ qua tasks).
-    enqueue_task: Optional[Callable] = None
+    enqueue_task: Callable | None = None
     # Đổi engine việc nền theo model phụ người dùng chọn (Claude / Codex / API rẻ).
     # None = giữ nguyên Claude như trước (test dựng deps tối giản không cần tiêm).
-    aux_swap: Optional[Callable] = None
+    aux_swap: Callable | None = None
     # M5: stage_agent_procedure(brain, slug, text) -> procedure id when the assistant has an active procedure
     # overlay (its additions then wait for the owner instead of going live), None otherwise. Raises ValueError
     # when the host checks refuse the text.
-    stage_agent_procedure: Optional[Callable] = None
+    stage_agent_procedure: Callable | None = None
 
 
 ALLOWED_WRITE_PREFIXES = ["memory", "Memory", "Wiki", "skills", ".claude/skills", "Javis",
@@ -457,7 +457,7 @@ class LearnFeature:
             "last_run": 0.0, "last_summary": "", "last_status": "",
         }
         self.lock = asyncio.Lock()             # serialize batch trong-process
-        self._pending: Dict[str, dict] = {}    # brain -> {count, dense, urgent, last_ts, convs:set, jobs:list}
+        self._pending: dict[str, dict] = {}    # brain -> {count, dense, urgent, last_ts, convs:set, jobs:list}
         self._pending_lock = asyncio.Lock()
         self.router = self._make_router()
 
@@ -499,7 +499,7 @@ class LearnFeature:
         except Exception as e:
             print(f"[learn config write] {e}", file=__import__('sys').stderr)
 
-    def _model(self, cfg) -> Optional[str]:
+    def _model(self, cfg) -> str | None:
         return (cfg.get("aux_model") or self.deps.aux_model() or None)
 
     # ── rate limit / budget ──
@@ -518,14 +518,14 @@ class LearnFeature:
         return {"allow_promote": True, "reason": ""}
 
     # ── gate tầng-1 (Python, miễn phí) ──
-    _DENSE_RE = re.compile(r"(là gì|gồm .{0,8}bước|công thức|mô hình|nguyên (lý|tắc)|framework|quy trình|khái niệm|định nghĩa|cách (làm|dựng|triển khai))", re.I)
-    _REMEMBER_RE = re.compile(r"(ghi nhớ|nhớ giúp|lưu lại|nhớ là|remember this|ghi lại vào bộ nhớ)", re.I)
+    _DENSE_RE = re.compile(r"(là gì|gồm .{0,8}bước|công thức|mô hình|nguyên (lý|tắc)|framework|quy trình|khái niệm|định nghĩa|cách (làm|dựng|triển khai))", re.IGNORECASE)
+    _REMEMBER_RE = re.compile(r"(ghi nhớ|nhớ giúp|lưu lại|nhớ là|remember this|ghi lại vào bộ nhớ)", re.IGNORECASE)
 
     def _classify_turn(self, user: str, assistant: str) -> str:
         u = (user or "").strip(); a = (assistant or "").strip()
         if len(u) + len(a) < 40:
             return "low"
-        if re.fullmatch(r"(hi|hello|chào|ok|okay|cảm ơn|thanks|ừ|vâng|yes|no)\b.*", u.lower() or "", re.I):
+        if re.fullmatch(r"(hi|hello|chào|ok|okay|cảm ơn|thanks|ừ|vâng|yes|no)\b.*", u.lower() or "", re.IGNORECASE):
             return "low"
         if self._DENSE_RE.search(u) or (len(a) > 600 and self._DENSE_RE.search(a)):
             return "dense"
@@ -661,9 +661,9 @@ class LearnFeature:
             await self.run_once(target, reason="auto")
 
     # ── DIGEST (full text từ SQLite, KHÔNG dùng bản .md đã clip) ──
-    def _build_digest(self, brain: str, convs: List[str], jobs: Optional[List[str]] = None) -> str:
+    def _build_digest(self, brain: str, convs: list[str], jobs: list[str] | None = None) -> str:
         store = self.deps.sessions_store
-        parts: List[str] = []
+        parts: list[str] = []
         seen = 0
         # Việc nền đứng TRƯỚC hội thoại: nó là thứ Javis tự làm, và cũng là phần dễ bị cắt
         # nhất nếu xếp sau (ngân sách 24k ký tự tiêu gần hết cho chat). Đã tính vào `seen` nên
@@ -708,7 +708,7 @@ class LearnFeature:
             new.mkdir(parents=True, exist_ok=True)
         return new
 
-    def _cap_slugs(self, brain: str, new_name: str, old_rel: str) -> List[str]:
+    def _cap_slugs(self, brain: str, new_name: str, old_rel: str) -> list[str]:
         """Slug agent/workflow ĐÃ CÓ (để fork dedup + verify tham chiếu). Không tạo thư mục."""
         try:
             d = self._cap_dir(brain, new_name, old_rel)
@@ -716,7 +716,7 @@ class LearnFeature:
         except Exception:
             return []
 
-    def _cap_file(self, brain: str, new_name: str, old_rel: str, slug: str) -> Optional[Path]:
+    def _cap_file(self, brain: str, new_name: str, old_rel: str, slug: str) -> Path | None:
         """File agent/workflow ĐANG CÓ của slug này (phẳng trước, rồi Javis/ cũ); None = chưa có.
 
         op=update phải ghi ĐÚNG file đang có: brain chưa migrate mà ghi bản sửa ra thư mục
@@ -757,8 +757,8 @@ class LearnFeature:
             return ""
         return "\n".join(out)
 
-    def _write_owner_rules(self, brain: str, slug: str, rules: List[str],
-                           written_paths: List[str], root, rep: dict) -> None:
+    def _write_owner_rules(self, brain: str, slug: str, rules: list[str],
+                           written_paths: list[str], root, rep: dict) -> None:
         """Luật CHỦ dặn mà fork nhận ra → mục Luật chủ dặn trong bộ nhớ agent, cùng chỗ với
         JAVIS_RULE khi chủ dặn thẳng agent. Không trần, không bao giờ bị đẩy ra."""
         fp = self.deps.brain_memory_dir(brain) / "agents" / slug / "MEMORY.md"
@@ -798,7 +798,7 @@ class LearnFeature:
             fm, _ = read_md(fp) if fp else ({}, "")
             steps = fm.get("steps") if isinstance(fm.get("steps"), list) else []
             buoc = " | ".join(
-                f"{i}. {str((s or {}).get('agent') or '?')} - {str((s or {}).get('task') or '')[:80]}"
+                f"{i}. {(s or {}).get('agent') or '?'!s} - {str((s or {}).get('task') or '')[:80]}"
                 for i, s in enumerate(steps[:8], 1) if isinstance(s, dict))
             khoa = " [chủ đã khoá]" if learn_locked(fm) else ""
             trang_thai = "đang bật" if status_workflow(fm) == "active" else "đang tắt"
@@ -856,7 +856,7 @@ class LearnFeature:
         except Exception:
             return ""
 
-    def _wiki_scan(self, brain: str) -> Tuple[List[Tuple[str, float]], str]:
+    def _wiki_scan(self, brain: str) -> tuple[list[tuple[str, float]], str]:
         """(danh sách (đường-dẫn-tương-đối, mtime) của note wiki, chữ ký tập tên file).
 
         Chữ ký để bắt XOÁ/ĐỔI TÊN - thứ mtime không thấy được, mà lại chính là nguyên nhân
@@ -1145,7 +1145,7 @@ class LearnFeature:
         return out
 
     # ── VERIFY skill (spawn thứ 2 độc lập, chỉ cho skill - blast radius lớn nhất) ──
-    async def _verify_skills(self, brain: str, skills: List[dict], cfg: dict) -> List[dict]:
+    async def _verify_skills(self, brain: str, skills: list[dict], cfg: dict) -> list[dict]:
         if not skills:
             return skills
         # Sửa một skill đang có nguy hiểm hơn tạo mới (đè lên tri thức đã dùng được), nên
@@ -1210,7 +1210,7 @@ class LearnFeature:
         rep = {"facts": [], "wiki": [], "skills": [], "agents": [], "workflows": [],
                "skills_updated": [], "agents_updated": [], "workflows_updated": [],
                "blocked": [], "commit": None}
-        written_paths: List[str] = []
+        written_paths: list[str] = []
 
         if not allow_write:
             # dry-run/suggest: chỉ liệt kê "sẽ học gì"
@@ -1635,7 +1635,7 @@ class LearnFeature:
             lock.release()
 
     @staticmethod
-    def _scope_cho_phep(root, *dirs) -> List[str]:
+    def _scope_cho_phep(root, *dirs) -> list[str]:
         """Các tiền tố được ghi: danh sách cố định cộng thư mục memory và wiki THẬT của brain này.
 
         0.217.0 (owner, 2026-10-18: một trang wiki chat vừa tạo biến mất sau lượt học). Danh sách cố định chỉ có "Wiki"
@@ -1785,7 +1785,7 @@ class LearnFeature:
 
     # ── 1 batch học ──
     async def run_once(self, brain: str, reason: str = "manual",
-                       force_write: bool = False, caps_override: Optional[dict] = None) -> dict:
+                       force_write: bool = False, caps_override: dict | None = None) -> dict:
         """force_write=True (nút thủ công /reflect): ghi bất kể mode/rate, NHƯNG vẫn fail-closed
         qua git + secret-scan. caps_override: bộ capability riêng cho lần chạy (không lưu config)."""
         if self.lock.locked():
@@ -2000,7 +2000,7 @@ class LearnFeature:
         except Exception as e:
             return f"Reindex lỗi: {e}"
 
-    def _curator_retire_memory(self, idx) -> Optional[dict]:
+    def _curator_retire_memory(self, idx) -> dict | None:
         """Gỡ khỏi MEMORY.md những dòng mục lục KHÔNG CÒN GIÁ TRỊ. Trả {n, ly_do} hoặc None.
 
         Vì sao đây là việc đáng làm nhất trong "chống rác tri thức": MEMORY.md được nạp
@@ -2070,7 +2070,7 @@ class LearnFeature:
         except Exception:
             return 0.0
 
-    def _curator_targets(self, cfg: dict) -> Tuple[List[str], List[str]]:
+    def _curator_targets(self, cfg: dict) -> tuple[list[str], list[str]]:
         """(brain nên chạy, lý do bỏ qua). Lọc brain không tồn tại + brain đã nguội.
 
         Danh sách cfg['brains'] chỉ nối thêm mỗi lần chat brain mới, không bao giờ bớt.

@@ -8,17 +8,18 @@ Dev server và lệnh build dài không thể chạy tiền cảnh trong một l
   - Xoá phiên thì mọi tiến trình nền của nó chết theo, thư mục trạng thái bị dọn.
   - Phiên này không thấy, không dừng được tiến trình của phiên khác.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-process-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_terminal as ct  # noqa: E402
+import coding_terminal as ct
 
 _fails = []
 

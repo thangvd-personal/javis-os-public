@@ -17,12 +17,13 @@ would hurt most if it broke:
      saving through /settings restarts the right channel. Lark defaults to the international cloud.
   5. Results of background work come back on the channel that asked (discord:/lark: prefixes).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-dclark-"))
 
@@ -31,12 +32,11 @@ try:
 except Exception:
     pass
 
-import websockets  # noqa: E402
-
-import channel_context  # noqa: E402
-import discord_bot  # noqa: E402
-import lark_bot  # noqa: E402
-import owner_channels  # noqa: E402
+import channel_context
+import discord_bot
+import lark_bot
+import owner_channels
+import websockets
 
 _fails = []
 
@@ -148,7 +148,7 @@ async def _lark_session():
         bot.start()
         try:
             await asyncio.wait_for(done.wait(), 5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         await asyncio.sleep(0.2)
         status = bot.status
@@ -236,7 +236,7 @@ async def _discord_session(close_code=None):
         bot.start()
         try:
             await asyncio.wait_for(got_identify.wait(), 5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
         await asyncio.sleep(0.6)
         state = (bot.status, bot.last_error, bot._task.done() if bot._task else True)
@@ -301,9 +301,9 @@ for src, must in (("discord", "2000 ký tự"), ("lark", "KHÔNG có bảng")):
 # ============================================================
 # 5. Settings through the real endpoint, background results routing
 # ============================================================
-import config as cfgmod  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import config as cfgmod
+import main
+from fastapi.testclient import TestClient
 
 for ch in owner_channels.ALL:
     ch.wire(read_settings=cfgmod.read_settings, update_settings=cfgmod.update_settings)

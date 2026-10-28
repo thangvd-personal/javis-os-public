@@ -20,10 +20,11 @@ Bản vá có hai nửa và test này khoá cả hai:
   2. ĐỌC theo bí danh (`main._brain_keys` + `sessions.loc_brain`) → phiên CŨ đã lệch vẫn
      hiện lên, không cần migration nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _TMP = tempfile.mkdtemp(prefix="javis-tgside-")
 os.environ.setdefault("JAVIS_STATE_DIR", _TMP)
@@ -34,8 +35,8 @@ try:
 except Exception:
     pass
 
-from sessions import SessionStore, loc_brain  # noqa: E402
-import main  # noqa: E402
+import main
+from sessions import SessionStore, loc_brain
 
 _fails = []
 

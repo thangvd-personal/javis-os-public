@@ -28,16 +28,17 @@ Và canh cả CHIỀU NGƯỢC LẠI: /reset, đổi brain, phiên đã nguội 
 tin thì vẫn phải sang phiên mới. Khôi phục mà bỏ qua mấy luật đó là chữa một lỗi bằng một lỗi
 to hơn (dính vĩnh viễn vào một hội thoại không cách nào thoát ra).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tgsid-test-")
 
-import main                     # noqa: E402
-from sessions import get_store  # noqa: E402
+import main
+from sessions import get_store
 
 _fails = []
 

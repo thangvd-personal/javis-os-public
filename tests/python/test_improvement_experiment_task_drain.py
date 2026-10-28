@@ -1,14 +1,13 @@
 """Experiment stop drains actual local tasks, including terminal-row workers."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import threading
 import unittest
 from unittest.mock import patch
 
-from improvement_trial_tasks import TrialTasks
 import test_improvement_trial_runner as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_trial_tasks import TrialTasks
 
 
 class ExperimentTaskDrainTests(unittest.IsolatedAsyncioTestCase):

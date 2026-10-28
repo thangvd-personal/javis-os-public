@@ -18,14 +18,14 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-groq-test-"))
 
-import aux_engine  # noqa: E402
-import config as cfgmod  # noqa: E402
-import engine  # noqa: E402
-import main  # noqa: E402
+import aux_engine
+import config as cfgmod
+import engine
+import main
 
 CONSOLE_JS = (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8")
 

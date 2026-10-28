@@ -110,6 +110,7 @@ def _hold_until() -> float:
     """Lập hay cập nhật trong lượt chat: lịch việc nền giữ tới khi host bàn giao cuối lượt (review pilot lần 3), để
     việc nền không chen vào khi bộ não còn đang viết. Lượt bị cắt thì lịch tự tới hạn sau HANDOFF_HOLD_S."""
     import time
+
     import resonance as R
     return time.time() + R.HANDOFF_HOLD_S
 

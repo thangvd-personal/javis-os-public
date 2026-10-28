@@ -19,9 +19,10 @@ chuỗi lỗi + đổi gợi ý khi dấu hiệu là crash phụ thuộc, (3) ca
 gói đã xác nhận gãy. Kèm canary chống ghim bừa: các thẻ uvx đã test chạy tốt với mcp 2.x
 thì KHÔNG được ghim <2, ép sai chiều là gãy chiều ngược lại.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import sys
+
+from _paths import ROOT, SERVER
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -38,7 +39,7 @@ def check(name, cond):
 
 
 # ---- 1. _err_tail giữ ĐUÔI ----
-import mcp_client  # noqa: E402
+import mcp_client
 
 sess = mcp_client.McpStdioSession("echo")
 

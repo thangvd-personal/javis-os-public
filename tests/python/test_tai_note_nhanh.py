@@ -6,7 +6,6 @@ Chủ dự án 19/10 (ảnh ô "Đang tải..." cạnh ô chọn brain): "khi t�
 rất chậm, tìm cách tăng tốc độ nó lên". Đo trên bộ não 2000 note qua đường 8 Mbps: 1,6 giây, trong đó 1,5 giây là tải
 989 KB JSON không nén, và mỗi lần đổi brain server đọc lại trọn 2000 file.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import gzip
 import json
@@ -15,6 +14,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-tainote-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -25,8 +26,8 @@ try:
 except Exception:
     pass
 
-import graph_builder as gb  # noqa: E402
-import nen_phan_hoi  # noqa: E402
+import graph_builder as gb
+import nen_phan_hoi
 
 _fails = []
 
@@ -116,8 +117,8 @@ check("orphans=0 và orphans=1 là hai kết quả riêng",
 gb._parse_file = _goc_parse
 
 # ---- 4. Endpoint: ETag, 304, gzip ----
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/graph", params={"path": str(V), "orphans": 1}, headers={"Accept-Encoding": "gzip"})

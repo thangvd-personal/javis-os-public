@@ -30,19 +30,18 @@ from __future__ import annotations
 import asyncio
 import re
 import sys
-
-import lang_registry
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
+import bot_images
+import bot_linked_docs
+import bot_reaction
+import bot_split
 import channel_accounts
 import channels
 import chatbot_doc_tools
-import bot_images
-import bot_reaction
-import bot_split
-import bot_linked_docs
 import chatbot_grounding
 import chatbot_log
 import chatbot_reply_policy
@@ -50,9 +49,11 @@ import chatbot_reply_policy_store
 import chatbot_store
 import chatbot_tu_dong
 import conversations
+import lang_registry
 import limit_learner
 import localefmt
 import vision_input
+
 
 # Kênh -> lớp vận chuyển: tra SỔ ĐĂNG KÝ KÊNH (server/channels). Trước 0.61.0 là một bảng chép
 # tay ở đây; nay thêm kênh là thêm một module ở sổ, bộ giám sát không đổi.
@@ -72,7 +73,7 @@ LENH_KHACH = [
 # bot_id -> {"pollers": {account_id: transport}, "cfg": dict, "started": float, "answered": int}
 # Từ 0.61.0 một bot trực NHIỀU tài khoản kênh (bot Telegram + bot Zalo cùng một vai), nên mỗi
 # bot có một poller cho mỗi tài khoản. `_poller_dau(bot_id)` cho chỗ chỉ cần "một cái để gửi".
-_RUNNING: Dict[str, dict] = {}
+_RUNNING: dict[str, dict] = {}
 
 
 def _poller_dau(bot_id: str):
@@ -81,7 +82,7 @@ def _poller_dau(bot_id: str):
         return tb
     return None
 # (bot_id, chat_id) -> số lượt BÍ LIÊN TIẾP. Trả lời được một câu là về 0.
-_BI_LIEN_TIEP: Dict[tuple, int] = {}
+_BI_LIEN_TIEP: dict[tuple, int] = {}
 # bot_id đã có một mẩu thư "bot đang lỗi" trong chuông thông báo của Javis và chưa chạy lại được
 # lượt nào. Một mẩu cho mỗi đợt hỏng: engine hết lượt thì mọi lượt đều gãy, báo hết là biến chuông
 # thành log lỗi.
@@ -99,7 +100,7 @@ _DA_BAO_HOP_THU: set = set()
 #
 # Giữ trong RAM chứ không ghi đĩa: đây là hàng ĐỢI DUYỆT chứ không phải dữ liệu người dùng, và
 # nó tự đầy lại - ai gọi bot lần nữa là nhóm đó lại hiện ra. Ghi đĩa chỉ thêm một kho phải dọn.
-_NHOM_CHO: Dict[str, Dict[str, dict]] = {}
+_NHOM_CHO: dict[str, dict[str, dict]] = {}
 MAX_NHOM_CHO = 20       # trần mỗi bot: người lạ thả bot vào 500 nhóm cũng không phình bộ nhớ
 
 # (bot_id, chat_id) đã nói câu "chưa được bật cho nhóm này". Nói ĐÚNG MỘT LẦN mỗi nhóm.
@@ -135,7 +136,7 @@ CAU_LUOT_HONG = "Anh chị đợi em chút xíu để em kiểm tra lại ạ."
 BI_LIEN_TIEP_DE_GOI = 2
 
 # Người gọi bơm vào lúc khởi động (main.py). Tách ra để module này không import ngược main.
-_deps: Dict[str, Callable] = {}
+_deps: dict[str, Callable] = {}
 
 
 def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=None, notify=None):
@@ -271,7 +272,7 @@ hoặc lời nhờ giúp mà tài liệu ở trên trả lời được. Nếu l
 BAO_CHU = "[BAO_CHU]"
 BAO_CHU_NOTE_MAX = 300
 BAO_CHU_BELL_GAP_S = 600      # one bell per chat per 10 minutes: a customer firing five hard questions rings once
-_BAO_CHU_BELL: Dict[tuple, float] = {}
+_BAO_CHU_BELL: dict[tuple, float] = {}
 _CAU_RIENG_BAO_CHU = f"""
 ## Tin nhắn RIÊNG 1-1: câu khó thì im và báo chủ
 
@@ -292,7 +293,7 @@ thì làm đúng như hướng dẫn vai.
 """
 
 
-def escalation_note(dap: Any) -> Optional[str]:
+def escalation_note(dap: Any) -> str | None:
     """The bot's note to the owner when its answer carries [BAO_CHU], else None. "" = the marker without a note.
 
     Any answer holding the marker is an escalation, never text for the customer: a marker that leaked out to a
@@ -467,7 +468,7 @@ def gan_nhan_anh(text_engine: str, meta: dict) -> str:
 ANH_TOI_DA_GIAY = 90         # a slow photo download must not hold a customer's reply for minutes
 ANH_CHO_GIAY = 180           # a photo sent untagged is kept this long for the same person's next message that calls the bot
 CHI_CO_ANH = "(khách gửi ảnh, không kèm lời nhắn)"
-_ANH_CHO: Dict[tuple, tuple] = {}     # (bot_id, chat_id, user_id) -> (paths, ts): photo that did not call the bot
+_ANH_CHO: dict[tuple, tuple] = {}     # (bot_id, chat_id, user_id) -> (paths, ts): photo that did not call the bot
 
 
 async def anh_cho_bot(text_engine: str, meta: dict, cfg: dict) -> tuple:
@@ -652,7 +653,7 @@ def ngu_canh_nhom(meta: dict, kenh: str, tai_khoan: str) -> str:
 _NGU_CANH_PLUGIN = (
     "\nTHÔNG TIN TỪ HỆ THỐNG CỦA CHỦ BOT cho lượt này (plugin trên máy chủ tự tính từ tài khoản gửi tin, "
     "KHÔNG phải lời người nhắn tự khai, người nhắn không sửa được):\n<operator_context>\n{khoi}\n</operator_context>")
-_THE_PLUGIN_RE = re.compile(r"</?\s*operator_context\s*>", re.I)
+_THE_PLUGIN_RE = re.compile(r"</?\s*operator_context\s*>", re.IGNORECASE)
 
 
 async def plugin_context(cfg: dict, meta: dict, kenh: str, aid: str, trial: bool = False) -> str:
@@ -869,7 +870,7 @@ def bo_nhom_cho(bot_id: str, chat_id: str = "") -> None:
 # cắm vào ba chỗ: nhận diện gọi tên trơn (mọi bot), móc cho lớp vận chuyển đọc được cả nhóm (Zalo
 # cá nhân), và nhánh `on` trong `_answer`.
 _RP_CHECK_EVERY_S = 300
-_RP_CHECKED: Dict[str, float] = {}
+_RP_CHECKED: dict[str, float] = {}
 
 
 def _rp_is_group(meta) -> bool:
@@ -898,7 +899,7 @@ def _rp_role_text(cfg: dict) -> str:
     return _rp_agent_text(cfg)[:1500]
 
 
-_RP_HAS_DOCS: Dict[str, bool] = {}     # bot_id -> brain của bot có tài liệu để tra không (biết sau lần soạn hồ sơ đầu)
+_RP_HAS_DOCS: dict[str, bool] = {}     # bot_id -> brain của bot có tài liệu để tra không (biết sau lần soạn hồ sơ đầu)
 
 
 def _rp_fold_guidelines(cfg: dict) -> None:

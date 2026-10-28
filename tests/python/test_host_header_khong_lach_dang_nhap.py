@@ -20,17 +20,18 @@ Hai lớp canh, test cả hai:
   2. Header Host méo bị chặn 400 ngay.
 Kèm một canary: cấm `request.url.path` quay lại trong hai middleware gác cổng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-hosthdr-")
 os.environ["JAVIS_REQUIRE_LOGIN"] = "1"   # bật cổng đăng nhập mà không cần đặt mật khẩu
 
-from fastapi.testclient import TestClient   # noqa: E402
-import main            # noqa: E402
-import web_security    # noqa: E402
+import main
+import web_security
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -93,7 +94,7 @@ src = (SERVER / "main.py").read_text(encoding="utf-8", errors="replace")
 def than_ham(ten):
     """Thân hàm, đã BỎ chú thích: comment cố ý nhắc chữ 'url.path' để cảnh báo người sau,
     đếm cả comment thì canary tự đỏ vì đúng dòng cảnh báo nó muốn có."""
-    m = re.search(r"async def " + ten + r"\(request.*?\n(?=\n\n)", src, re.S)
+    m = re.search(r"async def " + ten + r"\(request.*?\n(?=\n\n)", src, re.DOTALL)
     if not m:
         return ""
     return "\n".join(d.split("#", 1)[0] for d in m.group(0).split("\n"))

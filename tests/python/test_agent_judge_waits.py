@@ -10,7 +10,7 @@ import os
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import World, batch, check, finish, keys_in  # noqa: E402
+from _judge_world import World, batch, check, finish, keys_in
 
 ROLES = {"lan": "Điều phối", "minh": "Quảng cáo", "hoa": "Kho hàng"}
 

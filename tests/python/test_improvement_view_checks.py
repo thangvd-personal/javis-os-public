@@ -1,18 +1,17 @@
 """Untrusted synthetic records test shape/binding; no native or quality proof."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import tempfile
 import unittest
 from pathlib import Path
 
-import improvement_sandbox as SB
 import improvement_claude as native
+import improvement_sandbox as SB
 import improvement_store as IM
-from improvement_comparison_results import _NATIVE_CHECKS
 import test_improvement_trial_checks as fixtures
 import test_improvement_view_trial_protocol as protocol
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_comparison_results import _NATIVE_CHECKS
 
 
 class ViewRecordChecksTests(unittest.TestCase):

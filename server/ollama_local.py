@@ -22,18 +22,17 @@ không có quyền, và cũng không có đường, chạy một lệnh cài tr�
 from __future__ import annotations
 
 import ipaddress
-import re
 import json
 import os
+import re
 import shutil
 import subprocess
 from urllib.parse import urlparse
 
-import httpx
-
 import deploy_info
+import httpx
 import localefmt
-import winproc               # lệnh con chạy câm trên Windows, không nháy console đen
+import winproc  # lệnh con chạy câm trên Windows, không nháy console đen
 
 # Cổng mặc định của Ollama (docs.ollama.com). Chỉ dùng để GỢI Ý sẵn trong ô nhập.
 CONG_MAC_DINH = 11434
@@ -211,7 +210,7 @@ async def running_models(endpoint: str, key: str | None = None) -> list:
 # `embeddinggemma`, `nomic-embed-text`, `mxbai-embed-large`, nhưng TRƯỢT đúng những cái phổ
 # biến không có chữ "embed": `all-minilm`, `bge-m3`, `paraphrase-multilingual`. Đặt nhầm một
 # trong số đó làm model chính thì mọi lượt chat chết bằng một câu lỗi khó hiểu.
-_MAU_EMBED = re.compile(r"embed|all-minilm|bge-|gte-|paraphrase-", re.I)
+_MAU_EMBED = re.compile(r"embed|all-minilm|bge-|gte-|paraphrase-", re.IGNORECASE)
 
 
 async def kha_nang(endpoint: str, model: str, key: str | None = None) -> list:

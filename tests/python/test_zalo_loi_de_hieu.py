@@ -11,11 +11,11 @@ session detected"), đăng nhập lại thất bại, hoặc không dựng đư�
 
 Điều được ghim: hai lỗi người dùng tự xử được nói bằng lời thường; lỗi khác bỏ dòng cấu hình và giữ phần ĐUÔI.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import sys
 
 import localefmt
 import zalo_personal_channel as zc
+from _paths import ROOT, SERVER  # noqa: F401
 
 localefmt.dat_ngon_ngu_yeu_cau("vi")   # câu cho người dùng là tiếng Việt; bản tiếng Anh đi cùng hàm chu()
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Test đọc video YouTube (youtube_read + plugin bundled youtube-read). Chạy tay:
 
     python tests/run.py youtube
@@ -7,7 +6,6 @@ KHÔNG chạm mạng thật: mọi request đi qua httpx.MockTransport, nên tes
 ngoại tuyến. Cái đang kiểm là phần Javis tự viết (tách mã video, chọn phụ đề, ghép lời thoại,
 cắt theo trần ký tự, báo lỗi cho ra lỗi), không phải kiểm YouTube còn sống hay không.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import json
 import os
@@ -15,10 +13,12 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-yt-test-"))
 
-import httpx  # noqa: E402
-import youtube_read as yt  # noqa: E402
+import httpx
+import youtube_read as yt
 
 
 # ------------------------------------------------------------------ dữ liệu giả
@@ -297,7 +297,7 @@ async def main():
     # 16) ưu tiên lý do: video ĐÃ GỠ là sự thật về chính video nên thắng "nghi robot",
     #     vốn chỉ là chuyện của IP máy chủ.
     async with httpx.AsyncClient(transport=_transport(
-            theo_client={"*": _bot(), "web": _player(captions=False, status="ERROR")})) as c:  # noqa: E501
+            theo_client={"*": _bot(), "web": _player(captions=False, status="ERROR")})) as c:
         r = await yt.read("dQw4w9WgXcQ", client=c, cho_phep_ytdlp=False)
     assert r["code"] == "unavailable" and "không tồn tại" in r["error"], r
 
@@ -340,7 +340,6 @@ async def main():
     # 19) yt-dlp cũng thua -> vẫn phải báo tử tế, không nổ, không im lặng
     async def _ytdlp_thua(url, notes, timeout_s=75.0):
         notes.append("yt-dlp: RuntimeError: chặn nốt")
-        return None
 
     yt._ytdlp = _ytdlp_thua
     try:
@@ -463,7 +462,6 @@ async def main():
     #     chính ca này có gọi mạng, đúng lỗi vừa cấm ở vòng trước).
     async def _yt_kiem(url, notes, timeout_s=75.0):
         notes.append("yt-dlp: (giả lập) không có phụ đề")
-        return None
 
     yt._ytdlp = _yt_kiem
     try:

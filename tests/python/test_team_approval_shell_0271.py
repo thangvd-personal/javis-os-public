@@ -6,23 +6,24 @@ On Windows the Claude Code shell is `PowerShell`, not `Bash`. Reported: the card
 after approval the member said "the identical command is still blocked" and the card stayed "Approved, waiting for the
 assistant to run it"; a second member said it filed a request and no card showed it. Fake engines, real stores.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-shell-")
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 os.environ.setdefault("JAVIS_NO_REAL_TEAM_ENGINE", "1")
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_approval  # noqa: E402
-import team_gate  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_approval
+import team_gate
+import team_runner as TR
+import team_store
 
 fails = []
 

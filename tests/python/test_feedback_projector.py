@@ -7,20 +7,21 @@ Các ca: idempotent theo source_ref; thứ tự theo mã nhật ký và trạng 
 lỗi bộ chiếu rồi chiếu lại ở nhịp và lúc khởi động; lỗi kho không làm mất reaction, không tác động kép; trạng thái hiển
 thị ghi ngược theo lý do; reaction của agent không tạo lý do.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fb-proj-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fb-proj-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import team_store  # noqa: E402
+import agent_ledger as AL
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import team_store
 
 fails = []
 
@@ -203,8 +204,8 @@ check("dòng nhật ký cũ của nhóm (trước T2) coi như đã chiếu: m�
       "DEFAULT 'done'" in str(team_store._T2_REACTION_COLS))
 
 # ═════ review T2 P3: hai lần chiếu chạy đua trên cùng cặp (route và nhịp, hay hai lần đổi nhanh) ═════
-import threading  # noqa: E402
-import time as _time  # noqa: E402
+import threading
+
 d, gs, ss, tm, ag, sid, pj, box = world("race")
 W = AL.WakeReasons(gs)
 mid = ss.append_message(sid, "assistant", "Tin bị đổi nhanh hai lần")

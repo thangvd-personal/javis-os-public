@@ -14,18 +14,15 @@ code fixes so they do not slide back:
 
     python tests/python/test_kanban_nghiem_thu_va_quy_trinh.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
 import sqlite3
-from pathlib import Path
-
-import pytest
 
 import plugins_host
+import pytest
 import workflow_graph as wg
-from task_store import TaskStore
+from _paths import ROOT, SERVER  # noqa: F401
 from tasks import TasksDeps, TasksFeature
 
 
@@ -336,8 +333,9 @@ def test_kanban_turns_a_needs_input_workflow_error_into_needs_input(tmp_path):
 # ---------------------------------------------------------------- workflow runner (main)
 
 def _brain(tmp_path, monkeypatch, verify_answers, status="active", step_extra=""):
-    import config as cfgmod
     import copy
+
+    import config as cfgmod
     import main
 
     brain = tmp_path / "brain"

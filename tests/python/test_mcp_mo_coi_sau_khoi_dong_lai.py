@@ -13,14 +13,14 @@ socket, bot đọc phiên mới, phiên mới gần như không nhận được 
   4. KHÔNG giết một pid đã bị hệ điều hành cấp cho chương trình khác (dòng lệnh không khớp).
   5. Phiên bị đóng ĐÚNG LÚC tiến trình đang được tạo thì tiến trình đó cũng chết, không mồ côi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import subprocess
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-mocoi-")
 try:
@@ -28,8 +28,8 @@ try:
 except Exception:
     pass
 
-import mcp_client  # noqa: E402
-import mcp_orphans  # noqa: E402
+import mcp_client
+import mcp_orphans
 
 _fails = []
 

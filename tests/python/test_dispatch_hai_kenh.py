@@ -23,13 +23,14 @@ Lỗi 8 nằm trong hàm lồng bên trong `@app.websocket("/ws")` nên không g
 bằng AST, khẳng định đúng hai điều tạo nên lỗi: khung `response` KHÔNG nằm trong vòng lặp sự
 kiện, và vòng lặp có tích luỹ phần text đã stream để còn cái mà trả khi luồng đứt giữa chừng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import ast
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-dispatch-"))
 
@@ -38,8 +39,8 @@ try:
 except Exception:
     pass
 
-import channel_context  # noqa: E402
-import main  # noqa: E402
+import channel_context
+import main
 
 _fails = []
 

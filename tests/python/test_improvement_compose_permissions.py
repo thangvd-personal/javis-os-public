@@ -5,8 +5,6 @@ explicit synthetic_storage_fixture result cells and upstream synthetic admission
 availability. Those controls do not prove native/account/business readiness.
 Only an actual host owner call may create these new permission records.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib
 import importlib.util
 import json
@@ -15,12 +13,12 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-from cryptography.fernet import InvalidToken
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES
-from improvement_compose_inputs import ComposeInputs
 import test_improvement_compose_inputs as fixtures
-
+from _paths import ROOT, SERVER  # noqa: F401
+from cryptography.fernet import InvalidToken
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable
+from improvement_compose_inputs import ComposeInputs
 
 META = {'authorization_id', 'experiment_id', 'context_id', 'input_hash', 'basis_hash',
         'guard_blob_hash', 'experiment_generation', 'generation', 'status'}

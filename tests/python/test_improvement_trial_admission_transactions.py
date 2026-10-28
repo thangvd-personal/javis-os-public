@@ -1,6 +1,4 @@
 """Qualification, trial, ledger and events share one actual owner admission transaction."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import json
 import os
@@ -10,13 +8,15 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="at-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAIN_PATH": "brain", "BRAINS_DIR": "brains",
                   "OBSIDIAN_VAULT_PATH": "vault", "SOURCES_PATH": "sources", "JAVIS_SESSIONS_DB": "sessions.sqlite3"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-import test_improvement_trials as fixtures
 import improvement_store as IM
+import test_improvement_trials as fixtures
 from resonance_store import GoalStore
 
 

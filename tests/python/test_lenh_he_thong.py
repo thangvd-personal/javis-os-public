@@ -8,20 +8,21 @@ Phủ: khối chỉ dẫn của /plan và /goal (đúng hình dạng để dashb
 hạ mức quyền của lượt /plan xuống `suggest`, /compact ở cả hai họ engine (API: tóm tắt; gói
 thuê bao: xoay mạch native), định dạng cho Telegram, và các endpoint mới.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import os
 import re
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 state = tempfile.mkdtemp(prefix="javis-lenh-test-")
 os.environ["JAVIS_STATE_DIR"] = state
 os.environ["BRAINS_DIR"] = str(Path(state) / "brains")
 os.environ["JAVIS_SESSIONS_DB"] = str(Path(state) / "sessions.db")
 
-import lenh_he_thong as L            # noqa: E402
-from sessions import SessionStore, title_from_message  # noqa: E402
+import lenh_he_thong as L
+from sessions import SessionStore, title_from_message
 
 _fails = []
 
@@ -80,7 +81,7 @@ check("tên: khối ghim đứng trước khối /plan vẫn bóc được", tit
 check("tên: câu mở bằng ngoặc vuông của người dùng KHÔNG bị bóc", title_from_message("[gấp] xem giúp đơn hàng") .startswith("[gấp]"))
 
 # ---- 5. main: hạ mức quyền lượt /plan ----
-import main  # noqa: E402
+import main
 
 check("quyền: chat thường vẫn full", main._muc_quyen_luot_chat({}, "chào") == "full")
 check("quyền: chưa truyền tin vẫn full (chỗ gọi cũ không vỡ)", main._muc_quyen_luot_chat({}) == "full")
@@ -181,8 +182,8 @@ check("Telegram memory: cắt cho vừa một tin", len(L.dinh_dang_bo_nho("x" *
 check("Telegram memory: trống thì hướng dẫn", "memory/MEMORY.md" in L.dinh_dang_bo_nho(""))
 
 # ---- 8. Endpoint mới ----
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 app = FastAPI()
 app.post("/sessions/{session_id}/compact")(main.sessions_compact)
@@ -238,7 +239,7 @@ check("GET /slash/memory: file quá dài bị cắt và báo cat_bot", len(r["te
 check("GET /slash/memory: chưa có file -> text rỗng, không lỗi", client.get("/slash/memory").json()["text"] == "")
 
 # ---- 9. Telegram: menu lệnh và trợ giúp nói cùng một bộ ----
-import telegram_bot  # noqa: E402
+import telegram_bot
 
 menu_tg = {c["command"] for c in telegram_bot.BOT_COMMANDS}
 check("Telegram: menu có usage/tasks/memory/plan", {"usage", "tasks", "memory", "plan"} <= menu_tg)

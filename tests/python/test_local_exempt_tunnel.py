@@ -8,15 +8,16 @@ built-in Cloudflare Tunnel, Tailscale serve and a reverse proxy on a VPS all con
 tunnel URL could create a task or script reminder at the full permission level without logging in. Found while
 reviewing PR #733. No network.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tunnel-")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 

@@ -1,11 +1,10 @@
 """Preparation is a genuine baseline request, never a fabricated comparison arm."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 
-import improvement_store as IM
 import improvement_preparation_protocol as P
+import improvement_store as IM
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def request_v3():

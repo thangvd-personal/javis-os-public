@@ -15,11 +15,11 @@ import time
 from pathlib import Path
 
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
-import _paths  # noqa: E402,F401  - thư mục tạm riêng, tự xoá khi thoát (xem _paths.py)
+import _paths  # noqa: F401  - thư mục tạm riêng, tự xoá khi thoát (xem _paths.py)
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-judge-labels-")
 
-from _judge_world import World, batch, check, finish, keys_in  # noqa: E402
+from _judge_world import World, batch, check, finish, keys_in
 
 ROLES = {"lan": "Điều phối", "minh": "Quảng cáo", "hoa": "Kho hàng"}
 DAY = 86400.0
@@ -103,8 +103,8 @@ BR = Path(tempfile.mkdtemp(prefix="javis-judge-labels-brain-"))
 for slug in ("lan", "minh"):
     (BR / "agents" / f"{slug}.md").write_text(f"---\nname: {slug.capitalize()}\nrole: Thành viên\n---\nBạn là {slug}.\n",
                                               encoding="utf-8", newline="\n")
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 
 class RealEngineUsed(AssertionError):
@@ -154,7 +154,7 @@ r = c.post(f"/agents/lan/judge/label{Q}", json={"decision_id": sil, "label": ""}
 check("POST label rỗng: bỏ nhãn", r.status_code == 200 and st.get_decision(sil)["label"] == "")
 
 # ═════ chốt chung: engine phán xử thật không bao giờ được dựng trong test ═════
-import asyncio as _asyncio  # noqa: E402
+import asyncio as _asyncio
 
 check("_paths đặt JAVIS_NO_REAL_JUDGE_ENGINE cho mọi test Python", os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE") == "1")
 built = []
@@ -171,8 +171,8 @@ except main.agent_judge.EngineUnavailable:
 check("có chốt: lượt phán xử dừng bằng EngineUnavailable (hoàn lượt), không dựng engine", stopped and built == [])
 
 # ═════ bộ chuyển đăng ký phần "judge" vào khung nhịp của phần P ═════
-import sys as _sys  # noqa: E402
-import types as _types  # noqa: E402
+import sys as _sys
+import types as _types
 
 check("chưa có phần P (agent_pulse_host): bộ chuyển không làm gì, không lỗi",
       "agent_pulse_host" in _sys.modules or main._register_judge_view_part() is False)

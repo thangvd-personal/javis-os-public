@@ -9,11 +9,11 @@ mang đúng một cái tên "[File đính kèm để ĐỌC (đườn…" nên n
 cái nào. Nguyên nhân: title = 48 ký tự ĐẦU của tin nhắn thô, mà dashboard chèn sẵn một khối
 hướng dẫn dài TRƯỚC câu hỏi khi có file đính kèm (app.js).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
-import re
 import sys
 
-from sessions import TITLE_MAX, title_from_message as tt
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+from sessions import TITLE_MAX
+from sessions import title_from_message as tt
 
 loi = []
 

@@ -11,17 +11,18 @@ Không mạng, không dò binary thật (plan_brain_available bị thay). Khoá:
   - kết quả dò được nhớ 60 giây (hàm chạy mỗi câu nói);
   - GET /voice/options?brains=0 không chạy `agy models`, trả đường gọi, giọng đọc và bộ não giọng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-brain-auto-"))
 
-import codex_realtime  # noqa: E402
-import main  # noqa: E402
-import voice_brain as vb  # noqa: E402
-import voice_call  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import codex_realtime
+import main
+import voice_brain as vb
+import voice_call
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []

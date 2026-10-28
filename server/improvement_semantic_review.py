@@ -16,7 +16,7 @@ from improvement_generation_protocol import input_bytes
 from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_schema import TERMINAL, assert_installed
 from improvement_role_workflow import RoleWorkflow
-from improvement_semantic_protocol import semantic_output, combined_verdict
+from improvement_semantic_protocol import combined_verdict, semantic_output
 from improvement_semantic_records import SemanticReceipts
 from improvement_trial_records import _brain
 from improvement_trial_runner import _settled_call
@@ -293,7 +293,7 @@ class SemanticReview(RoleWorkflow):
                                         evidence['native_verdict'], owner['verdict'] if owner else None)}
 
     def arbitrate(self, principal, candidate_id, receipt_id, *, verdict, reason, expected_binding_hash, event_key, expected_generation=None):
-        from improvement_cases import _text, _digest
+        from improvement_cases import _digest, _text
         brain = _brain(principal)
         _identifier(candidate_id)
         _identifier(receipt_id)

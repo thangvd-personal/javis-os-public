@@ -1,11 +1,16 @@
 """Test endpoint /brains/delete + /brains/new (tombstone). Chạy:
     python tests/run.py brain_delete_endpoint"""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
-import os, sys, asyncio, tempfile
+import asyncio
+import os
+import sys
+import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="jv-del-state-"))
-import main  # noqa: E402
-import git_brain as gb  # noqa: E402
+import git_brain as gb
+import main
 
 _fails = []
 def check(name, cond):
@@ -23,6 +28,7 @@ check("xóa Foo trả ok", isinstance(r, dict) and r.get("ok"))
 check("Foo biến khỏi brains", not foo.exists())
 check("tombstone Foo được ghi", (BR / gb.TOMBSTONE_DIR / "Foo.json").exists())
 import config as cfgmod
+
 trash = Path(cfgmod.STATE_DIR) / "brain-trash"
 check("Foo nằm trong thùng rác", trash.is_dir() and len(list(trash.glob("Foo__*"))) == 1)
 

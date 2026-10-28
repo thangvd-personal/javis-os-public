@@ -7,14 +7,15 @@ Owner report 26/10/2026: a chat pinned to Gemini 3.8 Flash showed a raw block
 tries spent in a few seconds. The fault is Google's (the model was overloaded), but the owner could not tell that, nor
 what to do next.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-overload-")
 
-import engine  # noqa: E402
+import engine
 
 fails = []
 

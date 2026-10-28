@@ -117,8 +117,8 @@ class LazySkillSource:
                 lang: str = "", descriptions: dict | None = None) -> SkillSelection:
         """`descriptions`: owner-applied routing descriptions (M4) for this chat, {slug: text}. With
         any, ranking runs over the frozen manifest projection so the overlay text is what is scored."""
-        from improvement_task_skill_scope import current, ScopeUnavailable
         from improvement_blobs import AssetUnavailable
+        from improvement_task_skill_scope import ScopeUnavailable, current
         try:
             # Unbound returns None without I/O; any error here comes from a bound (maybe dead) scope.
             scope = current(brain)

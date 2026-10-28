@@ -13,8 +13,8 @@ import json
 import random
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 ARMS = ('single', 'team')
 RUBRIC = ('facts', 'completeness', 'usefulness', 'clarity')

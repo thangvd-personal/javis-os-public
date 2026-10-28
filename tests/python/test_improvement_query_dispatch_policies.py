@@ -1,14 +1,12 @@
 """Pure inventory policy vectors; no SDK, clients, files or native processes."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import json
 import subprocess
 import unittest
 
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_query_dispatch import validate_query_dispatch
-
 
 CLI = r'C:\Trusted Tools\claude.exe'
 CWD = r'D:\Trial Workspace\owned'

@@ -27,15 +27,16 @@ Bất biến phải giữ, viết dưới dạng một câu:
 (Tới 0.64.18 file này còn so trang Công cụ với engine ChatGPT Web. Engine đó gỡ ở 0.64.20, nên
 chỉ còn một bên; phần dò trình duyệt vẫn phục vụ connector Playwright MCP.)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-dotd-")
 
-import optional_tools as ot  # noqa: E402
+import optional_tools as ot
 
 _fails = []
 

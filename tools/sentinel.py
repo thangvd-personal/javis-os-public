@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "server"))
 
-import sentinel  # noqa: E402
+import sentinel
 
 
 def _brains(brains_dir: Path) -> list:

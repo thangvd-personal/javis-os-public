@@ -15,7 +15,6 @@ còn I/O nào chạy trên luồng event loop thì khoảng trống lớn nhất
 5. Qua main.py (review T3 P P2-3): route reaction chat riêng `POST /sessions/{id}/messages/{mid}/reaction` và lần thức
    nhịp chat riêng cuối lượt chat (`_pulse_wake_dm`) với kho chậm: không hàm kho nào chạy trên luồng event loop.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -26,14 +25,16 @@ from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-t3-loop-"))
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-from _judge_world import World, batch, check, finish  # noqa: E402
-import agent_ledger as AL  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as H  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_ledger as AL
+import agent_pulse as AP
+import agent_pulse_host as H
+import resonance_store as RS
+from _judge_world import World, batch, check, finish
 
 SLOW = 0.25        # hàm kho chính
 SLOW_CONN = 0.11   # mỗi lần mở kết nối SQLite: một lần mở trên luồng loop là đủ vượt ngưỡng 100 ms
@@ -330,8 +331,8 @@ check("bộ chiếu: lý do đổi trạng thái thì chỉ các reaction của 
       and len(ev3) == len(same_reason), (cl["outcome"], counts, by, same_reason, len(ev3)))
 
 # ═════ 5. qua main.py: route reaction chat riêng và lần thức nhịp cuối lượt chat (review T3 P P2-3) ═════
-import httpx  # noqa: E402
-import main  # noqa: E402
+import httpx
+import main
 
 
 def _no_real_engine(*a, **k):

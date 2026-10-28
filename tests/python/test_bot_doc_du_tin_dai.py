@@ -6,11 +6,12 @@ Nhóm của chủ (19/10): bot báo chị Diệu "tin của chị phần cuối 
 cả mức phụ thu 1-2 triệu. Ngữ cảnh nhóm đưa cho bot chỉ giữ 300 ký tự đầu của mỗi tin cũ; tin của chị dài chừng 470 ký tự.
 Người phán xử (bot có nên lên tiếng không) cũng chỉ đọc 400 ký tự đầu của tin cần quyết.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-tindai-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -19,9 +20,9 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import conversations  # noqa: E402
+import chatbot_reply_policy as rp
+import chatbot_runtime
+import conversations
 
 fails = []
 

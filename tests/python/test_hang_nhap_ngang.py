@@ -20,7 +20,7 @@ Chạy:
 """
 import re
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 STYLE = (ROOT / "dashboard" / "style.css").read_text(encoding="utf-8")
 BRANDING = (ROOT / "dashboard" / "branding.js").read_text(encoding="utf-8")

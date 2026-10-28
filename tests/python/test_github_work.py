@@ -5,12 +5,13 @@
 Phase G2: a turn that changed an attached repo runs the quality gate and posts the result into that chat; a turn that
 changed nothing runs nothing; a failing check is reported as a failure; a chat without repos costs nothing.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghw-")
 try:
@@ -18,13 +19,13 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos  # noqa: E402
-import github_work  # noqa: E402
+import github_repos
+import github_work
 
 _fails = []
 
@@ -50,7 +51,7 @@ view = github_repos.attach("chat", BRAIN, BRAIN, ["acme/app"])
 wt = Path(view["repos"][0]["worktree"])
 github_repos.set_checks(BRAIN, "acme/app", [{"run": "bash check.sh"}])
 
-run = lambda: asyncio.run(github_work.after_turn("chat", BRAIN))  # noqa: E731
+run = lambda: asyncio.run(github_work.after_turn("chat", BRAIN))
 
 check("a turn that changed nothing runs no gate", run() == [] and posted == [])
 (wt / "src/a.py").write_text("a = 3\n", encoding="utf-8")

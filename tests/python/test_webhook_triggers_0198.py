@@ -8,17 +8,18 @@ management routes still need one.
 Run:
     python tests/run.py webhook_triggers
 """
-from _paths import ROOT, SERVER, moi_duong_dan  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401
+
 STATE = Path(tempfile.mkdtemp(prefix="javis-webhooks-state-"))
 os.environ["JAVIS_STATE_DIR"] = str(STATE)
 
-import webhook_triggers as wt  # noqa: E402
+import webhook_triggers as wt
 
 fails = []
 
@@ -213,7 +214,7 @@ async def main():
 asyncio.run(main())
 
 # The public route and the login gate (main.py wiring)
-import main  # noqa: E402
+import main
 
 check("/hooks/ is a public prefix", "/hooks/" in main._AUTH_PUBLIC_PREFIX)
 check("/webhooks management is not public", not any("/webhooks".startswith(p) for p in main._AUTH_PUBLIC_PREFIX)

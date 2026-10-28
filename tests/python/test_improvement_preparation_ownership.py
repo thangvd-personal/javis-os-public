@@ -1,5 +1,4 @@
 """Multi-cell preparation never burns a later immutable link on a busy runner."""
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import threading
 import unittest
@@ -7,8 +6,9 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_trial_runner import TrialRunner
 import test_improvement_preparation_execution as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_trial_runner import TrialRunner
 
 
 class PreparationOwnershipTests(unittest.IsolatedAsyncioTestCase):
@@ -73,6 +73,7 @@ class PreparationOwnershipTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_next_during_slow_preflight_reserves_only_one_cell(self):
         from concurrent.futures import ThreadPoolExecutor
+
         from improvement_claude import ClaudeTrialAdapter
         # Two owner requests contend for the one remaining pilot cell while
         # the first request is still observing native availability.

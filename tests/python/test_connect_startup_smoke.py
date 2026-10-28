@@ -11,12 +11,13 @@ that was merely slow to start (first download) is not reported; nothing is sent 
 a source still starting reads as "starting", not as an error; Node's MODULE_NOT_FOUND reads as a
 broken install that Check repairs, not as a generic start failure.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-smoke-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
@@ -24,9 +25,9 @@ os.environ["HOME"] = str(_TMP / "home")
 for _d in ("state", "home"):
     (_TMP / _d).mkdir(parents=True, exist_ok=True)
 
-import connect_health  # noqa: E402
-import mcp_client  # noqa: E402
-import mcp_store  # noqa: E402
+import connect_health
+import mcp_client
+import mcp_store
 
 HELPER = str(Path(__file__).resolve().parent / "_slow_start_mcp_server.py")
 fails = []

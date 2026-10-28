@@ -9,12 +9,13 @@
   - Xoá bot xoá sạch dữ liệu học của bot đó (nội dung chat khách).
   - Mọi mã im mà bộ máy phát ra đều có nhãn đọc được ở giao diện.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-api-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"       # xem test_workflow_runs_api.py
@@ -23,11 +24,10 @@ try:
 except Exception:
     pass
 
-import chatbot_reply_policy as rp  # noqa: E402
-import chatbot_reply_policy_store as st  # noqa: E402
-import chatbot_store  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import chatbot_reply_policy_store as st
+import chatbot_store
+import main
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -129,7 +129,8 @@ class _CliGia:
         yield {"type": "final", "content": '{"verdict":"silent","score":0.1,"reason":"x"}'}
 
 
-import asyncio as _aio  # noqa: E402
+import asyncio as _aio
+
 _orig_engine, _orig_swap = main.claude_engine, main._aux_swap
 main.claude_engine = lambda **kw: _CliGia(**kw)
 main._aux_swap = lambda cli, mode=None, tag=None: cli
@@ -193,7 +194,7 @@ js = (ROOT / "dashboard" / "chatbots-reply-policy.js").read_text(encoding="utf-8
 codes = set()
 for m in re.finditer(r'(?:silence_code|code) = "([a-z_]+)"|return \(?(?:True|False), "([a-z_]+)"\)?|finish\("silent", "([a-z_]+)"|\("(?:silent)", "([a-z_]+)"', py):
     codes.update(x for x in m.groups() if x)
-codes |= set(re.findall(r'"([a-z_]+)"', re.search(r"_UNTRACKED = frozenset\(\{(.*?)\}\)", py, re.S).group(1)))
+codes |= set(re.findall(r'"([a-z_]+)"', re.search(r"_UNTRACKED = frozenset\(\{(.*?)\}\)", py, re.DOTALL).group(1)))
 codes |= {"judge_silent", "below_threshold"}
 codes -= {"silent", "reply", "called"}
 labels = set(re.findall(r"(\w+):\s*\"rp\.code_", js))
@@ -206,7 +207,8 @@ check("mã hạn mức cũ vẫn có nhãn để nhật ký cũ đọc được"
 
 check("không dùng em dash trong file test này", chr(0x2014) not in open(__file__, encoding="utf-8").read())
 # Góp ý sửa mã của vòng tự soát nối vào file trong brain CỦA BOT, không ghi đè lần trước.
-import tempfile as _tf  # noqa: E402
+import tempfile as _tf
+
 _brain = _tf.mkdtemp(prefix="javis-rp-brain-")
 main._reply_policy_write_feedback({"id": "x", "name": "Bot Thử", "brain": _brain}, "luật A chặn tin B")
 main._reply_policy_write_feedback({"id": "x", "name": "Bot Thử", "brain": _brain}, "luật C chặn tin D")
@@ -220,8 +222,9 @@ _txt = open(_gy, encoding="utf-8").read()
 check("góp ý bỏ link và khối mã", "https://" not in _txt and "```" not in _txt)
 
 # Engine sau swap không phải Claude: phải bị lột sạch tool (rà soát 0.77.0, lỗ có từ trước ở người phán xử).
-import aux_engine as _ae  # noqa: E402
-from claude_cli import CodexCLI as _Codex  # noqa: E402
+import aux_engine as _ae
+from claude_cli import CodexCLI as _Codex
+
 _base = _CliGia()
 _api = _ae._ApiAuxEngine(provider="openrouter", model="x")
 _cx = _Codex(cwd=_tf.mkdtemp())

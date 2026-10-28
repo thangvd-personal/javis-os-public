@@ -17,13 +17,14 @@ Luật sau khi sửa:
 Chạy:
     python tests/run.py hub_brain_mac_dinh
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-hub-brain-"))
 _BRAINS = _TMP / "brains"
@@ -35,9 +36,9 @@ os.environ["JAVIS_SESSIONS_DB"] = str(_TMP / "conversations.db")
 os.environ["BRAINS_DIR"] = str(_BRAINS)
 (_TMP / "state").mkdir(parents=True, exist_ok=True)
 
-import mcp_hub  # noqa: E402
-import sessions  # noqa: E402
-import tasks  # noqa: E402
+import mcp_hub
+import sessions
+import tasks
 
 fails = []
 

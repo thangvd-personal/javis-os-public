@@ -1,19 +1,16 @@
 """Owner candidate HTTP operations retain real encrypted writes through cancellation."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
-import json
 import threading
 import unittest
 from unittest.mock import patch
 
 import httpx
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-
 import improvement_store as IM
 import test_improvement_skill_candidates as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 if importlib.util.find_spec("improvement_candidate_api"):
     import improvement_candidate_api as API

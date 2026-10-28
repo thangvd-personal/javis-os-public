@@ -1,6 +1,4 @@
 """Real experiment stop/dispatch ownership; no production native execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import importlib.util
 import subprocess
@@ -11,8 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_trial_service import OwnerTrialService
 import test_improvement_experiment_lineage as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_trial_service import OwnerTrialService
 
 _REAL_RUN, _REAL_POPEN = subprocess.run, subprocess.Popen
 

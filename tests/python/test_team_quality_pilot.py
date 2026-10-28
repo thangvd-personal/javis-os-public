@@ -1,10 +1,10 @@
 """Paired pilot preparation is reproducible and never invents business results."""
-from _paths import ROOT, SERVER  # noqa: F401
 import importlib.util
-import json
 import tempfile
 import unittest
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 MODULE = ROOT / 'pilot' / 'team-multiday' / 'paired_evaluation.py'
 

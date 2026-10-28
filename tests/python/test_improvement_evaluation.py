@@ -1,6 +1,4 @@
 """Independent trial checks inspect immutable UTF-8 products, never solver instructions."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -12,12 +10,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-evaluation-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
                   "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-import improvement_store as IM  # noqa: E402
+import improvement_store as IM
 
 if importlib.util.find_spec("improvement_evaluation"):
     import improvement_evaluation as IE
@@ -88,7 +88,7 @@ class ImprovementEvaluationTests(unittest.TestCase):
         self.assertEqual(self.calls[0].path, "answer.json")
 
     def test_exact_raw_utf8_hash_is_not_a_normalized_text_hash(self):
-        self.raw = '{"value":42,"note":"Đúng"}\r\n'.encode("utf-8")
+        self.raw = '{"value":42,"note":"Đúng"}\r\n'.encode()
         self.path.write_bytes(self.raw)
         result = self.evaluate()
         self.assertEqual(result["output_hash"], digest(self.raw))

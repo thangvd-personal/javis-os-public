@@ -8,9 +8,8 @@ CẢNH trước khi câu đi vào bộ não. Ranh giới quan trọng: không đ
 David"), không đổi tên riêng hai chữ ("David Beckham"), không đụng câu không liên quan, và
 không sửa gì thì trả y nguyên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-
-import nghe_sua  # noqa: E402
+import nghe_sua
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -22,7 +21,7 @@ def check(name, cond):
 
 
 TV = ["Javis"]
-S = lambda s, tv=TV: nghe_sua.sua(s, tv)   # noqa: E731
+S = lambda s, tv=TV: nghe_sua.sua(s, tv)
 
 # ---- 1. Khoá âm: những cách máy nghe hay chép "Javis" phải về cùng một khoá ----
 for w in ("Javis", "David", "Davis", "Jarvis", "Gia vít", "Ja vịt", "Đa vít", "javist"):

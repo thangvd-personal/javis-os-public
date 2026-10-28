@@ -16,7 +16,7 @@ import re
 import yaml
 
 try:
-    from yaml import CSafeLoader as _CLoader   # libyaml
+    from yaml import CSafeLoader as _CLoader  # libyaml
     HAS_C = True
 except ImportError:                            # PyYAML build thuần Python
     _CLoader = None

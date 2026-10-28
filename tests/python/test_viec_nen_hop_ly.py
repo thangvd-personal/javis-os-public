@@ -19,19 +19,19 @@ Soi ra hai lỗi tách rời nhau, cả hai đều ở tầng THIẾT KẾ chứ
    `auto`; và specifier - cũng chỉ là một model - trả về chuỗi "full" là tự cấp cho mình mức
    tháo sạch rào, đúng mức mà `javis_task` từ chối tạo và CLAUDE.md bắt phải do người tự đặt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-viecnen-"))
 
-from fastapi import FastAPI  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
-
-import tasks as tasks_mod  # noqa: E402
-from tasks import TasksDeps, TasksFeature  # noqa: E402
+import tasks as tasks_mod
+from fastapi import FastAPI
+from starlette.testclient import TestClient
+from tasks import TasksDeps, TasksFeature
 
 _fails = []
 

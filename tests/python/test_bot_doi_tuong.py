@@ -16,12 +16,13 @@ Bốn thứ file này canh:
      chờ duyệt kèm loại (người hay nhóm) để chủ bấm Cho phép.
   4. CHỌN TỪ HỘP THƯ. Danh sách cuộc chat đã biết cho ô chọn, không bắt dán id.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-doituong-")
 try:
@@ -29,11 +30,11 @@ try:
 except Exception:
     pass
 
-import chatbot_cuoc_chat  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import chatbot_cuoc_chat
+import chatbot_runtime
+import chatbot_store
+import conversations
+import zalo_personal_channel as zc
 
 _fails = []
 
@@ -96,8 +97,8 @@ check("`can_xac_nhan` vẫn đúng cho mức quyền như cũ",
 # 2. Cổng: 3 audience x (chat riêng, nhóm), reply_when giữ nguyên nghĩa
 # ============================================================
 base = {"groups": [G], "people": [P], "reply_when": "mention"}
-rieng = lambda cid: {"chat_type": "private", "chat_id": cid}          # noqa: E731
-nhom = lambda cid, tag=False: {"chat_type": "group", "chat_id": cid, "mentioned": tag}   # noqa: E731
+rieng = lambda cid: {"chat_type": "private", "chat_id": cid}
+nhom = lambda cid, tag=False: {"chat_type": "group", "chat_id": cid, "mentioned": tag}
 im = chatbot_runtime._ly_do_im
 
 nh = dict(base, audience="nhom")

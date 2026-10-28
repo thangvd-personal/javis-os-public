@@ -3,11 +3,12 @@
 https://ai.google.dev/api/live?hl=en lists text/languageCode, no finished flag.
 Javis final=True commits a received segment; it does not assert an utterance ID.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import json
 import unittest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 from voice_live import GeminiLive
 
 

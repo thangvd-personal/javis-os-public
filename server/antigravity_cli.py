@@ -40,11 +40,18 @@ import sys
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional
 
 import localefmt
-from claude_cli import _ACTIVE_PROCS, _PROC_LOCK, _home_dir, _kill_tree, _no_window, tim_binary
+from claude_cli import (
+    _ACTIVE_PROCS,
+    _PROC_LOCK,
+    _home_dir,
+    _kill_tree,
+    _no_window,
+    tim_binary,
+)
 
 # Model mặc định khi người dùng chưa chọn gì. KHÔNG phải bảng model: chỉ là hạt giống để lượt
 # đầu chạy được nếu `agy models` chưa kịp trả lời. Danh sách thật luôn lấy từ CLI.
@@ -62,7 +69,7 @@ def lenh_cai() -> str:
     return LENH_CAI["windows"] if os.name == "nt" else LENH_CAI["linux"]
 
 
-def find_antigravity_cli() -> Optional[str]:
+def find_antigravity_cli() -> str | None:
     """Tìm binary `agy`. Cửa thoát JAVIS_AGY_BIN cho máy cài chỗ lạ.
 
     Trình cài chính chủ thả vào `~/.local/bin/agy`, mà thư mục đó KHÔNG chắc nằm trong PATH của
@@ -157,7 +164,7 @@ def co_co(*ten_co: str) -> bool:
 _CO_EFFORT = ("--effort", "--reasoning-effort")
 
 
-def co_effort(muc: Optional[str]) -> list:
+def co_effort(muc: str | None) -> list:
     """['--effort', '<muc>'] nếu bản CLI này khai đủ cả hai, không thì [] (không truyền gì)."""
     if not muc:
         return []
@@ -491,7 +498,7 @@ def _la_loi_thieu_prompt(loi: str) -> bool:
             or ("flag needs an argument" in l))
 
 
-def duong_prompt_dai(cli: Optional[str] = None) -> str:
+def duong_prompt_dai(cli: str | None = None) -> str:
     """Prompt không nhét vừa argv thì đi đường nào: "stdin:<công thức>" hay "file".
 
     Ưu tiên stdin vì nó là đường TRUNG THỰC: prompt tới model nguyên vẹn, đúng thứ Javis gửi.
@@ -530,7 +537,7 @@ def duong_prompt_dai(cli: Optional[str] = None) -> str:
     return duong
 
 
-def nho_duong(cli: Optional[str], duong: str, vi_sao: str = ""):
+def nho_duong(cli: str | None, duong: str, vi_sao: str = ""):
     """Ghi lại đường đã dùng được cho đúng bản binary này."""
     cli = cli or find_antigravity_cli()
     if not cli:
@@ -738,7 +745,7 @@ _CANH_BAO_DOC_HONG_EN = (
 # ---------------------------------------------------------------------------
 # Mức quyền
 # ---------------------------------------------------------------------------
-def co_quyen_cho_mode(mode: Optional[str]) -> list[str]:
+def co_quyen_cho_mode(mode: str | None) -> list[str]:
     """Ba mức quyền của Javis -> cờ của `agy`. Giá trị lạ về nấc CHẶT NHẤT (fail-closed).
 
     Chỉ có `--dangerously-skip-permissions` (tự duyệt mọi tool) và `--sandbox` (siết terminal)
@@ -806,7 +813,7 @@ def _tach_model(doc) -> list[str]:
     return ra
 
 
-def list_models() -> Optional[list]:
+def list_models() -> list | None:
     """Danh sách model hỏi thẳng CLI. None = chưa cài CLI (phía trên còn biết mà nói lý do).
 
     Không giữ bảng model chép tay: Google đổi tên model liên tục, và chính người dùng mới là
@@ -1069,7 +1076,7 @@ def login_huong_dan() -> dict:
 _MCP_DUONG_BO = (".antigravity/mcp.json", ".antigravity/settings.json")
 
 
-def hub_entry(url: str, headers: Optional[dict] = None) -> dict:
+def hub_entry(url: str, headers: dict | None = None) -> dict:
     """Một entry `mcpServers` theo ĐÚNG schema của `agy` (không phải của Gemini CLI).
 
     `serverUrl` là khoá chính chủ: tài liệu hiện hành dùng nó, và issue #71 của
@@ -1121,7 +1128,7 @@ def duong_mcp(vault_root=None) -> list[Path]:
     return ds
 
 
-def _ghi_mot_mcp(p: Path, hub: Optional[dict], xoa_khi_rong: bool = False) -> bool:
+def _ghi_mot_mcp(p: Path, hub: dict | None, xoa_khi_rong: bool = False) -> bool:
     """Đặt/gỡ entry `javis` trong MỘT file mcp_config, giữ nguyên phần của người dùng."""
     cu: dict = {}
     if p.exists():
@@ -1160,7 +1167,7 @@ def _ghi_mot_mcp(p: Path, hub: Optional[dict], xoa_khi_rong: bool = False) -> bo
     return True
 
 
-def ghi_mcp_settings(vault_root, hub: Optional[dict]) -> Optional[str]:
+def ghi_mcp_settings(vault_root, hub: dict | None) -> str | None:
     """Đấu hub của Javis vào `agy`: ghi entry `javis` vào cấu hình HOME + workspace.
 
     `hub=None` (hub tắt) → GỠ entry `javis` khỏi mọi chỗ, giữ nguyên MCP người dùng tự thêm.
@@ -1226,8 +1233,8 @@ def trang_thai_mcp(vault_root=None) -> dict:
 class AntigravityCLI:
     """Một lượt chạy `agy` headless. Cùng hợp đồng sự kiện với ClaudeSDK/CodexCLI/GeminiCLI."""
 
-    def __init__(self, cwd: Optional[str] = None, tag: str = "chat", model: Optional[str] = None,
-                 instructions: Optional[str] = None):
+    def __init__(self, cwd: str | None = None, tag: str = "chat", model: str | None = None,
+                 instructions: str | None = None):
         self.cli_path = find_antigravity_cli()
         self.cwd = cwd or os.getcwd()
         self.tag = tag
@@ -1239,7 +1246,7 @@ class AntigravityCLI:
         # File mcp_config riêng cho ĐÚNG lượt này. Chỉ dùng được nếu bản `agy` trên máy có cờ
         # nhận file cấu hình (hỏi `co_co` trước khi truyền). Có thì hết cảnh hai brain chạy cùng
         # lúc ghi đè header X-Javis-Vault của nhau trong file HOME dùng chung.
-        self.mcp_config: Optional[str] = None
+        self.mcp_config: str | None = None
         self.extra_args: list[str] = []
         # Độ sâu suy nghĩ (`main._cli_do_sau_khac` đặt). None = không truyền cờ nào.
         # Chỉ tới được dòng lệnh khi `co_effort` thấy bản CLI này khai đủ cờ lẫn giá trị.
@@ -1253,8 +1260,8 @@ class AntigravityCLI:
     def is_available(self) -> bool:
         return self.cli_path is not None
 
-    def _build_args(self, prompt_argv: Optional[str], noi_mach: bool = True,
-                    them: Optional[list] = None, ct_stdin: str = "") -> list[str]:
+    def _build_args(self, prompt_argv: str | None, noi_mach: bool = True,
+                    them: list | None = None, ct_stdin: str = "") -> list[str]:
         args = [self.cli_path]
         if self.model and co_co("--model"):
             args += ["--model", self.model]
@@ -1697,7 +1704,7 @@ class AntigravityCLI:
                    doc_duoc=doc_duoc, da_thu_doc=da_thu_doc, co_tool=co_tool,
                    biet_doc_hay_khong=(duong != "file") or (co_stream and co_json))
 
-    def _doi_su_kien(self, ev: dict, cac_manh: list, chan: Optional[dict] = None) -> list:
+    def _doi_su_kien(self, ev: dict, cac_manh: list, chan: dict | None = None) -> list:
         """Một dòng NDJSON của `agy` -> 0..n sự kiện theo hợp đồng của Javis.
 
         CHƯA ĐO được tên trường thật, nên nhận rộng: gom mọi hình dạng "có chữ để hiện" mà một

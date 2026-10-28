@@ -6,22 +6,23 @@ Kho SQLite thật, engine GIẢ hai vai, đồng hồ giả; mục tiêu tạo q
 gọi model thật. Mỗi vết kiểm: trạng thái và lý do, lượt (maker, reviewer, tổng), số lần engine giả được gọi, trạng thái
 hành động và hàng review (seq, charged), lý do đang chờ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = Path(tempfile.mkdtemp(prefix="javis-res-a5b-"))
 os.environ["JAVIS_STATE_DIR"] = str(_STATE)
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 
-import resonance as R  # noqa: E402
-import resonance_heartbeat as HB  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
-import _resonance_team as T  # noqa: E402
+import _resonance_agent as RA
+import _resonance_team as T
+import resonance as R
+import resonance_heartbeat as HB
+import resonance_store as RS
 
 _fails = []
 

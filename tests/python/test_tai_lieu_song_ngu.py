@@ -11,10 +11,11 @@ Test này canh những chỗ hỏng mà đọc bằng mắt không bắt đượ
   - Mất dòng chuyển ngôn ngữ, tức là hai bản tồn tại mà không ai tìm ra bản kia.
   - Con số nhà cung cấp / nhóm rail nói khác nhau giữa hai thứ tiếng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import pathlib
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _loi = []
 
@@ -153,6 +154,7 @@ check(f"README (en) nói đúng {_so_nhom} nhóm rail", f"**{_so_nhom} groups**"
 # đó lệch với sổ đăng ký thì người làm theo sổ tay sẽ đi sai ngay từ bước 1.
 _sotay = (R / "docs" / "dev" / "them-mot-ngon-ngu.md").read_text(encoding="utf-8")
 import lang_registry
+
 for _ma in lang_registry.cho_giao_dien():
     check(f"sổ tay có nhắc ngôn ngữ `{_ma['ma']}`", f"`{_ma['ma']}`" in _sotay)
 check("sổ tay nói rõ bước bộ từ vựng là TUỲ CHỌN nhưng nửa vời thì nguy hiểm",

@@ -12,19 +12,20 @@ Ba rào phải giữ, mỗi rào có phép thử riêng:
     Đây đúng là lý do không giao PTY của `terminal.py` cho model.
   - **Ghim trong thư mục làm việc.** `cwd` do model truyền không được trỏ ra ngoài.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-runcmd-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 # Biến "bí mật" cắm vào env của tiến trình test, để chứng minh lệnh con KHÔNG thấy nó.
 os.environ["JAVIS_TEST_SECRET"] = "KHOA-BI-MAT-KHONG-DUOC-LO"
 
-import run_command as rc  # noqa: E402
-from coding_ctx import CodingToolContext  # noqa: E402
+import run_command as rc
+from coding_ctx import CodingToolContext
 
 _fails = []
 
@@ -192,7 +193,7 @@ check("bị chặn -> gói thành ERROR cho model", s2.startswith("ERROR:"))
 
 # ---- 13. Cắm vào hub: chỉ hiện trong phiên có thư mục làm việc ----
 
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 t_thuong, _ = mcp_hub._builtin_tools("full", str(WS))
 check("phiên KHÔNG có thư mục làm việc -> hub KHÔNG cấp javis_run_command",
@@ -211,7 +212,6 @@ t_thieu, _ = mcp_hub._builtin_tools("full", str(WS), workspace_root=str(WS))
 check("có workspace nhưng THIẾU ctx -> vẫn không cấp tool chạy lệnh",
       "javis_run_command" not in [x["fn"] for x in t_thieu])
 
-import asyncio  # noqa: E402
 _, r_sug = mcp_hub._builtin_tools("full", str(WS), workspace_root=str(WS),
                                   coding_ctx_cua_phien=ctx("suggest"))
 # 0.256.0: mức suggest không thấy tool luôn (trước đây thấy rồi mới bị chặn lúc chạy). Lớp thứ

@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import lang as lang_mod
 import lang_registry
@@ -55,7 +54,7 @@ def snapshot(mem_dir) -> dict:
     return {"files": files, "titles": titles, "t0": time.time()}
 
 
-def _title(mem: Path, slug: str, titles: Dict[str, str]) -> str:
+def _title(mem: Path, slug: str, titles: dict[str, str]) -> str:
     if titles.get(slug):
         return titles[slug]
     try:
@@ -66,7 +65,7 @@ def _title(mem: Path, slug: str, titles: Dict[str, str]) -> str:
         return slug
 
 
-def facts_diff(snap: Optional[dict], mem_dir) -> List[dict]:
+def facts_diff(snap: dict | None, mem_dir) -> list[dict]:
     """Memories saved (new), changed (updated) or forgotten during the turn: [{slug, title, act}]."""
     if not snap:
         return []
@@ -93,7 +92,7 @@ def facts_diff(snap: Optional[dict], mem_dir) -> List[dict]:
     return out[:MAX_ITEMS]
 
 
-def changed(snap: Optional[dict], mem_dir) -> bool:
+def changed(snap: dict | None, mem_dir) -> bool:
     """Anything in the brain's memory changed during the turn (files, or a write noted by the memory tools)."""
     if not snap:
         return True        # no snapshot: cannot tell, so never accuse
@@ -111,14 +110,14 @@ def changed(snap: Optional[dict], mem_dir) -> bool:
 
 # ── the receipt ───────────────────────────────────────────────────────────────
 
-def receipt_block(items: List[dict], brain_key: str) -> str:
+def receipt_block(items: list[dict], brain_key: str) -> str:
     gon = [{"slug": str(i.get("slug") or "")[:120], "title": str(i.get("title") or "")[:120],
             "act": i.get("act") if i.get("act") in ("new", "updated", "forgot") else "updated"} for i in items]
     data = {"brain": str(brain_key or ""), "items": gon}
     return "<!-- JAVIS_NHO: " + json.dumps(data, ensure_ascii=False).replace("-->", "- ->") + " -->"
 
 
-def receipt_text(items: List[dict]) -> str:
+def receipt_text(items: list[dict]) -> str:
     """Plain line under the hidden block: what a channel without the block (or a screen reader) shows."""
     parts = []
     for i in items:
@@ -147,7 +146,7 @@ def _patterns(text: str):
 
 def detect_claim(text: str) -> str:
     """Name of the "I remembered / forgot / revoked it" pattern in an answer, or ""."""
-    import background_status as BS   # same normalisation and code stripping as the empty-promise check
+    import background_status as BS  # same normalisation and code stripping as the empty-promise check
     raw = str(text or "")
     if not raw.strip():
         return ""

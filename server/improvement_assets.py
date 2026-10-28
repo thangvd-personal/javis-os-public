@@ -5,12 +5,12 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import fastyaml
 import system_sync
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, check_ancestry
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable, check_ancestry
 from improvement_store import SourceSnapshot
 
 _SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,127}")
@@ -114,7 +114,7 @@ def capture_source(root: Path, kind: str, slug: str, *, pack_state_dir: Path | N
         agent_key = str(agent_identity() or "") if kind == "agent" and agent_identity else ""
         if kind == "agent" and not agent_key:
             raise SourceError("host_agent_identity_required")
-        identity = hashlib.sha256(f"{agent_key}:{before.st_dev}:{before.st_ino}".encode("utf-8")).hexdigest()
+        identity = hashlib.sha256(f"{agent_key}:{before.st_dev}:{before.st_ino}".encode()).hexdigest()
         return SourceSnapshot(kind, relative, digest, digest, True, "user_protected", identity, agent_key), content
     except SourceError:
         raise

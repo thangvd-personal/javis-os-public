@@ -1,6 +1,4 @@
 """Actual M0 owners with engineering guardian/release seams; no native child."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -14,10 +12,10 @@ import unittest
 from contextlib import closing
 from unittest.mock import patch
 
+import improvement_store as IM
 import test_improvement_native_decision_store as fixture
 import test_improvement_native_sdk as sdk_fixture
-import improvement_store as IM
-from improvement_native_protocol import _canonical
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 class NativeParentTests(unittest.IsolatedAsyncioTestCase):
@@ -196,7 +194,7 @@ class NativeParentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_query_parent_persists_all_four_images_in_full_attempt_scope_and_keeps_closing_callback(self):
         import test_improvement_native_trace_checks as captures
-        from improvement_native_decisions import attempt_scope, NativeImageDecisionStore
+        from improvement_native_decisions import NativeImageDecisionStore, attempt_scope
         from improvement_sandbox import worker_environment
         joins, callbacks = [], []
         workspace = {'trial_id': 'genuine-trial', 'attempt': 1, 'input_hash': 'c' * 64, 'path': str(self.root)}
@@ -264,8 +262,8 @@ class NativeAdapterBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.pin = sdk_fixture.pin()
 
     async def test_new_registered_boundary_profile_cannot_choose_unbound_legacy_verifier(self):
-        from improvement_claude import ClaudeTrialAdapter
         import improvement_native_qualifications as registrations
+        from improvement_claude import ClaudeTrialAdapter
         prefix = (sys.platform, self.pin['cli_version'], self.pin['cli_hash'], self.pin['sdk_version'],
                   self.pin['profile_version'], self.pin['profile_hash'])
         with patch.object(registrations, 'REVIEWED_RELEASES', {(*prefix, 'a' * 64): 'b' * 64}):
@@ -305,12 +303,12 @@ class NativeAdapterBoundaryTests(unittest.IsolatedAsyncioTestCase):
                             for value in instances))
 
     async def test_actual_prepared_new_inputs_reach_parent_and_bound_old_inputs_refuse_legacy_launch(self):
-        from improvement_claude import ClaudeTrialAdapter
-        from improvement_operation_adapter import ClaudeOperationAdapter
-        from improvement_sandbox import trial_system_prompt
-        from improvement_operation_profile import operation_system_prompt
         import test_improvement_operation_workspace as workspace_fixture
         import test_improvement_read_outcome_broker as manifest_fixture
+        from improvement_claude import ClaudeTrialAdapter
+        from improvement_operation_adapter import ClaudeOperationAdapter
+        from improvement_operation_profile import operation_system_prompt
+        from improvement_sandbox import trial_system_prompt
         setup = workspace_fixture.OperationWorkspaceTests(); setup.setUp()
         self.addCleanup(setup.doCleanups)
         observed = []

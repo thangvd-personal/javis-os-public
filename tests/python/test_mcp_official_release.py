@@ -18,16 +18,17 @@ No network. Three things are guarded here:
    names its one sub-action at the top level of args. Before 0.82.0 every such call failed
    closed to danger, so a read-only connection could not even list its domains through it.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-official-release-"))
 
-import mcp_catalog  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_login  # noqa: E402
+import mcp_catalog
+import zalo_cli
+import zalo_login
 
 _fails = []
 
@@ -138,7 +139,7 @@ check("Draft level cannot run an unlisted operation through the gateway", ok is 
 # ============================================================
 # A connection stores its command when it is created, so without `lenh_cu` an existing Google
 # Ads connection would keep running GitHub main forever and the rule would only reach new ones.
-import mcp_store  # noqa: E402
+import mcp_store
 
 
 def resolved_of(cid):

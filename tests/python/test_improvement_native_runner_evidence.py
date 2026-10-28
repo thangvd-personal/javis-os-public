@@ -1,6 +1,4 @@
 """Actual SQL/usage runner ownership with synthetic observation2 adapters only."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import unittest
@@ -8,16 +6,17 @@ from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
+import test_improvement_native_observation as G
+import test_improvement_operation_execution as O
+import test_improvement_trials as T
+import usage_index as UI
+import usage_store as US
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_claude import ClaudeTrialAdapter
+from improvement_operation_adapter import ClaudeOperationAdapter
 from improvement_operation_runner import OperationRunner
 from improvement_telemetry import NativeUsageRecorder
 from improvement_trial_runner import TrialRunner
-from improvement_claude import ClaudeTrialAdapter
-from improvement_operation_adapter import ClaudeOperationAdapter
-import test_improvement_trials as T
-import test_improvement_operation_execution as O
-import test_improvement_native_observation as G
-import usage_store as US
-import usage_index as UI
 
 
 class RunnerEvidenceCases:

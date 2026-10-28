@@ -3,17 +3,17 @@ types, no customer data, no credential) and a hook configuration is checked agai
 
     python tests/run.py webhook_capture
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
 import tempfile
 from pathlib import Path
 
-import test_webhook_spec_matrix as mx  # noqa: E402  (the harness; its main() runs only as a script)
+import test_webhook_spec_matrix as mx
+from _paths import ROOT, SERVER  # noqa: F401
 
 sys.path.insert(0, str(ROOT / "tools"))
-import webhook_capture as wc  # noqa: E402
+import webhook_capture as wc
 
 fails = []
 
@@ -66,6 +66,7 @@ async def main():
 def real_capture():
     """The first REAL POSCake delivery (event_type create, captured 2026-10-22): what it teaches is pinned here."""
     import re
+
     import webhook_triggers as wt
     uid = "abafe6f1-1708-4eda-896a-e180520504e5"           # a made-up staff account id
     seen = wt.mask_payload({"id": 739, "creator": {"id": uid}, "editor_id": uid, "assigning_seller_id": uid,

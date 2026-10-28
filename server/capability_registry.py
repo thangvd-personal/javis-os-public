@@ -12,11 +12,11 @@ import re
 import sqlite3
 import threading
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import config
-
 
 REGISTRY_SCHEMA_VERSION = "registry-v1"
 _WORD_RE = re.compile(r"[^\W_]{2,}", re.UNICODE)

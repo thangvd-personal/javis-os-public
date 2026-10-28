@@ -12,13 +12,14 @@ File này canh:
   2. Kênh: chỉ kênh gửi được file mới tách ảnh và mới dạy Agent cách gửi.
   3. Zalo cá nhân gửi ảnh thật bằng CLI `msg send-image`, sau câu chữ đã gỡ phần ảnh.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-botanh-")
 os.environ["JAVIS_REPLY_POLICY_SHADOW"] = "1"
@@ -27,11 +28,11 @@ try:
 except Exception:
     pass
 
-import bot_images  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
+import bot_images
+import chatbot_runtime
+import chatbot_store
+import zalo_cli
+import zalo_personal_channel as zc
 
 _fails = []
 

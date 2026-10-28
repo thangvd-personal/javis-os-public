@@ -10,12 +10,11 @@ Claude Code và Claude.ai - xem server/claude_auth.py). Nguồn duy nhất còn 
 live là `anthropic_api_key`. Mục 3 dưới đây là canary chống hồi quy: hễ có ai đưa lại đường
 đọc credential vào module này thì test đỏ.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
 import sys
 
-
-import claude_models as cm   # noqa: E402
+import claude_models as cm
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 _fails = []
 

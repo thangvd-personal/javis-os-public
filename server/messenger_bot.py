@@ -39,7 +39,6 @@ from collections import deque
 from pathlib import Path
 
 import httpx
-
 import localefmt
 import stt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
@@ -81,16 +80,16 @@ def split_credentials(raw) -> dict:
 def md_to_plain(text: str) -> str:
     """Markdown -> plain text Messenger shows as written. Code fences lose their markers only."""
     t = str(text or "")
-    t = re.sub(r"```[a-zA-Z0-9_-]*\n?(.*?)```", r"\1", t, flags=re.S)
+    t = re.sub(r"```[a-zA-Z0-9_-]*\n?(.*?)```", r"\1", t, flags=re.DOTALL)
     t = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", r"\1", t)
     t = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"\1 (\2)", t)
-    t = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"\1", t, flags=re.M)
+    t = re.sub(r"^#{1,6}\s+(.+?)\s*#*$", r"\1", t, flags=re.MULTILINE)
     t = re.sub(r"\*\*(.+?)\*\*", r"\1", t)
     t = re.sub(r"__(.+?)__", r"\1", t)
     t = re.sub(r"~~(.+?)~~", r"\1", t)
     t = re.sub(r"(?<![\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?![\w*])", r"\1", t)
     t = re.sub(r"`([^`\n]+)`", r"\1", t)
-    t = re.sub(r"^(\s*)[-*]\s+", r"\1• ", t, flags=re.M)
+    t = re.sub(r"^(\s*)[-*]\s+", r"\1• ", t, flags=re.MULTILINE)
     return t
 
 

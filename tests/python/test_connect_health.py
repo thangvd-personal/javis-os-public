@@ -1,10 +1,8 @@
 """Test sức khoẻ kết nối (connect_health) - phân loại lỗi + check + sweep + snapshot."""
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import asyncio
-import time
 
 import connect_health
-
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 # ---- classify_error: đủ nhánh, ưu tiên đúng thứ tự ----
 

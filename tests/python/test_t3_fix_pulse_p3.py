@@ -12,25 +12,26 @@
 8. "Huỷ"/"sửa yêu cầu" sau kết quả có bản tổng hợp phân bổ theo 6.5.
 Kho thật, đồng hồ giả, engine GIẢ. Không model thật nào.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-fix-pp3-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-fix-pp3-w-"))
 
-import agent_ledger as AL  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_pulse_host as H  # noqa: E402
-import feedback_projector as FP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_ledger as AL
+import agent_pulse as AP
+import agent_pulse_host as H
+import feedback_projector as FP
+import resonance_store as RS
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 D = 86400.0
@@ -155,8 +156,8 @@ live5 = [s for s in AP.signals(st5, k5) + AP.signals(st5, k5b) if s["source_ref"
 check("nguồn đã void: phân bổ lại không hồi sinh dòng nào", got5 == {} and live5 == [], (got5, live5))
 
 # ═════ 6. route chỉ nhận nhóm agent đang tham gia ═════
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 st6, k6, d6 = store()
 AP.ensure_row(st6, k6, "team:mine", at=T0)

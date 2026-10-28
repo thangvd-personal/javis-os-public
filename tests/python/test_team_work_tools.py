@@ -6,23 +6,24 @@ Owner, 17/10/2026: "team phải đầy đủ các quyền thì mới làm việc
 `main._team_engine_for` (only `team_engine.build` / `build_tools` swapped for fake engines) and real SQLite stores in a
 temporary folder; no model is called.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-tools-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-tools-w-"))
 
-import main  # noqa: E402
-import aux_engine  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_engine  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import aux_engine
+import main
+import sessions
+import task_store
+import team_engine
+import team_runner as TR
+import team_store
 
 fails = []
 

@@ -53,7 +53,7 @@ def output_path(value):
     for part in value.split("/"):
         if (not part or part in (".", "..") or part.endswith((".", " "))
                 or re.fullmatch(r"(?:con|prn|aux|nul|conin\$|conout\$|com[1-9¹²³]|lpt[1-9¹²³])",
-                                part.split(".", 1)[0].rstrip(" "), re.I)):
+                                part.split(".", 1)[0].rstrip(" "), re.IGNORECASE)):
             raise ValueError("invalid_trial_output_path")
     return value
 
@@ -523,7 +523,9 @@ class CaseStore:
             if replay is not None:
                 return replay
             row = self._row(connection, "improvement_qualification", brain, reservation_id)
-            from improvement_experiment_qualification import require_legacy_qualification
+            from improvement_experiment_qualification import (
+                require_legacy_qualification,
+            )
             require_legacy_qualification(connection, brain, row["case_set_id"], pins)
             if row["pins_hash"] != IM._hash(pins):
                 raise IM.ConflictError("stale_qualification_pin")

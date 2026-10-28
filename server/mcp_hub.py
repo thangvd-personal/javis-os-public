@@ -22,8 +22,6 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from fastapi.responses import JSONResponse, Response
-
 import chatbot_doc_tools
 import coding_files
 import config
@@ -39,6 +37,7 @@ import skill_usage
 import team_gate
 import turn_context
 from config import STATE_DIR
+from fastapi.responses import JSONResponse, Response
 
 _TOKEN_PATH = STATE_DIR / ".hub_token"
 _AUDIT_PATH = STATE_DIR / "mcp_audit.jsonl"
@@ -247,7 +246,7 @@ def _guard(ent, fn, mode):
             # Checked after the rate limit, so a refused call never burns the owner's approval.
             ok, why = await asyncio.to_thread(team_gate.hub_check, fn, args,
                                               f"{conn.get('label') or conn.get('connector_id') or ''}: {tool}")
-            why = why[len("ERROR: "):] if why.startswith("ERROR: ") else why
+            why = why.removeprefix("ERROR: ")
         if not ok:
             _audit_append({"ts": datetime.now().isoformat(timespec="seconds"), "conn_id": conn["id"],
                            "connector": conn.get("connector_id"), "label": conn.get("label"),
@@ -834,9 +833,10 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
 
     async def _skill(args):
         name = str((args or {}).get("name") or "").strip()
-        from improvement_task_skill_scope import current, ScopeUnavailable
-        from improvement_blobs import AssetUnavailable
         import sqlite3
+
+        from improvement_blobs import AssetUnavailable
+        from improvement_task_skill_scope import ScopeUnavailable, current
         def read():
             scope = current(vault_root)
             import improvement_activation
@@ -1412,7 +1412,7 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
     key = (mode, str(vault_root or ""), bool(include_plugins), bool(include_ambient),
            bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _quyen_ctx, bool(for_bot),
            str(_sid_ctx or ""))
-    from improvement_task_skill_scope import current, ScopeUnavailable
+    from improvement_task_skill_scope import ScopeUnavailable, current
     task_scope = current(vault_root or '')
     cache = task_scope._hub_cache if task_scope is not None else _cache
     epoch = _cache_epoch

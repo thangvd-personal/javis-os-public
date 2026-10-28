@@ -6,15 +6,16 @@ No network. Without this every background job paid for the same dead model again
 15 seconds to arrive). A resting link moves to the END of the chain rather than being skipped, so
 a job still runs when every other link fails too.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 import unittest
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-auxcool-"))
 
-import aux_engine  # noqa: E402
+import aux_engine
 
 
 class Link:

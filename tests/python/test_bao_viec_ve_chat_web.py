@@ -22,15 +22,14 @@ Chạy:
 import asyncio
 import os
 import re
-import sys
 import tempfile
 
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-push-test-"))
 
-import channel_context  # noqa: E402
-import main  # noqa: E402
+import channel_context
+import main
 
 APP = (ROOT / "dashboard" / "app.js").read_text(encoding="utf-8")
 CLAUDE_MD = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")

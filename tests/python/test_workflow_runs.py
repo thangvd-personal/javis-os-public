@@ -5,14 +5,15 @@
 Vì sao có kho này: trước đây bấm Chạy ở trang Quy trình thì kết quả stream vào một ngăn kéo
 tạm, đóng là mất. Hỏi Javis "quy trình chạy gần nhất ra sao" là không có gì để tra.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-wfruns-")
 
-import workflow_runs  # noqa: E402
+import workflow_runs
 
 fails = []
 

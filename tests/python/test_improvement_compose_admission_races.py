@@ -4,14 +4,13 @@ All positive consent/operation history comes from the actual owner fixture.
 Injected history/state changes are rollback-only negative controls, never native
 qualification, a provider call or business evidence.
 """
-from _paths import ROOT, SERVER  # noqa: F401
-
 import unittest
 from contextlib import closing
 from unittest.mock import patch
 
-from improvement_compose_permissions import ComposePermissions
 import test_improvement_compose_admission as admission
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_compose_permissions import ComposePermissions
 
 
 class ComposeAdmissionRaceTests(unittest.TestCase):

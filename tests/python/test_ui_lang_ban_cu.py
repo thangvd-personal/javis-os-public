@@ -6,16 +6,17 @@ Từ 0.66.0 `locale.ui_lang` mặc định là "" (chưa chọn), để dashboar
 ghi lại. Cái giá phải canh: máy cài TRƯỚC khi có khối locale có settings.json không chứa khoá
 này. Đọc ra "" là người dùng Việt có trình duyệt để tiếng Anh bị đổi giao diện trong im lặng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _tmp = Path(tempfile.mkdtemp(prefix="javis-uilang-"))
 os.environ["JAVIS_STATE_DIR"] = str(_tmp)
-import config as cfgmod  # noqa: E402
+import config as cfgmod
 
 cfgmod.SETTINGS_PATH = _tmp / "settings.json"
 _fails = []

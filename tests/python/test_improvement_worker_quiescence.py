@@ -1,8 +1,6 @@
 """Windows job ownership must outlive asynchronous native termination."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import ctypes
 import asyncio
+import ctypes
 import io
 import json
 import subprocess
@@ -10,11 +8,12 @@ import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
-from pathlib import Path
 
 import improvement_worker as worker
+from _paths import ROOT, SERVER  # noqa: F401
 
 _REAL_POPEN = subprocess.Popen
 
@@ -134,8 +133,8 @@ class WorkerQuiescenceTests(unittest.TestCase):
         self.assertEqual(subject.handle, 123)
 
     def test_durable_native_fences_block_both_brain_and_attempt_recovery(self):
-        from improvement_sandbox import TrialWorkspace, _bytes_hash
         from improvement_native_lifetime import fence_directory
+        from improvement_sandbox import TrialWorkspace, _bytes_hash
         with tempfile.TemporaryDirectory() as directory:
             workspace = TrialWorkspace(Path(directory) / 'trials')
             for namespace, key in (('.executions', 'synthetic-brain'), ('.lifetimes', 'trial-a:1')):

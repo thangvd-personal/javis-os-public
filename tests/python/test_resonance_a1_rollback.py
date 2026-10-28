@@ -8,7 +8,6 @@ tiêu có bàn giao, sửa cách hiểu, sổ hành động, đăng sản phẩm
 
 Máy không có lịch sử git của `09f254d0` thì in SKIP; trên CI (biến CI) thì ĐỎ, vì CI phải lấy commit đó trước.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import os
 import sqlite3
@@ -18,10 +17,12 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a1rb-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import resonance_store as RS  # noqa: E402
+import resonance_store as RS
 
 OLD_SHA = "09f254d0e4d009451dc58cb2e97788631c5acc1a"
 _fails = []

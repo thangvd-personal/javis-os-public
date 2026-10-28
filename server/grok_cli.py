@@ -70,8 +70,8 @@ import tempfile
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Optional
 
 import localefmt
 from claude_cli import _home_dir, _no_window, tim_binary
@@ -131,7 +131,7 @@ def _doc_json(p: Path):
         return None
 
 
-def find_grok_cli() -> Optional[str]:
+def find_grok_cli() -> str | None:
     """Tìm binary `grok`. Cửa thoát JAVIS_GROK_BIN cho máy cài chỗ lạ."""
     envp = (os.environ.get("JAVIS_GROK_BIN") or "").strip()
     if envp:
@@ -236,7 +236,7 @@ def co_co(*ten_co: str) -> bool:
 _CO_EFFORT = ("--effort", "--reasoning-effort")
 
 
-def co_effort(muc: Optional[str]) -> list:
+def co_effort(muc: str | None) -> list:
     """['--effort', '<muc>'] nếu bản CLI này khai đủ cả hai, không thì [] (không truyền gì)."""
     if not muc:
         return []
@@ -253,7 +253,7 @@ def phien_moi() -> str:
     return str(uuid.uuid4())
 
 
-def permission_cho_mode(mode: Optional[str]) -> list:
+def permission_cho_mode(mode: str | None) -> list:
     """Mức quyền của Javis -> cờ quyền của Grok. Giá trị lạ về nấc CHẶT NHẤT.
 
     Fail-closed cố ý: một chuỗi mode gõ sai không được
@@ -376,7 +376,7 @@ def _doc_toml_ky(p: Path) -> tuple:
 # ---------------------------------------------------------------------------
 # MCP: ghi hub của Javis vào `<brain>/.grok/config.toml`
 # ---------------------------------------------------------------------------
-def hub_entry(url: str, headers: Optional[dict] = None) -> dict:
+def hub_entry(url: str, headers: dict | None = None) -> dict:
     """Hình dạng entry MCP HTTP của Grok.
 
     Để hình dạng entry TRONG module engine chứ không viết tay ở `main.py` là bài học đắt của
@@ -394,7 +394,7 @@ def mcp_config_path(vault_root) -> Path:
     return Path(vault_root).expanduser() / ".grok" / "config.toml"
 
 
-def ghi_mcp_settings(vault_root, hub: Optional[dict]) -> Optional[str]:
+def ghi_mcp_settings(vault_root, hub: dict | None) -> str | None:
     """Ghi `<vault>/.grok/config.toml` với đúng một entry MCP trỏ về hub Javis.
 
     Vì sao ghi vào brain chứ không vào `~/.grok`: file HOME là của người dùng và dùng chung cho
@@ -896,7 +896,7 @@ def logout() -> dict:
     return {"ok": True}
 
 
-def list_models() -> Optional[list]:
+def list_models() -> list | None:
     """Danh sách model cho picker.
 
     Hỏi CLI trước (nếu bản này có lệnh liệt kê), rồi mới tới bảng dự phòng cộng model đang đặt
@@ -1041,8 +1041,8 @@ class GrokCLI:
     nơi gọi (chat dashboard, Telegram, việc nền) không phải biết đây là engine nào.
     """
 
-    def __init__(self, cwd: Optional[str] = None, tag: str = "chat", model: Optional[str] = None,
-                 instructions: Optional[str] = None):
+    def __init__(self, cwd: str | None = None, tag: str = "chat", model: str | None = None,
+                 instructions: str | None = None):
         self.cli_path = find_grok_cli()
         self.cwd = cwd or os.getcwd()
         self.tag = tag
@@ -1066,8 +1066,8 @@ class GrokCLI:
     def is_available(self) -> bool:
         return self.cli_path is not None
 
-    def _build_args(self, prompt_file: Optional[str] = None,
-                    prompt_argv: Optional[str] = None,
+    def _build_args(self, prompt_file: str | None = None,
+                    prompt_argv: str | None = None,
                     dinh_dang: str = "streaming-json") -> list:
         args = [self.cli_path]
         if self.model and co_co("--model"):
@@ -1176,7 +1176,7 @@ class GrokCLI:
             yield {"type": "error", "content": self._loi_trong(chan)}
 
     async def _mot_lan(self, args: list, cac_manh: list, chan: dict,
-                       xoa_tep: Optional[str] = None) -> AsyncIterator[dict]:
+                       xoa_tep: str | None = None) -> AsyncIterator[dict]:
         """Chạy MỘT tiến trình `grok` và sinh sự kiện theo hợp đồng chung.
 
         Tách khỏi `query` để chạy được lần hai với bộ tham số khác mà không chép lại cả khối
@@ -1401,7 +1401,7 @@ class GrokCLI:
                 return v
         return mac_dinh
 
-    def _doi_su_kien(self, ev: dict, cac_manh: list, chan: Optional[dict] = None) -> list:
+    def _doi_su_kien(self, ev: dict, cac_manh: list, chan: dict | None = None) -> list:
         """Một dòng NDJSON của Grok -> 0..n sự kiện theo hợp đồng của Javis."""
         if "_raw" in ev:
             cac_manh.append(str(ev["_raw"]))

@@ -6,12 +6,13 @@ Only `team_engine.build` / `build_tools` are swapped for fake engines; real SQLi
 is called. Checks per provider: the hub level, the native level, the turn key, the Claude PreToolUse hook, and the
 refusal of a provider that cannot stop its own tools before they run.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-gate-f-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-gate-fw-"))
@@ -19,16 +20,16 @@ TEMP = Path(tempfile.mkdtemp(prefix="javis-team-gate-fw-"))
 CODEX_CONFIG_HOME = TEMP / "codex-home"
 CODEX_CONFIG_HOME.mkdir()
 
-import main  # noqa: E402
-import aux_engine  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_engine  # noqa: E402
-import team_gate  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
-import turn_context  # noqa: E402
-from claude_sdk_engine import ClaudeSDK  # noqa: E402
+import aux_engine
+import main
+import sessions
+import task_store
+import team_engine
+import team_gate
+import team_runner as TR
+import team_store
+import turn_context
+from claude_sdk_engine import ClaudeSDK
 
 fails = []
 

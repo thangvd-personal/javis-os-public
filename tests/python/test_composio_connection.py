@@ -1,7 +1,5 @@
 """Composio Connect key failures must point to the Javis-side credential."""
 
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import json
 
@@ -9,7 +7,7 @@ import connect_health
 import mcp_client
 import mcp_hub
 import mcp_store
-
+from _paths import ROOT, SERVER  # noqa: F401
 
 REJECTED = (
     'HTTP 401: {"error":"Authorization required","reason":'

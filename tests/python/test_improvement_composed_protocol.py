@@ -1,16 +1,15 @@
 """Closed compose-arm transport and real paired arithmetic, no host authority."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import unittest
 
 import improvement_experiment_protocol as P
+import test_improvement_comparison_results as arithmetic
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_comparison_results import aggregate
 from improvement_experiment_requests import validate
 from improvement_trial_requests import TrialRequestError
 from improvement_view_protocol import view_manifest
 from improvement_view_trial_protocol import validate_request_v4
-import test_improvement_comparison_results as arithmetic
 from test_improvement_experiment_protocol import request_v2
 from test_improvement_views import manifest
 

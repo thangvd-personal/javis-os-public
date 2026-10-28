@@ -23,15 +23,16 @@ Và một luật ngược chiều, quan trọng ngang phần trên: nới cho we
 thuần. Telegram và Zalo không vẽ được bảng, terminal thì không render gì cả. Bốn check cuối
 canh đúng chỗ đó, vì đây là kiểu hồi quy dễ lọt nhất khi ai đó đi nới luật trình bày.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-dedoc-"))
 
-import channel_context  # noqa: E402
-import context_compiler  # noqa: E402
+import channel_context
+import context_compiler
 
 _fails = []
 

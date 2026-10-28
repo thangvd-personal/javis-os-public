@@ -2,7 +2,6 @@
 
     python tests/run.py reply_policy_hub_owner_only      (no network)
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
@@ -11,15 +10,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-rp-hub-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import chatbot_reply_policy_store as st  # noqa: E402
-import mcp_hub  # noqa: E402
-import plugins_host  # noqa: E402
+import chatbot_reply_policy_store as st
+import mcp_hub
+import plugins_host
 
 _fails = []
 
@@ -120,7 +121,8 @@ check("read tool is readonly, tune tool is safe",
 m._bots = lambda: [{"id": "A", "name": "Javis Vũ", "channel": "zalo"}, {"id": "B", "name": "Nhi Mai", "channel": "zalo"}]
 R, T = by["javis_reply_policy"]["handler"], by["javis_reply_policy_tune"]["handler"]
 
-import time  # noqa: E402
+import time
+
 now = time.time()
 d1 = st.log_decision({"bot_id": "A", "chat_id": "g1", "ts": now - 600, "text": "@Quý lịch học tuần này sao anh",
                       "sender": "Lan", "verdict": "silent", "silence_code": "addressed_other", "candidate": False,

@@ -219,12 +219,12 @@ MEMORY_CLAIM = (
 
 REMEMBER = re.compile(
     r"(remember this|remember that|keep in mind|note that|make a note|save this|"
-    r"store this|don't forget|do not forget|for future reference|remember i)", re.I
+    r"store this|don't forget|do not forget|for future reference|remember i)", re.IGNORECASE
 )
 
 DENSE = re.compile(
     r"(what is|what are|how does .{0,20}work|framework|methodology|principle|process for|"
-    r"steps to|concept of|definition of|model for|approach to)", re.I
+    r"steps to|concept of|definition of|model for|approach to)", re.IGNORECASE
 )
 
 STUCK = ("i don't have that information", "i do not have that information",

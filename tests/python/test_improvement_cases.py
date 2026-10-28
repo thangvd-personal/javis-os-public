@@ -1,6 +1,4 @@
 """Immutable trial inputs, private splits and qualification claims use real scratch SQLite."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
 import hashlib
 import importlib.util
@@ -15,14 +13,16 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 TEST_ROOT = Path(tempfile.mkdtemp(prefix="improvement-cases-"))
 for key, name in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
                   "BRAIN_PATH": "brain", "SOURCES_PATH": "sources"}.items():
     os.environ[key] = str(TEST_ROOT / name)
 
-import resonance_store as RS  # noqa: E402
-import improvement_store as IM  # noqa: E402
-from improvement_blobs import RevisionBlobs  # noqa: E402
+import improvement_store as IM
+import resonance_store as RS
+from improvement_blobs import RevisionBlobs
 
 if importlib.util.find_spec("improvement_cases"):
     import improvement_cases as IC

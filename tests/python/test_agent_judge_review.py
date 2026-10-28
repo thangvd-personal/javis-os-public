@@ -11,7 +11,6 @@ giao diện `JudgeAdapter`, không model):
   (độ tin ≥ 0,5); hết 14 ngày không xấu thì giữ; không lặp thay đổi đã quay lại trong 14 ngày;
 - không đè thiết lập chủ đang giữ (lúc áp và lúc quay lại); học không cấp quyền, không nâng trần.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,16 +19,18 @@ import tempfile
 from contextlib import closing
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-selfrev-")
 os.environ.pop("JAVIS_RESONANCE_CALL_CEILING", None)
 TEMP = Path(tempfile.mkdtemp(prefix="javis-selfrev-w-"))
 
-import agent_budget as AB  # noqa: E402
-import agent_ledger as ALG  # noqa: E402
-import agent_lessons as ALS  # noqa: E402
-import agent_pulse as AP  # noqa: E402
-import agent_review as AR  # noqa: E402
-import resonance_store as RS  # noqa: E402
+import agent_budget as AB
+import agent_ledger as ALG
+import agent_lessons as ALS
+import agent_pulse as AP
+import agent_review as AR
+import resonance_store as RS
 
 fails = []
 D = 86400.0

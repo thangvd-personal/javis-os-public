@@ -28,7 +28,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import brain_ident
 import channels
@@ -101,7 +101,7 @@ def _public(a: dict) -> dict:
 # ============================================================
 # Đọc
 # ============================================================
-def list_accounts(channel: str = "", brain: str = "") -> List[dict]:
+def list_accounts(channel: str = "", brain: str = "") -> list[dict]:
     """`brain` rỗng = mọi brain (hành vi cũ, và là thứ mã nội bộ cần: poller phải thấy hết).
 
     Có `brain` thì trả tài khoản của brain đó CỘNG tài khoản chưa gán brain nào. Tài khoản
@@ -137,7 +137,7 @@ def _ao_cua(conn_id: str, label: str = "") -> dict:
     }
 
 
-def tai_khoan_ao() -> List[dict]:
+def tai_khoan_ao() -> list[dict]:
     """Tài khoản Zalo cá nhân đang có ở trang Kết nối, dưới dạng tài khoản kênh để CHỌN cho bot."""
     try:
         import zalo_personal_channel
@@ -146,7 +146,7 @@ def tai_khoan_ao() -> List[dict]:
         return []
 
 
-def get_account(account_id: str) -> Optional[dict]:
+def get_account(account_id: str) -> dict | None:
     with _lock:
         for a in _load()["accounts"]:
             if a.get("id") == account_id:
@@ -175,7 +175,7 @@ def get_token(account_id: str) -> str:
     return ""
 
 
-def owner_of(username: str, channel: str, exclude_id: str = "") -> Optional[dict]:
+def owner_of(username: str, channel: str, exclude_id: str = "") -> dict | None:
     """Tài khoản nào đang giữ đúng con bot này (so theo tên tài khoản từ getMe, THEO KÊNH).
 
     Một token chỉ được MỘT tiến trình long-polling; hai poller cùng token thì máy chủ trả 409
@@ -199,7 +199,7 @@ def owner_of(username: str, channel: str, exclude_id: str = "") -> Optional[dict
 # ============================================================
 # Ghi
 # ============================================================
-def create_account(data: dict, account_id: str = "") -> tuple[Optional[str], str]:
+def create_account(data: dict, account_id: str = "") -> tuple[str | None, str]:
     """Tạo tài khoản token. Trả (id, "") hoặc (None, lý do).
 
     `account_id` chỉ dùng khi DI TRÚ từ bot cũ (giữ id bot làm id tài khoản); bình thường để
@@ -291,7 +291,7 @@ def delete_account(account_id: str) -> tuple[bool, str]:
         return True, ""
 
 
-def ensure_from_bot(bot: dict) -> Optional[str]:
+def ensure_from_bot(bot: dict) -> str | None:
     """DI TRÚ: tài khoản cho một bản ghi bot cũ còn mang `token_enc`. Trả id tài khoản.
 
     Id tài khoản = id bot, để khoá `f"{kenh}:{bot_id}"` của kho hội thoại giữ nguyên. Chép

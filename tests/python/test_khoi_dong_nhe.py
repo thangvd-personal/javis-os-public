@@ -13,12 +13,13 @@ file cho tiện, không ai nhận ra, và app chậm dần từng chút một m�
 0.59.18 thêm `jsonschema` (~50ms) vào diện phải nạp lười, và sửa chính phép đo tỉ lệ ở cuối
 file vì nó báo oan: xem khối chú thích ngay trên TRAN_TI_LE.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-khoidong-"))
 HERE = str(SERVER)
@@ -63,7 +64,7 @@ NOI_CAM_IMPORT = {
     "cryptography": ("main.py", "webpush.py"),
 }
 
-import main  # noqa: E402,F401
+import main
 
 for mod, ly_do in NANG_PHAI_LUOI.items():
     check(f"'{mod}' KHÔNG nạp lúc import main ({ly_do})", mod not in sys.modules)
@@ -73,14 +74,14 @@ for mod, ly_do in NANG_PHAI_LUOI.items():
 # mà test này phải chạy được offline. Chỉ kiểm hai điều tách bạch: (a) thư viện nạp được
 # khi cần, (b) hai chỗ dùng đều có lệnh import cục bộ nên sẽ nạp được lúc chạy.
 try:
-    import edge_tts  # noqa: E402,F401
+    import edge_tts  # noqa: F401
     nap_duoc = True
 except Exception as e:
     nap_duoc = False
     print(f"     (nạp edge_tts lỗi: {type(e).__name__}: {e})")
 check("edge_tts vẫn nạp được khi cần (không phải chỉ hoãn lỗi sang lúc dùng)", nap_duoc)
 
-import inspect  # noqa: E402
+import inspect
 
 for ten in ("_tts_edge", "tts_voices"):
     fn = getattr(main, ten, None)
@@ -89,13 +90,13 @@ for ten in ("_tts_edge", "tts_voices"):
 
 # ---- jsonschema cũng vậy, và nó khắt khe hơn edge_tts một bậc ----
 try:
-    import jsonschema  # noqa: E402,F401
+    import jsonschema  # noqa: F401
     check("jsonschema vẫn nạp được khi cần", True)
 except Exception as e:
     check(f"jsonschema vẫn nạp được khi cần (lỗi: {type(e).__name__}: {e})", False)
 
-import capability_executor      # noqa: E402
-import readonly_orchestrator    # noqa: E402
+import capability_executor
+import readonly_orchestrator
 
 # Ba hàm dùng jsonschema phải có lệnh import CỤC BỘ, và lệnh đó phải nằm NGOÀI khối try.
 # Vì sao khắt khe hơn edge_tts: cả ba chỗ đều bắt lỗi rồi trả "schema không hợp lệ"

@@ -1,6 +1,4 @@
 """Host V2 consumer contract; engineering fixtures never invoke an SDK or account."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import hashlib
@@ -9,17 +7,19 @@ import inspect
 import json
 import math
 import os
-from pathlib import Path
 import shutil
+import socket
 import tempfile
-import unittest
+import threading
 import time
 import traceback
-import threading
-import socket
+import unittest
 from collections import deque
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def component(test):
@@ -374,10 +374,11 @@ asyncio.run(main())
 class HostGuardianWindowsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.mod = component(self)
+        import msvcrt
+
         from improvement_native_bootstrap import _runtime_paths
         from improvement_native_image import ImageReadGuard
         from improvement_sandbox import worker_environment
-        import msvcrt
         short = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / 'AppData/Local'))) / 'Temp'
         self.temp = tempfile.TemporaryDirectory(prefix='jh2-', dir=short)
         self.root = Path(self.temp.name)

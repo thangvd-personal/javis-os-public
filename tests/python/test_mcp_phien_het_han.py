@@ -29,17 +29,17 @@ Không có ngoại lệ nào được ném ra, và cả dây chuyền phía trê
 Trách nhiệm: máy chủ Pancake xoá phiên là ĐÚNG chuẩn, không phải lỗi của họ. Bên sai chuẩn là
 Javis. Nên bản vá nằm hết ở phía Javis, và test này ghim cả bốn mảnh của nó.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
-import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-phien-"))
 
-import httpx          # noqa: E402
-import mcp_client     # noqa: E402
-import connect_health  # noqa: E402
+import connect_health
+import httpx
+import mcp_client
 
 _fails = []
 

@@ -16,12 +16,12 @@ import os
 import tempfile
 from pathlib import Path
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-suamd-"))
 
-import main  # noqa: E402
-import md_repair as M  # noqa: E402
+import main
+import md_repair as M
 
 CONSOLE = (ROOT / "dashboard" / "console.js").read_text(encoding="utf-8")
 

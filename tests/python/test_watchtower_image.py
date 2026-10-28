@@ -9,11 +9,10 @@ Image `containrrr/watchtower` mặc định nói Docker API 1.25 và repo đó �
 Restarting mãi, app không nối được `watchtower:8080` và nút cập nhật chết trên MỌI máy mới.
 Bản fork `nicholas-fedor/watchtower` tự thương lượng phiên bản API.
 """
-from _paths import ROOT  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import sys
 
 import yaml
-
+from _paths import ROOT
 
 FAIL = []
 

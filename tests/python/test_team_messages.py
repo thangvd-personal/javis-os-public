@@ -5,15 +5,16 @@
 Không gọi model. Cột người gửi, chống gửi trùng bằng `client_msg_id`, phân trang, ẩn kênh nhóm khỏi lịch sử chat chính,
 và chat thường không đổi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-msg-")
 
-import sessions  # noqa: E402
+import sessions
 
 fails = []
 

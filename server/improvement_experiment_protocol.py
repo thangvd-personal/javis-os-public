@@ -1,11 +1,11 @@
 """Closed immutable experiment data; no host, trial, case-store or engine imports."""
 from __future__ import annotations
 
-import re
 import json
 import math
+import re
 
-from improvement_store import _json, _hash
+from improvement_store import _hash, _json
 
 _ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}")
 _HASH = re.compile(r"[0-9a-f]{64}")

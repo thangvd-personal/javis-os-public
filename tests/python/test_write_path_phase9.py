@@ -5,21 +5,18 @@ restart không chạy lại action đã hoàn thành, UNKNOWN được reconcile
 toàn, tool không reconcile được thì về legacy, và audit nối được task/step/
 capability revision/provider request id.
 """
-from _paths import SERVER  # noqa: E402,F401
-
 import asyncio
 import inspect
 import json
 import sqlite3
 
-from cryptography.fernet import Fernet
-
-import write_path_runtime
+from _paths import SERVER
 from capability_executor import CapabilityExecutor, idempotency_key
 from capability_registry import CapabilityRegistry
 from capability_resolver import DeterministicResolver
 from context_compiler import ContextCompiler
 from context_runtime import ObserveRuntime
+from cryptography.fernet import Fernet
 from evidence_store import EvidenceStore
 from write_path_runtime import WritePathCanary, WritePolicy, parse_confirmation
 
@@ -595,6 +592,7 @@ def test_proposal_offers_buttons_whose_label_carries_the_code(tmp_path, monkeypa
     """
     import json as _json
     import re as _re
+
     import main
 
     stack = _stack(tmp_path)
@@ -647,6 +645,7 @@ def test_proposal_offers_buttons_whose_label_carries_the_code(tmp_path, monkeypa
 def test_button_block_is_stripped_before_the_turn_is_stored():
     """Khối nút là thứ để VẼ, không phải thứ để lưu vào corpus tự học."""
     import inspect
+
     import main
 
     source = inspect.getsource(main._persist_turn)
@@ -670,6 +669,7 @@ def test_a_proposal_without_a_code_is_refused_not_shown_as_a_dead_button(tmp_pat
     Bày ra lời đề xuất không duyệt được là để người dùng bấm vào hư không.
     """
     import json as _json
+
     import main
 
     stack = _stack(tmp_path)
@@ -721,6 +721,7 @@ def test_the_code_survives_block_stripping_so_a_reload_is_not_a_dead_end(tmp_pat
     """
     import json as _json
     import re as _re
+
     import main
 
     stack = _stack(tmp_path)

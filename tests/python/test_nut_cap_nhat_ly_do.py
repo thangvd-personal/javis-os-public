@@ -25,8 +25,14 @@ cập nhật, bị thiếu watchtower". Nói ra đúng lý do là cần, nhưng 
 quan trọng hơn một câu giải thích hay. Nay Watchtower ĐI KÈM SẴN trong cả hai file compose,
 nên mục 4 dưới đây canh chiều NGƯỢC LẠI với bản trước - đó là chủ ý, không phải test bị lỏng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
-import os, sys, asyncio, tempfile, re, io
+import asyncio
+import os
+import re
+import sys
+import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-nutcapnhat-")
 
 _fails = []
@@ -35,7 +41,7 @@ def check(name, cond):
     if not cond:
         _fails.append(name)
 
-import main  # noqa: E402
+import main
 
 # ============================================================
 # 1. Mã lý do phân biệt được hai trường hợp
@@ -106,7 +112,7 @@ main._watchtower_ly_do = _lydo_cu
 # 3. Dashboard phải nói ra LỆNH BẬT, không chỉ nói "thiếu Watchtower"
 # ============================================================
 # Biết mình thiếu gì mà không biết gõ gì thì vẫn tắc. Lệnh này là toàn bộ giá trị của bản vá.
-CON = io.open(os.path.join(ROOT, "dashboard", "console.js"), encoding="utf-8").read()
+CON = open(os.path.join(ROOT, "dashboard", "console.js"), encoding="utf-8").read()
 check("dashboard đọc mã lý do từ server", "self_update_off" in CON)
 check("CANARY: nhánh watchtower_off chỉ ra ĐÚNG lệnh bật",
       "docker compose --profile update up -d" in CON)
@@ -134,12 +140,12 @@ check("thiếu mã lý do vẫn có câu dự phòng",
 #
 # Canh thẳng vào file compose, vì mọi lời khuyên trong app đều dựa trên tiền đề này: ngày nào
 # ai đó đẩy Watchtower về sau một profile nữa thì câu chữ ở dashboard thành sai, không ai báo.
-COMPOSE = io.open(os.path.join(ROOT, "docker-compose.yml"), encoding="utf-8").read()
+COMPOSE = open(os.path.join(ROOT, "docker-compose.yml"), encoding="utf-8").read()
 check("CANARY: watchtower KHÔNG còn nấp sau profile (up -d là phải có nút)",
       re.search(r'watchtower:[\s\S]{0,600}profiles:', COMPOSE) is None)
-HOST = io.open(os.path.join(ROOT, "docker-compose.hostinger.yml"), encoding="utf-8").read()
+HOST = open(os.path.join(ROOT, "docker-compose.hostinger.yml"), encoding="utf-8").read()
 check("CANARY: stack Hostinger CÓ service watchtower",
-      re.search(r'^\s{2}watchtower:', HOST, re.M) is not None)
+      re.search(r'^\s{2}watchtower:', HOST, re.MULTILINE) is not None)
 check("CANARY: Hostinger đặt WATCHTOWER_TOKEN cho app (thiếu là app tưởng không có Watchtower)",
       "WATCHTOWER_TOKEN" in HOST)
 # Tự cập nhật (không cần bấm nút) phải TẮT mặc định: bật ngầm là app tự khởi động lại giữa
@@ -153,18 +159,18 @@ for _f, _t in (("docker-compose.yml", COMPOSE), ("docker-compose.hostinger.yml",
 # Lệnh `--profile update` nay là ĐƯỜNG LUI cho stack cũ, không còn là câu trả lời chính, nhưng
 # vẫn phải có mặt: người đang chạy compose cũ mà không được chỉ lệnh nào thì vẫn tắc như cũ.
 for f in ("DEPLOY.md", "docs/01-bat-dau-thiet-lap.md", "docs/17-khac-phuc-su-co.md"):
-    t = io.open(os.path.join(ROOT, f), encoding="utf-8").read()
+    t = open(os.path.join(ROOT, f), encoding="utf-8").read()
     check(f"{f} ghi đúng lệnh bật Watchtower cho stack cũ",
           "docker compose --profile update up -d" in t)
     check(f"{f} nói cách TỰ cập nhật khỏi bấm nút", "JAVIS_AUTO_UPDATE" in t)
 
-_sc = io.open(os.path.join(ROOT, "docs", "17-khac-phuc-su-co.md"), encoding="utf-8").read()
+_sc = open(os.path.join(ROOT, "docs", "17-khac-phuc-su-co.md"), encoding="utf-8").read()
 check("tài liệu sự cố có bảng phân biệt ba kiểu 'not found'",
       all(k in _sc for k in ("no configuration file provided",
                              "docker: command not found",
                              "is not a docker command")))
 
-print("")
+print()
 if _fails:
     print("THẤT BẠI " + str(len(_fails)) + ": " + ", ".join(_fails))
     sys.exit(1)

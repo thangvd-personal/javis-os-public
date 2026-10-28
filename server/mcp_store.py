@@ -15,10 +15,10 @@ import unicodedata
 import uuid
 from pathlib import Path
 
-import mcp_catalog
-import localefmt
-import secrets_store
 import config as cfgmod
+import localefmt
+import mcp_catalog
+import secrets_store
 from config import STATE_DIR
 
 # Registry bị ghi từ cả event-loop (endpoint) lẫn thread thường (zalo_login) →
@@ -528,7 +528,7 @@ def resolved(enabled_only=True):
         of = (con or {}).get("oauth_file") or {}
         if of.get("env") and of.get("format") and not env.get(of["env"]):
             try:
-                import oauth_mcp   # import TRỄ: oauth_mcp import mcp_store ở cấp module
+                import oauth_mcp  # import TRỄ: oauth_mcp import mcp_store ở cấp module
                 blob = oauth_mcp.credentials_file(c["id"], of["format"])
                 if blob:
                     fdir = STATE_DIR / "connector-files"

@@ -1,6 +1,4 @@
 """M8 prioritisation, bounded refinement, filtered export/import (spec 8.1, 15.3, 16.5, 23 M8)."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import sqlite3
 import unittest
 from contextlib import closing
@@ -10,6 +8,7 @@ import improvement_library as L
 import improvement_store as IM
 import test_improvement_activation as activation_base
 import test_improvement_agent_procedures as procedure_base
+from _paths import ROOT, SERVER  # noqa: F401
 
 NOW = 1_800_000_000.0
 PROCEDURE = "Kiem nguon truoc, doi chieu ky truoc, ghi ro phan thieu."
@@ -218,9 +217,9 @@ class LibraryStoreTests(procedure_base.AgentProcedureBase):
                     connection.execute(statement)
 
     def test_http_routes(self):
+        import improvement_activation_api as API
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
-        import improvement_activation_api as API
         imports = L.Imports(self.assets)
         app = FastAPI()
         API.register(app, API.ActivationApiDeps(

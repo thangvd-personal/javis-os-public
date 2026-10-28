@@ -15,7 +15,6 @@ trình mẫu gọi bước kiểm chứng `kiem-chung-vien` nhưng file tạo ra
   3. Vẫn chặn slug thoát thư mục: `../x`, `a/b`, `..\\x`, rỗng.
   4. Trợ lý và quy trình MỚI đặt tên file không dấu; bộ mẫu Studio khớp tên quy trình mẫu gọi.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import pathlib
 import sys
@@ -23,10 +22,12 @@ import tempfile
 import unicodedata
 from urllib.parse import quote
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-agslug-")
-import main  # noqa: E402
-import skill_router  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import skill_router
+from fastapi.testclient import TestClient
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

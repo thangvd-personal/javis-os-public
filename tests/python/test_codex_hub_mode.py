@@ -7,12 +7,13 @@ reminder, loop or Kanban job at suggest or auto that ran on Codex reached hub to
 that profile, while Grok and Antigravity already got the job's level. Now `aux_engine._build_codex`
 adds a per-process `-c` override, the same way the brain header is pinned.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-codex-mode-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
@@ -22,8 +23,8 @@ try:
 except Exception:
     pass
 
-import aux_engine  # noqa: E402
-import mcp_hub  # noqa: E402
+import aux_engine
+import mcp_hub
 
 _fails = []
 

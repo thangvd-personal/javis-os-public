@@ -18,10 +18,11 @@ rollback), và vòng dò dừng ngay theo đó. Nên chỉ hết hẳn 10 phút 
      không hiện thêm thanh "Tải lại / Để sau".
   5. Lỗi thật vẫn dừng ngay: nhánh result error/pull_failed/rolled_back còn nguyên.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import json
 import re
 import sys
+
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")

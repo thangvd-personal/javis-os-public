@@ -1,15 +1,13 @@
 """Host-selected B slots use native preflight and actual atomic trial accounting."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
-import time
 import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-import test_improvement_experiment_lineage as fixtures
 import improvement_store as IM
+import test_improvement_experiment_lineage as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_claude import ClaudeTrialAdapter
 
 if importlib.util.find_spec("improvement_experiment_admission"):

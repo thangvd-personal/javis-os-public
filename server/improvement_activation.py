@@ -26,9 +26,9 @@ import secrets
 import sqlite3
 import sys
 import time
+from collections.abc import Callable
 from contextlib import closing, contextmanager
 from pathlib import Path
-from typing import Callable
 
 import improvement_store as IM
 from improvement_blobs import AssetUnavailable
@@ -101,7 +101,7 @@ def _slug(canonical_ref: str) -> str:
 def _file_identity(root, canonical_ref: str) -> str:
     """Same identity improvement_assets.capture_source pins: a recreated file is a new target."""
     info = (Path(root) / canonical_ref).stat()
-    return hashlib.sha256(f":{info.st_dev}:{info.st_ino}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f":{info.st_dev}:{info.st_ino}".encode()).hexdigest()
 
 
 def _source_gone(root, slug: str) -> bool:

@@ -12,7 +12,6 @@ trong dashboard) và khi bật thì chỉ chạy NỀN, mở máy lên không th
   3. macOS: javis-autostart.sh viết thêm agent mở trình duyệt (chạy một lần, không KeepAlive); install.sh trên
      Darwin dùng nó thay cho nohup. Chạy thật script với launchctl giả, đọc plist bằng plistlib.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import plistlib
 import shutil
@@ -20,6 +19,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-tumo-"))
 
@@ -57,7 +58,7 @@ check("nút Cập nhật vẫn gọi vbs KHÔNG /open (cập nhật không đư�
       'str(ROOT / "start-javis.vbs")]' in up and "/open" not in up)
 
 # ---- 2. Windows: một chuỗi lệnh, cài là bật ----
-import main  # noqa: E402
+import main
 
 cmd = main._autostart_command()
 check("dashboard: lệnh có /open", cmd.endswith('start-javis.vbs" /open') and cmd.startswith("wscript.exe //nologo "), cmd)

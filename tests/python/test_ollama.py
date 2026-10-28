@@ -14,7 +14,6 @@ File này canh hai thứ. Một, Ollama Cloud chạy thật: lượt chat đi đ
 rơi về nhánh Anthropic mặc định cuối `_api_stream` - nhánh nuốt mọi provider quên đấu, và nuốt
 trong im lặng. Hai, phần máy nhà đã đi sạch, không để lại mẩu nào còn sống nửa vời.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import re
@@ -22,11 +21,13 @@ import sys
 import tempfile
 import types
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ollama-")
 
-import config as cfg  # noqa: E402
-import engine  # noqa: E402
-import main  # noqa: E402
+import config as cfg
+import engine
+import main
 
 _fails = []
 

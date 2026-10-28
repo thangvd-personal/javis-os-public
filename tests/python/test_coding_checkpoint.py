@@ -10,7 +10,6 @@ Bốn lời hứa:
     làm việc, và chụp trạng thái hiện tại trước khi trả (hoàn tác được cả lần hoàn tác).
   - Thư mục quá lớn hay là gốc ổ đĩa thì không chụp, và nói lý do thay vì treo.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import shutil
 import subprocess
@@ -19,10 +18,12 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-checkpoint-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 
-import coding_checkpoint as cc  # noqa: E402
+import coding_checkpoint as cc
 
 _fails = []
 

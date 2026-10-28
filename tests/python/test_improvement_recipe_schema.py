@@ -1,14 +1,9 @@
 """Real SQLite/Fernet archive controls; synthetic result fixtures grant no retrieval."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import importlib
 import hashlib
+import importlib
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import threading
-import types
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -16,10 +11,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import improvement_store as IM
-from resonance_store import GoalStore, Principal
-import test_improvement_compose_schema as historical
 import test_improvement_compose_permissions as permissions
+import test_improvement_compose_schema as historical
 import test_improvement_experiment_selection as selections
+from _paths import ROOT, SERVER  # noqa: F401
+from resonance_store import GoalStore, Principal
 
 
 class RecipeSchemaTests(unittest.TestCase):

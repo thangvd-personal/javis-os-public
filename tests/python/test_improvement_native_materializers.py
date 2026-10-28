@@ -1,9 +1,6 @@
 """Actual native-format producers over real host/SQL, no native execution."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib
 import importlib.util
-import json
 import unittest
 from contextlib import closing
 from unittest.mock import patch
@@ -11,10 +8,11 @@ from unittest.mock import patch
 import improvement_claude as claude
 import improvement_store as IM
 import test_improvement_host_snapshots as H
-import test_improvement_trials as T
-import test_improvement_preparation as P
-import test_improvement_view_materialization as V
 import test_improvement_operation_execution as O
+import test_improvement_preparation as P
+import test_improvement_trials as T
+import test_improvement_view_materialization as V
+from _paths import ROOT, SERVER  # noqa: F401
 
 PLANNED = 'claude-owned-images-v3'
 

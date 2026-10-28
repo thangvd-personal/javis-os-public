@@ -1,6 +1,4 @@
 """Synthetic owner decisions bind protected trial products; no engines or business evidence."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import importlib.util
 import json
 import sqlite3
@@ -8,9 +6,10 @@ import unittest
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
-import test_improvement_trials as fixtures
 import improvement_evaluation as IE
 import improvement_store as IM
+import test_improvement_trials as fixtures
+from _paths import ROOT, SERVER  # noqa: F401
 from improvement_blobs import AssetUnavailable
 from resonance_store import Principal
 

@@ -1,6 +1,4 @@
 """Synthetic asynchronous adapters exercise real trial storage without native/model calls."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import asyncio
 import copy
 import importlib.util
@@ -9,9 +7,10 @@ import time
 import unittest
 from unittest.mock import patch
 
-import test_improvement_trials as fixtures
 import improvement_store as IM
+import test_improvement_trials as fixtures
 import turn_context
+from _paths import ROOT, SERVER  # noqa: F401
 
 if importlib.util.find_spec("improvement_trial_runner"):
     import improvement_trial_runner as runner_module

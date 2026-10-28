@@ -18,7 +18,6 @@ conversation found with session ID". Tức mọi phiên cũ resume trượt đú
 và bản trước thì để cái id chết đó được LƯU LẠI rồi resume tiếp ở lượt sau, hội thoại kẹt vĩnh
 viễn. Nên file này canh cả ba tầng: cwd, chuẩn hoá link, và khôi phục khi mất mạch.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import os
 import re
 import sys
@@ -26,10 +25,12 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-taofile-")
 
-import main  # noqa: E402
-import claude_sdk_engine  # noqa: E402
+import claude_sdk_engine
+import main
 
 _fails = []
 
@@ -54,7 +55,7 @@ MAIN = (ROOT / "server" / "main.py").read_text(encoding="utf-8")
 check("dashboard: engine Claude dựng cwd qua _cwd_luot_chat",
       "claude_engine(system_prompt=SYSTEM_PROMPT, cwd=_cwd_luot_chat(_row0, brain), tag=turn_tag)" in MAIN)
 check("CANARY: _cwd_luot_chat MẶC ĐỊNH vẫn trả gốc brain",
-      re.search(r"def _cwd_luot_chat\(.*?\n    return _brain_root\(brain\)\n", MAIN, re.S) is not None)
+      re.search(r"def _cwd_luot_chat\(.*?\n    return _brain_root\(brain\)\n", MAIN, re.DOTALL) is not None)
 check("CANARY: chỉ phiên của trang Coding mới đổi cwd (suy từ kho, không từ tên kênh)",
       "coding_store.cwd_cua_phien(sid)" in MAIN)
 check("CANARY: dashboard KHÔNG còn dựng engine chat với cwd=CLAUDE_CWD (gốc project)",
@@ -170,7 +171,7 @@ check("chỉ giữ file có thật + trong brain + vừa đổi; tương đối 
 # ============================================================
 # 5. Mất mạch: engine cắm cờ, KHÔNG trả session_id chết; main.py mồi lại
 # ============================================================
-from claude_agent_sdk import ResultMessage  # noqa: E402
+from claude_agent_sdk import ResultMessage
 
 _rm = ResultMessage(subtype="error_during_execution", duration_ms=0, duration_api_ms=0, is_error=True,
                     num_turns=0, session_id="id-chet",
@@ -219,7 +220,7 @@ check("telegram: nối dòng đó vào cuối tin", '+ "\\n\\n" + _cau_link_khon
 _so_cho = len(re.findall(r"_chuan_hoa_link_file\(\s*_brain_root\(brain\),\s*final_text", MAIN))
 check("bốn engine CLI + engine API đều chuẩn hoá link trước khung response", _so_cho >= 5, _so_cho)
 
-print("")
+print()
 if _fails:
     print(f"{len(_fails)} test HỎNG: " + ", ".join(_fails))
     sys.exit(1)

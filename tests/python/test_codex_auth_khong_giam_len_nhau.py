@@ -18,7 +18,6 @@ and sign in again" (xem CHANGELOG và test_connect_health.py).
 
 Test này chạy THẬT openai_oauth với CODEX_HOME trỏ vào thư mục tạm, không chạm mạng.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import base64
 import json
 import os
@@ -26,12 +25,14 @@ import sys
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-codexauth-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ["CODEX_HOME"] = tempfile.mkdtemp(prefix="javis-codexhome-")
 
-import config as cfgmod   # noqa: E402
-import openai_oauth       # noqa: E402
+import config as cfgmod
+import openai_oauth
 
 _fails = []
 

@@ -7,7 +7,6 @@ TestClient trên main.app, kho mục tiêu thật, kho phiên thật (biên nh�
 dịch với tin báo). Tin báo đi qua `drain_outbox` và `main._resonance_notify` thật; chỉ phần gửi ra kênh được thay để
 ghi lại cờ `quiet`. Không gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import os
@@ -16,14 +15,16 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-a3api-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import resonance as R  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import _resonance_agent as RA  # noqa: E402
+import _resonance_agent as RA
+import main
+import resonance as R
+import resonance_store as RS
+from fastapi.testclient import TestClient
 
 _fails = []
 
@@ -177,7 +178,8 @@ check("A9 xoá tin: reaction thành mồ côi, bài học đã dùng hiện thi�
 check("reaction trên tin đã xoá: 400 (không còn biên nhận)", react(ma2)[0] == 400)
 
 # RV2 qua route (review mã A3, P2-2): thẻ cũ bấm Áp dụng sau khi hết hạn, KHÔNG có GET danh sách ở giữa.
-from unittest.mock import patch  # noqa: E402
+from unittest.mock import patch
+
 with patch.object(RS.time, "time", return_value=float(P_FULL["expires_at"]) + 1):
     code, body = api("post", f"/resonance/lessons/{P_FULL['id']}/decision",
                      json={"action": "apply", "expected_status": "proposed", "expected_updated_at": P_FULL["updated_at"]})

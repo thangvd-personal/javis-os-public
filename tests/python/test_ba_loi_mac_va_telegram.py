@@ -25,18 +25,19 @@ Kèm luôn cái chốt cho nguyên nhân macOS ở tầng dưới: tiến trình
 giản của launchd, nên `claude`/`codex` cài bằng Homebrew (Apple Silicon: /opt/homebrew/bin) hay
 nvm đều "không tìm thấy" dù gõ trong Terminal vẫn chạy.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-mactest-")
 
-import claude_cli          # noqa: E402
-import config as c         # noqa: E402
-import main                # noqa: E402
-import telegram_bot        # noqa: E402
+import claude_cli
+import config as c
+import main
+import telegram_bot
 
 _fails = []
 
@@ -81,6 +82,7 @@ check("đăng nhập ChatGPT xong thì cho phép hỏi lại (bộ nhớ 'đã h
 # 2. Rỗng thì phải nói VÌ SAO, và nói được câu dùng được
 # ============================================================
 import codex_models
+
 _cu_fc = main.find_codex_cli
 _cu_cfc = claude_cli.find_codex_cli
 _cu_mfc = codex_models.find_codex_cli
@@ -95,7 +97,7 @@ try:
 
     _cu = main.openai_oauth.valid_creds
     try:
-        main.openai_oauth.valid_creds = lambda: {}
+        main.openai_oauth.valid_creds = dict
         _ly_do2 = main._vi_sao_khong_co_model("openai-oauth", _m)
     finally:
         main.openai_oauth.valid_creds = _cu
@@ -217,7 +219,7 @@ try:
     for _d in ("/opt/homebrew/bin", "/usr/local/bin"):
         check(f"đường tìm có {_d}", _d in _duong)
     check("có cả thư mục cài của người dùng (~/.local/bin)",
-          str((claude_cli._home_dir() / ".local" / "bin")) in _duong or "/.local/bin" in _duong)
+          str(claude_cli._home_dir() / ".local" / "bin") in _duong or "/.local/bin" in _duong)
     check("PATH thật vẫn đứng TRƯỚC, không đảo ưu tiên",
           _duong.startswith("/usr/bin:/bin:/usr/sbin:/sbin"))
 

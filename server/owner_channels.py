@@ -22,8 +22,8 @@ import re
 import secrets
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, Optional
 
 import localefmt
 from bot_gateway import parse_chat_ids
@@ -36,7 +36,7 @@ QUEUE_REMIND = 10 * 60
 class OwnerChannel:
     def __init__(self, key: str, label: str, prefix: str, transport: Callable,
                  credentials: Callable[[dict], object], required: tuple, id_label: tuple,
-                 plain: Optional[Dict[str, Callable]] = None, secret_fields: tuple = (),
+                 plain: dict[str, Callable] | None = None, secret_fields: tuple = (),
                  trust_turn_ids: bool = False):
         self.key = key                  # settings section and channel name: "slack" | "whatsapp"
         self.label = label
@@ -47,14 +47,14 @@ class OwnerChannel:
         self.id_label = id_label        # (vi, en): what the allow-list holds, for messages
         # Settings fields: plain ones are shown back to the form (each with a normaliser),
         # secrets are masked on read and only overwritten when a new value is sent.
-        self.plain: Dict[str, Callable] = dict(plain or {})
+        self.plain: dict[str, Callable] = dict(plain or {})
         self.secret_fields = tuple(secret_fields)
         # The allow-list holds PEOPLE, but a turn's chat id may be a channel or DM id (Slack D...,
         # a Discord channel, a Lark oc_...). Ids the turn itself produced are trusted for replies.
         self.trust_turn_ids = bool(trust_turn_ids)
         self.bot = None
-        self.queue: Dict[str, dict] = {}
-        self.deps: Dict[str, Callable] = {}
+        self.queue: dict[str, dict] = {}
+        self.deps: dict[str, Callable] = {}
 
     # ---- wiring -----------------------------------------------------------------------
     def wire(self, **deps):
@@ -71,10 +71,10 @@ class OwnerChannel:
             rs = config.read_settings
         return (rs().get(self.key) or {})
 
-    def allowed(self, c: Optional[dict] = None) -> list:
+    def allowed(self, c: dict | None = None) -> list:
         return parse_chat_ids((c if c is not None else self.cfg()).get("allow"))
 
-    def configured(self, c: Optional[dict] = None) -> bool:
+    def configured(self, c: dict | None = None) -> bool:
         c = c if c is not None else self.cfg()
         return all(str(c.get(k) or "").strip() for k in self.required)
 

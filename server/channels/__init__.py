@@ -66,14 +66,14 @@ class KenhSpec:
     logo: str = ""              # khoá logo trong icons.js (Icons.kenh): "telegram", "zalo"
     mau: str = ""               # màu thương hiệu, cho giao diện tô chip
     lay_token: str = ""         # kind=bot: hướng dẫn lấy token, một câu
-    nang_luc: Dict[str, bool] = field(default_factory=dict)
+    nang_luc: dict[str, bool] = field(default_factory=dict)
     # Một câu tóm tắt cho ô chọn kênh (ai nhắn được, kênh này KHÔNG làm được gì).
     tom_tat: str = ""
     # Tên tài khoản phía nền tảng có tiền tố "@" không (Telegram có, Zalo không).
     tien_to_ten: str = ""
     # Bản tiếng Anh của chữ hiện ra (`nhan`, `lay_token`, `tom_tat`). Thiếu thì lấy ở
     # `_EN_MAC_DINH` theo id, rồi mới tới bản tiếng Việt.
-    en: Dict[str, str] = field(default_factory=dict)
+    en: dict[str, str] = field(default_factory=dict)
 
     def nl(self, khoa: str) -> bool:
         return bool(self.nang_luc.get(khoa, NANG_LUC_MAC_DINH.get(khoa, False)))
@@ -86,7 +86,7 @@ _MODULES = ("channels.zalo_bot", "channels.zalo_personal", "channels.messenger",
 
 # Chữ tiếng Anh cho các kênh có sẵn. Để ở đây (chứ không trong từng module kênh) cho một chỗ
 # duy nhất phải sửa khi đổi chữ hiển thị; kênh mới có thể tự khai `en=` trong SPEC.
-_EN_MAC_DINH: Dict[str, Dict[str, str]] = {
+_EN_MAC_DINH: dict[str, dict[str, str]] = {
     "telegram": {
         "lay_token": "Message @BotFather on Telegram, type /newbot and follow the steps.",
         "tom_tat": "Can join groups and send images and documents. Less common in Vietnam.",
@@ -102,15 +102,15 @@ _EN_MAC_DINH: Dict[str, Dict[str, str]] = {
     },
 }
 
-_DS: Optional[Dict[str, KenhSpec]] = None
-_MOD: Dict[str, object] = {}
+_DS: dict[str, KenhSpec] | None = None
+_MOD: dict[str, object] = {}
 
 
-def _nap() -> Dict[str, KenhSpec]:
+def _nap() -> dict[str, KenhSpec]:
     global _DS
     if _DS is not None:
         return _DS
-    ds: Dict[str, KenhSpec] = {}
+    ds: dict[str, KenhSpec] = {}
     for ten in _MODULES:
         try:
             m = importlib.import_module(ten)
@@ -141,7 +141,7 @@ def _nap() -> Dict[str, KenhSpec]:
     return ds
 
 
-def danh_sach() -> List[KenhSpec]:
+def danh_sach() -> list[KenhSpec]:
     return list(_nap().values())
 
 
@@ -149,7 +149,7 @@ def ids() -> tuple:
     return tuple(_nap().keys())
 
 
-def spec(kenh: str) -> Optional[KenhSpec]:
+def spec(kenh: str) -> KenhSpec | None:
     return _nap().get(str(kenh or "").strip().lower())
 
 
@@ -182,13 +182,13 @@ def logo(kenh: str) -> str:
     return s.logo if s else ""
 
 
-def nhan_theo_id() -> Dict[str, str]:
+def nhan_theo_id() -> dict[str, str]:
     return {k: s.nhan for k, s in _nap().items()}
 
 
 def _chu_spec(s: KenhSpec, khoa: str) -> str:
     """Chữ hiện ra của spec theo ngôn ngữ giao diện. Chỉ cho màn hình, không cho prompt."""
-    import localefmt   # lười: sổ kênh được nạp sớm, không kéo cấu hình lúc import
+    import localefmt  # lười: sổ kênh được nạp sớm, không kéo cấu hình lúc import
     vi = str(getattr(s, khoa, "") or "")
     en = (s.en or {}).get(khoa) or (_EN_MAC_DINH.get(s.id) or {}).get(khoa) or vi
     return localefmt.chu(vi, en) if vi else ""
@@ -200,7 +200,7 @@ def nhan_giao_dien(kenh: str) -> str:
     return _chu_spec(s, "nhan") if s else str(kenh or "")
 
 
-def cho_giao_dien() -> List[dict]:
+def cho_giao_dien() -> list[dict]:
     """Bản cho giao diện: đủ để vẽ ô chọn kênh, chip, form thêm tài khoản, KHÔNG đoán gì thêm."""
     out = []
     for s in danh_sach():

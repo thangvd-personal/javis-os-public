@@ -19,12 +19,12 @@ trong khi chat mới cùng model chạy tốt. Hai chỗ hở, cả hai đều �
   Việc dựng lại đúng một lần nằm ở caller (`_consume_codex`, `_nuot_codex`): lượt dựng lại không
   còn thread cũ nên không thể lặp.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
 from claude_cli import CodexCLI, _looks_like_codex_resume_error
 
 try:

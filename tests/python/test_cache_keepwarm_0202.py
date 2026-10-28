@@ -4,10 +4,10 @@ not while busy, and stops on a cold ping or a usage limit.
 Run:
     python tests/run.py cache_keepwarm
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 
-import cache_keepwarm as ck  # noqa: E402
+import cache_keepwarm as ck
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -78,9 +78,9 @@ async def main():
 
 asyncio.run(main())
 
-import main as app_main  # noqa: E402
-from _paths import moi_duong_dan  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main as app_main
+from _paths import moi_duong_dan
+from fastapi.testclient import TestClient
 
 check("keep-warm off by default", app_main._KEEPWARM.enabled() is False)
 check("routes registered", {"/cache-keepwarm"} <= moi_duong_dan(app_main.app))

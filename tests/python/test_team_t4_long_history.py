@@ -8,7 +8,6 @@ nhận trong `pulse_contrib` của phần nhịp T3), phản hồi của chủ c
 trong prompt. Số lần đọc kho mỗi lượt đếm bằng một lớp bọc đếm lời gọi: bằng nhau giữa nhóm 60 tin và 5.000 tin, có trần.
 Mọi truy vấn mới chạy theo chỉ mục (EXPLAIN QUERY PLAN không có "SCAN" toàn bảng).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sqlite3
@@ -16,16 +15,18 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-t4-long-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-t4-long-w-"))
 
-import agent_pulse as AP  # noqa: E402
-import resonance_store as RS  # noqa: E402
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_long_memory as TLM  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import agent_pulse as AP
+import resonance_store as RS
+import sessions
+import task_store
+import team_long_memory as TLM
+import team_runner as TR
+import team_store
 
 fails = []
 

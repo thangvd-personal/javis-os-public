@@ -12,7 +12,6 @@ Pilot thật cần thêm JAVIS_RESONANCE_PILOT_SETTINGS = đường dẫn settin
 đọc khoá), chép vào settings.json của thư mục tạm. Không ghi gì vào state thật.
 JAVIS_RESONANCE_PILOT_CALLS (mặc định 1, trần 5) giới hạn số lượt gọi model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,6 +19,8 @@ import sys
 import tempfile
 import types
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 PILOT = os.environ.get("JAVIS_RESONANCE_PILOT") == "1"
 _STATE = tempfile.mkdtemp(prefix="javis-resonance-m1-")
@@ -37,8 +38,8 @@ if PILOT:
     Path(_STATE, "settings.json").write_text(json.dumps({"model": keep}, ensure_ascii=False),
                                               encoding="utf-8", newline="\n")
 
-import aux_engine  # noqa: E402
-import resonance as R  # noqa: E402
+import aux_engine
+import resonance as R
 
 _fails = []
 
@@ -95,7 +96,8 @@ eng = FakeEngine([{"type": "final", "content": "- một\n- hai\n- ba", "tokens_i
 deps, built = make_deps(eng)
 r = run(deps, goal_in(tmp), "act_001")
 f = tmp / "act_001.md"
-import hashlib  # noqa: E402
+import hashlib
+
 check("thành công: status succeeded", r.status == "succeeded")
 check("thành công: host đã ghi file đầu ra", f.is_file() and f.read_text(encoding="utf-8").startswith("- một"))
 check("thành công: sha256 khớp đúng byte trên đĩa", r.output_sha256 == hashlib.sha256(f.read_bytes()).hexdigest())
@@ -251,8 +253,8 @@ check("chọn: Claude không có cổng chặn công cụ thì chặn", e7 is No
 _avail_that = aux_engine.availability
 aux_engine.availability = lambda spec, settings=None: (True, "")
 try:
-    import claude_cli  # noqa: E402
-    import grok_cli  # noqa: E402
+    import claude_cli
+    import grok_cli
     CODEX = {"provider": "openai-oauth", "model": "gpt-5"}
     for sandbox_env in ("auto", "off"):
         os.environ["JAVIS_CODEX_SANDBOX"] = sandbox_env
@@ -288,8 +290,8 @@ finally:
 
 
 # ─────────── Review PR #566 P1-1: Claude kết thúc LỖI nhưng vẫn có chữ (đi qua mapper SDK thật) ───────────
-import claude_sdk_engine  # noqa: E402
-from claude_agent_sdk import ResultMessage  # noqa: E402
+import claude_sdk_engine
+from claude_agent_sdk import ResultMessage
 
 
 def sdk_result(is_error, subtype, result, usage=None, cost=0.01):
@@ -338,7 +340,7 @@ check("đầu ra quá dài: vẫn giữ usage", r_big.usage and r_big.usage["tok
 # ───────────────────────────── pilot thật ─────────────────────────────
 
 if PILOT:
-    import main  # noqa: E402  - nạp SAU khi JAVIS_STATE_DIR tạm đã đặt
+    import main
     calls = max(1, min(int(os.environ.get("JAVIS_RESONANCE_PILOT_CALLS", "1") or 1), 5))
     out_root = Path(tempfile.mkdtemp(prefix="res-pilot-"))
     goal = R.GoalRecord(id="g_pilot", brain_id="pilot", owner="javis", revision=1, output_root=str(out_root))
@@ -353,7 +355,7 @@ if PILOT:
     out_text = out_bytes.decode("utf-8") if out_bytes else ""
     disk_sha = hashlib.sha256(out_bytes).hexdigest() if out_bytes else None
     lines = [ln for ln in out_text.splitlines() if ln.strip()]
-    import subprocess  # noqa: E402
+    import subprocess
     try:
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(ROOT), capture_output=True, text=True,
                               timeout=10).stdout.strip()

@@ -16,10 +16,10 @@ import os
 import re
 import stat
 import sys
-import types
 import threading
+import types
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -27,11 +27,12 @@ import improvement_trial_sql_context as SQL
 from evidence_store import redact
 from improvement_cases import output_path
 from improvement_store import _hash
-from improvement_trial_catalog import capture_catalog, _directory
-from improvement_trial_context import ContextSource, _read, _root, _check_path
-from improvement_trial_file_sources import _root as _owner_root, _authority, _acl_hash
+from improvement_trial_catalog import _directory, capture_catalog
+from improvement_trial_context import ContextSource, _check_path, _read, _root
+from improvement_trial_file_sources import _acl_hash, _authority
+from improvement_trial_file_sources import _root as _owner_root
 from improvement_trial_plugins import PluginCapabilityProjection
-from improvement_trial_selection import _read_stable, MAX_SETTINGS_BYTES
+from improvement_trial_selection import MAX_SETTINGS_BYTES, _read_stable
 from improvement_trial_semantics import capture_semantics, validate_capture
 
 MAX_DASHBOARD_FILES = 800
@@ -43,7 +44,7 @@ _COMPILED_CODE_LOCK = threading.RLock()
 
 
 def _utc_now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _semantic_incarnation(info):
@@ -327,7 +328,7 @@ class DashboardContextCapture:
                 now = _utc_now()
                 if type(now) is not datetime or now.tzinfo is None or now.utcoffset() is None:
                     raise ValueError("invalid_dashboard_clock")
-                volatile = {"clock_utc": now.astimezone(timezone.utc).isoformat(), "usage_total": None}
+                volatile = {"clock_utc": now.astimezone(UTC).isoformat(), "usage_total": None}
             else:
                 if type(volatile) is not dict or set(volatile) != {"clock_utc", "usage_total"}:
                     raise ValueError("invalid_dashboard_volatile_snapshot")

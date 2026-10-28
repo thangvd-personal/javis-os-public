@@ -14,18 +14,19 @@ File này khoá lại phần khó nhất của cách đọc tiếp - đếm cho 
 Chạy:
     python tests/run.py chi_so_token_doc_tiep
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path
+
 _TMP = Path(tempfile.mkdtemp(prefix="javis-token-index-"))
 os.environ["JAVIS_STATE_DIR"] = str(_TMP / "state")
 (_TMP / "state").mkdir(parents=True, exist_ok=True)
 
-import usage_index as ui  # noqa: E402
+import usage_index as ui
 
 fails = []
 
@@ -54,8 +55,7 @@ def dong(inp, out, ts="2026-09-21T08:00:00.000Z"):
 
 def ghi(lines, mode="a"):
     with open(LOG, mode, encoding="utf-8", newline="\n") as fh:
-        for ln in lines:
-            fh.write(ln + "\n")
+        fh.writelines(ln + "\n" for ln in lines)
     # mtime của hệ tệp Windows thô hơn một lượt ghi, mà `_scan_claude` so cả size nên vẫn thấy
     # file đổi; đẩy mtime lên cho chắc, không thì test thành ra phụ thuộc đồng hồ.
     st = os.stat(LOG)
@@ -144,6 +144,6 @@ ghi([dong(7, 3)], mode="w")    # ghi đè, file ngắn hẳn lại
 check("file teo lại thì có quét", quet() == 1)
 check("và đếm lại từ đầu chứ không cộng lên số cũ", tong() == (7, 3, 1))
 
-print("")
+print()
 print(("ĐỎ: " + ", ".join(fails)) if fails else "OK - test_chi_so_token_doc_tiep: tất cả pass")
 sys.exit(1 if fails else 0)

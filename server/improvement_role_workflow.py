@@ -1,14 +1,16 @@
 """Shared owned role workflow and actual native product gates; no role dispatch API."""
 from __future__ import annotations
+
 import asyncio
 from contextlib import closing
+
 import improvement_store as IM
 from improvement_operation_execution import OperationExecution
 from improvement_operation_results import OperationResults
 from improvement_operation_tasks import OperationTasks
-from improvement_trial_records import _brain
-from improvement_result_domain import NATIVE_GATES, require_product_report
 from improvement_qualification_records import require_product_store
+from improvement_result_domain import NATIVE_GATES, require_product_report
+from improvement_trial_records import _brain
 
 _REQUIRED = {'materialization', 'worker_protocol', 'installation', 'tool_inventory', 'side_effects',
              'completion', 'actual_model', 'native_session'}

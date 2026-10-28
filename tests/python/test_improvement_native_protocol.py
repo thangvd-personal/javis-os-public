@@ -4,9 +4,9 @@ import copy
 import hashlib
 import importlib.util
 import json
-from pathlib import Path
 import struct
 import unittest
+from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[2] / 'server' / 'improvement_native_protocol.py'
 if SOURCE.exists():

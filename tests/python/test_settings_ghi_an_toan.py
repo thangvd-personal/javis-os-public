@@ -25,15 +25,16 @@ lên; ghi không nguyên tử; không khoá đọc-sửa-ghi.
   8. Đọc hỏng thoáng qua (file bị khoá) không thành "máy mới cài", và cấu hình trống không bao
      giờ ghi đè được máy đã cài đặt (0.166.4, lỗi lưu kênh Lark).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 import threading
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-settings-safe-")
-import config as cfgmod  # noqa: E402
+import config as cfgmod
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -76,9 +77,9 @@ def con_nguyen(c, tru=()):
 
 
 # ---- 1. Ba đường ghi một phần, gọi qua endpoint thật ----
-import main  # noqa: E402
-import owner_channels  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import owner_channels
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://localhost")
 
@@ -191,7 +192,7 @@ check("nhiều luồng cùng cập nhật: không thay đổi nào bị đè m�
 # và trình cài đặt hiện lại. Đường dẫn tới đó: settings.json bị khoá trong tích tắc (diệt virus,
 # os.replace trên Windows) -> đọc lỗi -> .bak cũng lỗi -> trả {} = mặc định = máy mới cài, bộ nhớ đệm
 # giữ luôn bản trống đó, và lần lưu kế tiếp ghi nó xuống đĩa.
-from pathlib import Path  # noqa: E402
+from pathlib import Path
 
 seed()
 c = cfgmod.read_settings()

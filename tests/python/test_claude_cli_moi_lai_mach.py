@@ -17,9 +17,10 @@ Codex (9063) và Gemini (8914) đều mồi "khi không có mạch"; Claude Code
 gate theo "vừa xoay". Test này khoá bất biến CẤU TRÚC: điều kiện bootstrap của nhánh
 anthropic-cli phải là "mạch trống", để cả ba ca trên cùng được cứu.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import re
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -62,7 +63,7 @@ check("Grok vẫn mồi khi không có mạch",
 # 5. bootstrap_prompt với phiên MỚI (chưa có lịch sử) phải trả nguyên prompt - gate mới
 #    chạy cho cả lượt đầu tiên nên ca này thành đường nóng, hỏng là mọi phiên mới hỏng.
 sys.path.insert(0, str(ROOT / "server"))
-import compaction  # noqa: E402
+import compaction
 
 check("bootstrap_prompt([]) trả nguyên prompt (phiên mới không bị bọc header thừa)",
       compaction.bootstrap_prompt([], "câu hỏi đầu tiên") == "câu hỏi đầu tiên")

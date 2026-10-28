@@ -25,7 +25,6 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import List, Optional
 
 
 def _c(vi: str, en: str) -> str:
@@ -397,7 +396,7 @@ def working_tree_dirty(root: str) -> bool:
         return False
 
 
-def changed_paths(root: str) -> List[str]:
+def changed_paths(root: str) -> list[str]:
     """Danh sách path đang thay đổi (chưa commit) - dùng cho diff-scope guard."""
     try:
         r = _git(root, "status", "--porcelain")
@@ -414,7 +413,7 @@ def changed_paths(root: str) -> List[str]:
         return []
 
 
-def paths_within(paths: List[str], allowed_prefixes: List[str]) -> List[str]:
+def paths_within(paths: list[str], allowed_prefixes: list[str]) -> list[str]:
     """Trả path NGOÀI allowed_prefixes (rỗng = hợp lệ). Prefix so theo dạng posix."""
     bad = []
     norm_allowed = [a.replace("\\", "/").rstrip("/") + "/" for a in allowed_prefixes]
@@ -425,7 +424,7 @@ def paths_within(paths: List[str], allowed_prefixes: List[str]) -> List[str]:
     return bad
 
 
-def commit_paths(root: str, paths: List[str], msg: str) -> Optional[str]:
+def commit_paths(root: str, paths: list[str], msg: str) -> str | None:
     """git add ĐÚNG các path (KHÔNG add -A) rồi commit. Trả commit hash ngắn hoặc None.
     An toàn: chỉ đưa vào index những gì engine chủ động ghi."""
     try:
@@ -443,14 +442,14 @@ def commit_paths(root: str, paths: List[str], msg: str) -> Optional[str]:
         return None
 
 
-def hard_reset_paths(root: str, paths: List[str]) -> List[str]:
+def hard_reset_paths(root: str, paths: list[str]) -> list[str]:
     """Đưa các path ĐÃ CÓ trong HEAD về bản ở HEAD (dùng khi lượt học lỡ ghi ra ngoài phạm vi). Trả các path đã đưa về.
 
     0.217.0: KHÔNG BAO GIỜ xoá file chưa có trong lịch sử git. Bản cũ chạy `git clean -fd` trên cả danh sách, mà một
     file chưa commit chưa chắc do engine tạo: trang wiki chat vừa viết (chat không commit) chỉ được lượt học thêm một
     mục, và bị xoá trắng. Thêm nữa, `git checkout HEAD -- a b c` hỏng CẢ lệnh khi một path chưa có trong HEAD, nên các
     file đã có cũng không được khôi phục. Giờ khôi phục từng path một, và file chưa theo dõi thì để nguyên trên đĩa."""
-    xong: List[str] = []
+    xong: list[str] = []
     for p in paths or []:
         try:
             if _git(root, "cat-file", "-e", f"HEAD:{p}").returncode != 0:
@@ -462,13 +461,13 @@ def hard_reset_paths(root: str, paths: List[str]) -> List[str]:
     return xong
 
 
-def list_learn_commits(root: str, n: int = 20) -> List[dict]:
+def list_learn_commits(root: str, n: int = 20) -> list[dict]:
     """Liệt kê commit học gần nhất (prefix learn:/curator:/reflect:) + file đổi - cho Review UI."""
     if not is_git_checkout(root):
         return []
     try:
         r = _git(root, "log", "-n", str(n * 3), "--pretty=format:%h\x1f%ct\x1f%s", "--name-only")
-        out: List[dict] = []
+        out: list[dict] = []
         blocks = (r.stdout or "").split("\n\n")
         for blk in blocks:
             lines = [l for l in blk.splitlines() if l.strip()]
@@ -658,7 +657,7 @@ def _sync_mirror(src: str, mirror: str, sync_images: bool = False) -> dict:
     src, mirror = Path(src), Path(mirror)
     keep = set()
     bo_qua, bo_qua_bytes = 0, 0
-    anh_rels: List[str] = []
+    anh_rels: list[str] = []
     tran_anh = anh_max_bytes()
     for dirpath, dirnames, filenames in os.walk(src):
         dirnames[:] = [d for d in dirnames if d not in _BACKUP_SKIP_DIRS]
@@ -769,7 +768,7 @@ def _git_bytes(root: str, *args, timeout: int = 30) -> subprocess.CompletedProce
     )
 
 
-def _git_lines_z(root: str, *args, timeout: int = 60) -> List[str]:
+def _git_lines_z(root: str, *args, timeout: int = 60) -> list[str]:
     """Chạy git với -z (NUL-separated) + quotepath=false → path tiếng Việt trả về NGUYÊN VĂN."""
     r = _git_bytes(root, "-c", "core.quotepath=false", *args, timeout=timeout)
     if r.returncode != 0:
@@ -841,7 +840,7 @@ def _merge_with_policy(root: str) -> dict:
     return {"merged": True, "conflicts": conflicts}
 
 
-def _integrate_remote(root: str, pre_head: Optional[str]) -> dict:
+def _integrate_remote(root: str, pre_head: str | None) -> dict:
     """Hoà FETCH_HEAD vào mirror: chưa có commit local → nhận nguyên bản remote (khôi phục);
     remote đã nằm trong local → thôi; local nằm trong remote → fast-forward; lệch → merge policy."""
     if pre_head is None:
@@ -864,7 +863,7 @@ def _integrate_remote(root: str, pre_head: Optional[str]) -> dict:
     return _merge_with_policy(root)
 
 
-def _changed_by_integration(root: str, pre_head: Optional[str]) -> set:
+def _changed_by_integration(root: str, pre_head: str | None) -> set:
     """Các path mà bước hoà-nhập remote LÀM ĐỔI trong mirror (so pre_head..HEAD).
     Đây chính là danh sách cần áp ngược về brains - không đoán mò bằng mtime."""
     if _git(root, "rev-parse", "-q", "--verify", "HEAD").returncode != 0:
@@ -930,7 +929,7 @@ def _apply_back(mirror: str, brains_dir: str, changed: set, sync_start: float,
     return rep
 
 
-def _rollback_mirror(root: str, pre_head: Optional[str]) -> None:
+def _rollback_mirror(root: str, pre_head: str | None) -> None:
     """Đưa mirror về trạng thái TRƯỚC khi hoà remote (dùng khi áp về máy thất bại) →
     không push, remote còn nguyên dữ liệu, vòng sau fetch/merge/áp lại từ đầu."""
     try:
@@ -1054,7 +1053,7 @@ def _apply_tombstones(brains_dir: str, mirror_dir: str, trash_dir: str,
     return rep
 
 
-def _force_add_anh(mirror_dir: str, rels: List[str], chunk: int = 100) -> None:
+def _force_add_anh(mirror_dir: str, rels: list[str], chunk: int = 100) -> None:
     """`git add -f` ĐÚNG danh sách ảnh đã chép sang mirror, chia lô để không vượt trần độ dài
     dòng lệnh (Windows ~32k ký tự). -f vì .gitignore của brain (chép sang mirror) ignore ảnh;
     ép đích danh từng file an toàn hơn hẳn nới .gitignore - luật chặn log thô giữ nguyên."""
@@ -1063,7 +1062,7 @@ def _force_add_anh(mirror_dir: str, rels: List[str], chunk: int = 100) -> None:
 
 
 def sync_brains(brains_dir: str, mirror_dir: str, repo_url: str, token: str, branch: str = "main",
-                trash_dir: Optional[str] = None, protected_names=None,
+                trash_dir: str | None = None, protected_names=None,
                 sync_images: bool = False) -> dict:
     """Đồng bộ 2 CHIỀU toàn bộ thư mục brains với repo GitHub. Trả
     {ok, pushed, committed, merged, restored, conflicts, applied, deleted, error?}."""
@@ -1088,7 +1087,7 @@ def sync_brains(brains_dir: str, mirror_dir: str, repo_url: str, token: str, bra
 
 
 def _sync_brains_locked(brains_dir: str, mirror_dir: str, repo_url: str, token: str, branch: str,
-                        trash_dir: Optional[str] = None, protected_names=None,
+                        trash_dir: str | None = None, protected_names=None,
                         sync_images: bool = False) -> dict:
     rep = {"ok": False, "pushed": False, "committed": False, "merged": False,
            "restored": False, "conflicts": [], "applied": 0, "deleted": 0,
@@ -1235,10 +1234,10 @@ def clear_tombstone(brains_dir: str, name: str) -> None:
         print(f"[tombstone clear] {name}: {e}", file=__import__('sys').stderr)
 
 
-def _read_tombstones(root: str) -> List[dict]:
+def _read_tombstones(root: str) -> list[dict]:
     """Đọc mọi giấy báo tử trong <root>/.javis-tombstones/. Bỏ file hỏng. Gắn _file = tên file."""
     d = Path(root) / TOMBSTONE_DIR
-    out: List[dict] = []
+    out: list[dict] = []
     if not d.is_dir():
         return out
     for f in sorted(d.glob("*.json")):
@@ -1269,7 +1268,7 @@ def gc_tombstones(brains_dir: str, ttl: int = _TOMBSTONE_TTL) -> int:
 # ============================================================
 # THÙNG RÁC CỤC BỘ - giữ bản sao não đã xóa (30 ngày) để cứu hộ. NGOÀI vùng đồng bộ (không lên git).
 # ============================================================
-def move_to_trash(brain_dir: str, trash_dir: str, name: str) -> Optional[str]:
+def move_to_trash(brain_dir: str, trash_dir: str, name: str) -> str | None:
     """Chuyển thư mục não vào thùng rác <trash_dir>/<name>__<ts>/. Trả path đích hoặc None nếu
     nguồn không phải thư mục. shutil.move xử lý cả khác ổ đĩa. Retry 3 lần: Windows có thể kẹt
     handle (engine đang mở file trong não) - chờ ngắn rồi thử lại."""

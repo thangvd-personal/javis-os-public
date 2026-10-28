@@ -14,12 +14,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-import team_acceptance as TA
 import improvement_blobs
 import improvement_cases
 import improvement_store
-from improvement_blobs import AssetUnavailable, MAX_ASSET_BYTES, check_ancestry
-from improvement_cases import _ID, _contract, _digest, _fields, _frozen, _text, output_path
+import team_acceptance as TA
+from improvement_blobs import MAX_ASSET_BYTES, AssetUnavailable, check_ancestry
+from improvement_cases import (
+    _ID,
+    _contract,
+    _digest,
+    _fields,
+    _frozen,
+    _text,
+    output_path,
+)
 from improvement_store import _hash, _json
 
 EVALUATOR_PIN = {"id": "improvement-evaluation", "version": "1",

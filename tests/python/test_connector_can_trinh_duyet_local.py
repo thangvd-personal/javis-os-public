@@ -9,9 +9,10 @@ ERR_CONNECTION_REFUSED, và không một dòng nào nói cho họ biết vì sao
 chặn kèm lời giải thích (khuôn can_force như POST /reminders), còn LAN/localhost thì cho
 qua vì máy chạy Javis thường là desktop có màn hình.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import sys
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -31,7 +32,7 @@ for cid in ("google-workspace", "google-tasks"):
           by_id.get(cid, {}).get("needs_local_browser") is True)
 
 # ---- 2. host_kieu_local phân biệt đúng public/local ----
-import web_security  # noqa: E402
+import web_security
 
 for h, mong in [("localhost", True), ("127.0.0.1:7777", True), ("[::1]:7777", True),
                 ("192.168.1.5:7777", True), ("10.0.0.2", True), ("mymac.local", True),
@@ -40,8 +41,9 @@ for h, mong in [("localhost", True), ("127.0.0.1:7777", True), ("[::1]:7777", Tr
     check(f"host_kieu_local({h!r}) == {mong}", web_security.host_kieu_local(h) is mong)
 
 # ---- 3. /connect/add chặn đúng ca, khuôn can_force ----
-import main  # noqa: E402
 import inspect
+
+import main
 
 src = inspect.getsource(main.connect_add)
 check("connect_add đọc cờ needs_local_browser từ catalog", "needs_local_browser" in src)
