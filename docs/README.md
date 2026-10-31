@@ -41,7 +41,6 @@ Thanh điều hướng của dashboard gom **19 trang** thành **5 nhóm**: Bộ
 
 ### Kết nối & kênh (nhóm Kết nối)
 - [09 - Kết nối & số liệu kinh doanh](09-mcp-va-so-lieu.md) - kho dịch vụ ngoài đa tài khoản, phân quyền, báo cáo số thật.
-- [10 - Models & engine](10-models-va-engine.md) - đổi bộ não giữa Claude Code, ChatGPT/Codex, Antigravity CLI, OpenRouter, OpenAI, Gemini, Anthropic, Groq, Ollama mà không mất chức năng; mức suy nghĩ, model việc nền.
 - [11 - Kênh Telegram](11-telegram.md) - hỏi Javis qua điện thoại, gửi và nhận file.
 - [26 - Kênh Zalo Bot](26-kenh-zalo-bot.md) - hỏi Javis trên Zalo bằng API chính thức, ghép nối bằng một cú bấm.
 - [12 - Zalo Agent MCP](12-zalo.md) - đăng nhập QR, đọc/tìm lịch sử và gửi tin qua MCP chuẩn.
@@ -50,10 +49,12 @@ Thanh điều hướng của dashboard gom **19 trang** thành **5 nhóm**: Bộ
 ### Bộ não & dữ liệu
 - [13 - Second Brain: bộ nhớ, Wiki, INGEST](13-second-brain-bo-nho-wiki.md) - đa brain, bộ nhớ sống, tiêu hoá tri thức.
 - [34 - GitHub ngay trong khung chat](34-github-trong-chat.md) - gắn repo vào cuộc trò chuyện, Javis tự kiểm tra, đẩy lên, mở PR, theo dõi CI, sửa khi đỏ và merge khi xanh.
+- [35 - Zalo OA](35-zalo-oa.md) - đặt bot khách hàng trả lời hộp thư Zalo Official Account (API chính thức OA v3, cần tên miền HTTPS).
 - [18 - Sao lưu brain lên GitHub](18-sao-luu-github.md) - đồng bộ 2 chiều lên repo riêng, khôi phục khi mất máy/VPS.
 - [19 - Task & Dataview trong note](19-task-va-dataview.md) - tick checkbox tự lưu kiểu Obsidian, khối ```dataview chạy thật.
 
 ### Tài khoản, thương hiệu, cấu hình (nhóm Hệ thống)
+- [10 - Models & engine](10-models-va-engine.md) - đổi bộ não giữa Claude Code, ChatGPT/Codex, Antigravity CLI, OpenRouter, OpenAI, Gemini, Anthropic, Groq, Ollama mà không mất chức năng; mức suy nghĩ, model việc nền.
 - [14 - Bảo mật & tài khoản](14-bao-mat-tai-khoan.md) - đăng nhập bắt buộc, mật khẩu, rate-limit, mã hoá khoá bí mật.
 - [15 - Thương hiệu & tên miền riêng](15-thuong-hieu-ten-mien.md) - đổi logo/avatar, trỏ tên miền và bật HTTPS.
 - [16 - Cấu hình .env](16-cau-hinh-env.md) - tham chiếu mọi biến môi trường.

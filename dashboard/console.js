@@ -11,6 +11,9 @@
   // ngôn ngữ giao diện thì ngày giờ phải đổi theo, nếu không thì nửa màn hình tiếng Anh
   // mà ngày vẫn dd/mm/yyyy kiểu Việt.
   const LOC = () => (window.JavisI18n && JavisI18n.locale()) || "vi-VN";
+  // Cập nhật xong: tải lại khi máy chủ đã lên hẳn (freshness.js, 0.415.0), không thì trang mới mở ra giữa lúc nó còn
+  // khởi động và kẹt với chữ mã khoá.
+  const _taiLaiKhiSan = () => (window.JavisReloadWhenReady ? window.JavisReloadWhenReady() : location.reload());
   // ---- Khai báo các mục trên rail (mở rộng = thêm dòng ở đây) ----
   // type 'view' = render trong cview ; có launch() = nút mở overlay/modal sẵn có.
   const APP_VERSION = "0.4.3";   // fallback hiển thị tức thời; nguồn thật là /version (file VERSION)
@@ -38,6 +41,8 @@
     webhooks: "webhook",
     learn: "brain",
     kanban: "square-kanban",
+    // 0.422.0: the Tasks page (tasks.js) replaces Kanban and Scheduled under Work.
+    tasks: "list-checks",
     terminal: "terminal",
     // </> chứ không phải "một file mã": trang này là chỗ SAI VIỆC cho engine trên một thư
     // mục, không phải chỗ mở một file. Ký hiệu </> ai nhìn cũng hiểu ngay là lập trình.
@@ -102,7 +107,7 @@
   // tiếng Việt khi thiếu key, nên một bản dịch làm dở không bao giờ để lại key trần trên rail.
   const RAIL_ITEMS = [
     "home", "chat", "settings", "workspace", "teams", "skills", "chatbots", "conversations", "files",
-    "terminal", "coding", "selfimprove", "webhooks", "learn", "kanban", "models", "channels", "mcp", "plugins",
+    "terminal", "coding", "tasks", "webhooks", "learn", "models", "channels", "mcp", "plugins",
     "packs", "logs", "account", "usage", "logins", "pet", "share",
   ].map(id => ({ id, icon: ICON[id], get label() { return t(`page.${id}.label`); } }));
 
@@ -123,10 +128,9 @@
     // can code, so a separate Coding area is redundant. Terminal lives here; Coding stays a real
     // page (old links, voice commands) but is hidden from the rail, see RAIL_AN.
     { id: "nang_luc", get label() { return t("nav.group.nang_luc"); },    icon: GICON.nang_luc,    ids: ["workspace", "teams", "conversations", "skills", "plugins", "terminal"] },
-    { id: "viec", get label() { return t("nav.group.viec"); },        icon: GICON.viec,        ids: ["kanban", "selfimprove", "webhooks"] },
-    { id: "ket_noi", get label() { return t("nav.group.ket_noi"); },     icon: GICON.ket_noi,     ids: ["mcp", "packs", "channels", "logins", "models"] },
-    { id: "he_thong", get label() { return t("nav.group.he_thong"); },    icon: GICON.he_thong,    ids: ["settings", "share", "account"], foot: true },
-
+    { id: "viec", get label() { return t("nav.group.viec"); },        icon: GICON.viec,        ids: ["tasks", "webhooks"] },
+    { id: "ket_noi", get label() { return t("nav.group.ket_noi"); },     icon: GICON.ket_noi,     ids: ["mcp", "packs", "channels", "logins"] },
+    { id: "he_thong", get label() { return t("nav.group.he_thong"); },    icon: GICON.he_thong,    ids: ["models", "settings", "share", "account"], foot: true },
   ];
   const RAIL_BY_ID = Object.fromEntries(RAIL_ITEMS.map(i => [i.id, i]));
 
@@ -181,7 +185,7 @@
   //
   // `page.<id>.title` cho phép tiêu đề trang KHÁC nhãn trên rail khi cần (rail chật nên
   // "Việc", trang rộng nên "Việc (Kanban)"); thiếu key đó thì tự rơi về `page.<id>.label`.
-  const VIEW_META = Object.fromEntries(["home", "chat", "settings", "workspace", "teams", "skills", "files", "terminal", "coding", "selfimprove", "webhooks", "chatbots", "conversations", "learn", "kanban", "models", "channels", "mcp", "plugins", "packs", "logs", "account", "usage", "pet", "share", "logins"].map(id => [id, {
+  const VIEW_META = Object.fromEntries(["home", "chat", "settings", "workspace", "teams", "skills", "files", "terminal", "coding", "tasks", "webhooks", "chatbots", "conversations", "learn", "models", "channels", "mcp", "plugins", "packs", "logs", "account", "usage", "pet", "share", "logins"].map(id => [id, {
     icon: VIEW_ICON[id],
     get label() {
       const rieng = t(`page.${id}.title`);
@@ -202,7 +206,11 @@
   let _fmSauKhiDong = null;    // việc trang Tệp tin cần làm khi đóng trình sửa (nạp lại danh sách)
   let graphEnabled = true;
   const isNarrow = () => window.matchMedia("(max-width: 860px)").matches;
-  const liteMode = () => !graphEnabled || isNarrow();
+  // Màn hẹp KHÔNG còn tự tắt đồ thị (0.422.0). Lệnh tắt đó có từ trước khi đồ thị biết tự thôi vẽ lúc đứng yên
+  // (autoPauseRedraw, 0.63.7). Từ 0.415.0 nó còn chạy ngay sau khi đồ thị dựng xong, tức là dừng TRƯỚC khung vẽ đầu
+  // tiên, nên trên điện thoại khoang não trống trơn, chỉ còn tên các cụm (chủ repo báo 30/10/2026). Giờ đồ thị đứng
+  // yên thì cũng không tốn gì, nên điện thoại chạy như máy tính; chỉ công tắc Đồ thị trong Cài đặt tắt được nó.
+  const liteMode = () => !graphEnabled;
 
   const esc = (s) => (s || "").toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   // (i) button (info-tip.js, 0.214.0): long explanations hide behind it. Without info-tip.js
@@ -291,10 +299,6 @@
   // thứ hai rồi hai bản trôi lệch nhau ngay lần sửa đầu.
   window.JavisPager = pager;
 
-  // Pause SỚM (chạy ngay khi parse, không chờ Alpine tải): màn hẹp → graph app.js vừa dựng
-  // dừng luôn, khỏi ngốn pin/GPU trong lúc Alpine đang tải. _animate có guard _paused nên
-  // dù load() chạy xong gọi lại cũng không bật lại.
-  if (isNarrow() && window.__javisGraph) { try { window.__javisGraph.pause(); } catch (e) { } }
 
   // ---- Điều khiển graph: chỉ chạy khi đang ở cockpit + không lite + không mở Studio ----
   function recomputeGraph() {
@@ -309,6 +313,7 @@
     const shouldRun = !liteMode() && active === "home" && !studioOpen;
     if (shouldRun) g.wake(); else g.pause();
   }
+  window.JavisRecomputeGraph = recomputeGraph;
 
   // ---- Chuyển trang (có View Transition cho mượt) ----
   // Hook "rời trang": trang nào mượn DOM dùng chung (vd tab Trò chuyện mượn khung chat của
@@ -319,7 +324,8 @@
   // trắng không giải thích gì.
   // Trang Trợ lý và Quy trình gộp thành Cộng sự ở 0.59.0; ai bấm nút cũ trong chat hay
   // bookmark vẫn tới nơi.
-  const TRANG_GOP = { runtime: "usage", agents: "workspace", workflows: "workspace" };
+  // 0.422.0: Kanban and Scheduled became the Tasks page; the old Scheduled link opens its Recurring list.
+  const TRANG_GOP = { runtime: "usage", agents: "workspace", workflows: "workspace", kanban: "tasks", selfimprove: "tasks" };
   const TRANG_CUOI_KEY = "javis_last_page";
   function khoiPhucTrang() {
     let id = "home";
@@ -336,8 +342,10 @@
     // Trang Chatbot là TAB của trang Hội thoại từ 0.61.0: nhớ tab rồi đi tới trang đó.
     if (id === "chatbots") {
       if (window.JavisConversations && window.JavisConversations.chonTab) window.JavisConversations.chonTab("bot", true);
+      else _tabHoiThoaiCho = "bot";
       id = "conversations";
     }
+    if (id === "selfimprove") { try { localStorage.setItem("javis.nv.view", "rep"); } catch (e) {} }
     id = TRANG_GOP[id] || id;
     const store = Alpine.store("nav");
     const oldTab = { pet: "pet", usage: "usage", logs: "updates" }[id];
@@ -508,6 +516,17 @@
   // ============================================
   // Render từng trang vào #cviewBody
   // ============================================
+  // Trang nào cần nhóm code nạp chậm nào (nap-cham.js, khối javis-lazy trong index.html).
+  const NHOM_TRANG = {
+    workspace: ["congviec"], teams: ["congviec", "teams"], packs: ["packs"], plugins: ["packs"], mcp: ["packs"],
+    conversations: ["hoithoai"], chatbots: ["hoithoai"], usage: ["usage"], webhooks: ["webhooks"],
+    tasks: ["nhiemvu"],
+  };
+  // Tab Hội thoại cần chọn khi conversations.js còn chưa nạp (navigateTo("chatbots") lúc đầu): renderPage chọn hộ sau khi nạp.
+  let _tabHoiThoaiCho = "";
+  // Gọi một hàm của module nạp chậm từ chỗ khác trang: chờ nhóm của nó rồi mới gọi.
+  const _goiNhom = (nhom, fn) => (window.JavisNapCham ? window.JavisNapCham.goi(nhom, fn) : Promise.resolve(fn()));
+
   async function renderPage(id) {
     let el = body();
     if (!el) return;
@@ -522,7 +541,23 @@
     // #cview (KHÔNG bị clone như cviewBody) nên phải bật/tắt ở MỌI lần đổi trang, không thì trang sau mất đầu trang.
     const cv = document.getElementById("cview");
     if (cv) cv.classList.toggle("cview-hoi-thoai", id === "conversations" || id === "chatbots");
+    // 0.422.0: the Tasks page carries its own title at the top of its left column (owner's design), no page header.
+    if (cv) cv.classList.toggle("cview-nv", id === "tasks");
     _renderGen++;   // đổi trang → vô hiệu mọi render async đang dở (guard bổ sung cho renderer đã có)
+    // 0.417.0: code của trang này có thể chưa nạp (nap-cham.js). Chờ ĐỦ nhóm rồi mới vẽ; trong lúc chờ mà người dùng đã
+    // sang trang khác thì dừng hẳn, đừng vẽ (renderWorkspace mượn khung chat: vẽ vào trang đã tháo là mất khung chat).
+    const nhomCan = NHOM_TRANG[id];
+    if (nhomCan && window.JavisNapCham) {
+      const gen = _renderGen;
+      el.innerHTML = placeholder(id, window.t("common.loading"));
+      await window.JavisNapCham.cho(nhomCan);
+      if (gen !== _renderGen) return;
+      el.innerHTML = "";
+      if (id === "conversations" && _tabHoiThoaiCho) {
+        try { if (window.JavisConversations && window.JavisConversations.chonTab) window.JavisConversations.chonTab(_tabHoiThoaiCho, true); } catch (e) {}
+      }
+      _tabHoiThoaiCho = "";
+    }
     if (id === "chat")     return renderChat(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
@@ -544,7 +579,15 @@
     if (id === "files") return renderFiles(el);
     if (id === "coding") return renderCoding(el);
     if (CODE_PAGES.includes(id)) return renderCode(el, id);
-    if (id === "selfimprove") return renderSelfImprove(el);
+    if (id === "tasks") {
+      // 0.422.0: the Tasks page lives in tasks.js (lazy group "nhiemvu").
+      if (!window.JavisTasks) {
+        el.innerHTML = placeholder("tasks", window.t("cs.mod_not_ready", { ten: "tasks.js" }));
+        return;
+      }
+      _pageLeave = () => { try { window.JavisTasks.unmount(); } catch (e) {} };
+      return window.JavisTasks.mount(el);
+    }
     if (id === "webhooks") return renderWebhooks(el);
     if (id === "logins") {
       // 0.251.0: the Login vault page lives in login-vault.js, delegated like the Packs page.
@@ -571,10 +614,9 @@
       return window.JavisTeams.render(el);
     }
     if (id === "conversations") return renderConversations(el);
-    if (id === "learn") return renderLearn(el);
-    if (id === "kanban") return renderKanban(el);
-    if (id === "logs") return renderLogs(el);
-    if (id === "usage") return renderUsage(el);
+    if (id === "learn")    return renderLearn(el);
+    if (id === "logs")     return renderLogs(el);
+    if (id === "usage")    return renderUsage(el);
     el.innerHTML = placeholder(id);
   }
 
@@ -621,11 +663,11 @@
     // Truyền cả TRANG GỐC để kho vẽ được nút quay lại. Không truyền thì người dùng sang kho
     // rồi phải tự tìm đường về bằng thanh bên - mà kho không nằm trên thanh bên nữa, nên họ
     // dễ thấy mình bị lạc.
-    nut.onclick = () => {
+    nut.onclick = () => _goiNhom("packs", () => {
       if (window.JavisPacks && window.JavisPacks.moKho) {
         window.JavisPacks.moKho(kind, id, VIEW_META[id] ? VIEW_META[id].label : id);
       } else { const s = window.Alpine && Alpine.store("nav"); if (s && s.go) s.go("packs"); }
-    };
+    });
     return row;
   }
 
@@ -760,7 +802,9 @@
   async function renderUsage(el) {
     // Trang Token nâng cấp (usage.js): index log thô Claude+Codex + lọc kỳ/provider + insight.
     // Ủy quyền sang module mới nếu đã nạp; nếu chưa thì rơi về bảng cũ (usage_store 30 ngày).
-    if (window.JavisUsage && window.JavisUsage.render) { try { return window.JavisUsage.render(el); } catch (e) { } }
+    // Tab Thống kê trong Cài đặt cũng gọi hàm này mà không đi qua renderPage: tự chờ usage.js (0.417.0).
+    if (!window.JavisUsage && window.JavisNapCham) await window.JavisNapCham.cho("usage");
+    if (window.JavisUsage && window.JavisUsage.render) { try { return window.JavisUsage.render(el); } catch (e) {} }
     _injectUsageCss();
     el.innerHTML = `<div class="uz-wrap"><div class="cview-placeholder" style="min-height:200px"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div class="dim">${window.t("cs.uz_loading")}</div></div></div>`;
     let d;
@@ -1187,7 +1231,7 @@
           const phase = state.state.phase, result = state.state.result;
           const stash = state.state.stashed ? ic("package") + " " + window.t("cs.upd_stashed") : "";
           progress(phase, stash);
-          if (result === "success") { clearInterval(poll); status.innerHTML = OK_ICON + " " + window.t("cs.upd_done_reload"); setTimeout(() => location.reload(), 1500); return; }
+          if (result === "success") { clearInterval(poll); status.innerHTML = OK_ICON + " " + window.t("cs.upd_done_reload"); setTimeout(_taiLaiKhiSan, 1500); return; }
           if (result === "rolled_back") { clearInterval(poll); window.__javisUpdating = false; status.innerHTML = "↩ " + window.t("cs.upd_rb_a") + " <b>" + window.t("cs.upd_rb_b") + "</b>."; update.disabled = false; return; }
           if (["pull_failed", "rollback_failed", "error"].includes(result)) {
             clearInterval(poll); window.__javisUpdating = false; q("updVerProgress").style.display = "none";
@@ -1198,7 +1242,7 @@
           const v = await (await fetch("/version", { cache: "no-store" })).json();
           const docker = root.dataset.updateMode === "docker";
           if ((docker || !(state && state.state && state.state.phase)) && v.update_available === false && v.current && v.current !== oldCur) {
-            clearInterval(poll); status.innerHTML = OK_ICON + " " + window.t("cs.upd_done_reload"); setTimeout(() => location.reload(), 1500); return;
+            clearInterval(poll); status.innerHTML = OK_ICON + " " + window.t("cs.upd_done_reload"); setTimeout(_taiLaiKhiSan, 1500); return;
           }
         } catch (e) { }
         if (waited >= UPD_WAIT_MS) {
@@ -1361,6 +1405,12 @@
     .kn-ask-send{flex:none;padding:9px 12px;border-radius:8px;border:1px solid var(--link-ink);background:rgba(127,176,255,.14);color:var(--text-hi);font-size:14px;cursor:pointer}
     .kn-ask-send[disabled]{opacity:.5;cursor:default}
     .kn-qa{padding:8px 0;border-bottom:1px solid var(--surface-2)}.kn-qa b{color:var(--text)}
+    .kn-badge{border-radius:99px;padding:1px 7px;border:1px solid var(--hairline);color:var(--text2)}
+    .kn-badge.ok{border-color:rgba(63,220,134,.45);color:var(--green)}.kn-badge.warn{border-color:rgba(224,160,74,.5);color:var(--warn-ink)}
+    .kn-hint{margin:0 0 12px;padding:11px 13px;border:1px solid rgba(127,176,255,.35);border-radius:10px;background:rgba(127,176,255,.06);color:var(--text);font-size:14px;line-height:1.5}
+    .kn-more{display:block;margin:6px auto 10px;background:none;border:none;padding:4px 8px;font:inherit;font-size:13px;color:var(--link-ink);cursor:pointer;text-decoration:underline;text-underline-offset:2px}.kn-more[hidden]{display:none}
+    .kn-follow-note{margin-top:6px;font-size:13px}
+    .kn-task-calm{color:var(--text2);font-size:13px}.kn-tech{margin-top:8px;font-size:12px}.kn-tech summary{cursor:pointer;color:var(--text3)}
     .kn-task-result{margin-top:6px;color:var(--text3);font-size:12px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .kn-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.kn-actions button{padding:3px 8px;border-radius:6px;border:1px solid var(--hairline);background:var(--surface-1);color:var(--text2);font-size:11px;cursor:pointer}.kn-actions button:hover{border-color:var(--link-ink);color:var(--text-hi)}.kn-actions button.danger{color:var(--red)}.kn-actions button.danger:hover{border-color:var(--red);color:var(--red)}
     .kn-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}.kn-dot.live{background:var(--green);box-shadow:0 0 0 4px rgba(63,220,134,.12)}.kn-dot.off{background:var(--text3)}
@@ -1926,6 +1976,9 @@
     .pl-group{display:flex;align-items:baseline;gap:8px;margin:18px 0 8px;font-size:14px;font-weight:600;color:var(--text2)}
     .pl-group:first-child{margin-top:4px}
     .pl-group .n{font-weight:500;color:var(--text3);font-variant-numeric:tabular-nums}
+    .cview-section .pl-group > .n{order:0;flex-basis:auto}   /* the phone rule for section titles drops a span to its own line */
+    .pl-group .pl-goto{margin-left:auto;font-size:13.5px;font-weight:500;min-height:32px;white-space:nowrap}
+    .pl-card.noright{padding-right:14px}
     .pl-list{display:flex;flex-direction:column;gap:8px}
     .pl-card{display:flex;align-items:flex-start;gap:8px;padding:12px 6px 12px 14px;border:1px solid var(--hairline);border-radius:12px;background:var(--panel-bg)}
     .pl-card:hover{border-color:var(--accent-line)}
@@ -1964,6 +2017,7 @@
       .pl-zipw{margin-left:0}
       .pl-ds,.pl-nm{font-size:16px}
       .pl-card{padding:12px 2px 12px 12px}
+      .pl-card.noright{padding-right:12px}
     }`;
     const st = document.createElement("style"); st.id = "pl-css"; st.textContent = css; document.head.appendChild(st);
   }
@@ -2008,11 +2062,14 @@
       const meta = [MM[p.min_mode] ? esc(window.t("cs.pl_minmode", { muc: MM[p.min_mode] })) : "",
                     p.version ? `v${esc(p.version)}` : ""].filter(Boolean).join(" · ");
       const acts = (p.page ? `<a class="pl-act" href="${esc(safeHref(p.page))}" target="_blank" rel="noopener">${esc(window.t("cs.pl_open_page"))} ↗</a>` : "")
+        + (p.removed ? `<button type="button" class="pl-act undel">${esc(window.t("store.reinstall"))}</button>` : "")
         + (p.source !== "pack" && !p.removed ? `<button type="button" class="pl-act del">${esc(window.t("proj.remove_short"))}</button>` : "");
-      let right = "";
-      if (p.source === "pack") right = `<button type="button" class="s-btn-ghost" data-goto-packs="1">${esc(window.t("cs.pl_manage_store"))}</button>`;
-      else if (p.removed) right = `<button type="button" class="s-btn-ghost undel">${esc(window.t("store.reinstall"))}</button>`;
-      else right = `<button type="button" class="pl-sw" role="switch" aria-checked="${p.enabled ? "true" : "false"}" title="${esc(window.t(p.enabled ? "studio.tog_on" : "studio.tog_off"))}" aria-label="${esc(window.t("cs.pl_sw_aria", { ten: p.name }))}"><span class="pl-tr"><span class="pl-kn"></span></span></button>`;
+      // The right column holds the switch and nothing else (0.420.0). A text button there took half a phone's width and
+      // squeezed the name and description into a sliver: store plugins get one "manage" link on their group heading, a
+      // removed plugin's "reinstall" sits with the other actions under the text.
+      const right = p.source === "pack" || p.removed ? ""
+        : `<button type="button" class="pl-sw" role="switch" aria-checked="${p.enabled ? "true" : "false"}" title="${esc(window.t(p.enabled ? "studio.tog_on" : "studio.tog_off"))}" aria-label="${esc(window.t("cs.pl_sw_aria", { ten: p.name }))}"><span class="pl-tr"><span class="pl-kn"></span></span></button>`;
+      if (!right) div.classList.add("noright");
       div.innerHTML = `
         <div class="pl-main">
           <div class="pl-nm">${ic("puzzle")} <span>${esc(p.name)}</span> <span class="pl-slug">${esc(p.slug)}</span>${badge}${dongDai ? infoBtn() : ""}</div>
@@ -2020,15 +2077,7 @@
           <div class="pl-meta">${stChip}${chips}${meta ? `<span>${meta}</span>` : ""}${acts}</div>
           ${p.error ? `<div class="pl-err">${esc(p.error)}</div>` : ""}
         </div>
-        <div class="pl-right">${right}</div>`;
-
-      // Plugin đến từ gói thì bật/tắt và gỡ đều làm ở Kho cài đặt - nó đi theo cả gói, và có
-      // đúng MỘT chỗ gỡ thì người dùng không phải đoán gỡ ở đâu mới là gỡ thật.
-      const nutGoto = div.querySelector("[data-goto-packs]");
-      if (nutGoto) nutGoto.onclick = () => {
-        const s = window.Alpine && Alpine.store("nav");
-        if (s && s.go) s.go("packs");
-      };
+        ${right ? `<div class="pl-right">${right}</div>` : ""}`;
       // "Gỡ" khác "Tắt" ở Ý ĐỊNH, nên thẻ rời hẳn khỏi danh sách chính chứ không chỉ mờ đi.
       // Không xoá file trong bản cài: cây code read-only trên Docker, và git pull sẽ mọc lại.
       const doiGo = async (go) => {
@@ -2100,7 +2149,15 @@
           if (!items.length) return;
           const h = document.createElement("h3");
           h.className = "pl-group";
-          h.innerHTML = `${esc(window.t(key))} <span class="n">${items.length}</span>`;
+          h.innerHTML = `${esc(window.t(key))} <span class="n">${items.length}</span>`
+            + (g === "pack" ? `<button type="button" class="pl-act pl-goto" data-goto-packs="1">${esc(window.t("cs.pl_manage_store"))} →</button>` : "");
+          // Plugin đến từ gói thì bật/tắt và gỡ đều làm ở Kho cài đặt - nó đi theo cả gói, và có
+          // đúng MỘT chỗ gỡ thì người dùng không phải đoán gỡ ở đâu mới là gỡ thật.
+          const nutGoto = h.querySelector("[data-goto-packs]");
+          if (nutGoto) nutGoto.onclick = () => {
+            const s = window.Alpine && Alpine.store("nav");
+            if (s && s.go) s.go("packs");
+          };
           const list = document.createElement("div");
           list.className = "pl-list";
           items.forEach(p => list.appendChild(card(p)));
@@ -2171,6 +2228,8 @@
       inp.addEventListener("keydown", (e) => { if (e.key === "Escape" && inp.value) { e.preventDefault(); setQuery(""); } });
       wrap.querySelector("#plClear").onclick = () => { setQuery(""); inp.focus(); };
       const zip = wrap.querySelector("#plZip");
+      // Không qua _goiNhom: caiPluginZip mở hộp chọn file, trình duyệt chỉ cho mở NGAY trong cú bấm. packs.js đã nạp
+      // sẵn khi trang Plugin vẽ (NHOM_TRANG.plugins).
       zip.onclick = () => {
         if (!window.JavisPacks || !window.JavisPacks.caiPluginZip) return;
         window.JavisPacks.caiPluginZip({
@@ -2203,701 +2262,6 @@
       drawList();
     }
     load();
-  }
-
-  async function renderSelfImprove(el) {
-    _injectExtraCss();
-    const myGen = _renderGen;   // chống race: đổi trang → mọi loadLoops/loadLog dở tự bỏ
-    let pollTimer = null;       // 1 chuỗi poll duy nhất (clearTimeout trước khi đặt lại)
-    el.innerHTML = `<div class="cview-section"><div class="empty">${esc(t("common.loading"))}</div></div>`;
-    const GNAME = { business: window.t("cs.si_goal_business"), brain: window.t("cs.si_goal_brain"), product: window.t("cs.si_goal_product"), custom: window.t("cs.si_goal_custom") };
-    const fmtT = ts => ts ? new Date(ts * 1000).toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" }) : "-";
-    // Giờ TRẦN (chỉ "07:00") không cho biết là hôm nay, mai hay tuần sau - nhìn thẻ việc vẫn
-    // không biết bao giờ nó chạy. fmtWhen luôn nói rõ NGÀY khi không phải hôm nay.
-    function fmtWhen(ts) {
-      if (!ts) return "-";
-      const d = new Date(ts * 1000), now = new Date();
-      const hm = d.toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" });
-      const day = x => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
-      const tomorrow = new Date(now.getTime() + 86400000);
-      if (day(d) === day(now)) return window.t("cs.si_today", { gio: hm });
-      if (day(d) === day(tomorrow)) return window.t("cs.si_tomorrow", { gio: hm });
-      return `${hm} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-    }
-    // "còn 2 giờ 15 phút" - trả lời đúng câu người dùng hỏi trong đầu: bao lâu nữa thì nó chạy.
-    function fmtLeft(ts) {
-      if (!ts) return "";
-      const s = Math.round(ts - Date.now() / 1000);
-      if (s <= 0) return window.t("cs.si_due_now");
-      if (s < 3600) return window.t("cs.si_left_min", { so: Math.max(1, Math.round(s / 60)) });
-      if (s < 86400) {
-        const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
-        return m ? window.t("cs.si_left_hm", { gio: h, phut: m }) : window.t("cs.si_left_h", { gio: h });
-      }
-      return window.t("cs.si_left_day", { so: Math.round(s / 86400) });
-    }
-
-    el.innerHTML = `<div class="cview-section">
-      <div class="si-actions" style="margin-bottom:14px;align-items:center">
-        <button class="s-btn" id="lpNew">+ ${esc(window.t("cs.si_add"))}</button>
-        <button class="s-btn-ghost" id="lpMorning">${ic("sun")} ${esc(window.t("cs.si_morning"))}</button>
-        <button class="s-btn-ghost" id="lpStop">■ ${esc(window.t("cs.si_stop"))}</button>${infoBtn()}
-      </div>
-      ${infoBody(`${esc(window.t("cs.si_intro_a"))} <b>loop</b> ${esc(window.t("cs.si_intro_b"))} <b>${esc(window.t("cs.si_intro_c"))}</b> ${esc(window.t("cs.si_intro_d"))} <b>${esc(window.t("cs.si_intro_e"))}</b> ${esc(window.t("cs.si_intro_f"))} <b>${esc(window.t("cs.si_intro_g"))}</b> ${esc(window.t("cs.si_intro_h"))}`)}
-      <div id="lpNotifyWarn" style="display:none;margin-bottom:12px;padding:10px 12px;border:1px solid rgba(224,102,74,.5);border-radius:8px;background:rgba(224,102,74,.08);font-size:13px;line-height:1.5"></div>
-      <div id="lpForm" style="display:none;margin-bottom:14px;padding:14px;border:1px solid var(--hairline);border-radius:10px;background:var(--surface-1)">
-        <input type="hidden" id="lpSlug">
-        <input type="hidden" id="lpRemId">
-        <div class="si-grid">
-          <div class="si-field"><label>${esc(window.t("cs.si_kind"))}</label><div class="si-row" id="lpKind">
-            <button class="si-chip sel" data-kind="loop">${ic("repeat")} ${esc(window.t("cs.si_kind_loop"))}</button>
-            <button class="si-chip" data-kind="reminder">${ic("alarm-clock")} ${esc(window.t("cs.si_kind_rem"))}</button></div></div>
-          <div class="si-field"><label>${esc(window.t("cs.si_name"))}</label><input id="lpName" placeholder="${esc(window.t("cs.si_name_ph"))}"></div>
-          <div class="si-field"><label id="lpBodyLabel">${esc(window.t("cs.si_body_loop"))}</label>
-            <textarea id="lpBody" placeholder="${esc(window.t("cs.si_body_ph"))}"></textarea></div>
-          <div id="lpLoopFields">
-            <div class="si-row" style="gap:14px;flex-wrap:wrap">
-              <div class="si-field"><label for="lpModes">${esc(window.t("cs.si_mode"))}${infoBtn()}</label><div class="si-row" id="lpModes">
-                <button class="si-chip" data-mode="suggest">${esc(window.t("cs.si_mode_suggest"))}</button>
-                <button class="si-chip" data-mode="auto">${esc(window.t("cs.si_mode_auto"))}</button>
-                <button class="si-chip" data-mode="full">${esc(window.t("cs.si_mode_full"))}</button></div>
-                <div class="si-level-note" id="lpModeNote" role="status"></div></div>
-              <div class="si-field"><label>${esc(window.t("cs.si_interval"))}</label><input type="number" id="lpInterval" min="5" value="120" style="max-width:120px"></div>
-            </div>
-            ${infoBody(`${esc(window.t("cs.si_loopnote"))} <code>Javis/loops/&lt;${esc(window.t("cs.si_loopnote_name"))}&gt;.md</code>.`)}
-          </div>
-          <div id="lpRemFields" style="display:none">
-            <div class="si-row" style="gap:14px;flex-wrap:wrap">
-              <div class="si-field"><label for="lpRemWhen">${esc(window.t("cs.si_when"))}${infoBtn()}</label><input id="lpRemWhen" placeholder="${esc(window.t("cs.si_when_ph"))}" style="min-width:260px"></div>
-              <div class="si-field"><label>${esc(window.t("cs.si_rkind"))}</label><div class="si-row" id="lpRemModes">
-                <button class="si-chip sel" data-rmode="notify">${ic("alarm-clock")} ${esc(window.t("cs.si_rmode_notify"))}</button>
-                <button class="si-chip" data-rmode="task">${ic("bot")} ${esc(window.t("cs.si_rmode_task"))}</button></div></div>
-              <div class="si-field" id="lpRemMqWrap" style="display:none"><label>${esc(window.t("cs.si_rmq"))}</label><div class="si-row" id="lpRemMq">
-                <button class="si-chip" data-mq="suggest">${esc(window.t("cs.si_mq_read"))}</button>
-                <button class="si-chip" data-mq="auto">${esc(window.t("cs.si_mq_write"))}</button>
-                <button class="si-chip sel" data-mq="full">${esc(window.t("cs.si_mode_full"))}</button></div>
-                <div class="si-level-note" id="lpRemMqNote" role="status"></div></div>
-              <label id="lpRemLastWrap" style="display:none;align-self:flex-end;font-size:13px;gap:6px;align-items:center"><input type="checkbox" id="lpRemLast"> ${esc(window.t("cs.si_rem_last"))}</label>
-              <label style="display:flex;align-self:flex-end;font-size:13px;gap:6px;align-items:center"><input type="checkbox" id="lpRemSpeak"> ${esc(window.t("cs.si_rem_speak"))}</label>
-              <label style="display:flex;align-self:flex-end;font-size:13px;gap:6px;align-items:center"><input type="checkbox" id="lpRemCall"> ${esc(window.t("cs.si_rem_call"))}</label>
-            </div>
-            ${infoBody(`${esc(window.t("cs.si_rem_hint"))}<br>${esc(window.t("cs.si_rem_call_hint"))}`)}
-          </div>
-          <div class="si-field"><label>${esc(window.t("cs.si_brain"))}</label><select id="lpBrain" class="loop-sel" style="min-width:180px"></select></div>
-          <div class="si-actions"><button class="s-btn" id="lpSave">${SAVE_ICON} ${esc(window.t("common.save"))}</button><button class="s-btn-ghost" id="lpCancel">${esc(window.t("common.cancel"))}</button><span class="dim" id="lpFormMsg" style="font-size:13px;color:var(--warn-ink)"></span></div>
-        </div>
-      </div>
-      <!-- 0.204.0: three tabs instead of one long page (jobs, then incidents, then the log, all stacked), and the jobs
-           tab shows ONE brain at a time from a dropdown, with a kind filter and paging. Webhooks have their own page. -->
-      <div class="ach-tabs si-tabs" role="tablist" aria-label="${esc(t("page.selfimprove.label"))}">
-        <button type="button" role="tab" data-si-tab="jobs" aria-selected="true">${ic("repeat")}<span>${esc(window.t("cs.si_tab_jobs"))}</span><span class="si-tab-n" id="siNJobs"></span></button>
-        <button type="button" role="tab" data-si-tab="health" aria-selected="false">${ic("shield")}<span>${esc(window.t("cs.si_tab_health"))}</span><span class="si-tab-n warn" id="siNHealth" hidden></span></button>
-        <button type="button" role="tab" data-si-tab="watch" aria-selected="false">${ic("eye")}<span>${esc(window.t("cs.si_tab_watch"))}</span></button>
-        <button type="button" role="tab" data-si-tab="log" aria-selected="false">${ic("scroll-text")}<span>${esc(window.t("cs.si_tab_log"))}</span></button>
-      </div>
-      <section data-si-pane="jobs" role="tabpanel">
-        <div class="si-toolbar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px">
-          <select id="lpBrainFilter" class="loop-sel" aria-label="${esc(window.t("cs.si_brain"))}" style="font-size:15px;min-width:180px;max-width:100%"></select>
-          <div class="si-row" id="lpKindFilter" role="group">
-            <button class="si-chip sel" data-k="all">${esc(window.t("cs.si_kind_all"))}</button>
-            <button class="si-chip" data-k="loop">${ic("repeat")} ${esc(window.t("cs.si_kind_loop"))}</button>
-            <button class="si-chip" data-k="rem">${ic("alarm-clock")} ${esc(window.t("cs.si_kind_rem"))}</button>
-          </div>
-          <input id="lpSearch" type="search" autocomplete="off" placeholder="${esc(window.t("cs.si_search_ph"))}"
-            style="flex:1 1 200px;max-width:340px;padding:8px 12px;border-radius:8px;border:1px solid var(--hairline);background:var(--surface-2);color:var(--text);font-size:15px;outline:none">
-        </div>
-        <div id="lpGroups">${esc(window.t("common.loading"))}</div>
-      </section>
-      <section data-si-pane="health" role="tabpanel" hidden><div id="hpSection"></div></section>
-      <section data-si-pane="watch" role="tabpanel" hidden><div id="wwSection"></div></section>
-      <section data-si-pane="log" role="tabpanel" hidden>
-        <div class="si-log" style="margin-top:0"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("cs.si_log_head"))} · <select id="lpLogFilter" class="loop-sel" style="font-size:14px"><option value="">${esc(window.t("cs.si_log_all"))}</option></select></h3><div id="lpLog">${esc(window.t("common.loading"))}</div></div>
-      </section>
-    </div>`;
-
-    let fcur = { mode: "full" };   // mặc định toàn quyền (chủ repo bỏ luật an toàn cũ 2026-09-10)
-    let fkind = "loop";      // loại việc đang tạo: loop (việc lặp) | reminder (nhắc hẹn)
-    let frmode = "notify";   // kiểu nhắc hẹn: notify (chỉ nhắc) | task (tự làm rồi báo)
-    let frmq = "full";       // mức quyền của kiểu "task": suggest | auto | full
-    // 0.275.0 (customer report, codes 15 and 27): Full stays the default (owner, 2026-10-22), but the form says in one
-    // line what the picked level may do, so nobody leaves Full selected without knowing it edits files and acts outside.
-    const LEVEL_NOTE = { full: "cs.si_level_note_full", auto: "cs.si_level_note_auto", suggest: "cs.si_level_note_suggest" };
-    function levelNote(id, level) {
-      const n = el.querySelector(id);
-      if (!n) return;
-      n.textContent = LEVEL_NOTE[level] ? window.t(LEVEL_NOTE[level]) : "";
-      n.classList.toggle("is-full", level === "full");
-    }
-    function syncFormChips() {
-      el.querySelectorAll("#lpModes .si-chip").forEach(x => x.classList.toggle("sel", x.dataset.mode === fcur.mode));
-      levelNote("#lpModeNote", fcur.mode);
-    }
-    el.querySelectorAll("#lpModes .si-chip").forEach(c => c.onclick = () => { fcur.mode = c.dataset.mode; syncFormChips(); });
-
-    // Chuyển giao diện form theo loại việc: loop hiện chế độ + chu kỳ; nhắc hẹn hiện thời điểm + kiểu.
-    function syncKindUI() {
-      el.querySelectorAll("#lpKind .si-chip").forEach(x => x.classList.toggle("sel", x.dataset.kind === fkind));
-      const isRem = fkind === "reminder";
-      const q = id => el.querySelector(id);
-      if (q("#lpLoopFields")) q("#lpLoopFields").style.display = isRem ? "none" : "";
-      if (q("#lpRemFields")) q("#lpRemFields").style.display = isRem ? "" : "none";
-      q("#lpBodyLabel").textContent = isRem
-        ? window.t("cs.si_body_rem")
-        : window.t("cs.si_body_loop");
-    }
-    el.querySelectorAll("#lpKind .si-chip").forEach(c => c.onclick = () => {
-      // Đang SỬA (loop hay nhắc hẹn) → khoá loại: đổi loại giữa đường là ghi sang kho khác,
-      // để lại bản gốc ở kho cũ vẫn chạy.
-      if (el.querySelector("#lpSlug").value || el.querySelector("#lpRemId").value) return;
-      fkind = c.dataset.kind; syncKindUI();
-    });
-    // Mức quyền chỉ có nghĩa với kiểu "Tự làm rồi báo" - "Chỉ nhắc" không chạy engine nào cả,
-    // nên phơi ô đó ra là bày thêm một lựa chọn không làm gì.
-    function syncRemMq() {
-      const wrap = el.querySelector("#lpRemMqWrap");
-      if (wrap) wrap.style.display = frmode === "task" ? "" : "none";
-      const lastWrap = el.querySelector("#lpRemLastWrap");
-      if (lastWrap) lastWrap.style.display = frmode === "task" ? "flex" : "none";
-      el.querySelectorAll("#lpRemMq .si-chip").forEach(x => x.classList.toggle("sel", x.dataset.mq === frmq));
-      levelNote("#lpRemMqNote", frmq);
-    }
-    el.querySelectorAll("#lpRemModes .si-chip").forEach(c => c.onclick = () => {
-      frmode = c.dataset.rmode;
-      el.querySelectorAll("#lpRemModes .si-chip").forEach(x => x.classList.toggle("sel", x.dataset.rmode === frmode));
-      syncRemMq();
-    });
-    el.querySelectorAll("#lpRemMq .si-chip").forEach(c => c.onclick = () => {
-      frmq = c.dataset.mq; syncRemMq();
-    });
-
-    // "Khi nào" (nhắc hẹn) → payload cho POST /reminders. Cron 5 trường/@macro → {cron};
-    // "N phút/tiếng/giờ/ngày [nữa]" → {delay_min}; còn lại (8h30, 07:00, ngày giờ) → {at} để
-    // reminders.resolve_due tự hiểu. Chỉ nhận đơn-vị-chữ cho delay để "8h" vẫn là mốc giờ 8h.
-    function parseReminderWhen(s) {
-      s = (s || "").trim();
-      if (!s) return null;
-      if (s[0] === "@") return { cron: s };
-      const toks = s.split(/\s+/);
-      if (toks.length === 5 && toks.every(t => /^[\d*/,\-]+$/.test(t))) return { cron: s };
-      // KHÔNG dùng \b sau đơn vị: \b của JS là ranh giới ASCII, mà "giờ" kết thúc bằng ký tự có
-      // dấu ("ờ") nên "1.5 giờ" ở cuối chuỗi sẽ trượt. Alternation đã đủ đặc trưng để không khớp bừa.
-      // Nhận CẢ đơn vị tiếng Anh, và đây không phải chuyện cho sang: ô gợi ý ngay bên cạnh
-      // được dịch ở 0.55.14 nên bản tiếng Anh mời người ta gõ "in 30 minutes". Chỉ nhận tiếng
-      // Việt thì người làm ĐÚNG theo gợi ý sẽ trượt xuống nhánh `{at: s}`, server không hiểu
-      // rồi ném "at không hiểu" - nhắc hẹn im lặng không được tạo. Gợi ý bằng thứ tiếng nào
-      // thì phải hiểu được thứ tiếng đó.
-      // "in " đứng trước là tuỳ chọn; "minutes?" phải đứng trước "mins?" để "minutes" không bị
-      // "min" ăn mất phần đuôi.
-      const m = s.toLowerCase().match(
-        /^(?:in\s+)?(\d+(?:[.,]\d+)?)\s*(phút|phut|tiếng|tieng|giờ|gio|ngày|ngay|minutes?|mins?|hours?|hrs?|days?)/);
-      if (m) {
-        const num = parseFloat(m[1].replace(",", "."));
-        const u = m[2];
-        const mins = /^(ngày|ngay|days?)$/.test(u) ? num * 1440
-          : /^(tiếng|tieng|giờ|gio|hours?|hrs?)$/.test(u) ? num * 60 : num;
-        return { delay_min: Math.max(1, Math.round(mins)) };
-      }
-      return { at: s };
-    }
-
-    async function createReminder(payload) {
-      try {
-        return await (await fetch("/reminders", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })).json();
-      } catch (e) { return { ok: false, error: e.message }; }
-    }
-
-    let allLoops = [];    // phẳng mọi brain - cho bộ lọc nhật ký (log per brain+slug)
-    let allBrains = [];   // [{name, path, is_default}] - cho ô chọn brain (tạo mới + chuyển)
-
-    // Nạp danh sách brain cho ô chọn ĐỘC LẬP với /viec/all (vốn nặng: quét note mọi brain).
-    // /brains là nguồn chuẩn của sidebar - nhanh + luôn sẵn, nên form không bao giờ trống ô brain
-    // dù /viec/all còn đang tải hoặc lỗi. Đây là gốc bug "phần brain không thấy để chọn".
-    async function ensureBrains() {
-      if (allBrains.length) return;
-      try {
-        const d = await (await fetch("/brains")).json();
-        allBrains = (d.brains || []).map(b => ({ name: b.label || b.name, path: b.path, is_default: b.is_default }));
-      } catch (e) {}
-
-    }
-
-    function isCurrentBrain(b) {
-      const cur = fbrain();   // path brain đang chọn ở sidebar, hoặc "brain" (mặc định)
-      return cur === "brain" ? !!b.is_default : b.path === cur;
-    }
-    // Options brain cho nút "Chuyển sang..." - bỏ chính brain của item (không chuyển sang chỗ cũ).
-    function moveOptions(exceptPath) {
-      return allBrains.filter(b => b.path !== exceptPath)
-        .map(b => `<option value="${esc(b.path)}">${esc(b.name)}</option>`).join("");
-    }
-
-    // openForm(loop) = tạo/sửa việc lặp · openForm(null, rem) = SỬA một nhắc hẹn/lịch cron.
-    // Trước đây nhắc hẹn tạo xong là bất động (chỉ huỷ/chuyển brain) - muốn đổi giờ cron phải
-    // xoá rồi tạo lại, đúng chỗ khách báo "không sửa được lịch cron".
-    // `tpl` (0.222.0): a ready-made reminder from /reminders/templates pre-fills a NEW reminder.
-    // Nothing is created until Save, so the usual checks (report channel, can_force) still apply.
-    async function openForm(lp, rem, tpl) {
-      await ensureBrains();   // đảm bảo ô brain luôn có lựa chọn dù /viec/all chưa tải xong
-      fcur = { mode: lp ? lp.mode : "full" };
-      fkind = (rem || tpl) ? "reminder" : "loop";
-      frmode = (rem && rem.mode === "task") || (tpl && tpl.mode === "task") ? "task" : "notify";
-      // Mở form một nhắc hẹn cũ thì hiện ĐÚNG mức nó đang chạy (bản ghi cũ chưa có trường này
-      // thì server đã quy về mặc định trong _view, nên chỗ này không phải đoán lại).
-      frmq = (rem && rem.muc_quyen) || (tpl && tpl.muc_quyen) || "full";
-      el.querySelector("#lpRemLast").checked = !!(rem && rem.remember_last);
-      el.querySelector("#lpRemSpeak").checked = !!(rem && rem.speak);
-      el.querySelector("#lpRemCall").checked = !!(rem && rem.call);
-      const locked = !!(lp || rem);   // đang SỬA (loop hay nhắc) → khoá loại việc + brain
-      el.querySelector("#lpSlug").value = lp ? lp.slug : "";
-      el.querySelector("#lpRemId").value = rem ? rem.id : "";
-      el.querySelector("#lpName").value = rem ? (rem.label || "") : tpl ? (tpl.label || "") : (lp ? lp.name : "");
-      el.querySelector("#lpBody").value = rem ? (rem.text || "") : tpl ? (tpl.text || "") : (lp ? (lp.body || "") : "");
-      el.querySelector("#lpInterval").value = lp ? lp.interval_min : 120;
-      // Cron sửa được nguyên văn (không phụ thuộc múi giờ). Hẹn MỘT LẦN thì để trống + nói rõ
-      // "trống = giữ nguyên", vì viết lại mốc giờ tuyệt đối dễ lệch múi giờ máy người dùng.
-      const when = el.querySelector("#lpRemWhen");
-      when.value = rem && rem.cron ? rem.cron : (tpl && tpl.cron) || "";
-      when.placeholder = (rem && !rem.cron)
-        ? window.t("cs.si_when_keep", { luc: fmtWhen(rem.due_at) })
-        : window.t("cs.si_when_ph2");
-      // Job script giữ nguyên kiểu (đổi kiểu là mất tên file script) → khoá hai nút Kiểu cho khỏi
-      // tưởng đang đổi được; server cũng bỏ qua trường mode với loại này.
-      const isScript = !!(rem && rem.script);
-      el.querySelectorAll("#lpRemModes .si-chip").forEach(x => {
-        x.classList.toggle("sel", !isScript && x.dataset.rmode === frmode);
-        x.disabled = isScript; x.style.opacity = isScript ? .45 : 1;
-      });
-      el.querySelector("#lpFormMsg").textContent = isScript
-        ? window.t("cs.si_script_note", { ten: rem.script }) : "";
-      // Khoá bộ chọn loại khi SỬA (chỉ đổi được lúc tạo mới); mờ đi cho rõ.
-      el.querySelectorAll("#lpKind .si-chip").forEach(x => { x.disabled = locked; x.style.opacity = locked ? .45 : 1; });
-      // Ô chọn brain: TẠO MỚI cho chọn (mặc định brain đang xem); SỬA thì khoá về brain của việc
-      // (đổi brain lúc sửa sẽ đẻ file mới ở brain khác mà bản gốc vẫn còn - muốn dời thì dùng nút
-      // "Chuyển sang brain" trên thẻ, có kiểm tra trùng + dời state đàng hoàng).
-      const bsel = el.querySelector("#lpBrain");
-      const defPath = (lp || rem) ? ((lp || rem).brain_path || "")
-        : ((allBrains.find(isCurrentBrain) || allBrains[0] || {}).path || "");
-      bsel.innerHTML = allBrains.map(b =>
-        `<option value="${esc(b.path)}" ${b.path === defPath ? "selected" : ""}>${esc(b.name)}</option>`).join("");
-      bsel.disabled = locked;
-      syncKindUI();
-      syncFormChips();
-      syncRemMq();
-      el.querySelector("#lpForm").style.display = "block";
-      el.querySelector("#lpName").focus();
-    }
-    el.querySelector("#lpNew").onclick = () => openForm(null);
-    el.querySelector("#lpMorning").onclick = async () => {
-      let d = null;
-      try { d = await (await fetch("/reminders/templates", { cache: "no-store" })).json(); } catch (e) {}
-      const tpl = ((d && d.templates) || []).find(x => x.id === "morning_brief");
-      if (tpl) openForm(null, null, tpl);
-    };
-    el.querySelector("#lpCancel").onclick = () => { el.querySelector("#lpForm").style.display = "none"; };
-
-    el.querySelector("#lpSave").onclick = async () => {
-      const name = el.querySelector("#lpName").value.trim();
-      const body = el.querySelector("#lpBody").value.trim();
-      const msg = el.querySelector("#lpFormMsg");
-      const brainVal = el.querySelector("#lpBrain").value || fbrain();   // brain đích do user chọn
-      const b = el.querySelector("#lpSave");
-      if (!name) { msg.textContent = window.t("cs.si_need_name"); return; }
-      if (!body) { msg.textContent = fkind === "reminder" ? window.t("cs.si_need_rem_body") : window.t("cs.si_need_loop_body"); return; }
-
-      // NHẮC HẸN → kho reminders. Tạo mới: POST /reminders. Đang sửa: POST /reminders/update.
-      if (fkind === "reminder") {
-        const remId = el.querySelector("#lpRemId").value;
-        const whenRaw = el.querySelector("#lpRemWhen").value.trim();
-        const timePayload = whenRaw ? parseReminderWhen(whenRaw) : null;
-        const rememberLast = frmode === "task" && el.querySelector("#lpRemLast").checked;
-        const speak = el.querySelector("#lpRemSpeak").checked;
-        const call = el.querySelector("#lpRemCall").checked;
-        if (!remId && !timePayload) { msg.textContent = window.t("cs.si_need_when"); return; }
-        b.textContent = window.t("settings.saving");
-        let r = {};
-        if (remId) {
-          const f = new FormData();
-          f.append("id", remId); f.append("brain", brainVal);
-          f.append("label", name); f.append("text", body); f.append("mode", frmode);
-          f.append("muc_quyen", frmq);
-          f.append("remember_last", rememberLast ? "true" : "false");
-          f.append("speak", speak ? "true" : "false");
-          f.append("call", call ? "true" : "false");
-          if (timePayload) Object.keys(timePayload).forEach(k => f.append(k, timePayload[k]));
-          try { r = await (await fetch("/reminders/update", { method: "POST", body: f })).json(); }
-          catch (e) { r = { error: e.message }; }
-        } else {
-          r = await createReminder(Object.assign(
-            { text: body, label: name, mode: frmode, muc_quyen: frmq, brain: brainVal,
-              remember_last: rememberLast, speak: speak, call: call, created_by: "dashboard" }, timePayload));
-
-        }
-        b.innerHTML = SAVE_ICON + " " + window.t("common.save");
-        if (!r.ok) {
-          // can_force = server chặn vì THIẾU ĐIỀU KIỆN (chưa đấu Telegram thì không báo được kết
-          // quả cho ai). Nói rõ thiếu gì, và để người dùng tự quyết có tạo tiếp hay không.
-          if (r.can_force) {
-            msg.innerHTML = Icons.warn(r.error || window.t("cs.si_precond"))
-              + ` <button class="s-btn-ghost" id="lpForce" style="margin-left:6px">${esc(window.t("cs.si_force"))}</button>`;
-            const fb = el.querySelector("#lpForce");
-            if (fb) fb.onclick = async () => {
-              const r2 = await createReminder(Object.assign(
-                { text: body, label: name, mode: frmode, muc_quyen: frmq, brain: brainVal,
-                  remember_last: rememberLast, speak: speak, call: call, created_by: "dashboard", allow_no_channel: true }, timePayload));
-
-              if (!r2.ok) { msg.innerHTML = Icons.warn(r2.error || window.t("cs.si_save_err")); return; }
-              el.querySelector("#lpForm").style.display = "none";
-              loadAll();
-            };
-          } else msg.innerHTML = Icons.warn(r.error || window.t("cs.si_save_err"));
-          return;
-        }
-        el.querySelector("#lpForm").style.display = "none";
-        loadAll();
-        return;
-      }
-
-      // LOOP → POST /loops (file Javis/loops/<slug>.md).
-      const fd = new FormData();
-      fd.append("slug", el.querySelector("#lpSlug").value);
-      fd.append("name", name);
-      fd.append("mode", fcur.mode);
-      fd.append("interval_min", el.querySelector("#lpInterval").value || "120");
-      fd.append("body", body);
-      fd.append("brain", brainVal);
-      // Không gửi goal/workspace/tools_profile/quiet/maxruns → server giữ giá trị cũ (khi sửa)
-      // hoặc mặc định an toàn (tạo mới: goal=custom, vault + MCP đọc).
-      b.textContent = window.t("settings.saving");
-      let r = {}; try { r = await (await fetch("/loops", { method: "POST", body: fd })).json(); } catch (e) { r = { error: e.message }; }
-      b.innerHTML = SAVE_ICON + " " + window.t("common.save");
-      if (!r.ok) { msg.innerHTML = Icons.warn(r.error || window.t("cs.si_save_err")); return; }
-      el.querySelector("#lpForm").style.display = "none";
-      loadAll(); loadLog();
-    };
-
-    el.querySelector("#lpStop").onclick = async () => { await fetch("/loops/stop", { method: "POST" }); loadAll(); };
-
-    // Chuẩn hoá chuỗi để tìm kiếm: thường + bỏ dấu tiếng Việt (gõ "email" khớp "Email", "kho"
-    // khớp "khô") + đ→d. Dùng cho cả gắn nhãn thẻ việc lẫn từ khoá người dùng gõ.
-    function _lpNorm(s) {
-      return String(s == null ? "" : s).toLowerCase()
-        .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
-    }
-    // 0.204.0: the jobs tab shows one brain (or all, each card tagged with its brain), filtered by kind and the search
-    // box, 10 cards a page. Choices are remembered per browser (try/catch: storage can be blocked).
-    const LP_PER_PAGE = 10;
-    const LS_BRAIN = "javis.si.brain", LS_KIND = "javis.si.kind", LS_TAB = "javis.si.tab";
-    const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-    const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-    let lpData = [];                                       // brains from /viec/all, current brain first
-    let lpBrain = lsGet(LS_BRAIN) || "";                   // brain path, "*" = every brain, "" = the sidebar's brain
-    let lpKind = ["all", "loop", "rem"].includes(lsGet(LS_KIND)) ? lsGet(LS_KIND) : "all";
-    let lpPage = 0;
-    function syncBrainFilter() {
-      const sel = el.querySelector("#lpBrainFilter");
-      if (!sel) return;
-      if (lpBrain !== "*" && !lpData.some(g => g.path === lpBrain)) {
-        const cur = lpData.find(isCurrentBrain) || lpData[0];
-        lpBrain = cur ? cur.path : "*";
-      }
-      const n = g => (g.loops || []).length + (g.reminders || []).length;
-      const total = lpData.reduce((a, g) => a + n(g), 0);
-      sel.innerHTML = `<option value="*">${esc(window.t("cs.si_all_brains", { so: total }))}</option>`
-        + lpData.map(g => `<option value="${esc(g.path)}">${esc(g.name)} (${n(g)})${isCurrentBrain(g) ? " · " + esc(window.t("cs.si_viewing")) : ""}</option>`).join("");
-      sel.value = lpBrain;
-      const nj = el.querySelector("#siNJobs");
-      if (nj) nj.textContent = total ? String(total) : "";
-    }
-    function renderList() {
-      const box = el.querySelector("#lpGroups");
-      if (!box) return;
-      el.querySelectorAll("#lpKindFilter .si-chip").forEach(c => c.classList.toggle("sel", c.dataset.k === lpKind));
-      const q = _lpNorm((el.querySelector("#lpSearch") || {}).value || "").trim();
-      const many = lpBrain === "*";
-      const cards = [];
-      let inScope = 0, inBrain = 0;
-      lpData.forEach(g => {
-        if (!many && g.path !== lpBrain) return;
-        inBrain += (g.loops || []).length + (g.reminders || []).length;
-        const items = [];
-        if (lpKind !== "rem") (g.loops || []).forEach(lp => items.push(loopCard(lp)));
-        if (lpKind !== "loop") (g.reminders || []).forEach(r => items.push(reminderCard(r)));
-        inScope += items.length;
-        items.forEach(card => {
-          if (q && (card.dataset.search || "").indexOf(q) === -1) return;
-          if (many) {
-            const tag = document.createElement("div");
-            tag.className = "dim";
-            tag.style.cssText = "font-size:12px;color:var(--text3);margin-bottom:4px";
-            tag.innerHTML = `${ic("brain")} ${esc(g.name)}`;
-            card.insertBefore(tag, card.firstChild);
-          }
-          cards.push(card);
-        });
-      });
-      const empty = inScope
-        ? `<div class="empty">${esc(window.t("cs.si_none_match"))}</div>`
-        : inBrain ? `<div class="empty">${esc(window.t("cs.si_none_kind"))}</div>`
-        : `<div class="empty">${esc(window.t("cs.si_empty_brain_a"))} <b>+ ${esc(window.t("cs.si_add"))}</b>${esc(window.t("cs.si_empty_brain_b"))}</div>`;
-      pager(box, cards, LP_PER_PAGE, rows => {
-        const f = document.createDocumentFragment();
-        rows.forEach(c => f.appendChild(c));
-        return f;
-      }, empty, { page: lpPage, onPage: p => { lpPage = p; } });
-    }
-
-    function loopCard(lp) {
-      const paused = !!lp.auto_paused_reason;
-      const dot = lp.running ? `<span style="color:var(--green)">${ic("loader", { cls: "ic-spin" })} ${window.t("usage.loop.on")}</span>`
-        : paused ? `<span style="color:var(--warn-ink)">${WARN_ICON} ${window.t("cs.si_st_paused")}</span>`
-          : lp.enabled ? `<span style="color:var(--green)">● ${window.t("cs.st_on_low")}</span>` : `<span style="color:var(--text3)">○ ${window.t("cs.st_off_low")}</span>`;
-      const verify = lp.last_status && lp.last_status !== "ok"
-        ? ` · ${esc(lp.last_status.slice(0, 90))}` : (lp.last_status === "ok" ? " · ok" : "");
-      const last = lp.last_run ? window.t("cs.si_last", { luc: fmtWhen(lp.last_run) }) : window.t("cs.si_never");
-      const next = (lp.enabled && !paused && lp.next_run)
-        ? ` · ${window.t("cs.si_next", { luc: fmtWhen(lp.next_run), con: fmtLeft(lp.next_run) })}`
-        : (lp.enabled ? "" : " · " + window.t("cs.si_no_next"));
-      const modeLbl = lp.mode === "full" ? window.t("cs.si_mode_full_low")
-        : lp.mode === "auto" ? window.t("cs.si_mode_auto_low") : window.t("cs.si_mode_suggest_low");
-      const extra = [
-        `${modeLbl} · ${window.t("cs.si_every", { so: lp.interval_min })}`,
-        (lp.goal && lp.goal !== "custom") ? (GNAME[lp.goal] || lp.goal) : "",
-        lp.quiet_hours ? window.t("cs.si_quiet", { gio: lp.quiet_hours }) : "",
-        lp.max_runs_per_day ? window.t("cs.si_maxruns", { so: lp.max_runs_per_day, da: lp.runs_today }) : "",
-        lp.tools_profile === "code" ? `${ic("settings")} code · ${esc(lp.workspace)}` : "",
-      ].filter(Boolean).join(" · ");
-      const div = document.createElement("div");
-      div.className = "wf-card" + (lp.enabled ? "" : " off");
-      div.dataset.kind = "loop";
-      div.dataset.search = _lpNorm(`${lp.name} ${lp.slug} ${lp.goal || ""} ${GNAME[lp.goal] || ""}`);
-      div.innerHTML = `
-        <div class="wf-top"><div class="wf-name">${ic("repeat")} ${esc(lp.name)} <span class="dim" style="font-size:12px">${esc(lp.slug)}</span></div><div>${dot}</div></div>
-        <div class="wf-desc">${extra}</div>
-        <div class="wf-steps">${last}${verify}${next}${paused ? `<br>${WARN_ICON} ${esc(lp.auto_paused_reason)}` : ""}</div>
-        <div class="wf-actions">
-          <button class="s-btn-ghost tgl">${lp.enabled ? window.t("cb.tat") : window.t("cb.bat")}</button>
-          <button class="s-btn-ghost run">▶ ${esc(window.t("cs.si_run_now"))}</button>
-          <button class="s-btn-ghost edit">${esc(window.t("common.edit"))}</button>
-          <button class="s-btn-ghost del" style="color:var(--red)">${esc(window.t("common.delete"))}</button>
-          <select class="mv loop-sel" style="font-size:12px"><option value="">${esc(window.t("cs.si_move_brain"))}</option>${moveOptions(lp.brain_path)}</select>
-        </div>`;
-      // MỌI thao tác gửi brain của CHÍNH item (lp.brain_path), KHÔNG phải fbrain() - trang này gộp
-      // nhiều brain nên bám sidebar sẽ nhắm nhầm brain.
-      div.querySelector(".tgl").onclick = async () => {
-        await fetch("/loops/toggle", { method: "POST", body: (() => { const f = new FormData(); f.append("slug", lp.slug); f.append("brain", lp.brain_path); return f; })() });
-        loadAll();
-      };
-      div.querySelector(".run").onclick = async (e) => {
-        e.target.disabled = true; e.target.textContent = window.t("cs.si_running");
-        await fetch("/loops/run-now", { method: "POST", body: (() => { const f = new FormData(); f.append("slug", lp.slug); f.append("brain", lp.brain_path); return f; })() });
-        setTimeout(() => { loadAll(); loadLog(); }, 2500);
-      };
-      div.querySelector(".edit").onclick = () => openForm(lp);
-      div.querySelector(".del").onclick = async () => {
-        if (!confirm(window.t("cs.si_del_confirm", { ten: lp.name, slug: lp.slug }))) return;
-        await fetch("/loops/delete", { method: "POST", body: (() => { const f = new FormData(); f.append("slug", lp.slug); f.append("brain", lp.brain_path); return f; })() });
-        loadAll(); loadLog();
-      };
-      div.querySelector(".mv").onchange = async (e) => {
-        const to = e.target.value; if (!to) return;
-        const toName = (allBrains.find(b => b.path === to) || {}).name || to;
-        if (!confirm(window.t("cs.si_move_confirm", { ten: lp.name, brain: toName }))) { e.target.value = ""; return; }
-        const f = new FormData();
-        f.append("slug", lp.slug); f.append("from_brain", lp.brain_path); f.append("to_brain", to);
-        let r = {}; try { r = await (await fetch("/loops/move", { method: "POST", body: f })).json(); } catch (er) { r = { error: er.message }; }
-        if (!r.ok) alert(window.t("cs.si_move_err") + (r.error || window.t("app.err_low")));
-        loadAll(); loadLog();
-      };
-      return div;
-    }
-
-    // Nhắc hẹn đang chờ: gộp cùng loop trong mỗi nhóm brain. Loop = việc bền (.md, sửa trong
-    // Obsidian); nhắc = việc phù du. Cả hai đều gắn brain_path để thao tác đúng brain.
-    const MODE_LBL = { notify: window.t("cs.si_rem_notify"), task: window.t("cs.si_rem_task"), script: "script" };
-    // Mức quyền của nhắc hẹn kiểu "tự làm": phải hiện trên thẻ. Việc này tới giờ chạy một mình,
-    // nên "nó được phép làm tới đâu" là thứ người dùng cần liếc một cái là biết, không phải mở
-    // form Sửa mới thấy.
-    const MQ_LBL = { suggest: window.t("cs.si_mqlbl_suggest"), auto: window.t("cs.si_mqlbl_auto"), full: window.t("cs.si_mqlbl_full") };
-    // Câu tả LỊCH của một nhắc hẹn. Trước đây thẻ cron chỉ in "cron 0 7 * * *" rồi hết - không
-    // đọc được lịch, cũng không biết lần chạy kế tiếp là lúc nào (lỗi khách báo).
-    function remWhen(r) {
-      const next = r.due_at ? window.t("cs.si_next_rem", { luc: fmtWhen(r.due_at), con: fmtLeft(r.due_at) }) : "";
-      if (r.cron) {
-        const human = r.cron_human || r.cron;
-        return `${human} · ${next}`.replace(/ · $/, "");
-      }
-      if (r.repeat_min) return `${window.t("cs.si_rem_repeat", { so: r.repeat_min })} · ${next}`.replace(/ · $/, "");
-      return next ? window.t("cs.si_rem_once", { con: next }) : (r.due_human || "");
-    }
-    function reminderCard(r) {
-      const title = r.label || r.text || window.t("cs.si_kind_rem");
-      const when = remWhen(r);
-      const kind = MODE_LBL[r.mode] || window.t("cs.si_rem_notify");
-      const mq = r.mode === "task" ? (MQ_LBL[r.muc_quyen] || "") : "";
-      const div = document.createElement("div");
-      div.className = "wf-card";
-      div.dataset.kind = "rem";
-      div.dataset.search = _lpNorm(`${title} ${when} ${r.cron || ""} ${kind} ${mq}`);
-      div.innerHTML = `<b>${ic("alarm-clock")} ${esc(title)}</b>
-        <div class="dim" style="font-size:12px;color:var(--text3)">${esc(when)} · ${esc(kind)}${mq ? ` · <span class="rm-mq${r.muc_quyen === "full" ? " on" : ""}">${esc(mq)}</span>` : ""}${r.cron ? ` · <code>${esc(r.cron)}</code>` : ""}</div>
-        ${(r.next_runs || []).length > 1 ? `<div class="dim" style="font-size:12px;color:var(--text3)">${esc(window.t("cs.si_rem_next3", { ds: r.next_runs.map(x => fmtWhen(x.at)).join(" · ") }))}</div>` : ""}
-        ${r.remember_last ? `<div class="dim" style="font-size:12px;color:var(--text3)">${ic("history")} ${esc(window.t("cs.si_rem_last_tag"))}</div>` : ""}
-        ${r.speak ? `<div class="dim" style="font-size:12px;color:var(--text3)">${ic("volume-2")} ${esc(window.t("cs.si_rem_speak_tag"))}</div>` : ""}
-        ${r.call ? `<div class="dim" style="font-size:12px;color:var(--text3)">${ic("mic")} ${esc(window.t("cs.si_rem_call_tag"))}</div>` : ""}
-        ${r.error ? `<div style="font-size:12px;color:var(--warn-ink);margin-top:4px">${WARN_ICON} ${esc(window.t("cs.si_prev_err"))} ${esc(r.error.slice(0, 160))}</div>` : ""}
-        ${r.retry_count > 0 ? `<div style="font-size:12px;color:var(--warn-ink)">${ic("rotate-cw")} ${esc(window.t("cs.si_rem_retry", { lan: r.retry_count, tong: r.retry_max || r.retry_count, luc: fmtWhen(r.due_at) }))}</div>` : ""}
-        <div class="wf-actions" style="margin-top:8px">
-          <button class="s-btn-ghost rmEdit">${esc(window.t("common.edit"))}</button>
-          <button class="s-btn-ghost rmCancel">${esc(window.t("common.cancel"))}</button>
-          <button class="s-btn-ghost rmDel" style="color:var(--red)">${esc(window.t("common.delete"))}</button>
-          <select class="mv loop-sel" style="font-size:12px"><option value="">${esc(window.t("cs.si_move_brain"))}</option>${moveOptions(r.brain_path)}</select>
-        </div>`;
-      div.querySelector(".rmEdit").onclick = () => openForm(null, r);
-      div.querySelector(".rmCancel").onclick = async () => {
-        if (!confirm(window.t("cs.si_rem_cancel_confirm", { ten: title }))) return;
-        const f = new FormData();
-        f.append("id", r.id);        // id THÔ, /reminders/cancel nhận đúng dạng này
-        f.append("brain", r.brain_path);
-        await fetch("/reminders/cancel", { method: "POST", body: f });
-        loadAll();
-      };
-      div.querySelector(".rmDel").onclick = async () => {
-        if (!confirm(window.t("cs.si_rem_del_confirm", { ten: title }))) return;
-        const f = new FormData();
-        f.append("id", r.id); f.append("brain", r.brain_path);
-        let rr = {}; try { rr = await (await fetch("/reminders/delete", { method: "POST", body: f })).json(); } catch (er) { rr = { error: er.message }; }
-        if (!rr.ok) alert(window.t("cs.si_del_err") + (rr.error || window.t("app.err_low")));
-        loadAll();
-      };
-      div.querySelector(".mv").onchange = async (e) => {
-        const to = e.target.value; if (!to) return;
-        const toName = (allBrains.find(b => b.path === to) || {}).name || to;
-        if (!confirm(window.t("cs.si_rem_move_confirm", { ten: title, brain: toName }))) { e.target.value = ""; return; }
-        const f = new FormData();
-        f.append("id", r.id); f.append("from_brain", r.brain_path); f.append("to_brain", to);
-        let rr = {}; try { rr = await (await fetch("/reminders/move", { method: "POST", body: f })).json(); } catch (er) { rr = { error: er.message }; }
-        if (!rr.ok) alert(window.t("cs.si_move_err") + (rr.error || window.t("app.err_low")));
-        loadAll();
-      };
-      return div;
-    }
-
-    // Gộp MỌI brain: /viec/all trả từng brain kèm loop + nhắc hẹn. Nhóm theo brain, brain đang
-    // xem ở sidebar lên đầu; brain khác rỗng thì ẩn. Mỗi item mang brain_path riêng.
-    async function loadAll(retried) {
-      if (myGen !== _renderGen) return;
-      let d = null, loadErr = false;
-      try { d = await (await fetch("/viec/all")).json(); } catch (e) { loadErr = true; }
-      if (myGen !== _renderGen) return;
-      const box = el.querySelector("#lpGroups");
-      if (!box) return;
-      // /viec/all lỗi/hết-giờ (VPS chậm) → tự thử lại 1 lần sau 1.5s (vượt qua nhịp chậm/nghẽn
-      // thoáng qua), rồi mới BÁO RÕ + cho bấm thử lại. KHÔNG im lặng hiện "chưa có việc" (dễ tưởng
-      // việc biến mất). Giữ danh sách brain cũ + ensureBrains cho ô chọn của form.
-      if (loadErr || !d || !d.brains) {
-        ensureBrains();
-        if (!retried) {
-          box.innerHTML = `<div class="empty">${esc(window.t("cs.si_loading_jobs"))}</div>`;
-          setTimeout(() => { if (myGen === _renderGen) loadAll(true); }, 1500);
-          return;
-        }
-        box.innerHTML = `<div class="empty">${esc(window.t("cs.si_load_err"))} <a href="#" id="lpRetry" style="color:var(--link-ink)">${esc(window.t("common.retry"))}</a></div>`;
-        const rt = el.querySelector("#lpRetry");
-        if (rt) rt.onclick = (ev) => { ev.preventDefault(); loadAll(); loadLog(); };
-        return;
-      }
-      allBrains = (d.brains || []).map(b => ({ name: b.label || b.name, path: b.path, is_default: b.is_default }));
-      // Chưa đấu Telegram = việc vẫn chạy đúng giờ nhưng kết quả không tới tay ai. Người dùng
-      // không tự đoán ra điều đó, nên nói thẳng ở đầu trang kèm lối đi sang trang Kênh.
-      const nw = el.querySelector("#lpNotifyWarn");
-      if (nw) {
-        const nt = d.notify || {};
-        const bad = nt.ok === false;            // chưa đấu gì cả
-        const warn = !bad && nt.warn;           // đấu rồi nhưng bot đang lỗi thật
-        nw.style.display = (bad || warn) ? "block" : "none";
-        if (bad || warn) {
-          nw.innerHTML = bad
-            ? `${WARN_ICON} <b>${esc(window.t("cs.si_nochan_head"))}</b> - ${esc(nt.error || window.t("cs.si_nochan_fallback"))}.
-               ${esc(window.t("cs.si_nochan_body"))}
-               <a href="#" data-settings-go="channels" style="color:var(--link-ink)">${esc(window.t("cs.si_nochan_link"))}</a>`
-            : `${WARN_ICON} <b>${esc(window.t("cs.si_chanerr_head"))}</b> - ${esc(nt.warn)}.
-               ${esc(window.t("cs.si_chanerr_body"))}
-               <a href="#" data-settings-go="channels" style="color:var(--link-ink)">${esc(window.t("cs.si_chanerr_link"))}</a>`;
-          const go = nw.querySelector("[data-settings-go]");
-          if (go) go.onclick = (ev) => { ev.preventDefault(); navigateTo("channels"); };
-        }
-      }
-      lpData = (d.brains || []).slice().sort((a, b) => {
-        const ac = isCurrentBrain(a) ? 0 : 1, bc = isCurrentBrain(b) ? 0 : 1;
-        return ac - bc || String(a.name).localeCompare(String(b.name));
-      });
-      allLoops = [];
-      lpData.forEach(g => (g.loops || []).forEach(lp => allLoops.push(lp)));
-      syncBrainFilter();
-      renderList();
-      // Bộ lọc nhật ký: mọi loop mọi brain (value = index vào allLoops → biết cả brain lẫn slug).
-      const sel = el.querySelector("#lpLogFilter");
-      const cur = sel.value;
-      sel.innerHTML = `<option value="">${esc(window.t("cs.si_log_cur_brain"))}</option>` +
-        allLoops.map((lp, i) => `<option value="${i}" ${String(i) === cur ? "selected" : ""}>${esc(lp.name)} · ${esc(lp.brain_name)}</option>`).join("");
-      clearTimeout(pollTimer);
-      if (d.running) pollTimer = setTimeout(loadAll, 5000);   // đang có vòng chạy → tự refresh
-    }
-    // Nhật ký gần đây: tải 1 lần (mới nhất trước), rồi phân trang phía client 10 mục/trang - đỡ
-    // đổ cả trăm dòng DOM cùng lúc, có nút Trước/Sau để lật xem tin cũ hơn.
-    let logEntries = [];
-    const LOG_PER_PAGE = 10;
-    async function loadLog() {
-      if (myGen !== _renderGen) return;
-      const v = el.querySelector("#lpLogFilter").value;
-      let brainQ = fbrain(), slugQ = "";
-      if (v !== "") { const lp = allLoops[+v]; if (lp) { brainQ = lp.brain_path; slugQ = lp.slug; } }
-      let d = { entries: [] };
-      try { d = await (await fetch(`/loops/log?brain=${encodeURIComponent(brainQ)}&slug=${encodeURIComponent(slugQ)}&limit=200`)).json(); } catch (e) { }
-      if (myGen !== _renderGen) return;
-      logEntries = d.entries || [];
-      renderLog();
-    }
-    function renderLog() {
-      pager(el.querySelector("#lpLog"), logEntries, LOG_PER_PAGE,
-        (rows) => rows.map(e => `<div class="le">${esc(e)}</div>`).join(""),
-        `<div class="dim" style="color:var(--text3)">${esc(window.t("cs.si_no_log"))}</div>`);
-    }
-    el.querySelector("#lpLogFilter").onchange = loadLog;
-    { const s = el.querySelector("#lpSearch"); if (s) s.oninput = () => { lpPage = 0; renderList(); }; }
-    el.querySelector("#lpBrainFilter").onchange = (e) => { lpBrain = e.target.value; lsSet(LS_BRAIN, lpBrain); lpPage = 0; renderList(); };
-    el.querySelectorAll("#lpKindFilter .si-chip").forEach(c => c.onclick = () => {
-      lpKind = c.dataset.k; lsSet(LS_KIND, lpKind); lpPage = 0; renderList();
-    });
-    // Tabs (0.204.0). The health scan and the log load on first open, not on every visit to the jobs.
-    // Health (0.199.0): incidents Javis Core is handling and the read-only scan, see dashboard/health-panel.js.
-    const opened = {};
-    function openTab(name) {
-      if (!["jobs", "health", "watch", "log"].includes(name)) name = "jobs";
-      lsSet(LS_TAB, name);
-      el.querySelectorAll("[data-si-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.siTab === name)));
-      el.querySelectorAll("[data-si-pane]").forEach(p => { p.hidden = p.dataset.siPane !== name; });
-      if (opened[name]) return;
-      opened[name] = true;
-      if (name === "health" && window.JavisHealthPanel) window.JavisHealthPanel.mount(el.querySelector("#hpSection"));
-      // 0.239.0: theo dõi trang web không tốn token, see dashboard/web-watch.js.
-      if (name === "watch" && window.JavisWebWatch) window.JavisWebWatch.mount(el.querySelector("#wwSection"), fbrain);
-      if (name === "log") loadLog();
-    }
-    el.querySelectorAll("[data-si-tab]").forEach(b => b.onclick = () => openTab(b.dataset.siTab));
-    // Open incidents show as a count on the tab, so a problem is visible without opening it.
-    fetch("/incidents").then(r => r.json()).then(d => {
-      if (myGen !== _renderGen) return;
-      const n = (d.incidents || []).filter(i => i.status !== "resolved").length;
-      const b = el.querySelector("#siNHealth");
-      if (b) { b.hidden = !n; b.textContent = String(n); }
-    }).catch(() => {});
-    ensureBrains();   // nạp sẵn danh sách brain cho ô chọn (không chờ /viec/all vốn nặng)
-    loadAll();
-    openTab(lsGet(LS_TAB) || "jobs");
   }
 
   // ============================================
@@ -3215,339 +2579,6 @@
     loadAll();
   }
 
-  // ============================================
-  // Trang Việc - operations console cho hàng đợi AI tự vận hành
-  // ============================================
-  // Ưu tiên việc: tên icon + lớp màu. Cao thì mũi đôi màu đỏ để nhảy ra khỏi
-  // danh sách, thấp thì mờ đi cho khỏi tranh chú ý.
-  const _PRIO = { 1: ["chevrons-up", "ic-err"], 2: ["chevron-up", "ic-warn"], 3: ["chevron-down", "ic-dim"] };
-  function _prioIcon(p) {
-    const spec = _PRIO[p];
-    return spec ? ic(spec[0], { cls: spec[1] }) : "";
-  }
-  // Bảng TÊN KHOÁ chứ không phải chữ: file này nạp trước khi từ điển i18n về, đọc t() ở đây
-  // là đóng băng nhãn ở giá trị lúc chưa có. Tra chữ bằng _kstatus() tại thời điểm vẽ.
-  const _KSTATUS = {
-    triage: "kanban.st_triage", todo: "kanban.st_todo", ready: "kanban.st_ready",
-    running: "kanban.st_running", review: "kanban.st_review", blocked: "kanban.st_blocked",
-    done: "kanban.st_done", cancelled: "kanban.st_cancelled",
-  };
-  const _kstatus = (s) => (_KSTATUS[s] ? t(_KSTATUS[s]) : s);
-  async function renderKanban(el) {
-    _injectExtraCss();
-    if (window._javisKanbanDrawerCleanup) window._javisKanbanDrawerCleanup();
-    el.innerHTML = `<div class="cview-section"><div class="empty">${esc(t("common.loading"))}</div></div>`;
-    let wfs = [];
-    try { wfs = (await (await fetch(`/workflows?brain=${encodeURIComponent(fbrain())}`)).json()).workflows || []; } catch (e) { }
-    const routeOpts = `<option value="auto">${esc(t("kanban.route_auto"))}</option>` +
-      wfs.map(w => `<option value="wf:${esc(w.slug)}">Workflow: ${esc(w.name || w.slug)}</option>`).join("");
-
-    el.innerHTML = `<div class="cview-section">
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap">
-        <div>
-          <div style="font-size:16px;color:var(--text);font-weight:650"><span class="kn-dot off" id="knLiveDot"></span><span id="knLiveText">Dispatcher</span>${infoBtn()}</div>
-          ${infoBody(esc(t("kanban.intro")))}
-        </div>
-        <div class="si-actions" style="margin:0">
-          <button class="s-btn" id="knAdd">${esc(t("kanban.add"))}</button>
-          <button class="s-btn-ghost" id="knNudge">${esc(t("kanban.nudge"))}</button>
-          <button class="s-btn-ghost" id="knRefresh">↻</button>
-          <button class="s-btn-ghost" id="knStop" style="color:var(--warn-ink)">${esc(t("kanban.stop"))}</button>
-        </div>
-      </div>
-      <div class="kn-health">
-        <div class="kn-kpi"><span>${esc(t("kanban.kpi_active"))}</span><b id="knKpiActive">0</b></div>
-        <div class="kn-kpi"><span>${esc(t("kanban.kpi_queue"))}</span><b id="knKpiQueue">0</b></div>
-        <div class="kn-kpi"><span>${esc(t("kanban.kpi_attention"))}</span><b id="knKpiAttention">0</b></div>
-        <div class="kn-kpi"><span>${esc(t("kanban.kpi_done"))}</span><b id="knKpiDone">0</b></div>
-      </div>
-      <div class="si-field" style="margin-bottom:14px"><label>${esc(t("kanban.orch_label"))}</label><div class="si-row" id="knOrch"></div></div>
-      <div id="knForm" style="display:none;margin-bottom:14px;padding:14px;border:1px solid var(--hairline);border-radius:10px;background:var(--surface-1)">
-        <div class="si-field"><label>Goal</label><input id="knTitle" placeholder="${esc(t("kanban.title_ph"))}"></div>
-        <div class="si-field"><label>${esc(t("kanban.intent_label"))}</label><textarea id="knIntent" placeholder="${esc(t("kanban.intent_ph"))}"></textarea></div>
-        <div class="si-row" style="gap:14px;flex-wrap:wrap">
-          <div class="si-field" style="flex:1;min-width:220px"><label>Route</label><select id="knRoute" class="loop-sel">${routeOpts}</select></div>
-          <div class="si-field"><label>${esc(t("kanban.prio"))}</label><select id="knPrio" class="loop-sel"><option value="1">${esc(t("kanban.prio_high"))}</option><option value="2" selected>${esc(t("kanban.prio_mid"))}</option><option value="3">${esc(t("kanban.prio_low"))}</option></select></div>
-          <div class="si-field"><label>${esc(t("kanban.exception"))}${infoBtn()}</label>${infoBody(esc(t("kanban.need_approve_info")))}<label class="auto-learn" style="margin-top:8px"><input type="checkbox" id="knApprove"><span>${esc(t("kanban.need_approve"))}</span></label></div>
-        </div>
-        <div class="si-actions"><button class="s-btn" id="knSave">${esc(t("kanban.save"))}</button><button class="s-btn-ghost" id="knCancel">${esc(t("common.cancel"))}</button></div>
-      </div>
-      <div class="kn-layout" id="knOps">
-        <section class="kn-panel"><div class="kn-panel-head"><b style="color:var(--accent-ink)">${esc(t("kanban.kpi_attention"))}</b>
-          <span class="kn-head-right"><span id="knAttentionCount">0 ${esc(t("kanban.exceptions"))}</span>
-          <button class="kn-wipe" id="knWipeAttention" data-panel="attention">${esc(t("kanban.wipe"))}</button></span></div><div class="kn-list" id="knAttention"></div></section>
-        <section class="kn-panel"><div class="kn-panel-head"><b>${esc(t("kanban.p_active"))}</b><span id="knActiveCount">0 worker</span></div><div class="kn-list" id="knActive"></div></section>
-        <section class="kn-panel"><div class="kn-panel-head"><b>${esc(t("kanban.p_queue"))}</b><span id="knQueueCount">0 task</span></div><div class="kn-list" id="knQueue"></div></section>
-        <section class="kn-panel"><div class="kn-panel-head"><b>${esc(t("kanban.p_history"))}</b>
-          <span class="kn-head-right"><span>${esc(t("kanban.p_history_sub"))}</span>
-          <button class="kn-wipe" id="knWipeHistory" data-panel="history">${esc(t("kanban.wipe"))}</button></span></div><div class="kn-list" id="knHistory"></div></section>
-      </div>
-    </div>`;
-
-    // Portal lên document.body để drawer không bị cắt bởi vùng content có
-    // transform/overflow. Đây cũng bảo đảm nút đóng luôn nằm trong viewport.
-    const drawerPortal = document.createElement("div");
-    drawerPortal.id = "knDrawerPortal";
-    drawerPortal.innerHTML = `
-      <div class="kn-drawer-backdrop" id="knDrawerBackdrop"></div>
-      <aside class="kn-drawer" id="knDrawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="knDrawerTitle">
-        <div class="kn-drawer-head">
-          <b id="knDrawerTitle">${esc(t("kanban.detail"))}</b>
-          <button id="knDrawerClose" type="button" aria-label="${esc(t("kanban.close_detail"))}" title="${esc(t("kanban.close_esc"))}">×</button>
-        </div>
-        <div class="kn-drawer-body" id="knDrawerBody">${esc(t("common.loading"))}</div>
-      </aside>`;
-    document.body.appendChild(drawerPortal);
-    const drawer = drawerPortal.querySelector("#knDrawer");
-    const drawerBackdrop = drawerPortal.querySelector("#knDrawerBackdrop");
-    const drawerBody = drawerPortal.querySelector("#knDrawerBody");
-    const drawerTitle = drawerPortal.querySelector("#knDrawerTitle");
-    const closeDrawer = () => {
-      drawer.classList.remove("open");
-      drawerBackdrop.classList.remove("open");
-      drawer.setAttribute("aria-hidden", "true");
-    };
-    const openDrawer = () => {
-      drawer.classList.add("open");
-      drawerBackdrop.classList.add("open");
-      drawer.setAttribute("aria-hidden", "false");
-    };
-    const onDrawerKeydown = (event) => {
-      if (event.key === "Escape" && drawer.classList.contains("open")) closeDrawer();
-    };
-    document.addEventListener("keydown", onDrawerKeydown);
-    drawerPortal.querySelector("#knDrawerClose").onclick = closeDrawer;
-    drawerBackdrop.onclick = closeDrawer;
-    const cleanupDrawer = () => {
-      document.removeEventListener("keydown", onDrawerKeydown);
-      drawerPortal.remove();
-      if (window._javisKanbanDrawerCleanup === cleanupDrawer) {
-        delete window._javisKanbanDrawerCleanup;
-      }
-      if (window.JavisKanbanShow === showTask) delete window.JavisKanbanShow;
-    };
-    window._javisKanbanDrawerCleanup = cleanupDrawer;
-
-    const bf = () => { const f = new FormData(); f.append("brain", fbrain()); return f; };
-    const post = async (url, extra) => { const f = bf(); for (const k in (extra || {})) f.append(k, extra[k]); return (await fetch(url, { method: "POST", body: f })).json(); };
-
-    el.querySelector("#knAdd").onclick = () => { const b = el.querySelector("#knForm"); b.style.display = b.style.display === "none" ? "block" : "none"; };
-    el.querySelector("#knCancel").onclick = () => { el.querySelector("#knForm").style.display = "none"; };
-    el.querySelector("#knRefresh").onclick = () => load();
-    el.querySelector("#knStop").onclick = async () => { await post("/kanban/stop"); load(); };
-    el.querySelector("#knNudge").onclick = async () => { const b = el.querySelector("#knNudge"); b.disabled = true; await post("/kanban/nudge"); b.disabled = false; load(); };
-    el.querySelector("#knSave").onclick = async () => {
-      const title = el.querySelector("#knTitle").value.trim();
-      if (!title) { alert(t("kanban.need_title")); return; }
-      await post("/kanban/task", {
-        title, intent: el.querySelector("#knIntent").value.trim() || title,
-        route: el.querySelector("#knRoute").value, priority: el.querySelector("#knPrio").value,
-        needs_approval: el.querySelector("#knApprove").checked ? "1" : "0",
-      });
-      el.querySelector("#knTitle").value = ""; el.querySelector("#knIntent").value = "";
-      el.querySelector("#knForm").style.display = "none"; load();
-    };
-
-    function ago(ts) {
-      const sec = Math.max(0, Date.now() / 1000 - Number(ts || 0));
-      if (sec < 60) return t("kanban.ago_now");
-      if (sec < 3600) return t("kanban.ago_min", { n: Math.floor(sec / 60) });
-      if (sec < 86400) return t("kanban.ago_hour", { n: Math.floor(sec / 3600) });
-      return t("kanban.ago_day", { n: Math.floor(sec / 86400) });
-    }
-
-    // Câu hỏi việc đang chờ chủ trả lời (0.235.0), "" khi không có. Việc kẹt từ bản cũ chưa có sổ
-    // hỏi đáp thì câu hỏi chỉ còn trong block_reason; máy chủ vẫn nhận câu trả lời cho nó.
-    function pendingQuestion(t) {
-      if (t.status !== "blocked" || t.block_kind !== "needs_input") return "";
-      const qa = (t.metadata && Array.isArray(t.metadata.qa)) ? t.metadata.qa : [];
-      const last = qa[qa.length - 1];
-      return (last && !last.a) ? String(last.q || "") : String(t.block_reason || "");
-    }
-
-    function askBox(t) {
-      const q = pendingQuestion(t);
-      if (!q) return "";
-      return `<div class="kn-ask" data-ask="${esc(t.id)}">
-        <div class="kn-ask-q">${typeof ic === "function" ? ic("circle-help") : ""} ${esc(q)}</div>
-        <div class="kn-ask-row"><textarea class="kn-ask-input" rows="2" placeholder="${esc(window.t("kanban.answer_ph"))}"></textarea>
-        <button type="button" class="kn-ask-send">${esc(window.t("kanban.answer_send"))}</button></div>
-      </div>`;
-    }
-
-    function qaHistory(t) {
-      const qa = ((t.metadata && Array.isArray(t.metadata.qa)) ? t.metadata.qa : []).filter(x => x && x.a);
-      if (!qa.length) return "";
-      return `<div class="kn-detail-block"><h4>${esc(window.t("kanban.qa_title"))}</h4>${qa.map(x =>
-        `<div class="kn-qa"><div><b>${esc(window.t("kanban.qa_q"))}</b> ${esc(x.q || "")}</div><div><b>${esc(window.t("kanban.qa_a"))}</b> ${esc(x.a || "")}</div></div>`).join("")}</div>`;
-    }
-
-    function bindAskBoxes(scope) {
-      scope.querySelectorAll(".kn-ask[data-ask]").forEach(box => {
-        // Bấm vào ô trả lời không được mở ngăn kéo chi tiết của thẻ.
-        box.onclick = ev => ev.stopPropagation();
-        const input = box.querySelector(".kn-ask-input"), send = box.querySelector(".kn-ask-send");
-        send.onclick = async ev => {
-          ev.stopPropagation();
-          const answer = input.value.trim();
-          if (!answer) { input.focus(); return; }
-          send.disabled = true;
-          let r = null;
-          try { r = await post("/kanban/task/answer", { id: box.dataset.ask, answer }); } catch (e) {}
-          send.disabled = false;
-          if (!r || !r.ok) { alert((r && r.error) || t("kanban.cant_update")); return; }
-          closeDrawer();
-          await load();
-        };
-      });
-    }
-
-    function taskActions(t) {
-      const acts = [];
-      // Việc dừng lại vì CHƯA ĐƯỢC CẤP QUYỀN thao tác ra ngoài: nút đầu tiên phải là nút cấp
-      // quyền, và "Thử lại" thì BỎ ĐI. Thử lại ở đây chạy lại đúng nhánh chặn rồi chặn lại y
-      // hệt, kèm một tiếng chuông nữa - bày ra một cái nút không bao giờ dẫn tới đâu.
-      const canQuyen = t.status === "blocked" && t.block_kind === "capability";
-      if (canQuyen) acts.push(`<button data-act="grant" data-id="${esc(t.id)}">${esc(window.t("kanban.act_grant"))}</button>`);
-      if (t.status === "review") acts.push(`<button data-act="done" data-id="${esc(t.id)}">${CHECK_ICON} ${esc(window.t("kanban.act_approve"))}</button>`);
-      // Việc đang chờ câu trả lời: Thử lại chỉ chạy lại không kèm câu trả lời rồi hỏi y hệt, nên bỏ đi.
-      if (!canQuyen && (t.status === "blocked" || t.status === "review") && !pendingQuestion(t)) acts.push(`<button data-act="retry" data-id="${esc(t.id)}">↻ ${esc(window.t("kanban.act_retry"))}</button>`);
-      if (t.status === "running") acts.push(`<button data-act="cancel" data-id="${esc(t.id)}">${esc(window.t("kanban.act_stop"))}</button>`);
-      if (t.status !== "running") acts.push(`<button class="danger" data-act="archive" data-id="${esc(t.id)}">${esc(window.t("kanban.act_archive"))}</button>`);
-      return acts;
-    }
-
-    function taskHtml(t, area) {
-      const acts = taskActions(t);
-      const ask = askBox(t);
-      const reason = !ask && t.block_reason ? `<div class="kn-task-result" style="color:var(--red)">${esc(t.block_reason)}</div>` : "";
-      const result = !reason && t.result ? `<div class="kn-task-result">${esc(t.result.slice(0, 240))}</div>` : "";
-      return `<div class="kn-task" data-task="${esc(t.id)}">
-        <div class="kn-task-top"><div class="kn-task-title">${_prioIcon(t.priority)} ${esc(t.title)}</div><span class="kn-pill">${esc(_kstatus(t.status))}</span></div>
-        <div class="kn-task-meta"><span>${esc(t.capability || "auto")}</span><span>attempt ${Number(t.attempts || 0)}/${Number(t.max_attempts || 3)}</span><span>${ago(t.updated_at)}</span></div>
-        ${ask}${reason}${result}
-        ${acts.length ? `<div class="kn-actions">${acts.join("")}</div>` : ""}
-      </div>`;
-    }
-
-    function fillList(node, items, area) {
-      node.innerHTML = items.length ? items.map(x => taskHtml(x, area)).join("") : `<div class="kn-empty">${esc(area === "attention" ? t("kanban.empty_attention") : t("kanban.empty"))}</div>`;
-    }
-
-    async function doTaskAction(id, act) {
-      if (act === "archive" && !confirm(t("kanban.confirm_archive"))) return false;
-      // Cấp toàn quyền là cho việc TỰ THAO TÁC THẬT ra ngoài và không hoàn tác được, nên phải
-      // hỏi lại bằng đúng chữ nói ra hậu quả, không phải một câu "bạn chắc chứ".
-      if (act === "grant" && !confirm(t("kanban.confirm_grant"))) return false;
-      let result;
-      if (act === "retry") result = await post("/kanban/task/retry", { id });
-      else if (act === "grant") result = await post("/kanban/task/grant", { id });
-      else if (act === "cancel") result = await post("/kanban/task/cancel", { id });
-      else if (act === "archive") result = await post("/kanban/task/delete", { id });
-      else result = await post("/kanban/task/move", { id, status: act });
-      if (!result || !result.ok) {
-        alert((result && result.error) || t("kanban.cant_update"));
-        return false;
-      }
-      closeDrawer();
-      await load();
-      return true;
-    }
-
-    function bindActionButtons(scope) {
-      scope.querySelectorAll(".kn-actions button[data-act]").forEach(b => b.onclick = async ev => {
-        ev.stopPropagation();
-        b.disabled = true;
-        await doTaskAction(b.dataset.id, b.dataset.act);
-        b.disabled = false;
-      });
-    }
-
-    function bindActions() {
-      el.querySelectorAll(".kn-task[data-task]").forEach(row => row.onclick = () => showTask(row.dataset.task));
-      bindActionButtons(el);
-      bindAskBoxes(el);
-    }
-
-    // Xoá tất cả của một khu. Hai khu hai hậu quả khác nhau nên hỏi bằng hai câu khác nhau:
-    // khu Cần bạn xử lý chỉ dọn khỏi bảng (vẫn tra lại được), khu Lịch sử là xoá hẳn.
-    el.querySelectorAll(".kn-wipe").forEach(b => b.onclick = async () => {
-      const khu = b.dataset.panel;
-      if (!confirm(t(khu === "attention" ? "kanban.confirm_wipe_attention" : "kanban.confirm_wipe_history"))) return;
-      b.disabled = true;
-      const r = await post("/kanban/panel/clear", { panel: khu });
-      b.disabled = false;
-      if (!r || !r.ok) { alert((r && r.error) || t("kanban.cant_update")); return; }
-      await load();
-    });
-
-    // Voice V1: tool javis_ui (open_task) mở ngăn kéo việc qua cửa này (dashboard/ui-actions.js).
-    window.JavisKanbanShow = showTask;
-    async function showTask(id) {
-      openDrawer();
-      // window.t chứ KHÔNG phải t: dòng dưới khai `const t = d.task`, mà const có vùng chết -
-      // gọi t() ở đây là ReferenceError "Cannot access 't' before initialization" ngay câu lệnh
-      // đầu, tức bấm vào một thẻ việc thì ngăn kéo mở ra RỖNG và không bao giờ điền. Cả nhánh
-      // báo lỗi ngay dưới cũng chết theo nên không ai thấy vì sao.
-      drawerBody.innerHTML = esc(window.t("common.loading"));
-      let d = {}; try { d = await (await fetch(`/kanban/task/show?brain=${encodeURIComponent(fbrain())}&id=${encodeURIComponent(id)}`)).json(); } catch (e) { }
-      if (!d.ok) { drawerBody.innerHTML = `<span style="color:var(--red)">${esc(d.error || window.t("kanban.cant_load"))}</span>`; return; }
-      const t = d.task || {}, events = d.events || [], runs = d.runs || [];
-      const acts = taskActions(t);
-      drawerTitle.textContent = t.title || window.t("kanban.detail");
-      drawerBody.innerHTML = `
-        <div style="color:var(--text);white-space:pre-wrap">${esc(t.intent || "")}</div>
-        <div class="kn-task-meta" style="margin-top:10px"><span>${esc(_kstatus(t.status))}</span><span>${esc(t.capability || "auto")}</span><span>mode ${esc(t.execution_mode || "auto")}</span><span>${esc(window.t("kanban.prio_lc"))} ${Number(t.priority || 2)}</span></div>
-        ${acts.length ? `<div class="kn-actions" style="margin-top:14px">${acts.join("")}</div>` : ""}
-        ${pendingQuestion(t) ? `<div class="kn-detail-block"><h4>${esc(window.t("kanban.answer_title"))}${window.JavisInfo ? window.JavisInfo.btn(window.t("info.more")) : ""}</h4>${window.JavisInfo ? window.JavisInfo.body(esc(window.t("kanban.answer_info"))) : ""}${askBox(t)}</div>`
-          : (t.block_reason ? `<div class="kn-detail-block"><h4>${esc(window.t("kanban.blocked_reason"))}</h4><div style="color:var(--red)">${esc(t.block_reason)}</div></div>` : "")}
-        ${qaHistory(t)}
-        ${t.result ? `<div class="kn-detail-block"><h4>${esc(window.t("kanban.result"))}</h4><div style="white-space:pre-wrap">${esc(t.result)}</div></div>` : ""}
-        <div class="kn-detail-block"><h4>${esc(window.t("kanban.runs"))} (${runs.length})</h4>${runs.length ? runs.map(r => `<div class="kn-event"><b>${esc(r.status)}</b> · ${new Date(Number(r.started_at || 0) * 1000).toLocaleString()}${r.error ? `<div style="color:var(--red)">${esc(r.error)}</div>` : ""}</div>`).join("") : `<div class="dim">${esc(window.t("kanban.no_runs"))}</div>`}</div>
-        <div class="kn-detail-block"><h4>${esc(window.t("kanban.lifecycle"))}</h4>${events.length ? events.map(v => `<div class="kn-event"><b>${esc(v.event_type)}</b> · ${new Date(Number(v.created_at || 0) * 1000).toLocaleString()}<div>${esc(v.message || "")}</div></div>`).join("") : `<div class="dim">${esc(window.t("kanban.no_events"))}</div>`}</div>`;
-      bindActionButtons(drawerBody);
-      bindAskBoxes(drawerBody);
-    }
-
-    async function load() {
-      if (!el.isConnected || !el.querySelector("#knOps")) return;
-      let d = { operations: {}, orchestration: "off", counts: {}, dispatcher: {} };
-      try { d = await (await fetch(`/kanban?brain=${encodeURIComponent(fbrain())}`)).json(); } catch (e) { }
-      const ops = d.operations || {}, active = ops.active || [], attention = ops.attention || [], queue = ops.queue || [], history = ops.history || [];
-      const live = !!(d.dispatcher && d.dispatcher.running), dot = el.querySelector("#knLiveDot");
-      dot.classList.toggle("live", live); dot.classList.toggle("off", !live);
-      el.querySelector("#knLiveText").textContent = live ? t("kanban.disp_on", { n: Number(d.dispatcher.max_workers || 0) }) : t("kanban.disp_off");
-      el.querySelector("#knKpiActive").textContent = Number(d.dispatcher.active_workers || active.length);
-      el.querySelector("#knKpiQueue").textContent = queue.length;
-      el.querySelector("#knKpiAttention").textContent = attention.length;
-      el.querySelector("#knKpiDone").textContent = Number(d.completed_24h || 0);
-      el.querySelector("#knActiveCount").textContent = `${active.length} worker`;
-      el.querySelector("#knQueueCount").textContent = `${queue.length} task`;
-      el.querySelector("#knAttentionCount").textContent = `${attention.length} ${t("kanban.exceptions")}`;
-      const orch = el.querySelector("#knOrch");
-      orch.innerHTML = [["off", t("settings.tag_off")], ["manual", t("kanban.orch_manual")], ["auto", t("kanban.orch_auto")]]
-        .map(([v, l]) => `<button class="si-chip ${d.orchestration === v ? "sel" : ""}" data-orch="${v}">${esc(l)}</button>`).join("");
-      orch.querySelectorAll(".si-chip").forEach(c => c.onclick = async () => { await post("/kanban/orchestration", { mode: c.dataset.orch }); load(); });
-      fillList(el.querySelector("#knActive"), active, "active");
-      fillList(el.querySelector("#knQueue"), queue, "queue");
-      fillList(el.querySelector("#knAttention"), attention, "attention");
-      fillList(el.querySelector("#knHistory"), history.slice(0, 20), "history");
-      // Khu rỗng thì nút Xoá tất cả xám đi: bấm được một nút không xoá gì cả chỉ làm người ta
-      // nghi ngờ là nó có chạy hay không.
-      el.querySelector("#knWipeAttention").disabled = !attention.length;
-      el.querySelector("#knWipeHistory").disabled = !history.length;
-      bindActions();
-    }
-    load();
-    const poll = setInterval(() => {
-      if (!el.isConnected || !el.querySelector("#knOps")) {
-        clearInterval(poll);
-        cleanupDrawer();
-      }
-      else load();
-    }, 3000);
-  }
-
   async function freshSettings() {
     // Timeout 6s: nếu /settings chậm/treo thì KHÔNG để panel kẹt "Đang tải..." mãi - dùng cache cũ
     // (hoặc {}) để vẫn hiện providers/cấu hình ngay, refresh lần sau.
@@ -3606,7 +2637,7 @@
         <div class="cgrid">
           <div class="gcard">
             <div class="gcard-top"><span class="gcard-name">${esc(window.t("cs.ov_graph"))}</span><span class="gcard-tag">${gOn ? esc(window.t("cs.st_on_low")) : esc(window.t("cs.st_off_low"))}</span></div>
-            <div class="gcard-meta">${esc(window.t("cs.ov_graph_desc"))} ${isNarrow() ? esc(window.t("cs.ov_lite")) : ""}</div>
+            <div class="gcard-meta">${esc(window.t("cs.ov_graph_desc"))}</div>
             <div class="js-actions">
               <button class="gcard-btn ${gOn ? "ghost" : ""}" id="ovGraphToggle">${gOn ? esc(window.t("cs.ov_graph_off")) : esc(window.t("cs.ov_graph_on"))}</button>
             </div>
@@ -3755,7 +2786,7 @@
           const ph = s.state.phase, res = s.state.result;
           const stashNote = s.state.stashed ? ic("package") + " " + window.t("cs.ov_stashed") : "";
           renderProgress(ph, stashNote);
-          if (res === "success") { clearInterval(poll); st.innerHTML = OK_ICON + " " + esc(window.t("cs.upd_done_reload")); setTimeout(() => location.reload(), 1500); return; }
+          if (res === "success") { clearInterval(poll); st.innerHTML = OK_ICON + " " + esc(window.t("cs.upd_done_reload")); setTimeout(_taiLaiKhiSan, 1500); return; }
           if (res === "rolled_back") { clearInterval(poll); window.__javisUpdating = false; renderProgress("done", stashNote); st.innerHTML = "↩ " + esc(window.t("cs.upd_rb_a")) + " <b>" + esc(window.t("cs.upd_rb_b")) + "</b>. " + esc(window.t("cs.upd_see")) + " <code>update.log</code>."; verUpd.disabled = false; return; }
           if (res === "pull_failed" || res === "rollback_failed" || res === "error") {
             clearInterval(poll); window.__javisUpdating = false;
@@ -3769,7 +2800,7 @@
           const v = await (await fetch("/version", { cache: "no-store" })).json();
           const flipOk = (window._ovVerMode === "docker") || !(s && s.state && s.state.phase);
           if (flipOk && v && v.update_available === false && v.current && v.current !== oldCur) {
-            clearInterval(poll); st.innerHTML = OK_ICON + " " + esc(window.t("cs.upd_done_reload")); setTimeout(() => location.reload(), 1500); return;
+            clearInterval(poll); st.innerHTML = OK_ICON + " " + esc(window.t("cs.upd_done_reload")); setTimeout(_taiLaiKhiSan, 1500); return;
           }
         } catch (e) { /* server đang restart - chờ tiếp */ }
         if (waited >= UPD_WAIT_MS) {
@@ -4320,7 +3351,10 @@
     const bgCfg = R.background || { provider: "anthropic-cli", model: "", reasoning: "off" };
     const bgP = pById(bgCfg.provider) || {};
     const bgUse = R.bg_in_use || null;
-    const ui = el._ordUi || (el._ordUi = { showOff: false });
+    const ui = el._ordUi || (el._ordUi = { showOff: false, set: false });
+    // First visit with nothing signed in (owner, 2026-10-29): the connect list comes first and open. Once the owner
+    // folds or opens it, that choice wins.
+    const showOff = ui.set ? ui.showOff : !connList.length;
 
     const KEYFIELD = { "openrouter": "openrouter_key", "anthropic-api": "anthropic_api_key", "openai": "openai_api_key", "gemini": "gemini_api_key", "groq": "groq_api_key", "deepseek": "deepseek_api_key", "ollama": "ollama_key", "openai-compat": "openai_compat_key", "anthropic-compat": "anthropic_compat_key" };
     // ---- Usage order cards (0.351.0). `ord` = {idx} for a card in the order, null for a card still to connect. ----
@@ -4652,13 +3686,18 @@
     const bgLine = !bgUse ? `<div class="aux-note warn">${WARN_ICON} ${esc(t("models.bg_none"))}</div>`
       : bgUse.step !== "background" ? `<div class="aux-note">${esc(t("models.bg_using", { bg: bgName,
           dung: (useP.label || bgUse.provider) + " · " + (bgUse.model || defName(bgUse.provider)) }))}</div>` : "";
+    const moreHtml = offList.length ? `<div class="cview-section${connList.length ? "" : " ord-first"}">
+        ${connList.length ? "" : `<div class="prov-note warn">${WARN_ICON} ${esc(t("models.ord_empty"))}</div>`}
+        <button type="button" class="ord-more" id="ordMore" aria-expanded="${showOff ? "true" : "false"}">＋ ${esc(t("models.ord_more", { n: offList.length }))}</button>
+        <div class="prov-list ord-off" id="ordOff" ${showOff ? "" : "hidden"}>${offList.map(p => provCard(p, null)).join("")}</div>
+      </div>` : "";
     el.innerHTML = `
-      <div class="cview-section">
+      ${connList.length ? "" : moreHtml}
+      ${connList.length ? `<div class="cview-section">
         <h3>◆ ${esc(t("models.h_order"))} <span style="opacity:.5">${esc(t("models.h_order_sub"))}</span>${infoBtn()}</h3>
         ${infoBody(esc(t("models.order_note")))}
         <div class="prov-list ord-list">${connList.map((p, i) => (i ? swapRow(i) : "") + provCard(p, { idx: i })).join("")}</div>
-        ${connList.length ? "" : `<div class="prov-note warn">${WARN_ICON} ${esc(t("models.ord_empty"))}</div>`}
-      </div>
+      </div>` : ""}
       <div class="cview-section">
         <h3>◆ ${esc(t("models.h_aux"))} <span style="opacity:.5">${esc(t("models.h_aux_sub"))}</span>${infoBtn()}</h3>
         ${infoBody(esc(t("models.bg_note")))}
@@ -4677,10 +3716,7 @@
           ${bgLine}
         </div>
       </div>
-      ${offList.length ? `<div class="cview-section">
-        <button type="button" class="ord-more" id="ordMore" aria-expanded="${ui.showOff ? "true" : "false"}">＋ ${esc(t("models.ord_more", { n: offList.length }))}</button>
-        <div class="prov-list ord-off" id="ordOff" ${ui.showOff ? "" : "hidden"}>${offList.map(p => provCard(p, null)).join("")}</div>
-      </div>` : ""}`;
+      ${connList.length ? moreHtml : ""}`;
 
     bindOrderCards(el, { order, connList, prof, accts, bgCfg, effName, again: () => renderModelsCloudTab(el) });
     // Nguồn xác thực của gói Claude Code. Vẽ lại cả trang sau khi lưu vì cảnh báo phụ thuộc
@@ -5143,6 +4179,7 @@
       const box = el.querySelector("#ordOff");
       box.hidden = !box.hidden;
       el._ordUi.showOff = !box.hidden;
+      el._ordUi.set = true;
       more.setAttribute("aria-expanded", String(!box.hidden));
     };
 
@@ -6062,6 +5099,7 @@
   // Open the consent screen of a connector's companion store pack. Returns what `caiGoiKho` returned,
   // or "" when there is nothing to offer. Never installs anything by itself.
   async function moiGoiDiKem(el, pack) {
+    if (pack && !window.JavisPacks && window.JavisNapCham) await window.JavisNapCham.cho("packs");   // nạp chậm, 0.417.0
     if (!pack || !window.JavisPacks || typeof window.JavisPacks.caiGoiKho !== "function") return "";
     return window.JavisPacks.caiGoiKho(pack, { batSan: true, sauKhiCai: () => renderConnect(el) });
   }
@@ -6762,6 +5800,7 @@
     el.querySelectorAll("[data-coreoff]").forEach(b => b.onclick = async (ev) => {
       ev.stopPropagation();
       const con = byId[b.dataset.coreoff] || {};
+      if (!window.JavisPacks && window.JavisNapCham) await window.JavisNapCham.cho("packs");   // nạp chậm, 0.417.0
       if (!window.JavisPacks || !window.JavisPacks.goApp) { alert(window.t("cs.cn_reload_retry")); return; }
       const r = await window.JavisPacks.goApp(con.name || b.dataset.coreoff, b.dataset.coreoff);
       if (r.ok) renderConnect(el);
@@ -9385,6 +8424,8 @@
   let _vtWired = false;        // đã gắn handler search/toolbar chưa
   let _vtIndex = null;         // chỉ mục file toàn vault (crawl client) - cho tìm theo Tên không cần server restart
   let _neSaveFn = null;        // hàm lưu của editor đang mở (cho Ctrl+S), trả true nếu lưu được
+  let _nePz = null;            // zoom and pan of a picture open in the editor (pan-zoom.js), dropped on the next open
+  function _neDropPz() { if (_nePz) { try { _nePz.destroy(); } catch (e) {} _nePz = null; } }
   let _neOpenRel = "";         // file đang mở trong trình sửa (đường dẫn theo TRẦN DUYỆT)
   let _neLayNoiDung = null;    // () -> nội dung ĐANG soạn (markdown nếu là .md ở chế độ Sửa)
   let _neGocText = null;       // nội dung lúc VỪA MỞ, để biết có sửa gì chưa (xem _neCoSuaChua)
@@ -10068,6 +9109,7 @@
   function closeNote() {
     _neHideLocationSide();
     const ed = document.getElementById("noteEditor"); if (!ed) return;
+    _neDropPz();
     ed.hidden = true; ed.classList.remove("ne-full"); _neSyncFull();
     // Đóng trình sửa ở trang Trò chuyện = trả chỗ lại cho khung chat. Không trả thì khung chat
     // vẫn bị ẩn và người dùng nhìn vào một trang trống, tưởng chat hỏng.
@@ -10504,10 +9546,17 @@
     try { if (window.__javisGraph && window.__javisGraph.pause) window.__javisGraph.pause(); } catch (e) { }
     document.getElementById("neTitle").innerHTML = `<span class="vt-ico">${_fileIcon(ext)}</span>${esc(it.name || rel)}`;
     const actions = document.getElementById("neActions"); const body = document.getElementById("neBody");
+    _neDropPz();
     actions.innerHTML = ""; body.innerHTML = ""; body.className = "ne-body"; _neSaveFn = null;
 
     if (VT_IMG_EXTS.includes(ext)) {
-      body.innerHTML = `<div class="ne-img"><img src="${_vtRaw(rel)}" alt="${esc(it.name || "")}"></div>`;
+      body.innerHTML = `<div class="ne-img"><img src="${_vtRaw(rel)}" alt="${esc(it.name || "")}" draggable="false"></div>`;
+      // 0.405.0: zoom and pan (pan-zoom.js) once the picture knows its size; the page itself cannot pinch-zoom.
+      const pic = body.querySelector(".ne-img img");
+      pic.onload = () => {
+        if (!window.JavisPanZoom || !pic.isConnected || !pic.naturalWidth) return;
+        _nePz = window.JavisPanZoom.attach(pic.parentNode, pic, { w: pic.naturalWidth, h: pic.naturalHeight });
+      };
       _neCommonBtns(actions, rel, it); _vtMarkActive(null); return;
     }
     // .pdf: trình duyệt tự đọc được, nên xem NGAY tại chỗ thay vì mời tải về. Popup cũ của trang
@@ -10732,8 +9781,12 @@
     if (_eb) _eb.addEventListener("click", () => navigateTo("models"));
     const ver = document.getElementById("railVersion");
     if (ver) {
-      ver.textContent = "v" + APP_VERSION;   // hiện tạm, thay ngay bằng phiên bản thật từ server
-      fetch("/version").then(r => r.json()).then(d => { if (d && d.current) ver.textContent = "v" + d.current; }).catch(() => { });
+      // Hiện tạm, thay ngay bằng phiên bản thật từ server. Số tạm lấy từ khối javis-fresh mà index.html (luôn mới) mang
+      // theo: /version mà trượt (máy chủ đang khởi động) thì vẫn đúng số, không phải con số dự phòng cũ v0.4.3 như ảnh khách.
+      let verTam = APP_VERSION;
+      try { verTam = JSON.parse(document.getElementById("javis-fresh").textContent).version || APP_VERSION; } catch (e) {}
+      ver.textContent = "v" + verTam;
+      fetch("/version").then(r => r.json()).then(d => { if (d && d.current) ver.textContent = "v" + d.current; }).catch(() => {});
     }
     // Theo dõi Studio mở/đóng → bật/tắt graph theo
     const st = document.getElementById("studio");

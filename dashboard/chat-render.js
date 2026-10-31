@@ -1020,6 +1020,7 @@
     if (!panel) return;
     panel.classList.remove("open");
     document.body.classList.remove("jv-artpanel-open");
+    dropZoom();
     if (elBody) elBody.innerHTML = "";   // don iframe/srcdoc
     curArt = null;
   }
@@ -1033,6 +1034,7 @@
   }
   function renderTab() {
     var art = curArt; if (!art || !elBody) return;
+    dropZoom();
     if (curTab === "code" || art.type === "code") {
       // SUA DUOC (chu repo bao 29/09: "mo file khong co cho edit"). Van to mau nhu cu; sua
       // xong thi doc lai bang textContent, nen cac <span> to mau bi xe le khong anh huong gi.
@@ -1057,17 +1059,50 @@
       return;
     }
     if (art.type === "svg") {
-      elBody.innerHTML = "";
-      elBody.appendChild(frame("",   // sandbox rong = KHONG chay script trong svg
-        '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%;display:flex;' +
-        "align-items:center;justify-content:center;background:#fff}svg{max-width:100%;max-height:100%}</style>" + art.code));
+      // 0.405.0: an <img> of the svg instead of a sandboxed iframe, so it zooms and pans (owner, 2026-10-29: "cannot
+      // zoom"). An <img> never runs scripts inside the svg, the same guarantee the empty sandbox gave.
+      elBody.innerHTML = '<div class="jv-ap-svg"></div>';
+      var box = elBody.firstChild;
+      var img = document.createElement("img");
+      img.alt = "";
+      img.draggable = false;
+      var nat = svgCodeSize(art.code);
+      try { img.src = URL.createObjectURL(new Blob([art.code], { type: "image/svg+xml" })); } catch (e) { return; }
+      box.appendChild(img);
+      img.onload = function () {
+        try { URL.revokeObjectURL(img.src); } catch (e) {}
+        if (curArt !== art) return;
+        if (!nat) nat = { w: img.naturalWidth || 800, h: img.naturalHeight || 600 };
+        zoomOn(box, img, nat);
+      };
       return;
     }
     if (art.type === "mermaid") {
       elBody.innerHTML = '<div class="jv-ap-mermaid">' + esc(tw("crender.mm_drawing")) + "</div>";
-      renderMermaid(art.code, elBody.querySelector(".jv-ap-mermaid"));
+      renderMermaid(art.code, elBody.querySelector(".jv-ap-mermaid"), function (host) {
+        var svg = host.querySelector("svg");
+        if (svg && curArt === art && window.JavisPanZoom) zoomOn(host, svg, window.JavisPanZoom.svgSize(svg));
+      });
       return;
     }
+  }
+  // Zoom and pan on what the viewer shows (pan-zoom.js). One at a time: a new tab or a closed panel drops the old one.
+  var curPz = null;
+  function zoomOn(box, content, nat) {
+    dropZoom();
+    if (window.JavisPanZoom) curPz = window.JavisPanZoom.attach(box, content, nat);
+  }
+  function dropZoom() { if (curPz) { try { curPz.destroy(); } catch (e) {} curPz = null; } }
+  // Natural size from the svg text (viewBox, else width/height), or null to read it off the loaded <img>.
+  function svgCodeSize(code) {
+    try {
+      var svg = new DOMParser().parseFromString(code, "image/svg+xml").documentElement;
+      var vb = (svg.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number);
+      if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) return { w: vb[2], h: vb[3] };
+      var w = parseFloat(svg.getAttribute("width")), h = parseFloat(svg.getAttribute("height"));
+      if (w > 0 && h > 0) return { w: w, h: h };
+    } catch (e) {}
+    return null;
   }
   function onPanelClick(e) {
     // Bam vao chinh LOP PHU (ngoai hop) la dong. An toan tuyet doi o day: khung nay chi de
@@ -1140,7 +1175,7 @@
     s.onerror = function () { mmState = 3; var q = mmQueue; mmQueue = []; q.forEach(function (c) { c(false); }); };
     document.head.appendChild(s);
   }
-  function renderMermaid(code, host) {
+  function renderMermaid(code, host, done) {
     if (!host) return;
     loadMermaid(function (ok) {
       if (!ok || !window.mermaid) {
@@ -1150,7 +1185,7 @@
       }
       var id = "jvmm" + (++mmSeq);
       try {
-        window.mermaid.render(id, code).then(function (res) { host.innerHTML = res.svg; })
+        window.mermaid.render(id, code).then(function (res) { host.innerHTML = res.svg; if (done) done(host); })
           .catch(function () { host.innerHTML = '<div class="jv-ap-note">' + esc(tw("crender.mm_bad")) + '</div><pre class="code-block">' + esc(code) + "</pre>"; });
       } catch (e) {
         host.innerHTML = '<div class="jv-ap-note">' + esc(tw("crender.mm_bad")) + '</div><pre class="code-block">' + esc(code) + "</pre>";
@@ -1351,8 +1386,44 @@
       y: Math.max(-maxY, Math.min(maxY, state.y)) };
   }
 
+  // iPhone (0.369.0, chủ repo 28/10/2026: "ấn nút tải về trên điện thoại thì nó đang mở 1 trang mới chứ không tải được
+  // ảnh"). iOS không cho trang web tải ảnh thẳng vào máy; đường lưu ảnh của iOS là bảng chia sẻ, có nút "Lưu hình ảnh".
+  // Bảng đó chỉ mở được NGAY trong cú bấm (đợi mạng xong mới gọi là iOS từ chối), nên ảnh đang xem được tải sẵn thành
+  // File từ lúc hiện lên; bấm Tải về là mở bảng chia sẻ liền. Chưa tải xong hay máy không chia sẻ được thì như cũ: mở ảnh
+  // ở cửa sổ mới để bấm giữ, "Lưu vào Ảnh".
+  var _lbTep = null;   // {url, file} của ảnh đang xem, chỉ trên iOS
+  function _lbDuoi(mime) {
+    var m = /^image\/(png|jpe?g|gif|webp|heic|bmp)/i.exec(mime || "");
+    return m ? "." + m[1].toLowerCase().replace("jpeg", "jpg") : "";
+  }
+  function _lbTenTep(ten, mime) {
+    ten = String(ten || "").split("?")[0] || "anh";
+    return /\.[a-z0-9]{2,5}$/i.test(ten) ? ten : ten + (_lbDuoi(mime) || ".jpg");
+  }
+  function _lbChuanBiTep(url, ten) {
+    _lbTep = null;
+    if (!url || !laIOS() || typeof fetch !== "function" || typeof File !== "function" || !navigator.canShare) return;
+    try {
+      fetch(url, { credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.blob();
+      }).then(function (b) {
+        if (_lbUrl !== url || !b || !b.size) return;          // đã sang ảnh khác
+        var f = new File([b], _lbTenTep(ten, b.type), { type: b.type || "image/jpeg" });
+        if (navigator.canShare({ files: [f] })) _lbTep = { url: url, file: f };
+      }).catch(function () {});
+    } catch (e) {}
+  }
   function _lbTaiVe() {
     if (!_lbUrl) return;
+    if (laIOS() && _lbTep && _lbTep.url === _lbUrl && navigator.share) {
+      var tep = _lbTep.file, xem = _lbUrl;
+      navigator.share({ files: [tep] }).catch(function (err) {
+        if (err && err.name === "AbortError") return;        // người dùng tự đóng bảng chia sẻ
+        window.open(xem, "_blank");
+      });
+      return;
+    }
     var a = document.createElement("a");
     // /files/raw?...&dl=1 la duong SERVER ep tai kem dung ten file (ke ca ten tieng Viet).
     // Anh ngoai vault khong co duong do -> dua thuoc tinh download, cung lam gi hon duoc.
@@ -1369,7 +1440,7 @@
   // dung cai vua mo.
   function _goLopPhu() {
     if (!_lb) return;
-    _lb.remove(); _lb = null; _lbUrl = ""; _lbTen = ""; _lbDs = []; _lbI = 0; _lbChuyen = null;
+    _lb.remove(); _lb = null; _lbUrl = ""; _lbTen = ""; _lbDs = []; _lbI = 0; _lbChuyen = null; _lbTep = null;
     document.body.classList.remove("jv-lb-open");
   }
   function dongLightbox() {
@@ -1480,6 +1551,7 @@
       } catch (e) {}
       img.src = _lbUrl;
       img.alt = _lbTen;
+      _lbChuanBiTep(_lbUrl, _lbTen);
       // The next and previous pictures load now, so a swipe shows them at once.
       [i - 1, i + 1].forEach(function (k) {
         if (k < 0 || k >= _lbDs.length) return;
@@ -1825,7 +1897,7 @@
       // Xuat them de test chay THAT chuoi du phong cua anh (xem ungVienAnh / imgGone).
       ungVienAnh: ungVienAnh, ghepDuong: ghepDuong, imgGone: imgGone,
       lightboxPinchStep: lightboxPinchStep, lightboxClampPan: lightboxClampPan,
-      lightboxGalleryStep: lightboxGalleryStep, lightboxSwipe: lightboxSwipe,
+      lightboxGalleryStep: lightboxGalleryStep, lightboxSwipe: lightboxSwipe, lightboxFileName: _lbTenTep,
       NAV_PAGE_MAP: NAV_PAGE_MAP,
       navPageIdFromHref: navPageIdFromHref,
       navLinkHtml: navLinkHtml,

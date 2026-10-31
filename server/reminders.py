@@ -7,7 +7,7 @@ git-backed) + để scheduler nền (main._scheduler_loop, tick 30s) đánh th�
   - mode "notify" (mặc định): tới giờ bắn thẳng tin nhắc qua Telegram cho ĐÚNG người đã đặt.
   - mode "task"            : tới giờ chạy engine làm việc đã hẹn rồi gửi kết quả về Telegram.
                              Quyền theo `muc_quyen` (suggest | auto | full, mặc định full).
-                             Kết quả MỞ ĐẦU bằng [SILENT] → im lặng, vẫn lưu vào bản ghi.
+                             Kết quả MỞ ĐẦU hoặc KẾT THÚC bằng [SILENT] → im lặng, vẫn lưu vào bản ghi.
   - mode "script"          : job KHÔNG cần LLM (rẻ, để giám sát) - chạy script có sẵn trong
                              <brain>/Javis/scripts, đẩy stdout về Telegram; exit≠0 → cảnh báo lỗi,
                              stdout rỗng hoặc có cờ [SILENT] → im lặng (port ý no_agent của Hermes).
@@ -38,6 +38,7 @@ Module KHÔNG import main (tránh vòng lặp import): mọi helper tiêm qua Re
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import os
 import re
@@ -55,6 +56,7 @@ import channel_context  # bóc khối JAVIS_* trước khi gửi Telegram - kên
 import cron_util
 import localefmt
 import once_ledger  # outside actions of one firing run once, across retries (0.238.0)
+import work_log  # one line per finished run, for the Tasks page stats (0.428.0)
 import turn_context
 import winproc  # lệnh con câm lặng trên Windows
 from fastapi import APIRouter, Body, Form, Query
@@ -70,8 +72,7 @@ def _nhan_kw(fn, ten: str) -> bool:
         return False
     return any(p.name == ten or p.kind is p.VAR_KEYWORD for p in ps)
 import aux_engine  # engine viec nen theo model phu nguoi dung chon
-from claude_cli import _empty_mcp_file, claude_engine
-
+from claude_cli import _empty_mcp_file, cancel_all, claude_engine
 
 # Múi giờ để tính giờ nhắc hẹn. Đọc từ cấu hình, KHÔNG còn ghim Việt Nam.
 #
@@ -115,6 +116,18 @@ def muc_quyen_cua(rem: dict) -> str:
 MIN_LEAD_S = 3                 # tối thiểu 3s trong tương lai (tránh bắn ngay/quá khứ)
 MAX_DELAY_DAYS = 366           # trần: không hẹn quá ~1 năm (chỉ áp cho hẹn 1-lần, không áp cron)
 MAX_FIRE_PER_TICK = 6          # trần số nhắc bắn mỗi nhịp (chống dồn spam khi server vừa bật lại)
+# The reminder a task run belongs to, so its engine is tagged "reminder:<id>" and POST /reminders/stop
+# can end that one run (a context variable, not a parameter: test stubs replace _run_task).
+_RUN_RID: contextvars.ContextVar = contextvars.ContextVar("reminder_run_id", default="")
+
+
+def _engine_tag() -> str:
+    rid = _RUN_RID.get()
+    return f"reminder:{rid}" if rid else "reminder"
+
+
+# A reminder that still has a schedule: "paused" (0.422.0) is skipped by the tick but kept.
+LIVE_STATUSES = ("pending", "paused")
 MAX_KEEP = 500                 # trần số bản ghi giữ lại mỗi brain
 SCRIPT_TIMEOUT_S = 120         # trần thời gian chạy 1 job script
 SCRIPT_OUT_CAP = 3500          # trần ký tự stdout đẩy về Telegram
@@ -180,31 +193,6 @@ _SCRIPT_RUNNERS = {
 
 
 
-def morning_brief_template() -> dict:
-    """Ready-made "Morning brief" for the recurring-work page (0.222.0). Never created on its own:
-    the page pre-fills the form with it and the person presses Save, so the usual checks still run
-    (no report channel -> can_force). Read-and-report level: a brief only reads and summarises."""
-    return {
-        "id": "morning_brief",
-        "label": localefmt.chu("Bản tin buổi sáng", "Morning brief"),
-        "cron": "0 7 * * *",
-        "mode": "task",
-        "muc_quyen": "suggest",
-        "text": localefmt.chu(
-            "Soạn bản tin buổi sáng ngắn cho tôi, tối đa 10 dòng: "
-            "1) chào và nói giờ hiện tại; "
-            "2) lịch hôm nay nếu đã kết nối lịch (Google Calendar hay tương tự), chưa kết nối thì bỏ mục này; "
-            "3) nhắc ngắn chuyện hôm qua đã bàn, đọc từ memory/conversations/ của ngày hôm qua nếu có; "
-            "4) vài tin đáng chú ý trong lĩnh vực của tôi nếu có công cụ tìm kiếm web, không có thì bỏ. "
-            "Không bịa số liệu: mục nào không có nguồn thì bỏ qua.",
-            "Write me a short morning brief, 10 lines at most: "
-            "1) greet me and say the current time; "
-            "2) today's calendar if a calendar is connected (Google Calendar or similar), otherwise skip it; "
-            "3) a short recap of what we discussed yesterday, from yesterday's file in memory/conversations/ if there is one; "
-            "4) a few notable news items in my field if a web search tool is available, otherwise skip it. "
-            "Do not invent numbers: skip any part that has no source."),
-    }
-
 class NotifyNotReady(ValueError):
     """Chưa có đường gửi kết quả (bot Telegram chưa bật / chưa có Chat ID).
 
@@ -228,14 +216,13 @@ SILENT_MARK = "[SILENT]"
 
 
 def _is_silent_task_result(body: str) -> bool:
-    """True when a task reminder's answer opens with the [SILENT] flag.
+    """True when a task reminder's answer opens or closes with the [SILENT] flag.
 
     Script jobs go quiet on [SILENT] anywhere in stdout. A model answer is prose that may
     mention the flag while explaining something, so a task only counts as silent when the
-    answer STARTS with it (after control blocks, whitespace and markdown emphasis).
+    flag OPENS or CLOSES the answer (0.408.0, `channel_context.is_silent_report`).
     """
-    text = channel_context.strip_control_blocks(body or "").lstrip(" \t\r\n`*_>")
-    return text.startswith(SILENT_MARK)
+    return channel_context.is_silent_report(body)
 
 
 def _now() -> float:
@@ -369,6 +356,8 @@ class RemindersFeature:
         # không bắn lại cùng một nhắc và để tắt máy chủ đợi được chúng.
         self._dang_chay: set = set()
         self._viec_nen: set = set()
+        # Ids the owner stopped mid-run (POST /reminders/stop): _fire ends that run quietly.
+        self._stopped: set = set()
         self.router = self._make_router()
 
     # ── store (JSON trong brain) ──
@@ -434,7 +423,7 @@ class RemindersFeature:
     def _create(self, brain: str, text: str, *, delay_min=None, at=None, due_at=None,
                 chat_id="", mode="notify", repeat_min=0, label="", cron=None, script="",
                 created_by="user", allow_no_channel=False, muc_quyen=None,
-                remember_last=False, speak=False, call=False) -> dict:
+                remember_last=False, speak=False, call=False, bot_id="") -> dict:
         mode = mode if mode in VALID_MODE else "notify"
         mq = str(muc_quyen or "").strip().lower()
         mq = mq if mq in VALID_MUC_QUYEN else MUC_QUYEN_MAC_DINH
@@ -480,14 +469,18 @@ class RemindersFeature:
             "created_by": created_by, "created_at": _now(),
             "fired_at": 0.0, "result": "", "error": "",
         }
+        # 0.429.0: made in a dedicated chatbot's turn -> the Tasks page shows it under that bot's assistant.
+        bid = str(bot_id or "").strip()
+        if re.fullmatch(r"bot_[A-Za-z0-9_-]{1,64}", bid):
+            rem["bot_id"] = bid
         data = self._load(brain)
         data.setdefault("reminders", []).append(rem)
         # Giữ gọn: quá trần thì bỏ bớt bản ghi đã đóng (pending luôn được giữ)
         rems = data["reminders"]
         if len(rems) > MAX_KEEP:
-            rems.sort(key=lambda r: (r.get("status") != "pending", float(r.get("created_at", 0))))
-            data["reminders"] = ([r for r in rems if r.get("status") == "pending"]
-                                 + [r for r in rems if r.get("status") != "pending"])[:MAX_KEEP]
+            rems.sort(key=lambda r: (r.get("status") not in LIVE_STATUSES, float(r.get("created_at", 0))))
+            data["reminders"] = ([r for r in rems if r.get("status") in LIVE_STATUSES]
+                                 + [r for r in rems if r.get("status") not in LIVE_STATUSES])[:MAX_KEEP]
         self._save(brain, data)
         self._register(brain)
         return rem
@@ -508,10 +501,14 @@ class RemindersFeature:
                 "remember_last": bool(r.get("remember_last")),
                 "speak": bool(r.get("speak")),
                 "call": bool(r.get("call")),
+                # 0.429.0: who made it. bot_id names the chatbot whose turn created it ("" = the owner or Javis Core).
+                "created_by": r.get("created_by", ""), "bot_id": r.get("bot_id", ""),
                 "next_runs": next_runs(cron) if cron and r.get("status") == "pending" else [],
                 "result": (r.get("result") or "")[:500], "error": r.get("error", ""),
                 # A pending network retry (code 26): which retry the next run is, out of how many.
-                "retry_count": int(r.get("retry_count") or 0), "retry_max": len(RETRY_DELAYS_S)}
+                "retry_count": int(r.get("retry_count") or 0), "retry_max": len(RETRY_DELAYS_S),
+                # The Tasks page (0.422.0) turns its run button into a stop button while this is true.
+                "running": r.get("id") in self._dang_chay}
 
     def update(self, brain: str, rid: str, *, text=None, label=None, mode=None, chat_id=None,
                cron=None, at=None, delay_min=None, due_at=None, muc_quyen=None,
@@ -523,7 +520,7 @@ class RemindersFeature:
         cur = next((r for r in data.get("reminders", []) if r.get("id") == rid), None)
         if cur is None:
             return {"ok": False, "error": localefmt.chu("không thấy nhắc hẹn này", "reminder not found")}
-        if cur.get("status") != "pending":
+        if cur.get("status") not in LIVE_STATUSES:
             return {"ok": False, "error": localefmt.chu("chỉ sửa được nhắc đang chờ (mục đã xong/đã huỷ thì tạo mới)",
                                                         "only pending reminders can be edited (create a new one for done/cancelled items)")}
         if text not in (None, ""):
@@ -596,12 +593,85 @@ class RemindersFeature:
         data = self._load(brain)
         hit = False
         for r in data.get("reminders", []):
-            if r.get("id") == rid and r.get("status") == "pending":
+            if r.get("id") == rid and r.get("status") in LIVE_STATUSES:
                 r["status"] = "cancelled"
                 hit = True
         if hit:
             self._save(brain, data)
         return hit
+
+    def live_views(self, brain: str) -> list:
+        """Pending AND paused reminders of one brain, by next run (the Tasks page lists both;
+        a paused one shows its switch off instead of vanishing)."""
+        rems = [r for r in self._load(brain).get("reminders", []) if r.get("status") in LIVE_STATUSES]
+        rems.sort(key=lambda r: float(r.get("due_at") or 0))
+        return [self._view(r) for r in rems]
+
+    def _find(self, data: dict, rid: str):
+        return next((r for r in data.get("reminders", []) if r.get("id") == rid), None)
+
+    def pause(self, brain: str, rid: str, paused: bool) -> dict:
+        """Pause (status "paused": the tick skips it) or resume a reminder. Resuming moves a due
+        time that went by while paused to the next regular run from now, so it does not fire at
+        once for a slot the user chose to skip; a one-shot whose time passed fires on the next tick."""
+        data = self._load(brain)
+        cur = self._find(data, rid)
+        if cur is None or cur.get("status") not in LIVE_STATUSES:
+            return {"ok": False, "error": localefmt.chu("không thấy nhắc hẹn đang chờ", "no live reminder with that id")}
+        if paused:
+            cur["status"] = "paused"
+        else:
+            cur["status"] = "pending"
+            now = _now()
+            if float(cur.get("due_at") or 0) <= now:
+                nxt = self._next_regular(cur, now)
+                if nxt:
+                    cur["due_at"] = nxt
+        self._save(brain, data)
+        return {"ok": True, "reminder": self._view(cur)}
+
+    def skip(self, brain: str, rid: str) -> dict:
+        """Skip the next run of a repeating reminder: its due time moves to the run after it."""
+        data = self._load(brain)
+        cur = self._find(data, rid)
+        if cur is None or cur.get("status") not in LIVE_STATUSES:
+            return {"ok": False, "error": localefmt.chu("không thấy nhắc hẹn đang chờ", "no live reminder with that id")}
+        due = float(cur.get("due_at") or _now())
+        nxt = self._next_regular(dict(cur, retry_of=None, due_at=due), max(due, _now()))
+        if not nxt:
+            return {"ok": False, "error": localefmt.chu("nhắc một lần không có lần sau để bỏ qua, hãy huỷ", "a one-time reminder has no next run to skip; cancel it instead")}
+        cur["due_at"] = nxt
+        cur.pop("retry_of", None)
+        cur.pop("retry_count", None)
+        self._save(brain, data)
+        return {"ok": True, "reminder": self._view(cur)}
+
+    async def run_now(self, brain: str, rid: str) -> dict:
+        """Fire a live reminder now, outside its schedule. The copy carries `due_at = now` as its
+        slot, so the once-only ledger of the next scheduled run stays untouched and a repeating
+        schedule is recomputed from this run."""
+        async with self._io:
+            cur = self._find(self._load(brain), rid)
+        if cur is None or cur.get("status") not in LIVE_STATUSES:
+            return {"ok": False, "error": localefmt.chu("không thấy nhắc hẹn đang chờ", "no live reminder with that id")}
+        if rid in self._dang_chay:
+            return {"ok": False, "error": localefmt.chu("nhắc này đang chạy", "this reminder is already running")}
+        rem = dict(cur, due_at=_now())
+        rem.pop("retry_of", None)
+        rem.pop("retry_count", None)
+        if rem.get("mode") in ("task", "script"):
+            self._chay_nen(brain, rem)
+        else:
+            await self._fire(brain, rem)
+        return {"ok": True}
+
+    def stop(self, rid: str) -> dict:
+        """Stop the run of one reminder that is going now. That run is not retried and posts
+        nothing; a repeating reminder keeps its schedule, a one-shot one ends as cancelled."""
+        if rid not in self._dang_chay:
+            return {"ok": False, "error": localefmt.chu("nhắc này không đang chạy", "this reminder is not running")}
+        self._stopped.add(rid)
+        return {"ok": True, "cancelled": cancel_all(f"reminder:{rid}")}
 
     def pending_views(self, brain: str) -> list:
         """View các nhắc ĐANG CHỜ của 1 brain, sắp theo giờ tới. Dùng cho trang Việc gộp mọi
@@ -727,6 +797,8 @@ class RemindersFeature:
         attempt = int(rem.get("retry_count") or 0)
         retry_at = 0.0           # > 0: this failed run is tried again at that time
         run_failed = False       # the run itself produced nothing usable (set per mode below)
+        stopped = False          # the owner stopped this run (POST /reminders/stop)
+        t0 = _now()
         if mode == "task":
             previous = ""
             if rem.get("remember_last") and rem.get("result") and float(rem.get("fired_at") or 0) > 0:
@@ -746,11 +818,20 @@ class RemindersFeature:
                 tok = turn_context.bind(turn_context.make(
                     "reminder", chat_id=str(rem.get("chat_id") or ""), job=job))
                 try:
-                    body, err = await self._run_task(brain, text, muc_quyen_cua(rem), **extra)
+                    rid_tok = _RUN_RID.set(str(rem.get("id") or ""))
+                    try:
+                        body, err = await self._run_task(brain, text, muc_quyen_cua(rem), **extra)
+                    finally:
+                        _RUN_RID.reset(rid_tok)
                 finally:
                     turn_context.reset(tok)
             run_failed = not (body or "").strip()
-            if err and run_failed:
+            if rem.get("id") in self._stopped:
+                # The owner pressed stop on the Tasks page: no retry, nothing posted.
+                self._stopped.discard(rem.get("id"))
+                stopped = True
+                err = localefmt.chu("đã dừng theo lệnh của bạn", "stopped by you")
+            elif err and run_failed:
                 retry_at, why_not = self._retry_plan(rem, err, attempt, job)
                 if why_not:
                     err = f"{why_not} | {err}"
@@ -812,6 +893,8 @@ class RemindersFeature:
 
         ok, send_err = True, ""
         voice_rel = ""
+        if stopped:
+            deliver = False
         if deliver and rem.get("speak") and msg and not msg.startswith("⚠") and self.deps.make_voice:
             # 0.202.0: "read it to me": the same text as a voice note, linked under the message (a player on the web)
             # and sent as an audio file where the channel needs the file itself (Telegram).
@@ -860,6 +943,9 @@ class RemindersFeature:
                 except Exception as e:
                     print(f"[reminders] voice note not sent: {type(e).__name__}: {e}", file=sys.stderr)
 
+        work_log.append(str(self.deps.brain_root(brain)), "reminder", str(rem.get("id") or ""), head,
+                        "stopped" if stopped else "retry" if retry_at else "fail" if (run_failed or not ok) else "ok",
+                        seconds=_now() - t0, mode=mode)
         # Cập nhật trạng thái: cron → lần kế · repeat_min → dời hạn · else done/failed.
         async with self._io:
             data = self._load(brain)
@@ -910,7 +996,8 @@ class RemindersFeature:
                     # A run that produced no answer (engine error, nothing returned, script exit
                     # code) is "failed" even when the warning about it was delivered fine. Only the
                     # delivery used to count, so a dead run showed "done" (field report, code 26).
-                    cur["status"] = "done" if ok and not run_failed else "failed"
+                    cur["status"] = ("cancelled" if stopped
+                                     else "done" if ok and not run_failed else "failed")
             self._save(brain, data)
 
     def _next_regular(self, rem: dict, now: float) -> float:
@@ -1019,7 +1106,7 @@ class RemindersFeature:
             # nhóm tool hành động ra ngoài bị hub xếp loại nguy hiểm nên hai mức dưới không
             # những gọi không được mà còn KHÔNG NHÌN THẤY nó.
             cli = claude_engine(system_prompt=sysprompt, cwd=self.deps.brain_root(brain),
-                                tag="reminder", allowed_tools=None)
+                                tag=_engine_tag(), allowed_tools=None)
             if self.deps.apply_mcp:
                 try:
                     # brain BẮT BUỘC ở nhánh ungated: plugin in-process nạp ở đây và cần biết
@@ -1038,7 +1125,7 @@ class RemindersFeature:
                 except Exception:
                     pass
             cli = claude_engine(system_prompt=sysprompt, cwd=self.deps.brain_root(brain),
-                                tag="reminder", allowed_tools=tools)
+                                tag=_engine_tag(), allowed_tools=tools)
             if self.deps.apply_mcp:
                 try:
                     self.deps.apply_mcp(cli, mode=mq, brain=brain)   # hub ENFORCE theo mức
@@ -1100,9 +1187,10 @@ class RemindersFeature:
             rems = sorted(self._load(brain).get("reminders", []),
                           key=lambda r: float(r.get("due_at", 0)))
             pending = [self._view(r) for r in rems if r.get("status") == "pending"]
-            history = [self._view(r) for r in rems if r.get("status") != "pending"][-30:]
+            paused = [self._view(r) for r in rems if r.get("status") == "paused"]
+            history = [self._view(r) for r in rems if r.get("status") not in LIVE_STATUSES][-30:]
             ready, why = self.notify_status()
-            return {"pending": pending, "history": history,
+            return {"pending": pending, "paused": paused, "history": history,
                     "counts": {"pending": len(pending)},
                     "notify": {"ok": ready, "error": why}}
 
@@ -1134,6 +1222,7 @@ class RemindersFeature:
                         remember_last=_truthy(p.get("remember_last")),
                         speak=_truthy(p.get("speak")),
                         call=_truthy(p.get("call")),
+                        bot_id=str(p.get("bot_id") or ""),
                     )
             except NotifyNotReady as e:
                 # can_force: chỗ gọi (dashboard/chat) hỏi lại người dùng rồi tạo tiếp với
@@ -1154,11 +1243,6 @@ class RemindersFeature:
                     # Kèm lời đọc để chỗ gọi (chat) nhắc lại lịch bằng tiếng Việt, khỏi bắt user
                     # tự dịch "0 7 * * *".
                     "cron_human": cron_util.describe_cron(rem["cron"]) if rem["cron"] else ""}
-
-        @router.get("/reminders/templates")
-        async def reminders_templates():
-            """Ready-made reminders the recurring-work page can pre-fill (never created here)."""
-            return {"templates": [morning_brief_template()]}
 
         @router.get("/reminders/scripts")
         async def reminders_scripts(brain: str = Query("brain")):
@@ -1200,6 +1284,28 @@ class RemindersFeature:
                                    cron=cron, at=at, delay_min=delay_min, due_at=due_at,
                                    muc_quyen=muc_quyen, remember_last=remember_last, speak=speak, call=call)
 
+        @router.post("/reminders/pause")
+        async def reminders_pause(id: str = Form(...), brain: str = Form("brain"), paused: str = Form("1")):
+            """Pause (paused=1) or resume (paused=0) a live reminder (Tasks page switch)."""
+            async with self._io:
+                return self.pause(brain, id, _truthy(paused))
+
+        @router.post("/reminders/skip")
+        async def reminders_skip(id: str = Form(...), brain: str = Form("brain")):
+            """Skip the next run of a repeating reminder (Tasks page menu)."""
+            async with self._io:
+                return self.skip(brain, id)
+
+        @router.post("/reminders/run-now")
+        async def reminders_run_now(id: str = Form(...), brain: str = Form("brain")):
+            """Run a reminder now, outside its schedule (Tasks page run button)."""
+            return await self.run_now(brain, id)
+
+        @router.post("/reminders/stop")
+        async def reminders_stop(id: str = Form(...)):
+            """Stop the run of one reminder that is going now (Tasks page stop button)."""
+            return self.stop(id)
+
         @router.post("/reminders/delete")
         async def reminders_delete(id: str = Form(...), brain: str = Form("brain")):
             """Xoá HẲN một mục (khác /reminders/cancel: cancel giữ lại trong lịch sử)."""
@@ -1219,7 +1325,7 @@ class RemindersFeature:
             async with self._io:
                 data = self._load(brain)
                 data["reminders"] = [r for r in data.get("reminders", [])
-                                     if r.get("status") == "pending"]
+                                     if r.get("status") in LIVE_STATUSES]
                 self._save(brain, data)
             return {"ok": True}
 

@@ -27,6 +27,11 @@
 
   var CHU_KY_MS = 5 * 60 * 1000;     // nhịp hỏi lại máy chủ xem đã có bản mới chưa
   var KHOA_DA_TAI = "javis-fresh-reloaded";   // chống vòng lặp tải lại vô tận
+  // 0.415.0: vân tay của bộ file đã đo là KHỚP trên máy này. Bộ file không đổi thì lần mở sau khỏi đo lại: đo là tải lại
+  // từ cache và băm từng file (hơn trăm file, gần 4 MB) ngay sau lúc mở trang, việc nặng nhất của một chiếc điện thoại
+  // vào đúng lúc nó đang bận dựng giao diện. Lệch chỉ xảy ra khi bộ file vừa đổi (bản cập nhật), và lúc đó vân tay đổi
+  // theo nên vẫn đo như cũ.
+  var KHOA_DA_DO = "javis-fresh-checked";
 
   function moc() {
     var el = document.getElementById("javis-fresh");
@@ -159,15 +164,50 @@
           window.t("common.retry"), function () { location.reload(true); });
   }
 
+  /* Tải lại trang SAU khi máy chủ đã thật sự lên (0.415.0). Bấm cập nhật xong, trang tải lại 1,5 giây sau khi /version
+   * báo số mới; nếu lúc đó máy chủ hay đường hầm trước nó còn chập chờn thì trang mới mở ra nhận toàn trang lỗi, in mã
+   * khoá thay cho chữ và đứng đó (khách báo 30/10/2026). Hỏi /app-version và từ điển gốc, đủ HAI lần liền đều ra JSON
+   * thì mới tải lại; quá 90 giây vẫn tải lại (i18n/index.js còn tự hồi nếu lần đó vẫn trượt). */
+  function choSanRoiTaiLai() {
+    var batDau = Date.now(), dat = 0;
+    function json(url) {
+      return fetch(url, { credentials: "same-origin", cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    }
+    function thu() {
+      Promise.all([json("/app-version"), json("/static/i18n/vi.json")]).then(function (kq) {
+        dat = (kq[0] && kq[0].version && kq[1]) ? dat + 1 : 0;
+        if (dat >= 2 || Date.now() - batDau > 90000) { location.reload(); return; }
+        setTimeout(thu, 1000);
+      });
+    }
+    thu();
+  }
+  window.JavisReloadWhenReady = choSanRoiTaiLai;
+
   // ── Chạy ──────────────────────────────────────────────────────────────────────
   var m = moc();
   if (!m) return;              // server chưa nhúng khối này (bản cũ) - im lặng, đừng phá gì
+
+  // Vân tay của cả bộ file (tên + crc từng file), đo bằng chính crc32 ở trên.
+  var vanTay = "";
+  try {
+    var chuoi = (m.version || "") + "|" + Object.keys(m.assets || {}).sort().map(function (k) { return k + ":" + m.assets[k]; }).join(",");
+    vanTay = crc32(new TextEncoder().encode(chuoi));
+  } catch (e) { vanTay = ""; }
+  function daDo() { try { return !!vanTay && localStorage.getItem(KHOA_DA_DO) === vanTay; } catch (e) { return false; } }
+  function ghiDaDo(ok) {
+    try { if (ok && vanTay) localStorage.setItem(KHOA_DA_DO, vanTay); else localStorage.removeItem(KHOA_DA_DO); } catch (e) { /* noop */ }
+  }
 
   var daThu = false;
   try { daThu = sessionStorage.getItem(KHOA_DA_TAI) === "1"; } catch (e) { /* noop */ }
 
   function kiemNoiDung() {
+    if (daDo()) return;
     doLech(m).then(function (ds) {
+      ghiDaDo(!ds.length);
       if (!ds.length) {
         try { sessionStorage.removeItem(KHOA_DA_TAI); } catch (e) { /* noop */ }
         return;
@@ -194,13 +234,48 @@
         daBao = true;
         // Đang chờ ở nút Cập nhật ngay: bản mới đã lên đúng như người dùng vừa bấm, tải lại luôn
         // chứ đừng hỏi thêm một lần nữa.
-        if (window.__javisUpdating) { location.reload(); return; }
+        if (window.__javisUpdating) { choSanRoiTaiLai(); return; }
         baoCoBanMoi(d.version);
       })
       .catch(function () { /* mất mạng một nhịp không phải chuyện để làm phiền người dùng */ });
   }
 
   setInterval(kiemPhienBan, CHU_KY_MS);
+
+  /* 0.418.0: hỏi phiên bản NGAY sau khi mở, thử lại tới khi máy chủ trả lời. Khi máy chủ không với tới được, sw.js đưa ra
+   * khung trang đã giữ lần trước; khung đó có thể là bản trước một lần cập nhật. Lệch số phiên bản thì: trang vừa mở
+   * (dưới 2 phút), ô chat còn trống và chưa tự tải lại trong 30 giây qua: tải lại luôn; còn lại hiện thanh mời tải lại. */
+  var batDau = Date.now(), KHOA_TU_TAI = "javis-fresh-autoreload";
+  function kiemSom(lan) {
+    fetch("/app-version", { credentials: "same-origin", cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.version) { throw new Error("chua"); }
+        if (d.version === m.version || daBao) return;
+        var o = document.getElementById("chatInput");
+        var luc = 0;
+        try { luc = Number(sessionStorage.getItem(KHOA_TU_TAI) || 0); } catch (e) { /* noop */ }
+        if (Date.now() - batDau < 120000 && !(o && o.value.trim()) && Date.now() - luc > 30000) {
+          try { sessionStorage.setItem(KHOA_TU_TAI, String(Date.now())); } catch (e) { /* noop */ }
+          location.reload();
+          return;
+        }
+        daBao = true;
+        baoCoBanMoi(d.version);
+      })
+      .catch(function () { if (lan < 24) setTimeout(function () { kiemSom(lan + 1); }, 5000); });
+  }
+  setTimeout(function () { kiemSom(0); }, 2500);
+
+  // Đăng ký service worker cho mọi người (trước đây chỉ khi bật thông báo đẩy), để có đường lùi ở trên. Chỉ chạy trong
+  // ngữ cảnh an toàn (https hay localhost); trên http theo IP thì trình duyệt không cho, bỏ qua lặng lẽ.
+  try {
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+      window.addEventListener("load", function () {
+        setTimeout(function () { navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () {}); }, 3000);
+      });
+    }
+  } catch (e) { /* noop */ }
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) kiemPhienBan();
   });

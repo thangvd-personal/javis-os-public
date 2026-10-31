@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import mimetypes
 import time
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,7 @@ import channel_accounts
 import channels
 import chatbot_store
 import conversations
+import inbox_state
 import localefmt
 from fastapi import APIRouter, Form, Query
 from fastapi.responses import FileResponse, JSONResponse
@@ -42,6 +44,12 @@ class ConversationsDeps:
     # `brain_root(brain) -> str`: thư mục gốc của một brain. Cần cho `/conversations/{id}/media` (0.171.0), nơi phát ảnh và file khách
     # gửi mà kênh đã tải về brain của bot. Thiếu thì đường đó trả 404.
     brain_root: Callable = None
+    # Chatbot v5: the bot's approval queue (`pending(bot_id) -> [{chat_id, ...}]`) and taking one chat off it
+    # (`drop_pending(bot_id, chat_id)`), so the inbox can show and settle "someone called the A.I. here".
+    pending: Callable = None
+    drop_pending: Callable = None
+    # `manual_meta(conv, last) -> meta`: the turn meta for a stored conversation, to record a sent draft as the bot's words.
+    manual_meta: Callable = None
 
 
 # Ảnh và file khách gửi chỉ được phát từ hai thư mục mà các kênh tự tải về: `inbox/` (Telegram, Zalo Bot, Slack, WhatsApp,
@@ -143,11 +151,72 @@ def register(app, deps: ConversationsDeps):
         b = chatbot_store.get_bot(bot_id)
         return str((b or {}).get("name") or "") or localefmt.chu("Bot đã xoá", "Deleted bot")
 
+    # Chats logged before 0.380.0 by a channel that records without a bot (Zalo "record chats") get the bot on duty for
+    # their nick once, at start (owner, 2026-10-28: "a chat in the inbox already has an A.I.").
+    try:
+        conversations.fill_missing_bots()
+    except Exception as e:      # noqa: BLE001
+        print(f"[conversations] fill_missing_bots: {e}", file=sys.stderr)
+
+    class _StateCtx:
+        """Per-request cache for the "who is handling it" state (Chatbot v5): bot records, running flags and approval
+        queues are read once per bot, not once per row."""
+
+        def __init__(self, hesitant):
+            self.hesitant = hesitant
+            self.bots, self.running, self.pending = {}, {}, {}
+            self.no_bot = conversations.no_bot_accounts()
+
+        def of(self, row: dict) -> dict:
+            bid = str(row.get("bot_id") or "")
+            if bid and bid not in self.bots:
+                self.bots[bid] = chatbot_store.get_bot(bid)
+                try:
+                    self.running[bid] = bool((_DEPS.bot_status(bid) or {}).get("running"))
+                except Exception:      # noqa: BLE001
+                    self.running[bid] = False
+                try:
+                    self.pending[bid] = {str(x.get("chat_id")): int(x.get("lan") or 0)
+                                         for x in (_DEPS.pending(bid) if _DEPS.pending else []) if int(x.get("lan") or 0) > 0}
+                except Exception:      # noqa: BLE001
+                    self.pending[bid] = {}
+            bot = self.bots.get(bid) if bid else None
+            return inbox_state.state(row, bot, self.running.get(bid, False), self.pending.get(bid, {}),
+                                     conversations.khach_dang_cho(row, self.hesitant),
+                                     no_bot_wanted=str(row.get("channel_account_id") or "") in self.no_bot)
+
+    def _attach_state(items: list, ctx: "_StateCtx") -> None:
+        for it in items:
+            st = ctx.of(it)
+            bot = ctx.bots.get(str(it.get("bot_id") or "")) or {}
+            yield_min = bot.get("nhuong_tay_phut")
+            it.update(who=st["who"], who_code=st["who_code"], ai_allowed=st["ai_allowed"], ai_pending=st["pending"],
+                      draft=st["draft"], reply_when=str(bot.get("reply_when") or ""),
+                      yield_min=yield_min if isinstance(yield_min, int) else None)
+
+    def _day_range(date_from: str, date_to: str) -> tuple:
+        """("YYYY-MM-DD", "YYYY-MM-DD"), both days included, in the server's time zone -> (since, until) timestamps.
+        A missing or unreadable end stays open (0); the two ends swap when given backwards."""
+        def midnight(v: str) -> float:
+            try:
+                return time.mktime(time.strptime(str(v or "").strip()[:10], "%Y-%m-%d"))
+            except (ValueError, OverflowError):
+                return 0.0
+        a, b = midnight(date_from), midnight(date_to)
+        if a and b and b < a:
+            a, b = b, a
+        return a, (midnight(time.strftime("%Y-%m-%d", time.localtime(b + 36 * 3600))) if b else 0.0)
+
+    def _ids_param(raw: str) -> list:
+        return [x.strip() for x in str(raw or "").split(",") if x.strip()]
+
     @router.get("/conversations")
     async def conversations_list(channel: str = "", bot_id: str = "", account_id: str = "",
                                  q: str = "", mode: str = "", limit: int = 50, offset: int = 0,
                                  status: str = "", chat_type: str = "", tag: int = 0, has_contact: int = 0,
-                                 sort: str = ""):
+                                 sort: str = "", account_ids: str = "", who: str = "", tags_any: str = "",
+                                 tags_none: str = "", date_from: str = Query("", alias="from"),
+                                 date_to: str = Query("", alias="to"), last_by: str = "", pinned: int = 0):
         """Danh sách hội thoại mới nhất trước, kèm vài con số đầu trang (cùng bộ lọc).
 
         0.65.3: thêm `status` (unread | need_reply | human) và `chat_type` (group | private); mỗi hàng có `bot_name`;
@@ -158,15 +227,61 @@ def register(app, deps: ConversationsDeps):
         (unanswered customer message waiting longest first). Each row has `tags`; the first page also returns `tags`, the
         owner's tag list with counts, and `facets.has_contact`.
 
+        Chatbot v5 (2026-10-28): `account_ids` (comma-separated account keys, the channel picker), `tags_any` /
+        `tags_none` (comma-separated tag ids), and `who` (you | ai | owner | log, see `inbox_state`). Every row carries
+        `who`, `who_code`, `ai_allowed`, `ai_pending` and `draft`; the first page also returns `who_counts` for the
+        same filters without `who`, plus `you_by_account` ("Needs you" per account key) and `you_total`, both over the
+        whole inbox whatever the filters.
+
         2026-10-25 (row menu): hidden conversations stay out of the list unless `status=hidden` asks for exactly them;
         a search (`q`) finds them too, so a customer the owner hid can always be looked up. `facets.status.hidden`
         counts them."""
         hesitant = _hesitant()
         hidden = "only" if status == "hidden" else ("" if q.strip() else "exclude")
-        extra = dict(tag=tag, has_contact=bool(has_contact), sort=sort, hidden=hidden)
-        items = conversations.danh_sach(channel=channel, bot_id=bot_id, account_id=account_id,
-                                        q=q, mode=mode, limit=limit, offset=offset,
-                                        status=status, chat_type=chat_type, hesitant=hesitant, **extra)
+        since, until = _day_range(date_from, date_to)
+        extra = dict(tag=tag, has_contact=bool(has_contact), sort=sort, hidden=hidden,
+                     account_ids=_ids_param(account_ids), tags_any=_ids_param(tags_any), tags_none=_ids_param(tags_none),
+                     since=since, until=until, last_by=last_by, pinned=bool(pinned))
+        ctx = _StateCtx(hesitant)
+        who = who if who in inbox_state.WHO else ""
+        who_counts, total = None, None
+        if who or offset == 0:
+            # The state needs the bot record, so it is worked out here rather than in SQL: every matching row once,
+            # then one page of the ids that kept the wanted `who`.
+            base = dict(extra)
+            if account_id:
+                base["account_ids"] = (base["account_ids"] or []) + [account_id]
+            light = conversations.state_rows(channel=channel, bot_id=bot_id, q=q, status=status, chat_type=chat_type,
+                                             hesitant=hesitant, **base)
+            states = [(r["id"], ctx.of(r)["who"]) for r in light]
+            who_counts = inbox_state.count({"who": w} for _, w in states)
+            # Every row the filters match (the Channels tab pages through an account's chats with it).
+            total = len(states)
+            # "Needs you" per channel account (the channel picker's badges) and in all (the tab's badge) count the whole
+            # inbox: ticking one Page or searching must not make the other Pages' numbers vanish.
+            narrowed = bool(channel or bot_id or account_id or q or status or chat_type or tag or has_contact
+                            or base["account_ids"] or base["tags_any"] or base["tags_none"] or since or until
+                            or base["last_by"] or pinned)
+            every = conversations.state_rows(hesitant=hesitant, hidden="exclude") if narrowed else light
+            by_acc, you_total = {}, 0
+            for r in every:
+                if ctx.of(r)["who"] == "you":
+                    k = str(r.get("channel_account_id") or "")
+                    by_acc[k] = by_acc.get(k, 0) + 1
+                    you_total += 1
+            who_counts["you_by_account"] = by_acc
+            who_counts["you_total"] = you_total
+        if who:
+            keep = [i for i, w in states if w == who]
+            page = keep[max(0, offset):max(0, offset) + max(1, min(int(limit or 50), conversations.MAX_DANH_SACH))]
+            items = conversations.danh_sach(channel=channel, bot_id=bot_id, account_id=account_id, q=q, mode=mode,
+                                            limit=len(page) or 1, offset=0, status=status, chat_type=chat_type,
+                                            hesitant=hesitant, ids=page, **extra)
+        else:
+            items = conversations.danh_sach(channel=channel, bot_id=bot_id, account_id=account_id,
+                                            q=q, mode=mode, limit=limit, offset=offset,
+                                            status=status, chat_type=chat_type, hesitant=hesitant, **extra)
+        _attach_state(items, ctx)
         if offset > 0:
             # Trang thứ hai trở đi (0.65.11, cuộn xuống thì tải thêm) chỉ cần các dòng: số đếm, bộ lọc và danh sách bot đã có từ trang
             # đầu, tính lại cho mỗi trang là tốn công vô ích.
@@ -180,12 +295,13 @@ def register(app, deps: ConversationsDeps):
             items, phone_lookup = await _tim_sdt_tren_zalo(items, q, dict(
                 channel=channel, bot_id=bot_id, account_id=account_id, q=q, mode=mode, limit=limit,
                 status=status, chat_type=chat_type, hesitant=hesitant, **extra))
+            _attach_state(items, ctx)
         facets = conversations.dem_bo_loc(hesitant)
         ten = {bid: _ten_bot(bid) for bid in facets["bots"] if bid}
         for it in items:
             it["bot_name"] = ten.get(str(it.get("bot_id") or "")) or _ten_bot(str(it.get("bot_id") or ""))
             it["need_reply"] = conversations.can_tra_loi(it, hesitant)
-        return {"ok": True, "items": items,
+        return {"ok": True, "items": items, "who_counts": who_counts, "total": total,
                 "stats": conversations.thong_ke(bot_id=bot_id, channel=channel, account_id=account_id),
                 "facets": facets,
                 "bots": [{"id": bid, "name": ten[bid], **facets["bots"][bid]} for bid in ten],
@@ -213,6 +329,33 @@ def register(app, deps: ConversationsDeps):
                 it.get("channel_account_id") == x["account_id"]
                 and x["uid"] in (it.get("customer_external_id"), it.get("external_chat_id")) for it in items)
         return items, r
+
+    @router.get("/conversations/insights")
+    async def conversations_insights(days: int = 7, date_from: str = Query("", alias="from"),
+                                     date_to: str = Query("", alias="to"), account: str = ""):
+        """The Stats tab (Chatbot v5): this period against the one of the same length right before it, plus "needs you"
+        right now and the bot names. The period is `from`..`to` (days included, the date range picker), or else the
+        last `days` (1, 7 or 30) counted from midnight of the server's day. `account` (0.401.0): one inbox account only."""
+        now = time.time()
+        since, until = _day_range(date_from, date_to)
+        if since and until:
+            n = max(1, round((until - since) / 86400))
+            until = min(until, now)
+        else:
+            n = days if days in (1, 7, 30) else 7
+            lt = time.localtime()
+            midnight = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+            since, until = midnight - (n - 1) * 86400, now
+        accounts = conversations.stats_accounts()
+        account = account if any(a["id"] == account for a in accounts) else ""
+        cur = conversations.insights(since, until, account)
+        prev = conversations.insights(since - n * 86400, since, account)
+        ctx = _StateCtx(_hesitant())
+        you = sum(1 for r in conversations.state_rows(hesitant=ctx.hesitant, hidden="exclude", account_ids=[account] if account else None)
+                  if ctx.of(r)["who"] == "you")
+        names = {bid: _ten_bot(bid) for bid in set(cur["by_bot"]) | set(prev["by_bot"])}
+        return {"ok": True, "days": n, "since": since, "until": until, "now": cur, "before": prev, "needs_you": you, "bot_names": names,
+                "channels": channels.cho_giao_dien(), "accounts": accounts, "account": account}
 
     @router.get("/conversations/stats")
     async def conversations_stats(bot_id: str = "", channel: str = "", account_id: str = ""):
@@ -282,6 +425,7 @@ def register(app, deps: ConversationsDeps):
         d = conversations.chi_tiet(conv_id)
         if not d:
             return _404()
+        _attach_state([d], _StateCtx(_hesitant()))
         moi = after > 0
         msgs = conversations.tin_nhan(conv_id, limit=limit, before_id=before, after_id=after)
         d["bot_name"] = _ten_bot(str(d.get("bot_id") or ""))
@@ -359,16 +503,23 @@ def register(app, deps: ConversationsDeps):
         if c.get("bot_id") and str(c.get("mode") or "ai") == "ai":
             conversations.dat_che_do(conv_id, "human")
             tiep_quan = True
+        # The owner answered by hand: an A.I. draft still waiting is no longer needed (Chatbot v5).
+        conversations.clear_draft(conv_id)
         return {"ok": True, "message_id": r.get("message_id"), "tiep_quan": tiep_quan,
                 "conversation": conversations.chi_tiet(conv_id)}
 
     @router.post("/conversations/{conv_id}/ai-reply")
-    async def conversations_ai_reply(conv_id: int, mode: str = Form("send")):
+    async def conversations_ai_reply(conv_id: int, mode: str = Form("send"), instruction: str = Form("")):
         """Chủ nhờ BOT trả lời ngay từ Hộp thư (0.65.5). `mode=send`: bot trả lời tin khách cuối và câu đó được gửi luôn; cuộc chat
         vẫn ở chế độ Tự động. `mode=draft`: bot chỉ soạn, trả chữ về để đổ vào ô nhập, không gửi và không để lại dấu vết.
 
         Chỉ đúng chế độ mới chạy, và trả `code` để giao diện nói được lý do: `human` (đang tiếp quản), `bot_off` (bot đang tắt),
-        `no_bot`, `already_answered` (tin cuối không phải của khách), `busy`, `no_message`, `send_failed`, `engine`."""
+        `no_bot`, `already_answered` (tin cuối không phải của khách), `busy`, `no_message`, `send_failed`, `engine`.
+
+        `instruction` (Chatbot v5, "A.I. reply"): what the owner typed as an order for the reply. It always means a draft:
+        the owner reviews the result before anything is sent."""
+        if str(instruction or "").strip():
+            mode = "draft"
         if mode not in ("send", "draft"):
             return JSONResponse({"ok": False, "code": "bad_mode", "error": localefmt.chu("mode phải là send hoặc draft",
                                                                                          "mode must be send or draft")}, status_code=400)
@@ -394,7 +545,8 @@ def register(app, deps: ConversationsDeps):
                                                                                               "You have taken over this chat")}, status_code=409)
             if not (_DEPS.bot_status(bot_id) or {}).get("running"):
                 return JSONResponse({"ok": False, "code": "bot_off", "error": localefmt.chu("Bot đang tắt", "The bot is off")}, status_code=409)
-        r = await _DEPS.manual_answer(c, msgs, not send)
+        lenh = str(instruction or "").strip()
+        r = await (_DEPS.manual_answer(c, msgs, not send, lenh) if lenh else _DEPS.manual_answer(c, msgs, not send))
         if not r.get("ok"):
             status = 409 if r.get("code") == "busy" else 400 if r.get("code") in ("no_bot", "no_message") else 502
             return JSONResponse({"ok": False, "code": r.get("code") or "engine", "error": r.get("error") or localefmt.chu("Bot không soạn được", "The bot could not draft a reply")},
@@ -402,7 +554,11 @@ def register(app, deps: ConversationsDeps):
         if r.get("silent"):
             return {"ok": True, "silent": True, "text": ""}
         if not send:
-            return {"ok": True, "silent": False, "text": r["text"], "draft": True}
+            # Kept as the chat's waiting draft (Chatbot v5), so it survives a reload and is sent or dropped through
+            # /draft like a draft the bot wrote in "drafts" mode.
+            conversations.save_draft(conv_id, r["text"], conversations.last_customer_message_id(conv_id), lenh)
+            return {"ok": True, "silent": False, "text": r["text"], "draft": True,
+                    "conversation": _detail_with_state(conv_id)}
         ok, loi = await _gui_tin(c, r["text"], tieng_vong=True, reply_to=msgs[-1])
         if not ok:
             # Không gửi được thì trả chữ đã soạn để chủ dán vào ô nhập gửi tay, khỏi mất công soạn lại.
@@ -412,9 +568,18 @@ def register(app, deps: ConversationsDeps):
         return {"ok": True, "silent": False, "text": r["text"], "taught": bool((done or {}).get("taught")),
                 "conversation": conversations.chi_tiet(conv_id)}
 
+    def _detail_with_state(conv_id: int) -> Optional[dict]:
+        """`chi_tiet` plus the "who is handling it" fields (Chatbot v5)."""
+        d = conversations.chi_tiet(conv_id)
+        if d:
+            _attach_state([d], _StateCtx(_hesitant()))
+        return d
+
     @router.post("/conversations/{conv_id}/mode")
     async def conversations_mode(conv_id: int, mode: str = Form(...)):
-        """ai | human | waiting | closed. `human` = người thật tiếp quản, bot im ở cuộc chat đó."""
+        """ai | human | waiting | closed | draft. `human` = người thật tiếp quản, bot im ở cuộc chat đó. `draft` (Chatbot v5)
+        = the bot writes its reply and waits for the owner. A draft still waiting stays when the mode changes (the owner
+        may still send it, and Undo puts the old mode back with its draft); /reply and /draft clear it."""
         ok, err = conversations.dat_che_do(conv_id, mode)
         if not ok:
             # Chế độ hợp lệ mà vẫn hỏng thì chỉ có thể là không có hội thoại đó. Không dò chữ
@@ -422,7 +587,90 @@ def register(app, deps: ConversationsDeps):
             hop_le = str(mode or "").strip().lower() in conversations.CHE_DO
             return JSONResponse({"ok": False, "error": err},
                                 status_code=404 if hop_le else 400)
-        return {"ok": True, "conversation": conversations.chi_tiet(conv_id)}
+        return {"ok": True, "conversation": _detail_with_state(conv_id)}
+
+    @router.post("/conversations/{conv_id}/ai")
+    async def conversations_ai(conv_id: int, on: str = Form("1")):
+        """Let the bot on duty answer in this chat (on=1) or switch it off here (on=0), Chatbot v5. The bot's audience
+        stays as it is: see `chatbot_store.allow_patch`. Allowing also settles the approval queue entry."""
+        c = conversations.chi_tiet(conv_id)
+        if not c:
+            return _404()
+        bot_id = str(c.get("bot_id") or "")
+        bot = chatbot_store.get_bot(bot_id) if bot_id else None
+        if not bot:
+            return JSONResponse({"ok": False, "code": "no_bot", "error": localefmt.chu(
+                "Cuộc chat này chưa có bot nào trực", "No bot is on duty in this chat")}, status_code=400)
+        bat = str(on).strip().lower() not in ("0", "false", "")
+        chat_id = str(c.get("external_chat_id") or "")
+        ctype = str(c.get("chat_type") or "private")
+        patch = chatbot_store.allow_patch(bot, ctype, chat_id, bat)
+        ok, err = chatbot_store.update_bot(bot_id, patch)
+        if not ok:
+            return JSONResponse({"ok": False, "error": err}, status_code=400)
+        # The bot's lists only keep ids that look like a real platform chat id; one they drop would leave the switch
+        # where it was while the screen says "done". Say it instead.
+        if chatbot_store.chat_allowed(chatbot_store.get_bot(bot_id), ctype, chat_id, inbox_state.raw_account(c)) != bat:
+            return JSONResponse({"ok": False, "code": "chat_id", "error": localefmt.chu(
+                "Không đổi được A.I. riêng cho cuộc chat này (mã cuộc chat không hợp lệ). Đổi ở cài đặt bot.",
+                "Could not change the A.I. for this chat alone (its chat id is not valid). Change it in the bot settings.")},
+                status_code=400)
+        if _DEPS.drop_pending:
+            try:
+                _DEPS.drop_pending(bot_id, chat_id)
+            except Exception:      # noqa: BLE001
+                pass
+        return {"ok": True, "conversation": _detail_with_state(conv_id)}
+
+    @router.post("/conversations/{conv_id}/note")
+    async def conversations_note(conv_id: int, note: str = Form("")):
+        """The owner's note about the customer of this chat (Chatbot v5 Info panel; only the owner sees it)."""
+        if not conversations.set_note(conv_id, note):
+            return _404()
+        return {"ok": True, "conversation": _detail_with_state(conv_id)}
+
+    @router.post("/conversations/{conv_id}/draft")
+    async def conversations_draft(conv_id: int, action: str = Form(...), text: str = Form("")):
+        """The A.I.'s waiting draft (Chatbot v5): `action=send` sends `text` (the owner may have edited it) as the bot's
+        reply and records it in the inbox as the bot's words; `action=discard` drops it. Both clear the stored draft."""
+        c = conversations.chi_tiet(conv_id)
+        if not c:
+            return _404()
+        if action == "discard":
+            conversations.clear_draft(conv_id)
+            return {"ok": True, "conversation": _detail_with_state(conv_id)}
+        if action != "send":
+            return JSONResponse({"ok": False, "error": localefmt.chu("action phải là send hoặc discard",
+                                                                     "action must be send or discard")}, status_code=400)
+        txt = str(text or "").strip()
+        if not txt:
+            return JSONResponse({"ok": False, "error": localefmt.chu("tin rỗng", "empty message")}, status_code=400)
+        if len(txt) > conversations.MAX_CHU:
+            return JSONResponse({"ok": False, "error": localefmt.chu(f"tin dài quá {conversations.MAX_CHU} ký tự",
+                                                                   f"message longer than {conversations.MAX_CHU} characters")}, status_code=400)
+        msgs = conversations.tin_nhan(conv_id, limit=30)
+        last = next((m for m in reversed(msgs) if m.get("sender_type") == "customer"), None)
+        ok, loi = await _gui_tin(c, txt, tieng_vong=True, reply_to=last)
+        if not ok:
+            return JSONResponse({"ok": False, "code": "send_failed", "error": loi or localefmt.chu("không gửi được", "could not send")},
+                                status_code=400)
+        recorded = False
+        if c.get("bot_id") and _DEPS.manual_done and _DEPS.manual_meta:
+            try:
+                _DEPS.manual_done(c, msgs, txt, _DEPS.manual_meta(c, last or {}))
+                recorded = True
+            except Exception:      # noqa: BLE001 - the message went out; a failed record must not report a failed send
+                recorded = False
+        if not recorded:
+            conversations.ghi_su_kien({
+                "channel": str(c.get("channel") or ""), "account_id": _tk_goc(c), "account_name": c.get("account_name") or "",
+                "bot_id": c.get("bot_id") or "", "external_chat_id": c.get("external_chat_id"), "chat_type": c.get("chat_type"),
+                "chat_title": c.get("title") if c.get("chat_type") == "group" else "",
+                "sender_type": "ai", "sender_name": "Bot", "message_type": "text", "text": txt,
+                "metadata": {"tu_javis": True, "draft": True},
+            })
+        conversations.clear_draft(conv_id)
+        return {"ok": True, "conversation": _detail_with_state(conv_id)}
 
     def _goc_media(c: dict) -> list:
         """Các thư mục được phép phát media của hội thoại này: inbox/ và attachments/ trong brain của bot trực nó, và

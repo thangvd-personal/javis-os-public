@@ -41,7 +41,6 @@ The dashboard's navigation rail groups **19 pages** into **5 groups**: Brain · 
 
 ### Connections and channels (the Connections group)
 - [09 - Connections and business data](09-connections-and-business-data.md) - the multi-account store of external services, permissions, reporting real figures.
-- [10 - Models and engines](10-models-and-engines.md) - switching the brain between Claude Code, ChatGPT/Codex, Antigravity CLI, OpenRouter, OpenAI, Gemini, Anthropic, Groq and Ollama without losing capability; thinking levels, the background work model.
 - [11 - The Telegram channel](11-telegram.md) - asking Javis from a phone, sending and receiving files.
 - [26 - The Zalo Bot channel](26-zalo-bot-channel.md) - asking Javis on Zalo through the official API, paired with one click.
 - [12 - Zalo Agent MCP](12-zalo-agent-mcp.md) - signing in by QR, reading and searching history, sending messages through the standard MCP.
@@ -50,10 +49,12 @@ The dashboard's navigation rail groups **19 pages** into **5 groups**: Brain · 
 ### The brain and data
 - [13 - Second Brain: memory, Wiki, INGEST](13-second-brain.md) - multiple brains, living memory, digesting knowledge.
 - [34 - GitHub inside chat](34-github-in-chat.md) - attach repos to a conversation; Javis checks, pushes, opens a PR, watches CI, fixes red CI and merges when green.
+- [35 - Zalo OA](35-zalo-oa.md) - a customer bot that answers your Zalo Official Account inbox (official OA API v3, needs an HTTPS domain).
 - [18 - Backing the brain up to GitHub](18-github-backup.md) - two-way sync to a private repo, recovering after losing a machine or VPS.
 - [19 - Tasks and Dataview in notes](19-tasks-and-dataview.md) - Obsidian-style self-saving checkboxes, ```dataview blocks that really run.
 
 ### Accounts, branding, configuration (the System group)
+- [10 - Models and engines](10-models-and-engines.md) - switching the brain between Claude Code, ChatGPT/Codex, Antigravity CLI, OpenRouter, OpenAI, Gemini, Anthropic, Groq and Ollama without losing capability; thinking levels, the background work model.
 - [14 - Security and accounts](14-security-and-accounts.md) - forced login, passwords, rate limiting, secret-key encryption.
 - [15 - Branding and custom domains](15-branding-and-domains.md) - changing the logo and avatar, pointing a domain and enabling HTTPS.
 - [16 - .env configuration](16-env-configuration.md) - a reference for every environment variable.

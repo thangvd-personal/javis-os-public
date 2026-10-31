@@ -216,6 +216,7 @@ body.in-console .hud-actions { display: none; }
   border: 1px dashed var(--border); background: transparent; color: var(--text2); font: inherit; font-size: 16px; cursor: pointer; }
 .ord-add:hover, .ord-more:hover { background: var(--bg3); color: var(--text); }
 .ord-more { margin: 0 0 10px; }
+.ord-first > .prov-note { margin: 0 0 10px; }
 .ord-addbox { border: 1px dashed var(--accent-line); background: var(--accent-wash); border-radius: 12px; padding: 12px; margin-top: 8px;
   display: flex; flex-direction: column; gap: 10px; }
 .ord-dragging { position: relative; z-index: 5; box-shadow: var(--shadow-3) !important; cursor: grabbing; transition: none; }
@@ -258,6 +259,9 @@ body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user
   .ord-head .prov-status { overflow-wrap: anywhere; }
   .aux-now { flex-wrap: wrap; }
   .aux-now-act.ord-chips { width: 100%; justify-content: flex-end; }
+  /* Section title: the (i) stays next to the name, the sub-label takes the next line whole. */
+  .cview-section h3 > .info-i { order: 1; margin-left: 0; }
+  .cview-section h3 > span { order: 2; flex-basis: 100%; }
 }
 /* Messages under the buttons of a provider card. They used to sit INSIDE the flex row of buttons,
    so a long CLI message became a narrow column and stretched the buttons to its height (owner's
@@ -328,6 +332,9 @@ body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user
 .aux-now-prov { font-size: 13px; color: var(--text3); margin-top: 3px; }
 .aux-now-act { display: flex; gap: 8px; flex-shrink: 0; }
 .aux-card .aux-now-act .gcard-btn { width: auto; }   /* thắng luật full-width của .gcard .gcard-btn */
+/* Change model sits next to the Effort chip: same height, no top margin, same text size (owner, 29/10: "Off and
+   Change model are misaligned"). */
+.aux-card .aux-now-act .gcard-btn { margin-top: 0; min-height: 36px; padding: 6px 14px; font-size: 15px; }
 .aux-warn { color: var(--yellow); }
 /* Ghi chú phụ: chữ nhỏ, mờ, một dòng ý - phần dài dòng đã cắt bớt ở console.js. */
 .aux-note { margin-top: 10px; font-size: 12.5px; line-height: 1.5; color: var(--text3); }
@@ -557,6 +564,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .cview-section h3 {
   font-family: var(--font); font-size: 14px; letter-spacing: 1px; text-transform: uppercase;
   color: var(--text2); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; row-gap: 2px;   /* a phone puts the sub-label on its own line, not in a squeezed second column */
 }
 
 /* Cài đặt: một cột đọc tập trung, nhóm ít dùng có thể gập lại thay vì trải kín màn hình. */
@@ -841,15 +849,21 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
     padding: max(10px, env(safe-area-inset-top, 0px)) 8px max(10px, env(safe-area-inset-bottom, 0px));
     gap: 4px;
     border-top: 0; border-right: 1px solid var(--glass-brd);
-    transform: translateX(-100%); transition: transform .22s ease; z-index: 60; overflow-y: auto;
+    z-index: 60; overflow-y: auto;
     /* 0.216.0 (owner, iPhone): the drawer slid in then vanished, leaving only the dim backdrop. Safari can stop painting
        a box that is blurred (backdrop-filter), moved (transform) and scrolled at once. The drawer sits over the dim
-       backdrop anyway, so it needs no blur: a solid background and its own layer. */
-    background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; will-change: transform;
+       backdrop anyway, so it needs no blur: a solid background.
+       0.393.0 (owner, iPhone video): it came back with the blur gone, the drawer showing mid-slide and then nothing.
+       So no transform layer at all: the drawer slides on `left`, is `visibility: hidden` while shut (Safari keeps no
+       stale layer for it), and is the only scroller inside (the nav list no longer scrolls on its own). */
+    background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none;
+    transform: none; will-change: auto; left: calc(-1 * min(280px, 82vw)); visibility: hidden;
+    transition: left .22s ease, visibility 0s linear .22s;
   }
-  body.nav-open .rail { transform: translateX(0); box-shadow: 8px 0 40px var(--shadow-veil); }
+  body.nav-open .rail { left: 0; visibility: visible; transition: left .22s ease, visibility 0s;
+    box-shadow: 8px 0 40px var(--shadow-veil); }
   .rail-top, .rail-foot { display: flex; }            /* hiện lại brand + version trong ngăn kéo */
-  .rail-nav { flex-direction: column; overflow-x: hidden; overflow-y: auto; gap: 2px; padding: 0; }
+  .rail-nav { flex-direction: column; overflow: visible; gap: 2px; padding: 0; }
   .rail-group, .rail-grp-items { display: block; }
   .rail-grp-lbl { display: flex; }
   .rail-item { flex: none; flex-direction: row; gap: 10px; padding: 9px 10px; border-radius: 9px; }
@@ -864,6 +878,12 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .rail-sys .graph-select { flex: 1 1 auto; min-width: 0; max-width: 100%; }
   .rail-sys-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .rail-sys-btns .hud-icon-btn { display: inline-flex; }
+  .rail-sys-btns:empty { display: none; }
+  /* Light/dark switch in the drawer's foot, beside the collapse button (owner, 0.393.0): same size and outline, so the
+     two read as one pair of small controls on the version row. */
+  .rail-foot #themeToggle { order: 2; margin-left: auto; display: inline-flex; align-items: center;
+    justify-content: center; width: 32px; height: 28px; padding: 0; border-radius: 8px; flex: 0 0 auto; }
+  .rail-foot #themeToggle svg { width: 17px; height: 17px; }
 
   /* Nền mờ khi mở ngăn kéo */
   /* Shown by the drawer's own state only (0.216.0): a dim screen with no drawer on it can no longer stay behind. */
@@ -1146,6 +1166,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .conn-card .conn-ico .ico-img { display: block; margin: 0 auto; }
 .cat-name { font-weight: 600; font-size: 14.5px; }
 .cat-desc { font-size: 12.5px; opacity: .7; flex: 1; line-height: 1.45; }
+/* A clamped description must not be the card's flex spacer (0.407.0). Stretched to fill the card,
+   its box grew past the clamped lines: the ellipsis landed after line 2 and the lines below still
+   showed, cut through the middle. The spacer is the margin now, so the box stays the clamped height
+   and what follows it still sits at the bottom of the card. */
+.cat-desc.j-clamp2, .cat-desc.kho-mo-ta { flex: none; margin-bottom: auto; }
 .cat-doc { font-size: 12px; opacity: .7; }
 .conn-form { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
 .conn-form::-webkit-scrollbar { width: 10px; }
@@ -1323,8 +1348,35 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
    ============================================================ */
 /* Hàng tab LOẠI: gạch chân, không phải viên thuốc. Đây là trục chính của kho (đang xem trợ lý
    hay kỹ năng), còn cột nhóm bên trái là trục phụ - hai kiểu khác nhau để mắt không lẫn. */
-.kho-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border);
-  margin-bottom: 18px; overflow-x: auto; }
+/* The Store navbar (0.384.0): kind tabs plus Refresh / Install from .zip in one row, pinned to the
+   top of the page scroller while the cards scroll. Bleeds over the side padding so the cards
+   never show through at its edges. `top` cancels the scroller's 24px top padding (sticky stops
+   inside it, which left a strip of cards showing above the bar). No negative top margin: the
+   back button, the updates banner or the disabled notice may sit above it. */
+.kho-thanh { position: sticky; top: -24px; z-index: 6; display: flex; align-items: flex-end;
+  gap: 14px; margin: 0 -26px 18px; padding: 4px 26px 0;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border); }
+.kho-tabs { position: relative; display: flex; gap: 2px; flex: 1 1 auto; min-width: 0; overflow-x: auto;
+  scrollbar-width: none; }
+.kho-tabs::-webkit-scrollbar { display: none; }
+.kho-hd { display: flex; align-items: center; gap: 8px; flex: none; padding-bottom: 6px; }
+.kho-hd-btn { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  padding: 8px 13px; font-size: 14px; }
+.kho-hd-btn svg { width: 16px; height: 16px; flex: none; }
+/* Medium screens: the two buttons drop their labels so the six tabs keep theirs. */
+@media (max-width: 1360px) {
+  .kho-thanh > .kho-hd .kho-hd-btn { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .kho-thanh > .kho-hd .kho-hd-btn span { display: none; }
+}
+@media (min-width: 861px) and (max-width: 1100px) {
+  .kho-than { gap: 18px; }
+  .kho-cot { width: 170px; }
+  .kho-thanh .kho-tab { padding: 11px 10px; font-size: 14px; }
+}
+/* The copy beside the search box is the phone's; the navbar keeps the computer's. */
+.kho-hd-dt { display: none; }
 /* `font: inherit` là BẮT BUỘC trên mọi <button>: phần tử form không thừa kế phông của trang,
    trình duyệt áp phông hệ thống riêng. Thiếu nó thì giữa một trang Be Vietnam Pro có vài nút hiện
    bằng phông mặc định của máy - trông như trang bị lỗi tải phông. */
@@ -1339,7 +1391,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   color: var(--accent); }
 
 .kho-than { display: flex; gap: 26px; align-items: flex-start; }
-.kho-cot { width: 190px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+/* Group column on the right, pinned under the navbar so the filter stays in reach while scrolling. */
+.kho-cot { width: 200px; flex: none; display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 46px; max-height: calc(100vh - 220px); overflow-y: auto; }
+/* Phone-only dropdowns for kind and group; computers keep the tabs and the right-hand column. */
+.kho-chon-loai, .kho-chon-nhom { display: none; }
 .kho-cot-tieu { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--text3);
   padding: 4px 10px 8px; text-transform: uppercase; }
 .kho-nav { display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -1352,17 +1408,40 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .kho-nav.ngan { margin-top: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
 .kho-navdem { font-size: 12px; color: var(--text3); }
 .kho-chinh { flex: 1; min-width: 0; }
+/* The grid fills the column and lines up with the search row and the pager: the shared 980px
+   cap of .cat-grid left the toolbar running past the last card. */
+/* At most 3 columns (owner, 0.390.0): `max(250px, (100% - 2 gaps) / 3)` as the minimum track
+   width means a fourth card never fits, however wide the screen; narrower screens still drop to
+   2 and 1 columns. Matches 18 per page: six full rows of three. */
+.kho-chinh .cat-grid { max-width: none;
+  grid-template-columns: repeat(auto-fill, minmax(max(250px, calc((100% - 24px) / 3)), 1fr)); }
+.kho-loc { margin-top: 0; }
+.kho-so-muc { margin-left: auto; white-space: nowrap; }
 
 .kho-the { gap: 10px; }
 .kho-dau { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.kho-nhom { font-size: 12px; color: var(--text3); border: 1px solid var(--border);
+/* Card chips, top right: the group, plus "Runs code" when a pack has Python (0.390.0). Same shape
+   for both, colour only where it means something: amber from the theme's own warn tokens, so it
+   reads in light and dark alike (the old tags put green or brown text on a purple wash). */
+.kho-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
+.kho-nhom, .kho-chip-ma { font-size: 13px; line-height: 1.4; border: 1px solid var(--border);
   border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+.kho-nhom { color: var(--text3); }
+.kho-chip-ma { color: var(--warn-ink); background: var(--warn-wash); border-color: var(--warn-line);
+  font-weight: 600; }
 .kho-ten { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 6px;
   flex-wrap: wrap; }
 .kho-ava { width: 40px; height: 40px; flex: none; border-radius: 11px; display: grid;
   place-items: center; font-weight: 700; font-size: 15px; color: #fff; letter-spacing: -.02em; }
 /* Logo thật thì KHÔNG tô nền: nền màu sau một logo có nền trắng trông như lỗi in. */
 .kho-ava-img { background: none; }
+/* 0.376.0: icon of the kind (skill, workflow, tool) on a light tile in the card's own colour, and the agent
+   portrait for agents. Replaces the solid letter tiles. */
+.kho-ava-ic { background: color-mix(in srgb, var(--kho-mau, var(--accent)) 15%, var(--surface-1, #fff));
+  color: var(--kho-mau, var(--accent)); border: 1px solid color-mix(in srgb, var(--kho-mau, var(--accent)) 28%, transparent); }
+.kho-ava-ic svg { width: 22px; height: 22px; }
+.kho-ava-agent { background: none; }
+.pkm-dau .kho-ava-ic svg { width: 25px; height: 25px; }
 .kho-ava-img svg, .kho-ava-img img { width: 34px; height: 34px; object-fit: contain; }
 .kho-daicai { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
   color: var(--ok-ink, #2f855a); }
@@ -1399,13 +1478,19 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 
 .kho-trang { display: flex; align-items: center; gap: 6px; margin-top: 22px; padding-top: 16px;
   border-top: 1px solid var(--border); flex-wrap: wrap; }
+.kho-trang-so { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 .kho-so { min-width: 36px; height: 36px; padding: 0 11px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--surface-1); color: inherit;
-  font: inherit; font-size: 14px; cursor: pointer; }
+  font: inherit; font-size: 14px; cursor: pointer; display: inline-grid; place-items: center; }
+.kho-so svg { width: 16px; height: 16px; }
+.kho-so:disabled { opacity: .4; cursor: default; }
 
 /* Chữ trong thẻ của kho to hơn thẻ danh mục thường: đây là chỗ người ta ĐỌC để quyết định có
    cài hay không, không phải một dòng nhãn liếc qua. */
 .kho-the .cat-desc { font-size: 13.5px; opacity: .82; }
+/* Store cards: three lines, then an ellipsis (owner, 0.407.0); the full text is behind the (i). */
+.kho-mo-ta { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+  overflow: hidden; }
 .kho-the .prov-meta { font-size: 12.5px; }
 
 /* Nút quay lại trang vừa đi ra. */
@@ -1416,65 +1501,62 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .kho-quaylai:hover { border-color: var(--accent); }
 .kho-so.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
-.kho-tim { width: 100%; max-width: 320px; }
+.kho-tim { flex: 1 1 260px; width: auto; max-width: 380px; min-width: 0; }
+.kho-sap { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text2); }
+.kho-sap select { width: auto; min-width: 150px; }
 
-/* ---------- Điện thoại và máy tính bảng ----------
-   Breakpoint 860px trùng với breakpoint chính của app, nên kho đổi bố cục CÙNG LÚC với thanh
-   bên và khung chat - không có khoảng nào mà nửa trang ở chế độ này, nửa kia ở chế độ khác.
+/* ---------- Phones and tablets ----------
+   860px is the app's main breakpoint, so the Store switches layout together with the sidebar and
+   the chat frame.
 
-   Ba thứ đổi hình, và mỗi thứ đều vì một lý do cụ thể chứ không phải cho gọn:
+   KIND and GROUP become two dropdowns side by side in the pinned bar (0.386.0). Six kind tabs only
+   fit a phone row squeezed into tiny type, and the old wrapped group pills (no sideways strip,
+   since phone users do not swipe a row of buttons and miss the groups at its end) pushed the
+   first card most of a screen down. A dropdown lists every item and costs half a row.
 
-   TAB LOẠI thành một dải phân đoạn, số đếm xuống DƯỚI nhãn. Trên màn hẹp, để số nằm cạnh chữ
-   thì năm mục không đủ chỗ và chữ bị cắt; xếp dọc thì mỗi mục chỉ cần rộng bằng chữ dài nhất.
-
-   CỘT NHÓM thành các viên thuốc XUỐNG DÒNG, không phải dải cuộn ngang. Dải cuộn giấu mất
-   nhóm ở cuối, mà người dùng điện thoại thường không nghĩ tới việc vuốt ngang một hàng nút -
-   họ chỉ thấy có bốn nhóm trong khi thật ra có mười.
-
-   Ô TÌM chiếm trọn hàng, hai nút phụ xuống hàng dưới. */
+   Refresh and Install from .zip leave the pinned navbar for two icon buttons beside the search. */
 @media (max-width: 860px) {
-  .kho-than { flex-direction: column; gap: 16px; }
+  .kho-than { flex-direction: column; gap: 14px; }
+  /* Navbar on a phone: the two dropdowns, edge to edge, still pinned. */
+  .kho-thanh { top: -16px; margin: 0 -14px 14px; padding: 8px 14px; border-bottom: 0;
+    box-shadow: 0 1px 0 var(--border); }
+  .kho-thanh > .kho-hd { display: none; }
 
-  .kho-tabs { border-bottom: 0; background: var(--surface-2); border-radius: 14px;
-    padding: 4px; gap: 2px; overflow-x: auto; }
-  /* `flex: 1 1 0` chứ không phải grid 5 cột: số loại nằm ở JS, và một ngày nó thêm loại thứ
-     sáu thì bố cục tự chia lại thay vì vỡ. */
-  .kho-tab { flex: 1 1 0; min-width: 62px; flex-direction: column; gap: 3px;
-    padding: 9px 4px; border-bottom: 0; margin-bottom: 0; border-radius: 11px;
-    font-size: 12.5px; justify-content: center; text-align: center; }
-  .kho-tab.on { background: var(--surface-1); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
-  .kho-dem { font-size: 11.5px; padding: 0 7px; }
+  /* Kind and group as two dropdowns side by side in the pinned bar (0.386.0, owner: a dropdown
+     suits a phone better than six squeezed buttons). Nothing hides off screen, and both filters
+     stay in reach while the cards scroll. */
+  .kho-thanh { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .kho-thanh > .kho-tabs { display: none; }
+  .kho-chon-loai, .kho-chon-nhom { display: block; width: 100%; min-width: 0; min-height: 44px;
+    font-size: 16px; font-weight: 600; }
 
-  .kho-cot { width: 100%; flex-direction: row; flex-wrap: wrap; overflow: visible; gap: 8px; }
-  .kho-cot-tieu { display: none; }
-  /* Cao 40px là ngưỡng bấm được bằng ngón tay mà không cần ngắm. */
-  .kho-nav { flex: 0 0 auto; white-space: nowrap; border: 1px solid var(--border);
-    border-radius: 999px; padding: 9px 14px; gap: 7px; }
-  .kho-nav.on { border-color: var(--accent); }
-  /* Vạch ngăn trên chỉ có nghĩa khi các mục xếp DỌC. Xuống dòng ngang rồi thì nó thành một
-     nét lạ giữa hàng, nên trả về viền viên thuốc bình thường. */
-  .kho-nav.ngan { margin-top: 0; padding-top: 9px; border-top: 1px solid var(--border); }
+  .kho-cot { display: none; }
+  .kho-loc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin: 0; }
+  /* The count is already in each dropdown option, so the row keeps only search and the buttons. */
+  .kho-loc > .kho-so-muc { display: none; }
+  .kho-tim { max-width: none; width: 100%; font-size: 16px; }
+  /* Sort on its own row under the search: beside it the search box would be too narrow to type in. */
+  .kho-sap { grid-column: 1 / -1; font-size: 15px; }
+  .kho-sap select { flex: 1; min-height: 44px; font-size: 16px; }
+  .kho-hd-dt { display: flex; padding: 0; gap: 6px; }
+  .kho-hd-dt .kho-hd-btn { width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .kho-hd-dt .kho-hd-btn span { display: none; }
+  .kho-hd-dt .kho-hd-btn svg { width: 18px; height: 18px; }
 
-  .kho-tim { max-width: none; flex: 1 1 100%; }
-
-  /* Giấu tiêu đề khối: nó lặp gần nguyên văn tiêu đề trang ngay phía trên. Trên máy tính thì
-     vô hại, còn trên điện thoại nó đẩy hàng tab xuống gần một phần tư màn hình - đúng thứ
-     người ta cần thấy đầu tiên. Câu mô tả bên dưới thì GIỮ, vì nó nói một điều khác: bấm Cài
-     là mở ra cho xem trước rồi mới hỏi. */
-  .kho-khoi > h3 { display: none; }
   .kho-the { gap: 12px; }
   .kho-nut { flex-wrap: wrap; }
   .kho-btn { min-height: 44px; }
+  .kho-trang { justify-content: center; }
+  .kho-trang > .prov-meta { flex: 1 1 100%; text-align: center; }
+  .kho-trang-so { margin: 0 auto; justify-content: center; }
   .kho-so { min-width: 40px; height: 40px; }
   .kho-quaylai { min-height: 40px; }
 }
 
-/* Màn thật hẹp: lưới một cột, chữ trong tab co lại một nấc để năm mục vẫn vừa một hàng. */
+/* Very narrow screens: one column of cards. */
 @media (max-width: 480px) {
   .cat-grid { grid-template-columns: 1fr; }
-  .kho-tab { font-size: 11.5px; min-width: 56px; padding: 8px 2px; }
-  .kho-dem { font-size: 11px; padding: 0 6px; }
-  .kho-nav { padding: 9px 12px; font-size: 13.5px; }
+  .kho-chinh .cat-grid { grid-template-columns: 1fr; }
 }
 
 /* Hàng tab dẫn sang Kho cài đặt, đặt trên đầu năm trang năng lực.
@@ -2193,42 +2275,13 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
    Hai cột trên màn rộng (danh sách | lịch sử tin), một cột trên điện thoại (bấm một hội thoại
    là mở lịch sử, có nút quay lại). Chữ chính 16px trên màn nhỏ theo chuẩn đọc của chủ repo. */
 .ht-wrap { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
-.ht-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.ht-loc { display: flex; flex-wrap: wrap; gap: 6px; }
-.ht-loc-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--bg3); color: var(--text2); font-size: 13.5px; cursor: pointer; }
-.ht-loc-chip:hover { color: var(--text); border-color: var(--accent); }
-.ht-loc-chip.on { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
 .ht-search { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg3);
   color: var(--text); font-size: 16px; min-width: 0; flex: 1 1 200px; }
-/* Bộ lọc dropdown (0.65.3): một hàng chung với ô tìm. Đang lọc thì dropdown sáng màu nhấn để nhìn là biết. */
-.ht-f { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
-  font-size: 16px; min-width: 0; max-width: 100%; }
-.ht-f.on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-wash); }
-.ht-f[hidden], .ht-fclear[hidden] { display: none; }
-/* "Has phone/email" is an on/off filter of its own (combines with a status), drawn like the dropdowns next to it. */
-.ht-f-contact { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
-.ht-f-contact svg { width: 16px; height: 16px; flex: none; }
-/* Wide screens: the filter panel is just part of the row and the Filters button is never shown. */
-.ht-fpanel { display: contents; }
-.ht-fbtn { display: none; }
-.ht-fsum { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text3);
-  min-height: 20px; padding: 0 4px; }
 /* 0.216.0: kết quả hỏi Zalo khi ô tìm là một số điện thoại. */
 .ht-sdt { margin: 0 4px 6px; padding: 8px 10px; border-radius: 9px; background: var(--accent-wash); color: var(--text);
   font-size: 16px; line-height: 1.45; display: flex; flex-direction: column; gap: 4px; }
 .ht-sdt[hidden] { display: none; }
 .ht-sdt svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--accent); }
-.ht-fclear { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer;
-  text-decoration: underline; }
-.ht-item-tags { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
-.ht-bot-tag, .ht-need { flex: none; max-width: 100%; font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
-  font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ht-bot-tag.c0 { background: var(--accent2-wash); color: var(--accent2-ink); }
-.ht-bot-tag.c1 { background: var(--info-wash); color: var(--info-ink); }
-.ht-bot-tag.c2 { background: var(--ok-wash); color: var(--green); }
-.ht-bot-tag.c3 { background: var(--accent-wash); color: var(--accent-ink); }
-.ht-need { background: var(--warn-wash); color: var(--warn-ink); }
 /* 2026-10-25 (owner: "thêm tag khách hàng", Pancake-style chips): the owner's tags, one colour each from a fixed palette
    (conversations.TAG_COLORS). Tint, ink and border are mixed from one hue so a chip reads in light and dark themes. */
 .ht-tag { --tc: #8b8f98; display: inline-block; vertical-align: middle; min-width: 0; max-width: 140px; padding: 0 8px;
@@ -2250,21 +2303,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ht-has-contact { flex: none; display: inline-flex; color: var(--green); }
 .ht-has-contact svg { width: 14px; height: 14px; }
 .ht-item-ava { display: none; }
-/* Wide screens: one filter row when it fits (owner: no wall of buttons). Every control keeps its full text; when the
-   page is too narrow for all of them the row wraps instead of cutting words, and the search box takes what is left. */
-@media (min-width: 901px) {
-  .ht-bar { flex-wrap: wrap; }
-  .ht-bar .ht-search { flex: 1 1 220px; min-width: 200px; }
-  .ht-bar .ht-f { flex: 0 0 auto; }
-  /* The tag dropdown is as wide as its longest tag name; capped so one long tag does not squeeze the rest. */
-  .ht-bar .ht-f-tag { max-width: 170px; }
-}
-/* Thread: phone/email the customer left, this chat's tags, the Tag button and its picker. */
+/* A chat's tags, the Tag button and its picker (in the Info panel since Chatbot v5). */
 .ht-tagrow { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px;
   border-bottom: 1px solid var(--hairline); font-size: 16px; }
 .ht-tagrow:empty { display: none; }
-.ht-contact { display: inline-flex; align-items: center; gap: 5px; color: var(--text); font-size: 16px; user-select: all; }
-.ht-contact svg { width: 16px; height: 16px; color: var(--green); }
 .ht-tag-on { display: inline-flex; align-items: center; gap: 2px; max-width: 240px; padding-right: 2px; }
 .ht-tag-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ht-tag-x { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
@@ -2314,28 +2356,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   border: 2px solid var(--bg2); box-shadow: 0 0 0 1px var(--border); }
 .ht-sw.on { box-shadow: 0 0 0 2px var(--text); }
 @media (max-width: 640px) {
-  /* Phones (owner, 2026-10-25: the filters took half the screen): search and a Filters button share one row; the
-     filters open below them on demand, two per row, Bot and Channel full width. The button shows how many are on. */
-  .ht-bar { flex-wrap: nowrap; }
   .ht-search { flex: 1 1 auto; }
-  .ht-fbtn { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 8px 12px; border-radius: 9px;
-    border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 16px; cursor: pointer; }
-  .ht-fbtn svg { width: 16px; height: 16px; }
-  .ht-fbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent-ink); }
-  .ht-fbtn-n { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--accent);
-    color: var(--on-accent, #fff); font-size: 16px; line-height: 22px; text-align: center; }
-  .ht-fbtn-n[hidden] { display: none; }
-  .ht-fpanel { display: none; }
-  .ht-fpanel.open { display: flex; flex-wrap: wrap; gap: 8px; position: absolute; left: 0; right: 0; top: calc(100% + 6px);
-    z-index: 30; padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, .18); }
-  .ht-wrap .ht-bar { position: relative; }
-  .ht-f { flex: 1 1 42%; font-size: 16px; }
-  .ht-f-bot, .ht-f-channel, .ht-f-contact { flex-basis: 100%; }
-  .ht-f-contact { justify-content: center; }
 }
 /* Từ 0.65.10 vùng làm việc lấp đầy phần còn lại của khung (trước là calc(100vh - 300px), thấp hơn thật khoảng 90px nên cả trang phải cuộn
-   và khung tin bị đẩy xuống). Cột trái = dòng đếm + danh sách; danh sách và khung tin tự cuộn bên trong. */
+   và khung tin bị đẩy xuống). Cột trái = đầu danh sách + danh sách; danh sách và khung tin tự cuộn bên trong. */
 .ht-body { display: flex; gap: 12px; flex: 1 1 auto; min-height: 260px; }
 .ht-listcol { width: 320px; flex: none; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
 .ht-list { flex: 1 1 auto; min-height: 0; width: 100%; overflow: auto; display: flex; flex-direction: column; gap: 4px;
@@ -2351,7 +2375,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   border-radius: 10px; border: 1px solid transparent; background: none; color: var(--text2); cursor: pointer; }
 .ht-item:hover { background: var(--surface-2); color: var(--text); }
 .ht-item.on { border-color: var(--accent); background: var(--accent-wash); color: var(--text); }
-.ht-item-ic { flex: none; opacity: .8; margin-top: 2px; }
 .ht-item-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
 .ht-item-top { display: flex; align-items: baseline; gap: 6px; }
 .ht-item-top strong { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; overflow: hidden;
@@ -2429,8 +2452,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 /* Tổng số tin của cuộc (0.148.0): viên xám trung tính, tách hẳn số đỏ (cam) của tin chưa đọc. */
 .ht-count { flex: none; font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--border);
   color: var(--text3); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.ht-mode { flex: none; font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--warn-wash);
-  color: var(--warn-ink); font-weight: 600; }
 .ht-thread { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--border);
   border-radius: 12px; background: var(--surface-1); overflow: hidden; }
 .ht-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
@@ -2438,39 +2459,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ht-head-text strong { font-size: 15px; color: var(--text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ht-head-text small { font-size: 12.5px; color: var(--text3); display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ht-back { display: none; padding: 6px 9px; }
-/* Công tắc hai nấc Tự động / Tôi trả lời (0.65.4). */
-.ht-seg { flex: none; display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 2px; gap: 2px;
-  background: var(--bg3); }
-.ht-seg-b { border: 0; background: none; color: var(--text2); padding: 5px 11px; border-radius: 999px; font-size: 13px;
-  cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.ht-seg-b:hover { color: var(--text); }
-.ht-seg-b.on { background: var(--accent-wash); color: var(--accent-ink); font-weight: 600; }
-.ht-seg-b.on[data-m="human"] { background: var(--warn-wash); color: var(--warn-ink); }
-/* Điện thoại: công tắc xuống hàng riêng, rộng hết chiều ngang (dễ chạm một tay) thay vì chèn tiêu đề còn vài chục điểm ảnh. */
+/* Phones: a long name may push the Info button to its own line. */
 @media (max-width: 640px) {
   .ht-head { flex-wrap: wrap; }
-  .ht-seg { order: 3; flex: 1 1 100%; }
-  .ht-seg-b { flex: 1 1 50%; justify-content: center; padding: 8px 11px; font-size: 14px; }
 }
-/* Dòng trạng thái: ai đang trực cuộc chat. Đứng riêng một dòng, không chung hàng với nút nào. */
-.ht-status { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--hairline);
-  font-size: 12.5px; color: var(--text3); }
-.ht-status.ai { color: var(--green); }
-.ht-status.human { color: var(--warn-ink); background: var(--warn-wash); }
-.ht-status.off { color: var(--warn-ink); background: var(--warn-wash); }
-/* Hai nút hành động (0.65.5): cùng cao, chia đôi bề ngang, không bao giờ rớt dòng. Nút chưa dùng được vẫn hiện, viền đứt. */
-.ht-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px 0; }
-.ht-act { height: 34px; padding: 0 8px; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px;
-  border-radius: 9px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 13px; cursor: pointer; }
-.ht-act span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ht-act:hover { border-color: var(--accent); }
-.ht-act.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-.ht-act.off, .ht-act.pri.off { background: var(--bg3); border: 1px dashed var(--border); color: var(--text3); font-weight: 400; }
-.ht-act.busy { cursor: progress; }
-.ht-act:disabled { cursor: progress; }
-.ht-acts-note { display: flex; align-items: flex-start; gap: 6px; padding: 6px 12px 0; font-size: 12.5px; color: var(--text2); }
-.ht-acts-note.err { color: var(--red, #e5484d); }
-.ht-acts ~ .ht-compose { border-top: 0; }
 .ht-silent { align-self: flex-start; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px;
   color: var(--text3); }
 .ht-silent-why { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer;
@@ -2531,7 +2523,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .ht-listcol { width: var(--ht-list-w, 320px); position: relative; }
   .ht-listcol > .col-resize { display: block; position: absolute; top: 0; bottom: 0; right: -10px; width: 8px; z-index: 6;
     cursor: col-resize; touch-action: none; }
-  .ht-mini .ht-fsum, .ht-mini .ht-sdt, .ht-mini .ht-item-text, .ht-mini .ht-item-ic, .ht-mini .ht-more { display: none; }
+  .ht-mini .ht-sdt, .ht-mini .ht-item-text, .ht-mini .ht-more { display: none; }
   .ht-mini .ht-list { padding: 6px 4px; align-items: center; }
   .ht-mini .ht-item { justify-content: center; padding: 6px 0; width: 52px; }
   .ht-mini .ht-item-ava { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px;
@@ -2633,7 +2625,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 /* Ô trả lời khách (0.61.0): chỉ hiện khi kênh gửi được từ Javis. */
 .ht-compose { border-top: 1px solid var(--hairline); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
 .ht-compose-note { font-size: 12.5px; color: var(--text3); display: flex; gap: 5px; align-items: center; }
-.ht-compose-row { display: flex; gap: 8px; align-items: flex-end; }
 .ht-compose textarea { flex: 1 1 auto; min-width: 0; resize: vertical; padding: 8px 10px; border-radius: 9px;
   border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 14px; font-family: inherit; line-height: 1.45; }
 .ht-compose textarea:focus { border-color: var(--info-line); outline: none; }
@@ -4222,3 +4213,9 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   .tm-side .tm-add-open { margin-bottom: 4px; }
   .tm-side .tm-close { border-color: transparent; background: none; }
 }
+
+/* Recommended tab (0.370.0, renamed 0.376.0): the "Updated from the author" line on a Store card, and the tab's lead line. */
+.kho-goc { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.kho-goc svg { width: 14px; height: 14px; flex: none; }
+.kho-goc a { color: var(--accent); text-decoration: none; font-weight: 600; overflow-wrap: anywhere; }
+.kho-goc a:hover { text-decoration: underline; }

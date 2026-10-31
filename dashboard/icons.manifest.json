@@ -54,7 +54,8 @@
       "user-round",
       "users",
       "arrow-left",
-      "hand"
+      "hand",
+      "list-checks"
     ],
     "hanh-dong": [
       "save",
@@ -67,6 +68,7 @@
       "pencil",
       "search",
       "plus",
+      "minus",
       "download",
       "upload-cloud",
       "undo-2",
@@ -81,7 +83,11 @@
       "thumbs-up",
       "at-sign",
       "square",
-      "ellipsis"
+      "ellipsis",
+      "skip-forward",
+      "arrow-right-left",
+      "key-round",
+      "redo"
     ],
     "dieu-huong": [
       "chevron-down",
@@ -109,7 +115,18 @@
       "circle-dot",
       "info",
       "trending-up",
-      "trending-down"
+      "trending-down",
+      "list",
+      "clock-alert",
+      "circle-alert",
+      "loader-circle",
+      "pause",
+      "clock",
+      "sunrise",
+      "snowflake",
+      "trophy",
+      "flame",
+      "map-pin"
     ],
     "tep-tin": [
       "file",

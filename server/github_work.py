@@ -125,8 +125,12 @@ def fingerprint(worktree: str) -> str:
     return hashlib.sha256(f"{head}\n{status}\n{diff}".encode("utf-8", "replace")).hexdigest()
 
 
+def _base_name(repo: dict[str, Any]) -> str:
+    return repo.get("base_branch") or repo.get("default_branch") or "main"
+
+
 def _base(repo: dict[str, Any]) -> str:
-    return f"origin/{repo.get('default_branch') or 'main'}"
+    return f"origin/{_base_name(repo)}"
 
 
 def _has_work(repo: dict[str, Any]) -> bool:
@@ -276,7 +280,7 @@ def ensure_pr(repo: dict[str, Any], branch: str, title: str, body: str) -> dict[
     pr = gh.find_pull(fn, branch)
     if pr and pr.get("state") == "open":
         return pr
-    return gh.create_pull(fn, branch, repo.get("default_branch") or "main", title[:120] or branch, body, draft=True)
+    return gh.create_pull(fn, branch, _base_name(repo), title[:120] or branch, body, draft=True)
 
 
 def _session(sid: str) -> dict[str, Any]:
@@ -293,10 +297,11 @@ def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> 
     # The job's own request names the PR; the chat title only describes the chat's FIRST job.
     task_line = (str(info.get("task") or "").strip().splitlines() or [""])[0]
     title = (task_line[:100] or (info.get("title") or "").strip() or _c("Thay đổi từ Javis", "Changes from Javis"))
-    row = st().ensure(sid, fn, brain=brain, worktree=repo["worktree"], base_branch=repo.get("default_branch") or "main",
+    row = st().ensure(sid, fn, brain=brain, worktree=repo["worktree"], base_branch=_base_name(repo),
                       engine=str(info.get("engine") or ""), model=str(info.get("model") or ""))
     if not row.get("pr_number") or row.get("integ") == "merged":
-        row = st().update(sid, fn, title=title[:200])    # a new job: its request names it
+        # A new job: its request names it, and it targets the base the chat picked now (0.368.0).
+        row = st().update(sid, fn, title=title[:200], base_branch=_base_name(repo))
     else:
         title = row.get("title") or title               # the same job's later pushes keep the PR's name
     if row.get("integ") == "merged":

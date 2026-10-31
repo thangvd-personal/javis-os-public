@@ -106,6 +106,24 @@ check("chưa biết tên mình thì không nhận bừa", not bot()._co_nhac_ten
 check("nhận hơi rộng là CỐ Ý (tên nối bằng khoảng trắng vẫn tính là được gọi)",
       b5._co_nhac_ten({"text": "Bot Shop VN cho hỏi giá"}))
 
+# #885: getMe only gives the handle; a group tag carries the display name, matched against the bot's Javis names.
+cfg = {"name": "Nori VQT Piano", "reply_policy": {"aliases": ["cô Nori"]}}
+b7 = bot(cfg_fn=lambda: cfg)
+b7.bot_username = "bot.baMmUmzw"
+check("#885: a tag by display name (Zalo's 'Bot ' prefix + Javis name) is a call",
+      b7._co_nhac_ten({"text": "@Bot Nori VQT Piano cho hỏi lịch học"}))
+check("#885: double spaces inside the tag still match", b7._co_nhac_ten({"text": "@Bot  Nori   VQT Piano ơi"}))
+check("#885: a tag by the exact Javis name or an owner alias is a call",
+      b7._co_nhac_ten({"text": "@Nori VQT Piano"}) and b7._co_nhac_ten({"text": "hỏi @cô Nori nhé"}))
+check("#885: the Javis name without '@' is not a tag (a person may share it)",
+      not b7._co_nhac_ten({"text": "Nori VQT Piano học hôm nay vui lắm"}))
+check("#885: a longer name glued on is not this bot", not b7._co_nhac_ten({"text": "@Bot Nori VQT PianoX"}))
+check("#885: the handle still works", b7._co_nhac_ten({"text": "bot.baMmUmzw ơi"}))
+cfg["name"] = "Bot Mai"
+check("#885: a rename on the Chatbot page applies at once, no double 'Bot'",
+      b7._co_nhac_ten({"text": "@Bot Mai ơi"}) and not b7._co_nhac_ten({"text": "@Bot Nori VQT Piano"}))
+check("#885: a broken config read keeps the handle path", bot(cfg_fn=lambda: 1 / 0)._co_nhac_ten({"text": "x"}) is False)
+
 
 # ---- 5. Chạy trọn một lượt với client HTTP giả ----
 
@@ -217,7 +235,7 @@ check("file không tồn tại thì báo đúng lý do", not ok and "không tồ
 # 0.61.0: danh sách kênh gắn được bot đọc từ sổ đăng ký (server/channels), thứ tự là thứ tự sổ.
 # 0.64.80: Zalo cá nhân cũng gắn được bot (không token), nên ba kênh chứ không còn hai.
 check("kho biết đúng các kênh gắn được bot (0.71.0 thêm Slack, WhatsApp; 0.102.0 thêm Lark; 0.134.0 thêm Messenger)",
-      set(chatbot_store.KENH) == {"telegram", "zalo", "zalo_personal", "messenger", "slack", "whatsapp", "lark"})
+      set(chatbot_store.KENH) == {"telegram", "zalo", "zalo_personal", "zalo_oa", "messenger", "slack", "whatsapp", "lark"})
 check("kênh lạ rơi về Telegram chứ không lưu nguyên",
       chatbot_store._clean_kenh("viber") == "telegram")
 check("kênh zalo được nhận", chatbot_store._clean_kenh("Zalo") == "zalo")
@@ -228,6 +246,10 @@ check("mỗi kênh có câu chỉ chỗ lấy token riêng",
       "BotFather" in chatbot_store.KENH_NGUON_TOKEN["telegram"])
 check("id cuộc chat Zalo (chuỗi hex) được nhận là id nhóm hợp lệ",
       chatbot_store._clean_groups("6ede9afa66b88fe6d6a9") == ["6ede9afa66b88fe6d6a9"])
+check("Zalo Bot group id with zgr- prefix is accepted (#875)",
+      chatbot_store._clean_groups("zgr-72749471121efb40a20f") == ["zgr-72749471121efb40a20f"])
+check("zgr- prefix alone or with non-hex is still rejected",
+      chatbot_store._clean_groups(["zgr-", "zgr-nothex!!", "zgr-12"]) == [])
 check("id nhóm Telegram (số âm) vẫn nhận như cũ",
       chatbot_store._clean_groups("-1001234567890") == ["-1001234567890"])
 check("danh sách nhóm không bị cắt ở 50 (spa có hàng trăm nhóm khách)",

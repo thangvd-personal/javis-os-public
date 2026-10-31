@@ -311,7 +311,12 @@ def main() -> int:
             cmd = [str(goc / Path(c).relative_to(ROOT)) if Path(c).is_relative_to(ROOT / "tests") else c
                    for c in cmd]
             t = time.perf_counter()
-            r = chay_mot(cmd, env, cwd=goc, han_giay=ts["timeout"])
+            env_goc = dict(env)
+            pps = [str(goc / "server"), str(goc / "tests" / "python")]
+            if "PYTHONPATH" in os.environ:
+                pps.append(os.environ["PYTHONPATH"])
+            env_goc["PYTHONPATH"] = os.pathsep.join(pps)
+            r = chay_mot(cmd, env_goc, cwd=goc, han_giay=ts["timeout"])
             return r, time.perf_counter() - t
         finally:
             cho_trong.put(goc)

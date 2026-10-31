@@ -53,7 +53,7 @@ URL = "https://codeload.github.com/thangvd-personal/javis-zalo-public/tar.gz/ref
 check(
     "markers: last long arg plus the package name of a tarball URL",
     mcp_orphans._markers(["-y", "--prefer-offline", URL, "mcp", "start"])
-    == [URL, "/javis-zalo/"],
+    == [URL, "/javis-zalo-public/"],
 )
 check(
     "markers: an ordinary package keeps one marker",

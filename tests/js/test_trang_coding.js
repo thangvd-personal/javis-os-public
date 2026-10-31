@@ -250,7 +250,7 @@ check("index.html nạp folder-picker.js TRƯỚC coding.js",
 check("server nhận cả DANH SÁCH thư mục cho một phiên", (() => {
   const ST = fs.readFileSync(path.join(ROOT, "server", "coding_store.py"), "utf8");
   const RT = fs.readFileSync(path.join(ROOT, "server", "routes", "coding.py"), "utf8");
-  return /def thu_muc_cua_phien\(/.test(ST) && /thu_muc_ids: Optional\[List\[str\]\]/.test(ST)
+  return /def thu_muc_cua_phien\(/.test(ST) && /thu_muc_ids:\s*(Optional\[List\[str\]\]|list\[str\]\s*\|\s*None)/.test(ST)
     && /thu_mucs: str = Form\(None\)/.test(RT);
 })());
 check("thư mục phụ đi vào prompt bằng đường dẫn tuyệt đối", (() => {

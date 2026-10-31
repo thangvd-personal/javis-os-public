@@ -391,7 +391,7 @@ def _bao_xin_vao(conn: dict, theo_nhom: dict[str, dict]) -> None:
         return
     for nhom in theo_nhom.values():
         cau = cau_bao_xin_vao(conn, nhom["ten"], nhom["nguoi"])
-        t = loop.create_task(NOTIFY_OWNER("", cau, kind="system", label="Zalo", source="zalo"))
+        t = loop.create_task(NOTIFY_OWNER("", cau, kind="system", label="Zalo", source="zalo-group"))
         _VIEC.add(t)
         t.add_done_callback(_VIEC.discard)
 
@@ -915,9 +915,16 @@ def _soi_tranh_phien(conn: dict) -> None:
         killed = mcp_orphans.reap_same_home(home, keep_pgids=(pid,)) if home else []
         print(f"[zalo-personal {conn.get('label')}] another session keeps evicting this one "
               f"(reconnect #{th[0]}, rapid #{th[1]}); killed {len(killed)} local copy(ies)", file=sys.stderr)
+        # 0.402.0: the last notice time is kept in the inbox store too, so a restart does not ring again at once.
+        if not tt.get("tranh_phien_bao"):
+            try:
+                tt["tranh_phien_bao"] = float(conversations.doc_trang_thai(f"zalo_thrash_bell:{cid}", "0") or 0)
+            except (TypeError, ValueError):
+                tt["tranh_phien_bao"] = 0.0
         if NOTIFY_OWNER is None or time.time() - float(tt.get("tranh_phien_bao") or 0) < THRASH_BELL_GAP_S:
             return
         tt["tranh_phien_bao"] = time.time()
+        conversations.ghi_trang_thai(f"zalo_thrash_bell:{cid}", str(tt["tranh_phien_bao"]))
         tk = conn.get("label") or "Zalo"
         don = (localefmt.chu(f" Javis đã tắt {len(killed)} bản Zalo cũ còn chạy trên máy này.",
                              f" Javis stopped {len(killed)} old Zalo copy(ies) still running on this machine.")
@@ -1211,7 +1218,9 @@ def co_bot(conn_id: str) -> bool:
 
 
 def _chuan(text: str) -> str:
-    return " ".join(str(text or "").split())
+    # Compared as Zalo shows it (0.413.0): a reply sent as "**85.000đ**" comes back as "85.000đ" with a bold style,
+    # and must still be recognised as the bot's own echo, or the bot takes it for the owner and goes quiet.
+    return " ".join(plain_text(str(text or "")).split())
 
 
 # Zalo's own markup for a tag, e.g. `<a_mention href="zm://Profile/110413987_mention">@Minh</a_mention> Quý`.
@@ -1220,7 +1229,7 @@ def _chuan(text: str) -> str:
 # and outgoing (`channels.zalo_personal.gui`), leaving "@Minh Quý" for the real tag (`--mention`) to find.
 # Since 0.309.0 the stripping lives in `zalo_markup` (also used by the MCP pool for direct tool calls) and also
 # removes broken fragments such as a leftover `href="zm://...">`.
-from zalo_markup import strip_mention_markup
+from zalo_markup import plain_text, strip_mention_markup  # noqa: E402,F401
 
 
 def ghi_da_gui(conn_id: str, thread: str, text: str) -> None:

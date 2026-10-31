@@ -1063,7 +1063,12 @@ function _checkSocket() {
     return;
   }
   if (now - _wsLastFrameAt < WS_IM_MS) return;
-  _wsPingAt = now;
+  _pingNow();
+}
+// Ask the server "still there?" now; _checkSocket drops the socket when no pong comes within WS_PONG_MS.
+function _pingNow() {
+  if (!ws || ws.readyState !== WebSocket.OPEN || _wsPingAt) return;
+  _wsPingAt = Date.now();
   try { ws.send(JSON.stringify({ action: "ping" })); } catch (e) { _dropDeadSocket(); }
 }
 setInterval(_checkSocket, 5000);
@@ -1098,6 +1103,9 @@ function _resumeSauNgu(force) {
     // khung chat không có câu trả lời nào, phải hỏi lại. Hỏi server tin CUỐI một cái (rẻ),
     // lệch với khung đang hiện thì mới tải lại, không thì để yên.
     _dongBoNeuLech();
+    // 0.388.0: such a socket was only noticed after WS_IM_MS of silence plus the pong wait, up to 50 s of a chat
+    // that looked stopped while its turn ran on the server. Ask the server right away instead.
+    _pingNow();
   }
 }
 
@@ -1220,6 +1228,7 @@ function handleMessage(data) {
     try { if (window.JavisResume) window.JavisResume.fromHello(data.resumes || [], savedSessionId); } catch (e) {}
     runActions(turn.wsUp());   // socket đã nối: orb thôi "ĐANG KẾT NỐI LẠI"
     baoDutMang(false);
+    redrawRunningTurn();       // after baoDutMang: it removes the shared chip, the running turn's included
     if(adaptiveCapable) adaptiveOutbox.forEach(p=>ws.send(JSON.stringify(p.payload)));
     guiTinDutMang();           // và những câu nói lúc mất mạng được gửi đi, không bốc hơi
     return;
@@ -2127,6 +2136,7 @@ function restoreSession() {
       if (t.mid != null && window.JavisChatReactions && !el.classList.contains("msg-nho")) window.JavisChatReactions.attach(el, { sid: savedSessionId, mid: t.mid,
         sha: t.sha || "", brain: t.brain || s.brain, reaction: t.reaction || null, entry: t });
     } catch (e) {}
+    if (t.pinned && t.mid != null) datGhim(el, true);
     // Chip chỉ sống lại ở tin CUỐI: có tin sau nó nghĩa là câu hỏi đã được trả lời rồi.
     if (t.ask) window.JavisAsk.render(el, t.ask, i === convo.length - 1);
   });
@@ -2179,10 +2189,12 @@ function veTinDaLuu(m, brainCua, sidCua) {
     // T2 (0.154.0): mã tin, content_sha và reaction đi theo bong bóng lẫn convo, để thả cảm xúc được và F5 vẫn còn.
     const entry = { role: "javis", text: m.content || "", atts: [], ts, brain: brainCua,
                     mid: m.id, sha: m.content_sha || "", reaction: m.reaction || null };
+    entry.pinned = !!m.pinned;   // 0.374.0: pinned into the chat's contents (marks rail)
     try {
       if (window.JavisChatReactions && !el.classList.contains("msg-nho")) window.JavisChatReactions.attach(el, { sid: sidCua, mid: m.id, sha: m.content_sha || "",
         brain: brainCua, reaction: m.reaction || null, entry });
     } catch (e) {}
+    if (m.pinned) datGhim(el, true);
     return entry;
   }
   return null;
@@ -2746,6 +2758,22 @@ function hideActivity() {
   if (activityEl && activityEl.parentNode) activityEl.parentNode.removeChild(activityEl);
   activityEl = null;
 }
+// 0.388.0: the socket came back (the phone had switched apps) and the open chat's turn is still running on the server.
+// The "connection lost" note had taken the activity chip and went away with it, and frames sent meanwhile never
+// arrived, so the chat showed no sign of life until the answer landed and looked stopped. Draw the turn again: its
+// chip, and the text the server has so far (from `hello`) in its bubble.
+function redrawRunningTurn() {
+  const sid = savedSessionId, t = sid ? turns[sid] : null;
+  if (!t || !t.running) return;
+  if (t.text) {
+    if (!(t.bubble && t.bubble.isConnected)) t.bubble = createStreamingBubble();
+    t.bubble.dataset.md = t.text;
+    if (!dangTheoLoi()) t.bubble.querySelector(".bubble").innerHTML = markdownToHtml(t.text, undefined, t.bubble.dataset.anhV);
+  }
+  if (!activityEl) showActivity(t.text ? Icons.msg("pen-line", window.t("app.act_writing")) : window.t("app.act_thinking"));
+  else chatAppend(activityEl);   // keep the chip under the bubble
+  scrollBottom();
+}
 function setProcessing(s) { isProcessing = s; sendBtn.disabled = s || sendBtn.dataset.wsLock === "1"; }
 // workspace.js calls this after changing its lock, so send ends up disabled for the right reason.
 window.JavisSyncActiveUI = syncActiveUI;
@@ -2839,12 +2867,76 @@ function runMsgAct(btn) {
     }
     return;
   }
+  if (act === "pin") { doiGhim(msgEl, btn); return; }
+  if (act === "speak") { docThanhTieng(msgEl, btn); return; }
   // Chi tin NGUOI DUNG mang nut tua lai, nen chu goc luon nam ngay tren chinh no.
   // Truoc day con mot nhanh nguoc len tim tin nguoi dung gan nhat - do la duong cua nut "tra
   // loi lai cau hoi phia tren" o tin Javis, da bo o 0.52.13.
   const text = msgEl.dataset.text || "";
   if (!text) return;
   if (act === "rewind") tuaLai(msgEl, text);
+}
+// 0.374.0: pin an answer into the chat's table of contents (the marks rail lists pinned answers among the questions).
+// The bubble carries data-pinned="1"; the convo entry keeps `pinned` so a reload from local storage still shows it.
+// A pin changes an attribute, not the chat's children, so the rail is told with a "jv-pins" event on #chatArea.
+function datGhim(msgEl, on) {
+  if (!msgEl) return;
+  if (on) msgEl.dataset.pinned = "1"; else delete msgEl.dataset.pinned;
+  const b = msgEl.querySelector('.msg-act[data-act="pin"]');
+  if (b) {
+    b.classList.toggle("on", !!on);
+    b.title = window.t(on ? "cact.unpin" : "cact.pin");
+  }
+  try { chatArea.dispatchEvent(new CustomEvent("jv-pins")); } catch (e) {}
+}
+async function doiGhim(msgEl, btn) {
+  const mid = msgEl.dataset.mid, sid = msgEl.dataset.sid || savedSessionId;
+  if (!mid || !sid || btn.disabled) return;
+  const on = msgEl.dataset.pinned !== "1";
+  datGhim(msgEl, on);   // show it at once; put it back if the server says no
+  btn.disabled = true;
+  let ok = false, loi = "";
+  try {
+    const r = await fetch(`/sessions/${encodeURIComponent(sid)}/messages/${encodeURIComponent(mid)}/pin`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pinned: on }) });
+    const d = await r.json().catch(() => ({}));
+    ok = r.ok && d.ok; loi = d.error || "";
+  } catch (e) { loi = String(e); }
+  btn.disabled = false;
+  if (!ok) { datGhim(msgEl, !on); alert(loi || window.t("cact.pin_failed")); return; }
+  const entry = (msgEl._jr && msgEl._jr.entry) || convo.find(x => x && x.role === "javis" && String(x.mid) === String(mid));
+  if (entry) { entry.pinned = on; persistSession(); }
+}
+// 0.374.0: read one answer aloud, whatever the "read answers aloud" setting says (force). Pressing again while it is
+// still reading stops it. The button shows a stop square while that answer is being read.
+let _docTin = null;
+function docThanhTieng(msgEl, btn) {
+  // Same answer pressed again = stop, even before the first audio has arrived (isSpeaking() is still false then).
+  const dangDocTinNay = !!(_docTin && _docTin.el === msgEl);
+  voice.stopSpeaking();
+  if (_docTin) { clearInterval(_docTin.hen); veNutDoc(_docTin.btn, false); _docTin = null; }
+  if (dangDocTinNay) return;
+  const b = msgEl.querySelector(".bubble");
+  const text = window.JavisVisibleMarkdown(msgEl.dataset.md || (b ? b.innerText : "")).trim();
+  if (!text) return;
+  voice.speak(text, { force: true });
+  veNutDoc(btn, true);
+  const cua = { el: msgEl, btn };
+  // Watch for the end: the voice queue has no per-request callback, so poll it. A grace period covers the moment
+  // before the first audio starts, when isSpeaking() is still false.
+  const batDau = Date.now();
+  cua.hen = setInterval(() => {
+    if (Date.now() - batDau < 4000 || voice.isSpeaking()) return;
+    clearInterval(cua.hen); veNutDoc(btn, false);
+    if (_docTin === cua) _docTin = null;
+  }, 500);
+  _docTin = cua;
+}
+function veNutDoc(btn, on) {
+  if (!btn) return;
+  btn.classList.toggle("on", !!on);
+  btn.title = window.t(on ? "cact.stop_speak" : "cact.speak");
+  btn.innerHTML = ic(on ? "square" : "volume-2");
 }
 // Put a question back in the composer, NOT sent, so it can be edited first.
 function datVaoONhap(text) {
@@ -2966,6 +3058,9 @@ async function initGraph() {
   if (!window.ForceGraph) { graphStats.innerHTML = ic("triangle-alert", { cls: "ic-warn" }) + " " + window.t("app.graph_lib_err"); return; }
   javisGraph = new JavisGraph(c2d);   // resize() gọi bên trong load()
   await reloadGraph();
+  // 0.415.0: mở app thẳng vào một trang quản lý (trang nhớ từ lần trước) thì console.js đã hỏi "có nên chạy đồ thị không"
+  // TRƯỚC khi đồ thị kịp dựng, nên đồ thị cứ vẽ 60 khung/giây sau lưng trang đó. Hỏi lại khi nó đã có.
+  try { if (window.JavisRecomputeGraph) window.JavisRecomputeGraph(); } catch (e) {}
   requestAnimationFrame(() => { if (javisGraph) javisGraph.resize(); });
   setTimeout(() => { if (javisGraph) javisGraph.resize(); }, 150);
 }
@@ -3499,6 +3594,9 @@ function initStarfield() {
   function draw(now) {
     requestAnimationFrame(draw);
     if (document.hidden) return;
+    // 0.415.0: một trang quản lý (Cộng sự, Cài đặt...) đang che màn chính thì nền sao không ai nhìn thấy; vẽ tiếp chỉ đốt
+    // CPU, và đo kích thước ở dưới còn ép trình duyệt tính lại bố cục mỗi lần. Khung cuối vẫn nằm trên canvas khi quay về.
+    if (document.body.classList.contains("in-console")) return;
     // Nền 2D từng tự dựng gradient + grid ở 60 FPS dù não đứng yên. 15 FPS lúc nghỉ vẫn
     // đủ cho sao nhấp nháy chậm; khi có giọng/đang nghĩ nâng lên 30 FPS.
     const lvl = voice.getLevel();
@@ -4063,7 +4161,21 @@ chatInput.addEventListener("input", () => {
   const _cap = document.body.classList.contains("on-chat")
     ? Math.round(window.innerHeight * 0.4) : 200;
   chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
+  sendTypingHint();
 });
+// 0.382.0: tell the server the owner started typing, at most once every 20 s per conversation, so it can reopen this
+// conversation's engine process before the message lands (warm_pool.prewarm). Nothing is sent while a turn runs.
+let _typingHintAt = 0, _typingHintSid = "";
+function sendTypingHint() {
+  // A hint, not a message: with no open socket there is simply nothing to warm.
+  const sid = savedSessionId, now = Date.now();
+  const open = !!ws && ws.readyState === WebSocket.OPEN;
+  const due = sid !== _typingHintSid || now - _typingHintAt >= 20000;
+  if (sid && open && due && !isProcessing && chatInput.value.trim()) {
+    _typingHintAt = now; _typingHintSid = sid;
+    try { ws.send(JSON.stringify({ action: "typing", session_id: sid })); } catch (e) {}
+  }
+}
 // Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
 // chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
 const chatInputComposing = window.JavisActs.trackComposition(chatInput);
@@ -4350,7 +4462,6 @@ function _renderCtxLine(msgEl, data) {
   // và bỏ cả dòng chỉ vì thiếu một nửa là mất luôn nửa đang có.
   if (!msgEl || !data || !(data.ctx_path || data.engine)) return;
   const cu = data.ctx_path === "legacy";
-  const tok = Number(data.ctx_in) || 0;
   const old = msgEl.querySelector(".msg-ctx");
   if (old) old.remove();
   const el = document.createElement("div");
@@ -4367,10 +4478,7 @@ function _renderCtxLine(msgEl, data) {
               + (data.model ? " · " + _shortModel(data.model) : ""));
   }
   if (data.ctx_path) phan.push(CTX_PATH_LABEL[data.ctx_path] ? window.t(CTX_PATH_LABEL[data.ctx_path]) : data.ctx_path);
-  // 0.345.0: chỉ hiện token MỚI. Phần đọc lại từ cache (ctx_cache) rẻ hơn nhiều, tính chung vào thì một câu chào
-  // trên Claude Code hiện "60k token" và khách tưởng mình vừa trả 60k token. Phần cache nằm ở chú thích.
-  const cache = Math.min(Number(data.ctx_cache) || 0, tok);
-  if (tok) phan.push(_fmtTok(tok - cache) + " token");
+  // 0.374.0: no token count on the line any more (owner 28/10/2026); the Usage page has the numbers.
   el.textContent = phan.join(" · ");
   const chuThich = [];
   if (data.engine) {
@@ -4380,8 +4488,6 @@ function _renderCtxLine(msgEl, data) {
     chuThich.push(cu ? window.t("app.ctx_hint_full")
                      : window.t("app.ctx_hint_saving"));
   }
-  if (tok) chuThich.push(cache ? window.t("app.ctx_hint_tokens_new", { n: _fmtTok(cache) })
-                               : window.t("app.ctx_hint_tokens"));
   el.title = chuThich.join("\n");
   msgEl.appendChild(el);
 }
@@ -4906,18 +5012,6 @@ if (document.getElementById("wzFinish")) {
       const _ork = (document.getElementById("wzOrKeyInput") || {}).value;
       if (prov === "openrouter" && _ork && _ork.trim()) _mp.openrouter_key = _ork.trim();
       await fetch("/settings", { method: "POST", body: _fd({ section: "model", data: JSON.stringify(_mp) }) });
-      // Người dùng đã tick "cài trình duyệt": khởi động việc tải ở NỀN rồi vào app luôn. Không
-      // bắt họ ngồi nhìn thanh tiến độ cả trăm MB ngay phút đầu tiên; trang Công cụ có đủ
-      // trạng thái để xem sau. Hỏng thì cũng không chặn đường vào app.
-      const _ctB = document.getElementById("wzCtBrowser");
-      if (_ctB && _ctB.checked) {
-        try {
-          await fetch("/tools/optional/install", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: "browser" }),
-          });
-        } catch (e) {}
-      }
       location.reload();
     } catch (e) { err.textContent = window.t("app.err_net"); btn.disabled = false; btn.textContent = window.t("app.wz_start"); }
   });

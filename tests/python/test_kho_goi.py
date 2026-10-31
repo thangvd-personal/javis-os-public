@@ -103,6 +103,19 @@ check("size không phải số thì về 0",
 # index và chỉ nhận ảnh. Thẻ về ô chữ cái chứ KHÔNG BAO GIỜ vẽ ảnh từ host lạ.
 check("bộ đọc giữ lại icon để lưới vẽ logo",
       packs_store._lam_sach({"id": "a", "icon": "packs/a/assets/a.png"})["icon"] == "packs/a/assets/a.png")
+# Recommended repos (0.370.0): `upstream` becomes a github.com link on the card, so only a plain owner/name passes.
+up = packs_store._lam_sach({"id": "a", "upstream": {"repo": "remotion-dev/skills", "ref": "main",
+                                                   "commit": "30d4553ecd46fbc5212fd0ff006ae43af522158b",
+                                                   "synced": "2026-10-28", "extra": "x"}})["upstream"]
+check("upstream keeps repo, ref, commit and date", up == {"repo": "remotion-dev/skills", "ref": "main",
+      "commit": "30d4553ecd46fbc5212fd0ff006ae43af522158b", "synced": "2026-10-28"})
+for bad in ("https://evil.dev/x", "a/b/c", "javascript:alert(1)", "../x", "a/..", "", None):
+    check(f"upstream with a repo that is not owner/name is dropped: {bad!r}",
+          packs_store._lam_sach({"id": "a", "upstream": {"repo": bad}})["upstream"] == {})
+odd = packs_store._lam_sach({"id": "a", "upstream": {"repo": "a/b", "commit": "<b>", "synced": "hôm qua",
+                                                    "ref": "x y"}})["upstream"]
+check("odd commit, date and ref are blanked, the repo stays", odd == {"repo": "a/b", "ref": "", "commit": "", "synced": ""})
+check("a pack without upstream has an empty one", packs_store._lam_sach({"id": "a"})["upstream"] == {})
 
 # ─────────────── 4. Kho: đọc, cache, và suy biến ───────────────
 INDEX_TOT = json.dumps({
@@ -325,7 +338,7 @@ import re as _re
 _an = _re.search(r"const RAIL_AN = new Set\((.*?)\);", src_con)
 check("kho hiện trên thanh bên", _an is not None and '"packs"' not in _an.group(1))
 # 0.251.0: the Login vault joined the same group, between Channels and Models.
-check("và nằm trong nhóm Kết nối", '"mcp", "packs", "channels", "logins", "models"' in src_con)
+check("và nằm trong nhóm Kết nối", '"mcp", "packs", "channels", "logins"' in src_con)
 check("vẫn giữ trong danh sách trang (nguồn icon và nhãn)",
       '"packs", "logs", "account", "usage",' in src_con)
 # VIEW_META thiếu "packs" từ đầu nên header trang kho ghi nhầm là tiêu đề Trang chủ.
@@ -341,8 +354,21 @@ check("bật/tắt tạm chuyển lên thẻ chứ không mất",
       'data-kho-act="tat"' in src_js and '"/packs/toggle"' in src_js)
 # Nút chọn tệp nằm TRONG thanh công cụ của lưới, tức trên đầu - không phải cuối trang.
 check("nút cài từ tệp .zip nằm trên thanh công cụ của lưới",
-      src_js.index('id="pkChon2"') < src_js.index('id="pkGrid"'))
-check("tên hiển thị là Javis Store", "◆ Javis Store" in src_js)
+      src_js.index('data-kho-zip="1"') < src_js.index('id="pkGrid"'))
+# 0.384.0: the page header (VIEW_META) already reads "Javis Store", so the page body must not
+# repeat it as a second heading (owner, 2026-10-28).
+check("không lặp tiêu đề Javis Store trong thân trang", "◆ Javis Store" not in src_js)
+check("thanh tab của kho cố định khi cuộn",
+      ".kho-thanh { position: sticky;" in (DASHBOARD / "console.css").read_text(encoding="utf-8"))
+check("phân trang 18 mục một trang", "const MOI_TRANG = 18;" in src_js)
+# 0.386.0 (owner): on phones the kind tabs are a dropdown, in the pinned bar next to the group one.
+# 0.390.0 (owner): at most three card columns, and the card keeps only the "runs code" chip.
+_css = (DASHBOARD / "console.css").read_text(encoding="utf-8")
+check("lưới kho tối đa 3 cột", "calc((100% - 24px) / 3)" in _css)
+check("thẻ kho không còn nhãn loại, chỉ chip chạy mã", "kho-chip-ma" in src_js
+      and "' <span class=\"prov-kind\">' + esc(tw(lo.nhan))" not in src_js)
+check("điện thoại chọn loại bằng ô thả xuống", 'id="pkLoai"' in src_js and "sl.onchange" in src_js
+      and src_js.index('id="pkLoai"') < src_js.index('id="pkNhom"') < src_js.index('class="kho-than"'))
 
 # Mục trong danh mục trỏ vào tệp NGAY TRONG REPO thì tệp đó phải có thật và đúng dấu vân tay.
 # Đây là lỗi khó thấy nhất của một kho: index đã trỏ sang bản mới mà tệp thì quên chưa đẩy,

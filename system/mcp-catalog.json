@@ -210,7 +210,7 @@
           "zalo_get_labels"
         ],
         "write": ["zalo_mark_read"],
-        "danger": ["zalo_send_message", "zalo_send_file", "zalo_add_reaction", "zalo_review_join_requests"]
+        "danger": ["zalo_send_message", "zalo_send_typing", "zalo_send_file", "zalo_add_reaction", "zalo_review_join_requests"]
       },
       "default_perm": "full",
       "companion_pack": "javis.zalo",

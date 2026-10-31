@@ -96,7 +96,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
         "\"không có tool\" khi tool này đang hiện trong danh sách.",
         "- Khi user yêu cầu TẠO/SỬA/XOÁ/HUỶ/TẮT cron, việc định kỳ hoặc nhắc hẹn: BẮT BUỘC dùng "
         "`javis_schedule`. Riêng xoá/huỷ mà chưa có id thì gọi `op=list`, khớp đúng mục rồi gọi "
-        "`op=cancel`; không đẩy user sang trang Việc định kỳ để tự làm và chỉ xác nhận sau khi tool "
+        "`op=cancel`; không đẩy user sang trang Nhiệm vụ để tự làm và chỉ xác nhận sau khi tool "
         "trả thành công. Nếu tool lỗi: KHÔNG gọi DELETE, KHÔNG đoán body JSON và TUYỆT ĐỐI KHÔNG "
         "sửa trực tiếp `Javis/reminders.json` - làm vậy có thể huỷ nhầm job.",
         "- ĐỦ ĐIỀU KIỆN MỚI TẠO: trước khi tạo bất kỳ lịch/việc định kỳ nào, tự soát xem tới giờ nó "
@@ -130,7 +130,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
         "hay không thì HỎI MỘT CÂU rồi mới tạo, đừng tạo trước cho chắc.",
         "- Giao việc nền xong phải ĐỌC kết quả tool trả về rồi thuật lại đúng như vậy. Nếu tool "
         "báo điều phối đang TẮT thì việc chỉ nằm xếp hàng chứ chưa chạy - phải nói thẳng câu đó "
-        "và bảo user bật \"AI tự vận hành\" ở trang Việc, KHÔNG được rút gọn thành \"việc đang "
+        "và bảo user bật \"AI tự vận hành\" ở trang Nhiệm vụ, KHÔNG được rút gọn thành \"việc đang "
         "chạy, kết quả sẽ tự về\".",
         "- THÊM MCP / đấu nguồn mới: BẮT BUỘC dùng tool `javis_add_mcp` (op=find để tra Kho kết nối "
         "trước, op=add để đấu). Chỉ đường này nguồn mới mới nằm trong kho của Javis và HIỆN ở khu "
@@ -346,7 +346,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
             "cái cớ để viết dài ra hay bẻ một ý nhỏ thành ba gạch đầu dòng.",
             "",
             "## Điều khiển dashboard và máy tính bằng lời (Voice V1)",
-            "- User bảo MỞ một trang / file / việc trên Javis (\"mở trang Việc\", \"mở file X\", "
+            "- User bảo MỞ một trang / file / việc trên Javis (\"mở trang Nhiệm vụ\", \"mở file X\", "
             "\"cho xem việc vừa giao\", \"cuộn xuống\"): gọi tool `javis_ui` (action open_page | "
             "open_file | open_task | scroll) rồi thuật đúng kết quả tool trả về. Không mô tả "
             "đường bấm tay khi tool làm được.",
@@ -383,7 +383,7 @@ def build_channel_block(source: str, meta: dict = None, telegram_running: bool =
                 "lượt trả lời của bạn KẾT THÚC ngay sau khi bạn nói, không có chỗ nào để bạn ngồi đợi "
                 "và cũng không ai đánh thức bạn dậy để tổng hợp. Việc chạy nền tự báo kết quả THÔ về "
                 "khung chat khi xong. Hãy nói đúng như vậy: đã giao mấy việc, mỗi việc làm gì, kết quả "
-                "sẽ tự hiện ở đây, xem tiến độ ở trang Việc. Muốn có bản tổng hợp so sánh thì bảo user "
+                "sẽ tự hiện ở đây, xem tiến độ ở trang Nhiệm vụ. Muốn có bản tổng hợp so sánh thì bảo user "
                 "nhắn lại một câu sau khi kết quả về, HOẶC giao luôn một việc cuối chuyên đi tổng hợp "
                 "(dùng `deps` trỏ vào các việc trước) thay vì tự hứa suông.",
                 "- Javis TỰ KIỂM lời hứa: cuối mỗi lượt server dò câu trả lời xem có hẹn báo lại "
@@ -678,6 +678,27 @@ def _ask_to_text(payload: str) -> str:
     for i, x in enumerate(opts[:_MAX_ASK_OPTS], 1):
         lines.append(f"{i}. {str(x['label']).strip()}")
     return "\n".join(lines)
+
+
+SILENT_MARK = "[SILENT]"
+
+
+def is_silent_report(text: str) -> bool:
+    """True when a background answer carries the [SILENT] flag: "nothing to report, do not notify".
+
+    The flag counts when it OPENS the answer or CLOSES it (0.408.0). Models told "start with [SILENT] when there is
+    nothing to report" often write a sentence first and put the flag last ("I will check the failed POSCake runs.
+    [SILENT]"), and that leaked into the bell as a report (owner, 2026-10-29). A flag in the middle of prose is the
+    model explaining something, so it does not count. Control blocks, whitespace, quotes and markdown emphasis
+    around the flag are ignored.
+    """
+    def _sach(dong: str) -> str:
+        return dong.strip().strip("`*_>").strip()
+
+    dong = [d for d in (_sach(x) for x in strip_control_blocks(text or "").splitlines()) if d]
+    if not dong:
+        return False
+    return dong[0].upper().startswith(SILENT_MARK) or dong[-1].upper().endswith(SILENT_MARK)
 
 
 def strip_control_blocks(text: str) -> str:

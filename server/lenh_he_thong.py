@@ -244,9 +244,9 @@ def dinh_dang_muc_dung(summary: dict, openrouter=None) -> str:
     return "\n".join(dong)
 
 
-_NHAN_COT = (("running", "Đang chạy"), ("review", "Chờ duyệt"), ("blocked", "Bị kẹt"),
+_NHAN_COT = (("running", "Đang chạy"), ("review", "Chờ duyệt"), ("blocked", "Tạm dừng, Javis đang lo"),
              ("ready", "Sẵn sàng"), ("todo", "Chờ làm"), ("triage", "Mới nhận"))
-_NHAN_COT_EN = {"running": "Running", "review": "Awaiting review", "blocked": "Blocked",
+_NHAN_COT_EN = {"running": "Running", "review": "Awaiting review", "blocked": "Paused, Javis is on it",
                 "ready": "Ready", "todo": "To do", "triage": "New"}
 
 
@@ -259,11 +259,11 @@ def dinh_dang_viec(view: dict, moi_cot: int = 5) -> str:
     dong = [localefmt.chu("📋 Việc nền của Javis", "📋 Javis background work")]
     if che_do.lower() == "off":
         dong.append(localefmt.chu("⚠ Tự vận hành đang TẮT: việc chỉ nằm trong hàng đợi, chưa chạy. "
-                                  "Bật ở trang Việc trên dashboard.",
+                                  "Bật ở trang Nhiệm vụ trên dashboard.",
                                   "⚠ AI self-driving is OFF: work only sits in the queue and does not run. "
                                   "Turn it on from the Tasks page on the dashboard."))
     elif che_do.lower() == "manual":
-        dong.append(localefmt.chu("Tự vận hành ở chế độ thủ công: việc chỉ chạy khi bấm Chạy ở trang Việc.",
+        dong.append(localefmt.chu("Tự vận hành ở chế độ thủ công: việc chỉ chạy khi bấm Chạy ở trang Nhiệm vụ.",
                                   "AI self-driving is manual: work only runs when you click Run on the Tasks page."))
     co_gi = False
     for khoa, nhan in _NHAN_COT:

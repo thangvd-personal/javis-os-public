@@ -411,6 +411,18 @@ button, input, select, textarea { font-family: inherit; }
 .noti-kind.community { color: var(--info-ink); background: var(--info-wash); }
 .noti-kind.security { color: var(--warn-ink); background: var(--warn-wash); }
 .noti-time { color: var(--text3); font-size: 10.5px; }
+/* 0.408.0: X on every card, beside the time. Muted until hovered: it is the second thing on the card, not the first. */
+.noti-top-r { display: inline-flex; align-items: center; gap: 4px; }
+.noti-x { display: inline-grid; place-items: center; width: 26px; height: 26px; margin: -4px -6px -4px 0; padding: 0;
+  border: 0; border-radius: 7px; background: transparent; color: var(--text3); cursor: pointer; }
+.noti-x svg { width: 15px; height: 15px; }
+.noti-x:hover, .noti-x:focus-visible { color: var(--text-hi); background: var(--surface-3); }
+@media (pointer: coarse) { .noti-x { width: 34px; height: 34px; } .noti-x svg { width: 17px; height: 17px; } }
+/* "Show N read notices" / "Hide read notices" under the list. */
+.noti-read-toggle { display: block; margin: 8px auto 4px; font-size: 13px; }
+/* What Javis Core learned from "Not needed", shown once above the list after that card left it. */
+.noti-flash { margin: 2px 4px 8px; padding: 9px 11px; border-radius: 9px; font-size: 13px; line-height: 1.5;
+  color: var(--text2); background: var(--surface-2); }
 .noti-card h4 { margin: 8px 0 4px; color: var(--text); font-size: 14px; line-height: 1.35; }
 .noti-card p { margin: 0; color: var(--text2); font-size: 12px; line-height: 1.5; }
 .noti-card-summary,
@@ -464,6 +476,41 @@ button, input, select, textarea { font-family: inherit; }
 }
 /* 0.204.0: display above beat the hidden attribute, so an empty tab showed a "0" pill. */
 .noti-tab-count[hidden] { display: none; }
+/* 0.403.0: Javis Core as the notification commander. Filter tab, filtered notices, feedback row, filter view. */
+.noti-tab-filter { margin-left: auto; }
+.noti-why { display: inline-block; margin: 8px 8px 0 0; padding: 2px 7px; border-radius: 6px; font-size: 11px;
+  color: var(--text3); background: var(--surface-2); }
+.noti-react { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.noti-axis { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 1px solid var(--hairline);
+  border-radius: 999px; background: var(--surface-1); color: var(--text2); font: 600 12px var(--font); cursor: pointer; }
+.noti-axis svg { width: 14px; height: 14px; }
+.noti-axis:hover { border-color: var(--accent-line); color: var(--text); }
+.noti-axis.on { border-color: var(--accent); background: var(--accent-wash); color: var(--accent-ink); }
+.noti-axis.no.on { border-color: var(--warn-ink); background: var(--warn-wash); color: var(--warn-ink); }
+.noti-react-note { flex-basis: 100%; margin-top: 2px !important; font-size: 12px !important; color: var(--text2) !important; }
+.noti-sub-head { display: flex; align-items: center; gap: 8px; padding: 6px 4px 10px; }
+.noti-sub-head b { font-size: 14px; color: var(--text); }
+.noti-sub-head .noti-text-btn { display: inline-flex; align-items: center; gap: 2px; }
+.noti-sub-head svg { width: 15px; height: 15px; }
+.noti-filter { padding: 0 4px 8px; font-size: 13px; color: var(--text2); }
+.noti-filter .info-pair { display: block; margin-bottom: 8px; }
+.noti-fg { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0;
+  border-bottom: 1px solid var(--hairline); }
+.noti-fg-n { display: flex; flex-direction: column; color: var(--text); font-weight: 500; }
+.noti-fg-n small { color: var(--accent-ink); font-size: 11px; font-weight: 600; }
+.noti-fg select { height: 34px; max-width: 58%; padding: 0 8px; border: 1px solid var(--border); border-radius: 9px;
+  background: var(--bg2); color: var(--text); font: 500 13px var(--font); }
+.noti-filter h5 { margin: 14px 0 6px; font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; }
+.noti-fl { list-style: none; margin: 0; padding: 0; }
+.noti-fl li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0;
+  border-bottom: 1px solid var(--hairline); line-height: 1.45; }
+.noti-fl li small { color: var(--text3); }
+.noti-fl-empty { margin: 0; color: var(--text3); }
+@media (pointer: coarse) {
+  .noti-axis { height: 36px; font-size: 14px; }
+  .noti-filter { font-size: 15px; }
+  .noti-fg select { height: 40px; font-size: 15px; }
+}
 /* Công tắc thông báo đẩy - nằm ngay trên chân panel, thấy được lúc đang đọc thư. */
 .noti-push {
   flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -1371,6 +1418,20 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 /* Bên máy tính số thứ tự là thừa: dãy vạch đã nói vị trí bằng hình rồi. */
 #chatMarks .cm-so { display: none; }
 
+/* 0.374.0: answers pinned into the contents (pin button under an answer, chat-marks.js). They sit among the questions
+   in conversation order, marked by a pin instead of a number, in the accent colour on the rail as well. */
+.cm-vach.cm-ghim { height: 3px; background: var(--accent); opacity: .7; }
+#chatMarks .cm-muc.cm-ghim .cm-so { display: inline-flex; }
+.cm-muc.cm-ghim .cm-so { display: inline-flex; vertical-align: -2px; color: var(--accent); }
+.cm-muc.cm-ghim .cm-so svg { width: 13px; height: 13px; }
+.msg-javis.cm-vua-nhay .bubble { animation: cmNhay 1.2s ease; }
+/* The pin button appears once the answer is saved (it has a message id); while it streams there is nothing to pin. */
+.msg-javis:not([data-mid]) .msg-act[data-act="pin"] { display: none; }
+.msg-act svg { width: 14px; height: 14px; vertical-align: -2px; }
+.msg-act.on { color: var(--accent); }
+/* A pinned answer keeps its button row visible, so the filled pin says it is in the contents. */
+.msg-javis[data-pinned] .msg-acts { opacity: 1; }
+
 /* Điện thoại: nút đứng TRÊN HÀNG NHÃN (JS cắm vào .panel-acts hoặc .chatpage-bar), không
    còn là lớp dính trong khung cuộn - xem ngoại lệ ở đầu chat-marks.js. Ở đó khối bọc phải là
    một ô bình thường trên hàng, và nút không được định vị tuyệt đối nữa. */
@@ -1639,6 +1700,11 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 @media (max-width: 860px) {
   .dict-cancel, .dict-stop { width: 40px; height: 40px; }
   .dict-bar { height: 40px; }
+}
+/* 0.409.0: on a touch screen the box is only a display while recording; a tap on it must not focus it and bring the
+   keyboard (and iOS's AutoFill bubble) back (composer-dictate.js). */
+@media (pointer: coarse) {
+  .hud-voice.dictating .voice-input { pointer-events: none; }
 }
 .voice-input {
   flex: none; background: transparent; border: none; border-radius: 0;
@@ -2712,6 +2778,22 @@ body.jv-artpanel-open { overflow: hidden; }
 .jv-ap-mermaid { min-height: 100%; display: flex; align-items: center; justify-content: center;
   padding: 16px; background: var(--bg); color: var(--text2); }
 .jv-ap-mermaid svg { max-width: 100%; height: auto; }
+/* SVG picture in the viewer: an <img> on white, zoomed by pan-zoom.js (0.405.0). */
+.jv-ap-svg { height: 100%; background: #fff; }
+/* pan-zoom.js: the box clips, the content moves from its top left corner, touch gestures stay with the box. */
+.jv-pz { position: relative; overflow: hidden !important; padding: 0 !important; display: block !important;
+  height: 100%; min-height: 0; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.jv-pz.jv-pz-grab { cursor: grabbing; }
+.jv-pz > .jv-pz-item { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 0; }
+.jv-pz-bar { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 2px; padding: 4px;
+  border-radius: 12px; background: var(--panel-solid, var(--bg2)); border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .25); cursor: default; z-index: 2; }
+.jv-pz-bar button { width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--text2);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.jv-pz-bar button:hover { background: var(--bg3); color: var(--text-hi, var(--text)); }
+.jv-pz-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.jv-pz-bar svg { width: 18px; height: 18px; }
+.jv-pz-pct { min-width: 52px; text-align: center; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
 /* MẶC ĐỊNH XUỐNG DÒNG. `overflow-wrap: anywhere` để một chuỗi dài không có dấu cách (URL,
    chuỗi base64, đường dẫn) cũng ngắt được - thiếu nó thì "xuống dòng" vẫn đẩy ngang một dòng
    duy nhất ra ngoài hộp. Không còn nút tắt (bỏ 0.64.79): chủ repo không hiểu nó để làm gì. */
@@ -3995,6 +4077,12 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   filter: drop-shadow(0 0 5px var(--pet-face, #f28c28));
 }
 .pet-rig { transform-origin: 160px 160px; }
+/* Nghỉ yên (pet.js, 0.418.0): vòng vẽ JS dừng, vành quay bằng hoạt ảnh này (pet.js đặt thời lượng và steps để chỉ đổi
+   10 lần mỗi giây, bắt đầu từ đúng chỗ vành đang đứng qua --vanh0), mắt liếc bằng transition. Transition cũng theo
+   steps(10): đổi transform của nhóm SVG bắt trình duyệt dàn lại bố cục MỖI khung, đo được bận 17% so với 14% khi chỉ
+   đổi 10 lần cho cả cú liếc (mỗi lần dịch chưa tới 1px, mắt không thấy bậc). */
+@keyframes petVanh { from { stroke-dashoffset: var(--vanh0, 0); } to { stroke-dashoffset: calc(var(--vanh0, 0) - 360); } }
+.pet.pet-nghi .pet-rig, .pet.pet-nghi .pet-eyes { transition: transform 2.4s steps(10); }
 
 /* PHẢN ỨNG TẠM của linh vật (pet.js -> dienPhanUng, 0.64.39). Gắn lên <svg> chứ không lên
    .pet-body: .pet-body đang giữ transform trượt ra/nép vào, đè lên đó là pet giật về mép.
@@ -4281,8 +4369,8 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .rsa-goals-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-top: 12px; }
 /* 0.175.0: các câu giải thích của Auto gập lại, mở khi cần đọc. */
 /* Nút "i" mở lời giải thích (0.175.0, info-tip.js): chủ repo thấy tab Cài đặt "nhiều thông tin quá". Nút tròn nhỏ cạnh tiêu đề
-   mục, đứng cùng dòng chữ; vùng chạm nới ra 44px trên cảm ứng bằng một lớp trong suốt, không đẩy chữ. Khối giải thích là một ô
-   nền nhạt ngay dưới tiêu đề. */
+   mục, đứng cùng dòng chữ; vùng chạm nới ra 44px trên cảm ứng bằng một lớp trong suốt, không đẩy chữ. Từ 0.399.0 khối giải
+   thích luôn ẩn trong trang và mở trong popup (.info-pop, bên dưới). */
 .info-i { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
   margin-left: 6px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text3); cursor: pointer;
   vertical-align: middle; flex: none; }
@@ -4294,6 +4382,23 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   font-size: 16px; line-height: 1.55; font-weight: 400; display: block; overflow-wrap: anywhere;
   text-align: left; text-transform: none; letter-spacing: normal; }
 .info-body[hidden] { display: none; }
+/* 0.399.0 (owner, 2026-10-29): the (i) opens a popup next to the button instead of unfolding the block in the page
+   (info-tip.js). Above every modal (3210) and drawer; a sheet from the bottom on a phone, with a dimmed backdrop. On a
+   computer the backdrop is clear and only catches the click that closes the popup. */
+.info-pop-bg { position: fixed; inset: 0; z-index: 3400; background: transparent; }
+.info-pop { position: fixed; z-index: 3401; width: min(360px, calc(100vw - 16px)); max-height: min(60vh, 480px); overflow-y: auto;
+  box-sizing: border-box; padding: 12px 40px 12px 14px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--panel-solid, var(--bg2)); color: var(--text2); box-shadow: var(--shadow-2); font-size: 14px; line-height: 1.55;
+  text-align: left; text-transform: none; letter-spacing: normal; font-weight: 400; overflow-wrap: anywhere; outline: none; }
+.info-pop-c > * { margin: 0; font-size: inherit; }
+.info-pop-c > :is(div, p, ul, ol, pre) + :is(div, p, ul, ol, pre) { margin-top: 6px; }
+.info-pop-x { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; display: inline-flex; align-items: center;
+  justify-content: center; border: 0; border-radius: 8px; background: none; color: var(--text3); cursor: pointer; padding: 0; }
+.info-pop-x:hover { background: var(--surface-2); color: var(--text); }
+.info-pop-x svg { width: 16px; height: 16px; }
+.info-pop.sheet { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 70vh; border-radius: 18px 18px 0 0;
+  padding: 18px 48px 22px 18px; font-size: 16px; }
+@media (max-width: 600px) { .info-pop-bg { background: var(--scrim, rgba(0, 0, 0, .45)); } .info-pop-x { width: 40px; height: 40px; } }
 div.info-body > * { margin: 0; font-size: inherit; }
 /* Block, not flex (review 0.214.0): a folded sentence often mixes <b>, <code> and <a> with text, and flex turned each of
    those into its own stacked line. Block children (one line per div, p or list) still get a small gap. */
@@ -4517,6 +4622,30 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 .gh-local-meta { color: var(--text2); flex: 1; min-width: 120px; }
 .gh-chip svg { width: 15px; height: 15px; flex: none; }
 .gh-apply[disabled] { opacity: .55; cursor: default; }
+/* Repo and branch picker in the + menu (0.368.0, after Claude Code's picker): sections, grouped rows, two-line names. */
+.gh-sec { padding: 10px 10px 4px; font-size: 12.5px; color: var(--text3); font-weight: 600; }
+.gh-group { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.gh-group > .cp-mi { border-radius: 0; }
+.gh-group > .cp-mi + .cp-mi { border-top: 1px solid var(--border); }
+.gh-group > .cp-mi:hover, .gh-group > .cp-mi:focus-visible { background: var(--bg2); }
+.cp-menu [hidden] { display: none; }
+.gh-two { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gh-owner { font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-tick { flex: none; display: inline-flex; color: var(--accent, #3b82f6); }
+.gh-tick svg { width: 18px; height: 18px; }
+.gh-results { display: flex; flex-direction: column; gap: 2px; }
+.gh-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.gh-foot .gh-apply { width: 100%; }
+.gh-foot .gh-apply[hidden] { display: none; }
+.gh-repo .cp-mi-hint { display: inline-flex; align-items: center; gap: 4px; }
+.gh-repo .cp-mi-hint .cp-ic { width: 14px; height: 14px; }
+.gh-chip-br { display: inline-flex; align-items: center; gap: 3px; color: var(--text2); font-size: 12px; max-width: 90px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.gh-chip-br .cp-ic { width: 12px; height: 12px; }
+.cp-pin.gh-chip { max-width: 260px; }
+.cp-pin.gh-chip > span:first-of-type { min-width: 3ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .cp-pin.gh-chip { max-width: 200px; } .gh-chip-br { max-width: 64px; } }
 .gh-checks-box { width: 100%; min-height: 160px; font-family: var(--mono, ui-monospace, monospace); font-size: 16px; line-height: 1.45; resize: vertical; }
 /* GitHub status icon per conversation (0.365.0, spec 12.1): right of the title in the chat list, and in the repo chip. */
 .cside-item.has-gh { position: relative; }

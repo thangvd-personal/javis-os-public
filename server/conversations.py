@@ -51,11 +51,14 @@ KENH = _channels.ids()
 KENH_NHAN = _channels.nhan_theo_id()
 NGUOI_GUI = ("customer", "ai", "human", "system")
 LOAI_TIN = ("text", "image", "file", "audio", "video", "sticker", "reaction", "other")
-CHE_DO = ("ai", "human", "waiting", "closed")
+# "draft" (Chatbot v5, 2026-10-28): the bot writes its reply but does not send it; the reply waits in the conversation's
+# `metadata.draft` for the owner to send, rewrite or drop (see `save_draft`).
+CHE_DO = ("ai", "human", "waiting", "closed", "draft")
 CHE_DO_DEFAULT = "ai"
 
 MAX_CHU = 8_000          # trần độ dài một tin lưu lại
-GIU_TIN_NHOM = 100       # 0.65.12: mỗi NHÓM chỉ giữ chừng này tin gần nhất. Chat riêng với khách vẫn lưu hết (chủ chốt 30/09/2026).
+GIU_TIN_NHOM = 1000      # 0.65.12: mỗi NHÓM chỉ giữ chừng này tin gần nhất. Chat riêng với khách vẫn lưu hết (chủ chốt 30/09/2026).
+                         # 0.396.0: raised from 100 to 1000 at the owner's request (29/10/2026).
 NGAY_GIU_SAO_LUU = 14    # bản sao lưu trước khi cắt nhóm cũ tự xoá sau chừng này ngày: giữ mãi thì lời của người lạ vẫn nằm đó, trái mục đích cắt
 MAX_TEN = 120
 MAX_DANH_SACH = 200      # trần một trang danh sách hội thoại
@@ -298,7 +301,9 @@ def chuan_hoa(ev: dict) -> dict:
         "channel": kenh,
         "account_id": account_id,
         "account_name": _s(ev.get("account_name"), MAX_TEN).strip(),
-        "bot_id": _s(ev.get("bot_id"), 64).strip(),
+        # A chat logged by the channel itself (Zalo "record chats") comes without a bot; it still belongs to the bot on
+        # duty for that nick or Page, or the inbox would offer to "create an A.I." for a channel that has one.
+        "bot_id": _s(ev.get("bot_id"), 64).strip() or bot_of_account(account_id),
         "external_chat_id": chat,
         "chat_type": chat_type,
         "chat_title": _s(ev.get("chat_title"), MAX_TEN).strip(),
@@ -648,7 +653,7 @@ _LOC_TINH_TRANG = {
     "unread": "c.unread_count>0",
     "human": "c.mode='human'",
 }
-_KHACH_CHUA_DAP = "c.last_sender_type='customer' AND c.mode IN ('ai','waiting')"
+_KHACH_CHUA_DAP = "c.last_sender_type='customer' AND c.mode IN ('ai','waiting','draft')"
 
 
 def _sql_can_tra_loi(hesitant) -> tuple:
@@ -663,19 +668,45 @@ def _sql_can_tra_loi(hesitant) -> tuple:
 
 def can_tra_loi(item: dict, hesitant=None) -> bool:
     """Bản Python của điều kiện SQL ở trên, cho từng hàng danh sách (thẻ "Cần trả lời")."""
-    if item.get("last_sender_type") != "customer" or str(item.get("mode") or "ai") not in ("ai", "waiting"):
+    if item.get("last_sender_type") != "customer" or str(item.get("mode") or "ai") not in ("ai", "waiting", "draft"):
         return False
     if item.get("chat_type") != "group":
         return True
     return (str(item.get("bot_id") or ""), str(item.get("external_chat_id") or "")) in {
         (str(a), str(b)) for a, b in (hesitant or [])}
+
+
+# Zalo writes "X đã đồng ý kết bạn" / "Bạn vừa kết bạn với X" into the chat as if the other side had typed it. Nobody is
+# waiting for an answer to that (owner, 2026-10-28), so it never puts a chat under "Needs you".
+_TIN_KET_BAN = re.compile(r"(đã đồng ý kết bạn|vừa kết bạn với|đã trở thành bạn|accepted your friend request|are now friends)",
+                          re.IGNORECASE)
+
+
+def la_tin_ket_ban(text: Any) -> bool:
+    """The message only says a friend request was accepted (no question in it)."""
+    return bool(_TIN_KET_BAN.search(str(text or "")))
+
+
+def khach_dang_cho(item: dict, hesitant=None) -> bool:
+    """A customer waits for the OWNER right now (Chatbot v5 "Needs you"): the last message is the customer's and nobody
+    answered it (`can_tra_loi`), the owner has not opened the chat since (it is still unread: opening it, or a reply, takes
+    it off the list until the customer writes again), and it is more than a friend-request notice."""
+    if not can_tra_loi(item, hesitant):
+        return False
+    if int(item.get("unread_count") or 0) <= 0:
+        return False
+    return not la_tin_ket_ban(item.get("last_message"))
+
+
 BOT_KHONG_CO = "-"      # giá trị `bot_id` của bộ lọc để chỉ lấy cuộc chat KHÔNG có bot trực
 
 
 def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str = "",
               mode: str = "", limit: int = 50, offset: int = 0, status: str = "", chat_type: str = "",
               hesitant=None, tag: int = 0, has_contact: bool = False, sort: str = "",
-              hidden: str = "") -> list[dict]:
+              hidden: str = "", account_ids=None, ids=None, tags_any=None, tags_none=None,
+              since: float = 0, until: float = 0, last_by: str = "", pinned: bool = False,
+              _light: bool = False) -> list[dict]:
     """Danh sách hội thoại, ĐÃ GHIM rồi tới MỚI NHẤT TRƯỚC, kèm tên khách và kênh.
 
     `q` tìm theo tên khách, tiêu đề, id chat, tin cuối (LIKE, không phân biệt hoa thường).
@@ -689,10 +720,15 @@ def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str 
     `hidden` (2026-10-25, row menu "Hide conversation"): "exclude" leaves hidden conversations out (the inbox list),
     "only" returns just them (the "Hidden" filter), "" ignores the flag (other callers, such as the bot form's chat
     picker, still see every chat).
+
+    Chatbot v5 (2026-10-28): `account_ids` (several account keys, "<channel>:<id>") keeps only those accounts, the
+    channel picker's ticks; `ids` keeps only these conversation ids, in the usual order (the inbox filters by who is
+    handling a chat in Python, then asks for one page of the ids it kept); `tags_any` / `tags_none` (tag ids) keep
+    conversations carrying at least one of, or none of, those tags.
     """
-    n = max(1, min(int(limit or 50), MAX_DANH_SACH))
+    n = max(1, min(int(limit or 50), MAX_STATE_ROWS if _light else MAX_DANH_SACH))
     o = max(0, int(offset or 0))
-    where, args = [], []
+    where, args = _base_where(account_ids, ids, tags_any, tags_none, since, until, last_by, pinned)
     if channel:
         where.append("a.channel=?"); args.append(str(channel))
     if bot_id == BOT_KHONG_CO:
@@ -728,9 +764,12 @@ def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str 
             dk += ["k.phone LIKE ?", "c.external_chat_id LIKE ?"]
             args += [f"%{v}%", f"%{v}%"]
         where.append("(" + " OR ".join(dk) + ")")
+    cols = ("c.id, c.bot_id, c.chat_type, c.external_chat_id, c.channel_account_id, c.mode, c.last_sender_type,"
+            " c.unread_count, c.last_message, c.metadata_json, a.channel AS channel" if _light else
+            "c.*, a.channel AS channel, a.display_name AS account_name,"
+            " k.name AS customer_name, k.external_user_id AS customer_external_id, k.phone AS customer_phone")
     sql = (
-        "SELECT c.*, a.channel AS channel, a.display_name AS account_name,"
-        " k.name AS customer_name, k.external_user_id AS customer_external_id, k.phone AS customer_phone"
+        "SELECT " + cols +
         " FROM conversations c"
         " JOIN channel_accounts a ON a.id=c.channel_account_id"
         " LEFT JOIN customers k ON k.id=c.customer_id"
@@ -742,6 +781,13 @@ def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str 
     args += [n, o]
     with _lock:
         rows = _conn().execute(sql, args).fetchall()
+    if _light:
+        out = []
+        for r in rows:
+            d = _row(r)
+            d["metadata"] = _loads(d.pop("metadata_json", "{}"), {})
+            out.append(d)
+        return out
     out = [_conv_public(_row(r)) for r in rows]
     tags = conversation_tags([c["id"] for c in out])
     for c in out:
@@ -793,6 +839,60 @@ def dem_bo_loc(hesitant=None) -> dict:
     return out
 
 
+LAST_BY = ("customer", "ai", "human")
+
+
+def _base_where(account_ids=None, ids=None, tags_any=None, tags_none=None, since: float = 0, until: float = 0,
+                last_by: str = "", pinned: bool = False) -> tuple:
+    """WHERE parts shared by `danh_sach` and `state_rows` for the Chatbot v5 filters: picked accounts, ids, tags
+    any/none, the last message between `since` and `until` (timestamps, 0 = open), who sent the last message
+    (customer | ai | human, anything else ignored) and pinned chats only."""
+    where, args = [], []
+    if since:
+        where.append("c.last_message_at>=?"); args.append(float(since))
+    if until:
+        where.append("c.last_message_at<?"); args.append(float(until))
+    if last_by in LAST_BY:
+        where.append("c.last_sender_type=?"); args.append(last_by)
+    if pinned:
+        where.append("c.pinned=1")
+    accs = [str(a) for a in (account_ids or []) if str(a).strip()][:200]
+    if accs:
+        where.append("c.channel_account_id IN (" + ",".join("?" * len(accs)) + ")"); args += accs
+    if ids is not None:
+        keep = [int(i) for i in ids][:MAX_STATE_ROWS]
+        if not keep:
+            where.append("0")
+        else:
+            where.append("c.id IN (" + ",".join("?" * len(keep)) + ")"); args += keep
+    tany = [int(t) for t in (tags_any or []) if str(t).isdigit()][:50]
+    if tany:
+        where.append("c.id IN (SELECT conversation_id FROM conversation_tags WHERE tag_id IN ("
+                     + ",".join("?" * len(tany)) + "))"); args += tany
+    tnone = [int(t) for t in (tags_none or []) if str(t).isdigit()][:50]
+    if tnone:
+        where.append("c.id NOT IN (SELECT conversation_id FROM conversation_tags WHERE tag_id IN ("
+                     + ",".join("?" * len(tnone)) + "))"); args += tnone
+    return where, args
+
+
+MAX_STATE_ROWS = 5000     # most conversations the "who is handling it" filter looks at in one request
+
+
+def state_rows(channel: str = "", bot_id: str = "", q: str = "", status: str = "", chat_type: str = "",
+               hesitant=None, tag: int = 0, has_contact: bool = False, hidden: str = "", account_ids=None,
+               tags_any=None, tags_none=None, sort: str = "", since: float = 0, until: float = 0, last_by: str = "",
+               pinned: bool = False) -> list[dict]:
+    """Every conversation matching the inbox filters (newest first, at most MAX_STATE_ROWS), with only the columns the
+    "who is handling it" state needs: id, bot_id, chat_type, external_chat_id, channel_account_id, channel, mode,
+    last_sender_type, unread_count, last_message, metadata. Same filters as `danh_sach`, no paging."""
+    rows = danh_sach(channel=channel, bot_id=bot_id, q=q, status=status, chat_type=chat_type, hesitant=hesitant,
+                     tag=tag, has_contact=has_contact, hidden=hidden, account_ids=account_ids, tags_any=tags_any,
+                     tags_none=tags_none, sort=sort, since=since, until=until, last_by=last_by, pinned=pinned,
+                     limit=MAX_STATE_ROWS, _light=True)
+    return rows
+
+
 def cuoc_chat_cua_tai_khoan(channel: str, account_id: str, q: str = "", limit: int = 80) -> list[dict]:
     """Các cuộc chat ĐÃ BIẾT của một tài khoản kênh (theo id NGOÀI của tài khoản, như
     `channel_accounts` giữ), mới nhất trước. Cho ô chọn người/nhóm của form bot."""
@@ -832,6 +932,8 @@ def chi_tiet(conversation_id: int) -> dict | None:
     d = _conv_public(_row(r))
     d["customer_tags"] = _loads(d.pop("customer_tags_json", "[]"), [])
     d["tags"] = conversation_tags([d["id"]]).get(int(d["id"]), [])
+    meta = d.get("metadata") if isinstance(d.get("metadata"), dict) else {}
+    d["note"] = str(d.get("customer_note") or "") if d.get("customer_id") else str(meta.get("note") or "")
     return d
 
 
@@ -1085,6 +1187,86 @@ def che_do(channel: str, account_id: str, external_chat_id: str) -> str:
 
 
 # ============================================================
+# Drafts the bot wrote in "draft" mode (Chatbot v5)
+# ============================================================
+MAX_DRAFT = 4000
+
+
+def _set_meta_key(conversation_id: int, key: str, value) -> bool:
+    """Set (or remove, when `value` is None) one key of a conversation's metadata. False when there is no such
+    conversation."""
+    with _lock:
+        db = _conn()
+        r = db.execute("SELECT metadata_json FROM conversations WHERE id=?", (int(conversation_id),)).fetchone()
+        if r is None:
+            return False
+        meta = _loads(r["metadata_json"], {})
+        if not isinstance(meta, dict):
+            meta = {}
+        if value is None:
+            meta.pop(key, None)
+        else:
+            meta[key] = value
+        db.execute("UPDATE conversations SET metadata_json=?, updated_at=? WHERE id=?",
+                   (_json(meta), _now(), int(conversation_id)))
+        db.commit()
+    return True
+
+
+def conversation_id_of(channel: str, account_id: str, external_chat_id: str) -> int:
+    """Id of the conversation for a channel key, 0 when there is none yet."""
+    try:
+        with _lock:
+            r = _conn().execute(
+                "SELECT id FROM conversations WHERE channel_account_id=? AND external_chat_id=?",
+                (_tai_khoan_id(channel, account_id), str(external_chat_id))).fetchone()
+        return int(r["id"]) if r else 0
+    except Exception:      # noqa: BLE001
+        return 0
+
+
+def save_draft(conversation_id: int, text: str, for_message_id: int = 0, instruction: str = "") -> bool:
+    """Keep the bot's unsent reply on the conversation. A newer draft replaces the older one: the owner only ever reviews
+    the reply to the latest customer message."""
+    t = str(text or "").strip()[:MAX_DRAFT]
+    if not t:
+        return False
+    return _set_meta_key(conversation_id, "draft", {"text": t, "ts": _now(), "for_message_id": int(for_message_id or 0),
+                                                    "instruction": str(instruction or "")[:500]})
+
+
+def clear_draft(conversation_id: int) -> bool:
+    return _set_meta_key(conversation_id, "draft", None)
+
+
+def set_note(conversation_id: int, note: str) -> bool:
+    """The owner's note on a chat (Chatbot v5 Info panel). It belongs to the customer when the chat has one (the same
+    note then follows them into every chat), else to the conversation itself (a group). False when there is no such
+    conversation."""
+    text = _s(str(note or "").strip(), MAX_GHI_CHU)
+    with _lock:
+        r = _conn().execute("SELECT customer_id FROM conversations WHERE id=?", (int(conversation_id),)).fetchone()
+    if r is None:
+        return False
+    if r["customer_id"]:
+        return dat_ghi_chu_khach(int(r["customer_id"]), text)
+    return _set_meta_key(conversation_id, "note", text or None)
+
+
+def draft_of(conv: dict) -> Optional[dict]:
+    """The waiting draft of a conversation row (`metadata.draft`), or None."""
+    d = ((conv or {}).get("metadata") or {}).get("draft")
+    return d if isinstance(d, dict) and str(d.get("text") or "").strip() else None
+
+
+def last_customer_message_id(conversation_id: int) -> int:
+    with _lock:
+        r = _conn().execute("SELECT MAX(id) FROM messages WHERE conversation_id=? AND sender_type='customer'",
+                            (int(conversation_id),)).fetchone()
+    return int(r[0] or 0) if r else 0
+
+
+# ============================================================
 # Thống kê và tài khoản kênh
 # ============================================================
 def _dau_ngay() -> float:
@@ -1179,6 +1361,156 @@ def ghi_trang_thai(key: str, value: str) -> None:
             db.commit()
     except Exception as e:
         print(f"[conversations] ghi trạng thái lỗi: {e}", file=sys.stderr)
+
+
+# ---- "No bot needed" (Chatbot v5 Channels tab): the owner says a nick or Page is fine without an A.I., so its chats are
+# "logged only" and it stops counting as something to do. Kept per account key ("<channel>:<raw id>") in sync_state,
+# which holds every kind of account (a personal Zalo nick has no record in channel_accounts.json).
+_NO_BOT = "no_bot:"
+
+
+def set_no_bot(account_key: str, on: bool) -> None:
+    ghi_trang_thai(_NO_BOT + str(account_key), "1" if on else "")
+
+
+def set_account_bot(account_key: str, bot_id: str) -> int:
+    """The bot on duty for a channel account changed (Channels tab): its chats follow, so the inbox, the "who is
+    handling it" state and the per-chat A.I. switch all see the new bot (or none). Returns how many chats moved."""
+    with _lock:
+        db = _conn()
+        cur = db.execute("UPDATE conversations SET bot_id=? WHERE channel_account_id=?", (str(bot_id or ""), str(account_key)))
+        db.commit()
+    return cur.rowcount
+
+
+def bot_of_account(account_id: str) -> str:
+    """The bot on duty for a raw channel account id ("" when none). One bot per account (`chatbot_store.owner_of`)."""
+    if not account_id:
+        return ""
+    try:
+        import chatbot_store
+        bots = chatbot_store.bots_using_account(str(account_id))
+    except Exception:      # noqa: BLE001
+        return ""
+    return str(bots[0].get("id") or "") if bots else ""
+
+
+def fill_missing_bots() -> int:
+    """Chats logged before the fix above have no bot although their nick or Page has one: give them that bot.
+    Returns how many chats changed. Cheap and idempotent (only rows with an empty bot_id)."""
+    try:
+        import chatbot_store
+        pairs = [(aid, b["id"]) for b in chatbot_store.list_bots() for aid in chatbot_store.account_ids_of(b)]
+    except Exception:      # noqa: BLE001
+        return 0
+    n = 0
+    with _lock:
+        db = _conn()
+        for aid, bid in pairs:
+            cur = db.execute("UPDATE conversations SET bot_id=? WHERE bot_id=''"
+                             " AND substr(channel_account_id, instr(channel_account_id, ':') + 1)=?", (str(bid), str(aid)))
+            n += int(cur.rowcount or 0)
+        db.commit()
+    return n
+
+
+def no_bot_accounts() -> set:
+    try:
+        with _lock:
+            rows = _conn().execute("SELECT key FROM sync_state WHERE key LIKE ? AND value='1'", (_NO_BOT + "%",)).fetchall()
+        return {str(r["key"])[len(_NO_BOT):] for r in rows}
+    except Exception:
+        return set()
+
+
+# Hours a customer counts as writing "while you rest" for the Stats tab (owner, 2026-10-29): 21:00 to 07:00 local time.
+NGHI_TU, NGHI_DEN = 21, 7
+
+
+def _trung_vi(xs: list) -> Optional[float]:
+    if not xs:
+        return None
+    v = sorted(xs)
+    m = len(v) // 2
+    return round(v[m] if len(v) % 2 else (v[m - 1] + v[m]) / 2, 1)
+
+
+def insights(since: float, until: float, account: str = "") -> dict:
+    """Numbers for the Stats tab (Chatbot v5) between two timestamps: messages the A.I. sent, messages the owner sent,
+    customer messages, the average wait of a customer for the first answer (A.I. or owner), and the same counts per
+    channel and per bot. A waiting run starts at the first customer message after an answer; reactions do not count.
+
+    0.399.0 (owner, 2026-10-29: show what the chatbot gives the owner) adds:
+      - the typical (median) wait when the A.I. answered first and when the owner did, so the two can be compared;
+      - `ai_rest`: A.I. answers sent while the owner rests (21:00 to 07:00 in the brain's time zone);
+      - `chats` / `new_chats`: chats where a customer wrote, and private chats whose very first message is in the period;
+      - `hours`: customer messages per hour of the day (24 numbers, the brain's time zone).
+
+    0.401.0 (owner, 2026-10-29: "ở nick Javis Vũ anh không trả lời tý nào mà nó tính 45% câu do A.I. lo"): the totals mixed
+    every account, so one account's hand replies lowered another one's A.I. share. `account` (the inbox account key,
+    `"<channel>:<id>"`) keeps one account only, and `by_account` gives each account its own A.I., hand and customer counts."""
+    import localefmt
+    tz = localefmt.tz()
+    with _lock:
+        db = _conn()
+        rows = db.execute(
+            "SELECT m.conversation_id AS cid, m.sender_type AS who, m.created_at AS ts, a.channel AS channel,"
+            " c.bot_id AS bot_id, a.id AS acc FROM messages m JOIN conversations c ON c.id=m.conversation_id"
+            " JOIN channel_accounts a ON a.id=c.channel_account_id"
+            " WHERE m.created_at>=? AND m.created_at<? AND m.sender_type IN ('customer','ai','human')"
+            " AND m.message_type!='reaction'" + (" AND c.channel_account_id=?" if account else "") +
+            " ORDER BY m.conversation_id, m.created_at, m.id",
+            (float(since), float(until)) + ((str(account),) if account else ())).fetchall()
+        moi = db.execute(
+            "SELECT COUNT(*) FROM (SELECT m.conversation_id, MIN(m.created_at) AS dau FROM messages m"
+            " JOIN conversations c ON c.id=m.conversation_id WHERE c.chat_type='private'" +
+            (" AND c.channel_account_id=?" if account else "") +
+            " GROUP BY m.conversation_id HAVING dau>=? AND dau<?)",
+            ((str(account),) if account else ()) + (float(since), float(until))).fetchone()[0]
+    out = {"ai": 0, "human": 0, "customer": 0, "wait_avg": None, "waits": 0, "by_channel": {}, "by_bot": {}, "by_account": {},
+           "wait_ai": None, "wait_human": None, "waits_ai": 0, "waits_human": 0, "ai_rest": 0,
+           "chats": 0, "new_chats": int(moi or 0), "hours": [0] * 24}
+    waits, w_ai, w_human, start, cur, khach = [], [], [], None, None, set()
+    for r in rows:
+        who, ts = str(r["who"]), float(r["ts"] or 0)
+        if r["cid"] != cur:
+            cur, start = r["cid"], None
+        ch = out["by_channel"].setdefault(str(r["channel"] or ""), {"customer": 0, "ai": 0, "human": 0})
+        ch[who] += 1
+        acc = out["by_account"].setdefault(str(r["acc"] or ""), {"customer": 0, "ai": 0, "human": 0})
+        acc[who] += 1
+        out[who] += 1
+        gio = datetime.fromtimestamp(ts, tz).hour
+        if who == "customer":
+            khach.add(r["cid"])
+            out["hours"][gio] += 1
+            if start is None:
+                start = ts
+        else:
+            if who == "ai":
+                if r["bot_id"]:
+                    out["by_bot"][str(r["bot_id"])] = out["by_bot"].get(str(r["bot_id"]), 0) + 1
+                if gio >= NGHI_TU or gio < NGHI_DEN:
+                    out["ai_rest"] += 1
+            if start is not None:
+                w = max(0.0, ts - start)
+                waits.append(w)
+                (w_ai if who == "ai" else w_human).append(w)
+                start = None
+    out["chats"] = len(khach)
+    if waits:
+        out["wait_avg"] = round(sum(waits) / len(waits), 1)
+        out["waits"] = len(waits)
+    out["wait_ai"], out["waits_ai"] = _trung_vi(w_ai), len(w_ai)
+    out["wait_human"], out["waits_human"] = _trung_vi(w_human), len(w_human)
+    return out
+
+
+def stats_accounts() -> List[dict]:
+    """Every channel account the inbox knows, for the Stats tab's account picker: `[{id, channel, name}]` by name."""
+    with _lock:
+        rows = _conn().execute("SELECT id, channel, display_name FROM channel_accounts ORDER BY display_name, id").fetchall()
+    return [{"id": r["id"], "channel": r["channel"], "name": r["display_name"] or r["id"]} for r in rows]
 
 
 def xoa_trang_thai(tien_to: str) -> None:

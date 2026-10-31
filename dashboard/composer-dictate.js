@@ -6,7 +6,15 @@
    text in the box to edit, and the send button stops and sends in one press. Nothing is sent by itself.
 
    The speech work is dictate.js (Web Speech live text, Groq Whisper on stop when the server has an upload ear); this
-   file only draws the composer around it. fmtTime and levelOf are pure so node tests can run them. */
+   file only draws the composer around it. fmtTime and levelOf are pure so node tests can run them.
+
+   0.409.0, phone (owner report 2026-10-30, iPhone): the first recording worked, after that X and stop did nothing and
+   the timer ran on. The trap: stop focused the text box, so the keyboard came up; the next press of the mic made the
+   still focused box read-only, iOS dropped the keyboard but kept the focus and left the page slid up, and on that slid
+   page iOS hit-tests a fixed layer away from where it draws it: a tap on X or stop landed on the box instead (the
+   "AutoFill" bubble in the owner's screenshot). On a touch screen the box now gives up focus while recording (and
+   cannot take it back), stop no longer pops the keyboard, and mobile-chat.js slides the page back once the keyboard
+   is down even when something is still focused. */
 (function () {
   "use strict";
 
@@ -34,6 +42,14 @@
   window.JavisComposerDictate = pure;
 
   function tw(k) { return window.t ? window.t(k) : k; }
+  // A finger, not a mouse: no Shift+Enter, an on-screen keyboard that comes up with focus.
+  function touch() {
+    try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (e) { return false; }
+  }
+  // Drop the focus of the text box so iOS puts the keyboard away and the page settles before the bar is used.
+  function letGo(inp) {
+    if (inp && touch() && document.activeElement === inp) { try { inp.blur(); } catch (e) {} }
+  }
   function $(id) { return document.getElementById(id); }
 
   // state: "idle" | "listening" | "transcribing"
@@ -156,8 +172,10 @@
   // Browser speech hears one language only, so a Vietnamese sentence with English words comes out wrong. Only an ear
   // (a model listening to the audio again) fixes that; say once per page how to get one when the machine has none.
   var earTipShown = false;
+  // 0.419.0: off. The owner (2026-10-30): ordinary users never set Groq up, so a tip pointing at an API key is noise.
+  var EAR_TIP = false;
   function earTip(D, inp) {
-    if (earTipShown || !D || !D.ear || D.ear() !== "" || !inp || inp.value === S.base) return;
+    if (!EAR_TIP || earTipShown || !D || !D.ear || D.ear() !== "" || !inp || inp.value === S.base) return;
     earTipShown = true;
     note("dict.no_ear");
   }
@@ -173,6 +191,9 @@
       var b = $("sendBtn");
       if (b && !b.disabled) { b.click(); return; }
     }
+    // A phone keeps the keyboard down: it would cover the text and start the trap described at the top. One tap on the
+    // box brings it up when the owner wants to edit.
+    if (touch()) return;
     try { inp.focus(); var n = inp.value.length; inp.setSelectionRange(n, n); } catch (e) {}
   }
 
@@ -182,6 +203,7 @@
     if (S.state !== "idle") return;
     if (inCall()) { note("dict.in_call"); return; }
     var inp = $("chatInput");
+    letGo(inp);
     S.base = inp ? inp.value : "";
     S.sendAfter = false;
     S.levels = [];
@@ -197,7 +219,10 @@
         if (st === "idle" && was !== "idle") finished();
       },
       onError: function (code) {
-        note(code === "denied" ? "dict.denied" : code === "unsupported" ? "dict.unsupported"
+        // 0.419.0: Safari on an iPhone has no padlock in the address bar; say where its mic switch really is.
+        var ios = D.isIOS && D.isIOS();
+        note(code === "denied" ? (ios ? "dict.denied_ios" : "dict.denied")
+          : code === "service" ? (ios ? "dict.service_ios" : "dict.service") : code === "unsupported" ? "dict.unsupported"
           : code === "nothing" ? "dict.nothing" : "dict.failed");
       },
       onStream: onStream
@@ -236,6 +261,9 @@
     var card = $("hudVoice"), btn = $("dictBtn");
     if (!card || !btn) return;
     btn.addEventListener("click", function () { if (S.state === "idle") start(); else stop(); });
+    // While recording the box only shows the words; on a phone a tap must not focus it again (keyboard, AutoFill).
+    var inp = $("chatInput");
+    if (inp) inp.addEventListener("focus", function () { if (S.state !== "idle") letGo(inp); });
     var c = $("dictCancel"), s = $("dictStop");
     if (c) c.addEventListener("click", cancel);
     if (s) s.addEventListener("click", stop);
@@ -252,7 +280,9 @@
     window.addEventListener("keydown", function (e) {
       if (S.state === "idle") return;
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancel(); return; }
-      if (e.key === "Enter" && !e.shiftKey && e.target === $("chatInput")) {
+      // Enter follows the chat's own rule (JavisActs.enterSends): a phone's Enter stays a new line here too.
+      var sends = window.JavisActs ? window.JavisActs.enterSends(e, false) : e.key === "Enter" && !e.shiftKey;
+      if (sends && e.target === $("chatInput")) {
         e.preventDefault(); e.stopPropagation(); sendNow();
       }
     }, true);

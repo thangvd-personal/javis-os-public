@@ -24,6 +24,9 @@ os.environ["JAVIS_STATE_DIR"] = STATE
 import inbox
 import javis_core
 import main
+import notify_policy
+for _g in notify_policy.GROUPS:
+    notify_policy.set_mode(_g, "important")
 import tasks
 from starlette.testclient import TestClient
 

@@ -199,16 +199,18 @@ src_js = (DASHBOARD / "packs.js").read_text(encoding="utf-8")
 # Thiếu vế đầu thì gỡ hẳn dòng chữ khỏi giao diện vẫn xanh; thiếu vế sau thì đổi khoá thành câu
 # ngược nghĩa vẫn xanh.
 _VI = json.loads((DASHBOARD / "i18n" / "vi.json").read_text(encoding="utf-8"))
-check("thẻ kho vẫn hiện nhãn chính chủ hoặc cộng đồng",
-      'tw("store.verified")' in src_js and "chính chủ" in _VI.get("store.verified", "")
+# 0.390.0 (owner): the card drops the official/community tag; community packs keep their own
+# filter (below) and their own warning on the confirm screen.
+check("thẻ kho không còn nhãn chính chủ / cộng đồng", 'tw("store.verified")' not in src_js
       and 'tw("store.community")' in src_js and "cộng đồng" in _VI.get("store.community", ""))
 # Bộ lọc nguồn dọn từ hàng tab riêng xuống cột nhóm bên trái ở 0.55.31 (bố cục mới), nhưng
 # KHÔNG được mất: kho lớn dần thì "xem riêng hàng cộng đồng" là bộ lọc người ta tìm đầu tiên.
 # ("Cộng đồng" ở đây là GIÁ TRỊ lọc, vừa là vế so sánh vừa là payload data-kho-nhom, nên cố ý
 # không dịch và vẫn nằm nguyên trong .js.)
 check("lọc riêng được hàng cộng đồng", 'laCongDong' in src_js and '"Cộng đồng"' in src_js)
+# 0.384.0: the group list feeds both the right-hand column and the phone <select>.
 check("và chỉ hiện lối lọc đó khi kho thật sự có hàng cộng đồng",
-      re.search(r'congDong\.length\s*\?\s*hangNhom\("Cộng đồng"', src_js) is not None)
+      re.search(r'congDong\.length\s*\?\s*\[\["Cộng đồng"', src_js) is not None)
 check("gói cộng đồng có cảnh báo riêng trên màn hình xác nhận",
       'tw("store.inspect.community.body")' in src_js
       and "chưa qua " in _VI.get("store.inspect.community.body", "")

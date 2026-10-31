@@ -206,12 +206,19 @@
     tool:      { nhan: "store.kind.tool",      icon: "toolbox",  trang: "plugins" },
     connector: { nhan: "store.kind.connector", icon: "plug",     trang: "mcp" },
     bundle:    { nhan: "store.kind.bundle",    icon: "package",  trang: "" },
+    // Recommended (0.370.0, "Recommended repos" until 0.376.0): not a kind but a tab of its own, listing every Store entry that follows
+    // its author's GitHub repo (`upstream`), whatever its kind. It only shows when the Store has one.
+    repo:      { nhan: "store.kind.repo",      icon: "git-branch", trang: "" },
   };
   const THU_TU_LOAI = ["agent", "skill", "workflow", "tool", "connector"];
+  const theoGoc = g => !!(g && g.upstream && g.upstream.repo);
+  const trongTab = (g, loai) => loai === "repo" ? theoGoc(g) : (g.kind || "bundle") === loai;
 
   // Trần dung lượng tệp .zip, do server nói (`/packs` trả `max_mb`). Giữ ở module để hộp thoại
   // chọn tệp nói đúng con số ngay cả khi nó mở lại sau một lần lỗi, lúc không còn `d` trong tay.
   let _maxMb = 25;
+  // Folder the installs land in (`/packs` returns `dir`), told in the (i) of the .zip dialog.
+  let _thuMuc = "";
 
   // Loại được chọn sẵn khi mở kho. `moKho()` đặt, `render()` lấy rồi XOÁ ngay - nó là ý định
   // của MỘT lần bấm tab, không phải trạng thái của trang.
@@ -231,10 +238,6 @@
   let _veTrang = null;
   let _veLuot = null;
 
-  const BAC = {
-    data: { nhan: "store.tier.data", mau: "var(--ok-ink,#2f855a)" },
-    code: { nhan: "store.tier.code", mau: "var(--warn-ink,#b7791f)" },
-  };
 
   function vaultTom(v) {
     // Tóm tắt "gói này thêm gì vào bộ não", dạng "2 trợ lý, 1 kỹ năng".
@@ -452,17 +455,10 @@
   }
 
   // ---- Ảnh đại diện của một mục ----
-  // Ưu tiên icon THẬT của mục (connector đi kèm app đều có logo). Không có thì dựng một ô chữ
-  // cái: đó là chỗ dựa của lưới - mắt nhận ra hàng nào là hàng nào trước khi kịp đọc chữ.
+  // Ưu tiên icon THẬT của mục (connector đi kèm app đều có logo). Không có thì icon của loại trên
+  // ô màu riêng theo id: đó là chỗ dựa của lưới, mắt nhận ra hàng nào là hàng nào trước khi đọc chữ.
   const MAU_AVATAR = ["#2563eb", "#e8590c", "#0f766e", "#16a34a", "#7c3aed", "#0891b2",
                       "#ca8a04", "#dc2626", "#0d9488", "#db2777"];
-
-  function chuCai(ten) {
-    const w = String(ten || "?").trim().split(/\s+/).filter(Boolean);
-    if (!w.length) return "?";
-    if (w.length === 1) return w[0].slice(0, 2).replace(/^./, c => c.toUpperCase());
-    return (w[0][0] + w[1][0]).toUpperCase();
-  }
 
   function mauTheoId(id) {
     let h = 0;
@@ -471,24 +467,32 @@
   }
 
   function veAvatar(g) {
-    // Ba dạng, xử lý đúng thứ tự của `console.js iconInner` - trường `icon` của connector đã
-    // mang cả ba từ lâu và không thể ép về một dạng:
+    // Thứ tự, đúng như `console.js iconInner` cho phần logo:
     //   đường dẫn/URL ảnh (logo hãng)  -> <img>
-    //   tên icon Lucide                -> SVG, đặt trên nền màu
-    //   không có gì                    -> ô chữ cái
+    //   tên icon Lucide                -> SVG trên ô màu nhạt
+    //   trợ lý (agent)                 -> chân dung trợ lý y như trang Cộng sự (`JavisAvatar`)
+    //   còn lại                        -> icon của LOẠI (skill = mảnh ghép, quy trình, công cụ...)
     //
     // `ic()` KHÔNG tự nhận đường dẫn (đó là việc của `iconInner`), nên bỏ nhánh <img> là mọi
     // logo hãng hiện thành dấu hỏi - đúng lỗi thấy trên màn hình bản dựng đầu.
+    //
+    // 0.376.0: ô chữ cái đậm màu ("Su", "LP") bị chủ repo chê là xấu và không nói lên gì. Giờ ô là
+    // icon của đúng loại năng lực, màu riêng theo id nhưng nhạt nền, nên lưới đọc ra ngay đâu là
+    // skill, đâu là trợ lý, mà các thẻ cạnh nhau vẫn khác màu.
     const src = String((g && g.icon) || "");
     if (/^(https?:|\/)/.test(src)) {
       return '<div class="kho-ava kho-ava-img"><img src="' + esc(src)
         + '" alt="" loading="lazy"></div>';
     }
-    const nen = ' style="background:' + mauTheoId(g.id) + '"';
-    if (src && window.Icons && window.Icons.has && window.Icons.has(src)) {
-      return '<div class="kho-ava"' + nen + '>' + ic(src) + '</div>';
+    const kind = (g && g.kind) || "bundle";
+    const A = typeof window !== "undefined" && window.JavisAvatar;
+    if (kind === "agent" && A && A.html && window.JavisPet) {
+      try { return '<div class="kho-ava kho-ava-agent">' + A.html({ slug: g.id || "" }, 40) + '</div>'; }
+      catch (e) { /* the mascot library is not ready: fall back to the kind icon */ }
     }
-    return '<div class="kho-ava"' + nen + '>' + esc(chuCai(nn(g.name, g.id))) + '</div>';
+    const coIcon = src && window.Icons && window.Icons.has && window.Icons.has(src);
+    const ten = coIcon ? src : (LOAI[kind] || LOAI.bundle).icon;
+    return '<div class="kho-ava kho-ava-ic" style="--kho-mau:' + mauTheoId(g.id) + '">' + ic(ten) + '</div>';
   }
 
   // ---- Nút trên thẻ ----
@@ -557,8 +561,18 @@
       + tw("store.installed_latest", { ver: esc(g.installed_version) }) + '</div>';
   }
 
+  // "Updated from the author" line: the author's GitHub repo as a link, and the day the Store last took a new
+  // version from it. The repo is a plain owner/name (checked server-side in `packs_store._upstream`).
+  function dongGoc(g) {
+    if (!theoGoc(g)) return "";
+    const u = g.upstream;
+    return '<div class="prov-meta kho-goc">' + ic("git-branch") + ' ' + tw("store.upstream_follows")
+      + ' <a href="https://github.com/' + esc(u.repo) + '" target="_blank" rel="noopener noreferrer">'
+      + esc(u.repo) + '</a>'
+      + (u.synced ? ' · ' + esc(tw("store.upstream_synced", { ngay: u.synced })) : "") + '</div>';
+  }
+
   function theKho(g) {
-    const bac = BAC[g.tier] || BAC.data;
     const lo = LOAI[g.kind] || LOAI.bundle;
     const n = nutThe(g);
     // Số hiệu KHÔNG nằm ở đây khi gói đã cài. Dòng meta lấy `g.version` (số của KHO), nên thẻ
@@ -567,25 +581,29 @@
     // "Đã cài" kể chuyện phiên bản, một chỗ duy nhất và nói đủ cả hai số.
     const meta = [g.id, g.installed ? "" : (g.version ? "v" + g.version : ""),
                   (g.author && g.author.name) || ""].filter(Boolean).map(esc).join(" · ");
-    // A long description shows two lines on the card; the full text sits behind the (i) on the name.
+    // A description shows at most three lines and an ellipsis (`.kho-mo-ta`, 0.407.0); a long one
+    // also gets the (i) on the name, which holds the full text.
     const moTa = nn(g.description);
     const dai = moTa.length > 90;
     return '<div class="cat-card kho-the" data-loai="' + esc(g.kind || "bundle") + '"'
       + ' data-nhom="' + esc(g.nhom || "") + '" data-ng="' + (g.verified ? "1" : "0") + '">'
+      // Tags (0.390.0, owner): no kind tag (the open tab already says it) and no official/community
+      // tag (community packs keep their own filter and their own warning on the confirm screen).
+      // Of the tier only the exception shows: "Runs code", a small amber chip beside the group one.
+      // "Data only" is most packs and the safe case, so a tag on every card would say nothing.
+      // The title line keeps just the name and the (i).
       + '<div class="kho-dau">' + veAvatar(g)
-      + '<span class="kho-nhom">' + esc(g.nhom ? nhanNhom(g.nhom) : tw(lo.nhan)) + '</span></div>'
+      + '<span class="kho-chips">'
+      + (g.tier === "code" ? '<span class="kho-chip-ma">' + tw("store.tier.code") + '</span>' : "")
+      + '<span class="kho-nhom">' + esc(g.nhom ? nhanNhom(g.nhom) : tw(lo.nhan)) + '</span>'
+      + '</span></div>'
       + '<div class="kho-ten">' + esc(nn(g.name, g.id))
-      + ' <span class="prov-kind">' + esc(tw(lo.nhan)) + '</span>'
-      + ' <span class="prov-kind" style="color:' + bac.mau + '">' + tw(bac.nhan) + '</span>'
-      + (g.verified
-          ? ' <span class="prov-kind" style="color:var(--ok-ink,#2f855a)">'
-            + tw("store.verified") + '</span>'
-          : ' <span class="prov-kind">' + tw("store.community") + '</span>')
       + (dai ? infoBtn() : "")
       + '</div>'
-      + '<div class="cat-desc' + (dai ? " j-clamp2" : "") + '">' + esc(moTa) + '</div>'
+      + '<div class="cat-desc kho-mo-ta">' + esc(moTa) + '</div>'
       + (dai ? infoBody(esc(moTa)) : "")
       + '<div class="prov-meta">' + meta + '</div>'
+      + dongGoc(g)
       + dongDaCai(g)
       + '<div class="kho-nut">'
       // Bật/tắt tạm một gói đã cài. Trước 0.55.34 nút này chỉ có ở khối "Đã cài" dưới trang;
@@ -610,8 +628,32 @@
 
   // Trạng thái lưới kho. Để ở module vì mọi lần bấm tab, bấm nhóm hay đổi trang đều chỉ VẼ LẠI
   // từ dữ liệu đã tải, không gọi lại mạng.
-  let _kho = { dl: null, loai: "connector", nhom: "Tất cả", trang: 1, tim: "" };
-  const MOI_TRANG = 20;
+  let _kho = { dl: null, loai: "connector", nhom: "Tất cả", trang: 1, tim: "", sap: "" };
+  // Sort box (owner, 0.407.0). Only orders that need no server: install counts and stars wait for
+  // a central server (owner, 2026-10-29: later, with the business edition). The choice is a
+  // per-device convenience, so it lives in localStorage and the page works without it.
+  const SAP = { "de-xuat": "store.sort.recommended", "moi": "store.sort.recent", "ten": "store.sort.name" };
+  function docSap() {
+    try { const v = localStorage.getItem("javis.kho.sap"); return SAP[v] ? v : "de-xuat"; }
+    catch (e) { return "de-xuat"; }
+  }
+  // Stable: ties keep the catalog's own order, which is how the Store owner lays it out.
+  // Recommended = packs that follow their author's repo first, then catalog order.
+  function sapXep(ds, kieu) {
+    const co = ds.map((g, i) => [g, i]);
+    const theoThu = (a, b) => a[1] - b[1];
+    if (kieu === "moi") {
+      co.sort((a, b) => String(b[0].updated || "").localeCompare(String(a[0].updated || "")) || theoThu(a, b));
+    } else if (kieu === "ten") {
+      co.sort((a, b) => nn(a[0].name, a[0].id).localeCompare(nn(b[0].name, b[0].id), "vi") || theoThu(a, b));
+    } else {
+      co.sort((a, b) => (theoGoc(b[0]) ? 1 : 0) - (theoGoc(a[0]) ? 1 : 0) || theoThu(a, b));
+    }
+    return co.map(x => x[0]);
+  }
+  // 18, not 20 (owner, 2026-10-28): it splits evenly into the 3 and 2 column grids, so the last
+  // row of a full page is never left half empty.
+  const MOI_TRANG = 18;
   // Danh mục cũ hơn ngần này (giây) thì trang Kho tự lấy lại một lần ở nền. Xem `veKho`.
   const CU_QUA = 30 * 60;
 
@@ -681,10 +723,26 @@
     } catch (e) {}
   }
 
+  // A new page starts at its first card. The pager sits under the last row, so without this the
+  // next page opens at its bottom. Only scrolls UP, and stops below the pinned navbar.
+  function lenDauLuoi(host) {
+    try {
+      const than = host.querySelector(".kho-than");
+      const thanh = host.querySelector(".kho-thanh");
+      let sc = than && than.parentElement;
+      while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+      if (!than || !sc) return;
+      const lech = than.getBoundingClientRect().top - sc.getBoundingClientRect().top
+        - (thanh ? thanh.offsetHeight : 0) - 8;
+      if (lech < 0) sc.scrollTop += lech;
+    } catch (e) { /* no layout (node tests): nothing to scroll */ }
+  }
+
   function veLuoi(el, host) {
     const d = _kho.dl || { packs: [] };
     const ds = d.packs || [];
-    const cungLoai = ds.filter(g => (g.kind || "bundle") === _kho.loai);
+    if (_kho.loai === "repo" && !ds.some(theoGoc)) _kho.loai = "skill";
+    const cungLoai = ds.filter(g => trongTab(g, _kho.loai));
     const daCai = cungLoai.filter(g => g.installed);
     // Đếm bản mới trên MỌI loại, không chỉ tab đang mở. Đây là chỗ sửa cái lỗi nặng nhất của
     // tầng này: lưới lọc theo `_kho.loai` và tab mặc định là "Kết nối", nên một gói Kỹ năng có
@@ -706,7 +764,8 @@
     const laCongDong = _kho.nhom === "Cộng đồng";
     const laMoi = _kho.nhom === "Có bản mới";
     const q = _kho.tim.trim().toLowerCase();
-    const hop = cungLoai.filter(g =>
+    if (!SAP[_kho.sap]) _kho.sap = docSap();
+    const hop = sapXep(cungLoai, _kho.sap).filter(g =>
       (_kho.nhom === "Tất cả"
         || (laDaCai ? g.installed
             : laMoi ? coBanMoi(g)
@@ -727,9 +786,19 @@
     _kho.trang = trang;
     const hienThi = hop.slice((trang - 1) * MOI_TRANG, trang * MOI_TRANG);
 
-    const tabLoai = THU_TU_LOAI.map(k => {
+    const dsLoai = (ds.some(theoGoc) ? ["repo"] : []).concat(THU_TU_LOAI);
+    // The same kinds as a <select> for phones (owner, 2026-10-28: a dropdown fits a phone better
+    // than six squeezed buttons). Each option keeps its count and its "N new" badge as text.
+    const chonLoai = dsLoai.map(k => {
+      const trong = ds.filter(g => trongTab(g, k));
+      const nMoi = trong.filter(coBanMoi).length;
+      return '<option value="' + k + '"' + (k === _kho.loai ? " selected" : "") + '>'
+        + esc(tw(LOAI[k].nhan)) + ' (' + trong.length + ')'
+        + (nMoi ? ' · ' + esc(tw("store.tab_new_count", { count: nMoi })) : "") + '</option>';
+    }).join("");
+    const tabLoai = dsLoai.map(k => {
       const on = k === _kho.loai;
-      const trong = ds.filter(g => (g.kind || "bundle") === k);
+      const trong = ds.filter(g => trongTab(g, k));
       const nMoi = trong.filter(coBanMoi).length;
       return '<button class="kho-tab' + (on ? " on" : "") + '" data-kho-loai="' + k + '">'
         + esc(tw(LOAI[k].nhan))
@@ -759,40 +828,63 @@
         + '</div>'
       : "";
 
+    // Group filter as a native <select> in the pinned bar, shown on phones in place of the column:
+    // a wrapped row of ten pills pushed the cards a full screen down, and a sideways strip hides
+    // the groups at its end. The select shows every group and costs one row.
+    // One list feeds both: [filter key, count, label, starts the field groups].
+    const dsNhom = [["Tất cả", cungLoai.length, tw("studio.all")], ["Đã cài", daCai.length, tw("ol.installed")]]
+      .concat(capNhatLoai.length ? [["Có bản mới", capNhatLoai.length, tw("cs.upd_have_new")]] : [])
+      .concat(congDong.length ? [["Cộng đồng", congDong.length, tw("store.community")]] : [])
+      .concat(tenNhom.map((t, i) => [t, dem[t], nhanNhom(t), i === 0]));
+    const chonNhom = dsNhom.map(([ten, so, nhan]) => '<option value="' + esc(ten) + '"'
+      + (_kho.nhom === ten ? " selected" : "") + '>' + esc(nhan) + ' (' + so + ')</option>').join("");
+
+    // Refresh and Install from .zip, drawn twice: in the navbar (computer) and beside the search
+    // box (phone), CSS shows one. Hence data attributes rather than ids. The catalog time rides on
+    // the Refresh tooltip: without it "why don't I see the new version" has no answer, but as
+    // text in the navbar it pushed Refresh past the edge (0.390.0).
+    const nutHd = '<button class="mp-btn kho-hd-btn" data-kho-lammoi="1"'
+      + (gioLay ? ' title="' + esc(tw("store.catalog_at", { luc: gioLay })) + '"' : "")
+      + ' aria-label="' + esc(tw("store.refresh")) + '">'
+      + ic("rotate-cw") + '<span>' + tw("store.refresh") + '</span></button>'
+      + '<button class="mp-btn kho-hd-btn" data-kho-zip="1" aria-label="' + esc(tw("store.from_zip")) + '">'
+      + ic("upload-cloud") + '<span>' + tw("store.from_zip") + '</span></button>';
+
     const nhoConTro = ghiConTro(host);
     host.innerHTML =
       (d.stale ? '<div class="conn-guide" style="border-left:3px solid var(--warn,#e0a33e);padding-left:10px;margin-bottom:12px">' + tw("store.stale") + '</div>' : "")
       + bangMoi
+      // The Store's own navbar: kind tabs on the left, Refresh and Install from .zip on the right,
+      // one row that stays pinned while the cards scroll (owner, 2026-10-28). On phones the six
+      // tabs need the whole row, so the two buttons move next to the search box as icons.
+      + '<div class="kho-thanh">'
       + '<div class="kho-tabs">' + tabLoai + '</div>'
+      + '<select class="js-input kho-chon-loai" id="pkLoai" aria-label="' + esc(tw("store.kind_label")) + '">'
+      + chonLoai + '</select>'
+      + '<select class="js-input kho-chon-nhom" id="pkNhom" aria-label="' + esc(tw("studio.groups")) + '">'
+      + chonNhom + '</select>'
+      + '<div class="kho-hd">'
+      + nutHd
+      + '</div></div>'
       + '<div class="kho-than">'
-      + '<div class="kho-cot">'
-      + '<div class="kho-cot-tieu">' + tw("studio.groups") + '</div>'
-      + hangNhom("Tất cả", cungLoai.length, _kho.nhom === "Tất cả", false, tw("studio.all"))
-      + hangNhom("Đã cài", daCai.length, laDaCai, false, tw("ol.installed"))
-      + (capNhatLoai.length
-          ? hangNhom("Có bản mới", capNhatLoai.length, laMoi, false, tw("cs.upd_have_new")) : "")
-      + (congDong.length
-          ? hangNhom("Cộng đồng", congDong.length, laCongDong, false, tw("store.community")) : "")
-      + tenNhom.map((t, i) => hangNhom(t, dem[t], _kho.nhom === t, i === 0, nhanNhom(t))).join("")
-      + '</div>'
       + '<div class="kho-chinh">'
-      + '<div class="cat-tools">'
-      // Bề rộng do CSS lo, không viết cứng ở đây: trên điện thoại ô này phải chiếm trọn hàng,
-      // mà style nội tuyến thì media query không đè được nếu không kèm !important.
+      + '<div class="cat-tools kho-loc">'
+      // Width comes from CSS, not written here: on a phone this box takes the whole row, and an
+      // inline style cannot be overridden by a media query without !important.
       + '<input class="js-input kho-tim" id="pkQ" placeholder="'
       + esc(tw("store.search_ph", { loai: tw(LOAI[_kho.loai].nhan) }))
       + '" value="' + esc(_kho.tim) + '">'
-      + '<span class="prov-meta">'
+      + '<span class="kho-hd kho-hd-dt">' + nutHd + '</span>'
+      + '<label class="kho-sap"><span>' + tw("store.sort_label") + '</span>'
+      + '<select class="js-input" id="pkSap">'
+      + Object.keys(SAP).map(k => '<option value="' + k + '"' + (k === _kho.sap ? " selected" : "") + '>'
+          + esc(tw(SAP[k])) + '</option>').join("")
+      + '</select></label>'
+      + '<span class="prov-meta kho-so-muc">'
       + (laDaCai ? tw("store.count_installed", { count: hop.length })
          : laMoi ? tw("store.count_updates", { count: hop.length })
          : laCongDong ? tw("store.count_community", { count: hop.length })
          : tw("store.count_items", { count: hop.length })) + '</span>'
-      + '<span style="flex:1"></span>'
-      // Nói ra danh mục này lấy lúc nào. Không có dòng này thì "sao tôi không thấy bản mới"
-      // là câu không ai trả lời được, kể cả người viết ra nó.
-      + (gioLay ? '<span class="prov-meta">' + esc(tw("store.catalog_at", { luc: gioLay })) + '</span>' : "")
-      + '<button class="mp-btn" id="pkLamMoi">' + tw("store.refresh") + '</button>'
-      + '<button class="mp-btn" id="pkChon2">' + tw("store.from_zip") + '</button>'
       + '</div>'
       + '<div class="cat-grid" id="pkGrid">' + hienThi.map(theKho).join("") + '</div>'
       + (hienThi.length ? "" : '<div class="mp-empty">'
@@ -804,19 +896,32 @@
             + tw("store.paging", { tu: ((trang - 1) * MOI_TRANG + 1),
                                    den: Math.min(trang * MOI_TRANG, hop.length),
                                    tong: hop.length })
-            + '</span><span style="flex:1"></span>'
+            + '</span><span class="kho-trang-so">'
+            + '<button class="kho-so" data-kho-trang="' + (trang - 1) + '"' + (trang === 1 ? " disabled" : "")
+            + ' aria-label="' + esc(tw("store.page_prev")) + '">' + ic("chevron-left") + '</button>'
             + Array.from({ length: soTrang }, (_, i) =>
                 '<button class="kho-so' + (i + 1 === trang ? " on" : "") + '" data-kho-trang="'
                 + (i + 1) + '">' + (i + 1) + '</button>').join("")
-            + '</div>'
-          : "");
+            + '<button class="kho-so" data-kho-trang="' + (trang + 1) + '"' + (trang === soTrang ? " disabled" : "")
+            + ' aria-label="' + esc(tw("store.page_next")) + '">' + ic("chevron-right") + '</button>'
+            + '</span></div>'
+          : "")
+      + '</div>'
+      // Group column on the RIGHT (owner, 2026-10-28): the app sidebar is already on the left,
+      // and two menus side by side read as one long menu.
+      + '<div class="kho-cot">'
+      + '<div class="kho-cot-tieu">' + tw("studio.groups") + '</div>'
+      + dsNhom.map(([ten, so, nhan, ngan]) => hangNhom(ten, so, _kho.nhom === ten, !!ngan, nhan)).join("")
+      + '</div>'
+      + '</div>';
 
     traConTro(host, nhoConTro);
 
     const lai = () => veLuoi(el, host);
-    host.querySelectorAll("[data-kho-loai]").forEach(b => b.onclick = () => {
-      _kho.loai = b.dataset.khoLoai; _kho.nhom = "Tất cả"; _kho.trang = 1; _kho.tim = ""; lai();
-    });
+    const doiLoai = (k) => { _kho.loai = k; _kho.nhom = "Tất cả"; _kho.trang = 1; _kho.tim = ""; lai(); };
+    host.querySelectorAll("[data-kho-loai]").forEach(b => b.onclick = () => doiLoai(b.dataset.khoLoai));
+    const sl = host.querySelector ? host.querySelector("#pkLoai") : null;
+    if (sl) sl.onchange = () => doiLoai(sl.value);
     host.querySelectorAll("[data-kho-nhom]").forEach(b => b.onclick = () => {
       _kho.nhom = b.dataset.khoNhom; _kho.trang = 1; lai();
     });
@@ -826,8 +931,16 @@
       _kho.trang = 1; _kho.tim = ""; lai();
     });
     host.querySelectorAll("[data-kho-trang]").forEach(b => b.onclick = () => {
-      _kho.trang = Number(b.dataset.khoTrang); lai();
+      _kho.trang = Number(b.dataset.khoTrang); lai(); lenDauLuoi(host);
     });
+    const ss = host.querySelector ? host.querySelector("#pkSap") : null;
+    if (ss) ss.onchange = () => {
+      _kho.sap = SAP[ss.value] ? ss.value : "de-xuat"; _kho.trang = 1;
+      try { localStorage.setItem("javis.kho.sap", _kho.sap); } catch (e) {}
+      lai();
+    };
+    const sn = host.querySelector ? host.querySelector("#pkNhom") : null;
+    if (sn) sn.onchange = () => { _kho.nhom = sn.value; _kho.trang = 1; lai(); };
     const o = document.getElementById("pkQ");
     if (o) {
       const loc = () => { _kho.tim = o.value; _kho.trang = 1; lai(); };
@@ -837,10 +950,19 @@
       o.oninput = (ev) => { if (!(ev && ev.isComposing)) loc(); };
       o.oncompositionend = loc;
     }
-    const lm = document.getElementById("pkLamMoi");
-    if (lm) lm.onclick = () => veKho(el, host, true, _kho.loai);
-    const ct = document.getElementById("pkChon2");
-    if (ct) ct.onclick = () => manHinhChon(el, _maxMb);
+    host.querySelectorAll("[data-kho-lammoi]").forEach(b => b.onclick = () => veKho(el, host, true, _kho.loai));
+    host.querySelectorAll("[data-kho-zip]").forEach(b => b.onclick = () => manHinhChon(el, _maxMb));
+    // The active tab in view: on a narrow phone the tab strip can scroll sideways.
+    // Sets scrollLeft by hand: scrollIntoView would also move the page vertically.
+    // One frame later: the page is drawn off screen first and has no width yet.
+    const tabOn = host.querySelector ? host.querySelector(".kho-tab.on") : null;
+    const dai = tabOn && tabOn.parentElement;
+    if (dai && typeof requestAnimationFrame === "function") requestAnimationFrame(() => {
+      if (dai.scrollWidth <= dai.clientWidth) return;
+      const t = tabOn.offsetLeft, w = tabOn.offsetWidth;
+      if (t < dai.scrollLeft) dai.scrollLeft = t;
+      else if (t + w > dai.scrollLeft + dai.clientWidth) dai.scrollLeft = t + w - dai.clientWidth;
+    });
 
     const theo = {};
     ds.forEach(g => { theo[g.id] = g; });
@@ -910,7 +1032,8 @@
     const m = modal(
       pkmDau(null, (tuy.tieu || tw("store.from_zip")) + infoBtn(), tuy.phu || tw("store.pick.body"))
       // Trust note and what the next step shows: behind the (i) on the title; the next screen shows the real warning.
-      + (tuy.tinHtml || infoBody(esc(tw("store.pick.trust"))))
+      + (tuy.tinHtml || infoBody(esc(tw("store.pick.trust"))
+          + (_thuMuc ? "<br><br>" + tw("store.dir_note", { duong: "<code>" + esc(_thuMuc) + "</code>" }) : "")))
       + '<div class="pkm-than">'
       + '<label class="pkm-tha" id="pkTha">'
       + '<input type="file" accept=".zip" id="pkTepHop" style="display:none">'
@@ -1233,20 +1356,19 @@
         ? '<button class="kho-quaylai" id="pkQuayLai">← '
           + tw("store.back_to", { trang: esc(veTrang.nhan) }) + '</button>'
         : "")
-      + '<div class="cview-section kho-khoi"><h3>◆ Javis Store</h3>'
-      + '<div class="gcard-meta" style="max-width:740px">' + tw("store.intro") + ' '
-      + tw("store.intro_press", { nut: '<b>' + tw("store.btn.install") + '</b>' }) + '</div>'
+      // No heading and no intro here (owner, 2026-10-28): the page header right above already says
+      // "Javis Store" and what it holds, and the cards explain themselves. Where installs land on
+      // disk moved into the (i) of the Install from .zip dialog, the one place it matters.
+      + '<div class="kho-khoi">'
       + (d.disabled
-        ? '<div class="conn-guide" style="border-left:3px solid var(--warn,#e0a33e);padding-left:10px;margin-top:12px">'
+        ? '<div class="conn-guide" style="border-left:3px solid var(--warn,#e0a33e);padding-left:10px;margin-bottom:12px">'
           + tw("store.disabled_env", { bien: '<code>JAVIS_DISABLE_PACKS</code>' }) + '</div>'
         : "")
-      + '<div id="pkKho" style="margin-top:12px"></div>'
-      + '<div class="gcard-meta" style="margin-top:16px;opacity:.7">'
-      + tw("store.dir_note", { duong: '<code>' + esc(d.dir || "") + '</code>' }) + ' '
-      + tw("store.zip_limit", { mb: (d.max_mb || 25) }) + '</div>'
+      + '<div id="pkKho"></div>'
       + '</div>';
 
     _maxMb = d.max_mb || 25;
+    _thuMuc = d.dir || "";
     const nutVe = document.getElementById("pkQuayLai");
     if (nutVe) nutVe.onclick = () => {
       const s = window.Alpine && Alpine.store("nav");

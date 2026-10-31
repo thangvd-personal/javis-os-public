@@ -8,6 +8,381 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.429.0] - 2026-10-31
+### Fixed
+- **Jobs a chatbot makes now sit under that chatbot.** Every reminder, loop and Kanban job a chatbot (your Zalo assistant, say) made while chatting used to show under Javis Core. They now sit under the assistant the chatbot uses, in the lists and in Stats. When that assistant is not in this brain, the chatbot gets a row of its own.
+- **Older jobs are sorted out too.** Javis reads each chatbot's reply log: a job made while exactly one chatbot was answering (in the same chat, when the job names one) belongs to that chatbot. Two chatbots answering at that moment leaves the job with Javis Core, to be safe.
+### Improved
+- No search box on the Tasks page's Stats, since there is nothing to search there.
+
+## [0.428.2] - 2026-10-31
+### Fixed
+- **A Zalo Bot (official Zalo Bot) notices when it is tagged in a group.** Tagging it by its display name, such as "@Bot Nori", used to leave it silent, because Javis only matched the account handle like `bot.xxxx`. It now also matches the name you gave the bot in Javis. Thanks @VQTPiano (#885).
+## [0.428.1] - 2026-10-31
+### Fixed
+- **A team job stopped because its model cannot run with approvals now says how to fix it.** The message leads with the fix, names the assistant and suggests only connected models that can run the step on this machine, then Try again. Before, the Docker image cut off exactly that part, and the advice could point back to the model that was refused. Thanks @hwangrin (#904).
+
+## [0.428.0] - 2026-10-31
+### Added
+- **Stats on the Tasks page, for both tabs.** Stats closes the menu. Pick the period with the same dropdown as the Chatbot stats (Today, last 7 / 30 / 90 days, Last month... or your own days), always against the period before.
+- **Javis's stats:** how much of the work Javis carried next to you, **the time Javis gave back** (each kind of job counts the minutes you set, no money), work done while you slept, which assistant did what, reliability, and jobs Javis could take over.
+- **My stats:** done per day, a 12-week map, golden hours, on-time rate, habits over 30 days, projects, and tasks you keep moving with a Give to Javis button.
+### Improved
+- **Javis's tasks come first and open first.** "Mine" is now "My tasks".
+- Reminders and page watches now log every run so the stats count them all. Before this release a reminder kept only its last run.
+
+## [0.427.0] - 2026-10-31
+### Added
+- **Javis Core writes the habit lines every day.** The star and the habit reminders are no longer fixed sentences: Core reads each streak, frozen days and your usual time, and writes a line for each habit. Without a background model the fixed lines stay.
+- **Core learns which nudge works for you.** Each reminder records its style (cheer, sulk, challenge, remind why) and whether you did the habit that day. Styles that get you moving are picked more often.
+- **Google Calendar on the Mine tab.** With Google Calendar connected on the Connections page, the next 14 days of events sit next to your appointments, overlaps flagged. View only here; open one to edit it in Google Calendar.
+
+## [0.426.0] - 2026-10-30
+### Fixed
+- **Loops can be edited by hand again.** Since 0.422.0 the Tasks page could only switch, run and delete a loop. Edit now changes its name, what it does each round, its permission level (Suggest, Drafts, Full) and how often it runs.
+- **Reminders get their old options back:** Call me, Read it aloud, Remember the last result and the permission level, when adding and when editing. They went missing when the Scheduled page was merged.
+- **Asking Javis to show a job on screen works again.** Javis opens the Tasks page, the Javis tab, on that job's details.
+- **Allowing a job to act for real asks first,** since actions outside cannot be undone.
+- **Giving Javis a job has the Review the result when done box again.** A reminder's or loop's details show the permission level it runs at.
+- **With no channel for results, the Javis tab says so** with a button to Channels: reminders and loops still run but their results reach no one.
+- **Editing a script job no longer shows options that do not apply** (how it runs, level, call).
+### Improved
+- **Cancel and Save stay at the bottom of the form,** so a long form on a phone needs no scrolling to find them.
+- **A lighter page:** over 1,100 lines of code and 214 strings of the old Kanban and Scheduled pages are gone.
+
+## [0.425.0] - 2026-10-30
+### Added
+- **Appointments on the Mine tab.** When adding, pick Kind: Appointment to set a start time, duration and place. An appointment switches itself between Upcoming, Happening now and Past, and flags two appointments that overlap.
+- **A reminder before an appointment,** 5, 15, 30 or 60 minutes ahead (15 by default), once per appointment. You can also ask Javis to prepare beforehand (draft a document, look something up) as a reminder Javis finishes 30 minutes before the start.
+- **Say it in chat and it gets ticked.** Tell Javis "done reading" and the habit is ticked, marked as ticked by Javis so you can untick it. Several matching tasks make Javis ask instead of guessing. "Add this to my list" works too, on every brain.
+
+## [0.424.0] - 2026-10-30
+### Added
+- **Habits with a streak.** Switch "Count as a habit" on a repeating task (or pick Kind of repeat: Habit when adding) for a Duolingo-style streak. One missed session freezes it, the next one done thaws it, two missed in a row lose it. **Only scheduled days count**, so a habit's rest days never freeze.
+- **Ticking lights a flame.** The ring pops into a flame; a frozen one melts first. A habit's details show the streak, Days done, Frozen, Longest and a month calendar.
+- **The Habits list** opens with four tiles (grey until reached) and Javis's star saying a line with a matching face: sulking when you skip, delighted when all are done, sleepy on rest days.
+- **Habit reminders:** Javis reminds (after your usual time, earlier while frozen), At a set time, or No reminder. At most once a day, only when not done yet.
+
+## [0.423.0] - 2026-10-30
+### Added
+- **A "Mine" tab on the Tasks page.** Keep your own tasks: Today, Upcoming, Overdue, No date, Recurring, Done, and by **project** (create, rename, recolour, pin, delete with undo).
+- **Easier dates and repeats.** Quick picks When free, Today, Tomorrow, Next Monday, a month calendar and a time every 30 minutes. Repeat "Every [n] days, weeks, months, years", with weekday circles.
+- **Overdue also shows the latest missed run of a repeating task,** tickable right there. One-off tasks move to today with one button.
+- **Hand work back and forth with Javis.** "Give to Javis" turns your task into Javis work; "Do it myself" brings a Javis job to your tab. Both can be undone.
+
+## [0.422.0] - 2026-10-30
+### Added
+- **The Tasks page replaces Kanban and Scheduled.** The Work group now holds Tasks and Webhooks. What Javis does, reminders, loops and page watches sit in one place, split into lists: Today, Upcoming, Overdue, Recurring, Run errors, Done, Log, and one per assistant.
+- **Reminders can run now, stop, pause and skip their next run.** Press ▶ to run at once. While it runs the button turns into ■; pressed by mistake, press again to stop it, and the schedule stays.
+- **Delete, cancel and pause all have Undo** for a few seconds.
+### Improved
+- **The Morning brief button and template are gone.** For a brief, ask Javis for a reminder like any other job.
+
+## [0.421.0] - 2026-10-30
+### Fixed
+- **The Usage page no longer slides off the screen on phones.** Before, the page shifted left, cutting off text on the left and leaving a gap on the right. The cause was the day labels under the chart sticking out past the edge. Long periods like **3 months** or **This year** made the chart several screens wide. The chart now always fits, and long periods label months instead of days.
+- **The brain graph shows on phones again.** Since 0.415.0 the brain area on a phone showed only the cluster names and no note dots. Narrow screens switched the graph off to save battery, and the switch-off ran before the first frame was drawn. Phones now run the graph like a computer does. A still graph stops drawing by itself, so it costs no battery, and the Graph switch in Settings still turns it off.
+### Improved
+- **Drag the graph freely; let go and it returns to the centre.** Drag it anywhere and zoom as far as you like. Three seconds after you let go, the whole graph glides back to the centre, framed as when it first opened. Tapping a dot to open a note does not move it. On a computer it returns 3 seconds after the mouse leaves the graph.
+- **Pick the period from one dropdown.** The eight buttons Today, Yesterday, This week... took three rows on a phone. Now there is a single dropdown, on the same row as **Refresh**.
+- **The Usage page opens faster.**
+  - The server no longer works out the same numbers three times each time the page opens.
+  - The log scan now runs after the page shows its numbers, instead of competing with it while it loads.
+  - Reopening the page, or switching back to a period you already viewed, shows the numbers at once and then updates them.
+
+## [0.420.2] - 2026-10-30
+### Fixed
+- **Disconnecting and signing in as another account on the ChatGPT, Grok Build or Claude Code card lets you chat right away.** Before, when the old account ran out of quota, its "out of quota" mark stayed on the card after you signed in a new account as account 1, even across a Javis restart, so chat was sent to a backup card until the old account's reset time. Signing in now clears that mark.
+
+## [0.420.1] - 2026-10-30
+### Fixed
+- **Adding a ChatGPT account after the old one ran out of quota lets you chat right away.** Before, if account 1 ran out while the ChatGPT card had only that one account, Javis treated the whole card as out of quota until the reset time, so the newly added account was skipped and chat fell to a backup card, on some machines showing "Not logged in". Now the next chat turn runs on any account that is signed in and switched on. Grok Build and Claude Code with several accounts get the same fix.
+
+## [0.420.0] - 2026-10-30
+### Improved
+- **Skills page on a phone: pick a group from one dropdown.** The row of group buttons (All, AI, Sales...) ran off the screen once there were a few groups. Now there is one **Group** box showing how many skills each group holds. The Team page (filter by tag) and Workflows work the same way. On a computer the group column on the left stays as it was.
+- **Tools page tidier on a phone.** Every tool installed from Javis Store had a **Manage in Javis Store** button taking half the width, squeezing the name and description into a narrow column. Cards now use the full width, and the **Manage in Javis Store** link appears once on the **From Javis Store** group heading. The **Reinstall** button of a removed tool moves to the action row under the description.
+
+## [0.419.0] - 2026-10-30
+### Fixed
+- **The dictation button works on iPhone again.** Pressing the mic shows the recording bar and listens at once with Safari's own speech recognition, the very first press included, instead of flashing and closing. Javis used to ask the server first and missed the moment an iPhone allows the mic.
+- **An iPhone with Dictation off is told so**: Settings, General, Keyboard, Enable Dictation. A blocked microphone points at aA in Safari's address bar instead of a "padlock" that only fits a computer.
+- **No more Groq API key hints** in the dictation notes: ordinary users never need one.
+
+## [0.418.0] - 2026-10-30
+### Improved
+- **Javis opens even while the server restarts.** Before, reloading the page while the server was not up yet showed the browser's blank error page. Now Javis shows its full interface with a **Reconnecting to the server…** line and carries on once the server is up. If the server has just updated, the page reloads the new version by itself. This works when Javis is opened over https (a domain link or the Remote access link); while the server runs normally, Javis always loads the newest version as before.
+- **The pet is much lighter while it sits still.** When nobody touches it or moves the pointer, the pet lets the browser run its ring spin and eye glances instead of drawing every frame in JS. On a simulated phone, idle on the Team page: busy about 26% of the time before, about 14% now, close to having no pet at all. Anything that happens wakes it right away as before.
+
+## [0.417.0] - 2026-10-30
+### Improved
+- **Javis opens faster, phase 2: first load on a phone over 4G from 5.1 to about 4.7 seconds.** The code of the large pages (Teams, Conversations, Chatbot, Javis Store, Usage, Webhooks, Agent jobs) no longer loads when the app opens. The main screen and the chat show first, the rest loads quietly right after, so by the time you tap another page it is ready. Opening the app straight onto a page loads just what that page needs.
+
+### Fixed
+- **A flaky server no longer breaks the interface.** While the server restarts or the connection drops for a moment, Javis retries for about 10 seconds and shows a small **Reconnecting to the server…** line at the top, which hides itself once connected. Before, each of these showed cryptic errors such as "The string did not match the expected pattern". Javis only retries reading data, never re-sends a save or a message.
+
+## [0.416.0] - 2026-10-30
+### Improved
+- **Javis opens faster: first visit from 6.3 to 5.1 seconds, later visits from 1.55 to 1.37 seconds.** Measured on a simulated phone over 4G. 35% less to download when the app opens (1.7 MB down to 1.1 MB):
+  - **The server minifies the interface before sending it.** Comments and extra whitespace are dropped: JS is 44% lighter, CSS 49%. The source stays as it is, line numbers included, so error reports still point at the right line. Set `JAVIS_MINIFY=0` to turn it off.
+  - **Fonts ship with Javis.** The page no longer calls Google Fonts when it opens, so text appears sooner, and still looks right when the machine running Javis cannot reach Google.
+  - **Fewer duplicate requests when the app opens.** Settings were asked for 9 times in a row; now 3.
+- **The Health page has a new Recent interface errors section.** Errors that happen in the browser of anyone using Javis (computer or phone) are sent here automatically, grouped, with the version and device type. If something odd happens, a screenshot of this section is enough for the developer to fix it. Only technical details, never chat content.
+
+## [0.415.0] - 2026-10-30
+### Fixed
+- **No more screen full of label codes after an update.** If the page reloaded while the server was still starting, every label showed as a code like `nav.group.bo_nao`, the version read v0.4.3, an error said "The string did not match the expected pattern", and the page stayed that way. Javis now retries; once the server is up the page reloads once and shows everything correctly. If you are typing, it does not reload and the labels come back in place.
+- **The Update button waits until the server is fully ready** before reloading the page, instead of reloading as soon as it sees the new version number.
+
+### Improved
+- **Javis is lighter on a phone while idle.** On a simulated phone, the Team page kept the device busy about 26% of the time while doing nothing; now about 21%. Less heat, less battery, smoother scrolling:
+  - The pet draws 30 frames a second at rest and 15 while dozing (it was always 60). It looks the same, and goes back to 60 when you move the pointer or Javis is working.
+  - The starfield and the brain graph stop drawing while another page covers them. Before, opening the app straight onto the Team page kept the graph drawing behind it.
+- **Faster opening from the second visit.** Javis no longer re-downloads and checks 100+ interface files on every page load. Each set of files is checked once per device, right after an update. About half as many requests when the page opens.
+
+## [0.414.0] - 2026-10-30
+### Improved
+- **Customers see "typing..." while a personal Zalo bot writes** a private reply, as when a person types. Javis moves to javis-zalo 1.9.0 (which adds the typing tool); the Zalo connection updates itself after Javis restarts, no new QR scan needed.
+
+## [0.413.0] - 2026-10-30
+### Improved
+- **Personal Zalo bots send bold and coloured text.** When the bot writes in bold or colour (`{red:50% off}`), the customer sees real bold or coloured words, as a person would send, instead of `**` stars.
+- **"Typing..." shows while the bot writes** a private reply, so customers can hardly tell the bot from a person. Needs javis-zalo 1.9.0; with an older one the bot still answers, only without the indicator.
+
+## [0.412.0] - 2026-10-30
+### Added
+- **A bot can answer your Zalo Official Account inbox.** Pick the **Zalo OA** channel under Chatbot, Add channel, paste the App ID, App secret key, OA secret key and Refresh token; the bot shares the Agent, hours and Inbox of every other channel. Javis needs an HTTPS domain.
+- **Javis refreshes the Zalo OA token by itself.** A Zalo token lives about 25 hours and each refresh token works once; Javis swaps and stores the new pair at once, so you never fetch one again each day.
+- **Verify the Zalo domain right in the form.** Paste the `zalo_verifier...html` file name Zalo gives and press Save code; Javis serves that exact file so you can press Verify on Zalo. Step by step in guide 35.
+
+## [0.411.0] - 2026-10-30
+### Improved
+- **Javis only asks you when it really needs you.** "Needs you" became "Javis is asking you" and holds only questions, permission requests and results to approve; jobs paused on technical hitches move to "Javis is handling these", with a quiet notice saying there is nothing for you to do.
+- **Add a note to a job in any state.** A done, paused or waiting job has Add a note (e.g. "rewrite paragraph 2 shorter") and continues from its last result instead of starting over; queued jobs get Run now.
+- **See whether a finished job was checked.** Cards say Checked or Not checked with the run time, and an unchecked job has Check again.
+- **Smarter and lighter.** A job you asked for by hand 3 times in 60 days is suggested as a schedule, new jobs go to the assistant that fits and small jobs run light; the page reloads only when something changed and History shows the newest jobs first.
+
+## [0.410.0] - 2026-10-30
+### Fixed
+- **A job that ran out of usage is no longer marked Done.** When Claude reported the limit in wording Javis did not know yet (like "You're out of extra usage"), or an API error mid-run, the job still went to Done with that message as its result. A turn that ends in an error is now an error: the job waits for the plan to reopen, or sits under Needs you with the reason.
+- **Background work moves to the next provider in your order when Claude runs out**, as it already did for Codex, if nothing was done yet. A job already part done stops and reports instead, so nothing is sent twice.
+- **You can answer a job's question right on its card.** The Work page refreshes every 3 seconds and wiped whatever you were typing in the reply box. The box now keeps your text until you send it, and buttons no longer stay grey after a server error.
+
+## [0.409.0] - 2026-10-30
+### Fixed
+- **Phone dictation: X and stop respond again.** The first recording worked, after that neither X nor the stop square did anything and the timer ran on. Main cause: stopping put the cursor in the text box, so the keyboard came up; on the next recording the iPhone dropped the keyboard but left the page shifted, and a tap on X landed on the text box (the "AutoFill" bubble) instead of the button. Now the box lets go of the cursor while recording, stopping does not bring up the keyboard (tap the box to edit), and the page settles back when the keyboard goes down.
+- **The recording bar no longer hangs.** If the browser never confirms the stop, Javis ends the recording after 1.5 seconds and keeps the words heard; a second press of stop ends it at once. X while the words are being transcribed closes the bar right away instead of waiting for the server. A transcription taking over 45 seconds is given up and the bar closes.
+
+## [0.408.0] - 2026-10-29
+### Improved
+- **A tidier notification bell: read notices hide.** The list shows only unread notices. **Mark all read** empties it at once. To look back, tap **Show N read notices** at the bottom.
+- **An X on every notice** removes it from the queue without opening it.
+
+### Fixed
+- **"Not needed" takes that notice out of the list at once.** It used to stay in the bell even though Javis had noted the feedback. What Javis Core learned shows once above the list.
+- **Background jobs with nothing to report no longer land in the bell.** Javis only saw the `[SILENT]` flag at the start of an answer, so a reply like "I will check the failed POSCake runs. [SILENT]" still became a notice. The flag now counts at the start or the end, for reminders and webhooks alike.
+
+## [0.407.0] - 2026-10-29
+### Improved
+- **The Store has a Sort box.** Pick Recommended (the default, recommended packs first), Recently updated, or Name A-Z. Javis remembers your choice on this device.
+- **Long descriptions on Store cards fit in three lines and end with "…".** The text used to run a few more lines and get cut off mid-line. Tap the (i) next to the name to read it all.
+
+## [0.406.0] - 2026-10-29
+### Improved
+- **An easier first visit to the Models page.** With no provider signed in yet, **Connect another provider** sits at the top with the list of providers already open, ready to connect. It used to sit at the bottom of the page, closed.
+- **Aligned Models page.** **Change model** now has the same height as the Effort chip (Off) beside it and lines up with it. On a phone, each section title no longer squeezes into two columns: the (i) sits next to the name and the sub-label takes its own line.
+
+## [0.405.0] - 2026-10-29
+### Improved
+- **Diagrams and pictures zoom and pan on desktop and phone.** The diagram viewer, SVG pictures and pictures opened in the editor now zoom with the mouse wheel or a two-finger pinch and pan by dragging with the mouse or one finger. Buttons **+**, **-** and **Fit**, and a double tap zooms in fast. A wide diagram used to show tiny on a phone with no way to zoom.
+
+## [0.404.0] - 2026-10-29
+### Improved
+- **A tidier Channels tab.** The account card (status, bot on duty, chat counts, Record chats, Import old messages, View chats, Open Connections) no longer sits above the chat list. The new **Info** button next to "AI on duty" opens it as a popup, unchanged. The button shows a red dot when the account has an error.
+- The "Bot settings" button moved to the bottom of that popup.
+- Removed the hint lines above the "Groups and people" list. With no AI on duty yet, the "AI here" switch is dimmed and, when pressed, says to pick one in the box above.
+
+## [0.403.0] - 2026-10-29
+### Added
+- **Javis Core runs the notifications.** Every notice has a group (Reminders, Questions for you, Chatbot and customers, Connections and sign-in, Incidents, Job results...) and a level: normal, important or urgent.
+- **By default only urgent notices ring:** reminders, questions for you, a customer asking for a person, a failing chatbot, Javis not usable, a change on a page you watch. Other notices stay in the bell under **Filtered**, with no red dot, no phone push and no Telegram. A job given from a chat still reports back into that chat.
+- A **Filter** tab in the bell: each group picks Everything, Important and up, Urgent only or Off; see the kinds with their own rule; undo changes.
+- Every notice has two buttons, **Needed** and **Not needed**. To rate it with an emoji, press **Open in Javis Core** and put the emoji on it in the chat like on any answer. Javis Core adjusts itself from it, says so in its chat, and never hides an urgent notice by itself.
+- A kind that rings a 3rd time within 6 hours is filtered as "repeated" after that.
+- Say it in the Javis Core chat, for example "turn off Zalo sign-in notices", and Javis Core changes it with the new `javis_notify` tool.
+
+## [0.402.0] - 2026-10-29
+### Fixed
+- **Javis Core can pick a model.** By default Core follows the main model and changes with it. Picking another model in the model bar of a Core chat pins it for all of Core: every Core chat uses it until you choose "Follow the main chat's model". Core chats used to freeze on the model of the day they were made.
+- **Fewer false sign-in notices:**
+  - A normal answer that mentions "not logged in" no longer makes Javis say it is not usable.
+  - A failure already reported is not reported again after a restart.
+  - A connection still downloading on its first start is no longer counted as broken.
+  - A recurring job that keeps failing makes one "needs you" incident, not a new notice on every failure.
+  - The Zalo eviction notice no longer repeats after every restart.
+
+## [0.401.0] - 2026-10-29
+### Fixed
+- **Chatbot Stats split per account.** The "answers the AI handled" share used to mix every account, so an account where a person types lowered the share of one only the AI answers.
+- An **account picker** sits next to the period button. Pick one account and the whole page counts only that one. Javis remembers the choice.
+- The per-channel list became **AI and hand replies per account**: one two-colour bar per account, with that account's own AI share.
+- "You answered" is now **Hand replies**, since it also counts messages someone else types on that account's phone.
+
+## [0.400.0] - 2026-10-29
+### Fixed
+- **Canva and other OAuth connections no longer drop mid-session.** Near expiry, several calls at once each renewed the token with the same code, and Canva accepts that code only once, so it shut the sign-in. Now one call renews and the others share the new token.
+- A tool call mid-chat always uses the latest token. If the server still rejects it (error 401), Javis renews and tries once more instead of asking you to reconnect.
+- A token change no longer cuts off work in progress, such as a Canva design being generated.
+
+## [0.399.0] - 2026-10-29
+### Improved
+- **Chatbot Stats shows what the AI does for you.** A band at the top: how many messages the AI answered for you, its share of all answers, the hours it freed for you (estimated), and how many answers it sent while you rest (9 pm to 7 am).
+- **New numbers:** customers served and new customers, the AI's first-answer speed against yours, and a chart of when customers write during the day.
+- **The Channels and Stats tabs are tidier**, with the same type and buttons as the Conversations tab.
+- **Every (i) explanation now opens in a popup** next to its button (a sheet from the bottom on phones) instead of unfolding and pushing the page down.
+
+## [0.398.0] - 2026-10-29
+### Fixed
+- **Replying to customers on a phone: Enter adds a line.** On the Chatbot page, Enter on a phone keyboard used to send right away, with no way to write a second line. Enter now adds a line like in the main chat; press the send button to send. Computers are unchanged: Enter sends, Shift+Enter adds a line.
+- While dictating in the chat, Enter on a phone also adds a line instead of sending the recording.
+
+## [0.397.0] - 2026-10-29
+### Improved
+- **Chatbot page on phones: twice the room to read messages.** An open chat fills the screen: one head row with the back button, the customer's name and a violet mode button. Tap it to pick AI replies, AI drafts or I reply, each with a line on what it does. The compose box is one row with two round buttons.
+- **On phones** the "Chatbot" title is gone and the four tabs show their icon only.
+- **Smaller, tidier type on computers.** Each customer takes 2 lines and still shows the chat's message count and unread number; a third line appears only for tags.
+- **The four filter buttons that wrapped** (Needs you, AI is handling...) are now **one dropdown** that always shows the Needs you count. Each choice has a line saying what it means.
+- **The three reply modes sit in the chat head.** The coloured bar under it only shows when something needs you. The customer's tags sit next to the name, with a "+ Tag" button.
+- **The Info panel starts closed**; the ⓘ button opens it and Javis remembers your choice. Messages sit in a centred, easy-to-read column.
+- The compose box's "AI reply" button is now **"AI draft"**, which is what it does: the AI writes, you press Send. The draft shows right inside the compose box.
+
+## [0.396.0] - 2026-10-29
+### Improved
+- **Group chats now keep their latest 1,000 messages in the inbox, up from 100.** A busy group stays readable for days back. Private chats with customers still keep everything.
+- Messages already cut earlier do not come back; from now on a group fills up to 1,000 before the oldest start to go.
+
+
+## [0.394.0] - 2026-10-29
+### Fixed
+- **Switching to another app and back, a running turn no longer looks stopped.** Javis kept working on the server while you were away, but on reconnecting the chat removed the "Javis is thinking" line and did not show what had been written, so the command looked stopped until the finished answer popped up. The status line now comes back at once, with the text Javis wrote while you were away.
+- **Back in the app, a dead connection is noticed after about 20 seconds instead of up to 50,** so the chat catches up sooner on phones.
+
+## [0.393.0] - 2026-10-29
+### Fixed
+- **The phone menu opens again.** On iPhone, the menu button only dimmed the screen with no menu on it: Safari drew the menu while it slid in, then dropped it. The menu now slides in a way Safari does not mangle, and is fully hidden when shut.
+### Improved
+- On phones the **light/dark button** moves to the version row at the bottom of the menu, next to the sidebar collapse button.
+
+## [0.391.0] - 2026-10-29
+### Fixed
+- **The capability index `Javis/index.md` now updates itself in every brain**, not only Brain Default. A brain with no loop used to keep the file from the day it was created, so it still said "0 agents" after dozens were added, and an AI reading it to avoid duplicates was misled.
+- Adding, editing or deleting an agent, skill, workflow, loop or plugin updates the index within about 30 seconds, also when the AI writes the file itself. No more toggling a plugin to force a rebuild.
+- **Lighter than before:** Javis rebuilds only the brains that actually changed, so many brains do not slow the machine down.
+
+## [0.390.0] - 2026-10-29
+### Improved
+- **The Javis Store shows at most 3 columns of cards**, six full rows per 18-item page. Narrow screens still drop to 2 columns, phones to 1.
+- **Fewer tags on a card:** no kind tag (the open tab already says it) and no official or community tag. Only packs that run code get a small amber chip in the corner, beside the group chip, so the name fits on one line.
+- Refresh is no longer pushed past the edge on wide screens. The catalog time now shows when you hover the button.
+
+## [0.387.0] - 2026-10-29
+### Fixed
+- **Claude Code and Codex now really stay running between messages.** In 0.382.0 Javis thought the setup had changed after every message (Claude Code and Codex rewrite their sign-in file themselves), so it started them again each time. Measured again on the dashboard: the next message shows text after about 2 seconds instead of 8 to 14.
+- **Getting ready as you type now actually works** for both Claude Code and Codex, and covers a chat left idle for up to 12 hours (was 1 hour). Signing in or out makes Javis start them again on the new account.
+
+## [0.386.0] - 2026-10-28
+### Improved
+- **Javis Store on phones:** the six kind tabs become a dropdown, next to the group dropdown in one row that stays put while you scroll. Each choice shows its item count and new versions, in larger, easier to tap text. Computers keep the tabs.
+
+## [0.385.0] - 2026-10-28
+### Fixed
+- **Signing in to Claude on the Models page no longer says done and then falls back to "Not signed in".** The Claude CLI reports success even when it could not save the sign-in (on a Mac, a locked Keychain), and Javis took its word for it, so the card went back with no reason. Javis now checks right away and, if nothing was saved, says why and what to do.
+- Pasting a wrong code and then the right one no longer returns the first code's error. A refused code shows Claude's own reason on the card.
+
+## [0.384.0] - 2026-10-28
+### Improved
+- **A tidier Javis Store:** the repeated heading and intro lines are gone, and the tabs plus the Refresh and Install from .zip buttons share one row that **stays put while you scroll**. The group list moved to the right and stays put too.
+- **18 items per page**, with previous and next buttons. Moving to a page takes you to its first card.
+- **No more broken layout on phones:** the six tabs fit one row, groups are picked from a dropdown beside the search box, and Refresh and Install from .zip shrink to icons.
+
+## [0.382.0] - 2026-10-28
+### Improved
+- **Claude Code answers faster from the second message on.** Javis keeps Claude Code running between the messages of a chat instead of starting it again every time. Measured on a real machine: the next message went from about 10 seconds to about 4.
+- **Codex shows its answer as it writes** instead of making you wait for the whole paragraph. Codex is also kept running between messages, and Javis's rules go once per chat instead of with every message, so long chats no longer slow down.
+- Just start typing and Javis gets the brain ready again for a chat that has been idle over 5 minutes. How many stay ready is capped by the machine's free RAM; background work and customer bots run as before.
+
+## [0.381.0] - 2026-10-28
+### Improved
+- **Models** moves from the Connections group to the **System** group in the sidebar: choosing the AI brain is Javis's own setting, while Connections is for outside services.
+
+## [0.380.0] - 2026-10-28
+### Fixed
+- **Conversations list:** the number of messages in each chat is back (grey "12 msgs") next to the red unread count. The reply box drops its two notes, keeping only the warning that a personal account sends under your own name.
+- **A truer "Needs you":** opening a chat takes it off Needs you until the customer writes again. Friend-request notices ("accepted your friend request") do not count as a customer waiting. Chats of a nick that has an AI no longer offer "Create an AI for this channel".
+- **Channels tab:** a nick's groups and people come 20 a page (Previous / Next, "21-40 of 289") and the search covers every page. The channel list on the left stays in view while scrolling and has its own search.
+- A customer's emoji reaction is shown under the customer's name, no longer as "Bot reacted".
+
+## [0.379.0] - 2026-10-28
+### Fixed
+- **Allowing a Zalo Bot group now sticks.** Zalo Bot group ids look like `zgr-...` and were silently dropped: "Allow this group" said done, yet the group stayed "waiting for approval" and the bot never answered there. Thanks to @VQTPiano for the report and the fix (#875).
+
+## [0.378.0] - 2026-10-28
+### Fixed
+- **Customer bots with a long profile no longer go silent.** On a Linux server, a bot on the Claude plan whose prompt passed about 128 KB (a long assistant profile plus the customer context of each turn) could not start Claude, so the customer got no reply. The prompt now goes through a file, so any length works. Thanks to @QuanAMG for the report and diagnosis (#871).
+
+## [0.377.0] - 2026-10-28
+### Added
+- **Channels tab on the Chatbot page:** every Zalo nick, Page and Telegram bot grouped by channel with real logos. Pick the AI on duty for each with one dropdown; Cancel and Save appear only after a change. Also "No AI needed", "Put an AI on several Pages" at once, and an AI switch per group or person with Undo.
+- **Stats tab:** how many messages the AI and you answered, how long customers waited, against the period before, with bars by channel and by bot. Pick the period with a full date picker: today, last 7, 30 or 90 days, last month, week or month to date, or days on the calendar.
+- **Fuller Conversations filter:** Time (the same date picker), Last message by (customer, AI, you) and Pinned chats only. A list emptied by filters offers Clear right in the middle.
+
+### Fixed
+- Changing the bot on duty for a Page moves its existing chats to the new bot, so they no longer say "no bot". Switching the AI off in one chat that cannot be saved now says so instead of claiming it is done.
+## [0.376.0] - 2026-10-28
+### Improved
+- **Pin and speaker buttons under every answer.** The pin puts an answer into the conversation's contents (the marks rail on the right, the ≡ button on phones), marked with an orange pin, one click to jump back; pins are kept on the server so other devices see them. The speaker reads that answer aloud; press again to stop.
+- **No token count on the small line under an answer.** It now shows only the engine, the model and the context mode; the Usage page has the token numbers.
+- **The "Recommended repos" tab is now "Recommended".** A shorter name without the word "repos", one line on a phone. The card line now reads "Updated from the author".
+- **Clearer icons in the Javis Store.** The solid letter tiles are gone. Skills show the puzzle icon of the Skills page, workflows and tools their own icons, each card in its own light colour. Agents show an agent portrait like the Partners page. Packs with a real logo keep it.
+
+### Added
+- **Recommended gains 15 of the most popular skill sets**, each taken as the author wrote it and updated with them: Superpowers, GitNexus, REA, Matt Pocock's skills, Anthropic Skills, Vercel, planning with files, UI/UX Pro Max, Marketing Skills (52 skills), Humanizer, Claude for Marketing, Sales and Small Business, HyperFrames, Video Use. Already in the Javis Store, no app update needed.
+## [0.375.0] - 2026-10-28
+### Improved
+- **Javis now sets up a browser right after install.** If the machine has no Chrome or Edge, Javis downloads a compact Chromium (about 100 MB) in the background on first start, so nobody has to find the button on the Tools page. Javis stays usable while it downloads.
+- Machines that already have Chrome or Edge use it as is and download nothing. If you pressed Remove on the browser, Javis respects that and does not download it again.
+- To turn the automatic download off, set the environment variable `JAVIS_SKIP_BROWSER=1`.
+
+## [0.372.0] - 2026-10-28
+### Added
+- **New Conversations tab on the Chatbot page.** On a computer: customers, chat and an Info panel side by side. Each row's coloured edge says who is on it: Needs you, AI is handling, You are handling.
+- **Pick channels with checkboxes:** several Zalo nicks or Pages at once, each with its "Needs you" count. One **Filter** button holds tags, chat type, bot and status.
+- **"Who replies" bar under the customer's name:** AI replies, AI drafts and you approve, or I reply. Every change can be undone.
+- **"AI reply" button:** type an instruction ("quote 20 cases wholesale") and the AI writes the reply as a draft you edit before sending. The Info panel keeps a note on the customer.
+
+## [0.371.0] - 2026-10-28
+### Added
+- **Groundwork for the new Chatbot page** (the screen itself comes in the next release). Every chat now has one shared state: AI is handling it, You are handling it, Needs you, or Only logged.
+- **New "AI drafts, I approve" mode:** the bot writes its reply but does not send it; it waits for you to Send, Rewrite or Drop.
+- **Switch the AI off in a single chat** without changing the whole bot, and **give the AI an instruction** (for example "quote 20 cases wholesale") to write the reply to the customer.
+
+## [0.370.0] - 2026-10-28
+### Added
+- **Recommended repos in the Javis Store.** A new first tab in the Store with skill sets copied word for word from the author's own GitHub repo, nothing translated or changed. Each card links to the source repo with the day the latest version was taken. The store compares them with the source every day: when the author changes a skill the pack gets a new version, Javis tells you in the bell and you press Update. Skills you edited yourself are kept.
+- **The first two:** Remotion (12 official skills for making videos in React: new projects, animation, captions, maps, rendering) and Lemo-Opuscar (short films made entirely in code, in 59 styles).
+
+### Improved
+- **Skills that ship their own files work on every engine.** A skill with `scripts/` or `references/` now tells the model its folder when it is loaded, as Claude Code does, so the model finds those files instead of guessing.
+
+## [0.369.0] - 2026-10-28
+### Fixed
+- **Download in the picture viewer on an iPhone now saves the picture.** It used to only open the picture in a new page. It now opens the iPhone share sheet, where "Save Image" puts it straight into Photos. After swiping to another picture, Download saves the one on screen.
+
+## [0.368.0] - 2026-10-28
+### Improved
+- **Tidier repo and branch picking.** Tapping the repo chip in the chat box (or plus, GitHub repo) opens a small menu with "Change repo" and "Change branch". The repo list has "Selected" and "Repos" sections, the owner small above the repo name, and a "Connect more" button.
+- **Work from a branch other than the default.** Pick a branch (dev, say) before or during a chat: Javis cuts its working branch from it and opens the PR into it. The chosen branch shows on the chip. A chat with work in progress cannot switch, so nothing is lost.
+
 ## [0.367.0] - 2026-10-28
 ### Improved
 - **The GitHub and Messenger cards on the Connections page are compact.** Each card shows one row with the number of repos or Pages; "View details" opens the full list in a popup, like the bot cards on the Chatbot page. Many repos or Pages no longer stretch the whole page.
