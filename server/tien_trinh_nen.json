@@ -1,0 +1,62 @@
+[
+ {
+  "id": "jd7db8aca",
+  "pgid": 19354,
+  "mo_ta": "tiến trình nền",
+  "cwd": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "brain_root": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "chat_id": "web:32600e81a817455ca5e3d77ab80ecce4",
+  "bat_dau": 1793416214.3823156,
+  "trang_thai": "xong",
+  "sau_khi_xong": "",
+  "noi_tiep": false,
+  "do_sau": 0,
+  "ket_thuc": 1793416214.394239,
+  "file_moi": []
+ },
+ {
+  "id": "jed3bebd7",
+  "pgid": 23127,
+  "mo_ta": "tiến trình nền",
+  "cwd": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "brain_root": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "chat_id": "web:df29146297cb447aa43824fd23c7c7e1",
+  "bat_dau": 1793416757.2756052,
+  "trang_thai": "xong",
+  "sau_khi_xong": "",
+  "noi_tiep": false,
+  "do_sau": 0,
+  "ket_thuc": 1793416757.2882924,
+  "file_moi": []
+ },
+ {
+  "id": "jb3704868",
+  "pgid": 25342,
+  "mo_ta": "tiến trình nền",
+  "cwd": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "brain_root": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "chat_id": "web:df29146297cb447aa43824fd23c7c7e1",
+  "bat_dau": 1793417114.9956048,
+  "trang_thai": "xong",
+  "sau_khi_xong": "",
+  "noi_tiep": false,
+  "do_sau": 0,
+  "ket_thuc": 1793417115.007968,
+  "file_moi": []
+ },
+ {
+  "id": "j57a3605b",
+  "pgid": 36669,
+  "mo_ta": "tiến trình nền",
+  "cwd": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "brain_root": "/media/thang-vo/Data/SoftwareDev/javis-os-public/brains/Brain Default",
+  "chat_id": "web:df29146297cb447aa43824fd23c7c7e1",
+  "bat_dau": 1793418319.7779422,
+  "trang_thai": "xong",
+  "sau_khi_xong": "",
+  "noi_tiep": false,
+  "do_sau": 0,
+  "ket_thuc": 1793418319.789574,
+  "file_moi": []
+ }
+]
