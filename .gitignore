@@ -214,3 +214,11 @@ server/notify_policy.json
 server/engine_down_notified.json
 server/client_errors.json
 server/client_errors.tmp
+
+# Dữ liệu trạng thái chạy, cache và cấu hình runtime trong server/ (STATE_DIR mặc định là server/).
+# Toàn bộ file JSON runtime phát sinh liên tục trong quá trình làm việc, không push lên Git.
+server/cache/
+server/*.json
+server/.*.json
+!server/usage_pricing.json
+server/webhook_events.sqlite3*
