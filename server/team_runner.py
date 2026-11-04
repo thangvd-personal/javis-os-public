@@ -4119,7 +4119,7 @@ class TeamRunner:
 
     # ───────────── automatic retry of temporary errors (0.436.0, team_retry) ─────────────
 
-    def _auto_retry_plan(self, team: dict, task: dict, step: dict, out: dict) -> Optional[dict]:
+    def _auto_retry_plan(self, team: dict, task: dict, step: dict, out: dict) -> dict | None:
         """The retry plan for a step just marked failed, or None (block as before). Never raises: a broken detector
         must not turn one failed step into a stuck job."""
         try:
@@ -4149,7 +4149,7 @@ class TeamRunner:
                               "kind": retry["kind"], "attempt": retry["attempt"]})
         return res
 
-    def retry_due(self, now: Optional[float] = None) -> list:
+    def retry_due(self, now: float | None = None) -> list:
         """Jobs whose automatic retry time has come run again: the failed step is added anew (same as the owner's
         Retry) and the job goes back to its place in the queue. Returns the task ids. Code only, no model."""
         now = self.clock() if now is None else float(now)

@@ -100,7 +100,7 @@ def token() -> str:
     return str(conn.get("token") or "").strip() if conn.get("source") == "own" else ""
 
 
-def _app_token(conn: Dict[str, Any]) -> str:
+def _app_token(conn: dict[str, Any]) -> str:
     """Token from "Sign in with GitHub". The Javis app issues tokens that do not expire; if one does carry an expiry
     (the app setting was changed), renew it a minute early, and read as signed out when GitHub refuses."""
     tok = str(conn.get("token") or "").strip()
@@ -444,7 +444,7 @@ def norm_branch(name: str) -> str:
     return s
 
 
-def branches(full_name: str) -> Dict[str, Any]:
+def branches(full_name: str) -> dict[str, Any]:
     """Branches of a repo for the branch picker: the default branch first, then the rest by name."""
     fn = norm_full_name(full_name)
     tok = token()
