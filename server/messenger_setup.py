@@ -25,7 +25,10 @@ import time
 import httpx
 import localefmt
 from messenger_bot import (
+    FEED_FIELD,
     GRAPH,
+    IG_OBJECT,
+    IG_WEBHOOK_FIELDS,
     SUBSCRIBED_FIELDS,
     _explain_error,
     appsecret_proof,
@@ -38,6 +41,12 @@ WEBHOOK_PATH = "/messenger/webhook"
 # so it is not part of the run-time check.
 REQUIRED_SCOPES = ("pages_messaging", "pages_manage_metadata", "pages_read_engagement")
 WEBHOOK_FIELDS = tuple(SUBSCRIBED_FIELDS.split(","))
+# Page comments (0.434.0): reading them and replying under them. Optional, so a warning when missing.
+COMMENT_SCOPES = ("pages_read_user_content", "pages_manage_engagement")
+# Posting through the Facebook Pages tools on this same connection (0.438.0). Optional, a warning when missing.
+POST_SCOPES = ("pages_manage_posts",)
+# Instagram through the same Page (0.447.0): the linked account, its direct messages and its comments.
+IG_SCOPES = ("instagram_basic", "instagram_manage_messages", "instagram_manage_comments")
 
 
 def _app_token(app_id: str, app_secret: str) -> str:
@@ -152,13 +161,17 @@ async def set_app_webhook(client, app_id: str, app_secret: str, callback_url: st
     """Register (or overwrite) the app's `page` webhook with the fields the bot needs. Meta calls
     `callback_url` with the verify token while this request is open, so Javis must be reachable
     at that address for it to succeed."""
-    d = await _post(client, f"{app_id}/subscriptions", {
-        "object": "page", "callback_url": callback_url, "fields": SUBSCRIBED_FIELDS,
-        "include_values": "true", "verify_token": verify_token,
-        "access_token": _app_token(app_id, app_secret)})
+    params = {"object": "page", "callback_url": callback_url, "fields": SUBSCRIBED_FIELDS + "," + FEED_FIELD,
+              "include_values": "true", "verify_token": verify_token,
+              "access_token": _app_token(app_id, app_secret)}
+    d = await _post(client, f"{app_id}/subscriptions", params)
+    if not d.get("error") and d.get("success"):
+        return {"ok": True, "feed": True}
+    # `feed` (comments) is optional: never lose the message webhook over it.
+    d = await _post(client, f"{app_id}/subscriptions", {**params, "fields": SUBSCRIBED_FIELDS})
     if d.get("error") or not d.get("success"):
         return {"ok": False, "error": _err(d, "webhook setup failed")}
-    return {"ok": True}
+    return {"ok": True, "feed": False}
 
 
 async def page_subscription(client, page_id: str, page_token: str, app_id: str) -> dict:
@@ -169,6 +182,60 @@ async def page_subscription(client, page_id: str, page_token: str, app_id: str) 
         if str(a.get("id") or "") == str(app_id):
             return {"ok": True, "found": True, "fields": [str(f) for f in (a.get("subscribed_fields") or [])]}
     return {"ok": True, "found": False, "fields": []}
+
+
+async def instagram_account(client, page_id: str, page_token: str) -> dict:
+    """The Instagram professional account linked to a Page (0.447.0). {"ok", "id", "username"}; "id" is empty when
+    the Page has none linked."""
+    d = await _get(client, str(page_id), {"fields": "instagram_business_account{id,username}",
+                                          "access_token": page_token})
+    if d.get("error"):
+        return {"ok": False, "id": "", "username": "", "error": _err(d, "instagram lookup failed")}
+    ig = d.get("instagram_business_account") or {}
+    return {"ok": True, "id": str(ig.get("id") or ""), "username": str(ig.get("username") or "")}
+
+
+async def instagram_webhook(client, app_id: str, app_secret: str) -> dict:
+    """The app's `instagram` subscription: {"ok", "found", "callback_url", "active", "fields"}."""
+    d = await _get(client, f"{app_id}/subscriptions", {"access_token": _app_token(app_id, app_secret)})
+    if d.get("error"):
+        return {"ok": False, "error": _err(d, "subscriptions read failed")}
+    for s in d.get("data") or []:
+        if s.get("object") == IG_OBJECT:
+            fields = [str(f.get("name") if isinstance(f, dict) else f) for f in (s.get("fields") or [])]
+            return {"ok": True, "found": True, "callback_url": str(s.get("callback_url") or ""),
+                    "active": bool(s.get("active")), "fields": fields}
+    return {"ok": True, "found": False, "callback_url": "", "active": False, "fields": []}
+
+
+async def set_instagram_webhook(client, app_id: str, app_secret: str, callback_url: str, verify_token: str) -> dict:
+    """Register the app's `instagram` webhook (messages and comments) on the same address as the Page one."""
+    d = await _post(client, f"{app_id}/subscriptions", {
+        "object": IG_OBJECT, "callback_url": callback_url, "fields": IG_WEBHOOK_FIELDS, "include_values": "true",
+        "verify_token": verify_token, "access_token": _app_token(app_id, app_secret)})
+    if d.get("error") or not d.get("success"):
+        return {"ok": False, "error": _err(d, "instagram webhook setup failed")}
+    return {"ok": True}
+
+
+def instagram_item(ig: dict, scopes, wh: dict) -> dict:
+    """Warning row for Instagram (0.447.0): linked account, permissions, webhook. Never red: the Page works without."""
+    lack = [x for x in IG_SCOPES if x not in (scopes or [])]
+    if not ig.get("id"):
+        return _item("instagram", None, ("Instagram của Trang", "The Page's Instagram"),
+                     ig.get("error", "") or localefmt.chu("chưa gắn", "none linked"),
+                     ("Gắn tài khoản Instagram chuyên nghiệp vào Trang (Cài đặt Trang, Tài khoản liên kết), rồi đăng "
+                      "nhập Facebook lại ở thẻ Kết nối Meta và tick Instagram.",
+                      "Link an Instagram professional account to the Page (Page settings, Linked accounts), then log in "
+                      "with Facebook again on the Meta card and tick Instagram."))
+    if not (wh or {}).get("found") or not (wh or {}).get("active"):
+        lack.append("webhook instagram")
+    return _item("instagram", True if not lack else None, ("Nhận tin và bình luận Instagram",
+                                                           "Receives Instagram messages and comments"),
+                 ("@" + ig["username"] if ig.get("username") else ig["id"]) + (" · " + ", ".join(lack) if lack else ""),
+                 ("Đăng nhập Facebook lại ở thẻ Kết nối Meta, tick Instagram, cấp đủ quyền rồi bấm Sửa tự động.",
+                  "Log in with Facebook again on the Meta card, tick Instagram, grant every permission, then click Repair."),
+                 auto=True)
 
 
 def _item(cid: str, ok, label: tuple, detail: str = "", fix: tuple = ("", ""), auto: bool = False) -> dict:
@@ -183,6 +250,27 @@ def _date(ts: int) -> str:
         return time.strftime("%Y-%m-%d", time.localtime(int(ts)))
     except Exception:
         return ""
+
+
+def comments_item(scopes, page_fields) -> dict:
+    """Warning row for Page comments: the permissions and the `feed` subscription. Never red, the
+    inbox and the bot work without comments."""
+    lack = [x for x in COMMENT_SCOPES if x not in (scopes or [])]
+    if FEED_FIELD not in (page_fields or []):
+        lack.append(FEED_FIELD)
+    return _item("comments", True if not lack else None, ("Nhận bình luận Trang", "Receives Page comments"),
+                 ", ".join(lack) if lack else "",
+                 ("Đăng nhập Facebook lại ở thẻ Messenger, cấp đủ quyền, rồi bấm Sửa tự động.",
+                  "Log in with Facebook again on the Messenger card, grant every permission, then click Repair."))
+
+
+def posts_item(scopes) -> dict:
+    """Warning row for posting to the Page with the Facebook Pages tools. Never red."""
+    lack = [x for x in POST_SCOPES if x not in (scopes or [])]
+    return _item("posts", True if not lack else None, ("Đăng bài lên Trang", "Can post to the Page"),
+                 ", ".join(lack),
+                 ("Đăng nhập Facebook lại ở thẻ Messenger và đồng ý quyền đăng bài.",
+                  "Log in with Facebook again on the Messenger card and accept the posting permission."))
 
 
 async def run_checks(client, page_id: str, page_token: str, app_secret: str, app_id: str = "",
@@ -251,6 +339,8 @@ async def run_checks(client, page_id: str, page_token: str, app_secret: str, app
                                ("Trang gắn với app", "Page is subscribed to the app"),
                                ps.get("error", "") if not ps.get("ok") else ", ".join(ps.get("fields", [])),
                                ("Bấm Sửa tự động.", "Click Repair."), auto=True))
+            items.append(comments_item(info["scopes"], ps.get("fields", []) if ps.get("ok") else []))
+    items.append(posts_item(info["scopes"]))
     if bot_running is not None:
         items.append(_item("bot", None if not bot_running else True, ("Có bot đang trực", "A bot is answering"), "",
                            ("Vào Chatbot, Bot, tạo hoặc bật bot cho kênh này.",

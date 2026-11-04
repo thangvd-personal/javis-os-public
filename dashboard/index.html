@@ -31,8 +31,8 @@
   <!-- Biến --ic-* cho icon dùng trong content: của CSS. Phải đứng TRƯỚC style.css
        vì style.css tham chiếu các biến này. -->
   <link rel="stylesheet" href="/static/vendor/lucide-icons.css?v=1">
-  <link rel="stylesheet" href="/static/style.css?v=153">
-  <link rel="stylesheet" href="/static/console.css?v=130">
+  <link rel="stylesheet" href="/static/style.css?v=158">
+  <link rel="stylesheet" href="/static/console.css?v=131">
   <!-- Áp tông đã lưu TRƯỚC khi vẽ để không nháy tối rồi mới đổi sang sáng.
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
        Chế độ "auto" (0.74.0, mặc định khi chưa chọn gì từ 0.75.1) tính theo khung giờ "HH:MM-HH:MM", cùng quy tắc với lightAt() trong
@@ -820,6 +820,12 @@
           </div>
           <div id="wzProvHint"></div>
         </div>
+        <div class="set-sec">
+          <h4 data-i18n="wz.s4">4. Múi giờ</h4>
+          <div class="set-note" data-i18n="wz.tz_note">Javis dùng múi giờ này cho hôm nay, hôm qua, ngày mai, nhắc hẹn và kỳ báo cáo.</div>
+          <select id="wzTz" aria-label="Múi giờ" data-i18n-aria="wz.s4"></select>
+          <div class="set-note" id="wzTzNow"></div>
+        </div>
         <div class="set-actions"><button class="s-btn" id="wzFinish" data-i18n="wz.start">Bắt đầu dùng Javis →</button></div>
         <div class="auth-err" id="wzErr"></div>
       </div>
@@ -957,7 +963,8 @@
   "/static/agent-judge-ui.js?v=2"
  ],
  "teams": [
-  "/static/teams.js?v=20"
+  "/static/team-github.js?v=1",
+  "/static/teams.js?v=22"
  ],
  "packs": [
   "/static/packs.js?v=4"
@@ -980,7 +987,8 @@
   "/static/usage.js?v=3"
  ],
  "webhooks": [
-  "/static/webhooks.js?v=7"
+  "/static/webhooks.css?v=1",
+  "/static/webhooks.js?v=8"
  ],
  "nhiemvu": [
   "/static/date-range.css?v=1",
@@ -996,6 +1004,8 @@
   <script src="/static/vendor/lucide-icons.js?v=17"></script>
   <script src="/static/icons.js?v=2"></script>
   <script src="/static/info-tip.js?v=2"></script>
+  <!-- Timezone picker shared by the first-run setup and Settings (tz-picker.js, 0.443.0). -->
+  <script src="/static/tz-picker.js?v=1"></script>
 
   <!-- theme.js phải nạp TRƯỚC mọi file khác: graph.js / app.js đăng ký
        hàm vẽ lại theo tông ngay lúc parse, nếu window.javisTheme chưa có thì chúng
@@ -1025,7 +1035,9 @@
   <script src="/static/editor-cmds.js?v=2"></script>
   <!-- Đếm từ + ký tự cho trình sửa file (0.65.32). Thuần, console.js dùng qua window.JavisWordCount. -->
   <script src="/static/word-count.js?v=1"></script>
-  <script src="/static/file-editor.js?v=14"></script>
+  <!-- .html opens on its preview with a Code tab (0.430.2): before file-editor.js and console.js. -->
+  <script src="/static/html-preview.js?v=1"></script>
+  <script src="/static/file-editor.js?v=15"></script>
   <!-- Insert images into a note (paste/drop/button): compress, then save into images/. After
        editor-cmds.js because it shares its editor lookup (contextFor). -->
   <script src="/static/note-images.js?v=1"></script>
@@ -1042,6 +1054,8 @@
   <!-- Stick to the latest message, the jump button and its "New messages" pill, shared by app.js and teams.js. -->
   <script src="/static/chat-scroll.js?v=1"></script>
   <script src="/static/chat-quote.js?v=2"></script>
+  <!-- Long paste (0.430.1): preview the whole text, then paste inline or attach .txt. Before app.js and teams.js. -->
+  <script src="/static/chat-paste.js?v=1"></script>
   <!-- Sáu reaction dùng chung (T2 0.154.0): nạp TRƯỚC chat-reactions.js, app.js, teams.js và mobile-chat.js. -->
   <script src="/static/reactions.js?v=3"></script>
   <!-- Nhấn giữ tin trên điện thoại (0.179.0): nạp TRƯỚC chat-reactions.js và teams.js. -->
@@ -1069,7 +1083,7 @@
   <script src="/static/screen-awake.js?v=1"></script>
   <script src="/static/incoming-call.js?v=1"></script>
   <script src="/static/call-bar.js?v=1"></script>
-  <script src="/static/app.js?v=156"></script>
+  <script src="/static/app.js?v=158"></script>
   <!-- Sau app.js: dải việc nền đọc window.JavisSessions (app.js dựng) để biết phiên + brain. -->
   <script src="/static/background-strip.js?v=3"></script>
   <!-- Thân bảng chọn model dùng chung: phải đứng TRƯỚC model-picker.js (thanh chat) và
@@ -1087,7 +1101,9 @@
   <script src="/static/quick-settings.js?v=11"></script>
   <script src="/static/remote-access.js?v=2"></script>
   <script src="/static/chat-zoom.js?v=6"></script>
-  <script src="/static/brains-ui.js?v=8"></script>
+  <script src="/static/brains-ui.js?v=9"></script>
+  <!-- Brain picker drawn by Javis over #graphSource (0.431.0): after brains-ui.js and app.js. -->
+  <script src="/static/brain-picker.js?v=1"></script>
   <script src="/static/sessions-ui.js?v=25"></script>
   <link rel="stylesheet" href="/static/improvement-candidates.css?v=3">
   <script src="/static/improvement-experiments.js?v=1"></script>
@@ -1130,11 +1146,11 @@
   <script src="/static/login-vault.js?v=2"></script>
   <script src="/static/messenger-connect.js?v=3"></script>
   <script src="/static/voice-catalog.js?v=1"></script>
-  <script src="/static/console.js?v=204"></script>
+  <script src="/static/console.js?v=207"></script>
   <script src="/static/mobile-chat.js?v=16"></script>
   <script src="/static/brain-view.js?v=1"></script>
   <script src="/static/push.js?v=3"></script>
-  <script src="/static/install-nudge.js?v=1"></script>
+  <script src="/static/install-nudge.js?v=2"></script>
   <!-- Mời tặng sao GitHub (0.324.0): thẻ hiện ở khoảnh khắc vui, xem server/star_nudge.py. -->
   <link rel="stylesheet" href="/static/star-nudge.css?v=3">
   <script src="/static/star-nudge.js?v=2"></script>

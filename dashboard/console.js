@@ -537,6 +537,10 @@
     // nội dung/nút của trang mới. Đặc biệt bảo vệ các node chat mà tab Trò chuyện mượn vào
     // cviewBody (trước đây bị 1 render async trễ xoá mất → chat vỡ). Cũng hết nháy nội dung cũ.
     const fresh = el.cloneNode(false); el.parentNode.replaceChild(fresh, el); el = fresh;
+    // #936: the clone keeps every attribute. The Teams page marks this node data-localdrop (its own drop zone), so after a
+    // visit there the Chat page, which borrows the chat into this same node, ignored every dropped file. A new page starts
+    // without the mark; a page with its own drop zone sets it again while it renders.
+    el.removeAttribute("data-localdrop");
     // Trang Chatbot (0.65.10) tự vẽ tiêu đề cùng hàng với tab và chiếm trọn khung, nên đầu trang chung phải ẩn. Lớp nằm trên
     // #cview (KHÔNG bị clone như cviewBody) nên phải bật/tắt ở MỌI lần đổi trang, không thì trang sau mất đầu trang.
     const cv = document.getElementById("cview");
@@ -2283,6 +2287,8 @@
       brains = (d.brains || []).map(b => ({ name: b.label || b.name, path: b.path, is_default: b.is_default }));
     } catch (e) {}
     if (myGen !== _renderGen) return;
+    // 0.432.0: the hook popup hangs off <body>; leaving the page closes it.
+    _pageLeave = () => { try { window.JavisWebhooks.unmount(); } catch (e) {} };
     window.JavisWebhooks.mount(el.querySelector("#whSection"), { brains: () => brains, current: () => fbrain() });
   }
 
@@ -4504,6 +4510,7 @@
         <b>1)</b> ${esc(t("models.cli_s1"))}<br>
         <a href="${esc(safeHref(r.url))}" target="_blank" rel="noopener" style="color:var(--link-ink);word-break:break-all">${esc(r.url || t("models.no_link"))}</a><br>
         <b>2)</b> ${esc(t("models.cli_s2"))}
+        <div class="gcard-meta">${esc(t("models.cli_s2_nocode"))}</div>
         <div class="prov-action prov-code">
           <input class="js-input" id="cliCode" placeholder="${esc(t("models.code_ph"))}"
             autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
@@ -4512,16 +4519,33 @@
         <span id="cliMsg2" class="gcard-meta"></span>
       </div>`;
     const m2 = el.querySelector("#cliMsg2");
-    let stopped = false;
+    let stopped = false, busy = false, timer = 0;
     const t0 = Date.now();
-    const poll = async () => {   // tự hoàn tất (một số luồng không cần dán code)
-      if (stopped) return;
-      if (Date.now() - t0 > 5 * 60 * 1000) { if (m2) m2.textContent = t("models.timeout_retry"); return; }
-      let d; try { d = await (await fetch("/claude/status")).json(); } catch (e) { setTimeout(poll, 3000); return; }
-      if (d.connected) { stopped = true; refreshClaudeCard(el); return; }
-      setTimeout(poll, 3000);
+    // 0.438.7 (owner report 02/11/2026): on a machine with a browser the CLI opens the sign-in itself and gets the
+    // answer over localhost, so the web page only says "You're all set up" and never shows a code. This used to ask
+    // /claude/status, whose 90 s cache kept saying "signed out" until the page was reloaded. /claude/login-poll asks
+    // the sign-in process itself, and the card also asks the moment the user comes back to this tab.
+    const stop = () => {
+      stopped = true; clearTimeout(timer);
+      window.removeEventListener("focus", now); document.removeEventListener("visibilitychange", now);
     };
-    setTimeout(poll, 3000);
+    const poll = async () => {
+      if (stopped || busy) return;
+      clearTimeout(timer);
+      if (!el.isConnected) { stop(); return; }
+      if (Date.now() - t0 > 10 * 60 * 1000) { stop(); if (m2) m2.textContent = t("models.timeout_retry"); return; }
+      busy = true;
+      let d = null; try { d = await (await fetch("/claude/login-poll")).json(); } catch (e) {}
+      busy = false;
+      if (stopped) return;
+      if (d && d.connected) { stop(); refreshClaudeCard(el); return; }
+      if (d && d.ended) { stop(); if (m2) m2.innerHTML = Icons.warn(d.error || t("models.login_incomplete")); return; }
+      timer = setTimeout(poll, 2000);
+    };
+    const now = () => { if (!document.hidden) poll(); };
+    window.addEventListener("focus", now);
+    document.addEventListener("visibilitychange", now);
+    timer = setTimeout(poll, 2000);
     // 0.308.0 (owner screenshot 24/10/2026): this row used to be a bare flex div, where the global .gcard-btn
     // width:100% let the button take the whole row and squeezed the code box to 24px. It is a .prov-action row now
     // (button sized to its text, box takes the rest and wraps under on a phone). The box gets focus once the link is
@@ -4542,7 +4566,7 @@
       try { rr = await (await fetch("/claude/login-code", { method: "POST", body: fd })).json(); }
       catch (e) { cb.disabled = false; if (m2) m2.textContent = t("common.net_err"); return; }
       cb.disabled = false;
-      if (rr.ok) { stopped = true; refreshClaudeCard(el); }
+      if (rr.ok) { stop(); refreshClaudeCard(el); }
       else if (m2) m2.innerHTML = Icons.warn(rr.error || t("models.code_wrong"));
     };
   }
@@ -5764,6 +5788,9 @@
     el.querySelectorAll("#catGrid [data-msc-open]").forEach(b => b.onclick = () => {
       if (window.JavisMessenger && window.JavisMessenger.openForm) window.JavisMessenger.openForm(null);
     });
+    el.querySelectorAll("#catGrid [data-th-open]").forEach(b => b.onclick = () => {
+      if (window.JavisMessenger && window.JavisMessenger.openThreadsForm) window.JavisMessenger.openThreadsForm();
+    });
     const nutSanCo = document.getElementById("mcpDiSanCo");
     if (nutSanCo) nutSanCo.onclick = () => doiTab("sanco");
     // Từ banner mồ côi sang thẳng gói cần cài, ô tìm điền sẵn id connector. Thả người dùng vào
@@ -6880,6 +6907,24 @@
   }
 
   // ---- Lưu 1 section settings ----
+  // A short status line at the bottom of the screen (0.443.0). The Settings handlers called `toast(...)` but nothing in
+  // this file defined it, so changing the reply language threw a ReferenceError and the "saved" note never showed.
+  // Reuses the `.mp-toast` look from msg-press so every short notice in the app reads the same.
+  let _toastTimer = 0;
+  function toast(text, isError) {
+    const old = document.getElementById("csToast");
+    if (old) old.remove();
+    clearTimeout(_toastTimer);
+    const n = document.createElement("div");
+    n.id = "csToast";
+    n.className = "mp-toast";
+    n.setAttribute("role", isError ? "alert" : "status");
+    if (isError) n.style.background = "var(--danger, #b42318)";
+    n.textContent = String(text || "");
+    document.body.appendChild(n);
+    _toastTimer = setTimeout(() => n.remove(), isError ? 5000 : 2500);
+  }
+
   async function saveSetting(section, dataObj) {
     const fd = new FormData();
     fd.append("section", section);
@@ -7329,7 +7374,7 @@
       const infoBtn = () => (JI ? JI.btn(t("info.more")) : "");
       const infoBody = (h) => (JI ? JI.body(h) : '<div class="info-body">' + h + "</div>");
       el.innerHTML = `<div class="settings-page"><div class="settings-card">
-        <div class="settings-card-head"><b>${esc(t("share.heading"))}${infoBtn()}</b><span class="gcard-tag">${ds.length}</span></div>
+        <div class="settings-card-head"><b><span class="share-total">${ds.length}</span> ${esc(t("share.live_links"))}${infoBtn()}</b></div>
         ${infoBody(esc(t("share.warn")))}
         ${coTim ? `<input id="shareSearch" class="share-search" type="search" spellcheck="false"
           autocomplete="off" placeholder="${esc(t("share.search_ph"))}" value="${esc(tuKhoa)}">
@@ -7482,7 +7527,7 @@
       const infoBody = (h) => (JI ? JI.body(h) : '<div class="info-body">' + h + "</div>");
       host.innerHTML = `<div class="settings-card"><div class="pet-editor" data-pet-editor>${P.editorHtml(cur, OPTS_ED)}</div></div>
       <div class="settings-card">
-        <div class="settings-card-head"><b>${esc(t("settings.pet"))}${infoBtn()}</b><span class="gcard-tag">${esc(cur.enabled ? t("settings.tag_on") : t("settings.tag_off"))}</span></div>
+        <div class="settings-card-head"><b>${esc(t(cur.enabled ? "settings.pet_state_on" : "settings.pet_state_off"))}${infoBtn()}</b></div>
         ${infoBody(esc(t("settings.pet_desc")) + "<br>" + esc(t("settings.pet_hint")))}
         <div class="js-actions">
           <button class="gcard-btn" id="setPetSave">${SAVE_ICON} ${esc(t("settings.pet_save"))}</button>
@@ -7660,6 +7705,9 @@
     const langs = (s.lang_list || []);
     const replyLang = lc.reply_lang || "auto";
     const uiLang = (window.JavisI18n && JavisI18n.lang()) || "vi";
+    // Timezone (0.443.0): what "today", "yesterday", reminders and report periods mean for Javis. Lives with the language
+    // pickers because both are "where and how I live", but it is saved separately (locale.tz), never inferred from language.
+    const tzName = lc.tz || (s.locale_fmt && s.locale_fmt.tz) || "Asia/Ho_Chi_Minh";
     // MỘT thẻ cho cả hai ô ngôn ngữ (0.58.8). Trước là hai thẻ riêng nằm cạnh nhau trong lưới,
     // mỗi thẻ đúng một ô chọn - hai cái khung cho hai dòng chữ.
     const langHtml = `
@@ -7681,6 +7729,14 @@
           </select>
         </div>
         ${infoBody(esc(t("settings.lang.hint")))}
+        <div class="qs-field">
+          <label class="qs-lbl" for="vpTz">${esc(t("settings.tz.title"))}${infoBtn()}</label>
+          <select class="js-input" id="vpTz">
+            ${window.JavisTz ? JavisTz.options(tzName) : opt(tzName, tzName, tzName)}
+          </select>
+        </div>
+        ${infoBody(esc(t("settings.tz.hint")))}
+        <div class="gcard-meta" id="vpTzNow"></div>
       </div>`;
 
     el.innerHTML = `<div class="settings-page">
@@ -7767,6 +7823,17 @@
       if (sel) sel.onchange = async () => {
         const r = await saveSetting("locale", { reply_lang: sel.value });
         toast(r && r.ok ? t("settings.lang.saved") : t("settings.save_failed"), !(r && r.ok));
+      };
+      const selTz = document.getElementById("vpTz");
+      const tzNow = document.getElementById("vpTzNow");
+      const showTzNow = () => {
+        if (tzNow && selTz && window.JavisTz) tzNow.textContent = t("tz.now_there").replace("{time}", JavisTz.nowIn(selTz.value));
+      };
+      showTzNow();
+      if (selTz) selTz.onchange = async () => {
+        const r = await saveSetting("locale", { tz: selTz.value });
+        if (r && r.ok) { showTzNow(); toast(t("settings.tz.saved")); }
+        else { selTz.value = tzName; showTzNow(); toast((r && r.error) || t("settings.save_failed"), true); }
       };
       const selUi = document.getElementById("vpUiLang");
       if (selUi) selUi.onchange = async () => {
@@ -9530,11 +9597,17 @@
     _neDangDiLichSu = false;
     if (!laLichSu) _neDayLichSu(rel, it);
     _neVeNutLui();
-    // `inPlace`: open RIGHT IN the current frame (the middle column of the main screen, where the
-    // chat sits) instead of covering the whole screen. Today's daily note uses it: Ctrl+D is for
-    // jotting a few lines next to the work at hand, not for leaving that screen. The toolbar's
-    // maximize button can still go full screen.
-    ed.hidden = false; ed.classList.toggle("ne-full", !(opts && opts.inPlace)); _neSyncFull();
+    // 0.432.1: a file opens RIGHT IN the current frame (the middle column of the main screen, the
+    // chat's place on the Chat page, the file list on the Files page), never full screen by itself.
+    // Owner, 01/11/2026: "html hoặc .md khi mở mặc định nó zoom to hết cỡ, anh cần nó zoom trong
+    // khung, ấn mở zoom ra thì mới ra toàn màn hình". The toolbar's maximize button goes full screen,
+    // and moving to another file (a [[wikilink]], Back/Forward) keeps whatever size the owner chose.
+    // `inPlace` still forces the frame (Ctrl+D daily note); `full` forces full screen.
+    const daMo = !ed.hidden;
+    ed.hidden = false;
+    if (opts && opts.full) ed.classList.add("ne-full");
+    else if (!daMo || (opts && opts.inPlace)) ed.classList.remove("ne-full");
+    _neSyncFull();
     _neOpenRel = rel || "";     // để chip "file đang mở" biết có cần nạp lại hay chỉ cần đưa mắt về
     _neLayNoiDung = null; _neGocText = null;   // file mới: mốc so sánh dựng lại ở dưới
     // Đang ở trang Trò chuyện thì trình sửa chiếm chỗ khung chat thay vì đè lên visual não
@@ -9639,6 +9712,8 @@
         } catch (e) { }
         // File chữ khác không có thanh định dạng: bộ đếm đứng đầu thanh nút phía trên, đếm nguyên văn.
         _neGanDemTu(actions, () => ({ text: ta.value, md: false }), [ta]);
+        // .html (0.430.2): opens on the PREVIEW, like an artifact, with a Code tab (html-preview.js).
+        if (window.JavisHtmlPreview && window.JavisHtmlPreview.isHtmlPath(rel)) _neHtmlTabs(body, actions, ta, rel);
       }
       const saveBtn = document.createElement("button"); saveBtn.innerHTML = SAVE_ICON + " " + esc(window.t("common.save")); saveBtn.title = window.t("cs.ne_save_title");
       // Mốc so sánh "đã sửa gì chưa": lấy SAU khi dựng xong khung soạn, tức là bản đã vòng
@@ -9666,10 +9741,39 @@
       actions.appendChild(saveBtn);
       _neCommonBtns(actions, rel, it);
       _vtMarkActive(isMd ? rel : null);
-      ta.focus();
+      if (!body.classList.contains("mode-preview")) ta.focus();   // a preview needs no keyboard (phones)
       return;
     }
     _neRenderDownload(body, actions, rel, it); _vtMarkActive(null);
+  }
+
+  // Preview / Code tabs for an .html file in the editor. The preview draws the code in the editor
+  // right now, so an edit shows on the next switch back without saving first.
+  function _neHtmlTabs(body, actions, ta, rel) {
+    const HP = window.JavisHtmlPreview;
+    const prev = document.createElement("div");
+    prev.className = "ne-prev ne-html-prev";
+    body.appendChild(prev);
+    body.className = "ne-body mode-preview";
+    let shown = null;
+    const draw = () => {
+      if (shown === ta.value) return;
+      shown = ta.value;
+      HP.render(prev, ta.value, rel, (p) => _vtRaw(p));
+    };
+    const seg = document.createElement("span"); seg.className = "ne-seg";
+    [["preview", window.t("crender.ap_preview")], ["source", window.t("crender.ap_source")]].forEach(([mode, lbl]) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = lbl;
+      b.classList.toggle("active", mode === "preview");
+      b.onclick = () => {
+        body.className = "ne-body mode-" + mode;
+        seg.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+        if (mode === "preview") draw(); else ta.focus();
+      };
+      seg.appendChild(b);
+    });
+    actions.insertBefore(seg, actions.firstChild);
+    draw();
   }
 
   // Tooltip NHANH cho rail khi thu gọn (native title trễ ~500ms). 1 node body-level, thoát mọi overflow clip.

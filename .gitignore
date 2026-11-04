@@ -222,3 +222,7 @@ server/*.json
 server/.*.json
 !server/usage_pricing.json
 server/webhook_events.sqlite3*
+
+# Desktop installers built by packaging/ (CI publishes them on the "desktop" release)
+/dist/
+packaging/windows/Vietnamese.isl

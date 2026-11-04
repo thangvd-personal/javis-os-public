@@ -29,6 +29,24 @@ import httpx
 import mcp_orphans
 import winproc
 
+
+def _owner_tz_env(own_env) -> dict:
+    """`TZ` for a local MCP server: the timezone the owner picked in Settings (0.443.0).
+
+    A POS or chat MCP that works out "today" by itself reads the process clock, and on a VPS that is UTC, so "orders
+    today" asked at 6am in Vietnam returned yesterday's. Handing it the owner's timezone makes the server's own idea
+    of a day match Javis's. A connector that sets its own `TZ` keeps it. Not on Windows: its C runtime reads `TZ` in
+    the POSIX "EST5EDT" form and would misread an IANA name, which is worse than the machine's local time.
+    """
+    if os.name == "nt" or "TZ" in (own_env or {}):
+        return {}
+    try:
+        import localefmt
+        name = localefmt.valid_tz(localefmt.ten_tz())
+    except Exception:       # noqa: BLE001 - a missing setting must never stop an MCP from starting
+        return {}
+    return {"TZ": name} if name else {}
+
 PROTOCOL = "2025-06-18"
 # _IDLE_TTL PHẢI LỚN HƠN connect_health.HEALTH_INTERVAL (600). Khi hai số bằng nhau,
 # session vừa bị dọn xong ngay trước mỗi vòng quét sức khoẻ → vòng nào cũng spawn server
@@ -269,6 +287,29 @@ class McpHttpSession:
 # ============================================================
 # stdio - subprocess NDJSON (Windows-first)
 # ============================================================
+def npx_node_argv(resolved) -> list | None:
+    """`npx.cmd` -> `[node.exe, npx-cli.js]` of the same Node install, so Windows never routes npx through cmd.exe.
+
+    Why (#898, item 2): `cmd.exe /c "C:\\Program Files\\nodejs\\npx.cmd" --user-data-dir "C:\\My Javis\\x"` loses its
+    quotes: when the command line after /c starts with a quote, cmd strips the first and the last one, and the
+    connector died with "'C:\\Program' is not recognized". The default Node install lives in "Program Files", so
+    any argument with a space broke. cmd also expands `% ^ & |` in arguments. zalo_cli.npx_command does the same.
+    None when `resolved` is not npx.cmd or the npm CLI is not where Node ships it: the caller keeps cmd.exe.
+    """
+    p = Path(str(resolved))
+    if p.name.lower() not in ("npx.cmd", "npx.bat"):
+        return None
+    candidates = [p.parent / "node.exe"]
+    found = shutil.which("node")
+    if found:
+        candidates.append(Path(found))
+    for node in candidates:
+        cli = node.parent / "node_modules" / "npm" / "bin" / "npx-cli.js"
+        if node.is_file() and cli.is_file():
+            return [str(node), str(cli)]
+    return None
+
+
 class McpStdioSession:
     def __init__(self, command, args=None, env=None, label="", key=""):
         self.command = command
@@ -308,6 +349,9 @@ class McpStdioSession:
         resolved = shutil.which(self.command, path=search) or self.command
         # CreateProcess không chạy .cmd/.bat trực tiếp (npx trên Windows là npx.cmd)
         if str(resolved).lower().endswith((".cmd", ".bat")):
+            direct = npx_node_argv(resolved)
+            if direct:
+                return direct + self.args
             return ["cmd.exe", "/c", resolved] + self.args
         return [resolved] + self.args
 
@@ -356,6 +400,9 @@ class McpStdioSession:
                 await asyncio.to_thread(mcp_orphans.reap_same_home, self.single_socket_home())
             except Exception as e:      # noqa: BLE001
                 print(f"[mcp orphans] {type(e).__name__}: {e}", file=sys.stderr)
+        env = dict(os.environ)
+        env.update(_owner_tz_env(self.env))
+        env.update(self.env)
         kwargs = {}
         if os.name == "nt":
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -363,8 +410,6 @@ class McpStdioSession:
             # Nhóm tiến trình RIÊNG cho cả cây con - xem docstring _kill_tree (vụ 15/08:
             # uvx bị kill nhưng server thật thành mồ côi, 96 tiến trình ăn hết RAM VPS).
             kwargs["start_new_session"] = True
-        env = dict(os.environ)
-        env.update(self.env)
         self.proc = await asyncio.create_subprocess_exec(
             *self._argv(), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, env=env, limit=self._STREAM_LIMIT, **kwargs)

@@ -90,11 +90,13 @@
   // ============================================================
   var cardHost = null;
   function cardHtml(st, local) {
-    var head = '<div class="prov-head"><span class="conn-ico">' + LOGO + '</span><div class="prov-info"><div class="prov-name">GitHub' +
-      infoBtn() + '</div><div class="prov-status j-clamp2">' + esc(st.connected ? tw("gh.connected_as", { login: st.login || "?" }) : tw("gh.not_connected")) +
-      (st.connected && st.source === "backup" ? " · " + esc(tw("gh.uses_backup")) : "") + "</div>" + infoBody(esc(tw("gh.intro"))) + "</div></div>";
+    var head = '<div class="prov-head"><span class="conn-ico gh-logo">' + LOGO + '</span><div class="prov-info"><div class="prov-name">GitHub' +
+      infoBtn() + '</div><div class="prov-status j-clamp2">' + esc(st.connected ? tw("gh.card_desc") : tw("gh.not_connected")) +
+      (st.connected && st.source === "backup" ? " · " + esc(tw("gh.uses_backup")) : "") +
+      (st.connected && st.source === "app" ? " · " + esc(tw("gh.uses_app")) : "") + "</div>" + infoBody(esc(tw("gh.intro"))) + "</div></div>";
     var warn = st.connected && st.missing && st.missing.length
       ? '<div class="lv-note">' + esc(tw("gh.missing_scopes", { scopes: st.missing.join(", ") })) + "</div>" : "";
+    if (st.connected && st.source === "app" && st.installs === 0) warn += '<div class="lv-note">' + esc(tw("gh.no_install")) + "</div>";
     var noGit = st.has_git === false ? '<div class="lv-note">' + esc(tw("gh.no_git")) + "</div>" : "";
     // The repo list opens in a popup (owner, 28/10/2026, same as the bot cards on the Chatbot page): a brain can hold many
     // repos, and listing them inline stretched the Connections page. The card keeps one compact row with the counts.
@@ -106,10 +108,16 @@
           '<span class="cb-st-chip">' + esc(tw("gh.repos_n", { n: local.length })) + "</span>" +
           (chats ? '<span class="cb-st-chip">' + esc(tw("gh.local_chats", { n: chats })) + "</span>" : "") + "</span>" +
           '<span class="cb-st-more">' + esc(tw("gh.view")) + " " + ic("chevron-right") + "</span></button>"
-        : '<div class="lv-meta">' + esc(tw("gh.local_none")) + "</div>";
+        : "";
     }
+    // Like every other connection card: the account as a chip with a green dot (owner, 01/11/2026). Repos are picked
+    // in the chat box, so "Pick repos for Javis" only shows while the app is on no account at all, when the chat list
+    // would be empty.
     var acts = '<div class="conn-accounts">' + (st.connected
-      ? '<button class="conn-chip" type="button" data-gh-open>' + esc(tw("gh.change_token")) + "</button>" +
+      ? '<span class="conn-chip gh-acc"><span class="cdot hok">●</span> ' + esc(st.login ? "@" + st.login : "GitHub") + "</span>" +
+        (st.source === "app" && st.install_url && st.installs === 0 ? '<a class="conn-chip add" target="_blank" rel="noopener" href="' +
+          esc(st.install_url) + '">' + esc(tw("gh.pick_repos")) + "</a>" : "") +
+        '<button class="conn-chip" type="button" data-gh-open>' + esc(tw(st.source === "app" ? "gh.change_account" : "gh.change_token")) + "</button>" +
         '<button class="conn-chip" type="button" data-gh-off>' + esc(tw("gh.disconnect")) + "</button>"
       : '<button class="conn-chip add" type="button" data-gh-open>＋ ' + esc(tw("gh.connect")) + "</button>") + "</div>";
     return '<div class="prov-card conn-card gh-card">' + head + warn + noGit + repos + acts + "</div>";
@@ -233,13 +241,19 @@
     var bk = m.querySelector('[data-f="back"]');
     if (bk) bk.onclick = back;
   }
+  // The connect dialog (0.430.0): "Sign in with GitHub" first (the device flow of the Javis OS GitHub App, no token to
+  // make or copy), a pasted token below it for whoever prefers that, and the brain-backup token when there is one.
   function openForm(st) {
     var M = window.JavisConnModal;
     if (!M) return;
     var html = M.head(esc(tw("gh.dialog_head"))) + '<div class="conn-form gh-form">' +
+      '<div class="gh-signin"><button class="s-btn gh-signin-btn" type="button" data-f="signin">' + LOGO + "<span>" +
+      esc(tw("gh.signin")) + "</span></button>" + infoBtn() + "</div>" + infoBody(esc(tw("gh.signin_how"))) +
+      '<div class="lv-meta">' + esc(tw("gh.signin_sub")) + "</div>" +
+      '<div class="gh-or"><span>' + esc(tw("gh.or_token")) + "</span></div>" +
       '<div class="si-field"><label>' + esc(tw("gh.token")) + infoBtn() + "</label>" + infoBody(esc(tw("gh.token_how"))) +
       '<input class="js-input" data-f="token" type="password" autocomplete="off" spellcheck="false" placeholder="' + esc(tw("gh.token_ph")) + '"></div>' +
-      '<div class="lv-form-act"><button class="s-btn" type="button" data-f="go">' + esc(tw("gh.connect")) + "</button>" +
+      '<div class="lv-form-act"><button class="s-btn-ghost" type="button" data-f="go">' + esc(tw("gh.connect")) + "</button>" +
       (st && st.backup_token ? '<button class="s-btn-ghost" type="button" data-f="backup">' + esc(tw("gh.use_backup")) + "</button>" : "") +
       '<button class="s-btn-ghost" type="button" data-f="cancel">' + esc(tw("gh.cancel")) + "</button>" +
       '<span class="lv-msg" role="status"></span></div></div>';
@@ -255,11 +269,78 @@
       M.close();
       loadCard();
     }
+    form.querySelector('[data-f="signin"]').onclick = function () { signIn(); };
     form.querySelector('[data-f="go"]').onclick = function () { go({ token: form.querySelector('[data-f="token"]').value.trim() }); };
     var bk = form.querySelector('[data-f="backup"]');
     if (bk) bk.onclick = function () { go({ use_backup: "1" }); };
     form.querySelector('[data-f="cancel"]').onclick = function () { M.close(); };
-    setTimeout(function () { try { form.querySelector('[data-f="token"]').focus(); } catch (e) {} }, 30);
+  }
+
+  // Device flow, step by step in the same dialog: get a code, show it with "Open GitHub" and "Copy", poll until the
+  // person presses Authorize, then offer "Pick repos for Javis" when the app is not installed anywhere yet.
+  async function signIn() {
+    var M = window.JavisConnModal;
+    if (!M) return;
+    var m = M.open(M.head(esc(tw("gh.dialog_head"))) + '<div class="conn-form gh-form"><div class="lv-meta">' +
+      esc(tw("gh.loading")) + "</div></div>", 560);
+    var d = await api("/github/oauth/start", {});
+    if (!d || d.ok === false) {
+      m.querySelector(".gh-form").innerHTML = '<div class="lv-note">' + esc((d && d.error) || tw("gh.err_net")) + "</div>" +
+        '<div class="lv-form-act"><button class="s-btn" type="button" data-f="retry">' + esc(tw("gh.signin")) + "</button></div>";
+      m.querySelector('[data-f="retry"]').onclick = function () { signIn(); };
+      return;
+    }
+    var url = d.verification_uri || "https://github.com/login/device";
+    m = M.open(M.head(esc(tw("gh.dialog_head"))) + '<div class="conn-form gh-form gh-device">' +
+      '<div class="lv-meta">' + esc(tw("gh.code_how")) + "</div>" +
+      '<div class="gh-code" data-f="code" aria-label="' + esc(tw("gh.code_label")) + '">' + esc(d.user_code) + "</div>" +
+      '<div class="lv-form-act"><a class="s-btn" data-f="open" target="_blank" rel="noopener" href="' + esc(url) + '">' + esc(tw("gh.open_github")) + "</a>" +
+      '<button class="s-btn-ghost" type="button" data-f="copy">' + esc(tw("gh.copy")) + "</button>" +
+      '<button class="s-btn-ghost" type="button" data-f="cancel">' + esc(tw("gh.cancel")) + "</button></div>" +
+      '<div class="lv-msg" role="status" data-f="msg">' + esc(tw("gh.waiting")) + "</div></div>", 560);
+    var form = m.querySelector(".gh-form"), msg = form.querySelector('[data-f="msg"]');
+    function copy() {
+      try {
+        navigator.clipboard.writeText(d.user_code).then(function () { msg.textContent = tw("gh.copied"); }, function () {});
+      } catch (e) {}
+    }
+    copy();
+    // The code shows first and the link is a real tap, so no popup blocker gets in the way, and the tap copies the
+    // code again (the first copy can fail when the page had no focus).
+    form.querySelector('[data-f="open"]').addEventListener("click", copy);
+    form.querySelector('[data-f="copy"]').onclick = copy;
+    var alive = true;
+    function open() { return alive && form.isConnected && m.closest(".mp-overlay.open"); }
+    form.querySelector('[data-f="cancel"]').onclick = function () { alive = false; api("/github/oauth/cancel", {}); M.close(); };
+    var wait = Math.max(1, d.interval || 5) * 1000;
+    while (true) {
+      await new Promise(function (res) { setTimeout(res, wait); });
+      if (!open()) { if (alive) api("/github/oauth/cancel", {}); return; }
+      var r = await api("/github/oauth/poll", {});
+      if (!open()) return;
+      if (r && r.status === "pending") continue;
+      if (!r || r.ok === false || r.status === "error") {
+        msg.textContent = (r && r.error) || tw("gh.err_net");
+        form.querySelector('[data-f="open"]').remove();
+        form.querySelector('[data-f="copy"]').textContent = tw("gh.signin");
+        form.querySelector('[data-f="copy"]').onclick = function () { signIn(); };
+        return;
+      }
+      loadCard();
+      if (r.installs === 0) { pickRepos(r); return; }
+      M.close();
+      return;
+    }
+  }
+  // Signed in but the app is on no account yet: the last step, picking repos on GitHub.
+  function pickRepos(st) {
+    var M = window.JavisConnModal;
+    if (!M) return;
+    var m = M.open(M.head(esc(tw("gh.signed_in", { login: st.login || "?" }))) + '<div class="conn-form gh-form">' +
+      '<div class="lv-meta">' + esc(tw("gh.pick_repos_how")) + "</div>" +
+      '<div class="lv-form-act"><a class="s-btn" target="_blank" rel="noopener" href="' + esc(st.install_url || "") + '">' + esc(tw("gh.pick_repos")) + "</a>" +
+      '<button class="s-btn-ghost" type="button" data-f="done">' + esc(tw("gh.done")) + "</button></div></div>", 560);
+    m.querySelector('[data-f="done"]').onclick = function () { M.close(); loadCard(); };
   }
   function mount(el) { cardHost = el || null; if (cardHost) loadCard(); }
 
@@ -368,6 +449,7 @@
       b.classList.toggle("on", !k.hidden);
     });
     api("/github/status").then(function (st) {
+      ghStatus = st || null;
       if (!st || !st.connected) {
         box.innerHTML = '<div class="cp-empty">' + esc(tw("gh.panel_not_connected")) + "</div>" +
           '<button type="button" class="cp-mi" data-go-connect="1">' + LOGO + '<span class="cp-mi-lbl">' + esc(tw("gh.open_connections")) + "</span></button>";
@@ -376,6 +458,14 @@
       }
       (held || names().length) ? homeView(box, menuApi) : reposView(box, menuApi, false);
     });
+  }
+  // Status read when the panel opened: tells the repo list whether "add repos on GitHub" applies.
+  var ghStatus = null;
+  // Signed in with the Javis OS app, a repo shows in the chat list only once the app may see it. The shortcut opens the
+  // app's page on GitHub to tick more repos (owner, 01/11/2026); a pasted token already sees every repo, so it does not
+  // get one.
+  function addReposUrl() {
+    return ghStatus && ghStatus.source === "app" && ghStatus.install_url ? String(ghStatus.install_url) : "";
   }
   function goConnections() { try { window.Alpine.store("nav").go("mcp"); } catch (e) { location.hash = "#mcp"; } }
   // Inside a sub view our own back row leads back to the GitHub menu; the + menu's back row above it would only
@@ -425,32 +515,59 @@
       '<span class="gh-name">' + esc(parts[1] || r.full_name) + "</span></span>" +
       (on ? '<span class="gh-tick">' + CHECK + "</span>" : "") + "</button>";
   }
+  // Ticking a repo attaches it at once and unticking removes it (owner, 01/11/2026): no "Attach" button at the foot of
+  // a long list that had to be scrolled to. Changes go to the server one at a time; ticks made while one is in flight
+  // ride on the next request, so the server always ends on the last state the person sees.
   function reposView(box, menuApi, canBack) {
     outerBack(box, !canBack);
-    var chosen = held ? held.slice() : names(), start = chosen.slice(), items = [], timer = 0, n = 0;
+    var chosen = held ? held.slice() : names(), sent = chosen.slice(), busy = false, items = [], timer = 0, n = 0, addUrl = addReposUrl();
     box.innerHTML = (canBack ? backRow(tw("gh.menu")) + '<div class="cp-sep"></div>' : "") +
       '<input type="search" class="cp-search" placeholder="' + esc(tw("gh.search_ph")) + '" aria-label="' + esc(tw("gh.search_ph")) + '">' +
       '<div class="cp-results gh-results" role="listbox" aria-multiselectable="true"></div>' +
-      '<div class="gh-foot"><button type="button" class="s-btn gh-apply" data-apply="1" hidden></button>' +
-      '<button type="button" class="cp-mi gh-more-conn" data-gh-conn="1">' + PLUS + '<span class="cp-mi-lbl">' + esc(tw("gh.connect_more")) + "</span></button></div>" +
-      '<div class="cp-pin-err" role="status"></div>';
-    var input = box.querySelector(".cp-search"), out = box.querySelector(".cp-results"), applyBtn = box.querySelector("[data-apply]"),
-      err = box.querySelector(".cp-pin-err");
+      '<div class="gh-foot"><div class="cp-pin-err" role="status"></div>' +
+      (addUrl ? '<a class="cp-mi gh-more-conn" data-gh-add="1" target="_blank" rel="noopener" href="' + esc(addUrl) + '">' + PLUS +
+        '<span class="cp-mi-lbl">' + esc(tw("gh.add_on_github")) + "</span></a>"
+        : '<button type="button" class="cp-mi gh-more-conn" data-gh-conn="1">' + PLUS + '<span class="cp-mi-lbl">' + esc(tw("gh.connect_more")) + "</span></button>") +
+      "</div>";
+    var input = box.querySelector(".cp-search"), out = box.querySelector(".cp-results"), err = box.querySelector(".cp-pin-err");
     var back = box.querySelector("[data-gh-back]");
     if (back) back.onclick = function () { homeView(box, menuApi); };
-    box.querySelector("[data-gh-conn]").onclick = function () { menuApi.close(); goConnections(); };
-    function drawApply() {
-      var changed = !sameSet(chosen, start);
-      applyBtn.hidden = !changed;
-      applyBtn.textContent = chosen.length ? tw("gh.apply_n", { n: chosen.length }) : tw("gh.apply_none");
+    var conn = box.querySelector("[data-gh-conn]");
+    if (conn) conn.onclick = function () { menuApi.close(); goConnections(); };
+    // Back from GitHub with more repos ticked: list them again without a reload, once per return to the tab.
+    var away = false;
+    function onBack() {
+      if (!box.isConnected) { document.removeEventListener("visibilitychange", onBack); window.removeEventListener("focus", onBack); return; }
+      if (document.visibilityState === "hidden") { away = true; return; }
+      if (away) { away = false; load(); }
+    }
+    if (addUrl) {
+      box.addEventListener("click", function (e) { if (e.target.closest && e.target.closest("[data-gh-add]")) away = true; });
+      document.addEventListener("visibilitychange", onBack);
+      window.addEventListener("focus", onBack);
     }
     function draw() {
       var sel = [], rest = [];
       items.forEach(function (r, i) { (chosen.indexOf(r.full_name) >= 0 ? sel : rest).push(repoRow(r, i, chosen.indexOf(r.full_name) >= 0)); });
       out.innerHTML = (sel.length ? '<div class="gh-sec">' + esc(tw("gh.sec_selected")) + '</div><div class="gh-group">' + sel.join("") + "</div>" : "") +
         (rest.length ? '<div class="gh-sec">' + esc(tw("gh.sec_repos")) + '</div><div class="gh-group">' + rest.join("") + "</div>" : "") +
-        (!items.length ? '<div class="cp-empty">' + esc(tw("gh.none_found")) + "</div>" : "");
-      drawApply();
+        (!items.length ? '<div class="cp-empty">' + esc(tw("gh.none_found")) +
+          (addUrl ? ' <a data-gh-add="1" target="_blank" rel="noopener" href="' + esc(addUrl) + '">' + esc(tw("gh.add_on_github")) + "</a>" : "") +
+          "</div>" : "");
+    }
+    function sync() {
+      if (busy) return;
+      if (sameSet(chosen, sent)) return;
+      var list = chosen.slice(), adds = list.some(function (x) { return sent.indexOf(x) < 0; });
+      busy = true;
+      err.textContent = adds ? tw("gh.cloning") : "";
+      setRepos(list).then(function (msg) {
+        busy = false;
+        if (msg) { chosen = sent.slice(); err.textContent = msg; draw(); return; }
+        sent = list;
+        err.textContent = "";
+        sync();
+      });
     }
     function load() {
       var q = input.value.trim(), k = ++n;
@@ -469,18 +586,8 @@
       var b = e.target.closest ? e.target.closest("[data-gh-i]") : null;
       if (!b) return;
       var r = items[+b.getAttribute("data-gh-i")];
-      if (r) { chosen = toggle(chosen, r.full_name); draw(); }
+      if (r) { chosen = toggle(chosen, r.full_name); draw(); sync(); }
     });
-    applyBtn.onclick = function () {
-      applyBtn.disabled = true;
-      err.textContent = chosen.length ? tw("gh.cloning") : "";
-      setRepos(chosen).then(function (msg) {
-        applyBtn.disabled = false;
-        if (msg) { err.textContent = msg; drawApply(); return; }
-        if (chosen.length) homeView(box, menuApi);
-        else { menuApi.close(); var i = document.getElementById("chatInput"); if (i) i.focus(); }
-      });
-    };
     input.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(load, 200); });
     input.focus();
     load();

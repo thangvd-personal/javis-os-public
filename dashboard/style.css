@@ -1136,6 +1136,8 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   padding: 8px 12px; border-radius: 12px 12px 3px 12px; max-width: 90%;
   line-height: 1.55; font-size: 16px; font-family: var(--font-chat);
 }
+/* 0.440.0: label above a message an outside AI posted through Javis Gate ("từ ChatGPT"). */
+.msg-user .msg-via { font-size: 14px; color: var(--text3); margin: 0 4px 3px; }
 /* Bong bóng câu trả lời: giới hạn chiều dài dòng, nền nhẹ và nhịp chữ riêng để đoạn dài
    vẫn dễ quét. Khối mã và bảng có cơ chế cuộn riêng; khung hẹp tự co theo màn hình. */
 .msg-javis .bubble {
@@ -1189,6 +1191,19 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
    for older ones. Pressing it likes; hovering it opens six native emoji in a floating pill; a long press does the same on a
    phone. No reasons, axis or comment panel any more. */
 .msg-javis > .jr-chat { display: block; max-width: min(72ch, 100%); font-size: 16px; font-family: var(--font-chat); min-width: 0; }
+/* Wide tables on the Chat page (0.444.0, idea from PR #958 by @hwangrin). At 72ch a table of 4 or more columns
+   is squeezed into ~600px and has to be scrolled sideways while half the pane is empty. On a desktop such an answer,
+   and the reaction row under it, may grow to 1200px; the prose inside keeps its 72ch measure (0.26.1: long lines tire
+   the eye) and only the table uses the extra room. Narrow tables and every other answer stay exactly as before. */
+@media (min-width: 861px) {
+  #chatPage .msg-javis > .bubble:has(.md-table tr > :nth-child(4)),
+  #chatPage .msg-javis:has(> .bubble .md-table tr > :nth-child(4)) > .jr-chat {
+    max-width: min(1200px, 100%);
+  }
+  #chatPage .msg-javis > .bubble:has(.md-table tr > :nth-child(4)) > :not(.md-tablewrap):not(pre):not(.code-wrap) {
+    max-width: 72ch;
+  }
+}
 .jr-chat[hidden] { display: none; }
 .jr-anchor { position: relative; height: 0; }
 .jr-rx { position: absolute; right: -6px; top: -16px; z-index: 3; }
@@ -4553,6 +4568,24 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 .msc-row.warn .msc-mark { background: color-mix(in srgb, var(--warn, #e0a33e) 20%, transparent); color: var(--warn-ink, #b9821f); }
 .msc-row-detail { color: var(--text2); font-size: 13px; word-break: break-all; }
 .msc-row-fix { color: var(--text2); font-size: 14px; margin-top: 2px; }
+/* 0.434.0: Log in with Facebook (addresses to copy, Page picker) and the comment mode. 16px fields stop iOS zoom. */
+.msc-copy, .msc-cmt-row { margin-top: 10px; }
+.msc-copy-row { display: flex; gap: 8px; align-items: center; }
+.msc-copy-row .js-input { flex: 1; min-width: 0; font-size: 16px; }
+.msc-copy-row .s-btn-ghost { flex: none; }
+.msc-cmt { width: 100%; box-sizing: border-box; font-size: 16px; min-height: 44px; }
+.msc-manual-toggle { margin-top: 14px; }
+.msc-manual { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.msc-pick-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.msc-pick-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 44px; border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer; font-size: 16px; }
+.msc-pick-row input { width: 20px; height: 20px; flex: none; }
+.msc-pick-pic { width: 32px; height: 32px; border-radius: 50%; flex: none; object-fit: cover; display: inline-flex;
+  align-items: center; justify-content: center; }
+.msc-pick-name { display: flex; flex-direction: column; min-width: 0; }
+.msc-result { margin-top: 14px; }
+/* 0.436.1: link to the GitHub guide at the end of the form heading. */
+.msc-guide { margin-left: auto; font-size: 15px; font-weight: 500; color: var(--link-ink); white-space: nowrap; }
 
 /* Searchable agent picker (agent-picker.js). The native <select> stays in the DOM, hidden; this button opens a
    popover on desktop and a bottom sheet on phones. Every text here is at least 16px (owner rule, also stops iOS zoom). */
@@ -4616,12 +4649,16 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 
 /* GitHub inside chat (0.362.0, github-connect.js): the built-in card on Connections and the repo chip. */
 .gh-card .gh-local { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+/* Same 32px as the logos of the other connection cards (.ico-img), not the 18px menu icon (0.438.1). */
+.gh-card .conn-ico.gh-logo { display: inline-flex; align-items: center; justify-content: center; }
+.gh-card .conn-ico.gh-logo .cp-ic { width: 32px; height: 32px; }
+.gh-card .gh-acc { cursor: default; }
+.gh-card .gh-acc:hover { background: transparent; }
 .gh-local-head { font-weight: 600; font-size: 16px; }
 .gh-local-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 16px; }
 .gh-local-name { font-weight: 600; word-break: break-all; }
 .gh-local-meta { color: var(--text2); flex: 1; min-width: 120px; }
 .gh-chip svg { width: 15px; height: 15px; flex: none; }
-.gh-apply[disabled] { opacity: .55; cursor: default; }
 /* Repo and branch picker in the + menu (0.368.0, after Claude Code's picker): sections, grouped rows, two-line names. */
 .gh-sec { padding: 10px 10px 4px; font-size: 12.5px; color: var(--text3); font-weight: 600; }
 .gh-group { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -4635,9 +4672,13 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 .gh-tick { flex: none; display: inline-flex; color: var(--accent, #3b82f6); }
 .gh-tick svg { width: 18px; height: 18px; }
 .gh-results { display: flex; flex-direction: column; gap: 2px; }
-.gh-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.gh-foot .gh-apply { width: 100%; }
-.gh-foot .gh-apply[hidden] { display: none; }
+/* "Add repos on GitHub" is a link styled as a menu row, and the same link inline in the empty list (0.438.1). */
+a.cp-mi.gh-more-conn { text-decoration: none; color: inherit; }
+.gh-results .cp-empty a[data-gh-add] { color: var(--accent, #3b82f6); text-decoration: underline; }
+/* Pinned to the bottom of the scrolling + menu so a long repo list never hides it (0.432.4). The negative bottom and
+   margins cover the menu's 6px padding, so rows do not show through underneath. */
+.gh-foot { position: sticky; bottom: -6px; z-index: 1; display: flex; flex-direction: column; gap: 2px; margin: 8px -6px -6px;
+  padding: 4px 6px 6px; background: var(--bg2); border-top: 1px solid var(--border); }
 .gh-repo .cp-mi-hint { display: inline-flex; align-items: center; gap: 4px; }
 .gh-repo .cp-mi-hint .cp-ic { width: 14px; height: 14px; }
 .gh-chip-br { display: inline-flex; align-items: center; gap: 3px; color: var(--text2); font-size: 12px; max-width: 90px; overflow: hidden;
@@ -4647,6 +4688,16 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 .cp-pin.gh-chip > span:first-of-type { min-width: 3ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 860px) { .cp-pin.gh-chip { max-width: 200px; } .gh-chip-br { max-width: 64px; } }
 .gh-checks-box { width: 100%; min-height: 160px; font-family: var(--mono, ui-monospace, monospace); font-size: 16px; line-height: 1.45; resize: vertical; }
+/* "Sign in with GitHub" (0.430.0): one wide button first, the token box under a thin "or" rule, a big readable code. */
+.gh-signin { display: flex; align-items: center; gap: 8px; }
+.gh-signin-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; font-size: 17px; }
+.gh-signin-btn .cp-ic { width: 20px; height: 20px; }
+.gh-or { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; color: var(--text3); font-size: 15px; }
+.gh-or::before, .gh-or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.gh-code { margin: 14px 0; padding: 14px 10px; text-align: center; font-family: var(--mono, ui-monospace, monospace); font-size: 32px;
+  font-weight: 700; letter-spacing: 4px; border: 1px dashed var(--border); border-radius: 12px; user-select: all; overflow-wrap: anywhere; }
+.gh-form .lv-form-act a.s-btn, .gh-card a.conn-chip { text-decoration: none; display: inline-flex; align-items: center; }
+@media (max-width: 480px) { .gh-code { font-size: 26px; letter-spacing: 2px; } }
 /* GitHub status icon per conversation (0.365.0, spec 12.1): right of the title in the chat list, and in the repo chip. */
 .cside-item.has-gh { position: relative; }
 .cside-item.has-gh .ci-title { padding-right: 36px; }
@@ -4675,3 +4726,151 @@ select option, select optgroup { background-color: var(--bg2); color: var(--text
 .gh-table-wrap { overflow-x: auto; margin-top: 10px; }
 .gh-table { border-collapse: collapse; width: 100%; font-size: 16px; }
 .gh-table th, .gh-table td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+
+/* Long paste preview (0.430.1, chat-paste.js): the whole pasted text, then paste inline / attach .txt / cancel. */
+.jv-paste-overlay {
+  position: fixed; inset: 0; z-index: 9999; padding: 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .48);
+}
+.jv-paste-dialog {
+  display: flex; flex-direction: column; gap: 10px;
+  width: min(720px, 100%); max-height: min(90vh, 800px); min-height: 0;
+  background: var(--panel-solid, var(--surface-1)); color: var(--text);
+  border: 1px solid var(--border); border-radius: 16px; padding: 20px;
+  box-shadow: 0 14px 50px rgba(0, 0, 0, .25);
+}
+.jv-paste-dialog h2 { margin: 0; font-size: 19px; font-weight: 650; }
+.jv-paste-dialog p { color: var(--text2); font-size: 15px; line-height: 1.5; margin: 0; }
+.jv-paste-preview {
+  box-sizing: border-box; display: block; width: 100%; min-height: 160px; flex: 1 1 auto;
+  height: min(48vh, 380px); resize: vertical; padding: 12px 14px;
+  font-size: 15px; line-height: 1.6; font-family: inherit; white-space: pre-wrap;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px; overflow: auto;
+}
+.jv-paste-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.jv-paste-actions .gcard-btn { min-height: 42px; font-size: 15px; }
+@media (max-width: 520px) {
+  .jv-paste-dialog { padding: 14px; }
+  .jv-paste-preview { font-size: 16px; }
+  .jv-paste-actions .gcard-btn { flex: 1 1 auto; }
+}
+
+/* .html in the brain editor (0.430.2, html-preview.js): the page itself fills the editor, white like a browser tab. */
+.ne-html-prev { padding: 0; display: flex; flex-direction: column; border-left: none; background: #fff; }
+.ne-html-prev .jv-html-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; display: block; }
+
+/* Brain picker (0.431.0, brain-picker.js): drawn by Javis over the hidden #graphSource, the same on every device. */
+.graph-select.bp-native { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0;
+  pointer-events: none; overflow: hidden; clip: rect(0 0 0 0); margin: 0; padding: 0; border: 0; }
+.bp-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 240px; height: 30px;
+  padding: 0 8px 0 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.bp-btn:hover, .bp-btn[aria-expanded="true"] { border-color: var(--accent); }
+.bp-btn-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.bp-btn-n { flex: none; font-size: 12px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.bp-btn-chev { flex: none; display: inline-flex; color: var(--text2); }
+.bp-btn-chev svg { width: 15px; height: 15px; }
+
+.bp-shade { position: fixed; inset: 0; z-index: 1000; display: none; }
+.bp-shade.open { display: block; }
+.bp-pop { position: fixed; z-index: 1001; display: none; flex-direction: column; max-height: min(70vh, 520px);
+  background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 18px 50px var(--shadow-veil, rgba(0,0,0,.35)); overflow: hidden; }
+.bp-pop.open { display: flex; }
+.bp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 12px 8px 16px; }
+.bp-title { font-size: 15px; font-weight: 650; }
+.bp-head-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text2); font: inherit; font-size: 13px; cursor: pointer; }
+.bp-head-btn svg { width: 15px; height: 15px; }
+.bp-head-btn:hover { color: var(--text); border-color: var(--accent); }
+.bp-head-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); font-weight: 600; }
+.bp-head-btn[hidden] { display: none; }
+.bp-search-wrap { position: relative; margin: 0 12px 8px; }
+.bp-search-wrap[hidden] { display: none; }
+.bp-search-ic { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); display: inline-flex; }
+.bp-search-ic svg { width: 15px; height: 15px; }
+.bp-search { width: 100%; box-sizing: border-box; height: 36px; padding: 0 10px 0 32px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; font-size: 14px; outline: none; }
+.bp-search:focus { border-color: var(--accent); }
+.bp-hint { margin: 0 16px 8px; font-size: 13px; color: var(--text2); line-height: 1.45; }
+.bp-err { margin: 0 16px 8px; font-size: 13px; color: var(--red, #e5484d); }
+.bp-hint[hidden], .bp-err[hidden] { display: none; }
+.bp-list { overflow-y: auto; padding: 0 6px 8px; overscroll-behavior: contain; }
+.bp-group { padding: 10px 10px 4px; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--text3); }
+.bp-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px; border-radius: 10px;
+  cursor: pointer; outline: none; position: relative; background: var(--bg2); }
+.bp-row:hover, .bp-row:focus-visible { background: var(--bg3); }
+.bp-row.on { background: var(--accent-wash-2, rgba(255,140,60,.12)); }
+.bp-dot { flex: none; width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center;
+  justify-content: center; font-size: 14px; font-weight: 700; background: var(--bg3); color: var(--text2);
+  border: 1px solid var(--border); }
+.bp-row.on .bp-dot { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+.bp-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.bp-label { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-sub { font-size: 12.5px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.bp-check { flex: none; width: 20px; color: var(--accent); display: inline-flex; }
+.bp-check svg { width: 18px; height: 18px; }
+.bp-empty { padding: 18px 12px; text-align: center; color: var(--text3); font-size: 14px; }
+.bp-move { cursor: default; }
+.bp-grip { flex: none; width: 30px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text3); cursor: grab; touch-action: none; border-radius: 8px; }
+.bp-grip:hover { color: var(--text); background: var(--bg3); }
+.bp-grip svg { width: 17px; height: 17px; }
+.bp-arrow { flex: none; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.bp-arrow svg { width: 16px; height: 16px; }
+.bp-arrow:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.bp-arrow:disabled { opacity: .35; cursor: default; }
+.bp-row.dragging { z-index: 2; box-shadow: 0 8px 24px var(--shadow-veil, rgba(0,0,0,.3)); background: var(--bg3); }
+.bp-row.dragging .bp-grip { cursor: grabbing; }
+.bp-list .bp-row:not(.dragging) { transition: transform .12s ease; }
+
+/* Phone: a sheet from the bottom, bigger text and rows for a thumb. */
+@media (max-width: 860px) {
+  .rail-sys .bp-btn { flex: 1 1 calc(100% - 34px); min-width: 0; max-width: 100%; height: 42px; font-size: 16px; padding: 0 10px 0 12px; }
+  .rail-sys .bp-btn-n { font-size: 13px; }
+  .bp-shade.open { background: var(--scrim, rgba(0,0,0,.45)); }
+  .bp-pop.sheet { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 78dvh;
+    border-radius: 18px 18px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .bp-pop.sheet::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--border); margin: 8px auto 0; }
+  .bp-pop.sheet .bp-head { padding: 10px 14px 10px 18px; }
+  .bp-pop.sheet .bp-title { font-size: 17px; }
+  .bp-pop.sheet .bp-head-btn { height: 38px; font-size: 15px; padding: 0 14px; }
+  .bp-pop.sheet .bp-search { height: 42px; font-size: 16px; }
+  .bp-pop.sheet .bp-hint, .bp-pop.sheet .bp-err { font-size: 14px; }
+  .bp-pop.sheet .bp-row { min-height: 58px; padding: 8px 12px; }
+  .bp-pop.sheet .bp-label { font-size: 17px; }
+  .bp-pop.sheet .bp-sub { font-size: 14px; }
+  .bp-pop.sheet .bp-dot { width: 36px; height: 36px; font-size: 16px; }
+  .bp-pop.sheet .bp-arrow { width: 42px; height: 42px; }
+  .bp-pop.sheet .bp-grip { width: 38px; height: 44px; }
+}
+
+/* Meta connection card (0.446.0): the apps one connection covers, and Disconnect on each Page */
+.msc-apps { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 2px; flex-wrap: wrap; }
+.msc-app { display: inline-flex; line-height: 0; }
+.msc-app.soon { opacity: .38; filter: grayscale(.6); }
+.msc-acc .lv-actions .msc-del { color: var(--danger-ink, #b3261e); border-color: color-mix(in srgb, var(--danger-ink, #b3261e) 40%, transparent); }
+/* Instagram on the Meta card (0.447.0) */
+.msc-ig-tick { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 15px; cursor: pointer; }
+.msc-ig-tick input { width: 20px; height: 20px; }
+.msc-ig-row label, .msc-ig-none { display: inline-flex; align-items: center; gap: 6px; }
+/* Meta card actions: Facebook Page and Threads side by side (0.448.0) */
+.msc-cat-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.msc-cat-act .gcard-btn { flex: 1 1 auto; }
+
+/* Nút "Cài lên điện thoại" ở chân menu (0.450.0, install-nudge.js gắn khi CHƯA chạy dạng app).
+   Cùng khuôn với "Tặng sao" ngay dưới (star-nudge.css): hàng riêng trải hết bề ngang, nhưng tông
+   cam thương hiệu thay vì vàng sao để hai nút không lẫn vào nhau. Chỉ dành cho điện thoại. */
+.rail-foot .rf-install {
+  order: 3; flex: 1 0 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; margin: 2px 0 0; padding: 0 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--accent-solid); background: var(--accent-solid); color: var(--on-accent);
+  font: 600 15px/1.2 var(--font);
+}
+.rail-foot .rf-install .ic { width: 17px; height: 17px; flex: none; }
+.rail-foot .rf-install .rf-install-chu { overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 861px) and (pointer: fine) { .rail-foot .rf-install { display: none; } }

@@ -104,7 +104,7 @@ Nếu tool bị chặn vì mức quyền, câu trả lời sẽ chứa nguyên v
 
 | Tên trên thẻ | slug | Tool cung cấp | Quyền tối thiểu | Mặc định |
 |---|---|---|---|---|
-| Thời gian & ngày (VN) | `datetime-vn` | `javis_now`, `javis_date_add` | chỉ đọc | Bật |
+| Thời gian & ngày (múi giờ chọn ở Cài đặt) | `datetime-vn` | `javis_now`, `javis_date_add` | chỉ đọc | Bật |
 | Đặt việc định kỳ & nhắc hẹn | `javis-schedule` | `javis_schedule` | ghi (safe) | Bật |
 | Giao việc Kanban | `javis-task` | `javis_task` | ghi (safe) | Bật |
 | Quản lý nhóm chat | `javis-team` | `javis_team` | ghi (safe), chỉ chủ | Bật |
@@ -128,8 +128,8 @@ Từng cái làm được gì:
 - **Đọc video YouTube**: dán link video vào chat rồi nhờ tóm tắt. Plugin lấy **phụ đề thật** của video (đường mà trình phát YouTube dùng) nên Javis đọc được lời thoại chứ không đoán theo tiêu đề. Không cần khoá API, không cần đăng nhập YouTube, chạy trên **mọi engine** kể cả engine API vốn không mở được URL. Khi YouTube chặn máy chủ, nó tự đổi lần lượt qua sáu kiểu trình phát rồi mới nhờ tới yt-dlp, nên vượt được phần lớn ca bị nghi là robot. Video không có phụ đề, video riêng tư hoặc bị YouTube chặn thì tool nói thẳng lý do để Javis khỏi bịa. Video dài bị cắt bớt thì nhờ "đọc tiếp" là nó đọc khúc sau. Chi tiết ở [Trò chuyện](02-tro-chuyen-va-giong-noi.md).
 - **Luật cho từng cuộc chat Zalo**: đặt cách ứng xử cho từng nhóm hoặc từng khách trên Zalo bằng lời (im lặng, báo mọi tin, báo theo từ khoá, nhắc khi quên trả lời quá N phút). Luật ghi ra `Javis/zalo/<slug>.md` nên xem và sửa lại được.
 - **Gửi tin Zalo an toàn**: gửi tin Zalo thay cho tool thô. Nó khoá cứng vào tài khoản đang nghe và chỉ gửi được cho cuộc chat trong danh sách đang theo dõi; tên khớp nhiều người thì từ chối và bắt hỏi lại. Hai plugin Zalo dùng chung với [Kênh Zalo](12-zalo.md).
-- **Meta Ads (Graph API)**: đọc số liệu quảng cáo Facebook/Instagram (danh sách tài khoản ads, chiến dịch, hiệu suất). **Chỉ đọc, không tiêu tiền.** Cần đã đấu kết nối "Meta Ads (tự tạo app - Graph API)" ở trang Kết nối.
-- **Facebook Trang (Graph API)**: quản lý Trang/Fanpage. Đọc danh sách Trang, bài và bình luận là chỉ-đọc; đăng bài, đăng ảnh, đăng album, đăng video, sửa chữ, xoá bài, trả lời bình luận là hành động **thật, công khai** và cần mức toàn quyền. Cần kết nối "Facebook Trang (tự tạo app - Graph API)".
+- **Meta Ads (Graph API)**: đọc số liệu quảng cáo Facebook/Instagram (danh sách tài khoản ads, chiến dịch, hiệu suất). **Chỉ đọc, không tiêu tiền.** Cần đã đấu kết nối "Meta Ads (Facebook & Instagram)" ở trang Kết nối.
+- **Facebook Trang (Graph API)**: quản lý Trang/Fanpage. Đọc danh sách Trang, bài và bình luận là chỉ-đọc; đăng bài, đăng ảnh, đăng album, đăng video, sửa chữ, xoá bài, trả lời bình luận là hành động **thật, công khai** và cần mức toàn quyền. Dùng Fanpage đã nối ở thẻ Facebook Messenger trang Kết nối (hoặc kết nối "Facebook Trang" trong Kho nếu đã cài từ trước).
 - **Theo dõi Facebook (Apify)**: theo dõi Trang và Nhóm **công khai** để tìm bài nhiều lượt chia sẻ, qua dịch vụ Apify. Chỉ đọc, không đụng tài khoản cá nhân, chạy được trên VPS. Cần dán Personal API token của apify.com vào kết nối "Theo dõi Facebook (Apify)".
 - **Nhật ký dùng tool**: đếm số lần **mỗi** tool được engine gọi (qua hook `post_tool_call`) rồi cho xem thống kê tool hay dùng nhất. Đây là ví dụ minh hoạ cơ chế hook, nên mặc định để tắt; bật ở trang Plugins, chat vài lượt có gọi tool, rồi hỏi Javis "tool nào hay dùng nhất".
 
@@ -310,7 +310,7 @@ Plugin dùng hook này vẫn chịu đúng rào chung: plugin người dùng t�
 
 ## Trang riêng và đường HTTP (từ 0.64.26)
 
-Plugin mở được đường web của riêng nó, dưới `/ext/<slug>/`. Dùng cho trang cài đặt, hoặc cho dịch vụ bên ngoài gọi vào (webhook, cửa OAuth). Gói "Javis trong ChatGPT" trong kho là ví dụ chạy thật.
+Plugin mở được đường web của riêng nó, dưới `/ext/<slug>/`. Dùng cho trang cài đặt, hoặc cho dịch vụ bên ngoài gọi vào (webhook, cửa OAuth). Gói **Javis Gate** (`javis.gate`) trong kho là ví dụ chạy thật.
 
 ```python
 def register(ctx):
@@ -326,6 +326,33 @@ def register(ctx):
 - **`register_well_known`**: chỉ GET, công khai, không cookie. Hai plugin xin cùng tên thì plugin nạp trước giữ.
 - Khai `page: ""` trong `plugin.yaml` thì thẻ plugin có nút **Mở trang**.
 - Chỉ plugin đi kèm app, plugin của gói đã cài và plugin toàn cục mới có đường. **Plugin trong brain thì không**, vì model ghi được vào brain.
+
+## Javis Gate: AI bên ngoài nhắn vào khung chat (từ 0.440.0)
+
+Gói **Javis Gate** (`javis.gate`) mở cửa MCP có OAuth cho ChatGPT, Claude và AI khác. Ngoài bộ công
+cụ Javis đã có, cửa này có thêm năm công cụ chỉ AI bên ngoài thấy (`server/chat_bridge.py`):
+
+| Công cụ | Việc | Mức quyền |
+|---|---|---|
+| `javis_chat_find` | Tìm hội thoại theo tên (không phân biệt dấu) hoặc nội dung | Mọi mức |
+| `javis_chat_read` | Đọc các tin cuối của một hội thoại | Mọi mức |
+| `javis_chat_send` | Nhắn vào hội thoại như chủ gõ, chờ câu trả lời | Chỉ Toàn quyền |
+| `javis_chat_result` | Đọc câu trả lời khi Javis làm lâu | Mọi mức |
+| `javis_chat_note` | Ghi lại cuộc chat bên ngoài: chủ nói gì, đã chốt gì (từ 0.441.0) | Ghi nháp, Toàn quyền |
+
+- **Tin nhắn chạy đúng như chủ gõ:** đi qua chính vòng chat của dashboard, nên chữ chạy trên mọi tab
+  đang mở, có nút Dừng, lưu vào Lịch sử, ghi `memory/conversations` và vào vòng tự học. Bong bóng
+  tin mang nhãn **từ ChatGPT** hay **từ Claude**.
+- **Hội thoại đang trả lời** thì tin thành tin gõ thêm, như khi chủ gõ thêm lúc Javis đang làm.
+- **Chỉ hội thoại của chủ** (khung Trò chuyện, chat với Cộng sự). Hội thoại của khách và nhóm chat thì
+  không đọc, không nhắn được.
+- **Ghi chép không chạy Javis:** `javis_chat_note` chỉ lưu, không tốn hạn mức bộ não của Javis, nhưng đi
+  qua đúng đường lưu lượt chat nên vẫn vào Lịch sử, nhật ký và vòng tự học. Mỗi cuộc chat bên ngoài có một
+  hội thoại riêng **Từ ChatGPT: <tên>** (hay **Từ Claude: ...**); đưa `id` thì ghi thẳng vào hội thoại đó
+  của Javis. Javis không đọc được lịch sử chat của ChatGPT hay Claude, nên đây là cách AI bên ngoài tự gửi
+  sang phần đáng giữ.
+- Năm công cụ **không bao giờ** có trong bộ công cụ của chính Javis: chúng chỉ hiện khi cửa của gói gọi
+  `mcp_hub.tra_loi_jsonrpc(..., gate={"source": "<tên AI>"})`.
 
 ## Bảng tra nhanh nút và trạng thái
 

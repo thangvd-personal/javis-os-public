@@ -81,7 +81,8 @@ def _read_conn() -> dict[str, Any]:
 def _write_conn(conn: dict[str, Any]) -> None:
     """Replace the whole `github` section. The token is encrypted at rest by config (`github.token` is in
     `_SECRET_PATHS`), so it is written here in clear and never by hand-rolled crypto."""
-    empty = {"source": "", "token": "", "login": "", "user_id": 0, "missing": [], "connected_at": 0}
+    empty = {"source": "", "token": "", "refresh_token": "", "expires_at": 0, "login": "", "user_id": 0, "missing": [],
+             "connected_at": 0}
     _settings().update_settings({"github": {**empty, **(conn or {})}})
 
 
@@ -94,7 +95,34 @@ def token() -> str:
     conn = _read_conn()
     if conn.get("source") == "backup":
         return backup_token()
+    if conn.get("source") == "app":
+        return _app_token(conn)
     return str(conn.get("token") or "").strip() if conn.get("source") == "own" else ""
+
+
+def _app_token(conn: Dict[str, Any]) -> str:
+    """Token from "Sign in with GitHub". The Javis app issues tokens that do not expire; if one does carry an expiry
+    (the app setting was changed), renew it a minute early, and read as signed out when GitHub refuses."""
+    tok = str(conn.get("token") or "").strip()
+    try:
+        exp = float(conn.get("expires_at") or 0)
+    except (TypeError, ValueError):
+        exp = 0.0
+    if not exp or _now() < exp - 60:
+        return tok
+    import github_oauth
+    with _lock:
+        cur = _read_conn()
+        if cur.get("source") != "app":
+            return token()
+        if str(cur.get("token") or "") != tok:      # another thread renewed it meanwhile
+            return str(cur.get("token") or "").strip()
+        fresh = github_oauth.refresh(str(cur.get("refresh_token") or ""))
+        if not fresh:
+            return ""
+        _write_conn({**cur, "token": fresh["access_token"], "refresh_token": fresh["refresh_token"] or cur.get("refresh_token"),
+                     "expires_at": fresh["expires_at"]})
+        return fresh["access_token"]
 
 
 def user_id() -> int:
@@ -105,8 +133,13 @@ def user_id() -> int:
         return 0
 
 
-def _check_token(tok: str) -> dict[str, Any]:
-    """Validate a token against GitHub. Returns {login, scopes_ok, missing} or raises RepoError."""
+def _check_token(tok: str, app: bool = False) -> dict[str, Any]:
+    """Validate a token against GitHub. Returns {login, scopes_ok, missing} or raises RepoError.
+
+    `app` marks a "Sign in with GitHub" token. GitHub App tokens have no OAuth scopes at all (access comes from the
+    app's permissions plus the repos picked at install), yet GitHub still sends an EMPTY X-OAuth-Scopes header for
+    them, which read as "missing repo, workflow" on every successful sign-in. Only classic tokens are scope-checked.
+    """
     if not tok:
         raise RepoError(_c("Chưa có token.", "No token given."))
     try:
@@ -118,13 +151,25 @@ def _check_token(tok: str) -> dict[str, Any]:
         raise RepoError(_c(f"Không kiểm tra được token: {e}", f"Could not check the token: {e}"))
     scopes = u.get("_scopes")
     missing: list[str] = []
-    # Classic tokens list their scopes; fine-grained tokens do not (scopes is None) and are checked per repo instead.
+    # Classic tokens list their scopes. Fine-grained and GitHub App tokens either omit the header or send it empty,
+    # and are checked per repo instead, so their scopes count as unknown, never as missing.
+    if app or not _is_classic(tok):
+        scopes = None
     if scopes is not None and "repo" not in scopes:
         missing.append("repo")
     if scopes is not None and "workflow" not in scopes:
         missing.append("workflow")
     return {"login": u.get("login") or "", "id": int(u.get("id") or 0), "missing": missing,
             "classic": scopes is not None}
+
+
+# Prefixes of tokens that are NOT classic: GitHub App user (ghu_), installation (ghs_), refresh (ghr_) and
+# fine-grained personal access tokens. Anything else (ghp_, gho_, legacy 40-hex) is treated as classic.
+_NON_CLASSIC_PREFIXES = ("ghu_", "ghs_", "ghr_", "github_pat_")
+
+
+def _is_classic(tok: str) -> bool:
+    return not (tok or "").startswith(_NON_CLASSIC_PREFIXES)
 
 
 def connect(tok: str) -> dict[str, Any]:
@@ -134,6 +179,40 @@ def connect(tok: str) -> dict[str, Any]:
                  "missing": info["missing"], "connected_at": _now()})
     _REPO_CACHE.update(at=0.0, items=[])
     return status()
+
+
+def connect_app(fields: dict[str, Any]) -> dict[str, Any]:
+    """Store the token "Sign in with GitHub" just received (github_oauth.poll). Checked like a pasted token."""
+    tok = str((fields or {}).get("access_token") or "").strip()
+    info = _check_token(tok, app=True)
+    _write_conn({"source": "app", "token": tok, "refresh_token": str(fields.get("refresh_token") or ""),
+                 "expires_at": float(fields.get("expires_at") or 0), "login": info["login"], "user_id": info["id"],
+                 "missing": info["missing"], "connected_at": _now()})
+    _REPO_CACHE.update(at=0.0, items=[])
+    _INSTALL_CACHE.update(at=0.0, n=-1)
+    return status()
+
+
+# How many accounts the Javis app is installed on, as the signed-in person sees it. Zero means signed in but no repo
+# picked yet, the one step people miss. Cached briefly: the Connections page reads status on every visit.
+_INSTALL_CACHE: dict[str, Any] = {"at": 0.0, "n": -1}
+INSTALL_CACHE_S = 30.0
+
+
+def _installs(tok: str) -> int:
+    now = _now()
+    if _INSTALL_CACHE["at"] and now - _INSTALL_CACHE["at"] < INSTALL_CACHE_S:
+        return int(_INSTALL_CACHE["n"])
+    try:
+        d = GitHub(tok).get("/user/installations", params={"per_page": 1})
+        n = int((d or {}).get("total_count") or 0) if isinstance(d, dict) else 0
+    except GitHubError:
+        # unknown: say nothing rather than nag. 0.444.4: remembered too, so a GitHub outage or a dead network does
+        # not cost a fresh request (and its timeout) on every Connections visit.
+        _INSTALL_CACHE.update(at=now, n=-1)
+        return -1
+    _INSTALL_CACHE.update(at=now, n=n)
+    return n
 
 
 def connect_backup() -> dict[str, Any]:
@@ -150,6 +229,7 @@ def connect_backup() -> dict[str, Any]:
 def disconnect() -> dict[str, Any]:
     _write_conn({})
     _REPO_CACHE.update(at=0.0, items=[])
+    _INSTALL_CACHE.update(at=0.0, n=-1)
     return status()
 
 
@@ -161,10 +241,19 @@ def status() -> dict[str, Any]:
         "login": conn.get("login") or "",
         "source": conn.get("source") or "",
         # A classic token missing scopes still works for reading; say which ones so the person can add them.
-        "missing": list(conn.get("missing") or []),
+        # Never for an app sign-in: it has no scopes, and a stale flag stored by 0.430.0 to 0.432.1 is dropped here.
+        "missing": [] if conn.get("source") == "app" else list(conn.get("missing") or []),
         "backup_token": bool(backup_token()),
         "has_git": shutil.which("git") is not None,
+        # "Sign in with GitHub": where to pick repos, and how many accounts the app is on (-1 unknown).
+        "install_url": _oauth_install_url(),
+        "installs": _installs(tok) if (tok and conn.get("source") == "app") else -1,
     }
+
+
+def _oauth_install_url() -> str:
+    import github_oauth
+    return github_oauth.install_url()
 
 
 def client() -> GitHub:

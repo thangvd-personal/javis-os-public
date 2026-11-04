@@ -16,23 +16,27 @@ SPEC = KenhSpec(
     id="messenger", nhan="Messenger", kind="bot", logo="messenger", mau="#0866FF",
     lay_token=("Cần Javis có tên miền HTTPS. Ở developers.facebook.com tạo app, thêm sản phẩm Messenger, gắn "
                "Fanpage, đặt webhook bằng địa chỉ và mã xác minh hiện bên dưới (tick messages và "
-               "messaging_postbacks), rồi dán ba thứ cách nhau dấu cách: Page ID, Page access token, App secret. "
-               "Chi tiết: docs/31-messenger.md."),
-    tom_tat=("Hộp thư Fanpage Facebook. Chỉ chat riêng; ngoài 24 giờ kể từ tin cuối của khách thì không "
-             "trả lời được. Trả lời người ngoài cần app qua xét duyệt quyền pages_messaging của Meta."),
+               "messaging_postbacks, feed), rồi dán ba thứ cách nhau dấu cách: Page ID, token Trang, App secret."),
+    tom_tat=("Hộp thư và bình luận Fanpage Facebook. Chỉ chat riêng; ngoài 24 giờ kể từ tin cuối của khách thì "
+             "không nhắn lại được. Trả lời người ngoài cần chuyển app Meta sang chế độ Live."),
     nang_luc={"nhom": False, "gui_chu": True, "gui_file": True},
     en={
         "lay_token": ("Javis needs an HTTPS domain. On developers.facebook.com create an app, add the Messenger "
                       "product, connect your Facebook Page, set the webhook with the address and verify token "
-                      "shown below (tick messages and messaging_postbacks), then paste three things separated by "
-                      "spaces: the Page ID, the Page access token, the App secret. Details: docs/en/31-messenger.md."),
-        "tom_tat": ("Your Facebook Page inbox. Private chats only; no reply once 24 hours have passed since the "
-                    "customer's last message. Replying to the public needs Meta's App Review for pages_messaging."),
+                      "shown below (tick messages, messaging_postbacks and feed), then paste three things separated "
+                      "by spaces: the Page ID, the Page token, the App secret."),
+        "tom_tat": ("Your Facebook Page inbox and comments. Private chats only; no message once 24 hours have passed "
+                    "since the customer's last one. Replying to the public needs the Meta app switched to Live."),
     },
 )
 
 # The route Meta calls. The Channels form shows it with the verify token (GET /channels/webhook-info).
 WEBHOOK_PATH = "/messenger/webhook"
+# Step-by-step guide linked from the add-account form (0.436.1): file names in docs/ and docs/en/.
+GUIDE = {"vi": "31-messenger-tung-buoc.md", "en": "31-messenger-step-by-step.md"}
+# The Connections page has a card that connects a Page with Facebook Login and sets the webhook up (0.436.2): the
+# add-account form points there, and a Page connected on that card is already a channel here.
+CONNECT_CARD = True
 
 
 def _Transport():

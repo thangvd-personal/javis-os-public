@@ -1003,6 +1003,24 @@ def set_hidden(conversation_id: int, hidden: bool) -> bool:
     return cur.rowcount > 0
 
 
+def delete_conversation(conversation_id: int) -> bool:
+    """Remove a conversation, its messages and its tags from the inbox for good (row menu "Delete", 0.447.0). The
+    customer record stays: it may have other conversations, and a new message simply opens a new conversation."""
+    cid = int(conversation_id)
+    with _lock:
+        db = _conn()
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            db.execute("DELETE FROM messages WHERE conversation_id=?", (cid,))
+            db.execute("DELETE FROM conversation_tags WHERE conversation_id=?", (cid,))
+            cur = db.execute("DELETE FROM conversations WHERE id=?", (cid,))
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    return cur.rowcount > 0
+
+
 def dat_ghim(conversation_id: int, pinned: bool) -> bool:
     """Ghim hoặc bỏ ghim một cuộc chat (0.223.0). Không chạm `updated_at`: ghim không phải là có tin mới."""
     with _lock:
@@ -1017,7 +1035,7 @@ def dat_ghim(conversation_id: int, pinned: bool) -> bool:
 #
 # The owner keeps ONE list of tags (name + a colour from a small fixed palette) and puts them on CONVERSATIONS, so a
 # customer's private chat and a group they write in are tagged separately. Kept apart from `customers.tags_json`, the
-# free-text tags the CRM store pack (javis.khach-hang-crm) writes on a CUSTOMER: neither touches the other.
+# free-text tags the CRM store pack (javis.crm) writes on a CUSTOMER: neither touches the other.
 # ============================================================
 TAG_COLORS = ("gray", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink")
 MAX_INBOX_TAGS = 60
@@ -1566,7 +1584,7 @@ def loai_tin_tu_chu(text: str) -> str:
 # ============================================================
 # CRM: khách hàng xuyên kênh (0.60.1)
 #
-# Tầng đọc/ghi mà gói "Quản lý khách hàng" ở Kho cài đặt (javis.khach-hang-crm) cắm vào. Gói
+# Tầng đọc/ghi mà gói "Quản lý khách hàng" ở Kho cài đặt (javis.crm) cắm vào. Gói
 # gọi ĐÚNG các hàm này chứ không tự viết SQL: schema là của kho, kho đổi thì hàm đổi theo, còn
 # SQL chép trong gói sẽ gãy im lặng ở bản sau. Hai hàm ghi (tag, ghi chú) chỉ chạm bảng
 # customers; không hàm nào gửi tin hay gọi ra ngoài.

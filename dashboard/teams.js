@@ -236,14 +236,15 @@
     var text = String(m.content == null ? "" : m.content);
     if (mine) {
       var Q = quoteApi();
-      var t = Q ? Q.tach(text) : { quote: "", rest: text };
+      var sk = skillSplit(text);
+      var t = Q ? Q.tach(sk.rest) : { quote: "", rest: sk.rest };
       // 0.191.0: files sent with the message show as chips; the paperclip names line stored for the team turns is not repeated.
       var files = ((m.meta || {}).files || []).filter(function (f) { return f && f.path; });
       var rest = files.length ? t.rest.replace(/(?:\n\n)?\uD83D\uDCCE [^\n]*$/, "") : t.rest;
       // A long message collapses to ten lines with "Show more", like the main chat (chat-acts.js).
       var A = actsApi();
       var long = !!(A && A.isLongText && A.isLongText(rest));
-      return (t.quote ? quoteHtml(t.quote) : "") + (rest ? '<div class="tm-text utext' + (long && !open ? " clamped" : "") + '">' +
+      return skillChipHtml(sk.slug) + (t.quote ? quoteHtml(t.quote) : "") + (rest ? '<div class="tm-text utext' + (long && !open ? " clamped" : "") + '">' +
         esc(rest).replace(/\n/g, "<br>") + "</div>" + (long ? A.clampButtonHtml(!!open) : "") : "") +
         (files.length ? '<div class="tm-files">' + files.map(function (f) { return fileChipHtml(f, m.ts); }).join("") + "</div>" : "");
     }
@@ -279,9 +280,37 @@
   }
 
   // One-line plain preview of a message for the reply bar and the quote: markdown marks and an earlier quote dropped.
+  // 0.449.0: /skill in the team composer. The message carries the main chat's block (chat-slash.js buildSkillInvocation):
+  // "[SKILL: slug\n...]\n\n" before the owner's words. The server reads the skill into every member turn of that message
+  // or job (team_runner._skills); the chat shows the owner's own words and a small "/slug" chip.
+  var SKILL_HEAD = /^\[SKILL: ([A-Za-z0-9_-]+)\n[^\]]*\]\n\n/;
+  function skillSplit(text) {
+    var s = String(text == null ? "" : text), m = s.match(SKILL_HEAD);
+    return m ? { slug: m[1], rest: s.slice(m[0].length) } : { slug: "", rest: s };
+  }
+  // The skill a typed message calls: "/slug words" at the start, or a known "/slug" inside the sentence (the last one,
+  // like the main chat). `known` is the brain's skill slugs. Returns {cmd, rest, mid} or null. Inside a sentence the name
+  // stays in the words ("make /viet-email the main skill" still reads right); at the start it is an address and goes.
+  function skillCall(typed, known) {
+    var list = (known || []).map(function (x) { return String(x || "").toLowerCase(); });
+    var t = String(typed || "");
+    var head = t.match(/^\/([a-zA-Z0-9_-]+)(?:\s+([\s\S]*))?$/);
+    if (head && list.indexOf(head[1].toLowerCase()) >= 0) return { cmd: head[1].toLowerCase(), rest: (head[2] || "").trim(), mid: false };
+    var re = /(^|\s)\/([a-zA-Z0-9_-]+)(?=\s|$)/g, m, hit = null;
+    while ((m = re.exec(t)) !== null) { if (list.indexOf(m[2].toLowerCase()) >= 0) hit = m; }
+    if (!hit) return null;
+    var start = hit.index + hit[1].length;
+    var rest = (t.slice(0, start) + hit[2] + t.slice(start + 1 + hit[2].length)).trim().replace(/\s{2,}/g, " ");
+    return { cmd: hit[2].toLowerCase(), rest: rest, mid: true };
+  }
+  function skillChipHtml(slug) {
+    return slug ? '<span class="tm-skill-chip" title="' + esc(tw("teams.skill_used", { name: slug })) + '">' + ic("sparkles") +
+      "<span>/" + esc(slug) + "</span></span>" : "";
+  }
+
   function plainPreview(text, n) {
     var Q = quoteApi();
-    var s = String(text == null ? "" : text);
+    var s = skillSplit(text).rest;
     if (Q) s = Q.tach(s).rest;
     // Hidden blocks (JAVIS_CARD, JAVIS_ASK... are HTML comments) never show in a preview or a quote.
     s = s.replace(/<!--[\s\S]*?-->/g, " ").replace(/<!--[\s\S]*$/, " ");
@@ -748,7 +777,8 @@
   // lỗi hay không làm ra gì mới thì Thử lại, bị dừng giữa chừng thì Làm tiếp, chưa có trưởng nhóm thì mở chỗ chọn.
   function blockedAction(kind) {
     if (kind === "cap_reached") return { act: "extend", key: "teams.act.extend" };
-    if (kind === "failed" || kind === "no_progress") return { act: "retry", key: "teams.act.retry" };
+    // 0.436.0: auto_retry waits for its own retry time; the same button runs it now.
+    if (kind === "failed" || kind === "no_progress" || kind === "auto_retry") return { act: "retry", key: "teams.act.retry" };
     if (kind === "interrupted") return { act: "retry", key: "teams.act.continue" };
     if (kind === "no_leader") return { act: "leader", key: "teams.pick_leader" };
     if (kind === "agent_busy_long") return { act: "resume", key: "teams.resume" };
@@ -1874,7 +1904,7 @@
       openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false,
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle",
-      atts: [], folder: null, info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
+      atts: [], folder: null, repos: [], ghIcon: null, skills: null, skillsBrain: "", info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
       autoOpened: false, unclamped: {}, outbox: [] };
   }
 
@@ -2302,6 +2332,7 @@
     return '<div class="tm-plus-menu" role="menu" aria-label="' + esc(tw("teams.plus")) + '">' +
       item('role="menuitem" data-plus-attach="1"', "paperclip", tw("teams.attach")) +
       item('role="menuitem" data-plus-folder="1"', "folder", tw("cp.pin_folder")) +
+      item('role="menuitem" data-plus-github="1"', "git-branch", tw("gh.menu")) +
       item('role="menuitemcheckbox" aria-checked="' + (S.asJob ? "true" : "false") + '" class="tm-asjob" title="' +
         esc(tw("teams.as_job_title")) + '"', "list-todo", tw("teams.as_job"), S.asJob) +
       item('role="menuitem" data-insert-at="1"', "at-sign", tw("teams.mention_insert")) +
@@ -2428,7 +2459,8 @@
     var text = String(m.content == null ? "" : m.content);
     if (m.author_kind === "owner") {
       var Q = quoteApi();
-      return Q ? Q.tach(text).rest : text;
+      var sk = skillSplit(text);
+      return Q ? Q.tach(sk.rest).rest : sk.rest;
     }
     var vm = typeof window !== "undefined" && window.JavisVisibleMarkdown;
     return vm ? vm(text) : text;
@@ -2925,15 +2957,16 @@
     S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = String(taskId || "");
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
     S.picker = null; S.draft = null; S.picked = []; S.retrying = {};
-    S.replyTo = null; S.plusOpen = false; S.renamingHead = false; forgetAtts(S.atts); S.atts = []; S.folder = null; S.info = null;
+    S.replyTo = null; S.plusOpen = false; S.renamingHead = false; forgetAtts(S.atts); S.atts = []; S.folder = null; S.repos = []; S.ghIcon = null; S.info = null;
     S.typing = []; S.pinned = []; S.pinsOpen = false; S.unclamped = {}; S.listCache = null; S.outbox = []; stopReveal();
     closeFolderPanel();
+    closeGithubPanel();
     stopMic();
     var input = S.el.querySelector(".tm-input");
     if (input) input.value = "";
     setNote("");
     drawAll(true);
-    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () { if (S.activeId === id) { drawAll(true); loadFolder(); } });
+    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () { if (S.activeId === id) { drawAll(true); loadFolder(); loadSkills(); } });
     markOpened(id);
   }
 
@@ -3106,7 +3139,7 @@
   // Owner, 16/10/2026: "không copy và dán ảnh vào khung chat của team được". The main chat's paste and drop listeners sit on
   // the whole document and sent a picture pasted here to the hidden main chat. The team page answers first (its own
   // listeners, propagation stopped) and the page is marked data-localdrop so the main chat's drop leaves it alone.
-  var PASTE_TXT_CHARS = 1500, PASTE_TXT_LINES = 25;   // same thresholds as the main chat (app.js)
+  // Long-paste limits and the preview dialog are shared with the main chat (chat-paste.js).
   // Copy the bytes while the event is still running: a phone only lets a page read a pasted or dropped file then.
   function grabFile(f) {
     var read;
@@ -3133,15 +3166,20 @@
       attachGrabbed(files);
       return;
     }
-    // A very long text pasted into the team input becomes a .txt document instead of a wall in the box.
-    if (!(e.target && e.target.classList && e.target.classList.contains("tm-input"))) return;
+    // Text up to the shared limit pastes normally. Past it, show the whole text and let the owner choose
+    // paste inline / attach .txt / cancel, like the main chat (chat-paste.js, 0.430.1).
+    var input = e.target;
+    if (!(input && input.classList && input.classList.contains("tm-input"))) return;
+    var paste = typeof window !== "undefined" ? window.JavisPaste : null;
     var txt = (cd && cd.getData("text/plain")) || "";
-    if (txt.length > PASTE_TXT_CHARS || txt.split("\n").length > PASTE_TXT_LINES) {
-      e.preventDefault(); e.stopPropagation();
-      var d = new Date(), p2 = function (n) { return String(n).padStart(2, "0"); };
-      var name = "van-ban-dan-" + p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()) + ".txt";
-      attachFiles([new File([new Blob([txt], { type: "text/plain" })], name, { type: "text/plain" })]);
-    }
+    if (!paste || !paste.isLong(txt)) return;
+    e.preventDefault(); e.stopPropagation();
+    var range = { start: input.selectionStart, end: input.selectionEnd };
+    paste.offer(txt, function (value) {
+      if (canAttach()) paste.insertAt(input, range, value);
+    }, function (value) {
+      if (canAttach()) attachFiles([paste.textFile(value)]);
+    });
   }
   var dropDepth = 0;
   function hasFiles(e) {
@@ -3173,6 +3211,14 @@
         '<button type="button" class="tm-chip-x" data-folder-unpin="1" aria-label="' + esc(tw("cp.pin_unpin")) + '" title="' +
         esc(tw("cp.pin_unpin")) + '">' + ic("x") + "</button></span>";
     }
+    if (S.repos.length) {
+      // 0.449.0: the GitHub repos of the team chat. The name opens the picker; the status (once pushed) opens the detail.
+      var G = window.JavisTeamGithub, names = S.repos.map(function (r) { return r.full_name; });
+      var stKey = S.ghIcon && S.ghIcon.state ? "gh.st_" + S.ghIcon.state : "";
+      h += '<span class="tm-chip tm-chip-gh" title="' + esc(tw("gh.chip_label", { names: names.join(", ") })) + '">' + ic("git-branch") +
+        '<button type="button" class="tm-chip-name" data-gh-open="1">' + esc(G ? G.chipText(names, 18) : names[0]) + "</button>" +
+        (stKey ? '<button type="button" class="tm-chip-st tm-gh-st" data-gh-status="1">' + esc(tw(stKey)) + "</button>" : "") + "</span>";
+    }
     S.atts.forEach(function (a, i) {
       h += '<span class="tm-chip' + (a.err ? " is-err" : "") + (a.url ? " has-thumb" : "") + '" data-att="' + i + '">' +
         (a.url ? '<img class="tm-chip-thumb" src="' + esc(a.url) + '" alt="">' : ic(a.kind === "image" ? "image" : "paperclip")) +
@@ -3198,7 +3244,59 @@
         S.folder = (d && d.folder) || null;
         drawComposer();
         if (S.side && S.tab === "info") drawSide(true);
-      }).catch(function () {});
+      }).catch(function () {}).then(loadRepos);
+  }
+
+  // 0.449.0: GitHub repos attached to the team chat (team-github.js). Work/Help steps edit them and Javis pushes once a
+  // job is done, like a private chat.
+  function loadRepos() {
+    var sid = sessionId(), G = window.JavisTeamGithub;
+    if (!sid || !G) return Promise.resolve();
+    return G.load(sid, brain()).then(function (d) {
+      if (!d || sessionId() !== sid) return;
+      setRepos(d);
+    });
+  }
+  function setRepos(d) {
+    S.repos = (d && d.repos) || [];
+    S.ghIcon = d && d.icon && d.icon.state ? d.icon : null;
+    drawComposer();
+    if (S.side && S.tab === "info") drawSide(true);
+  }
+  function closeGithubPanel() {
+    var pop = document.querySelector(".tm-gh-pop");
+    if (pop) pop.remove();
+    document.removeEventListener("mousedown", githubOutside, true);
+    document.removeEventListener("keydown", githubEsc, true);
+  }
+  // The (i) explanation opens in its own pop-up (info-tip.js); reading it must not close the picker.
+  function githubOutside(e) { if (!(e.target.closest && e.target.closest(".tm-gh-pop, .info-pop, .info-pop-bg"))) closeGithubPanel(); }
+  function githubEsc(e) { if (e.key === "Escape") closeGithubPanel(); }
+  function openGithubPanel() {
+    var G = window.JavisTeamGithub;
+    var comp = S.el.querySelector(".tm-composer");
+    if (!G || !comp || !S.team || !sessionId()) return;
+    closeGithubPanel();
+    closeFolderPanel();
+    var r = comp.getBoundingClientRect();
+    var pop = document.createElement("div");
+    pop.className = "cp-menu tm-folder-pop tm-gh-pop";
+    pop.style.left = Math.max(8, r.left + 8) + "px";
+    pop.style.bottom = Math.max(8, window.innerHeight - r.top + 6) + "px";
+    pop.innerHTML = '<div class="cp-mi cp-back">' + esc(tw("gh.menu")) + infoBtn() + "</div>" +
+      infoBody(esc(tw("teams.gh_how"))) + '<div class="cp-sep"></div><div class="tm-gh-body"></div>';
+    document.body.appendChild(pop);
+    var sid = sessionId();
+    G.panel(pop.querySelector(".tm-gh-body"), {
+      sid: function () { return sessionId() === sid ? sid : ""; }, brain: brain,
+      current: function () { return S.repos.map(function (x) { return x.full_name; }); },
+      changed: function (d) { if (sessionId() === sid) setRepos(d); },
+      close: closeGithubPanel,
+      connections: function () { try { window.Alpine.store("nav").go("mcp"); } catch (e) { location.hash = "#mcp"; } } });
+    setTimeout(function () {
+      document.addEventListener("mousedown", githubOutside, true);
+      document.addEventListener("keydown", githubEsc, true);
+    }, 0);
   }
 
   function pinTeamFolder(p) {
@@ -3309,6 +3407,12 @@
       ? '<div class="tm-info-row">' + ic("folder") + '<span class="tm-info-grow" title="' + esc(S.folder.path) + '">' + esc(S.folder.name) +
         '</span><button type="button" class="ws-btn" data-folder-open="1">' + esc(tw("teams.change")) + "</button></div>"
       : '<button type="button" class="ws-btn" data-folder-open="1">' + ic("folder") + " " + esc(tw("cp.pin_folder")) + "</button>") + "</section>";
+    h += '<section class="tm-info-sec"><h4>' + esc(tw("gh.menu")) + "</h4>" + (S.repos.length
+      ? S.repos.map(function (r) {
+        return '<div class="tm-info-row">' + ic("git-branch") + '<span class="tm-info-grow" title="' + esc(r.worktree || r.full_name) + '">' +
+          esc(r.full_name) + (r.branch ? ' <span class="tm-sub">' + esc(r.branch) + "</span>" : "") + "</span></div>";
+      }).join("") + '<button type="button" class="ws-btn" data-gh-open="1">' + esc(tw("teams.change")) + "</button>"
+      : '<button type="button" class="ws-btn" data-gh-open="1">' + ic("git-branch") + " " + esc(tw("teams.gh_attach")) + "</button>") + "</section>";
     if (!I) return h + '<p class="tm-sub">' + esc(tw("common.loading")) + "</p>";
     var imgs = I.files.filter(function (f) { return f.image; });
     var docs = I.files.filter(function (f) { return !f.image; });
@@ -3355,7 +3459,12 @@
     // A reply carries the quoted message as a markdown quote on top (the same convention as the main chat, so every
     // engine reads it and history shows it), and calls the assistant being replied to when nobody is @-mentioned.
     var Q = quoteApi();
-    var text = S.replyTo && Q ? Q.ghep(S.replyTo.quote, typed) : typed;
+    // 0.449.0: a /skill call goes first as the main chat's skill block; the quote and the owner's words follow it.
+    var X = window.JavisSlash;
+    var call = X && X.buildSkillInvocation ? skillCall(typed, (S.skills || []).map(function (k) { return k.slug; })) : null;
+    var words = call ? call.rest : typed;
+    var text = S.replyTo && Q ? Q.ghep(S.replyTo.quote, words) : words;
+    if (call) text = X.buildSkillInvocation(call.cmd, text, call.mid);
     if (S.replyTo && S.replyTo.key && !mentions.length) mentions = [S.replyTo.key];
     // The message shows at once as a pending bubble keyed by its client id; the server's copy replaces it when it
     // arrives. A retry after a dropped connection sends the SAME client id, so the server returns the message it may
@@ -3476,10 +3585,63 @@
     return m[1];
   }
 
+  // 0.449.0: "/" lists the brain's skills, in the same suggestion box as "@". Only skills: the main chat's session and
+  // system commands (/new, /model...) act on a private chat, not on a team.
+  function loadSkills() {
+    var b = brain();
+    if (S.skills && S.skillsBrain === b) return Promise.resolve(S.skills);
+    return fetch("/skills?brain=" + q(b), { credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .catch(function () { return {}; })
+      .then(function (d) { S.skills = (d && d.skills) || []; S.skillsBrain = b; return S.skills; });
+  }
+  function skillSuggest(input, box, tok) {
+    if (!S.skills || S.skillsBrain !== brain()) {
+      hideSug();
+      loadSkills().then(function () { if (S && S.el && S.el.isConnected && S.skills) suggest(); });
+      return;
+    }
+    var X = window.JavisSlash;
+    var items = S.skills.filter(function (k) { return k && k.slug; }).map(function (k) {
+      return { kind: "skill", cmd: k.slug, name: k.name || k.slug, group: k.group || "", desc: k.description || "" };
+    });
+    var list = (X && X.filterItems ? X.filterItems(items, tok.query) : items).slice(0, 8);
+    S.sugKeys = list.map(function (k) { return "/" + k.cmd; });
+    if (S.sugIdx == null || S.sugIdx >= list.length) S.sugIdx = 0;
+    box.hidden = !list.length;
+    input.setAttribute("aria-expanded", list.length ? "true" : "false");
+    box.innerHTML = list.map(function (k, i) {
+      var on = i === S.sugIdx;
+      return '<button type="button" class="tm-sug-item tm-sug-skill' + (on ? " is-active" : "") + '" role="option" id="tm-sug-' + i +
+        '" aria-selected="' + (on ? "true" : "false") + '" data-skill="' + esc(k.cmd) + '">' +
+        '<span class="tm-sug-all" aria-hidden="true">' + ic("sparkles") + "</span>" +
+        '<span class="tm-sug-text"><span class="tm-sug-name">/' + esc(k.cmd) + (k.name !== k.cmd ? ' <span class="tm-sug-slug">' + esc(k.name) + "</span>" : "") +
+        "</span>" + (k.desc ? '<span class="tm-sug-role">' + esc(k.desc) + "</span>" : "") + "</span></button>";
+    }).join("");
+    if (list.length) input.setAttribute("aria-activedescendant", "tm-sug-" + S.sugIdx);
+    else input.removeAttribute("aria-activedescendant");
+  }
+  function pickSkill(slug) {
+    var input = S.el.querySelector(".tm-input");
+    if (!input || !slug) return;
+    var pos = input.selectionStart || input.value.length;
+    var before = input.value.slice(0, pos).replace(/\/([\p{L}\p{M}0-9_-]*)$/u, "/" + slug + " ");
+    input.value = before + input.value.slice(pos);
+    try { input.setSelectionRange(before.length, before.length); } catch (e) {}
+    input.focus();
+    grow(input);
+    S.pending = null;
+    hideSug();
+    drawHint();
+  }
+
   function suggest() {
     var input = S.el.querySelector(".tm-input");
     var box = S.el.querySelector(".tm-sug");
     if (!input || !box || !S.team) return;
+    var X = window.JavisSlash;
+    var tok = X && X.tokenAtCaret ? X.tokenAtCaret(input.value, input.selectionStart || 0) : null;
+    if (tok) return skillSuggest(input, box, tok);
     var query = suggestQuery(input);
     if (query === null) { hideSug(); return; }
     var list = mentionMatches(S.team.members, query, mentionsFromText(input.value, S.team.members, S.picked));
@@ -3545,6 +3707,7 @@
   }
 
   function pickMention(key) {
+    if (String(key || "").charAt(0) === "/") return pickSkill(String(key).slice(1));
     var input = S.el.querySelector(".tm-input");
     if (input && key === "*all") {
       // @all is read from the text itself (mentionScan), so it needs no picked entry.
@@ -3941,6 +4104,8 @@
     if (d.plusAttach) { setPlus(false); return pickFiles(attachFiles); }
     if (d.plusFolder || d.folderOpen) { setPlus(false); return openFolderPanel(); }
     if (d.folderUnpin) return pinTeamFolder("");
+    if (d.plusGithub || d.ghOpen) { setPlus(false); return openGithubPanel(); }
+    if (d.ghStatus) { var gs = sessionId(); if (gs && window.JavisTeamGithub) window.JavisTeamGithub.openStatus(gs); return; }
     if (d.attX !== undefined) { forgetAtts(S.atts.splice(+d.attX, 1)); drawComposer(); return; }
     if (d.outRetry) {
       var oe = S.outbox.filter(function (p) { return p.cid === d.outRetry; })[0];
@@ -4069,6 +4234,7 @@
     if (t.classList.contains("tm-send")) return send();
     if (t.classList.contains("tm-older")) return loadMsgs(true);
     if (d.mention) return pickMention(d.mention);
+    if (d.skill) return pickSkill(d.skill);
     if (d.unmention) return unMention(d.unmention);
     if (t.classList.contains("tm-search-btn")) {
       S.searchOpen = !S.searchOpen;
@@ -4807,7 +4973,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, listSync: listSync, pendingHtml: pendingHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, skillSplit: skillSplit, skillCall: skillCall, listSync: listSync, pendingHtml: pendingHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,

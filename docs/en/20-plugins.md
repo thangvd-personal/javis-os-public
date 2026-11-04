@@ -104,7 +104,7 @@ These ship with the app (the **Bundled** label). All are on by default except `t
 
 | Name on the card | slug | Tools provided | Minimum level | Default |
 |---|---|---|---|---|
-| Time and date (VN) | `datetime-vn` | `javis_now`, `javis_date_add` | read only | On |
+| Time and date (timezone picked in Settings) | `datetime-vn` | `javis_now`, `javis_date_add` | read only | On |
 | Recurring jobs and reminders | `javis-schedule` | `javis_schedule` | write (safe) | On |
 | Queue Kanban work | `javis-task` | `javis_task` | write (safe) | On |
 | Attach another MCP | `javis-connect` | `javis_add_mcp` | write (safe) | On |
@@ -126,8 +126,8 @@ What each one does:
 - **Read YouTube videos**: paste a video link into chat and ask for a summary. The plugin fetches the video's **real subtitles** (the route the YouTube player uses) so Javis reads the dialogue rather than guessing from the title. No API key, no YouTube sign-in, and it works on **every engine**, including API engines that cannot open a URL. When YouTube blocks the server it cycles through six player variants before falling back to yt-dlp, which gets past most robot-suspicion cases. A video with no subtitles, a private video or one YouTube blocks makes the tool state the reason plainly so Javis does not invent anything. A long video that got truncated continues when you ask it to "keep reading". Details in [Chat](02-chat-and-voice.md).
 - **Per-chat Zalo rules**: set the behaviour for each Zalo group or customer in words (stay silent, report every message, report on keywords, nudge when a reply is over N minutes late). The rules are written to `Javis/zalo/<slug>.md` so they can be read and edited.
 - **Safe Zalo sending**: sends Zalo messages in place of the raw tool. It locks onto the listening account and can only send to chats on the watch list; when a name matches several people it refuses and forces a question back. The two Zalo plugins are shared with [the Zalo channel](12-zalo-agent-mcp.md).
-- **Meta Ads (Graph API)**: reads Facebook/Instagram advertising figures (ad accounts, campaigns, performance). **Read only, spends no money.** Requires the "Meta Ads (your own app, Graph API)" connection on the Connections page.
-- **Facebook Pages (Graph API)**: manages Pages. Reading the Page list, posts and comments is read-only; posting, uploading photos, albums and videos, editing text, deleting posts and replying to comments are **real, public** actions and need the full-power level. Requires the "Facebook Pages (your own app, Graph API)" connection.
+- **Meta Ads (Graph API)**: reads Facebook/Instagram advertising figures (ad accounts, campaigns, performance). **Read only, spends no money.** Requires the "Meta Ads (Facebook & Instagram)" connection on the Connections page.
+- **Facebook Pages (Graph API)**: manages Pages. Reading the Page list, posts and comments is read-only; posting, uploading photos, albums and videos, editing text, deleting posts and replying to comments are **real, public** actions and need the full-power level. Uses the Pages connected on the Facebook Messenger card on the Connections page (or the store's Facebook Pages connection if installed earlier).
 - **Facebook monitoring (Apify)**: monitors **public** Pages and Groups to find heavily shared posts, through the Apify service. Read only, does not touch a personal account, and works on a VPS. Requires pasting an apify.com Personal API token into the "Facebook monitoring (Apify)" connection.
 - **Tool usage log**: counts how many times **each** tool is called by the engine (through the `post_tool_call` hook) and lets you see the most-used ones. It is a demonstration of the hook mechanism, so it is off by default; enable it on the Plugins page, chat a few turns that call tools, then ask Javis which tool is used most.
 
@@ -308,7 +308,7 @@ A plugin using this hook sits behind the usual rails: a user-installed plugin on
 
 ## Own page and HTTP routes (since 0.64.26)
 
-A plugin can open web routes of its own, under `/ext/<slug>/`. Use it for a settings page, or for an outside service to call in (webhook, OAuth door). The "Javis in ChatGPT" package in the store is a working example.
+A plugin can open web routes of its own, under `/ext/<slug>/`. Use it for a settings page, or for an outside service to call in (webhook, OAuth door). The **Javis Gate** package (`javis.gate`) in the store is a working example.
 
 ```python
 def register(ctx):
@@ -324,6 +324,32 @@ def register(ctx):
 - **`register_well_known`**: GET only, public, no cookie. If two plugins claim one name, the one loaded first keeps it.
 - Declare `page: ""` in `plugin.yaml` and the plugin card gets an **Open page** button.
 - Only bundled plugins, plugins from an installed package and global plugins get routes. **A plugin inside a brain does not**, because the model can write into the brain.
+
+## Javis Gate: an outside AI posts into a chat (since 0.440.0)
+
+The **Javis Gate** package (`javis.gate`) opens an MCP door with OAuth for ChatGPT, Claude and other AIs. Besides the
+tools Javis already has, that door carries five tools only the outside AI sees (`server/chat_bridge.py`):
+
+| Tool | What it does | Access level |
+|---|---|---|
+| `javis_chat_find` | Find chats by title (accents ignored) or content | Any |
+| `javis_chat_read` | Read the last messages of a chat | Any |
+| `javis_chat_send` | Post into a chat as if the owner typed it, wait for the answer | Full only |
+| `javis_chat_result` | Read the answer when Javis takes long | Any |
+| `javis_chat_note` | Save a note of the outside chat: what the owner said and decided (since 0.441.0) | Draft, Full |
+
+- **A posted message runs exactly like a typed one:** it goes through the dashboard's own chat loop, so the answer
+  streams on every open tab, has a Stop button, is saved to History, written to `memory/conversations` and fed to
+  self-learning. Its bubble is labelled **via ChatGPT** or **via Claude**.
+- **A chat that is answering** takes the message as a follow-up, as when the owner types while Javis works.
+- **Only the owner's chats** (main chat, partner chats). Customer chats and team chats can't be read or posted to.
+- **A note does not run Javis:** `javis_chat_note` only saves, so it costs Javis's brain nothing, yet it goes
+  through the same path as a chat turn: History, conversation log and self-learning. Each outside chat gets its own
+  conversation **From ChatGPT: <title>** (in the interface language); with an `id` the note goes into that
+  Javis chat instead. Javis can't read ChatGPT's or Claude's history, so this is how the outside AI sends over
+  what is worth keeping.
+- The five tools are **never** in Javis's own toolset: they appear only when the package's door calls
+  `mcp_hub.tra_loi_jsonrpc(..., gate={"source": "<AI name>"})`.
 
 ## Quick reference of buttons and states
 

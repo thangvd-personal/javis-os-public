@@ -139,7 +139,7 @@ BI_LIEN_TIEP_DE_GOI = 2
 _deps: dict[str, Callable] = {}
 
 
-def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=None, notify=None):
+def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=None, notify=None, transcribe=None):
     """main.py cấp ba thứ: lõi một lượt, đường tới brain, và cách đọc file Agent.
 
     `session_probe(key) -> (sid, số tin lịch sử RAM)` và `session_undo(key, giữ)` chỉ cho BẢN NHÁP ở Hộp thư (0.65.5): lấy phiên
@@ -147,8 +147,12 @@ def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=Non
     không có ngữ cảnh lưu trong kho và không tự dọn.
 
     `notify(text) -> awaitable` bỏ một mẩu thư vào chuông thông báo của Javis (lượt bot hỏng, xem `_bao_hop_thu`).
-    Thiếu thì lượt hỏng chỉ còn trong nhật ký bot và báo người trực."""
+    Thiếu thì lượt hỏng chỉ còn trong nhật ký bot và báo người trực.
+
+    `transcribe(bytes, file name) -> awaitable dict` like `stt.groq_nghe` (0.433.0): hears what is said in a video a
+    customer sends. Missing means the bot gets the video's frames only, and is told it did not hear the sound."""
     _deps["answer"] = answer
+    _deps["transcribe"] = transcribe
     _deps["notify"] = notify
     _deps["brain_root"] = brain_root
     _deps["read_agent"] = read_agent
@@ -490,6 +494,9 @@ async def anh_cho_bot(text_engine: str, meta: dict, cfg: dict) -> tuple:
       - `image_path`: a file a gateway already saved (Telegram, a photo the message replies to).
     A photo we know of but cannot get keeps the honest label, never a guess."""
     meta = meta or {}
+    if meta.get("audio_urls"):
+        # 0.435.0: what the customer SAID in a voice message goes in front of their typed words.
+        text_engine = await nghe_cho_bot(meta, cfg) + text_engine
     try:
         root = Path(_deps["brain_root"](cfg["brain"]))
     except Exception:      # noqa: BLE001 - no brain root (tests, odd records): nothing can be shown
@@ -530,11 +537,93 @@ async def anh_cho_bot(text_engine: str, meta: dict, cfg: dict) -> tuple:
             _ghi_ly_do_anh(cfg, f"tải ảnh lỗi: {type(e).__name__}: {e}")
     elif meta.get("co_anh") and not url and not paths:
         _ghi_ly_do_anh(cfg, "tin ảnh tới mà không kèm link ảnh nào (bản Zalo đang chạy không gửi link)")
+    video_note = ""
+    if meta.get("video_url"):
+        # 0.433.0: a video becomes a few frames (plus its speech when a speech-to-text key is set), after any photo.
+        frames, video_note = await video_cho_bot(meta, root, cfg)
+        paths.extend(frames[:max(0, vision_input.MAX_IMAGES - len(paths))])
     if not paths:
-        return (gan_nhan_anh(text, meta) if meta.get("co_anh") else text), []
+        return video_note + (gan_nhan_anh(text, meta) if meta.get("co_anh") else text), []
     if meta.get("anh_quote"):
-        return _QUOTE_ANH + text, paths[:vision_input.MAX_IMAGES]
-    return (text if text.strip() else CHI_CO_ANH), paths[:vision_input.MAX_IMAGES]
+        return video_note + _QUOTE_ANH + text, paths[:vision_input.MAX_IMAGES]
+    return video_note + (text if text.strip() or video_note else CHI_CO_ANH), paths[:vision_input.MAX_IMAGES]
+
+
+VIDEO_TRON = "[Khách gửi một video, không kèm lời nhắn]"
+AUDIO_TRON = "[Khách gửi tin thoại, không gõ chữ]"     # a voice-only turn: what was said is added by `nghe_cho_bot`
+AUDIO_MAX_BYTES = 25 * 1024 * 1024
+AUDIO_TOI_DA_GIAY = 240      # download + hear every voice message of one turn    # a video turn has no words of the customer's own
+VIDEO_TOI_DA_GIAY = 180      # download + frames + speech of one video; past this the bot answers without it
+
+
+async def video_cho_bot(meta: dict, root: Path, cfg: dict) -> tuple:
+    """(frame paths, note for the model) of the video in this turn (`meta["video_url"]`, 0.433.0).
+
+    Frames are saved next to the customer's photos (attachments/zalo/<chat>/, swept by media_gc). A video that cannot be
+    shown still yields a note, so the model says it could not watch it instead of pretending it did."""
+    import video_vision
+    import image_vision
+    url = str(meta.get("video_url") or "")
+    chat = image_vision.SAFE_PART.sub("_", str(meta.get("chat_id") or "chat"))[:64] or "chat"
+    dest = image_vision.image_gen._attachments_dir(root) / "zalo" / chat
+    msg_id = str(meta.get("video_msg") or meta.get("message_id") or "")
+    try:
+        res = await asyncio.wait_for(video_vision.look(url, dest, msg_id, _deps.get("transcribe")), VIDEO_TOI_DA_GIAY)
+    except asyncio.TimeoutError:
+        res = {"frames": [], "why": "xử lý video quá lâu"}
+    except Exception as e:      # noqa: BLE001 - a video we cannot get must never cost the customer the reply
+        res = {"frames": [], "why": f"xử lý video lỗi: {type(e).__name__}"}
+    if not res.get("frames"):
+        print(f"[chatbot] video not shown to the bot: {res.get('why')}", file=sys.stderr)
+        _ghi_ly_do_anh(cfg, "không xem được video: " + str(res.get("why") or ""))
+    return [str(Path(p).resolve()) for p, _t in res.get("frames") or []], video_vision.note(res, str(meta.get("video_truoc") or ""))
+
+
+async def nghe_cho_bot(meta: dict, cfg: dict) -> str:
+    """The voice messages of this turn (`meta["audio_urls"]`, personal Zalo, 0.435.0) heard and written down.
+
+    Returns the lines that go in front of the customer's typed words: what each message said, or, when it could not be
+    heard, a line saying so (the bot then asks the customer to type, never guesses). Uses the same ears as every other
+    voice message (`_deps["transcribe"]`: Groq, OpenAI, Gemini, then the offline Whisper). Files are downloaded to a
+    temporary folder with the size-capped, pinned-IP downloader and deleted right after."""
+    import tempfile
+    import zalo_attachments
+    urls = [str(u) for u in (meta.get("audio_urls") or []) if str(u or "").startswith("https://")]
+    if not urls:
+        return ""
+    hear = _deps.get("transcribe")
+    out = []
+
+    async def _one(url: str, i: int) -> str:
+        if hear is None:
+            return "(khách gửi một tin thoại nhưng bạn không nghe được: Javis chưa nối bộ nghe. Nhờ khách gõ chữ.) "
+        with tempfile.TemporaryDirectory(prefix="javis-voice-") as d:
+            saved, why = await zalo_attachments.fetch_file({"url": url, "name": f"voice{i}.m4a"}, Path(d), AUDIO_MAX_BYTES)
+            if not saved:
+                _ghi_ly_do_anh(cfg, "không tải được tin thoại: " + why)
+                return f"(khách gửi một tin thoại nhưng bạn không nghe được: {why}. Đừng đoán nội dung; nhờ khách gõ chữ.) "
+            res = await hear(Path(saved).read_bytes(), Path(saved).name)
+        if (res or {}).get("ok") and str(res.get("text") or "").strip():
+            said = str(res["text"]).strip().replace('"', "'")
+            return f"(khách gửi tin thoại, máy nghe chép lại, có thể sai vài chữ: \"{said}\") "
+        why = str((res or {}).get("ly_do") or "")
+        if why == "khong_nghe_ro":
+            return "(khách gửi một tin thoại nhưng không nghe ra lời nào. Nhờ khách nói lại rõ hơn hoặc gõ chữ.) "
+        _ghi_ly_do_anh(cfg, "không nghe được tin thoại: " + (why or "lỗi"))
+        if why == "thieu_key":
+            return ("(khách gửi một tin thoại nhưng bạn không nghe được vì chưa có bộ nghe. Nhờ khách gõ chữ, "
+                    "đừng nhắc gì tới cài đặt hay API key.) ")
+        return "(khách gửi một tin thoại nhưng bạn không nghe được. Đừng đoán nội dung; nhờ khách gõ chữ.) "
+
+    try:
+        for i, u in enumerate(urls):
+            out.append(await asyncio.wait_for(_one(u, i), AUDIO_TOI_DA_GIAY))
+    except asyncio.TimeoutError:
+        out.append("(khách gửi tin thoại nhưng nghe quá lâu nên bỏ dở. Nhờ khách gõ chữ.) ")
+    except Exception as e:      # noqa: BLE001 - a voice message we cannot hear must never cost the reply
+        print(f"[chatbot] voice message failed: {type(e).__name__}: {e}", file=sys.stderr)
+        out.append("(khách gửi một tin thoại nhưng bạn không nghe được. Nhờ khách gõ chữ.) ")
+    return "".join(out)
 
 
 def _ghi_ly_do_anh(cfg: dict, ly_do: str) -> None:
@@ -1614,6 +1703,10 @@ def _make_answer_fn(bot_id: str):
         # Per-chat exception (0.172.0): this private chat may run at its own level. Applied FIRST, so every later
         # read of `muc_quyen` in this turn (the tool route in `main`, the log, the prompt) sees the same level.
         cfg = chatbot_store.ap_ngoai_le(cfg, meta)
+        if (meta or {}).get("log_only"):
+            # Recorded for the inbox only, no turn (0.434.0: Page comments in "inbox" mode, the owner answers them).
+            ghi_tin_khach(cfg, meta or {}, text)
+            return {"text": "", "files": [], "im_lang": True}
         meta = _rp_named_meta(cfg, text, meta)
         _nho_neu_khong_goi(bot_id, cfg, meta, text)
         # Lớp thứ HAI của cùng một luật (`precheck_fn` đã chặn ở tầng kênh). Giữ cả hai vì hai
@@ -1926,9 +2019,24 @@ def manual_meta(conv: dict, last: dict) -> dict:
             "message_id": str(last.get("external_message_id") or ""), "account_id": raw,
             "platform": str(conv.get("channel") or ""), "_kenh": str(conv.get("channel") or ""), "mentioned": True,
             "ts": float(last.get("created_at") or time.time())}
+    if conv.get("channel") == "messenger" and meta["chat_id"].startswith(("cmt:", "igc:")):
+        # A Page comment thread (0.434.0), or an Instagram one (0.447.0): the reply goes out publicly under the
+        # comment, the model must know.
+        import messenger_bot
+        meta["ghi_chu_dau"] = messenger_bot.comment_note(instagram=meta["chat_id"].startswith("igc:"))
+    elif conv.get("channel") == "threads":
+        # Threads (0.448.0) has only public replies: the model must know its answer is public and short.
+        import threads_bot
+        meta["ghi_chu_dau"] = threads_bot.comment_note()
     if last.get("message_type") == "image":
         meta["co_anh"] = True
         meta["image_url"] = str((last.get("metadata") or {}).get("image_url") or "")
+    elif last.get("message_type") == "audio" and (last.get("metadata") or {}).get("audio_url"):
+        # 0.435.0: the owner asks the bot to answer a voice message: it hears it first.
+        meta["audio_urls"] = [str(last["metadata"]["audio_url"])]
+    elif last.get("message_type") == "video" and (last.get("metadata") or {}).get("video_url"):
+        # 0.433.0: the owner asks the bot to answer a video: it looks at the video's frames.
+        meta["video_url"] = str(last["metadata"]["video_url"])
     elif conv.get("channel") == "zalo_personal":
         # 0.141.0: the last message quotes a photo, same as the live bot (channels/zalo_personal.py `xu_ly`).
         try:
@@ -1969,6 +2077,8 @@ async def manual_answer(conv: dict, msgs: list, draft: bool = False, instruction
     last = next((m for m in reversed(msgs or []) if m.get("sender_type") == "customer"), None)
     # Tin ảnh thì chỉ phần chú thích là lời của khách; ảnh trơn (đường dẫn hoặc chữ giữ chỗ) không có gì để trả lời.
     chu_khach = (conversations.chu_thich_anh(last.get("text")) if (last or {}).get("message_type") == "image"
+                 else VIDEO_TRON if (last or {}).get("message_type") == "video"
+                 else AUDIO_TRON if (last or {}).get("message_type") == "audio"
                  else str((last or {}).get("text") or "").strip())
     if (not last or not chu_khach) and not lenh:
         return {"ok": False, "code": "no_message", "error": localefmt.chu("Chưa có tin khách để trả lời",
@@ -2006,6 +2116,8 @@ async def manual_answer(conv: dict, msgs: list, draft: bool = False, instruction
         if lenh:
             note = _INSTRUCTION_NOTE.format(lenh=lenh.replace('"', "'"))
             text_engine = note + ("\n" + text_engine if chu_khach else "")
+        if meta.get("ghi_chu_dau"):
+            text_engine = str(meta["ghi_chu_dau"]) + "\n" + text_engine
         kw = {"channel": kenh, "bot": cfg}
         if draft:
             kw.update(phien_kho=sid, ghi_kho=False)

@@ -8,6 +8,249 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.450.0] - 2026-11-04
+### Added
+- **"Install on phone" button in the phone menu.** Open the left menu and tap it to see how to add Javis to the home screen on the device you are using (iPhone: Share, then Add to Home Screen; Android: one Install button). Once Javis runs from the home screen, the button no longer shows.
+### Improved
+- If you tapped "Don't remind me again" on the daily reminder, you can still open the install guide any time from this button.
+
+## [0.449.0] - 2026-11-04
+### Added
+- **Teams can push code to GitHub.** In a team chat, tap the plus button, pick **GitHub repo** and tick a repo. When you assign a job, members edit code on the team's own branch; once the job is done, Javis checks, commits, pushes, opens the PR and watches CI, like a private chat.
+- If CI fails, Javis hands the team a fix job with the logs (up to 3 rounds). GitHub news shows right in the team chat; tap the repo chip to see the PR status.
+- **`/skill` commands work in Teams.** Type `/` to list the brain's skills. Every member who answers or works on that message reads the skill, even in a chat turn without tools.
+
+## [0.448.0] - 2026-11-04
+### Added
+- **Threads joins the Meta connection card.** Click **Connect Threads**, paste the Threads App ID and App secret, log in, done. Replies under your Threads posts reach the inbox as they happen, through a webhook (nothing polls), and the bot answers publicly right under them.
+- Each Threads account picks how replies are handled: off, shown in the inbox only, or answered by the bot. **Check** tells whether the token is valid and whether Threads has sent replies yet.
+- Javis renews the Threads token (60 days) by itself while a bot is on duty, so you do not log in again.
+### Improved
+- Threads replies get their own black square in the inbox. The "..." menu has View profile (opens threads.net) and Delete (hides the reply under your post, since Threads lets only the author delete it).
+
+## [0.447.0] - 2026-11-03
+### Added
+- **Instagram joins the Meta connection.** When you log in with Facebook on the Meta connection card, tick **Also connect the Page's Instagram**: messages and comments of the Instagram account linked to the Page land in the same inbox, served by the Page's bot. Public replies under comments and private messages to commenters both work.
+- **Each chat's "..." menu gains View profile, Block and Delete chat.** Facebook Pages: name and picture, block the person. Instagram: profile with a link to open it. Zalo personal account: profile (with the phone number when the person shares it), block, and delete on Zalo too.
+- Deleting a comment thread deletes that comment on Facebook or Instagram. Messenger and Instagram messages can only be removed from Javis, since Meta lets no app delete messages.
+### Improved
+- Instagram chats show the Instagram mark and Instagram comments a pink square, so they read apart from Facebook at a glance.
+
+## [0.446.0] - 2026-11-03
+### Added
+- **Message a commenter privately.** Open a Facebook comment in the inbox and pick **Message privately** above the reply box: the message goes straight to that person's Messenger from your Page, even if they never wrote to it. Once they answer, it is an ordinary Messenger chat in the inbox. Meta allows one private message per comment, within 7 days.
+- **Disconnect a Page.** Every connected Page has a **Disconnect** button: Javis takes it off its bot, tells Meta to stop sending its messages, and keeps past conversations.
+### Improved
+- **The "Facebook Messenger" card is now "Meta connection"**, with Facebook, Messenger, Instagram and Threads icons (the last two coming soon). WhatsApp is still connected on its own, since it uses its own phone number and token.
+- **Comments get their own icon** (an orange square with lines), so they no longer look like Messenger messages (the round blue bubble).
+
+## [0.445.1] - 2026-11-03
+### Fixed
+- **Windows: `npx` connectors no longer break when a path has a space** (for example `C:\My Javis\...` or a user name with a space). Javis runs Node directly instead of going through `cmd.exe`, which dropped the quotes when Node lives in `Program Files`. Thanks @ethan1nguyen1 (#898).
+- **Windows: `/C:/Users/...` links in answers open**, instead of being reported as missing files.
+
+## [0.445.0] - 2026-11-03
+### Improved
+- **New Claude Code chats use far less of your plan.** Each new chat used to reload about 40,000 tokens of Javis's instructions, because they held the time, usage and session id, which change all the time. That part is now identical across chats, so it is read back from the prompt cache. Thanks @sunstaysg-oss for measuring and reporting it (#975).
+- The current time, chat session id, today's usage and the latest workflow run now sit in a line at the head of each message sent to Claude Code, so Javis knows as much as before, and follow-up turns always see the fresh time.
+
+## [0.444.4] - 2026-11-03
+### Fixed
+- **Javis on a small VPS no longer freezes because slow work blocked the whole server.** Five places did heavy work on the main loop, so every other page and the health check waited (three missed checks and Traefik answers "404 page not found"). All five now run on a worker thread:
+  - the Tasks page showing which bot owns each job,
+  - the Tasks page stats (which checked the log for every single day since 1970),
+  - the GitHub card on Connections (a call to GitHub that could wait up to 20 seconds),
+  - the first page load after each restart (minifying the files takes seconds on a 1 vCPU VPS),
+  - the Tools page while the offline ear installs.
+- **The offline voice ear (Whisper) leaves one core to Javis** and runs at a lower priority, so a long voice message no longer hangs the app on a 1-2 core machine.
+- When the server is slow, the browser's retries are spread out at random instead of all landing at once.
+
+## [0.444.3] - 2026-11-03
+### Fixed
+- **The "You've hit your 5-hour limit" notice is now recognised.** Chat used to show the raw UTC time with no auto re-run card. The card now shows the reset in your own time, with the date when it falls on the next day. Thanks @hwangrin (#961).
+- **The reset time follows the time zone in Settings**, not the VPS clock (usually UTC).
+### Improved
+- **Tables with 4 or more columns on the Chat page get more room** on a desktop (up to 1200px), so less sideways scrolling. Prose keeps its usual line length. Idea from @hwangrin (#958).
+
+## [0.444.1] - 2026-11-03
+### Fixed
+- **Javis no longer freezes the computer while it answers.** Since 0.438.4 the answer arrives a few characters at a time, and the page redrew the whole answer for every piece: thousands of redraws for a long reply, enough to lock up a slower machine. The text still flows smoothly, but the page now redraws only a few times a second.
+- **No more "Reconnecting" loop on slower devices.** A page that fell behind the streaming text had every piece queued for it, and past 500 pieces the server dropped the connection, the page reconnected and fell behind again. Queued pieces of the same answer now travel as one, so a slow page gets fewer messages and is no longer cut off.
+
+## [0.443.0] - 2026-11-02
+### Added
+- **Pick your timezone in Settings** (the Language and timezone block) and in **step 4 of the first-run setup**, preselected from the device you open it on. Before, the timezone only showed through the Time plugin, with nowhere to change it.
+### Improved
+- Javis reads **today, yesterday and tomorrow**, and sets the date range when it pulls report numbers, in the timezone you picked, not the server clock (a VPS usually runs on UTC).
+- Data sources (MCP) running on the Javis machine get this timezone too, so "orders today" at 6am no longer returns yesterday's orders.
+### Fixed
+- Changing **Javis replies in** now shows the "changed" note as intended, instead of failing silently.
+
+## [0.441.0] - 2026-11-02
+### Added
+- **Chat in ChatGPT or Claude, and Javis still has the context.** Through Javis Gate, that AI saves into Javis what you asked and what you decided, with the reason. Each chat over there gets its own conversation in Javis's History, such as "From ChatGPT: Tet plan" or "From Claude: Web build".
+- A note **costs Javis's brain nothing** since Javis does not answer it, yet it goes into memory and self-learning like any chat. Next time you ask Javis, it remembers what you decided in ChatGPT.
+- Notes work at the Draft and Full levels. At Read only, the outside AI only reads and writes nothing into Javis.
+
+## [0.440.0] - 2026-11-02
+### Added
+- **ChatGPT and Claude post straight into your Javis chat.** Install **Javis Gate** from the Javis Store and connect it to ChatGPT or Claude. Ask it to "read the Viet Web chat on Javis and tell me what to do next": it reads and advises. Agree right there and it posts into that very chat so Javis carries on.
+- That message runs just as if you typed it: the answer streams on every open tab, has a Stop button, is saved to History, and **Javis learns from it** for next time. The bubble says **via ChatGPT** or **via Claude**.
+- No more handing work to Kanban where it ran unseen. If the chat is still answering, the message waits its turn, as when you type while Javis works.
+- Only at **Full access** can an outside AI post into a chat. Lower levels can only read chats. Customer chats and team chats can't be read or posted to.
+### Improved
+- **Store packs can switch to English ids** without installed copies losing anything. Update as usual: the on/off state, the pack's data and the skills it put into your brain stay, and the old pack removes itself.
+- **Javis in ChatGPT** becomes **Javis Gate**. Connectors already set up in ChatGPT keep working, no reconnecting needed.
+
+## [0.439.1] - 2026-11-02
+### Improved
+- **Install without the red "Windows protected your PC" screen.** Paste one line into PowerShell (Windows) or Terminal (Mac) and the installer downloads and opens on its own, without being blocked. The line is in the quick start guide. A browser download still asks once until the installer is code-signed.
+- **The installers carry the Javis logo.** The Windows wizard shows the Javis star on its first and last pages and in the corner of the pages between, sharp on scaled-up screens too. The disk that appears when you open the Mac `.dmg` has the Javis icon as well.
+- Releases are ready to sign the Windows installer: once the project owner adds a certificate on GitHub, later builds are signed automatically.
+
+## [0.439.0] - 2026-11-02
+### Added
+- **Install Javis like an app on your computer.** On Windows, download `JavisOS-Setup.exe`, double-click it and press Next to the end. On a Mac, download `JavisOS-macOS.dmg` and drag JAVIS OS into Applications. The installer checks which of Git, Python, Node and the AI brains are missing and installs them, no commands to type. Download links are in the quick start guide.
+- **A JAVIS OS icon on the Desktop, Start menu and Launchpad.** Clicking it opens Javis in its own window, with no address bar. Clicking again while Javis runs only reopens the window and never stops background work.
+- The in-app Update button works just like on a manual install. Uninstalling keeps your brain (notes, memory, settings) in the `JavisOS` folder.
+### Fixed
+- Installing on a brand-new Windows no longer dies at the Python environment step, and a PC without winget still downloads Python and Node by itself. A Mac without Homebrew now gets the Mac build of Node.
+- On Windows, an Antigravity or Grok installer that exits early no longer stops the whole install, so the later steps (libraries, settings, auto-start) still run.
+- On Windows, the Models page sees a freshly installed Antigravity and Grok right away, instead of saying "not installed" until the computer restarts.
+
+## [0.438.7] - 2026-11-02
+### Fixed
+- **Claude sign-in finishes on its own when the browser says it worked.** On a machine with a browser, Claude opens the sign-in page itself and the page only says "You're all set up", with no code to paste. The Models card used to keep waiting for a code until the page was reloaded. It now switches to Signed in within a few seconds, or as soon as you come back to the Javis tab.
+- If Claude reports the sign-in failed, the card says why instead of waiting forever.
+
+## [0.438.6] - 2026-11-02
+### Improved
+- **Grok Build and Antigravity CLI type out their answer too.** The reply flows in piece by piece while the model writes, instead of appearing only when the whole turn is done. Every Javis brain now shows text the same way.
+
+## [0.438.5] - 2026-11-01
+### Improved
+- **API key brains type out their answer too.** OpenRouter, OpenAI, Anthropic API, Gemini, Groq, DeepSeek, Ollama and OpenAI/Anthropic Compatible now show the reply piece by piece while the model writes, including turns that use tools. Before, a turn with tools waited for the whole answer and showed it at once.
+
+## [0.438.4] - 2026-11-01
+### Improved
+- **Claude Code types out its answer like ChatGPT.** The reply now flows in piece by piece while Claude is writing, instead of appearing all at once when a whole paragraph is done.
+
+## [0.438.3] - 2026-11-01
+### Improved
+- **Adding a Messenger channel in Chatbot is simpler.** Picking Messenger now shows one line and a button that opens the Messenger card on Connections. The token field, webhook address and Save button are gone here, since a Page connected on Connections is already in the channel list. Pasting a token still works inside the Messenger card.
+
+## [0.438.2] - 2026-11-01
+### Improved
+- **The official Meta logo.** The Facebook Messenger card on Connections now shows the real Meta mark in its blue gradient instead of the old hand-drawn one, on a transparent background that works in light and dark themes.
+
+## [0.438.1] - 2026-11-01
+### Improved
+- **The GitHub card on Connections matches the other cards.** A green dot shows it is connected, and the logo is the same size as the rest.
+- The **Pick repos for Javis** button and the "No repo downloaded yet" line are gone: repos are picked from the chat box with the plus button. The repo button only shows when the GitHub app is not installed on any account yet.
+- **Add repos from the picker.** If a repo is missing, press **Add repos on GitHub** at the bottom of the picker, tick it on GitHub and come back: it shows up without reloading the page.
+
+## [0.438.0] - 2026-11-01
+### Added
+- **One Page connection now posts too.** A Page connected on the Facebook Messenger card can be used for Javis's posting (when asked or on a schedule), so the store drops its Facebook Pages card (machines that installed it keep it). Pages connected earlier need one more Log in with Facebook to grant the posting permission.
+### Improved
+- The Facebook Messenger card on the Connections page now shows the Meta logo, since it covers messages, comments and posting.
+- **Messenger connects in one place.** The Facebook Messenger card on the Connections page now shows the webhook address and verify token with Copy buttons, to paste into the Meta app by hand when needed without leaving the page.
+- A Page connected on the Connections page is already a channel on the Chatbot page. Picking Messenger under Add channel shows a note with a button straight to the Messenger card, so nobody connects it twice.
+- **The Messenger guide is rewritten:** it follows the Log in with Facebook path (permissions, Facebook Login with Javis's two addresses, pick Pages, attach a bot, go Live), and pasting a token is only the fallback. The error table adds "URL blocked" and "Invalid Scopes".
+
+## [0.437.0] - 2026-11-01
+### Improved
+- **Team steps wait only for the steps they need.** The team leader can now say which part needs the result of which. Unrelated parts run at the same time, and a part that needs results starts as soon as exactly those parts are done, not when the whole job is.
+- For "A researches competitors, B pulls the numbers, C writes the plan from both": A and B work together, C after. For "B writes the post, C makes the image, both from A's numbers": B and C start together right after A, instead of one after the other.
+- **No extra turns:** each part reads only the results of the parts it waited for. A job you ask to run "in order" still runs one step at a time.
+
+## [0.436.1] - 2026-11-01
+### Improved
+- **Step-by-step Messenger guide, linked right in the form.** Pick Messenger under Chatbot, Channels, Add channel and a "Step-by-step guide" link opens the guide on GitHub, every click on Meta's site for newcomers. The Messenger card on the Connections page links to it too.
+- **The Store now has two Meta cards:** Meta Ads for ad numbers, and the Facebook Pages card for posts and comments. The Meta Ads card built on Meta's beta is gone, since Meta does not accept self-serve connections yet; machines that installed it keep it. The descriptions say one Meta app serves every card.
+### Fixed
+- Connecting Messenger (and WhatsApp, Zalo OA) no longer shows "This bot cannot join Zalo groups". That line is for Zalo Bot only.
+
+## [0.436.0] - 2026-11-01
+### Improved
+- **Teams retry on their own after a temporary error.** An overloaded model, a network hiccup or a plan out of quota no longer leaves a team job stuck overnight waiting for you to press Retry. The team tries again after 1, 5 and 15 minutes (or at the plan's reset time), up to 3 times, before it stops and asks you.
+- **Safety first:** a step that already called a tool (sent a message, posted, wrote a file) never retries on its own, so nothing happens twice. Other teams keep running while a job waits.
+- **Members report a short, honest result.** Each step ends with whether it worked, a 3-sentence summary and the files written. A step that reports it could not be done stops the job for you, instead of spending a summary turn on a broken result.
+- **Fewer tokens when summarising:** a long result is read as its summary, and each result appears once in the prompt instead of twice.
+
+## [0.435.0] - 2026-11-01
+### Added
+- **Voice messages and the speech in videos are heard without Groq.** Javis tries the keys you have on the Models page in turn: Groq, then OpenAI, then Gemini. When one fails or runs out, it moves on to the next.
+- **Offline ear:** the Tools page has a new "Offline ear (Whisper)" card. Install it once (about 1 GB) and Javis hears on the machine itself with no key, used when no key is set or every key fails. A weak machine hears slower and less accurately than Groq.
+- **The personal Zalo chatbot hears customers' voice messages.** They used to be skipped. When one cannot be heard, the bot says so and asks the customer to type, never guesses.
+
+## [0.434.0] - 2026-11-01
+### Added
+- **Connect a Facebook Page with a Log in with Facebook button.** The Messenger card on the Connections page now asks only for the App ID and App secret. Log in, tick the Pages to connect, and Javis does the rest. No more copying a token and a Page ID out of Graph API Explorer.
+- **Page comments in the inbox, the way Pancake shows them.** Every top-level comment under a post is its own conversation, and the replies under it join that conversation. What you reply in the inbox shows right under the comment on Facebook.
+- Each Page picks how comments are handled: shown in the inbox for you to answer (default), answered publicly by the bot, or off.
+- Javis serves a privacy policy page on your own domain, ready to paste into the Meta app so it can switch to Live mode.
+
+## [0.433.0] - 2026-11-01
+### Added
+- **The personal Zalo chatbot can look at videos customers send.** A video used to be skipped, so the bot could only say it could not watch it. Javis now cuts 4 frames spread over the clip and shows them to the bot, the same way as a photo.
+- **The bot also hears what is said in the video** when a Groq key is set on the Models page (the same key as voice messages). Without one the bot still sees the frames and knows it did not hear the sound.
+- A message right after a video ("can you take a look?") still shows the bot that video for 10 minutes. A video that cannot be fetched (expired link, over 60MB) makes the bot say so honestly and ask the customer to describe it.
+
+## [0.432.4] - 2026-11-01
+### Improved
+- **Picking repos in the chat box: tick to attach.** The "Attach repo to this conversation" button at the bottom of the list is gone, so no more scrolling to find it. Untick to remove a repo from the conversation.
+- **Connect more** stays pinned to the bottom of the picker, so a long list never hides it.
+
+## [0.432.3] - 2026-11-01
+### Improved
+- **Search workflows when creating a webhook.** A search box now sits above the Workflow picker: type a few letters of the name and the list narrows, with a line like "3 of 40 workflows match". Accents are optional when you type.
+- When nothing matches, the picker says so, and Save asks you to pick a workflow instead of saving an empty webhook.
+
+## [0.432.2] - 2026-11-01
+### Fixed
+- **The GitHub card no longer wrongly says "Token is missing permissions: repo, workflow"** after you connect with the Sign in with GitHub button. That sign-in does not use those permissions at all, so nothing is missing, and you still pick repos from the chat box as before. If you already saw the amber line, it goes away on its own, no need to sign in again.
+
+## [0.432.1] - 2026-11-01
+### Fixed
+- **Dragging a file onto the chat works again.** After a visit to the Teams page, dropping a file on the Chat page did nothing. Now the overlay shows and the file joins the attachments, like the paperclip. Thanks @thaihatr-source (#936).
+- **An .html or .md file opens inside its frame**, no longer filling the whole screen by itself. Press the maximize button for full screen; moving to another file keeps the size you chose.
+- **Sturdier MCP sign-in over OAuth.** Javis sends the server identifier the server declares (as the official SDK does), and says plainly when the provider does not accept Javis's return address instead of leaving you retrying the password. Thanks @dev23072005 (#939).
+- **Better memory recall.** Agent run logs no longer echo back as memories, facts sharing a "Why:" line are no longer reported as conflicting, a file with "profile" inside its name no longer takes a slot on every turn, and secondary indexes in memory/ are understood. Office files opened from the chat keep their name. Thanks @sohophotography (#934), @ethan1nguyen1 (#898).
+
+## [0.432.0] - 2026-11-01
+### Improved
+- **The Webhook page, redesigned to be easy to follow.** The top is one compact row of numbers: webhooks running, events and errors in the last 24 hours, and what needs you. When a run may not have finished, an amber banner appears, and **Open** takes you straight to it.
+- **Each webhook is one line** with a status dot and a strip of its last 20 runs: green is fine, amber needs you, red failed. One look tells you which webhook has a problem.
+- **Pressing a webhook opens its own window instead of dropping down.** Switching between Events, Configuration and Health, filtering or opening a run all change inside that window, which closes only when you press X. Runs are grouped by day, the cryptic `[SILENT]` is gone, and receiving and processing are plain on/off switches.
+- **No more repeated titles** on the Webhook, Cookies, Shared links and Mascot pages, to save space. The explanations still sit behind the (i) button.
+
+## [0.431.0] - 2026-11-01
+### Improved
+- **A new brain picker that looks the same on every device.** It used to be the browser's own menu, so each phone and computer drew it differently. Javis now draws it: a dropdown under the button on a computer, a sheet from the bottom on a phone with large text, the note count and a tick on the brain in use. A long list gets a search box.
+- **Put your brains in your own order.** Open the picker, press **Reorder**, drag the handle or use the up and down arrows, then **Done**. The order is saved on the server, so every device shows the same list.
+- Until you set an order, brains sort by their shown name the way a person reads it: "2-..." comes before "10-...". Before, they sorted by folder name, so a renamed brain often sat in the wrong place.
+
+## [0.430.2] - 2026-11-01
+### Improved
+- **An .html file opens as the live page.** Open an .html link in the chat or a file in the brain and Javis shows it in **Preview**, like a Claude artifact, with its pictures, colours and buttons as a browser would show them. Press **Source** to read and edit the code, then Save as before.
+- After editing the code, switch back to Preview to see the change at once, no save needed. The page runs in an isolated frame, so scripts in the file cannot read Javis's data.
+
+## [0.430.1] - 2026-11-01
+### Improved
+- **Pasting long text into the chat no longer turns it into a file on its own.** Text up to 12,000 characters and 150 lines pastes straight into the chat box, so you can read and edit it before sending. Before, anything over 1,500 characters became a `.txt` chip and you could no longer see what you had pasted.
+- **Longer text asks first.** A dialog shows the whole pasted text: Paste into chat, Attach .txt or Cancel. Works in the main chat and the team chat. Thanks @hwangrin (#937).
+
+## [0.430.0] - 2026-11-01
+### Added
+- **Connect GitHub with a Sign in button, no token to make.** On the Connections page, press **Sign in with GitHub**: Javis shows a short code, you press Open GitHub, paste the code and press Authorize. It works on a VPS with no browser too.
+- **You choose the repos Javis sees.** Once signed in, press **Pick repos for Javis** to install the Javis OS app on just the repos you want Javis to work on. Repos you leave out stay invisible to Javis.
+- The token box is still right below for anyone used to the old way.
+
+## [0.429.1] - 2026-10-31
+### Fixed
+- **Bots on ChatGPT (Codex) no longer send their lead-in to customers.** A line like "Let me check the class list" before the bot looks something up no longer reaches the customer; only the final answer is sent.
+
 ## [0.429.0] - 2026-10-31
 ### Fixed
 - **Jobs a chatbot makes now sit under that chatbot.** Every reminder, loop and Kanban job a chatbot (your Zalo assistant, say) made while chatting used to show under Javis Core. They now sit under the assistant the chatbot uses, in the lists and in Stats. When that assistant is not in this brain, the chatbot gets a row of its own.

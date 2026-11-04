@@ -72,6 +72,40 @@ check("no em dash in the module", js.indexOf("\u2014") === -1 && js.indexOf("\u2
   check("a non-default base rides on the chip", js.includes("gh-chip-br") && js.includes("function chipBase()"));
 }
 
+// 0.432.4 (owner, 01/11/2026): ticking a repo attaches it at once; no Attach button at the foot of a long list, and
+// the footer stays pinned while the list scrolls.
+{
+  const rv = js.slice(js.indexOf("function reposView(box, menuApi, canBack)"), js.indexOf("// Several repos: pick the repo first"));
+  check("the repo list has no Attach button any more", !rv.includes("data-apply") && !rv.includes("gh.apply_"));
+  check("a tick toggles the repo and syncs it to the chat right away", /chosen = toggle\(chosen, r\.full_name\); draw\(\); sync\(\);/.test(rv));
+  check("only one change is in flight; later ticks ride on the next request", /if \(busy\) return;/.test(rv) && /sent = list;[\s\S]*sync\(\);/.test(rv));
+  check("a refused change puts the ticks back and says why", /if \(msg\) \{ chosen = sent\.slice\(\); err\.textContent = msg; draw\(\);/.test(rv));
+  const css = fs.readFileSync(path.join(ROOT, "dashboard/style.css"), "utf8");
+  check("the picker footer is pinned to the bottom of the + menu", /\.gh-foot \{ position: sticky; bottom: -6px;/.test(css));
+}
+
+// 0.438.1 (owner, 01/11/2026): the card looks like the other connection cards and no longer asks to pick repos.
+{
+  const card = js.slice(js.indexOf("function cardHtml"), js.indexOf("async function loadCard"));
+  check("a connected card shows the account as a chip with a green dot", /conn-chip gh-acc"><span class="cdot hok">●<\/span>/.test(card));
+  check("Pick repos shows only while the app is on no account", /st\.installs === 0 \? '<a class="conn-chip add"[^]*gh\.pick_repos/.test(card));
+  check("no 'no repo downloaded yet' line on the card", !card.includes("gh.local_none"));
+  check("the status line no longer repeats the login", !card.includes("gh.connected_as") && card.includes("gh.card_desc"));
+  const css = fs.readFileSync(path.join(ROOT, "dashboard/style.css"), "utf8");
+  check("the GitHub logo is 32px like the other card logos", /\.gh-card \.conn-ico\.gh-logo \.cp-ic \{ width: 32px; height: 32px; \}/.test(css));
+}
+
+// 0.438.1 (owner, 01/11/2026): a shortcut to add repos on GitHub from the chat picker, for an app sign-in.
+{
+  const rv = js.slice(js.indexOf("function reposView(box, menuApi, canBack)"), js.indexOf("// Several repos: pick the repo first"));
+  check("the picker footer offers Add repos on GitHub for an app sign-in, Connect more otherwise",
+    /addUrl \? '<a class="cp-mi gh-more-conn" data-gh-add="1" target="_blank"[^]*gh\.add_on_github[^]*: '<button[^]*gh\.connect_more/.test(rv));
+  check("only an app sign-in gets the shortcut", /ghStatus\.source === "app" && ghStatus\.install_url/.test(js));
+  check("an empty list points to the same shortcut", /gh\.none_found"\)\) \+\s*\(addUrl \? ' <a data-gh-add="1"/.test(rv));
+  check("coming back to the tab after GitHub reloads the list", /if \(away\) \{ away = false; load\(\); \}/.test(rv) && rv.includes('addEventListener("visibilitychange", onBack)'));
+  check("the listeners go away with the panel", rv.includes('removeEventListener("visibilitychange", onBack)'));
+}
+
 // The "Connected" heading (0.367.0): MCP accounts plus GitHub plus Facebook Pages, whichever card loads last.
 {
   const attrs = [{ name: "id", value: "connCount" }, { name: "style", value: "opacity:.5" }, { name: "data-n", value: "2" }];

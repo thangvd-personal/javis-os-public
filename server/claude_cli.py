@@ -166,6 +166,12 @@ _THU_MUC_BIN_WINDOWS = (
     r"%USERPROFILE%\.local\bin",              # installer chính chủ của claude / grok / agy
     r"%LOCALAPPDATA%\Programs\antigravity",
     r"%LOCALAPPDATA%\Programs\grok",
+    # Where the official Windows installers really put them (seen on a clean windows-latest
+    # runner, 0.439.0): agy.exe under %LOCALAPPDATA%\agy\bin, grok.exe under ~\.grok\bin. Both
+    # only add themselves to the USER PATH in the registry, which a Javis started right after
+    # the install (setup wizard, "Open now") does not have yet.
+    r"%LOCALAPPDATA%\agy\bin",
+    r"%USERPROFILE%\.grok\bin",
     r"%LOCALAPPDATA%\Volta\bin",
     r"%USERPROFILE%\.bun\bin",
     r"%LOCALAPPDATA%\pnpm",
@@ -846,7 +852,8 @@ def auth_login():
 # Chạy `claude auth login --claudeai` với pipe: đọc LINK nó in cho user mở, nhận CODE user dán rồi
 # ghi vào stdin. Trạng thái giữ ở _LOGIN (1 phiên 1 lúc là đủ). KHÔNG mở browser trên server.
 import re as _re_login
-_LOGIN = {"proc": None, "url": "", "done": False, "error": "", "lines": [], "env": None}
+_LOGIN = {"proc": None, "url": "", "done": False, "error": "", "lines": [], "env": None, "verified": None,
+          "finalized": False}
 _LOGIN_URL_RE = _re_login.compile(r"https?://\S+")
 # Lines the CLI prints for a code it will not take. It keeps waiting after them, so the user can paste again.
 _LOGIN_BAD_CODE = ("invalid code", "wasn't accepted", "login failed", "oauth error")
@@ -918,7 +925,8 @@ def auth_login_ui_start(env: dict | None = None):
             _kill_tree(_LOGIN["proc"])
     except Exception:
         pass
-    _LOGIN.update({"proc": None, "url": "", "done": False, "error": "", "lines": [], "env": dict(env or {})})
+    _LOGIN.update({"proc": None, "url": "", "done": False, "error": "", "lines": [], "env": dict(env or {}),
+                   "verified": None, "finalized": False})
     try:
         proc = subprocess.Popen(
             [cli, "auth", "login", "--claudeai"],
@@ -967,6 +975,42 @@ def auth_login_ui_start(env: dict | None = None):
         return {"ok": False, "error": localefmt.chu("Không lấy được link đăng nhập (claude CLI không in URL).",
                                                     "Could not get the sign-in link (the claude CLI printed no URL).")}
     return {"ok": True, "url": _LOGIN["url"], "done": _LOGIN["done"], "error": _LOGIN["error"]}
+
+
+def auth_login_ui_poll() -> dict:
+    """Has the sign-in started by auth_login_ui_start finished WITHOUT a pasted code?
+
+    `claude auth login` opens the browser itself on a machine that has one, with a link whose answer goes back to
+    the CLI over localhost. Signing in there ends on platform.claude.com/oauth/code/success ("You're all set up"),
+    which shows NO code, and the CLI saves the login and exits. The card used to wait for a code that never comes
+    and asked `/claude/status`, whose 90 s cache kept saying "signed out" (owner report 02/11/2026, Windows: success
+    page in Edge, the card in Chrome still asking for a code until the page was reloaded).
+
+    Returns {connected: True} once (it verifies with a fresh `claude auth status`), {waiting: True} while the CLI
+    is still waiting, or {ended: True, error} when it exited without signing in.
+    """
+    proc = _LOGIN.get("proc")
+    if not proc:
+        return {"ok": True, "waiting": False, "connected": False}
+    if _LOGIN.get("verified"):
+        return dict(_LOGIN["verified"])
+    if not _LOGIN["done"] and proc.poll() is not None:
+        time.sleep(0.3)   # let the reader take the last line
+        if proc.returncode == 0:
+            _LOGIN["done"] = True
+    if _LOGIN["done"]:
+        v = _login_verify()
+        res = ({"ok": True, "connected": True} if v.get("ok")
+               else {"ok": False, "connected": False, "ended": True, "error": v.get("error", "")})
+        _LOGIN["verified"] = res
+        return dict(res)
+    if proc.poll() is not None:
+        tail = _login_tail()
+        return {"ok": False, "connected": False, "ended": True,
+                "error": localefmt.chu("Phiên đăng nhập này đã kết thúc. Bấm Đăng nhập Claude để lấy link mới.",
+                                       "This sign-in has ended. Click Sign in to Claude for a new link.")
+                + (f" ({tail})" if tail else "")}
+    return {"ok": True, "waiting": True, "connected": False}
 
 
 def auth_login_ui_code(code):
@@ -1129,6 +1173,13 @@ def claude_engine(system_prompt=None, cwd=None, tag="chat", allowed_tools=None, 
     # anyway, not at server import (that would load the whole SDK at startup; test_khoi_dong_nhe).
     # 0.345.0: token cache count on the turn's final event. Installed BEFORE plan_limits so its
     # own "already wrapped?" check keeps seeing itself on top (no stacked wrappers per turn).
+    # 0.438.4: answer text streams piece by piece (StreamEvent text_delta), like Codex. Lowest in the chain,
+    # installed first, so the two wrappers below keep their own "already wrapped?" checks on top.
+    try:
+        import claude_stream_text
+        claude_stream_text.cai_vao_claude_sdk()
+    except Exception:  # noqa: BLE001 - streaming must never stop a turn
+        pass
     try:
         _cai_dem_cache()
     except Exception:  # noqa: BLE001 - a counter must never stop a turn
@@ -1737,6 +1788,34 @@ _CODEX_TOOL_ITEMS = ("mcp_tool_call", "command_execution", "function_call",
                      "tool_call", "local_shell_call", "web_search_call")
 
 
+# A message Codex writes right before it works ("Let me check the class list.") is a lead-in, not part of the answer.
+# Codex sends it as its own agent message, and both readers used to join every message of the turn into the answer, so
+# a customer bot sent the lead-in too (LDA report, 31/10/2026). Longer text before a step is kept: it may be content.
+CODEX_LEAD_IN_MAX = 280
+
+
+def codex_answer_text(messages: list) -> str:
+    """The turn's answer from its agent messages, lead-ins left out. Each message: {"text", "phase", "before_step"}.
+
+    `phase` comes from app-server ("commentary" / "final_answer"); `codex exec` and some models send none, and then a
+    short message followed by a work step in the same turn counts as a lead-in. If that would leave nothing, every
+    message is kept: an answer with a lead-in beats an empty reply."""
+    def lead_in(m):
+        if m.get("phase") == "final_answer":
+            return False
+        if m.get("phase") == "commentary":
+            return True
+        return bool(m.get("before_step")) and len(str(m.get("text") or "").strip()) <= CODEX_LEAD_IN_MAX
+    keep = [m for m in messages if not lead_in(m)] or list(messages)
+    return "\n".join(str(m.get("text") or "") for m in keep)
+
+
+def codex_mark_step(messages: list) -> None:
+    """A work step started: every message so far came before a step."""
+    for m in messages:
+        m["before_step"] = True
+
+
 def _codex_tool_name(it: dict) -> str:
     """Tên bước: LOẠI việc, không phải nguyên câu lệnh. Trước 0.64.77 lệnh shell lấy `command` làm
     tên, nên Telegram in nguyên `/bin/sh -lc "sed -n ..."` lên dòng vết. mcp_tool_call của Codex
@@ -1979,6 +2058,7 @@ class CodexCLI:
         threading.Thread(target=reader_thread, daemon=True).start()
 
         final_text = ""
+        messages = []   # this turn's agent messages, joined into `final_text` when the turn ends (codex_answer_text)
         sandbox_hong = False
         while True:
             item = await queue.get()
@@ -2017,6 +2097,7 @@ class CodexCLI:
                 it = ev.get("item") or {}
                 itype = it.get("type")
                 if itype in _CODEX_TOOL_ITEMS:
+                    codex_mark_step(messages)
                     yield {"type": "progress", "name": _codex_tool_name(it), "item": it,
                            "id": str(it.get("id") or "")}
             elif t == "item.completed":
@@ -2029,9 +2110,11 @@ class CodexCLI:
                     # "turn4view0" là một nguồn có thật để trích dẫn tiếp.
                     txt = engine.strip_provider_markers(it.get("text") or "")
                     if txt.strip():
-                        final_text += (("\n" if final_text else "") + txt)
+                        # Shown live as before; the answer (`final`) leaves lead-ins out (codex_answer_text).
+                        messages.append({"text": txt, "phase": it.get("phase")})
                         yield {"type": "text", "content": txt}
                 elif itype in _CODEX_TOOL_ITEMS:
+                    codex_mark_step(messages)
                     # Câu lệnh đi kèm trong `item` để tool_label.chi_tiet rút ra khi cần.
                     name = _codex_tool_name(it)
                     # Kèm `item` THÔ. Codex không có trường file_path chuẩn hoá như Claude:
@@ -2047,11 +2130,14 @@ class CodexCLI:
                         ghi_codex_ws_hong(msg)
                     yield {"type": "retry", "content": msg}
                 elif itype:
+                    if itype == "file_change":
+                        codex_mark_step(messages)
                     # Item lạ (vd bản vá file) - KHÔNG dựng thành "đang gọi tool" để khỏi ồn,
                     # nhưng vẫn đẩy payload lên cho caller moi đường dẫn file vừa ghi.
                     yield {"type": "item", "item": it}
             elif t == "turn.completed":
                 u = ev.get("usage") or {}
+                final_text = codex_answer_text(messages)
                 # Dán lời giải thích vào chính bản báo cáo. Không dán thì thứ tới tay chủ là
                 # một bài dài model tự kể lại nỗi bối rối của nó, và không ai đọc ra được là
                 # phải đi sửa ở tầng container.
