@@ -59,14 +59,32 @@ ARCHIVE_TERMINAL_AFTER_DAYS = 3.0
 LIMIT_GRACE_SECONDS = limit_resume.GRACE_SECONDS
 LIMIT_MAX_WAIT_SECONDS = limit_resume.MAX_WAIT_SECONDS
 LIMIT_UNKNOWN_WAIT_SECONDS = 30 * 60
-# Tên gói để câu báo trên thẻ việc nói đúng gói nào hết lượt.
+# Tên gói để câu báo trên thẻ việc nói đúng gói nào hết lượt. Claude thêm tên gói THẬT do
+# Anthropic đặt (`_ten_goi_het_luot`), không ghi cứng "Pro/Max": Max 20x đã đổi thành Ultra
+# ngày 30/10/2026 và tên gói còn đổi tiếp.
 _TEN_GOI = {
-    "claude-code": "Claude (Pro/Max)",
+    "claude-code": "Claude",
     "codex": "ChatGPT",
     "grok-cli": "SuperGrok / X Premium",
     "antigravity-cli": "Google Antigravity",
     "gemini-cli": "Google",
 }
+
+
+def _ten_goi_het_luot(engine: str) -> str:
+    """"Claude Ultra" when Claude Code's own profile copy names the plan, else the brand alone."""
+    ten = _TEN_GOI.get(engine, "") or "thuê bao đang dùng"
+    if engine == "claude-code":
+        try:
+            import plan_limits
+            that = plan_limits.ten_goi_claude()
+            if that:
+                ten = f"{ten} {that}"
+        except Exception:  # noqa: BLE001
+            pass
+    return ten
+
+
 CAPABILITIES = {"auto", "files", "research", "mcp-read", "code", "external-write", "image"}
 # Capability "image": the job has to make or look at images. Below Full a worker only had
 # Read/Write/Edit/Glob/Grep/LS, so a job that needed a square post image could never reach the
@@ -1130,7 +1148,7 @@ gì, dữ liệu/file/artifact nào được tạo và cách đã kiểm chứng
         moc_nha = float(getattr(hit, "reset_epoch", 0) or 0)
         biet_moc = moc_nha > ts
         moc = (moc_nha + LIMIT_GRACE_SECONDS) if biet_moc else (ts + LIMIT_UNKNOWN_WAIT_SECONDS)
-        ten = _TEN_GOI.get(str(getattr(hit, "engine", "") or ""), "") or "thuê bao đang dùng"
+        ten = _ten_goi_het_luot(str(getattr(hit, "engine", "") or ""))
         # Giờ theo múi giờ NGƯỜI DÙNG (localefmt), không phải giờ máy chủ: VPS/Docker thường
         # chạy UTC, in "03:15" cho một mốc 10:15 ở Việt Nam là người dùng đợi sai giờ.
         try:
@@ -1531,7 +1549,8 @@ Trả DUY NHẤT một dòng JSON, không markdown:
                 self.deps.incident_hook("kanban", str(task.get("id") or ""), brain=str(task.get("brain_root") or ""),
                                         title=str(task.get("title") or ""),
                                         error=str(task.get("block_reason") or task.get("block_kind") or ""),
-                                        request=str(task.get("intent") or "")[:1500])
+                                        request=str(task.get("intent") or "")[:1500],
+                                        chat=str(task.get("chat_id") or ""))
             except Exception:
                 pass
         if status == "blocked" and self._cau_hoi_dang_cho(task):
@@ -1687,7 +1706,8 @@ Trả DUY NHẤT một dòng JSON, không markdown:
                 "brain_root": self._worker_brains.get(tid, ""),
                 "alive": not worker.done(),
             }
-            for tid, worker in self._workers.items()
+            # list(): /kanban builds this in a worker thread (see kanban_get) while the loop may add or drop a worker.
+            for tid, worker in list(self._workers.items())
             if self._worker_brains.get(tid) == root
         ]
         health = self.store.health(root)
@@ -1826,7 +1846,9 @@ Trả DUY NHẤT một dòng JSON, không markdown:
 
         @router.get("/kanban")
         async def kanban_get(brain: str = Query("brain"), rev: str = Query(""), history: int = Query(20)):
-            return self.board_view(brain, history_limit=history, rev=rev)
+            # Performance (2026-11-05): the board is several SQLite reads behind the task store's lock. On the event loop
+            # that froze every other request (a chat open, a page switch) whenever a worker held the lock.
+            return await asyncio.to_thread(self.board_view, brain, history_limit=history, rev=rev)
 
         @router.post("/kanban/task/followup")
         async def kanban_followup(id: str = Form(...), text: str = Form(""), brain: str = Form("")):

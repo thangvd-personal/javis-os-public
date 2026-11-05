@@ -36,6 +36,15 @@ Ba LOẠI kênh (`kind`), khác nhau ở cách có tài khoản chứ không ở
 
 Thêm một kênh = thêm một file ở đây + một dòng trong `_MODULES` + một logo trong icons.js.
 Không sửa gì khác.
+
+Optional module attributes (0.459.0, internal API channel):
+    GENERATED_KEY = True          the account secret is a key Javis generates on Save and shows once (no pasted token);
+                                  the module provides `new_key()`, `key_meta(raw)`, `default_settings()`
+    PERMISSION_CEILING = "<level>"  the highest Chatbot permission level a turn on this channel may run at;
+                                  `chatbot_runtime` refuses a turn above it
+    clean_settings(data), account_settings_spec()   numeric account settings edited on the account form
+    MAX_ACCOUNTS_PER_BOT = <n>    how many accounts of this channel one bot may serve (default 20, see
+                                  `max_accounts_per_bot`)
 """
 from __future__ import annotations
 
@@ -82,7 +91,7 @@ class KenhSpec:
 # Thứ tự ở đây là thứ tự hiện trên giao diện. KHÔNG có kênh nào "chính": Zalo đứng đầu vì
 # khách Việt Nam dùng nhiều nhất, không phải vì nó được ưu ái trong mã.
 _MODULES = ("channels.zalo_bot", "channels.zalo_personal", "channels.zalo_oa", "channels.messenger", "channels.threads",
-            "channels.telegram", "channels.slack", "channels.whatsapp", "channels.lark")
+            "channels.telegram", "channels.slack", "channels.whatsapp", "channels.lark", "channels.api")
 
 # Chữ tiếng Anh cho các kênh có sẵn. Để ở đây (chứ không trong từng module kênh) cho một chỗ
 # duy nhất phải sửa khi đổi chữ hiển thị; kênh mới có thể tự khai `en=` trong SPEC.
@@ -172,6 +181,22 @@ def bot_token_ids() -> tuple:
     return tuple(k for k, s in _nap().items() if s.nl("bot") and s.kind == "bot")
 
 
+# How many accounts of ONE channel one bot may serve, when the channel module does not say. A channel that polls or
+# holds a session per account (personal Zalo, Telegram, Zalo Bot) pays for each account the whole time the bot runs,
+# so it keeps this cap. A webhook channel (Messenger: the platform pushes to one route, nothing is held per Page)
+# declares a larger one with `MAX_ACCOUNTS_PER_BOT` (owner 2026-11-04: a shop with 26 Fanpages wants one bot).
+MAX_ACCOUNTS_PER_BOT_DEFAULT = 20
+
+
+def max_accounts_per_bot(kenh: str) -> int:
+    """The cap on accounts of channel `kenh` one bot may serve: the module's `MAX_ACCOUNTS_PER_BOT`, else 20."""
+    try:
+        n = int(getattr(module(kenh), "MAX_ACCOUNTS_PER_BOT", 0) or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return n if n > 0 else MAX_ACCOUNTS_PER_BOT_DEFAULT
+
+
 def nhan(kenh: str) -> str:
     s = spec(kenh)
     return s.nhan if s else str(kenh or "")
@@ -221,8 +246,21 @@ def cho_giao_dien() -> list[dict]:
             "huong_dan": dict(getattr(_MOD.get(s.id), "GUIDE", None) or {}),
             # The channel has its own card on the Connections page (Messenger, 0.436.2).
             "the_ket_noi": bool(getattr(_MOD.get(s.id), "CONNECT_CARD", False)),
+            # Javis generates the account key and shows it once (internal API, 0.459.0): no token field, a Rotate button.
+            "khoa_tu_sinh": bool(getattr(_MOD.get(s.id), "GENERATED_KEY", False)),
+            "tran_muc_quyen": str(getattr(_MOD.get(s.id), "PERMISSION_CEILING", "") or ""),
+            "cai_dat_tk": _account_settings(_MOD.get(s.id)),
         })
     return out
+
+
+def _account_settings(m) -> List[dict]:
+    fn = getattr(m, "account_settings_spec", None)
+    try:
+        return list(fn()) if callable(fn) else []
+    except Exception as e:      # a broken spec must not take the channel list down
+        print(f"[channels] account settings of {getattr(m, '__name__', m)}: {type(e).__name__}: {e}", file=sys.stderr)
+        return []
 
 
 async def gui(kenh: str, tk: dict, chat_id: str, text: str, chat_type: str = "private", **extra):

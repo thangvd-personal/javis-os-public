@@ -159,7 +159,7 @@ import turn_context
 
 _ns = dict(asyncio=asyncio, sys=sys, time=time, uuid=uuid, nghe_sua=nghe_sua, localefmt=localefmt, turn_context=turn_context,
            store=types.SimpleNamespace(get_session=lambda sid: None), send_raw=_send_raw, _persist_turn=_noop,
-           _resonance_turn_agent=lambda *a: None,  # A1: agent của phiên, test riêng ở test_resonance_a1_turn_agent
+           _resonance_turn_agent=lambda *a: None, _session_assistant=lambda *a: "",  # A1: agent của phiên, test riêng ở test_resonance_a1_turn_agent
            _CHAT_RUNTIME=types.SimpleNamespace(finish_job=lambda *a: None),
            context_runtime=types.SimpleNamespace(bind_trace=lambda *a: None, reset_trace=lambda *a: None,
                                                  event_fields=lambda *a: {}),

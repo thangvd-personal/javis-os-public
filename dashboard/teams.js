@@ -59,12 +59,12 @@
   var CAP_KEY = { task_turns: "teams.cap.task_turns", task_steps: "teams.cap.task_steps", daily_turns: "teams.cap.daily_turns",
     mentions: "teams.cap.mentions", help_depth: "teams.cap.help_depth", busy_wait_s: "teams.cap.busy_wait_s",
     judge_daily: "teams.cap.judge_daily", volunteer_k: "teams.cap.volunteer_k", judge_off_batch: "teams.cap.judge_off_batch",
-    reply_parallel: "teams.cap.reply_parallel" };
+    reply_parallel: "teams.cap.reply_parallel", auto_jobs: "teams.cap.auto_jobs" };
   var TAB_KEY = { info: "teams.tab_info", jobs: "teams.tab_jobs", team: "teams.tab_team" };
   var LATE = ["late_cancelled", "late", "old_revision", "member_left", "leader_changed", "lease_lost"];
   // Trần chủ nhóm chỉnh được (team_store.OWNER_CAPS). Bốn trần đầu có "Không giới hạn" (lưu null, GOAL T1 mục 9).
   var CAP_FIELDS = ["task_turns", "task_steps", "help_depth", "daily_turns", "mentions", "busy_wait_s", "judge_daily",
-    "volunteer_k"];
+    "volunteer_k", "auto_jobs"];
   var OWNER_UNL = ["task_turns", "task_steps", "help_depth", "daily_turns", "judge_daily"];
   // Ô chọn chế độ (T3 phần J): phán xử khi Cộng hưởng của trợ lý tắt, 1 = lọc code + lô, 0 = chỉ lọc code. Chỉ chủ chỉnh.
   // 0.260.0: reply_parallel, 1 = mọi người được @ trả lời cùng lúc, 0 = lần lượt theo thứ tự @.
@@ -486,7 +486,18 @@
         seen[k].n++;
       });
     });
-    return out.sort(function (a, b) { return a.ten.localeCompare(b.ten, "vi"); });
+    return tagOrder(out);
+  }
+  // 0.454.0: the owner's own tag order (reorder-dialog.js, saved per page), else by name.
+  function tagOrder(list) {
+    var R = typeof window !== "undefined" && window.JavisReorder;
+    return R ? R.sortTags(list, "tags_teams", function (g) { return g.key; }, function (g) { return g.ten; })
+      : list.sort(function (a, b) { return a.ten.localeCompare(b.ten, "vi"); });
+  }
+  function reorderTags(tags) {
+    var R = window.JavisReorder;
+    R.open({ title: tw("reorder.title_tags"), items: tags.map(function (g) { return { id: g.key, label: g.ten, icon: "tag" }; }),
+      save: function (keys) { return R.saveTags("tags_teams", keys); } });
   }
 
   function hasTag(t, key) {
@@ -526,6 +537,10 @@
     tags.forEach(function (g) {
       rows.push({ label: g.ten, icon: "tag", right: String(g.n), on: key === g.key, run: function () { pick(g.key); } });
     });
+    if (tags.length > 1 && typeof window !== "undefined" && window.JavisReorder) {
+      rows.push({ sep: true });
+      rows.push({ label: tw("reorder.menu_tags"), icon: "arrow-up-down", run: function () { reorderTags(tags); } });
+    }
     return rows;
   }
 
@@ -536,7 +551,7 @@
     var seen = {};
     allTags(teams).forEach(function (g) { seen[g.key] = 1; out.push({ ten: g.ten, key: g.key, on: !!mine[g.key] }); });
     Object.keys(mine).forEach(function (k) { if (!seen[k]) out.push({ ten: mine[k], key: k, on: true }); });
-    return out.sort(function (a, b) { return a.ten.localeCompare(b.ten, "vi"); });
+    return tagOrder(out);
   }
 
   function tagPicker() {
@@ -2952,7 +2967,31 @@
     });
   }
 
+  // 2026-11-05: the last state of the teams opened lately (the record, the queue, the newest page of messages). Opening
+  // one of them again draws it at once from here while the same three requests refresh it behind; before, every
+  // switch showed an empty chat until the slowest of them answered. Lives outside S, which each visit rebuilds.
+  var TEAM_CACHE = {}, TEAM_CACHE_MAX = 12, TEAM_CACHE_MS = 5 * 60 * 1000;
+  function keepTeam() {
+    if (!S || !S.activeId || !S.team || S.filterTask || (S.jumped !== null && S.jumped !== undefined)) return;
+    TEAM_CACHE[S.activeId] = { at: Date.now(), team: S.team, queue: S.queue, msgs: S.msgs.slice(-60), hasMore: S.hasMore || S.msgs.length > 60,
+      pinned: S.pinned || [], taskTitles: Object.assign({}, S.taskTitles) };
+    var ids = Object.keys(TEAM_CACHE);
+    if (ids.length > TEAM_CACHE_MAX) {
+      ids.sort(function (a, b) { return TEAM_CACHE[a].at - TEAM_CACHE[b].at; });
+      ids.slice(0, ids.length - TEAM_CACHE_MAX).forEach(function (k) { delete TEAM_CACHE[k]; });
+    }
+  }
+  function useTeam(id) {
+    var c = TEAM_CACHE[id];
+    if (!c || S.filterTask) return false;
+    if (Date.now() - c.at > TEAM_CACHE_MS) { delete TEAM_CACHE[id]; return false; }
+    S.team = c.team; S.queue = c.queue; S.msgs = c.msgs.slice(); S.hasMore = c.hasMore; S.pinned = c.pinned;
+    S.taskTitles = Object.assign({}, c.taskTitles);
+    return true;
+  }
+
   function openTeam(id, taskId) {
+    keepTeam();
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
     S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = String(taskId || "");
     S.team = null; S.queue = null; S.msgs = []; S.taskTitles = {}; S.side = false; S.openMember = null; S.turns = [];
@@ -2965,8 +3004,14 @@
     var input = S.el.querySelector(".tm-input");
     if (input) input.value = "";
     setNote("");
+    useTeam(id);
     drawAll(true);
-    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () { if (S.activeId === id) { drawAll(true); loadFolder(); loadSkills(); } });
+    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () {
+      if (S.activeId !== id) return;
+      // Drawn from the cache, the chat was already on screen: this redraw reuses the unchanged message nodes.
+      drawAll(true);
+      keepTeam(); loadFolder(); loadSkills();
+    });
     markOpened(id);
   }
 
@@ -4695,7 +4740,7 @@
     }
   }
 
-  var refreshTimer = null;
+  var refreshTimer = null, refreshOpen = "";
   function onTeamEvent(ev) {
     if (!S || !S.el || !S.el.isConnected) return;
     var d = (ev && ev.detail) || {};
@@ -4742,15 +4787,22 @@
       // A new message while the owner reads higher up: the jump button becomes "New messages" (at the end it follows).
       if (i < 0 && S.scroll && !S.scroll.stuck()) toLatest(false);
     }
+    // 2026-11-05: "the owner read this team" only changes the unread badge on the team list. It used to refetch the open
+    // team and its queue too, the heaviest reads of the page, after every team switch and every agent message.
+    // Events merged into one refresh keep the open team's refetch if any of them asked for it.
+    if (d.type !== "team_read" && d.team_id === S.activeId) refreshOpen = d.team_id;
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function () {
+      var full = !!refreshOpen && !!S && refreshOpen === S.activeId;
+      refreshOpen = "";
       loadTeams(false);
-      if (d.team_id === S.activeId) { loadQueue(); loadTeam(); }
+      if (full) { loadQueue(); loadTeam(); }
     }, 300);
   }
 
   // Rời trang (console.js gọi qua _pageLeave): đóng ngăn, bỏ hẹn giờ; trang dựng lại từ đầu lần ghé sau.
   function leave() {
+    keepTeam();
     clearTimeout(refreshTimer);
     if (colResize()) colResize().miniTip.hide();
     if (S && S.pickSt) closePicker();
@@ -4953,6 +5005,10 @@
     // 0.197.0: back to this tab with a team open: what arrived while away is read now.
     if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", onVisible);
     // Auto bật/tắt ở trang Cộng sự hay tab khác (0.142.0): danh sách thành viên của nhóm đang mở đọc lại trạng thái.
+    // 0.454.0: the tag order changed (here or on another tab of this page): the list and its tag bar follow.
+    window.addEventListener("javis:order-changed", function () {
+      if (S && S.el && S.el.isConnected) drawList();
+    });
     window.addEventListener("javis:resonance-agents-changed", function () {
       if (!S || !S.el || !S.el.isConnected || !S.activeId) return;
       loadTeam();

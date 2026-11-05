@@ -55,7 +55,8 @@
       "users",
       "arrow-left",
       "hand",
-      "list-checks"
+      "list-checks",
+      "brain-cog"
     ],
     "hanh-dong": [
       "save",
@@ -87,7 +88,14 @@
       "skip-forward",
       "arrow-right-left",
       "key-round",
-      "redo"
+      "redo",
+      "grip-vertical",
+      "gauge",
+      "user-plus",
+      "refresh-cw",
+      "log-in",
+      "unplug",
+      "plug-zap"
     ],
     "dieu-huong": [
       "chevron-down",

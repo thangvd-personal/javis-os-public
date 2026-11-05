@@ -91,6 +91,14 @@
     try { await fetch(`/sessions/${encodeURIComponent(sid)}/model`, { method: "POST", body: fd }); } catch (e) {}
   }
 
+  // 0.461.0: a Javis Core chat's pin is Javis Core's pin, also shown and set as the Model of its card on the Partners
+  // page (the agent editor). The chip tells the page through one event.
+  const CORE_EVENT = "javis:core-model";
+  function coreChanged() {
+    if (!(agentEff && agentEff.slug === "javis-core")) return;
+    try { window.dispatchEvent(new CustomEvent(CORE_EVENT, { detail: { from: "chat" } })); } catch (e) {}
+  }
+
   async function loadState() {
     try {
       const s = await (await fetch("/settings")).json();
@@ -326,6 +334,7 @@
       pinBroken = false;   // ghim mới đè ghim hỏng cũ
       pinSid = sid;
       await pinToSession(sid, prov, model);
+      coreChanged();
     } else {
       // Chat trống chưa mint id: nhớ lựa chọn, app.js gọi claimPending(sid) lúc gửi
       // tin đầu để phiên mới sinh ra đã mang đúng ghim.
@@ -376,6 +385,7 @@
     if (e.target.closest(".mb-follow")) {
       const sid = curSid();
       if (sid) await pinToSession(sid, "", "");
+      coreChanged();
       sessionPin = null; pinBroken = false; pinLimited = 0; pendingPin = null;
       await loadState(); renderBar(); close();
       return;
@@ -438,6 +448,10 @@
     // vẽ lại, kẻo trong lúc đó đổi mặc định chung ở trang Models là bar nói sai.
     noteStamped: function (sid) {
       if (!sid || (sessionPin && pinSid === sid)) return;
+      // A Javis Core chat has no stamp of its own: it runs on Javis Core's pin, or on the main model while there is none
+      // (server `_chat_provider_for_session`). Showing the main model as pinned here made an unpinned Core chat look
+      // pinned, and then "change" when the main model changed (owner, 04/11/2026).
+      if (agentEff && agentEff.slug === "javis-core" && pinSid === sid) return;
       sessionPin = { provider: state.main.provider, model: state.main.model };
       pinBroken = false; pinSid = sid;
       renderBar();
@@ -446,6 +460,13 @@
 
   // Đổi phiên (mở phiên cũ, chat mới, xoá phiên) → hỏi lại ghim của phiên rồi vẽ lại.
   window.addEventListener("javis:sessions-changed", async () => { await loadSessionPin(); renderBar(); });
+  // The Models page turned Fast mode on or off from a card's Effort sheet: the composer's bolt follows at once.
+  window.addEventListener("javis:fast-changed", (e) => { state.fast = !!(e.detail && e.detail.on); renderFast(); });
+  // The Core card pinned or unpinned Javis Core: an open Core chat redraws its chip.
+  window.addEventListener(CORE_EVENT, async (e) => {
+    if ((e.detail || {}).from === "chat" || !(agentEff && agentEff.slug === "javis-core")) return;
+    await loadSessionPin(); renderBar();
+  });
 
   // Từ điển về (fetch bất đồng bộ, thường SAU khi chip model đã vẽ) hoặc người dùng đổi
   // ngôn ngữ giao diện: vẽ lại chip, và vẽ lại cả bảng chọn nếu nó đang mở.

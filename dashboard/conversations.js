@@ -64,6 +64,9 @@
   var _items = [], _stats = {}, _dauVet = "";
   var _kenhLoc = "", _botLoc = "", _q = "";
   var _privFor = 0;                     // id of the comment thread whose composer is set to "Message privately" (0.446.0)
+  // The mic of the reply box (owner, 2026-11-05: "thêm nút chép lời để nói bằng giọng nói rồi chép lại, khỏi phải gõ").
+  // dictate.js does the listening; the state lives here because the 5-second redraw rebuilds the box.
+  var _dict = null, _dictState = "idle", _dictBase = "", _dictConv = 0, _dictSend = false;
   var _statusLoc = "", _typeLoc = "";   // bộ lọc (0.65.3), lưu ở trình duyệt qua JavisConvFilters
   var _contactLoc = "";     // 2026-10-25: "1" = only chats where the customer left a phone number or email
   // Chatbot v5 (2026-10-28, docs/dev/2026-10-chatbot-v5-spec.md): who is handling the chat (the quick filters), the ticked
@@ -89,6 +92,11 @@
   var _soTrang = 1, _conDS = false, _dangTaiDS = false;   // phân trang danh sách: số trang đã tải, còn trang sau không
   var _conCu = false, _dangTaiCu = false, _vetMeta = "";   // khung tin: còn tin cũ không, đang tải tin cũ, chữ ký phần đầu khung
   var _actNote = null;      // {text, err}: dòng nói kết quả của lần bấm gần nhất, sống qua các lần vẽ lại khung
+  // Chats opened before, so going back to one shows it at once and only asks for what came after (owner, 2026-11-04:
+  // "ấn sang nó không phản hồi ngay"). id -> {conv, msgs, conCu, silence, running}, newest last in _cacheThu.
+  var _cacheTin = {}, _cacheThu = [];
+  var _rowIds = null, _rowHtml = [], _rowFoot = "";   // the list as last drawn: row ids, each row's HTML, the footer
+  var CACHE_CHAT = 30, CACHE_TIN = 60;
   var _kenhDS = [];         // các LOẠI kênh (server: id, nhan, logo, kind, nang_luc...)
   var _tk = [];             // mọi tài khoản kênh, một khuôn
   var _dauVetTK = "";
@@ -123,13 +131,20 @@
     Object.keys(obj || {}).forEach(function (k) { if (obj[k] != null) f.append(k, obj[k]); });
     return f;
   }
+  // One Intl formatter per locale and shape, made once: toLocaleString(loc, opts) builds a new one on every call, and the
+  // list plus the open chat call this a hundred times per redraw (the top cost when switching chats, 2026-11-04).
+  var _fmtGio = {};
+  function fmtGio(cungNgay) {
+    var k = LOC() + (cungNgay ? "|t" : "|d");
+    return _fmtGio[k] || (_fmtGio[k] = new Intl.DateTimeFormat(LOC(), cungNgay ? { hour: "2-digit", minute: "2-digit" }
+      : { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }));
+  }
   function gio(ts) {
     if (!ts) return "";
     try {
       var d = new Date(ts * 1000), nay = new Date();
-      var cungNgay = d.toDateString() === nay.toDateString();
-      return cungNgay ? d.toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" })
-                      : d.toLocaleString(LOC(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      var cungNgay = d.getDate() === nay.getDate() && d.getMonth() === nay.getMonth() && d.getFullYear() === nay.getFullYear();
+      return fmtGio(cungNgay).format(d);
     } catch (e) { return ""; }
   }
 
@@ -246,7 +261,7 @@
   function nhip() {
     if (_timer) clearInterval(_timer);
     _timer = setInterval(function () {
-      if (!_host || !document.body.contains(_host)) { clearInterval(_timer); _timer = null; closeRowMenu(false); return; }
+      if (!_host || !document.body.contains(_host)) { clearInterval(_timer); _timer = null; closeRowMenu(false); dropMic(); return; }
       if (document.hidden || document.querySelector(".ht-modal")) return;
       if (_tab === "inbox") {
         tai(true);
@@ -746,6 +761,7 @@
     var box = _host.querySelector(".ht-list");
     if (!box) return;
     if (!_items.length) {
+      _rowIds = null;
       closeRowMenu(false);
       var coNguon = _tk.some(function (a) { return a.ghi; });
       var loc = !!(_q || _kenhLoc || _botLoc || _accs.length || _statusLoc || _typeLoc || _tagsAny.length || _tagsNone.length || _contactLoc ||
@@ -784,7 +800,7 @@
     }
     var V = window.JavisInboxV5;
     var many = _accs.length !== 1;      // several nicks or Pages in view: each row names the one it came through
-    box.innerHTML = _items.map(function (c) {
+    var rows = _items.map(function (c) {
       var ten = c.title || c.customer_name || c.external_chat_id;
       var pre = c.last_sender_type === "ai" ? window.t("ib.pre_ai") : c.last_sender_type === "human" ? window.t("ib.pre_you") : "";
       var who = V && V.WHO.indexOf(c.who) >= 0 ? c.who : "log";
@@ -825,30 +841,29 @@
           '</span>' +
           (userTags ? '<span class="ht-item-utags">' + userTags + '</span>' : "") +
         '</span></button>';
-    }).join("") + (_conDS ? '<div class="ht-more"><button type="button" class="s-btn-ghost ht-more-b">' +
-                            esc(window.t("ht.xem_them")) + '</button></div>' : "");
-    box.querySelectorAll(".ht-item").forEach(function (x) {
-      x.onclick = function (e) {
-        if (e.target && e.target.closest && e.target.closest(".ht-pin")) { e.stopPropagation(); ghim(x); return; }
-        // The "..." opens the row menu and never the conversation.
-        if (e.target && e.target.closest && e.target.closest(".ht-rmore")) { e.stopPropagation(); toggleRowMenu(x, false); return; }
-        mo(parseInt(x.dataset.id, 10));
-      };
-      var p = x.querySelector(".ht-pin");
-      if (p) p.onkeydown = function (e) {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); ghim(x); }
-      };
-      var more = x.querySelector(".ht-rmore");
-      if (more) more.onkeydown = function (e) {
-        if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); toggleRowMenu(x, true); }
-      };
-      // Right click (and a long press, where the phone browser reports it as a context menu) opens the same menu.
-      x.oncontextmenu = function (e) { e.preventDefault(); openRowMenu(x, false); };
-      // Keyboard: the context-menu key or Shift+F10 on a focused row.
-      x.onkeydown = function (e) {
-        if (e.target === x && (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); openRowMenu(x, true); }
-      };
     });
+    var foot = (_conDS ? '<div class="ht-more"><button type="button" class="s-btn-ghost ht-more-b">' +
+                         esc(window.t("ht.xem_them")) + '</button></div>' : "");
+    var ids = _items.map(function (c) { return String(c.id); });
+    // Same rows in the same order (the 5-second refresh, the reload after opening a chat): swap only the rows whose HTML
+    // changed, so one new message or one read chat does not rebuild forty rows (2026-11-04, a slow tap on a long inbox).
+    var cur = box.children || [];
+    var same = !!box.replaceChild && _rowIds && _rowFoot === foot && _rowIds.length === ids.length && cur.length === ids.length + (foot ? 1 : 0) &&
+      ids.every(function (id, i) { return _rowIds[i] === id && cur[i].dataset && cur[i].dataset.id === id; });
+    if (same) {
+      for (var ri = 0; ri < rows.length; ri++) {
+        if (rows[ri] === _rowHtml[ri]) continue;
+        var tpl = document.createElement("template");
+        tpl.innerHTML = rows[ri];
+        var neu = tpl.content.firstElementChild;
+        box.replaceChild(neu, cur[ri]);
+        ganDong(neu);
+      }
+    } else {
+      box.innerHTML = rows.join("") + foot;
+      box.querySelectorAll(".ht-item").forEach(ganDong);
+    }
+    _rowIds = ids; _rowHtml = rows; _rowFoot = foot;
     // Còn trang sau: nút Xem thêm ở cuối, và tự tải khi cuộn gần tới đáy. Dùng sự kiện cuộn chứ không dùng IntersectionObserver: callback của
     // nó bị trình duyệt hoãn khi khung không được vẽ, còn sự kiện cuộn thì luôn tới (và kiểm thử được).
     var them = box.querySelector(".ht-more");
@@ -862,6 +877,30 @@
     }
     // An open row menu survives the redraw; its row may have left the list (hidden on another device): then it closes.
     if (_rm) { if (!rmAnchor()) closeRowMenu(false); else placeRowMenu(); }
+  }
+
+  // The handlers of one list row (bound again whenever the row is rebuilt).
+  function ganDong(x) {
+    x.onclick = function (e) {
+      if (e.target && e.target.closest && e.target.closest(".ht-pin")) { e.stopPropagation(); ghim(x); return; }
+      // The "..." opens the row menu and never the conversation.
+      if (e.target && e.target.closest && e.target.closest(".ht-rmore")) { e.stopPropagation(); toggleRowMenu(x, false); return; }
+      mo(parseInt(x.dataset.id, 10));
+    };
+    var p = x.querySelector(".ht-pin");
+    if (p) p.onkeydown = function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); ghim(x); }
+    };
+    var more = x.querySelector(".ht-rmore");
+    if (more) more.onkeydown = function (e) {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); toggleRowMenu(x, true); }
+    };
+    // Right click (and a long press, where the phone browser reports it as a context menu) opens the same menu.
+    x.oncontextmenu = function (e) { e.preventDefault(); openRowMenu(x, false); };
+    // Keyboard: the context-menu key or Shift+F10 on a focused row.
+    x.onkeydown = function (e) {
+      if (e.target === x && (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); openRowMenu(x, true); }
+    };
   }
 
   // Ghim một cuộc chat lên đầu hòm thư (0.223.0). Server xếp cuộc đã ghim trước, nên chỉ cần tải lại danh sách.
@@ -1141,6 +1180,7 @@
     } catch (e) { return alert(window.t("ht.rm_err", { err: e.message })); }
     _items = _items.filter(function (it) { return it.id !== id; });
     if (_conv && _conv.id === id) dongThread();
+    boCache(id);
     _dauVet = "";
     veDanhSach();
     tai(true);
@@ -1214,20 +1254,58 @@
   // ---------------------------------------------------------------- một hội thoại
   async function mo(id) {
     closeRowMenu(false);
-    if (id !== _chon) { _tagPop = false; _tagEdit = 0; _tagErr = ""; _draftEdit = null; _noteEdit = null; _msheet = false; }
+    if (id !== _chon) { _tagPop = false; _tagEdit = 0; _tagErr = ""; _draftEdit = null; _noteEdit = null; _msheet = false; dropMic(); }
+    luuCache();
     _chon = id;
     _dauVetTin = "";
     _actNote = null;
     _msgs = []; _conCu = false; _dangTaiCu = false; _vetMeta = "";       // hội thoại khác: tải lại từ tin mới nhất
     _host.querySelector(".ht-wrap").classList.add("thread-on");
-    veDanhSach();
-    // Read first: an opened chat leaves "Needs you" (owner, 2026-10-28), so the bar above it must not still say it.
-    try { await api("/conversations/" + id + "/read", { method: "POST" }); } catch (e) {}
-    await taiTin(false);
+    // Answer the tap at once (2026-11-04): move the highlight instead of redrawing the whole list, and show the chat from
+    // the last visit (or a loading line) before the network answers. Only what came since is fetched then.
+    chonDong(id);
+    var cu = _cacheTin[id];
+    if (cu) {
+      _conv = cu.conv; _msgs = cu.msgs.slice(); _conCu = cu.conCu; _silence = cu.silence; _running = cu.running;
+      _vetMeta = metaSig(); _dauVetTin = "x";
+      veThread();
+    } else {
+      var th = _host.querySelector(".ht-thread");
+      if (th) th.innerHTML = '<div class="ht-empty ht-thread-empty">' + esc(window.t("common.loading")) + '</div>';
+    }
+    // `read=1`: the same request marks it read first, so an opened chat leaves "Needs you" (owner, 2026-10-28) and the bar
+    // above it does not still say it, without a round trip of its own.
+    await taiTin(false, true);
     tai(true);
   }
 
+  // Move the "open" highlight to row `id` without redrawing the list (a full redraw was most of the cost of a tap).
+  function chonDong(id) {
+    var box = _host && _host.querySelector(".ht-list");
+    if (!box) return;
+    var cu = box.querySelector(".ht-item.on");
+    if (cu) cu.classList.remove("on");
+    var row = box.querySelector('.ht-item[data-id="' + id + '"]');
+    if (row) row.classList.add("on");
+  }
+
+  // Keep the chat being left (its last CACHE_TIN messages) for a quick return. Older messages reload by scrolling up.
+  function luuCache() {
+    if (!_chon || !_msgs.length || !_conv || _conv.id !== _chon) return;
+    var cat = _msgs.length > CACHE_TIN;
+    _cacheTin[_chon] = { conv: _conv, msgs: cat ? _msgs.slice(-CACHE_TIN) : _msgs.slice(), conCu: _conCu || cat,
+                         silence: _silence, running: _running };
+    _cacheThu = _cacheThu.filter(function (k) { return k !== _chon; }).concat([_chon]);
+    while (_cacheThu.length > CACHE_CHAT) delete _cacheTin[_cacheThu.shift()];
+  }
+  function boCache(id) {
+    delete _cacheTin[id];
+    _cacheThu = _cacheThu.filter(function (k) { return k !== id; });
+  }
+
   function dongThread() {
+    dropMic();
+    luuCache();
     _chon = null;
     _msgs = [];
     _infoN = false; _msheet = false;
@@ -1240,7 +1318,7 @@
     veDanhSach();
   }
 
-  async function taiTin(im) {
+  async function taiTin(im, docLuon) {
     if (!_chon) return;
     var id = _chon;
     var box = _host.querySelector(".ht-thread");
@@ -1251,7 +1329,7 @@
     var moi = [];
     try {
       var d = await api("/conversations/" + id + "/messages?" +
-                        (dau ? "limit=" + TIN_TRANG : "after=" + _msgs[_msgs.length - 1].id + "&limit=200"));
+                        (dau ? "limit=" + TIN_TRANG : "after=" + _msgs[_msgs.length - 1].id + "&limit=200") + (docLuon ? "&read=1" : ""));
       if (_chon !== id) return;
       _conv = d.conversation; _silence = d.bot_silence || null; _running = !!d.bot_running;
       if (dau) { _msgs = d.messages || []; _conCu = !!d.has_more; }
@@ -1262,6 +1340,8 @@
         _msgs = _msgs.concat(moi);
       }
     } catch (e) {
+      // A chat shown from the cache that no longer answers (deleted elsewhere): forget it, so the next open asks afresh.
+      if (docLuon) boCache(id);
       if (!im && dau) box.innerHTML = '<div class="ht-empty">' + esc(window.t("ht.loi_tai")) + ' ' + esc(e.message) + '</div>';
       return;
     }
@@ -1466,6 +1546,10 @@
       });
       var ask = box.querySelector(".ib-ask");
       if (ask) ask.onclick = function () { aiReply(c, ta.value.trim(), "ask"); };
+      var mic = box.querySelector(".ib-mic");
+      if (mic) mic.onclick = function () { toggleMic(c); };
+      // While the words arrive by themselves the box is read only: typing would be overwritten by the next result.
+      ta.readOnly = dictOn(c);
     }
     paintInfo();
   }
@@ -1995,6 +2079,91 @@
         esc(window.t(_aiBusy === "now" ? "ib.ai_busy" : "ib.ask_ai_now")) + '</button>' : "") + '</div>';
   }
 
+  // ---------------------------------------------------------------- Mic: speak, the words land in the reply box
+  // Same engine as the team chat (dictate.js): live text while speaking, nothing is sent by itself. The owner reads
+  // the words, fixes them, then presses Send (or A.I. draft, where the words are the instruction).
+  function dictOn(c) { return !!(_dict && _dictState !== "idle" && c && c.id === _dictConv); }
+
+  function micHtml(c) {
+    var st = dictOn(c) ? _dictState : "idle";
+    var lab = window.t(st === "idle" ? "ib.mic" : st === "transcribing" ? "ib.mic_busy" : "ib.mic_stop");
+    return '<button type="button" class="s-btn-ghost ib-mic' + (st !== "idle" ? " is-rec" : "") + '" aria-pressed="' +
+      (st === "listening" ? "true" : "false") + '" title="' + esc(lab) + '" aria-label="' + esc(lab) + '"' +
+      (st === "transcribing" ? " disabled" : "") + '>' +
+      ic(st === "idle" ? "mic" : st === "transcribing" ? "loader" : "square") + '</button>';
+  }
+
+  function replyBox() { return _host && _host.querySelector(".ht-thread .ib-cin textarea"); }
+
+  function paintMic() {
+    var b = _host && _host.querySelector(".ht-thread .ib-mic");
+    if (b && _conv) b.outerHTML = micHtml(_conv);
+    var nb = _host && _host.querySelector(".ht-thread .ib-mic");
+    if (nb && _conv) { var c = _conv; nb.onclick = function () { toggleMic(c); }; }
+    var ta = replyBox();
+    if (ta) ta.readOnly = dictOn(_conv);
+  }
+
+  function touchOnly() {
+    try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (e) { return false; }
+  }
+
+  function toggleMic(c) {
+    var D = window.JavisDictate;
+    if (!D) { setNote(window.t("dict.unsupported"), true); return; }
+    if (_dict && _dictState === "listening") { _dict.stop(); return; }
+    if (_dict && _dictState !== "idle") return;
+    var ta = replyBox();
+    // A phone would keep the keyboard up over the words; put it away while listening (see composer-dictate.js, 0.409.0).
+    if (ta && touchOnly() && document.activeElement === ta) { try { ta.blur(); } catch (e) { /* ignore */ } }
+    _dictBase = ta ? ta.value : "";
+    _dictConv = c.id;
+    _dictSend = false;
+    if (_actNote) setNote("");
+    var dict = D.create({
+      onText: function (text) {
+        if (_dict !== dict || _chon !== _dictConv) return;
+        var box = replyBox();
+        if (!box) return;
+        box.value = D.joinText(_dictBase, text);
+        box.style.height = "auto"; box.style.height = box.scrollHeight + "px";
+        box.scrollTop = box.scrollHeight;
+      },
+      onState: function (st) {
+        if (_dict !== dict) return;
+        var was = _dictState;
+        _dictState = st;
+        if (st === "idle") _dict = null;
+        paintMic();
+        if (st !== "idle" || was === "idle") return;
+        var send = _dictSend;
+        _dictSend = false;
+        if (_chon !== _dictConv || !_conv) return;
+        if (send) { gui(_conv); return; }
+        var box = replyBox();
+        if (box && !touchOnly()) { try { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } catch (e) { /* ignore */ } }
+      },
+      onError: function (code) {
+        var ios = D.isIOS && D.isIOS();
+        setNote(window.t(code === "denied" ? (ios ? "dict.denied_ios" : "dict.denied")
+          : code === "service" ? (ios ? "dict.service_ios" : "dict.service") : code === "unsupported" ? "dict.unsupported"
+          : code === "nothing" ? "dict.nothing" : "dict.failed"), true);
+      }
+    });
+    _dict = dict;
+    _dictState = "listening";
+    paintMic();
+    dict.start();
+  }
+
+  // Another chat opened or the page closed: drop the recording, its words belong to the chat it started in.
+  function dropMic() {
+    if (!_dict) return;
+    var d = _dict;
+    _dict = null; _dictState = "idle"; _dictSend = false;
+    try { d.cancel(); } catch (e) { /* ignore */ }
+  }
+
   // Ô trả lời khách: Gửi (gửi nguyên văn) và A.I. trả lời (chữ trong ô là lệnh cho A.I.). Nói rõ trước khi bấm gửi: gửi từ đây
   // là TIẾP QUẢN (bot đang trực sẽ im ở cuộc này), và với kênh tài khoản cá nhân thì tin đi dưới tên chính bạn.
   function veCompose(c) {
@@ -2018,6 +2187,7 @@
       (draft && V ? V.draftHtml(draft, busy || (_aiBusy ? "x" : ""), ic) : "") +
       '<div class="ib-cin">' +
         '<textarea rows="1" placeholder="' + esc(ph) + '" aria-label="' + esc(t("ib.cin_aria")) + '"></textarea>' +
+        micHtml(c) +
         (laBot && !priv ? '<button type="button" class="s-btn-ghost ib-ask"' + (_aiBusy ? " disabled" : "") + ' title="' + esc(t("ib.ai_reply_t")) +
           '" aria-label="' + esc(t("ib.ai_reply")) + '">' +
           ic(_aiBusy === "ask" ? "loader" : "sparkles") + '<span>' + esc(t(_aiBusy === "ask" ? "ib.ai_busy" : "ib.ai_reply")) + '</span></button>' : "") +
@@ -2040,6 +2210,7 @@
   }
 
   async function gui(c) {
+    if (dictOn(c)) { _dictSend = true; if (_dictState === "listening") _dict.stop(); return; }
     var box = _host.querySelector(".ht-thread");
     var ta = box && box.querySelector(".ib-cin textarea");
     var nut = box && box.querySelector(".ht-send");
@@ -2321,7 +2492,7 @@
       '<div class="cb-hint ht-card-hint" id="htCardHint" hidden></div>' +
       '<div id="htTokenPart">' +
       '<label id="htTokenLabel"></label>' +
-      '<div class="cb-row"><input id="htToken" type="password" placeholder="' + esc(window.t("cb.ph_token")) + '">' +
+      '<div class="cb-row" id="htTokenRow"><input id="htToken" type="password" placeholder="' + esc(window.t("cb.ph_token")) + '">' +
         '<button class="s-btn-ghost" id="htCheck" type="button">' + esc(window.t("cb.kiem_tra")) + '</button></div>' +
       '<div class="cb-hint" id="htTokenNote"></div>' +
       '<div class="cb-hint ht-webhook" id="htWebhook" hidden></div>' +
@@ -2357,7 +2528,10 @@
       var g = guideUrl(k);
       if (g) lab.insertAdjacentHTML("beforeend", ' · <a class="ht-guide" href="' + esc(g) + '" target="_blank" rel="noopener">'
         + esc(window.t("ht.huong_dan")) + " ↗</a>");
-      box.querySelector("#htTokenNote").textContent = (k.lay_token || "") + " " + window.t("cb.token_rieng");
+      // Internal API (0.459.0): Javis generates the key on Save, so there is no token to paste or check.
+      box.querySelector("#htTokenRow").hidden = !!k.khoa_tu_sinh;
+      if (k.khoa_tu_sinh) lab.textContent = window.t("ht.khoa_lb");
+      box.querySelector("#htTokenNote").textContent = (k.lay_token || "") + (k.khoa_tu_sinh ? "" : " " + window.t("cb.token_rieng"));
       // A channel with its own card on the Connections page (Messenger, 0.436.2): connecting there is quicker and a Page
       // connected there is already in the channel list, so nobody should connect the same Page twice.
       // 0.438.3 (owner, 01/11/2026): for such a channel the form stops here. No token field, webhook or Save, only the
@@ -2450,8 +2624,8 @@
       var t = box.querySelector("#htToken").value.trim();
       var k = kenhCua(chon);
       if (!chon) return alert(window.t("ht.khong_kenh_token"));
-      if (!t) return alert(window.t("cb.dan_token_kenh", { kenh: k.nhan }) + "\n\n" + (k.lay_token || ""));
-      var moi = null;
+      if (!t && !k.khoa_tu_sinh) return alert(window.t("cb.dan_token_kenh", { kenh: k.nhan }) + "\n\n" + (k.lay_token || ""));
+      var moi = null, khoa = "";
       try {
         var r = await api("/channels/accounts", { method: "POST", body: fd({
           channel: chon, token: t, label: box.querySelector("#htLabel").value.trim(), bot_username: uname,
@@ -2459,25 +2633,59 @@
           // mà không gắn chủ thì nó lơ lửng ở mọi brain.
           brain: brain() }) });
         moi = r.account || (r.id ? { id: r.id, channel: chon } : null);
+        khoa = r.secret || "";
       } catch (e) { return alert(window.t("ht.loi_doi") + " " + e.message); }
       dong();
       _dauVetTK = "";
       taiTK(true);
+      if (khoa) hienKhoa(khoa);
       if (opts.onXong) { try { opts.onXong(moi); } catch (e) {} }
+    };
+  }
+
+  // The key of a generated-key channel (internal API, 0.459.0), shown ONCE: Javis keeps only its hash.
+  function hienKhoa(khoa) {
+    var box = el('<div class="ht-modal"><div class="ht-form">' +
+      '<h3>' + esc(window.t("ht.khoa_moi")) + '</h3>' +
+      '<div class="cb-row"><input id="htKhoa" readonly value="' + esc(khoa) + '">' +
+        '<button class="s-btn-ghost" id="htKhoaCopy" type="button">' + esc(window.t("ht.khoa_chep")) + '</button></div>' +
+      '<div class="cb-hint cb-warn">' + esc(window.t("ht.khoa_mot_lan")) + '</div>' +
+      '<div class="ht-form-acts"><button class="s-btn ht-close" type="button">' + esc(window.t("ht.khoa_da_luu")) + '</button></div>' +
+      '</div></div>');
+    document.body.appendChild(box);
+    box.querySelector(".ht-close").onclick = function () { if (box.parentNode) box.parentNode.removeChild(box); };
+    box.querySelector("#htKhoaCopy").onclick = async function () {
+      var ok = await copyText(khoa);
+      this.textContent = window.t(ok ? "ht.khoa_da_chep" : "ht.khoa_chep_tay");
+      if (!ok) box.querySelector("#htKhoa").select();
     };
   }
 
   function moSuaTK(a) {
     var k = kenhCua(a.channel);
     var uname = "";
+    var tuSinh = !!k.khoa_tu_sinh;
+    var md = a.meta || {};
+    // Generated-key channel: no token field, the key's first characters, a Rotate button and the account's limits.
+    var phanKhoa = tuSinh
+      ? '<label>' + esc(window.t("ht.khoa_lb")) + '</label>' +
+        '<div class="cb-row"><code id="htKhoaDau">' + esc((md.key_prefix || "") + "…") + '</code>' +
+          '<button class="s-btn-ghost" id="htXoayKhoa" type="button">' + esc(window.t("ht.khoa_xoay")) + '</button></div>' +
+        '<div class="cb-hint">' + esc(window.t("ht.khoa_tran")) + '</div>' +
+        (k.cai_dat_tk || []).map(function (f) {
+          var v = md[f.key] != null ? md[f.key] : f.default;
+          return '<label>' + esc(f.nhan) + '</label><input class="ht-cai-dat" type="number" inputmode="numeric" data-k="' +
+            esc(f.key) + '" min="' + esc(f.min) + '" max="' + esc(f.max) + '" value="' + esc(v) + '">';
+        }).join("")
+      : '<label>Token ' + esc(k.nhan) + ' ' + esc(window.t("cb.token_de_trong")) + '</label>' +
+        '<div class="cb-row"><input id="htToken" type="password" placeholder="' + esc(window.t("cb.ph_token")) + '">' +
+          '<button class="s-btn-ghost" id="htCheck" type="button">' + esc(window.t("cb.kiem_tra")) + '</button></div>' +
+        '<div class="cb-hint" id="htTokenNote">' + (a.external_id ? esc(window.t("cb.dang_dung")) + " " + esc((a.tien_to_ten || "") + a.external_id) : "") + '</div>';
     var box = el('<div class="ht-modal"><div class="ht-form">' +
       '<h3>' + esc(window.t("ht.sua_tk")) + ' - ' + esc(a.label) + '</h3>' +
       '<label>' + esc(window.t("ht.lb_nhan_tk")) + '</label>' +
       '<input id="htLabel" value="' + esc(a.label) + '">' +
-      '<label>Token ' + esc(k.nhan) + ' ' + esc(window.t("cb.token_de_trong")) + '</label>' +
-      '<div class="cb-row"><input id="htToken" type="password" placeholder="' + esc(window.t("cb.ph_token")) + '">' +
-        '<button class="s-btn-ghost" id="htCheck" type="button">' + esc(window.t("cb.kiem_tra")) + '</button></div>' +
-      '<div class="cb-hint" id="htTokenNote">' + (a.external_id ? esc(window.t("cb.dang_dung")) + " " + esc((a.tien_to_ten || "") + a.external_id) : "") + '</div>' +
+      phanKhoa +
       (a.bot_id ? '<div class="cb-hint">' + esc(window.t("ht.tk_doi_token_bot", { bot: a.bot_name })) + '</div>' : "") +
       // Đổi brain chủ (0.62.4). Đây là lối thoát khi lỡ thêm tài khoản ở brain khác: không có
       // nó thì chỉ còn cách xoá rồi thêm lại, mà xoá là mất luôn lịch sử hội thoại của nó.
@@ -2499,7 +2707,18 @@
     var nutXoa = box.querySelector(".ht-xoa-tk");
     if (nutXoa) nutXoa.onclick = function () { dong(); xoaTK(a); };
     veChonBrain(box.querySelector("#htBrain"), a.brain || "");
-    box.querySelector("#htCheck").onclick = async function () {
+    var nutXoay = box.querySelector("#htXoayKhoa");
+    if (nutXoay) nutXoay.onclick = async function () {
+      if (!confirm(window.t("ht.khoa_xn_xoay"))) return;
+      try {
+        var r = await api("/channels/accounts/" + encodeURIComponent(a.id) + "/rotate-key", { method: "POST", body: fd({}) });
+        var dau = box.querySelector("#htKhoaDau");
+        if (dau && r.account && r.account.meta) dau.textContent = (r.account.meta.key_prefix || "") + "…";
+        md = (r.account && r.account.meta) || md;
+        if (r.secret) hienKhoa(r.secret);
+      } catch (e) { alert(window.t("ht.loi_doi") + " " + e.message); }
+    };
+    if (box.querySelector("#htCheck")) box.querySelector("#htCheck").onclick = async function () {
       var t = box.querySelector("#htToken").value.trim();
       var note = box.querySelector("#htTokenNote");
       if (!t) { note.textContent = window.t("cb.dan_token"); return; }
@@ -2514,9 +2733,16 @@
     box.querySelector(".ht-save").onclick = async function () {
       try {
         var oBr = box.querySelector("#htBrain");
+        var oTok = box.querySelector("#htToken");
         var than = { label: box.querySelector("#htLabel").value.trim(),
-                     token: box.querySelector("#htToken").value.trim(), bot_username: uname };
+                     token: oTok ? oTok.value.trim() : "", bot_username: uname };
         if (oBr) than.brain = oBr.value;   // không có ô (kind account) thì KHÔNG gửi = không đụng
+        var oCd = box.querySelectorAll(".ht-cai-dat");
+        if (oCd.length) {
+          var cd = {};
+          oCd.forEach(function (n) { cd[n.dataset.k] = n.value.trim(); });
+          than.settings = JSON.stringify(cd);
+        }
         await api("/channels/accounts/" + encodeURIComponent(a.id) + "/update", { method: "POST", body: fd(than) });
       } catch (e) { return alert(window.t("ht.loi_doi") + " " + e.message); }
       dong();

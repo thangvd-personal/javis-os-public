@@ -29,10 +29,14 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
+
+import hashlib
+import weakref
 
 import reaction_values as RV
 import team_migration
+import subscription_context_store
 
 # DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/).
 _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
@@ -92,6 +96,22 @@ CREATE TABLE IF NOT EXISTS message_pins (
     message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     created_at REAL NOT NULL,
     PRIMARY KEY(session_id, message_id)
+);
+"""
+
+
+# 0.454.0: the owner's own order of pinned chats and of projects (drag to reorder, dashboard/reorder-dialog.js). Kept in
+# tables of their own on purpose: the `sessions` and `projects` columns are an exact list the qualified native trial
+# context reads (improvement_trial_sql_context._SESSION_COLUMNS, _PROJECT_COLUMNS), so a new column there would stop it.
+# A chat or project without a row has no place yet: it comes after the ordered ones.
+_ORDER_SQL = """
+CREATE TABLE IF NOT EXISTS pin_order (
+    session_id TEXT PRIMARY KEY,
+    pos        INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS project_order (
+    project_id TEXT PRIMARY KEY,
+    pos        INTEGER NOT NULL
 );
 """
 
@@ -457,6 +477,14 @@ class SessionStore:
         self._apply_wal()
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._init_schema()
+        # Reads get their own connection per thread once the file is in WAL mode (see _read).
+        self._wal = self._journal_is_wal()
+        self._rlocal = threading.local()
+        # Weak: a reader belongs to its thread and goes (closed by the GC) when the thread ends. A strong list here
+        # leaked one open file per short-lived thread.
+        self._rconns: "weakref.WeakSet[_ReaderConn]" = weakref.WeakSet()
+        self._rconns_lock = threading.Lock()
+        self._closed = False
 
     # ── connection setup ──
 
@@ -480,6 +508,7 @@ class SessionStore:
     def _init_schema(self) -> None:
         with self._lock:
             self._conn.executescript(_SCHEMA_SQL)
+            subscription_context_store.migrate(self._conn)
             # Migration cột mới cho DB cũ (CREATE IF NOT EXISTS không tự thêm cột)
             cols = {r[1] for r in self._conn.execute("PRAGMA table_info(sessions)").fetchall()}
             for name, ddl in (("codex_thread_id", "TEXT"),
@@ -562,6 +591,7 @@ class SessionStore:
                         f"ALTER TABLE projects ADD COLUMN {name} {ddl}")
             self._conn.executescript(_DM_REACTION_SQL)
             self._conn.executescript(_MSG_PIN_SQL)
+            self._conn.executescript(_ORDER_SQL)
             if self._probe_fts5():
                 try:
                     self._conn.executescript(_FTS_SQL)
@@ -596,7 +626,51 @@ class SessionStore:
                 raise
         raise last_err or sqlite3.OperationalError("database is locked after retries")
 
-    def _read(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+    def _journal_is_wal(self) -> bool:
+        try:
+            row = self._conn.execute("PRAGMA journal_mode").fetchone()
+            return bool(row) and str(row[0]).lower() == "wal" and str(self.db_path) != ":memory:"
+        except sqlite3.Error:
+            return False
+
+    def _read_conn(self) -> Optional[sqlite3.Connection]:
+        """This thread's read-only connection, or None to fall back to the shared one.
+
+        Performance (2026-11-05): reads used to share the single write connection and its lock, so opening a chat
+        queued behind every in-flight write (a turn saving its answer, a bot logging a message) and behind
+        every other read (a search, the history list). Measured with two writers and one search running:
+        opening a 30-message chat went from about 3 ms to about 45 ms at the SQLite layer alone. In WAL mode
+        readers never block writers nor each other, so each thread keeps its own reader and only writes
+        take the lock. DELETE journal mode (some network disks) keeps the old shared path: there a reader
+        can collide with a writer's exclusive lock."""
+        if not self._wal or self._closed:
+            return None
+        c = getattr(self._rlocal, "conn", None)
+        if c is not None:
+            return c
+        try:
+            c = sqlite3.connect(str(self.db_path), check_same_thread=False, timeout=5.0, isolation_level=None,
+                                factory=_ReaderConn)
+            c.row_factory = sqlite3.Row
+            c.execute("PRAGMA query_only=ON")
+        except sqlite3.Error:
+            return None
+        self._rlocal.conn = c
+        with self._rconns_lock:
+            self._rconns.add(c)
+        return c
+
+    def _read(self, sql: str, params: tuple = ()) -> List[sqlite3.Row]:
+        rc = self._read_conn()
+        if rc is not None:
+            try:
+                return rc.execute(sql, params).fetchall()
+            except sqlite3.OperationalError as exc:
+                # A schema change made by the writer (a migration adding a column) can leave this reader with a
+                # stale statement cache; the shared connection below always sees the current schema.
+                if "locked" not in str(exc).lower() and "busy" not in str(exc).lower() \
+                        and "no such" not in str(exc).lower():
+                    raise
         with self._lock:
             return self._conn.execute(sql, params).fetchall()
 
@@ -868,8 +942,11 @@ class SessionStore:
             "WHERE r.report_key = ? AND r.goal_id = ?", (str(report_key), str(goal_id)))
         return [dict(r) for r in rows]
 
-    def get_session(self, session_id: str) -> dict[str, Any] | None:
-        rows = self._read("SELECT * FROM sessions WHERE id = ?", (session_id,))
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._read("SELECT s.*, COALESCE(c.input_tokens,0) AS last_context_input_tokens, "
+                          "COALESCE(c.provider,'') AS last_context_provider FROM sessions s "
+                          "LEFT JOIN subscription_request_context c ON c.session_id=s.id WHERE s.id = ?",
+                          (session_id,))
         return dict(rows[0]) if rows else None
 
     def pop_last_message(self, session_id: str, role: str, content: str | None = None) -> bool:
@@ -1320,10 +1397,16 @@ class SessionStore:
                     WHERE session_id = s.id AND role = 'user'
                     ORDER BY ts, id LIMIT 1) AS preview
             FROM sessions s
+            LEFT JOIN pin_order po ON po.session_id = s.id
             {where_sql}
             -- rowid breaks a tie on updated_at (two writes in one time.time() tick): the
             -- row created later counts as newer, never left to SQLite's scan order.
-            ORDER BY s.pinned DESC, s.updated_at DESC, s.rowid DESC
+            -- 0.454.0: pinned chats keep the order the owner dragged them into (table pin_order),
+            -- unordered pinned ones after them; chats that are not pinned stay newest first.
+            ORDER BY s.pinned DESC,
+                     CASE WHEN s.pinned = 1 THEN (po.pos IS NULL) ELSE 0 END,
+                     CASE WHEN s.pinned = 1 THEN po.pos ELSE 0 END,
+                     s.updated_at DESC, s.rowid DESC
             LIMIT ?
             """,
             tuple(params),
@@ -1382,11 +1465,28 @@ class SessionStore:
 
     def set_pinned(self, session_id: str, pinned: bool = True) -> None:
         """Ghim hay bỏ ghim. KHÔNG đụng updated_at: ghim không phải là 'vừa nói chuyện',
-        đẩy mốc lên là xáo trộn thứ tự của mọi cuộc còn lại một cách vô cớ."""
-        self._write(lambda c: c.execute(
-            "UPDATE sessions SET pinned = ? WHERE id = ?",
-            (1 if pinned else 0, session_id),
-        ))
+        đẩy mốc lên là xáo trộn thứ tự của mọi cuộc còn lại một cách vô cớ.
+        0.454.0: unpinning drops the chat's place in the pinned order; pinning again puts it after the ordered ones."""
+        def go(c):
+            c.execute("UPDATE sessions SET pinned = ? WHERE id = ?", (1 if pinned else 0, session_id))
+            c.execute("DELETE FROM pin_order WHERE session_id = ?", (session_id,))
+        self._write(go)
+
+    def set_pin_order(self, ids: List[str]) -> int:
+        """The owner's order of the pinned chats (0.454.0), first to last. Only pinned chats take a place. Never touches
+        `updated_at`. Returns rows ordered."""
+        ids = list(dict.fromkeys(str(i) for i in (ids or []) if str(i or "").strip()))
+
+        def go(c):
+            # Only the listed chats move: the dialog shows the pinned chats of ONE brain, and the pinned chats of
+            # another brain keep their own order.
+            n = 0
+            for i, sid in enumerate(ids):
+                if c.execute("SELECT 1 FROM sessions WHERE id = ? AND pinned = 1", (sid,)).fetchone():
+                    c.execute("INSERT OR REPLACE INTO pin_order(session_id, pos) VALUES (?, ?)", (sid, i))
+                    n += 1
+            return n
+        return int(self._write(go) or 0)
 
     def set_project(self, session_id: str, project_id: str | None, *,
                     brain: str | None = None) -> bool:
@@ -1455,14 +1555,32 @@ class SessionStore:
                    (CASE WHEN COALESCE(TRIM(p.instructions), '') <> '' THEN 1 ELSE 0 END)
                        AS has_instructions
             FROM projects p
+            LEFT JOIN project_order po ON po.project_id = p.id
             {where_sql}
-            ORDER BY p.pinned DESC, p.updated_at DESC, p.rowid DESC
+            -- 0.454.0: the owner's own order wins (table project_order); projects never ordered come after,
+            -- pinned first, then the most recent.
+            ORDER BY (po.pos IS NULL), po.pos, p.pinned DESC, p.updated_at DESC, p.rowid DESC
             """,
             params,
         )
         return [dict(r) for r in rows]
 
-    def get_project(self, project_id: str) -> dict[str, Any] | None:
+    def set_project_order(self, brain: str, ids: List[str]) -> int:
+        """The owner's order of the projects of `brain` (0.454.0). `ids` first to last; a project of the brain left out
+        of the list keeps no order (it goes after the ordered ones). Never touches `updated_at`. Returns rows ordered."""
+        ids = [str(i) for i in (ids or []) if str(i or "").strip()]
+
+        def go(c):
+            c.execute("DELETE FROM project_order WHERE project_id IN (SELECT id FROM projects WHERE brain = ?)", (brain,))
+            n = 0
+            for i, pid in enumerate(dict.fromkeys(ids)):
+                if c.execute("SELECT 1 FROM projects WHERE id = ? AND brain = ?", (pid, brain)).fetchone():
+                    c.execute("INSERT OR REPLACE INTO project_order(project_id, pos) VALUES (?, ?)", (pid, i))
+                    n += 1
+            return n
+        return int(self._write(go) or 0)
+
+    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
         rows = self._read("SELECT * FROM projects WHERE id = ?", (project_id,))
         return dict(rows[0]) if rows else None
 
@@ -1540,6 +1658,7 @@ class SessionStore:
             # CÙNG transaction, chứ không phải một lượt dọn riêng có thể không bao giờ chạy.
             conn.execute("DELETE FROM project_files WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM project_links WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM project_order WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             return n
         return self._write(_do)
@@ -1710,7 +1829,10 @@ class SessionStore:
 
     def delete(self, session_id: str) -> None:
         # ON DELETE CASCADE xoá messages; trigger dọn messages_fts.
-        self._write(lambda c: c.execute("DELETE FROM sessions WHERE id = ?", (session_id,)))
+        def _del(c):
+            c.execute("DELETE FROM pin_order WHERE session_id = ?", (session_id,))   # 0.454.0
+            c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        self._write(_del)
 
     def archive(self, session_id: str, archived: bool = True) -> None:
         self._write(lambda c: c.execute(
@@ -1748,6 +1870,22 @@ class SessionStore:
             (max(0, int(tokens or 0)), session_id),
         ))
 
+    def set_last_context_input_tokens(self, session_id: str, tokens: int, provider: str = "codex") -> None:
+        """Input of the LAST model request, measured by the engine. Never a turn total.
+
+        Written only from a real per-request measurement (see subscription_usage). Rotation
+        reads it in place of last_input_tokens, which sums every request of a tool loop.
+        """
+        self._write(lambda c: c.execute(
+            "INSERT INTO subscription_request_context(session_id,provider,input_tokens) "
+            "SELECT id,?,? FROM sessions WHERE id=? ON CONFLICT(session_id) DO UPDATE "
+            "SET provider=excluded.provider,input_tokens=excluded.input_tokens",
+            (provider, max(0, int(tokens or 0)), session_id),
+        ))
+
+    def clear_last_context_input_tokens(self, session_id: str, provider: str = "codex") -> None:
+        self._write(lambda c: subscription_context_store.clear(c, session_id, provider))
+
     def mark_thread_rotated(self, session_id: str) -> None:
         """Ghi mốc msg_count lúc vừa xoay mạch. Xem cột thread_rotated_msg ở migration."""
         self._write(lambda c: c.execute(
@@ -1783,17 +1921,22 @@ class SessionStore:
         """Gắn thread native của Codex vào hội thoại dashboard để lượt sau resume đúng mạch."""
         if not thread_id:
             return
-        self._write(lambda c: c.execute(
-            "UPDATE sessions SET codex_thread_id = ?, updated_at = ? WHERE id = ?",
-            (thread_id, time.time(), session_id),
-        ))
+        def _ghi(c):
+            row = c.execute("SELECT codex_thread_id FROM sessions WHERE id=?", (session_id,)).fetchone()
+            if row and row[0] != thread_id:
+                # The measurement described the previous thread, not this one.
+                subscription_context_store.clear(c, session_id, "codex")
+            c.execute("UPDATE sessions SET codex_thread_id = ?, updated_at = ? WHERE id = ?",
+                      (thread_id, time.time(), session_id))
+        self._write(_ghi)
 
     def clear_codex_thread_id(self, session_id: str) -> None:
         """Thread Codex thành stale khi provider khác chen lượt vào cùng hội thoại."""
-        self._write(lambda c: c.execute(
-            "UPDATE sessions SET codex_thread_id = NULL WHERE id = ? AND codex_thread_id IS NOT NULL",
-            (session_id,),
-        ))
+        def _xoa(c):
+            c.execute("UPDATE sessions SET codex_thread_id = NULL "
+                      "WHERE id = ? AND codex_thread_id IS NOT NULL", (session_id,))
+            subscription_context_store.clear(c, session_id, "codex")
+        self._write(_xoa)
 
     def clear_cli_session_id(self, session_id: str) -> None:
         """Mạch Claude Code thành stale khi engine khác chen một lượt vào cùng hội thoại."""
@@ -1861,10 +2004,13 @@ class SessionStore:
         for nhan, cot in self._MACH_NATIVE.items():
             if cot == cot_giu or not (row.get(cot) or ""):
                 continue
-            self._write(lambda c, _cot=cot: c.execute(
-                f"UPDATE sessions SET {_cot} = NULL WHERE id = ? AND {_cot} IS NOT NULL",
-                (session_id,),
-            ))
+            if cot == "codex_thread_id":
+                self.clear_codex_thread_id(session_id)    # also drops its request measurement
+            else:
+                self._write(lambda c, _cot=cot: c.execute(
+                    f"UPDATE sessions SET {_cot} = NULL WHERE id = ? AND {_cot} IS NOT NULL",
+                    (session_id,),
+                ))
             da_don.append(nhan)
         return da_don
 
@@ -1974,12 +2120,24 @@ class SessionStore:
         return [dict(r) for r in self._read(sql, tuple(params))]
 
     def close(self) -> None:
+        self._closed = True
+        with self._rconns_lock:
+            for c in list(self._rconns):
+                try:
+                    c.close()
+                except Exception:
+                    pass
+            self._rconns = weakref.WeakSet()
         with self._lock:
             try:
                 self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             except Exception:
                 pass
             self._conn.close()
+
+
+class _ReaderConn(sqlite3.Connection):
+    """A per-thread read connection (SessionStore._read_conn). A subclass only so it can be weakly referenced."""
 
 
 # Singleton toàn process (1 connection + app-lock).

@@ -176,7 +176,37 @@
     });
     rows.push({ sep: true });
     rows.push({ label: window.t("sess.proj_new"), run: function () { newProject(); } });
+    // 0.454.0: drag the projects into the owner's own order (reorder-dialog.js), like the brain picker.
+    if (projects.length > 1 && window.JavisReorder) {
+      rows.push({ label: window.t("reorder.menu_projects"), icon: "arrow-up-down", run: function () { reorderProjects(); } });
+    }
     openMenu(anchor, rows);
+  }
+
+  function reorderProjects() {
+    var R = window.JavisReorder, b = brain();
+    R.open({ title: window.t("reorder.title_projects"),
+      items: projects.map(function (p) { return { id: p.id, label: p.name, icon: p.icon || "folder" }; }),
+      save: function (ids) {
+        return R.post("/projects/order", { brain: b, order: JSON.stringify(ids) }).then(function (res) {
+          if (!res.ok) return (res.d && res.d.error) || window.t("reorder.save_err");
+          return Promise.resolve(loadProjects()).then(function () { return ""; });
+        });
+      } });
+  }
+
+  // 0.454.0: drag the pinned chats into the owner's own order. `pins` are the pinned rows shown in the list.
+  function reorderPins(pins) {
+    var R = window.JavisReorder;
+    R.open({ title: window.t("reorder.title_pins"),
+      items: pins.map(function (s) { return { id: s.id, label: s.title || s.preview || window.t("sess.untitled"), icon: "pin" }; }),
+      save: function (ids) {
+        return R.post("/sessions/pin-order", { order: JSON.stringify(ids) }).then(function (res) {
+          if (!res.ok) return (res.d && res.d.error) || window.t("reorder.save_err");
+          cached = null;
+          return Promise.resolve(loadList()).then(function () { return ""; });
+        });
+      } });
   }
 
   /** Hộp chức năng của MỘT project. Đi sâu vào cùng một popover (có hàng quay lại) chứ không
@@ -1654,6 +1684,7 @@
           '<div class="cside-list"></div>' +
         '</div>';
       listEl = side.querySelector(".cside-list");
+      ganTaiTruoc(listEl);
       searchEl = side.querySelector(".cside-search");
       projBar = null;
       cayEl = null;
@@ -1679,6 +1710,7 @@
       '</div>' +
       '<div class="cside-pane" data-pane="files"></div>';
     listEl = side.querySelector(".cside-list");
+    ganTaiTruoc(listEl);
     searchEl = side.querySelector(".cside-search");
     projBar = side.querySelector(".cside-proj");
     cayEl = side.querySelector('[data-pane="files"]');
@@ -1760,6 +1792,28 @@
     if (page) page.classList.remove("side-open");
   }
 
+  // 2026-11-05: start fetching a chat the moment the pointer rests on it (or a finger touches it), so the click that
+  // follows usually finds it ready (app.js prefetchSession keeps it). One listener on the list, not one per row:
+  // the list is redrawn often.
+  function ganTaiTruoc(el) {
+    if (!el || el._taiTruoc) return;
+    el._taiTruoc = true;
+    var hen = null;
+    var sidCua = function (e) {
+      var it = e.target && e.target.closest ? e.target.closest("[data-sid]") : null;
+      return it ? it.getAttribute("data-sid") : "";
+    };
+    var tai = function (sid) {
+      try { if (sid && window.JavisSessions && window.JavisSessions.prefetch) window.JavisSessions.prefetch(sid); } catch (e) {}
+    };
+    el.addEventListener("pointerover", function (e) {
+      var sid = sidCua(e);
+      clearTimeout(hen);
+      if (sid) hen = setTimeout(function () { tai(sid); }, 80);   // a pass over the list on the way elsewhere fetches nothing
+    }, { passive: true });
+    el.addEventListener("pointerdown", function (e) { clearTimeout(hen); tai(sidCua(e)); }, { passive: true });
+  }
+
   function openSession(id) {
     if (window.JavisSessions) window.JavisSessions.open(id);
     closeDrawerIfNarrow();
@@ -1796,12 +1850,21 @@
     var keepScroll = listEl.scrollTop;
     listEl.innerHTML = "";
     var cur = currentId(), lastGroup = null;
+    var pins = items.filter(function (s) { return s.pinned; });
     items.forEach(function (s) {
       // Mục ghim gom thành MỘT nhóm trên đầu, không xếp theo thời gian nữa - ghim chính là để
       // thoát khỏi thứ tự thời gian. Server đã sắp pinned trước nên chỉ cần đổi nhãn nhóm.
       var g = s.pinned ? window.t("sess.grp_pinned") : groupOf(s.updated_at || 0);
       if (g !== lastGroup) {
-        listEl.appendChild(el('<div class="cside-group">' + g + '</div>'));
+        var head = el('<div class="cside-group">' + g + '</div>');
+        // 0.454.0: the pinned group gets a Reorder button (two or more pinned chats).
+        if (s.pinned && pins.length > 1 && window.JavisReorder) {
+          var rb = el('<button type="button" class="cside-reorder" title="' + esc(window.t("reorder.title_pins")) +
+            '" aria-label="' + esc(window.t("reorder.title_pins")) + '">' + ic("arrow-up-down") + '</button>');
+          rb.onclick = function (ev) { ev.stopPropagation(); reorderPins(pins); };
+          head.appendChild(rb);
+        }
+        listEl.appendChild(head);
         lastGroup = g;
       }
       var eng = (s.engine || "").toString().slice(0, 10);
@@ -1901,6 +1964,7 @@
           togglePin({ id: h.session_id, pinned: h.pinned }, q);
         };
         item.onclick = function () { openSession(h.session_id); };
+        item.setAttribute("data-sid", h.session_id);
         listEl.appendChild(item);
       });
     } catch (e) { listEl.innerHTML = '<div class="cside-empty">' + esc(window.t("sess.search_err")) + '</div>'; }

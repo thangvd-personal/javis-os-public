@@ -20,6 +20,10 @@ within REOPEN_AFTER_S only bumps its counter, except the first repeat after a re
 as "needs you" with one message. At most TRIAGE_PER_HOUR model triages per hour; past that the
 fallback rule decides.
 
+A report may name the chat the job came from (`chat`: "web:<session id>", a Telegram id...). The desk still
+triages and retries here, and the incident stays on this list, but its messages go to that chat, so a job made in a
+partner chat no longer reports its failures to Javis Core instead (the host routes an empty chat to Javis Core).
+
 Store: STATE_DIR/incidents.json (last KEEP incidents). Turn the desk off with the setting
 `incidents.enabled = false`. The module does not import main.
 """
@@ -60,12 +64,22 @@ class IncidentDeps:
     state_dir: Callable[[], Path]
     # async ask(prompt) -> model text; raise when no engine is ready
     ask: Callable | None = None
-    # async post(brain, text) -> None: one message in the brain's Javis Core chat (+ inbox)
+    # async post(brain, text, chat="") -> None: one message in `chat`, or the brain's Javis Core chat when it is empty
+    # (+ inbox). A post that takes no `chat` keyword (older hosts, tests) gets the two positional arguments only.
     post: Callable | None = None
     # source -> async retry(incident) -> (ok, note)
     retry: dict[str, Callable] = field(default_factory=dict)
     enabled: Callable[[], bool] = lambda: True
     atomic_write_text: Callable[[Any, str], None] | None = None
+
+
+def _takes_chat(fn) -> bool:
+    try:
+        import inspect
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+    return "chat" in params or any(p.kind == p.VAR_KEYWORD for p in params.values())
 
 
 def fallback_decision(error: str, can_retry: bool) -> str:
@@ -152,7 +166,7 @@ class IncidentDesk:
 
     # ── intake ──
     def report(self, source: str, ref: str, *, brain: str = "", title: str = "", error: str = "",
-               request: str = "") -> str | None:
+               request: str = "", chat: str = "") -> str | None:
         """Record a failure and schedule its handling. Never raises; returns the incident id, or None
         when the desk is off or the report only bumped an open incident. Safe to call from sync code
         running inside the event loop."""
@@ -167,7 +181,7 @@ class IncidentDesk:
             return None
         t = loop.create_task(self._intake(str(source), str(ref), brain=str(brain or ""),
                                           title=str(title or "")[:160], error=str(error or "")[:4000],
-                                          request=str(request or "")[:2000]))
+                                          request=str(request or "")[:2000], chat=str(chat or "").strip()[:200]))
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
         return "scheduled"
@@ -191,6 +205,8 @@ class IncidentDesk:
                 open_inc["count"] = int(open_inc.get("count") or 1) + 1
                 open_inc["last_at"] = now
                 open_inc["error"] = kw.get("error") or open_inc.get("error", "")
+                if kw.get("chat"):
+                    open_inc["chat"] = kw["chat"]
                 if open_inc.get("status") == "retrying":
                     open_inc["status"] = "needs_you"
                     followup = dict(open_inc)
@@ -206,7 +222,7 @@ class IncidentDesk:
             await self._post(followup["brain"], localefmt.chu(
                 f"⚠ Sự cố: '{followup.get('title')}' chạy lại vẫn hỏng. Cần bạn xem: ",
                 f"⚠ Incident: '{followup.get('title')}' failed again after the retry. Needs you: ")
-                + str(followup.get("error") or "")[:240])
+                + str(followup.get("error") or "")[:240], chat=str(followup.get("chat") or ""))
             return
         if inc is not None:
             await self._triage(inc)
@@ -254,7 +270,7 @@ class IncidentDesk:
         else:
             text = localefmt.chu(f"⚠ Sự cố cần bạn: '{head}'. ", f"⚠ Incident needs you: '{head}'. ")
             text += message or (localefmt.chu("Lỗi: ", "Error: ") + str(inc.get("error") or "")[:240])
-        await self._post(inc.get("brain", ""), text)
+        await self._post(inc.get("brain", ""), text, chat=str(inc.get("chat") or ""))
 
     async def _update(self, iid: str, **changes) -> None:
         async with self._io:
@@ -264,11 +280,14 @@ class IncidentDesk:
                 cur.update(changes)
                 self._save(items)
 
-    async def _post(self, brain: str, text: str) -> None:
+    async def _post(self, brain: str, text: str, chat: str = "") -> None:
         if not self.deps.post:
             return
         try:
-            await self.deps.post(brain, text)
+            if chat and _takes_chat(self.deps.post):
+                await self.deps.post(brain, text, chat=chat)
+            else:
+                await self.deps.post(brain, text)
         except Exception as e:
             print(f"[incidents] could not post: {type(e).__name__}: {e}", file=sys.stderr)
 

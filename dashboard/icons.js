@@ -40,6 +40,12 @@
       '<circle cx="12" cy="12" r="8.2" fill="#F28C28" stroke="none"/>' +
       '<ellipse cx="12.1" cy="10.74" rx=".76" ry="1.84" fill="#201E1E" stroke="none"/>' +
       '<ellipse cx="15.26" cy="10.74" rx=".76" ry="1.84" fill="#201E1E" stroke="none"/>',
+    // "neural-net" (2026-11-05, owner picked it from a side-by-side sheet): a 2-3-2 neural network for the home page
+    // ("Mạng nơ-ron"). Lucide has no such icon. Lines stop at each node's edge, so the nodes stay hollow and crisp
+    // at 19px on any background; thinner lines than the nodes keep the eye on the nodes.
+    "neural-net":
+      '<path d="M6.1 6.34L9.9 5.16M5.87 8.17L10.13 10.83M5.19 8.85L10.81 17.65M5.19 15.15L10.81 6.35M5.87 15.83L10.13 13.17M6.1 17.66L9.9 18.84M14.1 5.16L17.9 6.34M13.19 6.35L18.81 15.15M13.87 10.83L18.13 8.17M13.87 13.17L18.13 15.83M13.19 17.65L18.81 8.85M14.1 18.84L17.9 17.66" stroke-width="1.3"/>' +
+      '<circle cx="4" cy="7" r="2.2" stroke-width="1.9"/><circle cx="4" cy="17" r="2.2" stroke-width="1.9"/><circle cx="12" cy="4.5" r="2.2" stroke-width="1.9"/><circle cx="12" cy="12" r="2.2" stroke-width="1.9"/><circle cx="12" cy="19.5" r="2.2" stroke-width="1.9"/><circle cx="20" cy="7" r="2.2" stroke-width="1.9"/><circle cx="20" cy="17" r="2.2" stroke-width="1.9"/>',
   };
   var missing = Object.create(null);
   var cache = Object.create(null);
@@ -298,6 +304,15 @@
         'c-1.4 3.3-5.2 4.6-9.2 3.1-3-1.1-5-3.6-6.1-6.6z"/>' +
         '<path fill="#133C9A" d="M11.3 10.4c2.5-2.3 5.6-3 8.6-1.8 1 .4 1.6 1 1.9 1.6-.7.2-1.4.7-2' +
         ' 1.3l-.9 1.4c-1.6 1.9-3.7 2.6-6.3 2.1-1.2-.2-2.4-.6-3.5-1.2z"/>',
+    },
+    // Internal API (0.459.0): a server you run asks a Chatbot over HTTP. Code brackets on slate.
+    api: {
+      nhan: "API",
+      mau: "#475569",
+      than:
+        '<rect width="24" height="24" rx="7" fill="#475569"/>' +
+        '<path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"' +
+        ' d="M9 8l-4 4 4 4M15 8l4 4-4 4M13.2 6.8l-2.4 10.4"/>',
     },
   };
 

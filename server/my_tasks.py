@@ -4,12 +4,18 @@ One JSON store per brain at <brain>/Javis/my-tasks.json:
 
     {"tasks": [...], "projects": [...], "rev": n}
 
+0.463.0: the page calls `projects` TAGS. A task carries `tags` (a list of tag ids, several allowed); the old single
+`project` field is kept equal to the first tag so older readers still work, and a store written before 0.463.0 is
+read with tags = [project]. `subs` is the task's subtask list [{t, done}], only for the owner's own tasks; a
+repeating task starts each occurrence with its subtasks open again (the ticked ones are kept on that day's
+`done_dates` entry so unticking the occurrence puts them back).
+
 A repeating task is ONE record; each finished occurrence is a key of `done_dates` ("YYYY-MM-DD" ->
 {"at": epoch, "by": "me" | "javis"}). The missed occurrence shown under Overdue, streaks and the like are
 computed from the schedule and `done_dates` (the page does it, see dashboard/tasks.js), never stored.
 
 Routes (all JSON bodies, `brain` like the other stores):
-    GET  /my-tasks?brain                      -> {ok, tasks, projects, rev}
+    GET  /my-tasks?brain                      -> {ok, tasks, projects, rev, coach, clean, done_total}
     POST /my-tasks                            create a task, -> {ok, task}
     POST /my-tasks/update   {id, ...fields}   -> {ok, task}
     POST /my-tasks/check    {id, date?, by?}  done (one occurrence of a repeating task when `date`)
@@ -17,9 +23,15 @@ Routes (all JSON bodies, `brain` like the other stores):
     POST /my-tasks/delete   {id}
     POST /my-tasks/restore  {task}            put a deleted task back (undo)
     POST /my-tasks/move     {id, from_brain, to_brain, copy?}
-    POST /my-tasks/project  {id?, name, color, pinned, order}   create or update
-    POST /my-tasks/project/delete {id}        its tasks keep living, without a project
+    POST /my-tasks/project  {id?, name, color, pinned, order}   create or update a tag
+    POST /my-tasks/project  {order_ids: [...]}                  put the tags in this order
+    POST /my-tasks/project/delete {id}        its tasks keep living, without that tag
     GET  /my-tasks/calendar?brain&days        read-only Google Calendar events (0.427.0), see gcal_read.py
+    POST /my-tasks/mark     {kind: "over_clear"}   count one clearing of every overdue task (badge)
+
+2026-11-04 ("Nhịp hôm nay"): a task may carry `star` (a priority of its day, at most 3 a day, the page enforces it)
+and a repeat `skip_dates` ({date: epoch}: times skipped on purpose, they count as handled but never as done). The store
+keeps `clean` = {days: {date: "c"|"i"|"x"|"e"}, over_clears: n}, see `judge_clean_days`.
 
 Habit coach (0.427.0): once a day the background model ("Javis Core") writes the habit lines the page and the
 reminders use, into <brain>/Javis/habit-coach.json, and learns which style of nudge was followed by the habit
@@ -51,6 +63,11 @@ _COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 KINDS = ("task", "appt")
 UNITS = ("day", "week", "month", "year")
 REMINDS = ("auto", "time", "off")
+MAX_TAGS = 20                   # tags on one task
+MAX_SUBS = 100                  # subtasks on one task
+MAX_SKIPS = 400                 # skipped times kept on one repeating task
+CLEAN_BACK = 60                 # how far back the first clean-day judge looks (days)
+CLEAN_KEEP = 400                # judged days kept
 
 
 @dataclass
@@ -114,6 +131,28 @@ def clean_habit(h) -> Optional[dict]:
     return out
 
 
+def clean_tags(v) -> list:
+    """A task's tag ids: strings, no duplicates, in the given order."""
+    out = []
+    for x in (v if isinstance(v, list) else []):
+        x = str(x or "").strip()[:40]
+        if x and x not in out:
+            out.append(x)
+    return out[:MAX_TAGS]
+
+
+def task_tags(task: dict) -> list:
+    """The tags of a task, reading a store from before 0.463.0 (one `project`) the same way."""
+    if isinstance(task.get("tags"), list):
+        return clean_tags(task["tags"])
+    return [task["project"]] if task.get("project") else []
+
+
+def _set_tags(task: dict, tags: list) -> None:
+    task["tags"] = tags
+    task["project"] = tags[0] if tags else ""
+
+
 def _apply(task: dict, p: dict) -> None:
     """Copy the editable fields of payload `p` onto `task`, cleaned. Missing keys are left as they are."""
     if "title" in p:
@@ -130,21 +169,130 @@ def _apply(task: dict, p: dict) -> None:
         task["end"] = _clean_time(p.get("end"))
     if "repeat" in p:
         task["repeat"] = clean_repeat(p.get("repeat"))
-    if "project" in p:
-        task["project"] = str(p.get("project") or "")[:40]
+    if "tags" in p:
+        _set_tags(task, clean_tags(p.get("tags")))
+    elif "project" in p:
+        pr = str(p.get("project") or "")[:40]
+        _set_tags(task, [pr] if pr else [])
     if "remind" in p:
         task["remind"] = str(p.get("remind") or "")[:8]
     if "location" in p:
         task["location"] = str(p.get("location") or "")[:300]
     if "subs" in p and isinstance(p.get("subs"), list):
-        task["subs"] = [{"t": str(x.get("t") or "")[:300], "done": bool(x.get("done"))}
-                        for x in p["subs"][:50] if isinstance(x, dict) and str(x.get("t") or "").strip()]
+        task["subs"] = [{"t": str(x.get("t") or "").strip()[:300], "done": bool(x.get("done"))}
+                        for x in p["subs"][:MAX_SUBS] if isinstance(x, dict) and str(x.get("t") or "").strip()]
     if "habit" in p:
         task["habit"] = clean_habit(p.get("habit"))
     if "from_javis" in p:
         task["from_javis"] = bool(p.get("from_javis"))
     if "prep" in p:
         task["prep"] = str(p.get("prep") or "")[:500]
+    if "star" in p:
+        task["star"] = bool(p.get("star"))
+    if "skip_dates" in p:
+        task["skip_dates"] = clean_skips(p.get("skip_dates"), task.get("skip_dates"))
+
+
+def clean_skips(new, old=None) -> dict:
+    """Times of a repeat the owner skipped on purpose: {"YYYY-MM-DD": epoch of the skip}. A date already skipped keeps
+    its time (the clean-day judge reads it), a new one gets now, anything that is not a date is dropped."""
+    old = old if isinstance(old, dict) else {}
+    out = {}
+    for k, v in (new.items() if isinstance(new, dict) else []):
+        k = _clean_date(k)
+        if not k or not v:
+            continue
+        keep = old.get(k)
+        out[k] = keep if isinstance(keep, (int, float)) and keep > 1 else (v if isinstance(v, (int, float)) and v > 1 else _now())
+    return dict(sorted(out.items())[-MAX_SKIPS:])
+
+
+# ---------------------------------------------------------------- clean days (2026-11-04)
+# The streak on the Tasks page ("Nhịp hôm nay"). A day is CLEAN when every task due by then was handled (done, moved,
+# skipped or deleted), nothing overdue was left and at least one task got done. The first unclean day freezes the
+# chain ("i"), a second one in a row loses it ("x"); a day with nothing due and nothing done is empty ("e") and neither
+# adds nor breaks. Each past day is judged once, from the done/skip times in the store, and kept, so a later edit
+# never rewrites history. The page judges today live and only reads this for the days before.
+def _local_day(ts: float, tz) -> str:
+    return datetime.fromtimestamp(float(ts), tz).date().isoformat()
+
+
+def _prev_occ(rep: dict, anchor: str, iso: str) -> Optional[str]:
+    """The latest occurrence on or before `iso` (not before `anchor`), or None."""
+    d = date.fromisoformat(iso)
+    for _ in range(400):
+        x = d.isoformat()
+        if x < anchor:
+            return None
+        if occurs_on(rep, anchor, x):
+            return x
+        d -= timedelta(days=1)
+    return None
+
+
+def judge_day(tasks: list, day: str, tz=None) -> str:
+    """"c" clean, "u" unclean, "e" empty for one past day, from what the store says about the end of that day."""
+    end = datetime.combine(date.fromisoformat(day) + timedelta(days=1), datetime.min.time(), tz).timestamp()
+    left = done = 0
+    for t in tasks:
+        if not isinstance(t, dict) or t.get("kind") == "appt" or ((t.get("habit") or {}) and not (t.get("habit") or {}).get("off")):
+            continue
+        if float(t.get("created_at") or 0) >= end:
+            continue
+        if t.get("repeat"):
+            dd, sk = t.get("done_dates") or {}, t.get("skip_dates") or {}
+            done += 1 if day in dd else 0
+            anchor = t.get("date") or day
+            o = _prev_occ(t["repeat"], anchor, day)
+            if o:
+                hit, skip = dd.get(o), sk.get(o)
+                handled = (isinstance(hit, dict) and float(hit.get("at") or 0) < end) or (isinstance(skip, (int, float)) and skip < end)
+                left += 0 if handled else 1
+            continue
+        da = float(t.get("done_at") or 0)
+        if t.get("status") == "done" and da and _local_day(da, tz) == day:
+            done += 1
+        if t.get("date") and t["date"] <= day and not (t.get("status") == "done" and da and da < end):
+            left += 1
+    return "u" if left else "c" if done else "e"
+
+
+def judge_clean_days(data: dict, today: str, tz=None, back: int = CLEAN_BACK) -> bool:
+    """Judge the days not judged yet, up to yesterday, into data["clean"]["days"]. True when something was added."""
+    cl = data.setdefault("clean", {})
+    days = cl.setdefault("days", {})
+    tasks = data.get("tasks") or []
+    if not tasks:
+        return False
+    first = min((_local_day(t.get("created_at"), tz) for t in tasks if isinstance(t, dict) and t.get("created_at")), default=today)
+    start = max(first, (date.fromisoformat(today) - timedelta(days=back)).isoformat())
+    if days:
+        start = max(start, (date.fromisoformat(max(days)) + timedelta(days=1)).isoformat())
+    d, changed = date.fromisoformat(start), False
+    while d.isoformat() < today:
+        iso = d.isoformat()
+        v = judge_day(tasks, iso, tz)
+        if v == "u":
+            prev = days.get((d - timedelta(days=1)).isoformat())
+            v = "x" if prev in ("i", "x") else "i"
+        days[iso] = v
+        changed = True
+        d += timedelta(days=1)
+    if len(days) > CLEAN_KEEP:
+        for k in sorted(days)[:len(days) - CLEAN_KEEP]:
+            days.pop(k, None)
+    return changed
+
+
+def done_total(tasks: list) -> int:
+    """How many of the owner's tasks were ever finished (one-off ticks and each finished time of a repeat; habits and
+    appointments are not tasks here). The page celebrates 10, 25, 50, 100..."""
+    n = 0
+    for t in tasks:
+        if not isinstance(t, dict) or t.get("kind") == "appt" or ((t.get("habit") or {}) and not (t.get("habit") or {}).get("off")):
+            continue
+        n += len(t.get("done_dates") or {}) if t.get("repeat") else (1 if t.get("status") == "done" else 0)
+    return n
 
 
 # ---------------------------------------------------------------- habits (0.424.0)
@@ -451,6 +599,9 @@ class MyTasks:
                 d.setdefault("tasks", [])
                 d.setdefault("projects", [])
                 d.setdefault("rev", 0)
+                for t in d["tasks"]:
+                    if isinstance(t, dict) and not isinstance(t.get("tags"), list):
+                        t["tags"] = task_tags(t)
                 return d
         except FileNotFoundError:
             pass
@@ -480,7 +631,7 @@ class MyTasks:
             return _err("thiếu tên việc", "the task needs a title")
         now = _now()
         task = {"id": "m_" + uuid.uuid4().hex[:10], "kind": "task", "title": title, "notes": "", "date": None,
-                "time": "", "end": "", "repeat": None, "project": "", "status": "open", "done_at": 0,
+                "time": "", "end": "", "repeat": None, "project": "", "tags": [], "status": "open", "done_at": 0,
                 "done_dates": {}, "subs": [], "remind": "", "location": "", "habit": None,
                 "created_at": now, "updated_at": now}
         _apply(task, p)
@@ -518,6 +669,11 @@ class MyTasks:
             dd = task.setdefault("done_dates", {})
             if done:
                 dd[d] = {"at": _now(), "by": by}
+                # Each occurrence starts with its subtasks open; the ticked ones stay on this day's entry.
+                subs = task.get("subs") or []
+                if any(x.get("done") for x in subs):
+                    dd[d]["subs"] = [dict(x) for x in subs]
+                    task["subs"] = [{"t": x.get("t") or "", "done": False} for x in subs]
                 if task.get("habit"):
                     try:
                         self._coach_done(brain, tid, d)
@@ -527,7 +683,10 @@ class MyTasks:
                     for k in sorted(dd)[:len(dd) - MAX_DONE_DATES]:
                         dd.pop(k, None)
             else:
-                dd.pop(d, None)
+                gone = dd.pop(d, None)
+                if isinstance(gone, dict) and isinstance(gone.get("subs"), list) and not any(
+                        x.get("done") for x in task.get("subs") or []):
+                    task["subs"] = gone["subs"]
         else:
             task["status"] = "done" if done else "open"
             task["done_at"] = _now() if done else 0
@@ -573,7 +732,7 @@ class MyTasks:
         if copy:
             item["id"] = "m_" + uuid.uuid4().hex[:10]
             item["created_at"] = item["updated_at"] = _now()
-        item["project"] = ""   # projects belong to a brain
+        _set_tags(item, [])   # tags belong to a brain
         dst = self.load(to_brain)
         dst["tasks"].append(item)
         self.save(to_brain, dst)          # target first: a crash in between leaves a duplicate, not a loss
@@ -584,12 +743,21 @@ class MyTasks:
 
     def project(self, brain: str, p: dict) -> dict:
         data = self.load(brain)
+        if isinstance(p.get("order_ids"), list):
+            # Drag or "move up/down" on the page: the tags in this order, any not listed keep their place after.
+            ids = [str(x) for x in p["order_ids"]]
+            rank = {x: i for i, x in enumerate(ids)}
+            data["projects"].sort(key=lambda x: (rank.get(x.get("id"), len(ids)), int(x.get("order") or 0)))
+            for i, x in enumerate(data["projects"]):
+                x["order"] = i
+            self.save(brain, data)
+            return {"ok": True, "projects": data["projects"], "rev": data["rev"]}
         pid = str(p.get("id") or "")
         cur = next((x for x in data["projects"] if x.get("id") == pid), None) if pid else None
         if cur is None:
             name = str(p.get("name") or "").strip()
             if not name:
-                return _err("thiếu tên dự án", "the project needs a name")
+                return _err("thiếu tên tag", "the tag needs a name")
             cur = {"id": "p_" + uuid.uuid4().hex[:8], "name": name[:80], "color": "#3b82f6", "pinned": False,
                    "order": len(data["projects"])}
             data["projects"].append(cur)
@@ -611,12 +779,12 @@ class MyTasks:
         data = self.load(brain)
         cur = next((x for x in data["projects"] if x.get("id") == pid), None)
         if cur is None:
-            return _err("không thấy dự án này", "project not found")
+            return _err("không thấy tag này", "tag not found")
         data["projects"] = [x for x in data["projects"] if x.get("id") != pid]
-        moved = [t["id"] for t in data["tasks"] if t.get("project") == pid]
+        moved = [t["id"] for t in data["tasks"] if pid in task_tags(t)]
         for t in data["tasks"]:
-            if t.get("project") == pid:
-                t["project"] = ""
+            if pid in task_tags(t):
+                _set_tags(t, [x for x in task_tags(t) if x != pid])
         self.save(brain, data)
         return {"ok": True, "project": cur, "tasks": moved, "rev": data["rev"]}
 
@@ -700,12 +868,37 @@ class MyTasks:
 
         @router.get("/my-tasks")
         async def my_tasks_list(brain: str = Query("brain")):
+            tz = self.deps.tz() if self.deps.tz else None
+            today = datetime.now(tz).date().isoformat()
             async with self._io:
                 d = self.load(brain)
                 c = self.load_coach(brain)
+                # Clean days (2026-11-04): the days since the last visit are judged once, here, and kept.
+                if judge_clean_days(d, today, tz):
+                    self.save(brain, d)
             coach = {"date": c.get("date") or "", "head": c.get("head") or {},
                      "habits": {k: {"frozen": v.get("frozen", "")} for k, v in (c.get("habits") or {}).items() if v.get("frozen")}}
-            return {"ok": True, "tasks": d["tasks"], "projects": d["projects"], "rev": d["rev"], "coach": coach}
+            cl = d.get("clean") or {}
+            recent = (date.fromisoformat(today) - timedelta(days=CLEAN_BACK)).isoformat()
+            clean = {"days": {k: v for k, v in (cl.get("days") or {}).items() if k >= recent},
+                     "over_clears": int(cl.get("over_clears") or 0)}
+            return {"ok": True, "tasks": d["tasks"], "projects": d["projects"], "rev": d["rev"], "coach": coach,
+                    "clean": clean, "done_total": done_total(d["tasks"])}
+
+        @router.post("/my-tasks/mark")
+        async def my_tasks_mark(payload: dict = Body(None)):
+            """A moment the page celebrates and the store counts. Only {kind: "over_clear"} for now: the owner just
+            cleared every overdue task (the badge counts how many times)."""
+            p = payload or {}
+            if p.get("kind") != "over_clear":
+                return _err("không rõ sự kiện", "unknown event")
+            brain = str(p.get("brain") or "brain")
+            async with self._io:
+                d = self.load(brain)
+                cl = d.setdefault("clean", {})
+                cl["over_clears"] = int(cl.get("over_clears") or 0) + 1
+                self.save(brain, d)
+            return {"ok": True, "over_clears": cl["over_clears"]}
 
         @router.get("/my-tasks/calendar")
         async def my_tasks_calendar(brain: str = Query("brain"), days: int = Query(14)):

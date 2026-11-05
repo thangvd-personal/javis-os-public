@@ -418,13 +418,16 @@ def _turn_key(cli, lane) -> Optional[str]:
         return None
 
 
-def _spawn(args: List[str], cwd: str, acct_home):
+def _spawn(args: List[str], cwd: str, acct_home, tag: str = ""):
     import claude_cli as cc
+    env = cc.codex_env(acct_home)
+    if tag:
+        env = cc._mark_env(env, tag)    # what its commands leave running is adopted (tien_trinh_nen.ENV_MARK)
     return subprocess.Popen(
         args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, text=True,
         encoding="utf-8", errors="replace", bufsize=1,
         creationflags=(subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0),
-        start_new_session=(os.name != "nt"), env=cc.codex_env(acct_home))
+        start_new_session=(os.name != "nt"), env=env)
 
 
 async def run(cli, prompt: str) -> AsyncIterator[dict]:
@@ -438,6 +441,12 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
     sid = steer_inbox.current_sid()
     _acct_home = getattr(cli, "codex_home", None)
     warm_key = str(getattr(cli, "warm_key", "") or "")
+    try:
+        # A warm app-server keeps the mark of its conversation from its start: this turn still has to look for it.
+        import tien_trinh_nen
+        tien_trinh_nen.note_mark(cli.tag, tien_trinh_nen.mark_for(cli.tag))
+    except Exception:  # noqa: BLE001
+        pass
     if cli.session_id and cli.instructions and not carries_instructions(cli.session_id):
         prompt = cli.instructions.strip() + "\n\n" + prompt   # a thread from before 0.382.0: as before
     lane = None
@@ -496,7 +505,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
         if lane is not None:
             lane.attach()
         try:
-            proc = _spawn(args, cli.cwd, _acct_home)
+            proc = _spawn(args, cli.cwd, _acct_home, cli.tag)
         except Exception as e:
             if lane is not None:
                 lane.close()
@@ -551,6 +560,9 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
         busy = 0
         final_text = ""
         messages = []          # this turn's agent messages; `final` leaves the lead-ins out (cc.codex_answer_text)
+        from subscription_usage import CodexUsage
+        baseline = getattr(slot.handle, "usage_total", None) if slot else getattr(cli, "_usage_total", None)
+        usage = CodexUsage(baseline if resume_requested else {"input": 0, "cache": 0, "output": 0})
         tok_in = tok_out = tok_cache = 0
         error_msg = ""
         sandbox_broken = False
@@ -664,10 +676,9 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                 except Exception:  # noqa: BLE001
                     pass
             elif method == "thread/tokenUsage/updated" and p.get("turnId") == turn_id:
-                lu = ((p.get("tokenUsage") or {}).get("last") or {})
-                tok_in += int(lu.get("inputTokens") or 0)
-                tok_out += int(lu.get("outputTokens") or 0)
-                tok_cache += int(lu.get("cachedInputTokens") or 0)   # 0.345.0: đã nằm trong inputTokens
+                usage.observe(p.get("tokenUsage") or {})
+                cli._usage_total = usage.previous
+                tok_in, tok_cache, tok_out = usage.input, usage.cache, usage.output
             elif method == "error":
                 e = p.get("error") or {}
                 msg = str(e.get("message") or "")
@@ -694,7 +705,8 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                     except Exception as e:
                         print(f"[anh codex] {type(e).__name__}: {e}", file=sys.stderr)
                     yield {"type": "final", "content": final_text, "session_id": thread_id,
-                           "tokens_in": tok_in, "tokens_cache_read": tok_cache, "tokens_out": tok_out}
+                           "tokens_in": tok_in, "tokens_cache_read": tok_cache, "tokens_out": tok_out,
+                           "usage_telemetry": usage.summary(), "request_usage": usage.requests}
                 elif status == "failed":
                     msg = str(((turn.get("error") or {}).get("message")) or error_msg or "turn failed")
                     yield {"type": "error", "content": "Codex: " + msg,
@@ -717,12 +729,14 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             rpc.detach()
             fp_now = _fingerprint(cli, args)    # the session id is this thread now
             if slot is not None:
+                slot.handle.usage_total = usage.previous
                 warm_pool.POOL.release(slot, fingerprint=fp_now)
                 handled = True
             else:
                 new = warm_pool.POOL.admit(warm_key, "codex", fp_now, CodexHandle(proc, rpc, thread_id, lane),
                                            recipe=_recipe(cli, args, _acct_home, thread_id))
                 if new is not None:
+                    new.handle.usage_total = usage.previous
                     warm_pool.POOL.release(new)
                     handled = True
         elif slot is not None:
@@ -744,13 +758,14 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
 def _recipe(cli, args: List[str], acct_home, thread_id: str):
     """How to reopen this process for a prewarm: same argv, same thread, resumed. The instructions live on the thread."""
     cwd, params = cli.cwd, {**_thread_params(cli), "threadId": thread_id, "excludeTurns": True}
+    tag = str(getattr(cli, "tag", "") or "")
     lane_arg = next((a for a in args if a.startswith("mcp_servers.javis.http_headers.")), None)
 
     async def _open() -> CodexHandle:
         import turn_context
         lane = turn_lane.Lane() if lane_arg else None
         argv = [(f'{turn_context.CODEX_HEADER_KEY}="{lane.key}"' if (lane and a == lane_arg) else a) for a in args]
-        proc = _spawn(argv, cwd, acct_home)
+        proc = _spawn(argv, cwd, acct_home, tag)
         rpc = _Rpc(proc, asyncio.get_running_loop())
         rpc.keep_reading = True
         try:
