@@ -189,9 +189,9 @@ class GitHub:
                 ctx.append(c["context"])
         return ctx
 
-    def branches(self, full_name: str) -> List[str]:
+    def branches(self, full_name: str) -> list[str]:
         """Branch names of a repo, as GitHub lists them (paged, at most 1000)."""
-        out: List[str] = []
+        out: list[str] = []
         for page in range(1, 11):
             batch = self.get(f"/repos/{full_name}/branches", params={"per_page": 100, "page": page})
             if not isinstance(batch, list):
