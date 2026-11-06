@@ -124,16 +124,16 @@
     // NHÌN vào chính bộ não (đồ thị là khoang não, trò chuyện là nói với bộ não đó), nên
     // đứng thành một tầng riêng ngang hàng với Bộ não là thừa một bậc. Hai mục dồn xuống
     // "Bộ não" và đứng đầu nhóm, vì đó là hai trang được mở nhiều nhất.
-    { id: "bo_nao", get label() { return t("nav.group.bo_nao"); },      icon: GICON.bo_nao,      ids: ["home", "files", "learn"] },
+    { id: "bo_nao", get label() { return t("nav.group.bo_nao"); }, icon: GICON.bo_nao, ids: ["home", "files", "learn"] },
     // 0.61.0: Chatbot gộp vào trang Hội thoại (tab thứ ba); id "chatbots" giữ làm bí danh
     // (lệnh nói "mở chatbot", bookmark cũ) và được navigateTo đổi hướng sang tab đó.
     // 0.347.0: the "Code" group is gone (owner, 27/10/2026): every chat now works in a folder and
     // can code, so a separate Coding area is redundant. Terminal lives here; Coding stays a real
     // page (old links, voice commands) but is hidden from the rail, see RAIL_AN.
-    { id: "nang_luc", get label() { return t("nav.group.nang_luc"); },    icon: GICON.nang_luc,    ids: ["workspace", "teams", "conversations", "skills", "plugins", "terminal"] },
-    { id: "viec", get label() { return t("nav.group.viec"); },        icon: GICON.viec,        ids: ["tasks", "webhooks"] },
-    { id: "ket_noi", get label() { return t("nav.group.ket_noi"); },     icon: GICON.ket_noi,     ids: ["mcp", "packs", "channels", "logins"] },
-    { id: "he_thong", get label() { return t("nav.group.he_thong"); },    icon: GICON.he_thong,    ids: ["models", "settings", "share", "account"], foot: true },
+    { id: "nang_luc", get label() { return t("nav.group.nang_luc"); }, icon: GICON.nang_luc, ids: ["workspace", "teams", "conversations", "skills", "plugins", "terminal"] },
+    { id: "viec", get label() { return t("nav.group.viec"); }, icon: GICON.viec, ids: ["tasks", "webhooks"] },
+    { id: "ket_noi", get label() { return t("nav.group.ket_noi"); }, icon: GICON.ket_noi, ids: ["mcp", "packs", "channels", "logins"] },
+    { id: "he_thong", get label() { return t("nav.group.he_thong"); }, icon: GICON.he_thong, ids: ["models", "settings", "share", "account"], foot: true },
   ];
   const RAIL_BY_ID = Object.fromEntries(RAIL_ITEMS.map(i => [i.id, i]));
   // Rows that stand ALONE at the very top of the rail, outside every group: no header, never folded, always on screen.
@@ -380,7 +380,7 @@
       else _tabHoiThoaiCho = "bot";
       id = "conversations";
     }
-    if (id === "selfimprove") { try { localStorage.setItem("javis.nv.view", "rep"); } catch (e) {} }
+    if (id === "selfimprove") { try { localStorage.setItem("javis.nv.view", "rep"); } catch (e) { } }
     id = TRANG_GOP[id] || id;
     const store = Alpine.store("nav");
     const oldTab = { pet: "pet", usage: "usage", logs: "updates" }[id];
@@ -517,7 +517,7 @@
     // nhát này thì mở xong vẫn không biết file nằm đâu, lần sau lại phải đi tìm lại từ đầu.
     // Đặt ở wrapper chứ không trong openNote: openNote còn được chính cây gọi khi bấm node,
     // ở đó cây đã đúng chỗ rồi, dựng lại là thừa.
-    try { _vtRevealInTree(ceilingRel); } catch (e) {}
+    try { _vtRevealInTree(ceilingRel); } catch (e) { }
   };
   // Mở lại một file bằng đường dẫn THEO TRẦN DUYỆT (đã có sẵn tiền tố nhà brain). Người gọi:
   // chip "file đang mở" dưới khung chat (app.js) - ghim giữ đúng dạng path mà openNote nhận,
@@ -602,11 +602,11 @@
       if (gen !== _renderGen) return;
       el.innerHTML = "";
       if (id === "conversations" && _tabHoiThoaiCho) {
-        try { if (window.JavisConversations && window.JavisConversations.chonTab) window.JavisConversations.chonTab(_tabHoiThoaiCho, true); } catch (e) {}
+        try { if (window.JavisConversations && window.JavisConversations.chonTab) window.JavisConversations.chonTab(_tabHoiThoaiCho, true); } catch (e) { }
       }
       _tabHoiThoaiCho = "";
     }
-    if (id === "chat")     return renderChat(el);
+    if (id === "chat") return renderChat(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
     if (id === "settings") return renderSettingsPage(el);
@@ -633,7 +633,7 @@
         el.innerHTML = placeholder("tasks", window.t("cs.mod_not_ready", { ten: "tasks.js" }));
         return;
       }
-      _pageLeave = () => { try { window.JavisTasks.unmount(); } catch (e) {} };
+      _pageLeave = () => { try { window.JavisTasks.unmount(); } catch (e) { } };
       return window.JavisTasks.mount(el);
     }
     if (id === "webhooks") return renderWebhooks(el);
@@ -662,9 +662,9 @@
       return window.JavisTeams.render(el);
     }
     if (id === "conversations") return renderConversations(el);
-    if (id === "learn")    return renderLearn(el);
-    if (id === "logs")     return renderLogs(el);
-    if (id === "usage")    return renderUsage(el);
+    if (id === "learn") return renderLearn(el);
+    if (id === "logs") return renderLogs(el);
+    if (id === "usage") return renderUsage(el);
     el.innerHTML = placeholder(id);
   }
 
@@ -852,7 +852,7 @@
     // Ủy quyền sang module mới nếu đã nạp; nếu chưa thì rơi về bảng cũ (usage_store 30 ngày).
     // Tab Thống kê trong Cài đặt cũng gọi hàm này mà không đi qua renderPage: tự chờ usage.js (0.417.0).
     if (!window.JavisUsage && window.JavisNapCham) await window.JavisNapCham.cho("usage");
-    if (window.JavisUsage && window.JavisUsage.render) { try { return window.JavisUsage.render(el); } catch (e) {} }
+    if (window.JavisUsage && window.JavisUsage.render) { try { return window.JavisUsage.render(el); } catch (e) { } }
     _injectUsageCss();
     el.innerHTML = `<div class="uz-wrap"><div class="cview-placeholder" style="min-height:200px"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div class="dim">${window.t("cs.uz_loading")}</div></div></div>`;
     let d;
@@ -1113,12 +1113,16 @@
         <div class="gcard-meta" id="updVerStatus"></div>
         <div class="upd-rollback" id="updVerRollback"></div>
         ${window.JavisStar ? window.JavisStar.theUngHo() : ""}
-      </section>
-      <div id="clTimeline"><div class="cl-note">${window.t("cs.cl_loading")}</div></div>
+      </section>      
+      <div id="clTimeline"><div class="cl-note">${window.t("cs.cl_loading")}</div></div>      
     </div>`;
+
+    /** Tạm ẩn
     // Thẻ "Ủng hộ Javis" (star-nudge.js): ai muốn tặng sao lúc nào cũng tìm được ở đây.
     const _snGo = el.querySelector(".sn-ho .sn-go");
     if (_snGo) _snGo.onclick = () => window.JavisStar.open();
+    */
+
     // Nút "Kiểm tra lại" PHẢI làm mới cả danh sách bên dưới, không chỉ khung trên.
     wireUpdateManager(el, napTimeline);
     await napTimeline();
@@ -1181,7 +1185,7 @@
     if (maLyDo === "no_token") {
       return window.t("cs.upd_nt_a") + " <b>" + window.t("cs.upd_nt_b") + "</b>" + infoBtn()
         + infoBody(window.t("cs.upd_nt_c") + " <b>Redeploy</b> " + window.t("cs.upd_nt_d")
-        + " <code>docker compose up -d --pull always</code>.");
+          + " <code>docker compose up -d --pull always</code>.");
     }
     // Rơi vào đây là mode lạ hoặc server cũ chưa trả mã lý do - giữ nguyên câu cũ, đừng đoán bừa.
     return "↻ " + window.t("cs.upd_fb_a") + " <b>Redeploy</b>" + window.t("cs.upd_fb_b")
@@ -2088,7 +2092,7 @@
 
     // Accent-insensitive, every word must match somewhere: "lich dang" finds "Lịch đăng bài".
     const haystack = (p) => _vtNoAccent([p.name, p.slug, p.description, p.author,
-      (p.tools || []).join(" "), (p.hooks || []).join(" ")].join(" "));
+    (p.tools || []).join(" "), (p.hooks || []).join(" ")].join(" "));
     const matches = (p, words) => { const h = haystack(p); return words.every(w => h.includes(w)); };
 
     function card(p) {
@@ -2104,11 +2108,11 @@
         + (tools.length > TOOLS_SHOWN ? `<span class="pl-chip" title="${esc(tools.slice(TOOLS_SHOWN).map(x => x[0]).join(", "))}">+${tools.length - TOOLS_SHOWN}</span>` : "");
       const stChip = p.error ? `<span class="pl-st bad">${WARN_ICON} ${esc(window.t("app.err_low"))}</span>`
         : p.gated ? `<span class="pl-st warn">${WARN_ICON} ${esc(window.t("cs.pl_st_gated"))}</span>`
-        : (p.enabled && !p.loaded) ? `<span class="pl-st warn">${esc(window.t("cs.pl_st_idle"))}</span>` : "";
+          : (p.enabled && !p.loaded) ? `<span class="pl-st warn">${esc(window.t("cs.pl_st_idle"))}</span>` : "";
       // The group heading already says where a plugin comes from; only "this brain only" needs saying.
       const badge = p.source === "vault" ? `<span class="pl-badge" style="color:${SRC.vault[1]}">${esc(SRC.vault[0])}</span>` : "";
       const meta = [MM[p.min_mode] ? esc(window.t("cs.pl_minmode", { muc: MM[p.min_mode] })) : "",
-                    p.version ? `v${esc(p.version)}` : ""].filter(Boolean).join(" · ");
+      p.version ? `v${esc(p.version)}` : ""].filter(Boolean).join(" · ");
       const acts = (p.page ? `<a class="pl-act" href="${esc(safeHref(p.page))}" target="_blank" rel="noopener">${esc(window.t("cs.pl_open_page"))} ↗</a>` : "")
         + (p.removed ? `<button type="button" class="pl-act undel">${esc(window.t("store.reinstall"))}</button>` : "")
         + (p.source !== "pack" && !p.removed ? `<button type="button" class="pl-act del">${esc(window.t("proj.remove_short"))}</button>` : "");
@@ -2253,12 +2257,12 @@
       wrap.innerHTML = `<div id="ctTuyChon" style="margin-bottom:22px" hidden></div>`
         + `<div id="plGate"></div>`
         + `<div class="pl-bar">`
-        +   `<label class="pl-search">${ic("search")}<input type="search" id="plSearch" autocomplete="off" spellcheck="false" placeholder="${esc(window.t("cs.pl_search_ph"))}" aria-label="${esc(window.t("cs.pl_search_ph"))}">`
-        +   `<button type="button" class="pl-clear" id="plClear" aria-label="${esc(window.t("cs.pl_clear"))}" title="${esc(window.t("cs.pl_clear"))}" hidden>${ic("x")}</button></label>`
-        +   `<div class="pl-seg" id="plSeg" role="group" aria-label="${esc(window.t("cs.pl_filter_aria"))}"></div>`
+        + `<label class="pl-search">${ic("search")}<input type="search" id="plSearch" autocomplete="off" spellcheck="false" placeholder="${esc(window.t("cs.pl_search_ph"))}" aria-label="${esc(window.t("cs.pl_search_ph"))}">`
+        + `<button type="button" class="pl-clear" id="plClear" aria-label="${esc(window.t("cs.pl_clear"))}" title="${esc(window.t("cs.pl_clear"))}" hidden>${ic("x")}</button></label>`
+        + `<div class="pl-seg" id="plSeg" role="group" aria-label="${esc(window.t("cs.pl_filter_aria"))}"></div>`
         // Install from .zip (owner, 2026-10-25): the flow lives in packs.js next to the pack zip
         // flow, so both share one picker, one zip rule set on the server and one style of screen.
-        +   `<div class="pl-zipw"><button type="button" class="s-btn-ghost pl-zip" id="plZip">${ic("file-up")} ${esc(window.t("plzip.btn"))}</button>${infoBtn()}</div>`
+        + `<div class="pl-zipw"><button type="button" class="s-btn-ghost pl-zip" id="plZip">${ic("file-up")} ${esc(window.t("plzip.btn"))}</button>${infoBtn()}</div>`
         + `</div>`
         + infoBody(esc(window.t("plzip.btn_info")))
         // The folder path and how to add a plugin are help, not state: both sit in one (i).
@@ -2300,7 +2304,7 @@
     async function load() {
       if (myGen !== _renderGen) return;
       let d = { plugins: [] };
-      try { d = await (await fetch(`/plugins?brain=${encodeURIComponent(fbrain())}`)).json(); } catch (e) {}
+      try { d = await (await fetch(`/plugins?brain=${encodeURIComponent(fbrain())}`)).json(); } catch (e) { }
       if (myGen !== _renderGen) return;
       const first = !ui.data;
       ui.data = d;
@@ -2329,10 +2333,10 @@
     try {
       const d = await (await fetch("/brains")).json();
       brains = (d.brains || []).map(b => ({ name: b.label || b.name, path: b.path, is_default: b.is_default }));
-    } catch (e) {}
+    } catch (e) { }
     if (myGen !== _renderGen) return;
     // 0.432.0: the hook popup hangs off <body>; leaving the page closes it.
-    _pageLeave = () => { try { window.JavisWebhooks.unmount(); } catch (e) {} };
+    _pageLeave = () => { try { window.JavisWebhooks.unmount(); } catch (e) { } };
     window.JavisWebhooks.mount(el.querySelector("#whSection"), { brains: () => brains, current: () => fbrain() });
   }
 
@@ -2496,12 +2500,16 @@
       const head = `<div class="dim" style="color:var(--text3)">${esc(window.t("improve.auto_stats").replace("{p}", st.pending || 0).replace("{m}", open))}</div>`;
       const rows = (d.history || []).slice(0, 10);
       if (!rows.length) { box.innerHTML = head + `<div class="dim" style="color:var(--text3)">${esc(window.t("improve.auto_empty"))}</div>`; return; }
-      const KIND = {skill: window.t("improve.auto_kind_skill"), agent: window.t("improve.auto_kind_agent"),
-                    workflow: window.t("improve.auto_kind_workflow")};
-      const STATE = {undone: window.t("improve.auto_undone"), applied: window.t("improve.auto_applied"),
-                     proposed: window.t("improve.auto_proposed"), running: window.t("improve.auto_running"),
-                     failed: window.t("improve.auto_failed"), skipped: window.t("improve.auto_skipped"),
-                     kept: window.t("improve.auto_kept")};
+      const KIND = {
+        skill: window.t("improve.auto_kind_skill"), agent: window.t("improve.auto_kind_agent"),
+        workflow: window.t("improve.auto_kind_workflow")
+      };
+      const STATE = {
+        undone: window.t("improve.auto_undone"), applied: window.t("improve.auto_applied"),
+        proposed: window.t("improve.auto_proposed"), running: window.t("improve.auto_running"),
+        failed: window.t("improve.auto_failed"), skipped: window.t("improve.auto_skipped"),
+        kept: window.t("improve.auto_kept")
+      };
       box.innerHTML = head + rows.map(r => {
         const what = (KIND[r.kind] || r.kind) + " " + r.slug + (r.kind === "workflow" ? " #" + (r.step + 1) : "");
         const state = r.undone_at ? "undone" : r.applied ? "applied" : r.proposed ? "proposed" : r.state === "running" ? "running"
@@ -2511,8 +2519,10 @@
         return `<div class="le">${esc(new Date(r.started_at * 1000).toLocaleString())} · <b>${esc(what)}</b> · ${esc(STATE[state])} ${act}</div>`;
       }).join("");
       const post = async (id, verb) => {
-        await fetch(`/auto-learning/${encodeURIComponent(id)}/${verb}?brain=${encodeURIComponent(fbrain())}`, {method: "POST",
-          headers: {"Content-Type": "application/json"}, body: JSON.stringify({event_key: `ln-${verb}-${id}`})});
+        await fetch(`/auto-learning/${encodeURIComponent(id)}/${verb}?brain=${encodeURIComponent(fbrain())}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_key: `ln-${verb}-${id}` })
+        });
         loadChat();
       };
       box.querySelectorAll("[data-al-apply]").forEach(b => b.onclick = () => post(b.dataset.alApply, "apply"));
@@ -3018,55 +3028,55 @@
     const lenhNghe = olLenhNghe(st);
     el.innerHTML =
       '<div class="gcard ol-empty">' +
-        '<div class="ol-empty-ico">' + ic("cpu", { cls: "ic-xl" }) + "</div>" +
-        // 0.214.0: what Ollama is, the Docker caveat and the VPS how-to fold into (i) blocks.
-        '<div class="ol-empty-title">' + esc(t("ol.title")) + infoBtn() + "</div>" +
-        infoBody('<div class="ol-empty-desc">' + esc(t("ol.desc")) + "</div>" +
-          (xa ? '<div class="ol-note">' + ic("info") + "<span>" + esc(t("ol.note_docker")) + "</span></div>" +
-                '<div class="ol-note ol-warn">' + ic("triangle-alert") + "<span>" + esc(t("ol.dk_cham")) + "</span></div>"
-              : "")) +
-        (xa ? "" : '<div class="ol-note">' + ic("info") + "<span>" + esc(t("ol.note_native")) + "</span></div>") +
-        (xa
-          // The steps are the action itself, so they stay open; only the firewall caveat folds (review 0.214.0).
-          ? '<div class="ol-step">' + esc(t("ol.dk_title")) + "</div>" +
-            '<div class="ol-buoc">1. ' + esc(t("ol.dk_b1")) + "</div>" +
-            '<div class="ol-buoc">2. ' + esc(t("ol.dk_b2")) + "</div>" +
-            '<div class="ol-cmd"><code>' + esc(lenh) + "</code>" +
-              '<button class="gcard-btn ol-copy" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button></div>" +
-            '<div class="ol-buoc">3. ' + esc(t("ol.dk_b3")) + "</div>" +
-            '<div class="ol-cmd"><code>' + esc(lenhNghe) + "</code>" +
-              '<button class="gcard-btn ol-copy2" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button>" + infoBtn() + "</div>" +
-            // The firewall caveat opens from its own (i) next to the command it is about.
-            infoBody('<div class="ol-note ol-warn">' + ic("shield") + "<span>" + esc(t("ol.dk_canh_bao")) + "</span></div>") +
-            '<div class="ol-step">' + esc(t("ol.dk_b4")) + "</div>"
-          : '<div class="ol-step">1. ' + esc(t("ol.step_install")) + "</div>" +
-            '<div class="ol-cmd"><code>' + esc(lenh) + "</code>" +
-              '<button class="gcard-btn ol-copy" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button></div>" +
-            '<div class="ol-step">2. ' + esc(t("ol.step_endpoint")) + "</div>") +
-        // ĐIỀN SẴN chứ không để trong placeholder. Chủ repo báo 02/09: "ghi điền địa chỉ này
-        // mà không biết là địa chỉ nào" - đúng, vì chữ xám trong ô nhập trông như gợi ý chứ
-        // không như một giá trị, lại còn bị ô hẹp cắt cụt giữa chừng. Dò ra được thì điền
-        // thẳng vào: người dùng chỉ việc bấm Kết nối.
-        '<div class="ol-row">' +
-          '<input class="ol-in ol-ep" placeholder="' + esc(window.t("cs.ol_ep_ph")) + '"' +
-            (st.goi_y_endpoint ? ' value="' + esc(st.goi_y_endpoint) + '"' : "") + ">" +
-          '<button class="gcard-btn primary ol-noi" type="button">' + esc(t("ol.connect")) + "</button>" +
-        "</div>" +
-        // Dò không ra cổng (mạng Docker lạ, hoặc chạy --network=host) thì nói thẳng là phải
-        // tự tìm, kèm đúng một lệnh tìm. Im lặng để ô trống là đẩy người dùng vào ngõ cụt.
-        // It is the only instruction for the empty box, so it stays open (review 0.214.0).
-        (xa && !st.goi_y_endpoint
-          ? '<div class="ol-note ol-warn">' + ic("triangle-alert") + "<span>" +
-            esc(t("ol.dk_khong_do_duoc")) + "</span></div>" +
-            '<div class="ol-cmd"><code>' + esc(OL_LENH_TIM_CONG) + "</code>" +
-              '<button class="gcard-btn ol-copy3" type="button">' + ic("copy") + " " +
-              esc(t("common.copy")) + "</button></div>"
-          : "") +
-        (st.error ? '<div class="ol-err">' + ic("triangle-alert") + "<span>" + esc(st.error) + "</span>" + (xa ? infoBtn() : "") + "</div>" : "") +
-        // Đã lưu địa chỉ mà vẫn không nối được thì từ trong container Javis không phân biệt
-        // nổi "chưa cài" với "đã chạy nhưng chỉ nghe 127.0.0.1". Máy chủ thì phân biệt được
-        // bằng đúng một lệnh - đưa lệnh đó và cách đọc kết quả, thay vì để người dùng đoán.
-        (st.error && xa ? infoBody('<div class="ol-note">' + ic("terminal") + "<span>" + esc(t("ol.dk_chan_doan")) + "</span></div>") : "") +
+      '<div class="ol-empty-ico">' + ic("cpu", { cls: "ic-xl" }) + "</div>" +
+      // 0.214.0: what Ollama is, the Docker caveat and the VPS how-to fold into (i) blocks.
+      '<div class="ol-empty-title">' + esc(t("ol.title")) + infoBtn() + "</div>" +
+      infoBody('<div class="ol-empty-desc">' + esc(t("ol.desc")) + "</div>" +
+        (xa ? '<div class="ol-note">' + ic("info") + "<span>" + esc(t("ol.note_docker")) + "</span></div>" +
+          '<div class="ol-note ol-warn">' + ic("triangle-alert") + "<span>" + esc(t("ol.dk_cham")) + "</span></div>"
+          : "")) +
+      (xa ? "" : '<div class="ol-note">' + ic("info") + "<span>" + esc(t("ol.note_native")) + "</span></div>") +
+      (xa
+        // The steps are the action itself, so they stay open; only the firewall caveat folds (review 0.214.0).
+        ? '<div class="ol-step">' + esc(t("ol.dk_title")) + "</div>" +
+        '<div class="ol-buoc">1. ' + esc(t("ol.dk_b1")) + "</div>" +
+        '<div class="ol-buoc">2. ' + esc(t("ol.dk_b2")) + "</div>" +
+        '<div class="ol-cmd"><code>' + esc(lenh) + "</code>" +
+        '<button class="gcard-btn ol-copy" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button></div>" +
+        '<div class="ol-buoc">3. ' + esc(t("ol.dk_b3")) + "</div>" +
+        '<div class="ol-cmd"><code>' + esc(lenhNghe) + "</code>" +
+        '<button class="gcard-btn ol-copy2" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button>" + infoBtn() + "</div>" +
+        // The firewall caveat opens from its own (i) next to the command it is about.
+        infoBody('<div class="ol-note ol-warn">' + ic("shield") + "<span>" + esc(t("ol.dk_canh_bao")) + "</span></div>") +
+        '<div class="ol-step">' + esc(t("ol.dk_b4")) + "</div>"
+        : '<div class="ol-step">1. ' + esc(t("ol.step_install")) + "</div>" +
+        '<div class="ol-cmd"><code>' + esc(lenh) + "</code>" +
+        '<button class="gcard-btn ol-copy" type="button">' + ic("copy") + " " + esc(t("common.copy")) + "</button></div>" +
+        '<div class="ol-step">2. ' + esc(t("ol.step_endpoint")) + "</div>") +
+      // ĐIỀN SẴN chứ không để trong placeholder. Chủ repo báo 02/09: "ghi điền địa chỉ này
+      // mà không biết là địa chỉ nào" - đúng, vì chữ xám trong ô nhập trông như gợi ý chứ
+      // không như một giá trị, lại còn bị ô hẹp cắt cụt giữa chừng. Dò ra được thì điền
+      // thẳng vào: người dùng chỉ việc bấm Kết nối.
+      '<div class="ol-row">' +
+      '<input class="ol-in ol-ep" placeholder="' + esc(window.t("cs.ol_ep_ph")) + '"' +
+      (st.goi_y_endpoint ? ' value="' + esc(st.goi_y_endpoint) + '"' : "") + ">" +
+      '<button class="gcard-btn primary ol-noi" type="button">' + esc(t("ol.connect")) + "</button>" +
+      "</div>" +
+      // Dò không ra cổng (mạng Docker lạ, hoặc chạy --network=host) thì nói thẳng là phải
+      // tự tìm, kèm đúng một lệnh tìm. Im lặng để ô trống là đẩy người dùng vào ngõ cụt.
+      // It is the only instruction for the empty box, so it stays open (review 0.214.0).
+      (xa && !st.goi_y_endpoint
+        ? '<div class="ol-note ol-warn">' + ic("triangle-alert") + "<span>" +
+        esc(t("ol.dk_khong_do_duoc")) + "</span></div>" +
+        '<div class="ol-cmd"><code>' + esc(OL_LENH_TIM_CONG) + "</code>" +
+        '<button class="gcard-btn ol-copy3" type="button">' + ic("copy") + " " +
+        esc(t("common.copy")) + "</button></div>"
+        : "") +
+      (st.error ? '<div class="ol-err">' + ic("triangle-alert") + "<span>" + esc(st.error) + "</span>" + (xa ? infoBtn() : "") + "</div>" : "") +
+      // Đã lưu địa chỉ mà vẫn không nối được thì từ trong container Javis không phân biệt
+      // nổi "chưa cài" với "đã chạy nhưng chỉ nghe 127.0.0.1". Máy chủ thì phân biệt được
+      // bằng đúng một lệnh - đưa lệnh đó và cách đọc kết quả, thay vì để người dùng đoán.
+      (st.error && xa ? infoBody('<div class="ol-note">' + ic("terminal") + "<span>" + esc(t("ol.dk_chan_doan")) + "</span></div>") : "") +
 
       "</div>";
     const cop3 = el.querySelector(".ol-copy3");
@@ -3374,7 +3384,7 @@
       const hen = setTimeout(() => ac.abort(), 2500);
       try { claudeSt = await (await fetch("/claude/status", { signal: ac.signal })).json(); }
       finally { clearTimeout(hen); }
-    } catch (e) {}
+    } catch (e) { }
     const claudeOn = !!(claudeSt && claudeSt.connected);
     // kind "cli" nay có ba bộ não (Claude Code, Grok Build, Antigravity). Chỉ Claude mới phải
     // hỏi /claude/status; hai cái kia đã có `configured` thật từ server (đọc file đăng nhập).
@@ -3422,8 +3432,8 @@
     const ordBadges = (p, ord) => !ord ? "" : `<div class="ord-badges-m">${ord.idx === 0
       ? `<span class="prov-badge">${ic("star")}MAIN</span>`
       : `<span class="ord-pos">${esc(t("models.ord_backup", { n: ord.idx }))}</span>`}${chatLive(p, ord)
-      ? `<span class="prov-badge ord-live">${ic("zap")}${esc(t("models.ord_live"))}</span>` : ""}${isBg(p)
-      ? `<span class="prov-badge ord-bgb">${ic("workflow")}${esc(t("models.badge_bg"))}</span>` : ""}</div>`;
+        ? `<span class="prov-badge ord-live">${ic("zap")}${esc(t("models.ord_live"))}</span>` : ""}${isBg(p)
+          ? `<span class="prov-badge ord-bgb">${ic("workflow")}${esc(t("models.badge_bg"))}</span>` : ""}</div>`;
     // Fast mode is one setting for the whole app (the composer's bolt); a chip shows the bolt while it is on and the
     // card's model supports it, same rule as the composer (JavisModelBar.fastNote).
     const fastOk = (pid, model) => !!(window.JavisModelBar && window.JavisModelBar.fastNote
@@ -3539,8 +3549,10 @@
       return `<span class="prov-logo${svg ? "" : " ic-tile"}">${svg || ic("key-round")}<span class="prov-dot${limitedAt[p.id] ? " rest" : on ? " on" : ""}"></span></span>`;
     };
     // The small tag after the name says what pays for the card: the plan, or an API key.
-    const PLAN_TAG = { "openai-oauth": "models.tag_chatgpt", "grok-cli": "models.tag_xai", "antigravity-cli": "models.tag_google",
-                       "anthropic-cli": "models.tag_claude" };
+    const PLAN_TAG = {
+      "openai-oauth": "models.tag_chatgpt", "grok-cli": "models.tag_xai", "antigravity-cli": "models.tag_google",
+      "anthropic-cli": "models.tag_claude"
+    };
     const kindTag = (p) => {
       if (p.id === "anthropic-cli" && p.auth_mode === "api_key") return t("models.tag_api");
       if (PLAN_TAG[p.id]) return p.plan ? t("models.tag_plan", { goi: p.plan }) : t(PLAN_TAG[p.id]);
@@ -3622,8 +3634,8 @@
           ${ordActs(p, ord, { add: on && ord && multiPlan.indexOf(p.id) >= 0 ? "plan" : "" })}
           <div class="prov-action" style="flex-wrap:wrap">
             ${on && ord ? "" : on
-              ? `<button class="gcard-btn ghost" data-oauth-disc="1">${esc(t("models.disconnect"))}</button>`
-              : `<button class="gcard-btn" data-oauth-login="1">${esc(t("models.login_gpt"))}</button>
+            ? `<button class="gcard-btn ghost" data-oauth-disc="1">${esc(t("models.disconnect"))}</button>`
+            : `<button class="gcard-btn" data-oauth-login="1">${esc(t("models.login_gpt"))}</button>
                  <button class="gcard-btn ghost" data-oauth-browser="1">${esc(t("models.via_browser"))}</button>`}
             <span id="oauthMsg" class="gcard-meta" style="margin-left:10px;flex:1;min-width:220px"></span>
           </div>
@@ -3648,7 +3660,7 @@
           ${ordActs(p, ord, { check: "data-grokcheck", add: on && multiPlan.indexOf(p.id) >= 0 ? "plan" : "" })}
           <div class="prov-action" style="flex-wrap:wrap">
             ${on && ord ? "" : on
-              ? `<button class="gcard-btn ghost" data-grokcheck="1">${esc(t("qs.recheck"))}</button>
+            ? `<button class="gcard-btn ghost" data-grokcheck="1">${esc(t("qs.recheck"))}</button>
                  <button class="gcard-btn ghost" data-grokdisc="1">${esc(t("models.disconnect"))}</button>`
             : `<button class="gcard-btn" data-groklogin="1">${esc(t("auth.submit"))}</button>
                  <button class="gcard-btn ghost" data-grokcheck="1">${esc(t("qs.recheck"))}</button>`}
@@ -3669,9 +3681,9 @@
         const off = !!p.javis_off;
         const st = on
           ? t("models.st_logged_in") + (p.auth_method ? " · " + esc(p.auth_method) : "")
-            + " · " + p.models.length + " model"
+          + " · " + p.models.length + " model"
           : off ? t("models.agy_off")
-          : (p.cli_found ? t("models.st_cli_no_login") : t("models.st_no_cli", { ten: "Antigravity CLI" }));
+            : (p.cli_found ? t("models.st_cli_no_login") : t("models.st_no_cli", { ten: "Antigravity CLI" }));
         return `${cardOpen(p, ord)}
           ${provHead(p, on, "MCP/skill", st, true, ord)}
           ${infoBody(esc(t("models.agy_note")))}
@@ -3686,8 +3698,8 @@
           ${ordActs(p, ord, { check: "data-agycheck", add: on && multiPlan.indexOf(p.id) >= 0 ? "plan" : "" })}
           <div class="prov-action" style="flex-wrap:wrap">
             ${off
-              ? `<button class="gcard-btn" data-agyon="1">${ic("plug-zap")} ${esc(t("models.reconnect"))}</button>`
-              : on && ord ? "" : `<button class="gcard-btn ghost" data-agycheck="1">${esc(t("qs.recheck"))}</button>
+            ? `<button class="gcard-btn" data-agyon="1">${ic("plug-zap")} ${esc(t("models.reconnect"))}</button>`
+            : on && ord ? "" : `<button class="gcard-btn ghost" data-agycheck="1">${esc(t("qs.recheck"))}</button>
                  ${on ? `<button class="gcard-btn ghost" data-agydisc="1">${esc(t("models.disconnect"))}</button>` : ""}`}
             <span id="agyMsg" class="gcard-meta" style="margin-left:10px;flex:1;min-width:200px">${on || off ? "" : esc(p.auth_error || "")}</span>
           </div>
@@ -3705,7 +3717,7 @@
             <div class="prov-info">
               <div class="prov-name">${esc(p.label)} <span class="prov-kind">${esc(kindTag(p))}</span></div>
               <div class="prov-status" id="cliStatus">${esc(p.cli_found === false
-                ? t("models.st_no_cli", { ten: "Claude Code" }) : t("models.checking"))}</div>
+          ? t("models.st_no_cli", { ten: "Claude Code" }) : t("models.checking"))}</div>
             </div>
             ${cardMenuBtn(p, ord)}
           </div>${ordChips(p, ord)}${limitLine(p, ord)}
@@ -3801,15 +3813,17 @@
     const bgName = bgCfg.model || defName(bgCfg.provider);
     const useP = bgUse ? (pById(bgUse.provider) || {}) : {};
     const bgLine = !bgUse ? `<div class="aux-note warn">${WARN_ICON} ${esc(t("models.bg_none"))}</div>`
-      : bgUse.step !== "background" ? `<div class="aux-note">${esc(t("models.bg_using", { bg: bgName,
-          dung: (useP.label || bgUse.provider) + " · " + (bgUse.model || defName(bgUse.provider)) }))}</div>` : "";
+      : bgUse.step !== "background" ? `<div class="aux-note">${esc(t("models.bg_using", {
+        bg: bgName,
+        dung: (useP.label || bgUse.provider) + " · " + (bgUse.model || defName(bgUse.provider))
+      }))}</div>` : "";
     const moreHtml = offList.length ? `<div class="cview-section${connList.length ? "" : " ord-first"}">
         ${connList.length ? "" : `<div class="prov-note warn">${WARN_ICON} ${esc(t("models.ord_empty"))}</div>`}
         <button type="button" class="ord-more" id="ordMore" aria-haspopup="dialog" aria-expanded="${showOff ? "true" : "false"}">
           <span class="ord-stack">${offList.filter(p => window.JavisProviderLogos && window.JavisProviderLogos.has(p.id)).slice(0, 3)
-            .map(p => `<span class="prov-logo mini">${window.JavisProviderLogos.svg(p.id)}</span>`).join("") || `<span class="prov-logo mini ic-tile">${ic("plug")}</span>`}</span>
+        .map(p => `<span class="prov-logo mini">${window.JavisProviderLogos.svg(p.id)}</span>`).join("") || `<span class="prov-logo mini ic-tile">${ic("plug")}</span>`}</span>
           <span class="ord-more-t"><b>${esc(t("models.connect_more"))}</b><span>${esc(offList.slice(0, 4).map(p => p.label).join(", ")
-            + (offList.length > 4 ? " " + t("models.connect_more_n", { n: offList.length - 4 }) : ""))}</span></span>
+          + (offList.length > 4 ? " " + t("models.connect_more_n", { n: offList.length - 4 }) : ""))}</span></span>
           ${ic("chevron-up", { cls: "ord-more-c" })}
         </button>
         <div class="prov-list ord-off" id="ordOff" ${showOff ? "" : "hidden"}>${offList.map(p => provCard(p, null)).join("")}</div>
@@ -3842,9 +3856,11 @@
       </div>
       ${connList.length ? moreHtml : ""}`;
 
-    bindOrderCards(el, { order, connList, offList, prof, accts, bgCfg, effName, multiKey, multiPlan, limited: limitedAt,
-                         fast: m.fast === true, kindTag,
-                         again: () => renderModelsCloudTab(el) });
+    bindOrderCards(el, {
+      order, connList, offList, prof, accts, bgCfg, effName, multiKey, multiPlan, limited: limitedAt,
+      fast: m.fast === true, kindTag,
+      again: () => renderModelsCloudTab(el)
+    });
     // Nguồn xác thực của gói Claude Code. Vẽ lại cả trang sau khi lưu vì cảnh báo phụ thuộc
     // cả lựa chọn này LẪN model việc nền - chỉ server mới ghép được hai thứ đó.
     el.querySelectorAll('input[name="claudeAuth"]').forEach((r) => {
@@ -4139,12 +4155,14 @@
       b.disabled = true;
       save({ order: MO.swapAt(c.order, Number(b.dataset.swap)) });
     });
-    MO.bindDrag(el, { onDrop: (key, from, to) => {
-      if (key === "prov") save({ order: MO.move(c.order, from, to) });
-      else if (key.indexOf("acct:") === 0) saveAcc(key.slice(5), MO.move(items(key.slice(5)), from, to));
-      else if (key.indexOf("pacct:") === 0) saveAcc(key.slice(6), MO.move(items(key.slice(6)), from, to));
-      else if (key.indexOf("adv:") === 0) save({ adv_keys: { items: MO.move(items("anthropic-compat"), from, to) } });
-    } });
+    MO.bindDrag(el, {
+      onDrop: (key, from, to) => {
+        if (key === "prov") save({ order: MO.move(c.order, from, to) });
+        else if (key.indexOf("acct:") === 0) saveAcc(key.slice(5), MO.move(items(key.slice(5)), from, to));
+        else if (key.indexOf("pacct:") === 0) saveAcc(key.slice(6), MO.move(items(key.slice(6)), from, to));
+        else if (key.indexOf("adv:") === 0) save({ adv_keys: { items: MO.move(items("anthropic-compat"), from, to) } });
+      }
+    });
 
     // ---- pull-up sheets: every picker, menu, form and confirmation of this page ----
     // 0.352.0 gave a phone a bottom sheet and kept a popover under the chip on a computer. The owner asked on 05/11/2026
@@ -4296,8 +4314,10 @@
       if (!g && !v("key")) return need(box, "key");
       let r;
       try {
-        r = await postJson("/provider/anthropic-compat/connect", { id: g ? g.id : "", add: !g, label: v("label"),
-          base: v("base"), key: v("key"), models: v("models") }, 60000);
+        r = await postJson("/provider/anthropic-compat/connect", {
+          id: g ? g.id : "", add: !g, label: v("label"),
+          base: v("base"), key: v("key"), models: v("models")
+        }, 60000);
       } catch (e) { r = { ok: false, error: String(e) }; }
       if (!r || !r.ok) {
         if (r && r.need_models) box("models").focus();
@@ -4313,21 +4333,25 @@
         const i = idx(), n = items(ADV).length;
         const saveAdv = (list, removed) => save({ adv_keys: { items: list, removed: removed || [] } });
         menuSheet(btn, g.label || id, [[
-          { ic: g.enabled ? "pause" : "play", label: t(g.enabled ? "models.acct_disable" : "models.acct_enable"),
+          {
+            ic: g.enabled ? "pause" : "play", label: t(g.enabled ? "models.acct_disable" : "models.acct_enable"),
             sub: g.enabled ? t("models.acct_disable_d") : "", run: () => {
               const l = items(ADV);
               l[idx()].enabled = !l[idx()].enabled;
               saveAdv(l);
-            } },
+            }
+          },
           { ic: "pencil", label: t("models.adv_edit"), sub: t("models.adv_edit_d"), run: () => advSheet(btn, g) },
           i > 0 && { ic: "arrow-up", label: t("models.move_up"), run: () => saveAdv(MO.move(items(ADV), idx(), idx() - 1)) },
           i < n - 1 && { ic: "arrow-down", label: t("models.move_down"), run: () => saveAdv(MO.move(items(ADV), idx(), idx() + 1)) },
         ], [
-          { ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () => confirmSheet(btn, t("models.rm_t", { ten: g.label }),
-            t(n > 1 ? "models.acct_rm_q" : "models.acct_rm_last_q", { ten: g.label }), t("models.acct_rm"), "trash-2", () => {
-              if (n > 1) { const l = items(ADV); l.splice(idx(), 1); saveAdv(l, [id]); }
-              else disconnectCard(el, ADV, null, cardOf(ADV).label, true);
-            }) },
+          {
+            ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () => confirmSheet(btn, t("models.rm_t", { ten: g.label }),
+              t(n > 1 ? "models.acct_rm_q" : "models.acct_rm_last_q", { ten: g.label }), t("models.acct_rm"), "trash-2", () => {
+                if (n > 1) { const l = items(ADV); l.splice(idx(), 1); saveAdv(l, [id]); }
+                else disconnectCard(el, ADV, null, cardOf(ADV).label, true);
+              })
+          },
         ]], g.host);
       };
     });
@@ -4338,35 +4362,43 @@
         const btn = ev.currentTarget, a = items(pid)[idx()] || {}, i = idx(), n = items(pid).length;
         const name = a.label || t("models.acct_n", { n: i + 1 });
         menuSheet(btn, name, [[
-          { ic: a.enabled ? "pause" : "play", label: t(a.enabled ? "models.acct_disable" : "models.acct_enable"),
+          {
+            ic: a.enabled ? "pause" : "play", label: t(a.enabled ? "models.acct_disable" : "models.acct_enable"),
             sub: a.enabled ? t("models.acct_disable_d") : "", run: () => {
               const l = items(pid);
               l[idx()].enabled = !l[idx()].enabled;
               saveAcc(pid, l);
-            } },
-          { ic: "pencil", label: t("models.acct_rename"), run: () => formSheet(btn, t("models.acct_rename"), name,
-            [{ f: "label", ph: t("models.acct_label_ph"), value: a.label }], t("common.save"), (v, box) => {
-              if (!v("label")) return need(box, "label");
-              const l = items(pid);
-              l[idx()].label = v("label");
-              saveAcc(pid, l);
-            }) },
-          { ic: "key-round", label: t("models.acct_rekey"), sub: t("models.acct_rekey_d"), run: () => formSheet(btn,
-            t("models.acct_rekey"), name, [{ f: "key", ph: t("models.acct_key_ph"), type: "password" }], t("common.save"), (v, box) => {
-              if (!v("key")) return need(box, "key");
-              const l = items(pid);
-              l[idx()].key = v("key");
-              saveAcc(pid, l);
-            }) },
+            }
+          },
+          {
+            ic: "pencil", label: t("models.acct_rename"), run: () => formSheet(btn, t("models.acct_rename"), name,
+              [{ f: "label", ph: t("models.acct_label_ph"), value: a.label }], t("common.save"), (v, box) => {
+                if (!v("label")) return need(box, "label");
+                const l = items(pid);
+                l[idx()].label = v("label");
+                saveAcc(pid, l);
+              })
+          },
+          {
+            ic: "key-round", label: t("models.acct_rekey"), sub: t("models.acct_rekey_d"), run: () => formSheet(btn,
+              t("models.acct_rekey"), name, [{ f: "key", ph: t("models.acct_key_ph"), type: "password" }], t("common.save"), (v, box) => {
+                if (!v("key")) return need(box, "key");
+                const l = items(pid);
+                l[idx()].key = v("key");
+                saveAcc(pid, l);
+              })
+          },
           i > 0 && { ic: "arrow-up", label: t("models.move_up"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() - 1)) },
           i < n - 1 && { ic: "arrow-down", label: t("models.move_down"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() + 1)) },
         ], [
-          { ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () => confirmSheet(btn, t("models.rm_t", { ten: name }),
-            t(n > 1 ? "models.acct_rm_q" : "models.acct_rm_last_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
-              const l = items(pid);
-              l.splice(idx(), 1);
-              saveAcc(pid, l);
-            }) },
+          {
+            ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () => confirmSheet(btn, t("models.rm_t", { ten: name }),
+              t(n > 1 ? "models.acct_rm_q" : "models.acct_rm_last_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
+                const l = items(pid);
+                l.splice(idx(), 1);
+                saveAcc(pid, l);
+              })
+          },
         ]], cardOf(pid).label);
       };
     });
@@ -4381,8 +4413,10 @@
       msg.textContent = t("models.opening");
       let r;
       try {
-        r = await postJson("/plan-accounts/login-start", { provider: pid, account_id: box.dataset.re || "",
-          label: box.querySelector('[data-f="label"]').value.trim() }, 60000);
+        r = await postJson("/plan-accounts/login-start", {
+          provider: pid, account_id: box.dataset.re || "",
+          label: box.querySelector('[data-f="label"]').value.trim()
+        }, 60000);
       } catch (e) { r = { ok: false, error: String(e) }; }
       go.disabled = false;
       msg.textContent = "";
@@ -4420,7 +4454,7 @@
         try {
           d = await (await fetch("/plan-accounts/login-poll?provider=" + encodeURIComponent(pid)
             + "&account_id=" + encodeURIComponent(r.account_id))).json();
-        } catch (e) {}
+        } catch (e) { }
         if (d && d.connected) { done(); return; }
         if (d && d.ok === false && d.error) { msg.innerHTML = WARN_ICON + " " + esc(d.error); return; }
         if (Date.now() < han) setTimeout(tick, 3000);
@@ -4447,7 +4481,7 @@
       box.querySelector("[data-pacct-go]").onclick = () => planLogin(pid, box);
       box.querySelector("[data-pacct-cancel]").onclick = () => closePop();
       opened(btn, sh, null, () => {
-        if (box.dataset.acc) postJson("/plan-accounts/login-cancel", { provider: pid, account_id: box.dataset.acc }).catch(() => {});
+        if (box.dataset.acc) postJson("/plan-accounts/login-cancel", { provider: pid, account_id: box.dataset.acc }).catch(() => { });
       });
       if (reId) planLogin(pid, box);
     };
@@ -4481,14 +4515,16 @@
         go.disabled = true;
         let r;
         try {
-          r = await postJson("/plan-accounts/login-start", { provider: pid, account_id: box.dataset.re || "",
-            label: box.querySelector('[data-f="label"]').value.trim() }, 30000);
+          r = await postJson("/plan-accounts/login-start", {
+            provider: pid, account_id: box.dataset.re || "",
+            label: box.querySelector('[data-f="label"]').value.trim()
+          }, 30000);
         } catch (e) { r = { ok: false, error: String(e) }; }
         go.disabled = false;
         if (!r || !r.ok || !r.terminal) { msg.innerHTML = WARN_ICON + " " + esc((r && r.error) || t("app.err_cap")); return; }
         box.dataset.acc = r.account_id;
         let copied = false;
-        try { await navigator.clipboard.writeText(r.terminal); copied = true; } catch (e) {}
+        try { await navigator.clipboard.writeText(r.terminal); copied = true; } catch (e) { }
         step.innerHTML = `<div>${esc(t(copied ? "models.agy_copied" : "models.agy_copy_this"))}</div><code class="ord-cmd">${esc(r.terminal)}</code>`;
         go.hidden = true;
         // Wait for the account's token file for up to 15 minutes; the sheet stays open meanwhile.
@@ -4500,7 +4536,7 @@
           let d = null;
           try {
             d = await (await fetch("/plan-accounts/login-poll?provider=" + pid + "&account_id=" + encodeURIComponent(r.account_id))).json();
-          } catch (e) {}
+          } catch (e) { }
           if (d && d.connected) {
             job.live = false;
             delete box.dataset.acc;
@@ -4519,13 +4555,13 @@
         step.querySelector("[data-open-term]").onclick = () => {
           delete box.dataset.acc;   // closing must not cancel the sign-in now
           closePop();
-          try { window.JavisNav.go("terminal"); } catch (e) {}
+          try { window.JavisNav.go("terminal"); } catch (e) { }
         };
       };
       opened(btn, sh, null, () => {
         if (!box.dataset.acc) return;
         if (box._job) box._job.live = false;
-        postJson("/plan-accounts/login-cancel", { provider: pid, account_id: box.dataset.acc }).catch(() => {});
+        postJson("/plan-accounts/login-cancel", { provider: pid, account_id: box.dataset.acc }).catch(() => { });
       });
     };
     el.querySelectorAll("[data-addacc]").forEach(b => b.onclick = () => planSheet(b, b.dataset.addacc));
@@ -4536,22 +4572,26 @@
         const btn = ev.currentTarget, a = (c.accts[pid] || []).find(x => x.id === id) || {};
         const i0 = idx(), n = items(pid).length;
         const name = a.label || (a.main ? t("models.pacct_main") : t("models.pacct_n", { n: i0 + 1 }));
-        const rows = [{ ic: a.enabled ? "pause" : "play", label: t(a.enabled ? "models.acct_disable" : "models.acct_enable"),
+        const rows = [{
+          ic: a.enabled ? "pause" : "play", label: t(a.enabled ? "models.acct_disable" : "models.acct_enable"),
           sub: a.enabled ? t("models.acct_disable_d") : "", run: () => {
             const l = items(pid);
             l[idx()].enabled = !l[idx()].enabled;
             saveAcc(pid, l);
-          } }];
+          }
+        }];
         // Account 1 is the machine's own sign-in: it can be turned off here, not removed or signed in again.
         if (!a.main) rows.push({ ic: "log-in", label: t("models.pacct_relogin"), run: () => planSheet(btn, pid, id, a.label || "") });
         if (i0 > 0) rows.push({ ic: "arrow-up", label: t("models.move_up"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() - 1)) });
         if (i0 < n - 1) rows.push({ ic: "arrow-down", label: t("models.move_down"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() + 1)) });
-        menuSheet(btn, name, [rows, a.main ? [] : [{ ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
-          confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
-            const l = items(pid), i = idx();
-            const gone = l.splice(i, 1)[0];
-            saveAcc(pid, l, [gone.id]);
-          }) }]], cardOf(pid).label);
+        menuSheet(btn, name, [rows, a.main ? [] : [{
+          ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
+            confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
+              const l = items(pid), i = idx();
+              const gone = l.splice(i, 1)[0];
+              saveAcc(pid, l, [gone.id]);
+            })
+        }]], cardOf(pid).label);
       };
     });
 
@@ -4569,16 +4609,18 @@
     };
     if (more) more.onclick = () => {
       const offOpen = !el.querySelector("#ordOff").hidden;
-      menuSheet(more, t("models.connect_more"), [(c.offList || []).map(p => ({ ic: p.id === "anthropic-compat" ? "key-round" : "plug", label: p.label, sub: c.kindTag(p), run: () => {
-        const box = showOff(true);
-        const card = box && box.querySelector(`[data-offp="${p.id}"]`);
-        if (card) {
-          card.scrollIntoView({ block: "center", behavior: "smooth" });
-          card.classList.add("ord-flash");
-          setTimeout(() => card.classList.remove("ord-flash"), 1600);
+      menuSheet(more, t("models.connect_more"), [(c.offList || []).map(p => ({
+        ic: p.id === "anthropic-compat" ? "key-round" : "plug", label: p.label, sub: c.kindTag(p), run: () => {
+          const box = showOff(true);
+          const card = box && box.querySelector(`[data-offp="${p.id}"]`);
+          if (card) {
+            card.scrollIntoView({ block: "center", behavior: "smooth" });
+            card.classList.add("ord-flash");
+            setTimeout(() => card.classList.remove("ord-flash"), 1600);
+          }
         }
-      } })), offOpen ? [{ ic: "chevron-up", label: t("models.connect_fold"), run: () => showOff(false) }] : []],
-      t("models.connect_more_sub", { n: (c.offList || []).length }));
+      })), offOpen ? [{ ic: "chevron-up", label: t("models.connect_fold"), run: () => showOff(false) }] : []],
+        t("models.connect_more_sub", { n: (c.offList || []).length }));
       // Each provider row shows the provider's own logo instead of a generic icon.
       const L = window.JavisProviderLogos;
       if (L && openPop) openPop.el.querySelectorAll(".ord-mi").forEach((b, i) => {
@@ -4607,20 +4649,24 @@
         // is greyed out on a model without Fast mode, same rule as the composer (JavisModelBar.fastNote).
         const fn = (window.JavisModelBar && window.JavisModelBar.fastNote) ? window.JavisModelBar.fastNote(curProv, cur.model)
           : { supported: false, note: "fast.none" };
-        const slider = S.mount(sh.body, { value: cur.reasoning, locked: locked, lockedValue: locked ? S.lockedLevel(cur.model) : "",
-          fast: { supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
-            c.fast = on;
-            el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
-            await saveSetting("model", { fast: on });
-            window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
-          } },
+        const slider = S.mount(sh.body, {
+          value: cur.reasoning, locked: locked, lockedValue: locked ? S.lockedLevel(cur.model) : "",
+          fast: {
+            supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
+              c.fast = on;
+              el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
+              await saveSetting("model", { fast: on });
+              window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
+            }
+          },
           onChange: (v) => {
             cur.reasoning = v;
             btn.querySelector(".ord-etxt").textContent = c.effName(v);
             clearTimeout(tm);
             tm = setTimeout(() => saveSetting("model", isBg ? { auxiliary: { reasoning: v } }
               : { profile: { provider: pid, reasoning: v } }), 300);
-          } });
+          }
+        });
         opened(btn, sh, slider);
         if (slider.focus && !phone()) slider.focus();
         return;
@@ -4693,8 +4739,10 @@
       opened(auxChg, sh);
       const st = { expanded: c.bgCfg.provider, filter: "" };
       const draw = async () => {
-        const o = { providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
-                    selected: { provider: c.bgCfg.provider, model: c.bgCfg.model }, searchId: "ordBgSearch" };
+        const o = {
+          providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
+          selected: { provider: c.bgCfg.provider, model: c.bgCfg.model }, searchId: "ordBgSearch"
+        };
         const html = await window.JavisModelList.render(o);
         if (!openPop || openPop.el !== pop) return;
         const typing = document.activeElement && document.activeElement.id === "ordBgSearch";
@@ -4719,7 +4767,7 @@
     const retry = async (pid) => {
       const fd = new FormData();
       fd.append("provider", pid);
-      try { await fetch("/routing/retry", { method: "POST", body: fd }); } catch (e) {}
+      try { await fetch("/routing/retry", { method: "POST", body: fd }); } catch (e) { }
       c.again();
     };
     el.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => { b.disabled = true; retry(b.dataset.retry); });
@@ -4751,21 +4799,23 @@
       const until = c.limited[pid] ? new Date(c.limited[pid] * 1000).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "";
       menuSheet(b, p.label, [
         [{ ic: "cpu", label: t("models.change_model").replace(/\s*▾$/, ""), sub: pr.model || defName(pid), run: chip("model") },
-         { ic: "gauge", label: t("models.eff_title"), sub: c.effName(pr.reasoning), run: chip("eff") }],
+        { ic: "gauge", label: t("models.eff_title"), sub: c.effName(pr.reasoning), run: chip("eff") }],
         [c.limited[pid] && { ic: "rotate-cw", label: t("models.retry_now"), sub: t("models.retry_now_d", { gio: until }), tone: "warn", run: () => retry(pid) }],
         [c.bgCfg.provider === pid
           ? { ic: "workflow", label: t("models.bg_running"), sub: t("models.bg_d"), tone: "bgsel", sel: true }
           : { ic: "workflow", label: t("models.use_bg"), sub: t("models.bg_d"), run: () => setBg(pid) }],
         [i > 0 && { ic: "star", label: t("models.make_main"), sub: t("models.make_main_d"), tone: "acc", run: () => save({ order: MO.move(c.order, i, 0) }) },
-         i > 1 && { ic: "arrow-up", label: t("models.move_up"), run: () => save({ order: MO.move(c.order, i, i - 1) }) },
-         i >= 0 && i < n - 1 && { ic: "arrow-down", label: t("models.move_down"), run: () => save({ order: MO.move(c.order, i, i + 1) }) }],
+        i > 1 && { ic: "arrow-up", label: t("models.move_up"), run: () => save({ order: MO.move(c.order, i, i - 1) }) },
+        i >= 0 && i < n - 1 && { ic: "arrow-down", label: t("models.move_down"), run: () => save({ order: MO.move(c.order, i, i + 1) }) }],
         [q("[data-addkey]") && { ic: "key-round", label: t("models.acct_add"), sub: t("models.acct_add_d"), run: () => (pid === "anthropic-compat" ? advSheet(b) : addKeySheet(b, pid)) },
-         q("[data-addacc]") && { ic: "user-plus", label: t("models.pacct_add"), sub: t("models.pacct_add_d"), run: () => planSheet(b, pid) },
-         pid === "anthropic-cli" ? { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => refreshClaudeCard(el, true) }
-           : check && { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => check.click() }],
+        q("[data-addacc]") && { ic: "user-plus", label: t("models.pacct_add"), sub: t("models.pacct_add_d"), run: () => planSheet(b, pid) },
+        pid === "anthropic-cli" ? { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => refreshClaudeCard(el, true) }
+          : check && { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => check.click() }],
         // Claude Code on an API key: the key is chosen with the card's own switch, there is no plan login to drop.
-        [!(pid === "anthropic-cli" && p.auth_mode === "api_key") && { ic: "log-out", label: t("models.disconnect_full"), sub: t("models.disc_d"),
-          danger: true, run: () => discSheet(b, pid) }],
+        [!(pid === "anthropic-cli" && p.auth_mode === "api_key") && {
+          ic: "log-out", label: t("models.disconnect_full"), sub: t("models.disc_d"),
+          danger: true, run: () => discSheet(b, pid)
+        }],
       ], i === 0 ? "MAIN · " + c.kindTag(p) : t("models.ord_backup", { n: i }) + " · " + c.kindTag(p), logoOf(pid));
     });
   }
@@ -4774,8 +4824,10 @@
   // provider keeps its own way out: a plan logs out, an API card forgets its keys, a home Ollama forgets its address,
   // Antigravity runs its own sign-out when it has one and is switched off in Javis either way. The card then leaves
   // the usage order and the next card becomes MAIN.
-  const DISC_URL = { "anthropic-cli": "/claude/logout", "openai-oauth": "/oauth/openai/disconnect",
-                     "grok-cli": "/grok/logout", "antigravity-cli": "/antigravity/logout" };
+  const DISC_URL = {
+    "anthropic-cli": "/claude/logout", "openai-oauth": "/oauth/openai/disconnect",
+    "grok-cli": "/grok/logout", "antigravity-cli": "/antigravity/logout"
+  };
   // `sure`: the Models page already asked in its own sheet.
   async function disconnectCard(el, pid, btn, label, sure) {
     const q = pid === "anthropic-cli" ? t("models.cc_logout_confirm")
@@ -4789,7 +4841,7 @@
         fd.append("endpoint", "");
         await fetch("/ollama-local/endpoint", { method: "POST", body: fd });
       } else await saveSetting("model", { clear_key: pid });
-    } catch (e) {}
+    } catch (e) { }
     _daHoiModel.delete(pid);
     if (el.isConnected) renderModelsCloudTab(el);
   }
@@ -4969,7 +5021,7 @@
       if (!el.isConnected) { stop(); return; }
       if (Date.now() - t0 > 10 * 60 * 1000) { stop(); if (m2) m2.textContent = t("models.timeout_retry"); return; }
       busy = true;
-      let d = null; try { d = await (await fetch("/claude/login-poll")).json(); } catch (e) {}
+      let d = null; try { d = await (await fetch("/claude/login-poll")).json(); } catch (e) { }
       busy = false;
       if (stopped) return;
       if (d && d.connected) { stop(); refreshClaudeCard(el); return; }
@@ -6044,7 +6096,7 @@
       + ' <span class="prov-kind">' + esc(kind || "claude code") + '</span></div>'
       + '<div class="prov-status ' + (ok ? "on" : "") + '">'
       + (ok ? ic("circle", { cls: "ic-fill ic-ok" }) + " " + esc(window.t("cs.cn_amb_ok"))
-            : WARN_ICON + " " + esc(s.status))
+        : WARN_ICON + " " + esc(s.status))
       + (host ? ' <span class="amb-host">· ' + esc(host) + '</span>' : "")
       + '</div></div></div></div>';
   }
@@ -6057,10 +6109,10 @@
     return on.map(s => ambientCard(s, kind)).join("")
       + (on.length ? "" : '<div class="mp-empty">' + esc(window.t("cs.cn_amb_none_ok")) + '</div>')
       + (off.length
-          ? '<div class="amb-hidden"><span>' + esc(window.t("cs.cn_amb_off_n", { count: off.length })) + '</span>'
-            + '<button class="mp-btn" type="button" data-amb-show>' + esc(window.t("cs.cn_amb_show")) + '</button></div>'
-            + '<div class="amb-off-list" hidden>' + off.map(s => ambientCard(s, kind)).join("") + '</div>'
-          : "");
+        ? '<div class="amb-hidden"><span>' + esc(window.t("cs.cn_amb_off_n", { count: off.length })) + '</span>'
+        + '<button class="mp-btn" type="button" data-amb-show>' + esc(window.t("cs.cn_amb_show")) + '</button></div>'
+        + '<div class="amb-off-list" hidden>' + off.map(s => ambientCard(s, kind)).join("") + '</div>'
+        : "");
   }
   // Tab đang mở của trang Kết nối. Để NGOÀI renderConnect vì trang tự vẽ lại sau mỗi lần
   // đấu, ngắt hay gỡ dịch vụ - giữ trong hàm thì mỗi thao tác lại quăng người dùng về tab đầu.
@@ -6114,22 +6166,22 @@
     const moCoiKho = orphans.filter(o => !o.co_trong_kho);
     const banMoCoi = orphans.length
       ? '<div class="conn-guide" style="border-left:3px solid var(--warn,#e0a33e);padding-left:10px;margin-bottom:12px">'
-        + WARN_ICON + ' <b>' + esc(window.t("cs.cn_orphan_head", { count: orphans.length })) + '</b> '
-        + orphans.map(o => esc(o.label)).join(", ") + '. '
-        + (orphans.some(o => o.co_trong_kho)
-            ? esc(window.t("cs.cn_orphan_local")) + ' ' : "")
-        + (moCoiKho.length
-            // Why and what reinstalling does: in (i); the reinstall buttons stay visible.
-            ? infoBtn() + infoBody(esc(window.t("cs.cn_orphan_store")))
-              // Nút xếp NGANG và chỉ rộng bằng chữ. `.gcard-btn` mặc định chiếm trọn hàng, nên
-              // để trần thì hai ba nút thành hai ba dải to đùng chồng lên nhau, trông như lỗi.
-              + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
-              + Array.from(new Set(moCoiKho.map(o => o.connector_id))).map(cid =>
-                  '<button class="gcard-btn" style="width:auto;flex:none" data-mocoi="' + esc(cid)
-                  + '">' + esc(window.t("cs.cn_orphan_btn", { ten: cid })) + '</button>').join("")
-              + '</div>'
-            : "")
+      + WARN_ICON + ' <b>' + esc(window.t("cs.cn_orphan_head", { count: orphans.length })) + '</b> '
+      + orphans.map(o => esc(o.label)).join(", ") + '. '
+      + (orphans.some(o => o.co_trong_kho)
+        ? esc(window.t("cs.cn_orphan_local")) + ' ' : "")
+      + (moCoiKho.length
+        // Why and what reinstalling does: in (i); the reinstall buttons stay visible.
+        ? infoBtn() + infoBody(esc(window.t("cs.cn_orphan_store")))
+        // Nút xếp NGANG và chỉ rộng bằng chữ. `.gcard-btn` mặc định chiếm trọn hàng, nên
+        // để trần thì hai ba nút thành hai ba dải to đùng chồng lên nhau, trông như lỗi.
+        + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
+        + Array.from(new Set(moCoiKho.map(o => o.connector_id))).map(cid =>
+          '<button class="gcard-btn" style="width:auto;flex:none" data-mocoi="' + esc(cid)
+          + '">' + esc(window.t("cs.cn_orphan_btn", { ten: cid })) + '</button>').join("")
         + '</div>'
+        : "")
+      + '</div>'
       : "";
     // A connected service whose extra tools moved to a store pack the machine does not have yet
     // (0.73.0: Zalo -> javis.zalo). Javis never installs a pack silently, so it has to be said here.
@@ -6868,7 +6920,7 @@
           <input class="js-input" id="${id("allow")}" value="${esc(allowVal)}" placeholder="${esc(window.t(`ach.${def.key}_allow_ph`))}" autocomplete="off" spellcheck="false">
           ${def.key === "telegram" ? `<label class="js-lbl" for="${id("owner")}">${tr("ach.telegram_owner")}${infoBtn()}</label>
           <select class="js-input" id="${id("owner")}">${[""].concat(String(allowVal || "").split(/[\s,]+/).filter(Boolean)).map(v =>
-            `<option value="${esc(v)}" ${v === (c.owner_chat_id || "") ? "selected" : ""}>${esc(v || window.t("ach.telegram_owner_auto"))}</option>`).join("")}</select>
+      `<option value="${esc(v)}" ${v === (c.owner_chat_id || "") ? "selected" : ""}>${esc(v || window.t("ach.telegram_owner_auto"))}</option>`).join("")}</select>
           ${infoBody(tr("ach.telegram_owner_hint"))}` : ""}
           <div id="${id("cho")}"></div>
         </div>
@@ -7165,7 +7217,7 @@
     // 0.224.0: the server wants the current password (+ a 2FA code) and refuses on a public
     // server, so the button is hidden there. The flow lives in app.js, shared with the settings block.
     if (dis) {
-      fetch("/auth/status").then(r => r.json()).then(a => { if (a.require_login) dis.hidden = true; }).catch(() => {});
+      fetch("/auth/status").then(r => r.json()).then(a => { if (a.require_login) dis.hidden = true; }).catch(() => { });
       dis.onclick = async () => {
         const curEl = document.getElementById("acCur");
         if (!window.__javisDisableLogin) { acStatus.innerHTML = Icons.warn(window.t("cs.ac_err_dot")); return; }
@@ -7467,7 +7519,7 @@
     // máy đang ở đường dự phòng (chưa nối ChatGPT, Codex cũ, thiếu key...).
     const engineName = call.engine === "chatgpt" ? "ChatGPT Live"
       : call.engine === "api" ? t("call.engine_api", { provider: LIVE_API_NAMES[call.live_provider] || "API" })
-      : t("call.engine_basic");
+        : t("call.engine_basic");
     // 0.298.0: the engine line moved into "what you will hear" (capNhatNghe below); the why stays as a dim line.
     const parts = [];
     if (call.engine === "basic" && o.voice_brain && o.voice_brain.id) parts.push(t("settings.vc_now_brain", { brain: o.voice_brain.label }));
@@ -7489,8 +7541,10 @@
     const sel = $("vcVoice"), tryBtn = $("vcTry");
     const edgeSel = $("voiceSel");
     const basic = call.engine === "basic";
-    const VC = window.JavisVoiceCatalog || { gioiCua: () => "n", tenDep: (x) => x, nhomTheoGioi: (d) => ({ f: [], m: [], n: d || [] }),
-                                             lechGioi: () => null, giongCungGioi: () => "" };
+    const VC = window.JavisVoiceCatalog || {
+      gioiCua: () => "n", tenDep: (x) => x, nhomTheoGioi: (d) => ({ f: [], m: [], n: d || [] }),
+      lechGioi: () => null, giongCungGioi: () => ""
+    };
     const tenGioi = (g) => g === "f" ? t("settings.vc_g_f") : g === "m" ? t("settings.vc_g_m") : "";
     // "Juniper · Nữ": the live voices are bare names, so the gender word is what tells them apart (0.298.0).
     const nhanGiong = (x) => VC.tenDep(x) + (tenGioi(VC.gioiCua(x)) ? " · " + tenGioi(VC.gioiCua(x)) : "");
@@ -7549,7 +7603,7 @@
       $("vcNow").innerHTML = (basic
         ? `<div>${esc(t("settings.vc_hear_basic", { voice: docLbl }))}</div>`
         : `<div>${esc(t("settings.vc_hear_call", { engine: engineName, voice: chuChon(sel) }))}</div>`
-          + `<div>${esc(t("settings.vc_hear_read", { voice: docLbl }))}</div>`)
+        + `<div>${esc(t("settings.vc_hear_read", { voice: docLbl }))}</div>`)
         + (nowExtra ? `<div class="vc-now-why">${esc(nowExtra)}</div>` : "");
       const lech = basic ? null : VC.lechGioi(sel.value, readSel.value.startsWith("edge:") ? readSel.value.slice(5) : readSel.value);
       const box = $("vcMismatch");
@@ -7618,7 +7672,7 @@
         } else if (window.JavisVoiceSample) window.JavisVoiceSample();
       } catch (e) { }
     };
-    $("vcReadTry").onclick = () => { try { if (window.JavisVoiceSample) window.JavisVoiceSample(); } catch (e) {} };
+    $("vcReadTry").onclick = () => { try { if (window.JavisVoiceSample) window.JavisVoiceSample(); } catch (e) { } };
 
 
     // Live over an API key: TV filter and reply pace (0.220.0). ChatGPT Live and the basic path
@@ -8644,7 +8698,7 @@
   // Call AFTER JavisChatSide.mount: mount rewrites the column's innerHTML and would drop them.
   function _setSideFolded(page, folded) {
     page.classList.toggle("side-thu", folded);
-    try { localStorage.setItem("javis_chatside_thu", folded ? "1" : "0"); } catch (e) {}
+    try { localStorage.setItem("javis_chatside_thu", folded ? "1" : "0"); } catch (e) { }
   }
   function _addSideFoldButtons(page, sideEl) {
     if (!page || !sideEl) return;
@@ -8806,28 +8860,28 @@
     document.body.classList.add("on-chat");
     el.innerHTML =
       '<div class="chatpage" id="chatPage">' +
-        '<aside class="chatpage-side" id="chatPageSide"></aside>' +
-        '<div class="chatpage-main">' +
-          '<div class="chatpage-bar">' +
-            // Phone only (CSS hides it on a computer): opens the Conversations/Files drawer.
-            '<button class="cp-ico-btn cp-side-toggle" type="button" data-i18n-title="cs.cp_side_open" data-i18n-aria="cs.cp_side_open" ' +
-              'title="' + esc(window.t("cs.cp_side_open")) + '" aria-label="' + esc(window.t("cs.cp_side_open")) + '">' + ic("panel-left") + '</button>' +
-            // Chữ nằm trong <span> để màn hẹp ẩn được, giữ lại icon. Để chữ trần thì không
-            // có cách nào ẩn mà không mất luôn cả nút.
-            '<button class="cp-ico-btn cp-min" type="button" id="cpMinBtn" data-i18n-title="cs.cp_min_title" data-i18n-aria="cs.cp_min_title" ' +
-              'title="' + esc(window.t("cs.cp_min_title")) + '" aria-label="' + esc(window.t("cs.cp_min_title")) + '">' +
-              ic("chevron-left") + '<span data-i18n="cs.cp_min">' + esc(window.t("cs.cp_min")) + '</span></button>' +
-            // 0.251.0: the open conversation's name (sessions-ui.js renderTitle draws it).
-            '<span class="cp-conv-host"></span>' +
-            // Tiêu đề tĩnh "Trò chuyện với Javis" ĐÃ BỎ (chủ repo yêu cầu 01/09). Nó nói
-            // đúng một điều mà rail đang tô sáng và khung trống đã ghi bằng chữ in nghiêng
-            // ngay bên dưới, nên nó chỉ ăn chỗ. Chip project lùi về mép phải, chiếm chỗ đó.
-            '<span class="proj-chip-host"></span>' +
-          '</div>' +
-          '<div class="chatpage-slot" id="chatPageSlot"></div>' +
-          // Chỗ đứng cho TRÌNH SỬA khi mở file từ tab Thư mục. Rỗng và ẩn cho tới lúc đó.
-          '<div class="chatpage-edit" id="chatPageEdit" data-ne-host></div>' +
-        '</div>' +
+      '<aside class="chatpage-side" id="chatPageSide"></aside>' +
+      '<div class="chatpage-main">' +
+      '<div class="chatpage-bar">' +
+      // Phone only (CSS hides it on a computer): opens the Conversations/Files drawer.
+      '<button class="cp-ico-btn cp-side-toggle" type="button" data-i18n-title="cs.cp_side_open" data-i18n-aria="cs.cp_side_open" ' +
+      'title="' + esc(window.t("cs.cp_side_open")) + '" aria-label="' + esc(window.t("cs.cp_side_open")) + '">' + ic("panel-left") + '</button>' +
+      // Chữ nằm trong <span> để màn hẹp ẩn được, giữ lại icon. Để chữ trần thì không
+      // có cách nào ẩn mà không mất luôn cả nút.
+      '<button class="cp-ico-btn cp-min" type="button" id="cpMinBtn" data-i18n-title="cs.cp_min_title" data-i18n-aria="cs.cp_min_title" ' +
+      'title="' + esc(window.t("cs.cp_min_title")) + '" aria-label="' + esc(window.t("cs.cp_min_title")) + '">' +
+      ic("chevron-left") + '<span data-i18n="cs.cp_min">' + esc(window.t("cs.cp_min")) + '</span></button>' +
+      // 0.251.0: the open conversation's name (sessions-ui.js renderTitle draws it).
+      '<span class="cp-conv-host"></span>' +
+      // Tiêu đề tĩnh "Trò chuyện với Javis" ĐÃ BỎ (chủ repo yêu cầu 01/09). Nó nói
+      // đúng một điều mà rail đang tô sáng và khung trống đã ghi bằng chữ in nghiêng
+      // ngay bên dưới, nên nó chỉ ăn chỗ. Chip project lùi về mép phải, chiếm chỗ đó.
+      '<span class="proj-chip-host"></span>' +
+      '</div>' +
+      '<div class="chatpage-slot" id="chatPageSlot"></div>' +
+      // Chỗ đứng cho TRÌNH SỬA khi mở file từ tab Thư mục. Rỗng và ẩn cho tới lúc đó.
+      '<div class="chatpage-edit" id="chatPageEdit" data-ne-host></div>' +
+      '</div>' +
 
       '</div>';
     const page = el.querySelector("#chatPage");
@@ -8844,14 +8898,16 @@
     // của panel - gắn trước là nút biến mất.
     const sideEl = el.querySelector("#chatPageSide");
     const datSideThu = (thu) => _setSideFolded(page, thu);
-    try { if (localStorage.getItem("javis_chatside_thu") === "1") page.classList.add("side-thu"); } catch (e) {}
+    try { if (localStorage.getItem("javis_chatside_thu") === "1") page.classList.add("side-thu"); } catch (e) { }
     _addSideFoldButtons(page, sideEl);
     // Cột Hội thoại/Thư mục kéo được ở đường biên phải (0.148.0, col-resize.js); màn hẹp là ngăn kéo, CSS ẩn tay kéo.
     if (sideEl && window.JavisColResize) {
       // 0.196.0: let go narrower than the fold point and the column folds away, as its collapse button does.
-      const oSide = { host: page, varName: "--cp-side-w", key: "javis_cp_side_w", min: 220, max: 560, edge: "right",
+      const oSide = {
+        host: page, varName: "--cp-side-w", key: "javis_cp_side_w", min: 220, max: 560, edge: "right",
         label: "common.resize_chatside", keep: 420, total: () => page.clientWidth,
-        collapse: { below: window.JavisColResize.FOLD_AT(220), run: () => datSideThu(true) } };
+        collapse: { below: window.JavisColResize.FOLD_AT(220), run: () => datSideThu(true) }
+      };
 
       window.JavisColResize.apply(oSide);
       window.JavisColResize.attach(sideEl, oSide);
@@ -8933,7 +8989,7 @@
   let _vtIndex = null;         // chỉ mục file toàn vault (crawl client) - cho tìm theo Tên không cần server restart
   let _neSaveFn = null;        // hàm lưu của editor đang mở (cho Ctrl+S), trả true nếu lưu được
   let _nePz = null;            // zoom and pan of a picture open in the editor (pan-zoom.js), dropped on the next open
-  function _neDropPz() { if (_nePz) { try { _nePz.destroy(); } catch (e) {} _nePz = null; } }
+  function _neDropPz() { if (_nePz) { try { _nePz.destroy(); } catch (e) { } _nePz = null; } }
   let _neOpenRel = "";         // file đang mở trong trình sửa (đường dẫn theo TRẦN DUYỆT)
   let _neLayNoiDung = null;    // () -> nội dung ĐANG soạn (markdown nếu là .md ở chế độ Sửa)
   let _neGocText = null;       // nội dung lúc VỪA MỞ, để biết có sửa gì chưa (xem _neCoSuaChua)
@@ -9435,7 +9491,7 @@
   function _vtDailyTemplate(date) {
     const [y, m, d] = date.split("-").map(Number);
     let weekday = "";
-    try { weekday = new Date(y, m - 1, d).toLocaleDateString(LOC(), { weekday: "long" }); } catch (e) {}
+    try { weekday = new Date(y, m - 1, d).toLocaleDateString(LOC(), { weekday: "long" }); } catch (e) { }
     weekday = weekday ? weekday.charAt(0).toUpperCase() + weekday.slice(1) : "";
     return "---\ntype: daily\ndate: " + date + "\ntags: [daily]\n---\n\n"
       + "# " + date + (weekday ? " - " + weekday : "") + "\n\n"
@@ -9465,13 +9521,13 @@
         const fd = new FormData();
         fd.append("brain", fbrain()); fd.append("path", rel); fd.append("content", _vtDailyTemplate(date));
         let ok = false;
-        try { const w = await fetch("/files/write", { method: "POST", body: fd }); ok = w.ok; } catch (e) {}
+        try { const w = await fetch("/files/write", { method: "POST", body: fd }); ok = w.ok; } catch (e) { }
         if (!ok) { alert(window.t("cs.vt_daily_fail")); return; }
         _vtCache.clear(); _vtIndex = null;
-        try { await _vtRebuildReExpand((_vtHome ? _vtHome + "/" : "") + folder); } catch (e) {}
+        try { await _vtRebuildReExpand((_vtHome ? _vtHome + "/" : "") + folder); } catch (e) { }
       }
       openNote(rel, { name: date + ".md", ext: ".md", type: "file" }, { inPlace: true });
-      try { _vtRevealInTree(rel); } catch (e) {}
+      try { _vtRevealInTree(rel); } catch (e) { }
     } finally { _vtDailyOpening = false; }
   }
   // Cmd+D on Mac, Ctrl+D elsewhere, and only inside the note editor or the Vault panel: the
@@ -9827,11 +9883,13 @@
             return "[[" + p + (alias ? "|" + alias : "") + "]]";
           }
           return "[" + (c || p) + "](" + p + ")";                    // link markdown vault: giữ dạng [chữ](đường-dẫn)
-        } });
+        }
+      });
       // Vault image: keep the ORIGINAL syntax. ![[a|300]] (dragged size or alt text after |) saves
       // back as-is; ![text](a) stays ![text](a). Only a ![](..) image that was resized switches to
       // ![[..|size]], since ![](..) has nowhere to store a size - keeping it would drop the resize.
-      _td.addRule("wikiimg", { filter: (n) => n.nodeName === "IMG" && n.getAttribute("data-vault-path") != null,
+      _td.addRule("wikiimg", {
+        filter: (n) => n.nodeName === "IMG" && n.getAttribute("data-vault-path") != null,
         replacement: (c, n) => {
           const p = n.getAttribute("data-vault-path");
           const size = n.getAttribute("data-img-size");
@@ -9840,7 +9898,8 @@
           if (n.getAttribute("data-img-wiki") === "1") return "![[" + p + (alias ? "|" + alias : "") + "]]";
           // A space ends the link target in markdown: "![a](my pic.webp)" is not an image elsewhere.
           return "![" + (n.getAttribute("alt") || "") + "](" + p.replace(/ /g, "%20") + ")";
-        } });
+        }
+      });
 
       // Các khối render đặc biệt của mdToHtml phải TRẢ VỀ đúng fence gốc khi lưu bản WYSIWYG,
       // nếu không nội dung note bị phá (mất truy vấn dataview, mất code). Round-trip:
@@ -10329,9 +10388,9 @@
       // Hiện tạm, thay ngay bằng phiên bản thật từ server. Số tạm lấy từ khối javis-fresh mà index.html (luôn mới) mang
       // theo: /version mà trượt (máy chủ đang khởi động) thì vẫn đúng số, không phải con số dự phòng cũ v0.4.3 như ảnh khách.
       let verTam = APP_VERSION;
-      try { verTam = JSON.parse(document.getElementById("javis-fresh").textContent).version || APP_VERSION; } catch (e) {}
+      try { verTam = JSON.parse(document.getElementById("javis-fresh").textContent).version || APP_VERSION; } catch (e) { }
       ver.textContent = "v" + verTam;
-      fetch("/version").then(r => r.json()).then(d => { if (d && d.current) ver.textContent = "v" + d.current; }).catch(() => {});
+      fetch("/version").then(r => r.json()).then(d => { if (d && d.current) ver.textContent = "v" + d.current; }).catch(() => { });
     }
     // Theo dõi Studio mở/đóng → bật/tắt graph theo
     const st = document.getElementById("studio");

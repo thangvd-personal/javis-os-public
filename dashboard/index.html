@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <!-- maximum-scale=1 + user-scalable=no: tắt pinch/double-tap zoom trên mobile theo yêu cầu
        chủ. Chỉ chặn TUYỆT ĐỐI khi chạy dạng app màn hình chính (xem cụm apple-mobile-web-app-*
        dưới); ở tab Safari thường iOS 10+ vẫn cho zoom bằng tay vì lý do accessibility, nên còn
        chặn thêm bằng touch-action trong style.css làm lớp thứ hai. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Javis OS</title>
   <!-- Favicon = logo hiện tại (/brand-logo): mặc định theo logo.png, và tự đổi theo ảnh user tải lên. -->
   <link rel="icon" href="/brand-logo?v=5">
@@ -37,32 +39,44 @@
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
        Chưa chọn gì thì SÁNG (2026-11-05; trước đó là "auto"). Chế độ "auto" (0.74.0) tính theo khung giờ "HH:MM-HH:MM", cùng quy tắc với lightAt() trong
        theme.js (vắt qua nửa đêm được, hai mốc trùng là tối): sửa một bên thì sửa cả bên kia. -->
-  <script>(function(){try{var m=localStorage.getItem('javis.theme'),L=m!=='dark'&&m!=='dim';if(m==='auto'){var p=/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(localStorage.getItem('javis.theme.schedule')||'')||[0,6,0,18,0],a=p[1]*60+ +p[2],b=p[3]*60+ +p[4],d=new Date(),n=d.getHours()*60+d.getMinutes();L=a!==b&&(a<b?n>=a&&n<b:n>=a||n<b);}if(L)document.documentElement.setAttribute('data-theme','light');}catch(e){}})();</script>
+  <script>(function () { try { var m = localStorage.getItem('javis.theme'), L = m !== 'dark' && m !== 'dim'; if (m === 'auto') { var p = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/.exec(localStorage.getItem('javis.theme.schedule') || '') || [0, 6, 0, 18, 0], a = p[1] * 60 + +p[2], b = p[3] * 60 + +p[4], d = new Date(), n = d.getHours() * 60 + d.getMinutes(); L = a !== b && (a < b ? n >= a && n < b : n >= a || n < b); } if (L) document.documentElement.setAttribute('data-theme', 'light'); } catch (e) { } })();</script>
 </head>
+
 <body>
   <div class="hud">
 
     <!-- ===== TOP BAR ===== -->
     <header class="hud-top">
       <!-- Mobile-only: mở ngăn kéo điều hướng -->
-      <button class="hud-icon-btn nav-toggle-btn" id="navToggle" title="Menu" aria-label="Mở menu" data-i18n-title="top.menu" data-i18n-aria="top.menu_open">
+      <button class="hud-icon-btn nav-toggle-btn" id="navToggle" title="Menu" aria-label="Mở menu"
+        data-i18n-title="top.menu" data-i18n-aria="top.menu_open">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/>
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="17" x2="20" y2="17" />
         </svg>
       </button>
       <!-- NHÓM TRÁI: thương hiệu + chọn brain + số liệu (bám trái) -->
       <div class="hud-top-left">
-        <div class="brand"><span class="brand-icon"><img src="/brand-logo" alt="" style="width:22px;height:22px;border-radius:5px;vertical-align:middle;object-fit:cover"></span> <span class="brand-text">JAVIS OS</span></div>
+        <div class="brand"><span class="brand-icon"><img src="/brand-logo" alt=""
+              style="width:22px;height:22px;border-radius:5px;vertical-align:middle;object-fit:cover"></span> <span
+            class="brand-text">JAVIS OS</span></div>
         <!-- Select Brain: dời từ góc graph lên navbar -->
         <div class="orb-graph-ctl navbar-brain">
-          <i data-ic="brain" class="brain-select-ico" data-ic-title="Bộ não đang chọn" data-i18n-title="top.brain_current"></i>
+          <i data-ic="brain" class="brain-select-ico" data-ic-title="Bộ não đang chọn"
+            data-i18n-title="top.brain_current"></i>
           <select id="graphSource" class="graph-select">
             <option value="brain">Brain Default</option>
           </select>
-          <button class="graph-folder-btn" id="newBrainBtn" title="Tạo brain mới trong thư mục brains" data-i18n-title="top.brain_new"><i data-ic="plus"></i></button>
-          <button class="graph-folder-btn" id="renameBrainBtn" title="Đổi tên brain đang chọn (thư mục và liên kết giữ nguyên)" data-i18n-title="top.brain_rename"><i data-ic="pencil"></i></button>
-          <button class="graph-folder-btn" id="delBrainBtn" title="Xoá brain đang chọn (xác nhận gõ đúng tên)" data-i18n-title="top.brain_delete"><i data-ic="trash-2"></i></button>
-          <button class="graph-folder-btn" id="pickFolderBtn" title="Chọn brain từ folder ngoài bất kỳ" data-i18n-title="top.brain_pick"><i data-ic="folder-open"></i></button>
+          <button class="graph-folder-btn" id="newBrainBtn" title="Tạo brain mới trong thư mục brains"
+            data-i18n-title="top.brain_new"><i data-ic="plus"></i></button>
+          <button class="graph-folder-btn" id="renameBrainBtn"
+            title="Đổi tên brain đang chọn (thư mục và liên kết giữ nguyên)" data-i18n-title="top.brain_rename"><i
+              data-ic="pencil"></i></button>
+          <button class="graph-folder-btn" id="delBrainBtn" title="Xoá brain đang chọn (xác nhận gõ đúng tên)"
+            data-i18n-title="top.brain_delete"><i data-ic="trash-2"></i></button>
+          <button class="graph-folder-btn" id="pickFolderBtn" title="Chọn brain từ folder ngoài bất kỳ"
+            data-i18n-title="top.brain_pick"><i data-ic="folder-open"></i></button>
           <span class="graph-stats" id="graphStats">-</span>
         </div>
       </div>
@@ -75,8 +89,8 @@
       </div>
       <!-- NHÓM PHẢI: chuông Thông báo + nút đổi tông (LUÔN hiện) + cụm nút cockpit (ẩn ở trang quản lý) -->
       <div class="hud-top-right">
-        <button class="notification-trigger" id="notificationTrigger" type="button"
-                aria-haspopup="dialog" aria-expanded="false" title="Mở hộp thư Thông báo" data-i18n-title="top.notifications">
+        <button class="notification-trigger" id="notificationTrigger" type="button" aria-haspopup="dialog"
+          aria-expanded="false" title="Mở hộp thư Thông báo" data-i18n-title="top.notifications">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
             <path d="M10 21h4"></path>
@@ -88,37 +102,45 @@
              bắn beforeinstallprompt (Chrome/Edge desktop + Android) và chưa chạy standalone.
              Safari/iOS không có event này - bên đó vẫn là Share → Thêm vào MH chính. -->
         <button class="install-app-btn" id="installAppBtn" type="button" hidden
-                title="Cài Javis thành app riêng - mở từ Desktop/Dock, không lẫn giữa các tab" data-i18n-title="top.install_title"
-                aria-label="Cài Javis thành app riêng" data-i18n-aria="top.install">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
-            <path d="M8 21h8M12 17v4"/>
-            <path d="M12 6v6M9.5 9.5 12 12l2.5-2.5"/>
+          title="Cài Javis thành app riêng - mở từ Desktop/Dock, không lẫn giữa các tab"
+          data-i18n-title="top.install_title" aria-label="Cài Javis thành app riêng" data-i18n-aria="top.install">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <path d="M8 21h8M12 17v4" />
+            <path d="M12 6v6M9.5 9.5 12 12l2.5-2.5" />
           </svg>
           <span class="install-app-label" data-i18n="top.install_label">Mở như app</span>
         </button>
         <button class="hud-icon-btn theme-toggle" id="themeToggle" type="button" aria-pressed="false"
-                title="Đang dùng tông tối - bấm để chuyển sang tông sáng"
-                aria-label="Đang dùng tông tối - bấm để chuyển sang tông sáng">
+          title="Đang dùng tông tối - bấm để chuyển sang tông sáng"
+          aria-label="Đang dùng tông tối - bấm để chuyển sang tông sáng">
           <!-- Trăng hiện ở tông tối, mặt trời hiện ở tông sáng (đổi qua CSS theo data-theme) -->
           <svg class="ic-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/>
+            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z" />
           </svg>
           <svg class="ic-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="4.1"/>
-            <path d="M12 2.6v2.1M12 19.3v2.1M4.35 4.35l1.5 1.5M18.15 18.15l1.5 1.5M2.6 12h2.1M19.3 12h2.1M4.35 19.65l1.5-1.5M18.15 5.85l1.5-1.5"/>
+            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.1" />
+            <path
+              d="M12 2.6v2.1M12 19.3v2.1M4.35 4.35l1.5 1.5M18.15 18.15l1.5 1.5M2.6 12h2.1M19.3 12h2.1M4.35 19.65l1.5-1.5M18.15 5.85l1.5-1.5" />
           </svg>
         </button>
         <div class="hud-actions">
-          <button class="studio-open-btn" id="studioOpenBtn" title="Studio - Agents, Skills, Workflows" data-i18n-title="top.studio_title">▦ Studio</button>
+          <button class="studio-open-btn" id="studioOpenBtn" title="Studio - Agents, Skills, Workflows"
+            data-i18n-title="top.studio_title">▦ Studio</button>
           <button class="hud-icon-btn" id="settingsBtn" title="Cài đặt" data-i18n-title="page.settings.label">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-              <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-              <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-              <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
             </svg>
           </button>
           <!-- Nút loa ở đây đã BỎ (0.48.3): cùng một công tắc mà có tới ba chỗ bấm (header,
@@ -127,13 +149,15 @@
                trang Trò chuyện, và có ở màn hẹp. Chỗ trống này để dành cho hòm thư. -->
           <button class="hud-icon-btn" id="resetBtn" title="Reset hội thoại" data-i18n-title="top.reset">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.7 3M3 4v5h5"/>
+              <path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.7 3M3 4v5h5" />
             </svg>
           </button>
           <!-- Mobile-only: hội thoại mới -->
-          <button class="hud-icon-btn new-chat-btn" id="newChatBtn" title="Hội thoại mới" data-i18n-title="top.new_chat" aria-label="Hội thoại mới" data-i18n-aria="top.new_chat">
+          <button class="hud-icon-btn new-chat-btn" id="newChatBtn" title="Hội thoại mới" data-i18n-title="top.new_chat"
+            aria-label="Hội thoại mới" data-i18n-aria="top.new_chat">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
         </div>
@@ -142,26 +166,30 @@
 
     <!-- Hộp thư chung: bản cập nhật + thông báo cộng đồng/marketing -->
     <div class="notification-shade" id="notificationShade" hidden></div>
-    <aside class="notification-panel" id="notificationPanel" role="dialog"
-           aria-modal="false" aria-label="Hộp thư Thông báo" data-i18n-aria="top.notifications" aria-hidden="true" hidden>
+    <aside class="notification-panel" id="notificationPanel" role="dialog" aria-modal="false"
+      aria-label="Hộp thư Thông báo" data-i18n-aria="top.notifications" aria-hidden="true" hidden>
       <div class="noti-head">
         <div>
           <div class="noti-title" data-i18n="noti.label">Thông báo</div>
           <div class="noti-sub" id="notificationSummary" data-i18n="noti.summary">Cập nhật mới và tin từ Javis OS</div>
         </div>
         <div class="noti-head-actions">
-          <button class="noti-text-btn" id="notificationReadAll" type="button" data-i18n="noti.read_all">Đọc tất cả</button>
-          <button class="noti-close" id="notificationClose" type="button" aria-label="Đóng" data-i18n-aria="common.close">×</button>
+          <button class="noti-text-btn" id="notificationReadAll" type="button" data-i18n="noti.read_all">Đọc tất
+            cả</button>
+          <button class="noti-close" id="notificationClose" type="button" aria-label="Đóng"
+            data-i18n-aria="common.close">×</button>
         </div>
       </div>
       <!-- Hai tab: thư RIÊNG của người dùng và tin PHÁT CHUNG. Gộp một danh sách thì kết quả
            công việc thật bị chôn dưới mấy dòng changelog, mà đó mới là thứ cần đọc ngay. -->
       <div class="noti-tabs" role="tablist">
         <button class="noti-tab active" id="notiTabMine" type="button" role="tab" aria-selected="true">
-          <span data-i18n="noti.tab_mine">Của tôi</span><span class="noti-tab-count" id="notiTabMineCount" hidden>0</span>
+          <span data-i18n="noti.tab_mine">Của tôi</span><span class="noti-tab-count" id="notiTabMineCount"
+            hidden>0</span>
         </button>
         <button class="noti-tab" id="notiTabNews" type="button" role="tab" aria-selected="false">
-          <span data-i18n="noti.tab_news">Tin tức</span><span class="noti-tab-count" id="notiTabNewsCount" hidden>0</span>
+          <span data-i18n="noti.tab_news">Tin tức</span><span class="noti-tab-count" id="notiTabNewsCount"
+            hidden>0</span>
         </button>
         <!-- 0.403.0: Javis Core's notification filter (each group's mode, per-kind rules, undo). -->
         <button class="noti-tab noti-tab-filter" id="notiTabFilter" type="button" role="tab" aria-selected="false">
@@ -176,16 +204,21 @@
       <div class="noti-push" id="notificationPush" hidden>
         <div class="noti-push-main">
           <span class="noti-push-title" data-i18n="noti.push">Thông báo đẩy</span>
-          <span class="noti-push-note" id="notificationPushNote" data-i18n="noti.push_note">Báo cả khi bạn không mở Javis</span>
+          <span class="noti-push-note" id="notificationPushNote" data-i18n="noti.push_note">Báo cả khi bạn không mở
+            Javis</span>
         </div>
-        <button class="noti-text-btn" id="notificationPushTest" type="button" hidden data-i18n="noti.push_test">Gửi thử</button>
-        <button class="noti-text-btn primary" id="notificationPushToggle" type="button" data-i18n="noti.push_on">Bật</button>
-        <label class="noti-push-hide" id="notificationPushHideRow" hidden><input type="checkbox" id="notificationPushHide">
+        <button class="noti-text-btn" id="notificationPushTest" type="button" hidden data-i18n="noti.push_test">Gửi
+          thử</button>
+        <button class="noti-text-btn primary" id="notificationPushToggle" type="button"
+          data-i18n="noti.push_on">Bật</button>
+        <label class="noti-push-hide" id="notificationPushHideRow" hidden><input type="checkbox"
+            id="notificationPushHide">
           <span data-i18n="noti.push_hide">Ẩn nội dung trên thông báo đẩy</span></label>
       </div>
       <div class="noti-foot">
         <button class="noti-text-btn" id="notificationRefresh" type="button" data-i18n="noti.refresh">↻ Làm mới</button>
-        <button class="noti-text-btn primary" id="notificationOpenUpdates" type="button" data-i18n="noti.open_updates">Xem nhật ký cập nhật →</button>
+        <button class="noti-text-btn primary" id="notificationOpenUpdates" type="button"
+          data-i18n="noti.open_updates">Xem nhật ký cập nhật →</button>
       </div>
     </aside>
 
@@ -196,29 +229,40 @@
       <aside class="hud-left">
         <!-- Nút mở lại khi panel đang thu gọn (body.vault-thu). Ẩn mặc định bằng CSS;
              chỉ hiện ở màn chính, không theo node sang tab "Thư mục" của trang Trò chuyện. -->
-        <button class="vault-expand" id="vtExpand" title="Mở lại panel Vault" data-i18n-title="vault.expand" aria-label="Mở lại panel Vault" data-i18n-aria="vault.expand"><i data-ic="panel-left"></i></button>
+        <button class="vault-expand" id="vtExpand" title="Mở lại panel Vault" data-i18n-title="vault.expand"
+          aria-label="Mở lại panel Vault" data-i18n-aria="vault.expand"><i data-ic="panel-left"></i></button>
         <div class="vault-head">
           <span class="vault-title">VAULT</span>
           <span class="vault-tools">
-            <button class="mini-btn" id="vtNewFile" title="Tạo file mới ở gốc brain" data-i18n-title="vault.new_file">＋</button>
-            <button class="mini-btn" id="vtNewDir" title="Tạo thư mục mới ở gốc brain" data-i18n-title="vault.new_dir"><i data-ic="folder-plus"></i></button>
-            <button class="mini-btn" id="vtDaily" title="Nhật ký hôm nay (Ctrl+D / Cmd+D khi đang ở khung ghi chú)" data-i18n-title="vault.daily"><i data-ic="calendar"></i></button>
+            <button class="mini-btn" id="vtNewFile" title="Tạo file mới ở gốc brain"
+              data-i18n-title="vault.new_file">＋</button>
+            <button class="mini-btn" id="vtNewDir" title="Tạo thư mục mới ở gốc brain"
+              data-i18n-title="vault.new_dir"><i data-ic="folder-plus"></i></button>
+            <button class="mini-btn" id="vtDaily" title="Nhật ký hôm nay (Ctrl+D / Cmd+D khi đang ở khung ghi chú)"
+              data-i18n-title="vault.daily"><i data-ic="calendar"></i></button>
             <button class="mini-btn" id="vtRefresh" title="Làm mới cây" data-i18n-title="vault.refresh">⟳</button>
-            <button class="mini-btn" id="vtCollapse" title="Thu gọn panel Vault (như sidebar)" data-i18n-title="vault.collapse"><i data-ic="panel-left"></i></button>
+            <button class="mini-btn" id="vtCollapse" title="Thu gọn panel Vault (như sidebar)"
+              data-i18n-title="vault.collapse"><i data-ic="panel-left"></i></button>
           </span>
         </div>
         <div class="vault-search">
           <i class="vs-ico" data-ic="search"></i>
           <!-- data-esc: ô này TỰ xử Esc (xoá chữ, về lại cây). Trình sửa note bắt Esc ở mức
                document + capture, nên không khai dấu này thì Esc ở đây đóng mất file đang mở. -->
-          <input id="vaultSearch" type="text" data-esc placeholder="Tìm note..." data-i18n-ph="vault.search_ph" spellcheck="false" autocomplete="off">
-          <button class="vs-clear" id="vaultSearchClear" title="Xoá tìm kiếm" data-i18n-title="vault.search_clear" hidden><i data-ic="x"></i></button>
+          <input id="vaultSearch" type="text" data-esc placeholder="Tìm note..." data-i18n-ph="vault.search_ph"
+            spellcheck="false" autocomplete="off">
+          <button class="vs-clear" id="vaultSearchClear" title="Xoá tìm kiếm" data-i18n-title="vault.search_clear"
+            hidden><i data-ic="x"></i></button>
         </div>
         <div class="vault-modes">
-          <button class="vs-chip active" id="vsModeName" data-mode="name" title="Lọc nhanh theo tên trong cây" data-i18n-title="vault.mode_name_title" data-i18n="vault.mode_name">Tên</button>
-          <button class="vs-chip" id="vsModeContent" data-mode="content" title="Tìm sâu theo nội dung (quét toàn vault)" data-i18n-title="vault.mode_content_title" data-i18n="vault.mode_content">Nội dung</button>
+          <button class="vs-chip active" id="vsModeName" data-mode="name" title="Lọc nhanh theo tên trong cây"
+            data-i18n-title="vault.mode_name_title" data-i18n="vault.mode_name">Tên</button>
+          <button class="vs-chip" id="vsModeContent" data-mode="content" title="Tìm sâu theo nội dung (quét toàn vault)"
+            data-i18n-title="vault.mode_content_title" data-i18n="vault.mode_content">Nội dung</button>
         </div>
-        <div class="vault-tree" id="vaultTree"><div class="vt-info" data-i18n="common.loading">Đang tải…</div></div>
+        <div class="vault-tree" id="vaultTree">
+          <div class="vt-info" data-i18n="common.loading">Đang tải…</div>
+        </div>
         <div class="vault-results" id="vaultResults" hidden></div>
       </aside>
 
@@ -231,22 +275,24 @@
           <div class="orb-state" id="orbState" data-i18n="orb.ready">SẴN SÀNG</div>
           <div class="orb-interim" id="voiceInterim"></div>
         </div>
-        <button class="brain-overlay-toggle" id="brainOverlayToggle" type="button"
-                aria-pressed="false" aria-label="Ẩn nhãn và số liệu brain" data-i18n-aria="orb.overlay_aria"
-                title="Ẩn nhãn thư mục và số liệu Agents / Skills / Workflows" data-i18n-title="orb.overlay_title">
+        <button class="brain-overlay-toggle" id="brainOverlayToggle" type="button" aria-pressed="false"
+          aria-label="Ẩn nhãn và số liệu brain" data-i18n-aria="orb.overlay_aria"
+          title="Ẩn nhãn thư mục và số liệu Agents / Skills / Workflows" data-i18n-title="orb.overlay_title">
           <svg class="brain-eye-on" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
             <circle cx="12" cy="12" r="2.75"></circle>
           </svg>
           <svg class="brain-eye-off" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 3l18 18M10.6 6.15A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.05 2.65M6.3 6.35C3.85 8.05 2.5 12 2.5 12s3.5 6 9.5 6a9.5 9.5 0 0 0 3.1-.52M9.9 9.9a3 3 0 0 0 4.2 4.2"></path>
+            <path
+              d="M3 3l18 18M10.6 6.15A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a15 15 0 0 1-2.05 2.65M6.3 6.35C3.85 8.05 2.5 12 2.5 12s3.5 6 9.5 6a9.5 9.5 0 0 0 3.1-.52M9.9 9.9a3 3 0 0 0 4.2 4.2">
+            </path>
           </svg>
         </button>
 
         <!-- Timelapse "cuộc đời brain": chiếu lại note mọc dần theo thời gian tạo (chỉ đồ thị 2D) -->
         <button class="brain-overlay-toggle graph-timelapse-btn" id="graphTimelapseBtn" type="button"
-                aria-pressed="false" aria-label="Chiếu timelapse cuộc đời brain" data-i18n-aria="orb.timelapse_aria"
-                title="Timelapse: xem lại brain lớn lên từ note đầu tiên tới giờ" data-i18n-title="orb.timelapse_title">
+          aria-pressed="false" aria-label="Chiếu timelapse cuộc đời brain" data-i18n-aria="orb.timelapse_aria"
+          title="Timelapse: xem lại brain lớn lên từ note đầu tiên tới giờ" data-i18n-title="orb.timelapse_title">
           <svg class="tl-play" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9"></circle>
             <path d="M12 7v5l3.5 2"></path>
@@ -259,14 +305,16 @@
 
         <!-- BUNG/THU khoang não - CHỈ hiện trên điện thoại (console.css .brain-max-btn).
              Trên desktop khoang não đã chiếm cả cột giữa nên không có gì để bung. -->
-        <button class="brain-overlay-toggle brain-max-btn" id="brainMaxBtn" type="button"
-                aria-pressed="false" aria-label="Bung khoang não toàn màn" data-i18n-aria="orb.max_aria"
-                title="Bung khoang não ra toàn màn để nhìn rõ đồ thị" data-i18n-title="orb.max_title">
+        <button class="brain-overlay-toggle brain-max-btn" id="brainMaxBtn" type="button" aria-pressed="false"
+          aria-label="Bung khoang não toàn màn" data-i18n-aria="orb.max_aria"
+          title="Bung khoang não ra toàn màn để nhìn rõ đồ thị" data-i18n-title="orb.max_title">
           <svg class="bmx-in" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4"></path>
+            <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4">
+            </path>
           </svg>
           <svg class="bmx-out" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 10h4a2 2 0 0 0 2-2V4M20 10h-4a2 2 0 0 1-2-2V4M4 14h4a2 2 0 0 1 2 2v4M20 14h-4a2 2 0 0 0-2 2v4"></path>
+            <path d="M4 10h4a2 2 0 0 0 2-2V4M20 10h-4a2 2 0 0 1-2-2V4M4 14h4a2 2 0 0 1 2 2v4M20 14h-4a2 2 0 0 0-2 2v4">
+            </path>
           </svg>
         </button>
 
@@ -311,22 +359,27 @@
       <aside class="hud-right">
         <!-- Nút mở lại khi khung hội thoại đang thu (body.chatcol-thu, chỉ desktop).
              Ẩn mặc định bằng CSS - trên điện thoại cột này chính là khung chat, không thu. -->
-        <button class="chatcol-expand" id="chatColMo" title="Mở lại khung hội thoại" data-i18n-title="chat.col_expand" aria-label="Mở lại khung hội thoại" data-i18n-aria="chat.col_expand"><i data-ic="panel-left"></i></button>
+        <button class="chatcol-expand" id="chatColMo" title="Mở lại khung hội thoại" data-i18n-title="chat.col_expand"
+          aria-label="Mở lại khung hội thoại" data-i18n-aria="chat.col_expand"><i data-ic="panel-left"></i></button>
         <div class="panel-label">
           <span data-i18n="chat.panel">HỘI THOẠI</span>
           <!-- Chip project: sessions-ui.js vẽ vào đây khi lượt chat thuộc một project.
                Rỗng thì span co về 0 nên hàng vẫn là "nhãn ... nút" như cũ. -->
           <span class="proj-chip-host" id="projChipHost"></span>
           <span class="panel-acts">
-            <button class="mini-btn" id="chatZoomBtn" title="Mở trang Trò chuyện (khung chat toàn màn)" data-i18n-title="chat.zoom"><i data-ic="maximize"></i></button>
-            <button class="mini-btn chatcol-thu-btn" id="chatColThu" title="Thu khung hội thoại sang phải (như thu sidebar)" data-i18n-title="chat.col_collapse"><i data-ic="panel-left"></i></button>
+            <button class="mini-btn" id="chatZoomBtn" title="Mở trang Trò chuyện (khung chat toàn màn)"
+              data-i18n-title="chat.zoom"><i data-ic="maximize"></i></button>
+            <button class="mini-btn chatcol-thu-btn" id="chatColThu"
+              title="Thu khung hội thoại sang phải (như thu sidebar)" data-i18n-title="chat.col_collapse"><i
+                data-ic="panel-left"></i></button>
           </span>
         </div>
         <!-- MỨC DÙNG token đã DỜI xuống góc dưới-phải khung giữa (giải phóng chỗ cho khung chat). -->
         <!-- Thanh gọi (call-bar.js, 0.65.18): hiện khi bấm mic gọi Javis. Nằm trong CHAT_NODE_IDS
              (console.js) nên sang trang Trò chuyện là đi theo khung chat. -->
         <div class="call-bar" id="callBar" hidden></div>
-        <div class="transcript" id="chatArea" data-i18n-empty="chat.empty_hint" data-empty-hint="Nói hoặc gõ để bắt đầu hội thoại với Javis."></div>
+        <div class="transcript" id="chatArea" data-i18n-empty="chat.empty_hint"
+          data-empty-hint="Nói hoặc gõ để bắt đầu hội thoại với Javis."></div>
         <!-- Thanh #toolBar cũ ĐÃ BỎ: trạng thái "đang suy nghĩ / gọi tool" giờ hiện bằng
              chip hoạt động NGAY TRONG #chatArea (app.js showActivity) → tự đi theo cả khi
              phóng to chat workspace (chat-zoom chỉ dời #chatArea, trước đây toolBar bị bỏ lại). -->
@@ -341,7 +394,8 @@
         <!-- ===== CÀI ĐẶT: avatar + tên miền + giọng nói + tốc độ (console.js nhúng vào trang Cài đặt) ===== -->
         <details class="quick-set" id="quickSet" open>
           <summary class="panel-label" style="cursor:pointer;list-style:none;user-select:none">
-            <i data-ic="settings"></i> <span data-i18n="qs.title">CÀI ĐẶT NHANH</span> <i class="qs-caret" data-ic="chevron-right"></i>
+            <i data-ic="settings"></i> <span data-i18n="qs.title">CÀI ĐẶT NHANH</span> <i class="qs-caret"
+              data-ic="chevron-right"></i>
           </summary>
           <div class="quick-set-body">
 
@@ -380,7 +434,8 @@
                   <span class="vc-saved" id="vcVoiceSaved" aria-live="polite"></span>
                 </div>
               </div>
-              <div class="qs-hint" id="vcVoiceNote" data-i18n="qs.voice_ml_note" hidden>Giọng đa ngôn ngữ hỗ trợ tiếng Việt.</div>
+              <div class="qs-hint" id="vcVoiceNote" data-i18n="qs.voice_ml_note" hidden>Giọng đa ngôn ngữ hỗ trợ tiếng
+                Việt.</div>
               <div class="vc-mismatch" id="vcMismatch" role="status" hidden>
                 <span id="vcMismatchTxt"></span>
                 <button class="gcard-btn" type="button" id="vcMismatchFix"></button>
@@ -391,13 +446,20 @@
                    already does that, so console.js hides this row there. -->
               <div class="qs-field vc-field" id="vcReadRow" hidden>
                 <div class="vc-lblcol">
-                  <label class="qs-lbl" for="vcReadVoice"><span data-i18n="settings.vc_read_voice">Giọng đọc câu trả lời</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></label>
-                  <div class="vc-sub" data-i18n="settings.vc_read_sub">Đọc tin trong khung chat và ghi chú giọng nói.</div>
+                  <label class="qs-lbl" for="vcReadVoice"><span data-i18n="settings.vc_read_voice">Giọng đọc câu trả
+                      lời</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích"
+                      title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i
+                        data-ic="info"></i></button></label>
+                  <div class="vc-sub" data-i18n="settings.vc_read_sub">Đọc tin trong khung chat và ghi chú giọng nói.
+                  </div>
                 </div>
-                <div class="info-body" hidden data-i18n="settings.vc_read_info">Giọng đọc câu trả lời trong chat và ghi chú giọng nói gửi qua Telegram, Zalo. Cuộc gọi ChatGPT Live hay Live qua API nói bằng giọng riêng của nó nên không đổi theo ô này.</div>
+                <div class="info-body" hidden data-i18n="settings.vc_read_info">Giọng đọc câu trả lời trong chat và ghi
+                  chú giọng nói gửi qua Telegram, Zalo. Cuộc gọi ChatGPT Live hay Live qua API nói bằng giọng riêng của
+                  nó nên không đổi theo ô này.</div>
                 <div class="v2-voice-row">
                   <select class="js-input" id="vcReadVoice"></select>
-                  <button class="gcard-btn ghost" type="button" id="vcReadTry" data-i18n="qs.test_voice">▶ Nghe thử</button>
+                  <button class="gcard-btn ghost" type="button" id="vcReadTry" data-i18n="qs.test_voice">▶ Nghe
+                    thử</button>
                   <span class="vc-saved" id="vcReadSaved" aria-live="polite"></span>
                 </div>
               </div>
@@ -406,14 +468,22 @@
                    list cannot load. -->
               <div id="vcEleven" hidden>
                 <div class="qs-field">
-                  <label class="qs-lbl" for="vcElKey"><span>ElevenLabs API key</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button> <span class="dim" id="vcElKeySet" data-i18n="settings.key_set" hidden>(đã có - để trống nếu không đổi)</span></label>
-                  <div class="info-body" hidden data-i18n="settings.vc_el_info">Lấy key ở elevenlabs.io, mục Developers, API Keys. Giọng bạn tự nhân bản trên ElevenLabs cũng có trong danh sách. Model Multilingual v2 không đọc được tiếng Việt, nên câu tiếng Việt tự dùng Flash v2.5.</div>
-                  <input class="js-input" id="vcElKey" type="password" autocomplete="off" data-i18n-ph="settings.eleven_ph" placeholder="Dán API key ElevenLabs">
+                  <label class="qs-lbl" for="vcElKey"><span>ElevenLabs API key</span> <button type="button"
+                      class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích"
+                      data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button> <span
+                      class="dim" id="vcElKeySet" data-i18n="settings.key_set" hidden>(đã có - để trống nếu không
+                      đổi)</span></label>
+                  <div class="info-body" hidden data-i18n="settings.vc_el_info">Lấy key ở elevenlabs.io, mục Developers,
+                    API Keys. Giọng bạn tự nhân bản trên ElevenLabs cũng có trong danh sách. Model Multilingual v2 không
+                    đọc được tiếng Việt, nên câu tiếng Việt tự dùng Flash v2.5.</div>
+                  <input class="js-input" id="vcElKey" type="password" autocomplete="off"
+                    data-i18n-ph="settings.eleven_ph" placeholder="Dán API key ElevenLabs">
                 </div>
                 <div class="qs-field">
                   <label class="qs-lbl" for="vcElVoiceSel" data-i18n="settings.vc_el_voice">Giọng ElevenLabs</label>
                   <select class="js-input" id="vcElVoiceSel" hidden></select>
-                  <input class="js-input" id="vcElVoice" data-i18n-ph="settings.eleven_voice_ph" placeholder="Ví dụ: 21m00Tcm4TlvDq8ikWAM (Rachel)">
+                  <input class="js-input" id="vcElVoice" data-i18n-ph="settings.eleven_voice_ph"
+                    placeholder="Ví dụ: 21m00Tcm4TlvDq8ikWAM (Rachel)">
                   <div class="qs-hint" id="vcElVoiceMsg" role="status"></div>
                 </div>
                 <div class="qs-field">
@@ -426,11 +496,15 @@
               <div class="qs-field">
                 <span class="qs-lbl" data-i18n="settings.vc_mic_lbl">Thử mic và loa</span>
                 <div class="v2-voice-row">
-                  <button class="gcard-btn ghost" type="button" id="vcMicTest" data-i18n="settings.vc_mic_btn">Thử mic</button>
-                  <button class="gcard-btn ghost" type="button" id="vcSpkTest" data-i18n="settings.vc_spk_btn">Thử loa</button>
+                  <button class="gcard-btn ghost" type="button" id="vcMicTest" data-i18n="settings.vc_mic_btn">Thử
+                    mic</button>
+                  <button class="gcard-btn ghost" type="button" id="vcSpkTest" data-i18n="settings.vc_spk_btn">Thử
+                    loa</button>
                 </div>
               </div>
-              <div class="mic-meter" aria-hidden="true"><div class="mic-meter-bar" id="vcMicBar"></div></div>
+              <div class="mic-meter" aria-hidden="true">
+                <div class="mic-meter-bar" id="vcMicBar"></div>
+              </div>
               <div class="mic-result" id="vcMicResult" role="status"></div>
               <details class="qs-advanced" id="vcAdvanced">
                 <summary data-i18n="settings.vc_advanced">Nâng cao</summary>
@@ -456,15 +530,19 @@
                     <label class="qs-lbl" for="vcBrainModel" data-i18n="settings.vc_brain_model">Model</label>
                     <select class="js-input" id="vcBrainModel"></select>
                   </div>
-                  <div class="qs-hint" data-i18n="settings.vc_brain_hint">Bộ não trả lời các câu nói ở đường Cơ bản. Việc cần dữ liệu vẫn đi bộ não chính.</div>
+                  <div class="qs-hint" data-i18n="settings.vc_brain_hint">Bộ não trả lời các câu nói ở đường Cơ bản.
+                    Việc cần dữ liệu vẫn đi bộ não chính.</div>
                 </div>
                 <!-- Live over an API key only (0.220.0): console.js shows this box when call.engine is "api". -->
                 <div id="vcLiveBox" hidden>
                   <div class="qs-field">
-                    <label class="qs-lbl" for="vcLiveProactive" data-i18n="settings.vc_live_proactive">Lọc tiếng xung quanh</label>
+                    <label class="qs-lbl" for="vcLiveProactive" data-i18n="settings.vc_live_proactive">Lọc tiếng xung
+                      quanh</label>
                     <select class="js-input" id="vcLiveProactive">
-                      <option value="on" data-i18n="settings.vc_live_proactive_on">Bật: bỏ qua TV, người bên cạnh</option>
-                      <option value="off" data-i18n="settings.vc_live_proactive_off">Tắt: trả lời mọi câu nghe được</option>
+                      <option value="on" data-i18n="settings.vc_live_proactive_on">Bật: bỏ qua TV, người bên cạnh
+                      </option>
+                      <option value="off" data-i18n="settings.vc_live_proactive_off">Tắt: trả lời mọi câu nghe được
+                      </option>
                     </select>
                   </div>
                   <div class="qs-field">
@@ -475,7 +553,8 @@
                       <option value="slow" data-i18n="settings.vc_live_turn_slow">Chậm rãi: chờ bạn nghĩ thêm</option>
                     </select>
                   </div>
-                  <div class="qs-hint" data-i18n="settings.vc_live_hint">Áp dụng cho Gemini Live và OpenAI Realtime, từ cuộc gọi kế tiếp.</div>
+                  <div class="qs-hint" data-i18n="settings.vc_live_hint">Áp dụng cho Gemini Live và OpenAI Realtime, từ
+                    cuộc gọi kế tiếp.</div>
                 </div>
                 <div class="qs-field" id="vcRateRow">
                   <label class="qs-lbl" for="rateSel" data-i18n="qs.rate_lbl">Tốc độ đọc</label>
@@ -487,21 +566,28 @@
                     <option value="1.45" data-i18n="qs.rate_opt_veryfast">Rất nhanh · 1,45×</option>
                   </select>
                 </div>
-                <div class="qs-hint" id="vcOpenaiNote" data-i18n="settings.vc_openai_note" hidden>Muốn giọng OpenAI: dán API key OpenAI ở trang Models.</div>
+                <div class="qs-hint" id="vcOpenaiNote" data-i18n="settings.vc_openai_note" hidden>Muốn giọng OpenAI: dán
+                  API key OpenAI ở trang Models.</div>
               </details>
               <div class="gcard-meta" id="vcStatus" role="status"></div>
               <div class="gcard-meta" id="v2LastErr" hidden></div>
               <!-- Kho giọng Edge: app.js đọc/ghi giọng Edge qua ô này (localStorage javis.voice), còn
                    người dùng chọn ở #vcVoice. Ẩn, nhưng vẫn là danh sách gốc của bảy giọng Edge. -->
               <select id="voiceSel" name="voice" hidden aria-hidden="true" tabindex="-1">
-                <option value="en-US-EmmaMultilingualNeural" data-i18n="qs.voice_opt_emma">Emma · Nữ, vui tươi rõ chữ · đa ngôn ngữ</option>
+                <option value="en-US-EmmaMultilingualNeural" data-i18n="qs.voice_opt_emma">Emma · Nữ, vui tươi rõ chữ ·
+                  đa ngôn ngữ</option>
                 <option value="vi-VN-HoaiMyNeural" data-i18n="qs.voice_opt_hoaimy">Hoài My · Nữ, tự nhiên ấm áp</option>
                 <option value="vi-VN-NamMinhNeural" data-i18n="qs.voice_opt_namminh">Nam Minh · Nam, trầm</option>
-                <option value="en-US-AvaMultilingualNeural" data-i18n="qs.voice_opt_ava">Ava · Nữ, dịu và biểu cảm · đa ngôn ngữ</option>
-                <option value="en-US-AndrewMultilingualNeural" data-i18n="qs.voice_opt_andrew">Andrew · Nam, ấm và tự tin · đa ngôn ngữ</option>
-                <option value="en-US-BrianMultilingualNeural" data-i18n="qs.voice_opt_brian">Brian · Nam, gần gũi đời thường · đa ngôn ngữ</option>
-                <option value="en-AU-WilliamMultilingualNeural" data-i18n="qs.voice_opt_william">William · Nam, thân thiện giọng Úc · đa ngôn ngữ</option>
-                <option value="auto" data-i18n="qs.voice_opt_auto">Tự động theo thứ tiếng · Hoài My, Emma hoặc giọng bản xứ</option>
+                <option value="en-US-AvaMultilingualNeural" data-i18n="qs.voice_opt_ava">Ava · Nữ, dịu và biểu cảm · đa
+                  ngôn ngữ</option>
+                <option value="en-US-AndrewMultilingualNeural" data-i18n="qs.voice_opt_andrew">Andrew · Nam, ấm và tự
+                  tin · đa ngôn ngữ</option>
+                <option value="en-US-BrianMultilingualNeural" data-i18n="qs.voice_opt_brian">Brian · Nam, gần gũi đời
+                  thường · đa ngôn ngữ</option>
+                <option value="en-AU-WilliamMultilingualNeural" data-i18n="qs.voice_opt_william">William · Nam, thân
+                  thiện giọng Úc · đa ngôn ngữ</option>
+                <option value="auto" data-i18n="qs.voice_opt_auto">Tự động theo thứ tiếng · Hoài My, Emma hoặc giọng bản
+                  xứ</option>
               </select>
             </div>
 
@@ -514,8 +600,10 @@
                 <img id="brandLogoPreview" src="/brand-logo" alt="logo">
                 <div class="js-actions qs-foot">
                   <label class="gcard-btn ghost qs-file"><span data-i18n="qs.avatar_upload">Tải ảnh lên</span>
-                    <input type="file" id="brandLogoInput" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label>
-                  <button class="gcard-btn ghost" id="brandLogoReset" data-i18n="qs.avatar_reset">Khôi phục mặc định</button>
+                    <input type="file" id="brandLogoInput" accept="image/png,image/jpeg,image/webp,image/gif"
+                      hidden></label>
+                  <button class="gcard-btn ghost" id="brandLogoReset" data-i18n="qs.avatar_reset">Khôi phục mặc
+                    định</button>
                 </div>
               </div>
               <div class="opt-sub" id="brandLogoStatus"></div>
@@ -530,9 +618,11 @@
 
             <div class="qs-block" data-settings-section="general">
               <div class="popover-label" data-i18n="qs.domain">TÊN MIỀN & SSL</div>
-              <div class="opt-sub dom-intro" data-i18n="qs.domain_intro">Nhập tên miền để Javis kiểm tra DNS và hướng dẫn bật HTTPS theo đúng môi trường đang chạy.</div>
+              <div class="opt-sub dom-intro" data-i18n="qs.domain_intro">Nhập tên miền để Javis kiểm tra DNS và hướng
+                dẫn bật HTTPS theo đúng môi trường đang chạy.</div>
               <div class="dom-field">
-                <input id="setDomain" placeholder="Ví dụ: javis.tencuaban.com" data-i18n-ph="qs.domain_ph" autocomplete="off" spellcheck="false">
+                <input id="setDomain" placeholder="Ví dụ: javis.tencuaban.com" data-i18n-ph="qs.domain_ph"
+                  autocomplete="off" spellcheck="false">
                 <button class="gcard-btn" id="saveDomain" data-i18n="qs.domain_save">Lưu &amp; kiểm tra</button>
               </div>
               <div class="dom-status" id="domStatusRow" style="display:none">
@@ -549,17 +639,23 @@
               <div id="domainGuide" class="dom-guide" style="display:none"></div>
               <div class="opt-sub" id="domainStatus"></div>
               <div class="dom-docs">
-                <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/15-thuong-hieu-ten-mien.md" target="_blank" rel="noopener" data-i18n="qs.domain_docs">Hướng dẫn cài tên miền ↗</a>
-                <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/DEPLOY.md" target="_blank" rel="noopener" data-i18n="qs.deploy_docs">Hướng dẫn deploy/SSL ↗</a>
+                <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/15-thuong-hieu-ten-mien.md"
+                  target="_blank" rel="noopener" data-i18n="qs.domain_docs">Hướng dẫn cài tên miền ↗</a>
+                <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/DEPLOY.md" target="_blank"
+                  rel="noopener" data-i18n="qs.deploy_docs">Hướng dẫn deploy/SSL ↗</a>
               </div>
             </div>
 
             <!-- Remote access through the built-in Cloudflare Tunnel (0.242.0). remote-access.js draws #raBox from
                  /remote-access/status; the server downloads and supervises cloudflared (remote_tunnel.py). -->
             <div class="qs-block" data-settings-section="general" id="remoteAccessBlock">
-              <div class="popover-label"><span data-i18n="ra.title">TRUY CẬP TỪ XA</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></div>
-              <div class="info-body" hidden data-i18n="ra.intro_long">Javis tự tải và chạy cloudflared (công cụ chính thức, miễn phí của Cloudflare) ngay trên máy này.</div>
-              <div class="opt-sub" data-i18n="ra.sub">Mở Javis từ điện thoại hay máy khác qua link HTTPS, không cần VPS.</div>
+              <div class="popover-label"><span data-i18n="ra.title">TRUY CẬP TỪ XA</span> <button type="button"
+                  class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích"
+                  data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></div>
+              <div class="info-body" hidden data-i18n="ra.intro_long">Javis tự tải và chạy cloudflared (công cụ chính
+                thức, miễn phí của Cloudflare) ngay trên máy này.</div>
+              <div class="opt-sub" data-i18n="ra.sub">Mở Javis từ điện thoại hay máy khác qua link HTTPS, không cần VPS.
+              </div>
               <div id="raBox" class="ra"></div>
             </div>
 
@@ -590,11 +686,16 @@
       <button id="voiceFocusResume" class="voice-focus-resume" hidden></button>
       <div class="attach-bar" id="attachBar"></div>
       <input type="file" id="fileInput" multiple style="display:none">
-      <textarea id="chatInput" class="voice-input" placeholder="Bạn muốn tôi làm điều gì?" data-i18n-ph="bar.input_ph" rows="1"></textarea>
+      <textarea id="chatInput" class="voice-input" placeholder="Bạn muốn tôi làm điều gì?" data-i18n-ph="bar.input_ph"
+        rows="1"></textarea>
       <div class="cp-row" id="cpRow">
-        <button type="button" class="cp-plus" id="plusBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="plusMenu"
-                title="Thêm file, lệnh, kết nối" data-i18n-title="cp.plus" aria-label="Thêm file, lệnh, kết nối" data-i18n-aria="cp.plus">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <button type="button" class="cp-plus" id="plusBtn" aria-haspopup="menu" aria-expanded="false"
+          aria-controls="plusMenu" title="Thêm file, lệnh, kết nối" data-i18n-title="cp.plus"
+          aria-label="Thêm file, lệnh, kết nối" data-i18n-aria="cp.plus">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
         </button>
         <div class="cp-chips" id="cpChips">
           <button type="button" class="mb-chip" id="mbOpen" title="Đổi model / nhà cung cấp" data-i18n-title="mb.open">
@@ -602,15 +703,22 @@
             <span id="mbModelTxt">Model</span>
             <span class="mb-caret">▾</span>
           </button>
-          <button type="button" class="cp-eff" id="effBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="effPop"
-                  title="Mức suy nghĩ" data-i18n-title="eff.title">
-            <span class="cp-eff-fast" id="effFast" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg></span><span id="effTxt">Off</span><span class="mb-caret">▾</span>
+          <button type="button" class="cp-eff" id="effBtn" aria-haspopup="dialog" aria-expanded="false"
+            aria-controls="effPop" title="Mức suy nghĩ" data-i18n-title="eff.title">
+            <span class="cp-eff-fast" id="effFast" hidden><svg width="12" height="12" viewBox="0 0 24 24"
+                fill="currentColor" aria-hidden="true">
+                <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+              </svg></span><span id="effTxt">Off</span><span class="mb-caret">▾</span>
           </button>
           <!-- Plan usage ring (plan-limit.js, 0.329.0): took the place of the Fast mode bolt, which moved into the
                Effort popover. Shown only for brains on a plan (Claude Code signed in, ChatGPT through Codex). -->
-          <button type="button" class="cp-limit" id="limitBtn" hidden aria-haspopup="dialog" aria-expanded="false" aria-controls="limitPop"
-                  title="Hạn mức gói" data-i18n-title="lim.title" aria-label="Hạn mức gói" data-i18n-aria="lim.title" data-muc="none">
-            <svg width="20" height="20" viewBox="0 0 36 36" aria-hidden="true"><circle class="lim-bg" cx="18" cy="18" r="14" pathLength="100"/><circle class="lim-fg" cx="18" cy="18" r="14" pathLength="100" stroke-dasharray="0 100"/></svg>
+          <button type="button" class="cp-limit" id="limitBtn" hidden aria-haspopup="dialog" aria-expanded="false"
+            aria-controls="limitPop" title="Hạn mức gói" data-i18n-title="lim.title" aria-label="Hạn mức gói"
+            data-i18n-aria="lim.title" data-muc="none">
+            <svg width="20" height="20" viewBox="0 0 36 36" aria-hidden="true">
+              <circle class="lim-bg" cx="18" cy="18" r="14" pathLength="100" />
+              <circle class="lim-fg" cx="18" cy="18" r="14" pathLength="100" stroke-dasharray="0 100" />
+            </svg>
           </button>
         </div>
         <span class="cp-gap"></span>
@@ -618,39 +726,56 @@
              X drops the recording, the meter shows the mic level, the square stops and keeps the text to edit,
              and the send button next to it stops and sends. -->
         <div class="dict-bar" id="dictBar">
-          <button type="button" class="dict-cancel" id="dictCancel" title="Huỷ ghi âm" data-i18n-title="dict.cancel" aria-label="Huỷ ghi âm" data-i18n-aria="dict.cancel">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          <button type="button" class="dict-cancel" id="dictCancel" title="Huỷ ghi âm" data-i18n-title="dict.cancel"
+            aria-label="Huỷ ghi âm" data-i18n-aria="dict.cancel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           </button>
           <canvas class="dict-wave" id="dictWave" aria-hidden="true"></canvas>
           <span class="dict-busy" id="dictBusy" hidden data-i18n="dict.busy">Đang chuyển thành chữ...</span>
           <span class="dict-time" id="dictTime" aria-live="off">0:00</span>
-          <button type="button" class="dict-stop" id="dictStop" title="Dừng ghi, giữ chữ để sửa" data-i18n-title="dict.stop" aria-label="Dừng ghi, giữ chữ để sửa" data-i18n-aria="dict.stop">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+          <button type="button" class="dict-stop" id="dictStop" title="Dừng ghi, giữ chữ để sửa"
+            data-i18n-title="dict.stop" aria-label="Dừng ghi, giữ chữ để sửa" data-i18n-aria="dict.stop">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="2" />
+            </svg>
           </button>
         </div>
         <!-- Two voice buttons (0.230.0): the mic records speech into the text box (nothing is sent by itself),
              the sound-wave button is the live voice chat (#voiceBtn, unchanged behaviour). -->
-        <button type="button" class="mic-big dict-btn" id="dictBtn" title="Ghi âm thành chữ" data-i18n-title="dict.btn" aria-label="Ghi âm thành chữ" data-i18n-aria="dict.btn">
+        <button type="button" class="mic-big dict-btn" id="dictBtn" title="Ghi âm thành chữ" data-i18n-title="dict.btn"
+          aria-label="Ghi âm thành chữ" data-i18n-aria="dict.btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
           </svg>
         </button>
-        <button type="button" class="mic-big" id="voiceBtn" title="Đàm thoại: nói chuyện trực tiếp với Javis" data-i18n-title="bar.mic" aria-label="Đàm thoại: nói chuyện trực tiếp với Javis" data-i18n-aria="bar.mic">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/>
+        <button type="button" class="mic-big" id="voiceBtn" title="Đàm thoại: nói chuyện trực tiếp với Javis"
+          data-i18n-title="bar.mic" aria-label="Đàm thoại: nói chuyện trực tiếp với Javis" data-i18n-aria="bar.mic">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3" />
           </svg>
         </button>
-        <button type="button" class="stop-btn" id="stopBtn" title="Ngắt lệnh / dừng đọc (Esc)" data-i18n-title="bar.stop" style="display:none">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        <button type="button" class="stop-btn" id="stopBtn" title="Ngắt lệnh / dừng đọc (Esc)"
+          data-i18n-title="bar.stop" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
         </button>
         <button type="button" class="send-btn" id="sendBtn" aria-label="Gửi" data-i18n-aria="bar.send">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
       </div>
       <div class="mb-pop" id="mbPop" hidden></div>
       <div class="eff-pop" id="effPop" role="dialog" aria-label="Effort" hidden></div>
-      <div class="eff-pop lim-pop" id="limitPop" role="dialog" aria-label="Hạn mức gói" data-i18n-aria="lim.title" hidden></div>
+      <div class="eff-pop lim-pop" id="limitPop" role="dialog" aria-label="Hạn mức gói" data-i18n-aria="lim.title"
+        hidden></div>
       <div class="cp-menu" id="plusMenu" role="menu" hidden></div>
     </div><!-- /hudVoice -->
   </div>
@@ -660,26 +785,29 @@
 
   <!-- ===== Console layer: rail điều hướng + trang quản lý (Alpine-driven) ===== -->
   <nav class="rail" x-data x-cloak :class="{ collapsed: $store.nav.collapsed }"
-       x-effect="document.body.classList.toggle('rail-collapsed', $store.nav.collapsed)">
+    x-effect="document.body.classList.toggle('rail-collapsed', $store.nav.collapsed)">
     <!-- ĐỈNH cố định -->
     <div class="rail-top">
       <!-- Dấu ấn và CHỮ tách làm hai ô: pet.js thay ruột của .brand-mark bằng khuôn mặt linh
            vật (xem veDauAn), nên chữ phải nằm ngoài ô đó, không thì mỗi lần đổi hình dáng hay
            bảng màu là chữ bị xoá theo. .brand .brand-icon trên thanh trên cũng cùng vai trò. -->
-      <div class="rail-brand"><span class="brand-mark"><img src="/brand-logo" alt="Javis" style="width:30px;height:30px;border-radius:8px;display:block;object-fit:cover"></span><span class="rail-brand-text">JAVIS <i>OS</i></span></div>
+      <div class="rail-brand"><span class="brand-mark"><img src="/brand-logo" alt="Javis"
+            style="width:30px;height:30px;border-radius:8px;display:block;object-fit:cover"></span><span
+          class="rail-brand-text">JAVIS <i>OS</i></span></div>
     </div>
     <!-- GIỮA cuộn được - gom theo nhóm; nhóm foot (Hệ thống) tự ghim xuống đáy -->
     <div class="rail-nav">
       <template x-for="g in $store.nav.groups" :key="g.label">
-        <div class="rail-group" :class="{ foot: g.foot, solo: g.solo, open: $store.nav.isOpen(g.label), 'has-active': g.items.some(it => it.id === $store.nav.active) }">
+        <div class="rail-group"
+          :class="{ foot: g.foot, solo: g.solo, open: $store.nav.isOpen(g.label), 'has-active': g.items.some(it => it.id === $store.nav.active) }">
           <button class="rail-grp-lbl" x-show="!g.solo" @click="$store.nav.toggleGroup(g.label)" :title="g.label">
             <span class="rail-grp-ico" x-html="g.icon"></span>
             <span class="grp-name" x-text="g.label"></span>
           </button>
           <div class="rail-grp-items">
             <template x-for="it in g.items" :key="it.id">
-              <button class="rail-item" :class="{ active: $store.nav.active === it.id }"
-                      @click="$store.nav.go(it.id)" :title="it.label" :data-page="it.id">
+              <button class="rail-item" :class="{ active: $store.nav.active === it.id }" @click="$store.nav.go(it.id)"
+                :title="it.label" :data-page="it.id">
                 <span class="rail-ico" x-html="it.icon"></span>
                 <span class="rail-lbl" x-text="it.label"></span>
               </button>
@@ -694,26 +822,30 @@
          có danh sách để không hiện một ô select trống. -->
     <div class="rail-lang" id="railLangWrap" hidden>
       <i data-ic="globe"></i>
-      <select id="railLang" class="rail-lang-sel" aria-label="Ngôn ngữ giao diện" data-i18n-aria="settings.ui_lang.title"></select>
+      <select id="railLang" class="rail-lang-sel" aria-label="Ngôn ngữ giao diện"
+        data-i18n-aria="settings.ui_lang.title"></select>
     </div>
     <!-- ĐÁY cố định: nút thu/mở + version + tác giả -->
     <div class="rail-foot">
       <button class="rail-collapse-btn" @click="$store.nav.toggleCollapsed()"
-              :title="($store.nav.i18nTick, $store.nav.collapsed ? t('rail.expand') : t('rail.collapse'))"
-              x-html="$store.nav.collapseIcon"></button>
+        :title="($store.nav.i18nTick, $store.nav.collapsed ? t('rail.expand') : t('rail.collapse'))"
+        x-html="$store.nav.collapseIcon"></button>
       <div class="rf-meta">
         <div class="rf-ver" id="railVersion">v0.0.0</div>
-        <a class="rf-author" href="https://javisos.com" target="_blank" rel="noopener">by Javis Foundation</a>
+        <a class="rf-author" href="https://javisos.com" target="_blank" rel="noopener" style="display:none">by Javis
+          Foundation</a>
       </div>
     </div>
   </nav>
 
-  <section class="cview" id="cview" x-data x-cloak x-show="$store.nav.active !== 'home'" x-transition.opacity.duration.200ms>
+  <section class="cview" id="cview" x-data x-cloak x-show="$store.nav.active !== 'home'"
+    x-transition.opacity.duration.200ms>
     <div class="cview-head">
       <div>
         <!-- meta.icon là TÊN icon Lucide (VIEW_ICON trong console.js) nên phải render
              qua ic() bằng x-html; x-text sẽ in nguyên tên ("brain", "bot"...) ra màn hình. -->
-        <div class="cview-title"><span class="ico" x-html="ic($store.nav.meta.icon || 'sparkles')"></span> <span x-text="$store.nav.meta.label"></span></div>
+        <div class="cview-title"><span class="ico" x-html="ic($store.nav.meta.icon || 'sparkles')"></span> <span
+            x-text="$store.nav.meta.label"></span></div>
         <div class="cview-sub" x-text="$store.nav.meta.sub"></div>
       </div>
     </div>
@@ -745,14 +877,16 @@
 
   <!-- Drag-drop overlay -->
   <div class="drop-overlay" id="dropOverlay">
-    <div class="drop-msg"><i data-ic="paperclip"></i> <span data-i18n="drop.msg">Thả file vào đây → lưu vào Sources</span></div>
+    <div class="drop-msg"><i data-ic="paperclip"></i> <span data-i18n="drop.msg">Thả file vào đây → lưu vào
+        Sources</span></div>
   </div>
 
   <!-- Folder picker modal -->
   <div class="modal-overlay" id="folderModal">
     <div class="folder-modal">
       <div class="fm-head">
-        <span><i data-ic="folder-open"></i> <span data-i18n="fm.title">Chọn brain (folder chứa ghi chú .md)</span></span>
+        <span><i data-ic="folder-open"></i> <span data-i18n="fm.title">Chọn brain (folder chứa ghi chú
+            .md)</span></span>
         <button class="fm-close" id="fmClose"><i data-ic="x"></i></button>
       </div>
       <div class="fm-path" id="fmPath">-</div>
@@ -767,66 +901,148 @@
   <!-- Bộ cài đặt lần đầu (hiện khi chưa setup_done) -->
   <div class="modal-overlay" id="setupWizard">
     <div class="settings-modal" style="max-width:460px">
-      <div class="fm-head"><img src="/brand-logo" alt="" style="width:24px;height:24px;border-radius:6px;vertical-align:middle;margin-right:6px;object-fit:cover"><span data-i18n="wz.welcome">Chào mừng tới Javis</span></div>
+      <div class="fm-head"><img src="/brand-logo" alt=""
+          style="width:24px;height:24px;border-radius:6px;vertical-align:middle;margin-right:6px;object-fit:cover"><span
+          data-i18n="wz.welcome">Chào mừng tới Javis</span></div>
       <div class="settings-body">
         <style>
-        .wz-prov{display:flex;flex-direction:column;gap:8px;margin-top:6px}
-        /* Theme tokens only: these colours used to be hard-coded for the dark theme, so on the
+          .wz-prov {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 6px
+          }
+
+          /* Theme tokens only: these colours used to be hard-coded for the dark theme, so on the
            light theme the provider names were near-white on cream and the login command in
            the hint was dark-on-dark (customer report 2026-10-11). */
-        .wz-card{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);background:var(--bg2);border-radius:10px;cursor:pointer;transition:.15s}
-        .wz-card:hover{border-color:var(--accent-line)} .wz-card.sel{border-color:var(--accent);background:var(--accent-wash-2)}
-        /* The global form-input rule stretches inputs to full width; a radio must stay its own size. */
-        .wz-card input{width:auto;flex:none;margin:3px 0 0;accent-color:var(--accent)} .wz-card b{font-size:15px;color:var(--text)}
-        .wz-rec{font-size:12px;background:var(--accent-solid);color:var(--bg);border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:700}
-        .wz-pdesc{font-size:15px;color:var(--text2);margin-top:3px;line-height:1.45}
-        #wzProvHint code{background:var(--surface-3);color:var(--text);padding:1px 5px;border-radius:4px;font-size:13px;word-break:break-all}
-        #wzProvHint{margin-top:8px;font-size:15px;color:var(--text2);line-height:1.5}
+          .wz-card {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            background: var(--bg2);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: .15s
+          }
+
+          .wz-card:hover {
+            border-color: var(--accent-line)
+          }
+
+          .wz-card.sel {
+            border-color: var(--accent);
+            background: var(--accent-wash-2)
+          }
+
+          /* The global form-input rule stretches inputs to full width; a radio must stay its own size. */
+          .wz-card input {
+            width: auto;
+            flex: none;
+            margin: 3px 0 0;
+            accent-color: var(--accent)
+          }
+
+          .wz-card b {
+            font-size: 15px;
+            color: var(--text)
+          }
+
+          .wz-rec {
+            font-size: 12px;
+            background: var(--accent-solid);
+            color: var(--bg);
+            border-radius: 6px;
+            padding: 1px 6px;
+            margin-left: 6px;
+            font-weight: 700
+          }
+
+          .wz-pdesc {
+            font-size: 15px;
+            color: var(--text2);
+            margin-top: 3px;
+            line-height: 1.45
+          }
+
+          #wzProvHint code {
+            background: var(--surface-3);
+            color: var(--text);
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 13px;
+            word-break: break-all
+          }
+
+          #wzProvHint {
+            margin-top: 8px;
+            font-size: 15px;
+            color: var(--text2);
+            line-height: 1.5
+          }
         </style>
-        <div class="set-note"><span data-i18n="wz.intro">Vài bước nhanh để bắt đầu. Mọi thứ đổi lại được sau trong</span> <i data-ic="settings"></i> <span data-i18n="page.settings.label">Cài đặt</span>.</div>
+        <div class="set-note"><span data-i18n="wz.intro">Vài bước nhanh để bắt đầu. Mọi thứ đổi lại được sau
+            trong</span> <i data-ic="settings"></i> <span data-i18n="page.settings.label">Cài đặt</span>.</div>
         <div class="set-sec">
           <h4 data-i18n="wz.s1">1. Workspace</h4>
           <label data-i18n="wz.ws_name">Tên hiển thị</label><input id="wzWsName" placeholder="Javis OS">
         </div>
         <div class="set-sec">
-          <h4><span data-i18n="wz.s2">2. Tài khoản admin</span> <span class="dim" data-i18n="wz.s2_rec">(khuyến nghị)</span></h4>
-          <div class="set-note" data-i18n="wz.pass_note">Đặt mật khẩu để chặn người lạ - quan trọng nếu đưa lên VPS. Bỏ trống nếu chỉ chạy máy cá nhân.</div>
-          <label data-i18n="common.account">Tài khoản</label><input id="wzUser" placeholder="Ví dụ: admin" data-i18n-ph="wz.user_ph">
-          <label data-i18n="common.password">Mật khẩu</label><input id="wzPass" type="password" placeholder="Để trống nếu không đặt mật khẩu" data-i18n-ph="wz.pass_ph">
+          <h4><span data-i18n="wz.s2">2. Tài khoản admin</span> <span class="dim" data-i18n="wz.s2_rec">(khuyến
+              nghị)</span></h4>
+          <div class="set-note" data-i18n="wz.pass_note">Đặt mật khẩu để chặn người lạ - quan trọng nếu đưa lên VPS. Bỏ
+            trống nếu chỉ chạy máy cá nhân.</div>
+          <label data-i18n="common.account">Tài khoản</label><input id="wzUser" placeholder="Ví dụ: admin"
+            data-i18n-ph="wz.user_ph">
+          <label data-i18n="common.password">Mật khẩu</label><input id="wzPass" type="password"
+            placeholder="Để trống nếu không đặt mật khẩu" data-i18n-ph="wz.pass_ph">
         </div>
         <div class="set-sec">
           <h4 data-i18n="wz.s3">3. Nhà cung cấp AI (bộ não)</h4>
-          <div class="set-note"><span data-i18n="wz.prov_note">Chọn 1 nhà cung cấp chính. Đổi lại được trong</span> <i data-ic="cpu"></i> <b>Models</b>.</div>
+          <div class="set-note"><span data-i18n="wz.prov_note">Chọn 1 nhà cung cấp chính. Đổi lại được trong</span> <i
+              data-ic="cpu"></i> <b>Models</b>.</div>
           <div class="wz-prov" id="wzProv">
             <label class="wz-card" data-prov="anthropic-cli">
               <input type="radio" name="wzprov" value="anthropic-cli" checked>
               <div><b><i data-ic="brain"></i> Claude Code <span class="wz-rec" data-i18n="wz.rec">khuyên dùng</span></b>
-                <div class="wz-pdesc" data-i18n="wz.prov_claude">Đăng nhập subscription Claude → đủ MCP, skill, đọc/ghi file, vòng lặp tự cải thiện. Mạnh & đầy đủ nhất.</div></div>
+                <div class="wz-pdesc" data-i18n="wz.prov_claude">Đăng nhập subscription Claude → đủ MCP, skill, đọc/ghi
+                  file, vòng lặp tự cải thiện. Mạnh & đầy đủ nhất.</div>
+              </div>
             </label>
             <label class="wz-card" data-prov="openai-oauth">
               <input type="radio" name="wzprov" value="openai-oauth">
-              <div><b><i data-ic="message-circle"></i> <span data-i18n="wz.prov_gpt_name">ChatGPT (gói subscription)</span></b>
-                <div class="wz-pdesc" data-i18n="wz.prov_gpt">Đăng nhập ChatGPT Plus/Pro (qua Codex) → vẫn dùng được MCP của Javis. Hợp nếu bạn đã có gói ChatGPT.</div></div>
+              <div><b><i data-ic="message-circle"></i> <span data-i18n="wz.prov_gpt_name">ChatGPT (gói
+                    subscription)</span></b>
+                <div class="wz-pdesc" data-i18n="wz.prov_gpt">Đăng nhập ChatGPT Plus/Pro (qua Codex) → vẫn dùng được MCP
+                  của Javis. Hợp nếu bạn đã có gói ChatGPT.</div>
+              </div>
             </label>
             <label class="wz-card" data-prov="openrouter">
               <input type="radio" name="wzprov" value="openrouter">
               <div><b><i data-ic="globe"></i> OpenRouter</b>
-                <div class="wz-pdesc" data-i18n="wz.prov_or">Nhiều model giá rẻ một chỗ, vẫn đủ MCP Javis + skill + đọc/ghi file brain. Chỉ cần API key - không cần đăng nhập.</div></div>
+                <div class="wz-pdesc" data-i18n="wz.prov_or">Nhiều model giá rẻ một chỗ, vẫn đủ MCP Javis + skill +
+                  đọc/ghi file brain. Chỉ cần API key - không cần đăng nhập.</div>
+              </div>
             </label>
           </div>
           <div id="wzOrKey" style="display:none">
-            <label>OpenRouter API key <span class="dim" data-i18n="wz.or_key_later">(có thể dán sau ở Models)</span></label>
+            <label>OpenRouter API key <span class="dim" data-i18n="wz.or_key_later">(có thể dán sau ở
+                Models)</span></label>
             <input id="wzOrKeyInput" placeholder="Ví dụ: sk-or-v1-… (tùy chọn)" data-i18n-ph="wz.or_key_ph">
           </div>
           <div id="wzProvHint"></div>
         </div>
         <div class="set-sec">
           <h4 data-i18n="wz.s4">4. Múi giờ</h4>
-          <div class="set-note" data-i18n="wz.tz_note">Javis dùng múi giờ này cho hôm nay, hôm qua, ngày mai, nhắc hẹn và kỳ báo cáo.</div>
+          <div class="set-note" data-i18n="wz.tz_note">Javis dùng múi giờ này cho hôm nay, hôm qua, ngày mai, nhắc hẹn
+            và kỳ báo cáo.</div>
           <select id="wzTz" aria-label="Múi giờ" data-i18n-aria="wz.s4"></select>
           <div class="set-note" id="wzTzNow"></div>
         </div>
-        <div class="set-actions"><button class="s-btn" id="wzFinish" data-i18n="wz.start">Bắt đầu dùng Javis →</button></div>
+        <div class="set-actions"><button class="s-btn" id="wzFinish" data-i18n="wz.start">Bắt đầu dùng Javis →</button>
+        </div>
         <div class="auth-err" id="wzErr"></div>
       </div>
     </div>
@@ -835,30 +1051,39 @@
   <!-- Đăng nhập (chỉ hiện khi admin đã đặt mật khẩu & chưa đăng nhập) -->
   <div class="modal-overlay" id="authOverlay">
     <div class="folder-modal auth-modal">
-      <div class="fm-head"><img src="/brand-logo" alt="" style="width:24px;height:24px;border-radius:6px;vertical-align:middle;margin-right:6px;object-fit:cover"><span id="authTitle" data-i18n="auth.title">Đăng nhập Javis</span></div>
+      <div class="fm-head"><img src="/brand-logo" alt=""
+          style="width:24px;height:24px;border-radius:6px;vertical-align:middle;margin-right:6px;object-fit:cover"><span
+          id="authTitle" data-i18n="auth.title">Đăng nhập Javis</span></div>
       <div class="auth-body">
         <input id="authUser" placeholder="Tài khoản" data-i18n-ph="common.account" autocomplete="username">
         <div class="auth-pw">
-          <input id="authPass" type="password" placeholder="Mật khẩu" data-i18n-ph="common.password" autocomplete="current-password">
-          <button type="button" class="auth-pw-eye" id="authPassEye" aria-pressed="false"
-                  title="Hiện/ẩn mật khẩu" data-i18n-title="auth.show_pw" aria-label="Hiện/ẩn mật khẩu" data-i18n-aria="auth.show_pw"><i data-ic="eye"></i></button>
+          <input id="authPass" type="password" placeholder="Mật khẩu" data-i18n-ph="common.password"
+            autocomplete="current-password">
+          <button type="button" class="auth-pw-eye" id="authPassEye" aria-pressed="false" title="Hiện/ẩn mật khẩu"
+            data-i18n-title="auth.show_pw" aria-label="Hiện/ẩn mật khẩu" data-i18n-aria="auth.show_pw"><i
+              data-ic="eye"></i></button>
         </div>
         <!-- Ô mã 2 lớp: ẩn cho tới khi server trả needs_2fa. Hiện sẵn từ đầu thì người CHƯA bật
              2FA phải nhìn một ô họ không hiểu, mỗi lần đăng nhập. inputmode=numeric để điện
              thoại bật bàn phím số; autocomplete=one-time-code để iOS/Android tự điền từ SMS/app. -->
         <div id="authCodeWrap" style="display:none">
-          <input id="authCode" inputmode="numeric" autocomplete="one-time-code"
-                 placeholder="Mã 6 số, hoặc mã khôi phục" data-i18n-ph="auth.code_ph">
-          <div class="auth-hint" data-i18n="auth.code_hint">Mở app Authenticator và nhập mã đang hiện. Mất điện thoại thì
+          <input id="authCode" inputmode="numeric" autocomplete="one-time-code" placeholder="Mã 6 số, hoặc mã khôi phục"
+            data-i18n-ph="auth.code_ph">
+          <div class="auth-hint" data-i18n="auth.code_hint">Mở app Authenticator và nhập mã đang hiện. Mất điện thoại
+            thì
             nhập một mã khôi phục đã lưu lúc bật.</div>
         </div>
         <button class="fm-use" id="authSubmit" data-i18n="auth.submit">Đăng nhập</button>
         <div class="auth-err" id="authErr"></div>
         <div class="auth-help"><span id="authForgot" data-i18n="auth.forgot">Quên mật khẩu?</span></div>
         <div class="auth-reset" id="authResetInfo" style="display:none">
-          <span data-i18n="auth.reset1">Mở file</span> <code>server/settings.json</code><span data-i18n="auth.reset2">, xóa khối</span> <code>"auth"</code> <span data-i18n="auth.reset3">(hoặc đặt rỗng), rồi chạy</span>
-          <code>stop-javis.bat</code> → <code>start-javis.vbs</code>. <span data-i18n="auth.reset4">Mở lại sẽ về bộ cài đặt để tạo tài khoản mới.</span>
-          <div class="auth-reset-srv" data-i18n="auth.reset_server">Chạy trên máy chủ (Docker, Hostinger): đổi JAVIS_ADMIN_PASSWORD trong Environment rồi Redeploy. Javis đặt lại mật khẩu theo giá trị mới, 2FA giữ nguyên.</div>
+          <span data-i18n="auth.reset1">Mở file</span> <code>server/settings.json</code><span data-i18n="auth.reset2">,
+            xóa khối</span> <code>"auth"</code> <span data-i18n="auth.reset3">(hoặc đặt rỗng), rồi chạy</span>
+          <code>stop-javis.bat</code> → <code>start-javis.vbs</code>. <span data-i18n="auth.reset4">Mở lại sẽ về bộ cài
+            đặt để tạo tài khoản mới.</span>
+          <div class="auth-reset-srv" data-i18n="auth.reset_server">Chạy trên máy chủ (Docker, Hostinger): đổi
+            JAVIS_ADMIN_PASSWORD trong Environment rồi Redeploy. Javis đặt lại mật khẩu theo giá trị mới, 2FA giữ
+            nguyên.</div>
         </div>
       </div>
     </div>
@@ -867,7 +1092,8 @@
   <!-- Cài đặt -->
   <div class="modal-overlay" id="settingsOverlay">
     <div class="settings-modal">
-      <div class="fm-head"><span><i data-ic="settings"></i> <span data-i18n="setm.title">Cài đặt Javis</span></span><button class="fm-close" id="settingsClose"><i data-ic="x"></i></button></div>
+      <div class="fm-head"><span><i data-ic="settings"></i> <span data-i18n="setm.title">Cài đặt
+            Javis</span></span><button class="fm-close" id="settingsClose"><i data-ic="x"></i></button></div>
       <div class="settings-body">
         <div class="set-sec">
           <h4 data-i18n="setm.general">Chung</h4>
@@ -875,12 +1101,17 @@
           <button class="s-btn" id="saveGeneral" data-i18n="common.save">Lưu</button>
         </div>
         <div class="set-sec">
-          <h4>Model <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
-          <div class="info-body" hidden data-i18n="setm.or_note">Danh sách model tải động từ OpenRouter. Không thấy model cần? Chọn "Nhập tên khác" rồi gõ chính xác id. OpenRouter sẽ kích hoạt ở bản kế (P2).</div>
+          <h4>Model <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích"
+              title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i
+                data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.or_note">Danh sách model tải động từ OpenRouter. Không thấy
+            model cần? Chọn "Nhập tên khác" rồi gõ chính xác id. OpenRouter sẽ kích hoạt ở bản kế (P2).</div>
           <label data-i18n="setm.engine">Engine xử lý chat</label>
           <select id="setEngine">
-            <option value="cli" data-i18n="setm.engine_cli">Claude Code CLI - MCP Javis + skill + loop + lệnh máy</option>
-            <option value="openrouter" data-i18n="setm.engine_or">OpenRouter - MCP Javis + skill + loop (không lệnh máy)</option>
+            <option value="cli" data-i18n="setm.engine_cli">Claude Code CLI - MCP Javis + skill + loop + lệnh máy
+            </option>
+            <option value="openrouter" data-i18n="setm.engine_or">OpenRouter - MCP Javis + skill + loop (không lệnh máy)
+            </option>
           </select>
           <label data-i18n="setm.claude_model">Model Claude (khi dùng CLI)</label>
           <!-- Danh sách nạp động từ /provider/models (app.js: loadClaudeModels). Mấy option
@@ -889,20 +1120,30 @@
             <option value="" data-i18n="common.default">Mặc định</option>
           </select>
           <label>OpenRouter API key <span class="dim" id="setKeyHint"></span></label>
-          <input id="setOrKey" type="password" placeholder="Ví dụ: sk-or-... (để trống nếu không đổi)" data-i18n-ph="setm.or_key_ph">
-          <label>OpenRouter model <button type="button" class="set-mini" id="loadModelsBtn" data-i18n="setm.load_models">↻ Tải danh sách</button></label>
-          <select id="setOrModelSel"><option value="__custom__" data-i18n="setm.custom_model">Nhập tên model khác (custom)…</option></select>
-          <input id="setOrModel" placeholder="Ví dụ: openai/gpt-4o-mini" data-i18n-ph="setm.or_model_ph" style="display:none">
+          <input id="setOrKey" type="password" placeholder="Ví dụ: sk-or-... (để trống nếu không đổi)"
+            data-i18n-ph="setm.or_key_ph">
+          <label>OpenRouter model <button type="button" class="set-mini" id="loadModelsBtn"
+              data-i18n="setm.load_models">↻ Tải danh sách</button></label>
+          <select id="setOrModelSel">
+            <option value="__custom__" data-i18n="setm.custom_model">Nhập tên model khác (custom)…</option>
+          </select>
+          <input id="setOrModel" placeholder="Ví dụ: openai/gpt-4o-mini" data-i18n-ph="setm.or_model_ph"
+            style="display:none">
           <button class="s-btn" id="saveModel" data-i18n="common.save">Lưu</button>
         </div>
         <div class="set-sec">
-          <h4>Telegram <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
-          <div class="info-body" hidden data-i18n="setm.tg_note">Nhắn Telegram ↔ Javis. Dùng đúng engine đang chọn (CLI thì có cả MCP để hỏi doanh thu/ads qua điện thoại). Có thể dùng lại token bot Morning Briefing.</div>
+          <h4>Telegram <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích"
+              title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i
+                data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.tg_note">Nhắn Telegram ↔ Javis. Dùng đúng engine đang chọn (CLI
+            thì có cả MCP để hỏi doanh thu/ads qua điện thoại). Có thể dùng lại token bot Morning Briefing.</div>
           <label class="loop-row" style="padding:0"><span data-i18n="setm.tg_on">Bật bot Telegram</span>
             <label class="toggle"><input type="checkbox" id="setTgEnabled"><span></span></label></label>
           <label>Bot token <span class="dim" id="setTgHint"></span></label>
-          <input id="setTgToken" type="password" placeholder="Ví dụ: 123456:ABC... (để trống nếu không đổi)" data-i18n-ph="setm.tg_token_ph">
-          <label><span data-i18n="setm.tg_chat">Chat ID được phép dùng</span> <span class="dim" data-i18n="setm.tg_chat_dim">(nhiều ID cách nhau dấu phẩy)</span></label>
+          <input id="setTgToken" type="password" placeholder="Ví dụ: 123456:ABC... (để trống nếu không đổi)"
+            data-i18n-ph="setm.tg_token_ph">
+          <label><span data-i18n="setm.tg_chat">Chat ID được phép dùng</span> <span class="dim"
+              data-i18n="setm.tg_chat_dim">(nhiều ID cách nhau dấu phẩy)</span></label>
           <input id="setTgChat" placeholder="Ví dụ: 123456789, 987654321" data-i18n-ph="setm.tg_chat_ph">
           <div class="set-note" id="setTgStatus">-</div>
           <div class="set-actions">
@@ -911,15 +1152,21 @@
           </div>
         </div>
         <div class="set-sec">
-          <h4><span data-i18n="setm.auth">Tài khoản đăng nhập</span> <button type="button" class="info-i" aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more" data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
-          <div class="info-body" hidden data-i18n="setm.auth_note">Đặt mật khẩu để chặn người lạ khi đưa Javis lên VPS. Lưu ý: trên VPS nên chạy sau HTTPS (reverse proxy).</div>
+          <h4><span data-i18n="setm.auth">Tài khoản đăng nhập</span> <button type="button" class="info-i"
+              aria-expanded="false" aria-label="Xem giải thích" title="Xem giải thích" data-i18n-aria="info.more"
+              data-i18n-title="info.more"><i data-ic="info"></i></button></h4>
+          <div class="info-body" hidden data-i18n="setm.auth_note">Đặt mật khẩu để chặn người lạ khi đưa Javis lên VPS.
+            Lưu ý: trên VPS nên chạy sau HTTPS (reverse proxy).</div>
           <div class="set-note" id="setAuthState"></div>
-          <label data-i18n="common.account">Tài khoản</label><input id="setAuthUser" placeholder="Ví dụ: admin" data-i18n-ph="wz.user_ph">
+          <label data-i18n="common.account">Tài khoản</label><input id="setAuthUser" placeholder="Ví dụ: admin"
+            data-i18n-ph="wz.user_ph">
           <!-- Mật khẩu hiện tại: chỉ hiện khi ĐÃ có tài khoản (app.js refreshAuthRow bật lên).
                Server đòi nó để một phiên bị mượn không đổi được mật khẩu rồi khoá chính chủ. -->
           <label id="setAuthCurLbl" hidden data-i18n="setm.cur_pass">Mật khẩu hiện tại</label>
-          <input id="setAuthCur" type="password" autocomplete="current-password" placeholder="Mật khẩu đang dùng" data-i18n-ph="setm.cur_pass_ph" hidden>
-          <label data-i18n="common.password">Mật khẩu</label><input id="setAuthPass" type="password" autocomplete="new-password" placeholder="Đặt mật khẩu (để trống nếu không đổi)" data-i18n-ph="setm.pass_ph">
+          <input id="setAuthCur" type="password" autocomplete="current-password" placeholder="Mật khẩu đang dùng"
+            data-i18n-ph="setm.cur_pass_ph" hidden>
+          <label data-i18n="common.password">Mật khẩu</label><input id="setAuthPass" type="password"
+            autocomplete="new-password" placeholder="Đặt mật khẩu (để trống nếu không đổi)" data-i18n-ph="setm.pass_ph">
           <div class="set-actions">
             <button class="s-btn" id="savePassword" data-i18n="setm.save_auth">Lưu tài khoản</button>
             <button class="s-btn-ghost" id="logoutBtn" data-i18n="setm.logout">Đăng xuất</button>
@@ -931,7 +1178,8 @@
                Nội dung do console.js đổ vào (renderTfaRow) vì nó cần hỏi /auth/status. -->
           <div class="set-tfa" id="setTfaRow" hidden></div>
         </div>
-        <div class="set-note" style="opacity:.7" data-i18n="setm.more">Ảnh đại diện, tên miền, giọng nói &amp; tốc độ nằm trong trang Cài đặt.</div>
+        <div class="set-note" style="opacity:.7" data-i18n="setm.more">Ảnh đại diện, tên miền, giọng nói &amp; tốc độ
+          nằm trong trang Cài đặt.</div>
       </div>
     </div>
   </div>
@@ -1168,4 +1416,5 @@
   <!-- Alpine self-host (dashboard/vendor): bản unpkg đo được 2.1s lúc first load + chết khi offline -->
   <script defer src="/static/vendor/alpinejs-3.14.1.min.js?v=1"></script>
 </body>
+
 </html>

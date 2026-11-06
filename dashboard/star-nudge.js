@@ -123,8 +123,10 @@
     var moc = c.milestone, buocTruoc = moc - (moc <= 1000 ? 100 : moc <= 5000 ? 500 : moc <= 20000 ? 1000 : 5000);
     var pt = Math.max(4, Math.min(100, Math.round((c.stars - buocTruoc) / (moc - buocTruoc) * 100)));
     return '<div class="sn-so">'
-      + '<div class="sn-so-chu">' + dam("star.count", { n: "**" + soDep(c.stars) + "**", con: "**" + soDep(c.remaining) + "**",
-        moc: "**" + soDep(c.milestone) + "**" }) + "</div>"
+      + '<div class="sn-so-chu">' + dam("star.count", {
+        n: "**" + soDep(c.stars) + "**", con: "**" + soDep(c.remaining) + "**",
+        moc: "**" + soDep(c.milestone) + "**"
+      }) + "</div>"
       + '<div class="sn-thanh" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pt + '">'
       + '<span style="width:' + pt + '%"></span></div></div>';
   }
@@ -183,14 +185,14 @@
     the = el;
 
     var mo = function () {
-      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) {}
+      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) { }
       post("/star-nudge/action", { action: "opened" });
       el.querySelector(".sn-moi").hidden = true;
       el.querySelector(".sn-cho").hidden = false;
     };
     el.querySelector(".sn-go").onclick = mo;
     el.querySelector(".sn-molai").onclick = function () {
-      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) {}
+      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) { }
     };
     el.querySelector(".sn-xong").onclick = function () {
       post("/star-nudge/action", { action: "done" });
@@ -258,7 +260,9 @@
     b.setAttribute("aria-label", t("star.go"));
   }
   function batDau() {
+    /** Ẩn tạm thời
     ganNutGoc();
+    */
     moment("load");
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", batDau);
@@ -270,7 +274,7 @@
 
   /** Thẻ "Ủng hộ Javis" cố định trên trang Cập nhật (console.js gắn nút bấm). */
   function theUngHo() {
-    return '<div class="sn-ho"><div class="sn-lv">' + linhVat("vui") + "</div>"
+    return '<div class="sn-ho" style="display:none"><div class="sn-lv">' + linhVat("vui") + "</div>"
       + '<div class="sn-ho-chu"><b>' + esc(t("star.support_title")) + "</b><span>" + esc(t("star.support_body")) + "</span></div>"
       + '<button type="button" class="sn-go">' + ic("star") + " " + esc(t("star.go")) + "</button></div>";
   }
