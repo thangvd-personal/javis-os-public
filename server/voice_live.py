@@ -1477,7 +1477,7 @@ def _chatgpt_account(cfg: dict) -> dict:
 
 
 def make_provider(cfg: dict, system: str = "", recognition_lang: str = "vi-VN", memory_index: str = "",
-                  persona: Optional[tuple] = None) -> LiveProvider:
+                  persona: tuple | None = None) -> LiveProvider:
     """Dựng nhà cung cấp Live từ settings. Ném RuntimeError có câu người đọc hiểu được.
 
     `persona`: (name, identity block) of the partner the call talks to (a call from a partner's chat, see
