@@ -10,11 +10,12 @@ No network, no model.
 - The card and the Core chat model bar read and write the same pin, both ways.
 - A pin that cannot run (no key) says so and shows the main model as what runs.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-core-card-")
 try:
@@ -31,10 +32,10 @@ def check(name, cond, extra=""):
         fails.append(name)
 
 
-import config as cfgmod  # noqa: E402
-import javis_core  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import config as cfgmod
+import javis_core
+import main
+from fastapi.testclient import TestClient
 
 if os.environ["JAVIS_STATE_DIR"] not in str(cfgmod.STATE_DIR):
     print(f"FAIL state dir is not the temp dir: {cfgmod.STATE_DIR}. STOP.")

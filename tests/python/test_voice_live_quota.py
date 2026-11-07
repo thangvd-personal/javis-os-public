@@ -13,7 +13,6 @@ another path, even after the owner had switched the main model to Claude Max. Pi
   - with every account resting, the call path is no longer ChatGPT Live (api with a key, else basic), detail "quota";
   - one Codex app-server per account (the login lives in the CODEX_HOME it started with).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -21,6 +20,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _TMP = Path(tempfile.mkdtemp(prefix="javis-live-quota-"))
 os.environ.setdefault("JAVIS_STATE_DIR", str(_TMP / "state"))
@@ -34,12 +35,12 @@ try:
 except Exception:
     pass
 
-import codex_realtime  # noqa: E402
-import limit_learner  # noqa: E402
-import model_routing  # noqa: E402
-import plan_accounts  # noqa: E402
-import voice_call  # noqa: E402
-import voice_live  # noqa: E402
+import codex_realtime
+import limit_learner
+import model_routing
+import plan_accounts
+import voice_call
+import voice_live
 
 _fails = []
 
@@ -201,7 +202,7 @@ async def server_checks():
 asyncio.run(server_checks())
 
 # ---- the Basic path's quick-reply brain does not pick an exhausted ChatGPT ----
-import voice_brain  # noqa: E402
+import voice_brain
 
 model_routing.clear_rest(PROV, plan_accounts.MAIN)
 voice_brain._AUTO_CACHE["at"] = 0.0

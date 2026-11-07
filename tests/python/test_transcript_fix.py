@@ -6,16 +6,17 @@ No network: the model call (`transcript_fix._ask_model`) is replaced by fakes. P
 Javis, Groq kept), Groq wins when its key is set, otherwise the background model only when it is an API with a key,
 a model that rewrites the sentence or fails falls back to the rules, and the route never errors.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-fix-"))
 
-import main  # noqa: E402
-import transcript_fix  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import transcript_fix
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []

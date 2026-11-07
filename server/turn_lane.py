@@ -18,7 +18,6 @@ from __future__ import annotations
 import contextvars
 import secrets
 import time
-from typing import Optional
 
 import turn_context as tc
 
@@ -90,7 +89,7 @@ class Lane:
     def close(self) -> None:
         self.detach()
 
-    def turn(self) -> Optional[dict]:
+    def turn(self) -> dict | None:
         return tc.resolve_key(self.key)
 
     def context(self) -> contextvars.Context:

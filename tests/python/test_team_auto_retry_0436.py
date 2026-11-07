@@ -4,23 +4,24 @@
 
 Fake engines only, no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-retry-")
 os.environ.pop("JAVIS_TEAM_AUTO_RETRIES", None)
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_dispatch  # noqa: E402
-import team_retry  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_dispatch
+import team_retry
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -176,8 +177,9 @@ run(r.dispatch_once(wait=True))
 check("a step that acted blocks for the owner", ts.get_task(j3["task_id"])["block_kind"] == "failed")
 
 # ---------- end-of-step report (team_step_report) ----------
-import json  # noqa: E402
-import team_step_report as SR  # noqa: E402
+import json
+
+import team_step_report as SR
 
 
 def directive(**op):

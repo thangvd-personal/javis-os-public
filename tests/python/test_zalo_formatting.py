@@ -12,12 +12,13 @@ not tell a bot from a person; Javis sent Markdown stars as typed. What is guarde
   4. In a group the "@Name " put in front moves every style.
   5. "Đang soạn tin" is best effort: an MCP without the tool is not asked again, and the reply never waits on it.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zalo-fmt-")
 
@@ -26,11 +27,11 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_markup  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import chatbot_runtime
+import zalo_cli
+import zalo_markup
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 fails = []
 

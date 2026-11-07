@@ -45,14 +45,14 @@ import json
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Optional
-
-from fastapi import APIRouter, Body, Query
+from typing import Any
 
 import localefmt
+from fastapi import APIRouter, Body, Query
 
 STORE = "my-tasks.json"
 MAX_TASKS = 2000
@@ -81,13 +81,13 @@ class MyTasksDeps:
     brain_root: Callable[[str], str]
     atomic_write_text: Callable[[str, str], None]
     # Habit reminders (0.424.0): the brains the scheduler visits, how to reach the owner, and the local time zone.
-    scheduler_brains: Optional[Callable[[], list]] = None
-    notify: Optional[Callable[..., Any]] = None
-    tz: Optional[Callable[[], Any]] = None
+    scheduler_brains: Callable[[], list] | None = None
+    notify: Callable[..., Any] | None = None
+    tz: Callable[[], Any] | None = None
     # Habit coach (0.427.0): async ask(prompt) -> text from the background model, raises when none is ready.
-    ask: Optional[Callable[[str], Any]] = None
+    ask: Callable[[str], Any] | None = None
     # Google Calendar (0.427.0): async events(brain, start_iso, end_iso) -> {ok, connected, events, error}.
-    calendar: Optional[Callable[..., Any]] = None
+    calendar: Callable[..., Any] | None = None
 
 
 def _now() -> float:
@@ -98,7 +98,7 @@ def _err(vi: str, en: str) -> dict:
     return {"ok": False, "error": localefmt.chu(vi, en)}
 
 
-def _clean_date(v) -> Optional[str]:
+def _clean_date(v) -> str | None:
     v = str(v or "").strip()
     return v if _DATE.match(v) else None
 
@@ -108,7 +108,7 @@ def _clean_time(v) -> str:
     return v if _TIME.match(v) and int(v[:2]) < 24 and int(v[3:]) < 60 else ""
 
 
-def clean_repeat(r) -> Optional[dict]:
+def clean_repeat(r) -> dict | None:
     """{unit, n, days} or None. `days` are weekdays 0 (Sunday) .. 6, used by a weekly repeat."""
     if not isinstance(r, dict):
         return None
@@ -126,7 +126,7 @@ def clean_repeat(r) -> Optional[dict]:
     return out
 
 
-def clean_habit(h) -> Optional[dict]:
+def clean_habit(h) -> dict | None:
     if not isinstance(h, dict):
         return None
     out = {"start": _clean_date(h.get("start")) or time.strftime("%Y-%m-%d"),
@@ -223,7 +223,7 @@ def _local_day(ts: float, tz) -> str:
     return datetime.fromtimestamp(float(ts), tz).date().isoformat()
 
 
-def _prev_occ(rep: dict, anchor: str, iso: str) -> Optional[str]:
+def _prev_occ(rep: dict, anchor: str, iso: str) -> str | None:
     """The latest occurrence on or before `iso` (not before `anchor`), or None."""
     d = date.fromisoformat(iso)
     for _ in range(400):
@@ -307,7 +307,7 @@ def _dnum(iso: str) -> int:
     return date.fromisoformat(iso).toordinal()
 
 
-def occurs_on(rep: Optional[dict], anchor: str, iso: str) -> bool:
+def occurs_on(rep: dict | None, anchor: str, iso: str) -> bool:
     """Whether a repeat rule anchored on `anchor` falls on `iso` (weeks start on Monday, like the page)."""
     if not rep or not anchor or iso < anchor:
         return False
@@ -411,7 +411,7 @@ def open_on(t: dict, day: str) -> bool:
     return t.get("date") == day and t.get("status") != "done"
 
 
-def remind_minutes(t: dict) -> Optional[int]:
+def remind_minutes(t: dict) -> int | None:
     """Minutes before the start a timed item is reminded, None for no reminder. "0" is "no reminder" (the page's
     choice); an appointment left empty gets the page's default, a task left empty is reminded at its time."""
     r = str(t.get("remind") or "").strip()
@@ -562,7 +562,7 @@ Answer with JSON only, no prose:
  "habits": {{"<id>": {{"frozen": "...", "nudge": "...", "style": "cheer|sulk|challenge|why"}}}}}}"""
 
 
-def parse_coach(text: str, ids: set) -> Optional[dict]:
+def parse_coach(text: str, ids: set) -> dict | None:
     m = re.search(r"\{[\s\S]*\}", str(text or ""))
     if not m:
         return None
@@ -713,7 +713,7 @@ class MyTasks:
         self.deps.atomic_write_text(str(p), json.dumps(data, ensure_ascii=False, indent=1))
 
     @staticmethod
-    def _find(data: dict, tid: str) -> Optional[dict]:
+    def _find(data: dict, tid: str) -> dict | None:
         return next((t for t in data.get("tasks", []) if t.get("id") == tid), None)
 
     # ---- operations (sync, call under self._io) ----
@@ -1093,10 +1093,10 @@ class MyTasks:
 
 
 # The running store, for the bundled plugin javis-mine (in-process, like tasks.current()).
-_FEATURE: Optional["MyTasks"] = None
+_FEATURE: MyTasks | None = None
 
 
-def current() -> Optional["MyTasks"]:
+def current() -> MyTasks | None:
     return _FEATURE
 
 

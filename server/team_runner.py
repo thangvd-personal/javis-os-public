@@ -35,11 +35,11 @@ import localefmt
 import reaction_values as RV
 import resonance_store
 import team_acceptance
-import team_retry
-import team_step_report
 import team_approval
 import team_gate
 import team_quality
+import team_retry
+import team_step_report
 import turn_context
 from io_offload import run_io
 from reaction_values import REACTION_EMOJI

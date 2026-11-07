@@ -1944,13 +1944,14 @@
       card.className = "wf-card" + (ct.trang_thai === "san_sang" ? "" : " off");
       const dl = ct.dung_luong ? " · " + esc(ct.dung_luong)
         : (ct.trang_thai === "chua_cai" && ct.dung_luong_uoc ? " · " + esc(ct.dung_luong_uoc) : "");
+      const moTaNgan = (ct.mo_ta || "").split("\n\n")[0];
       card.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">'
         + '<div style="min-width:0">'
         // Server description: two clamped lines, the full text in (i) when it is long (0.214.0).
         + '<div style="font-weight:600">' + esc(ct.ten) + ((ct.mo_ta || "").length > 100 ? infoBtn() : "") + '</div>'
-        + '<div class="j-clamp2" style="color:var(--text3);font-size:13px;margin-top:3px">' + esc(ct.mo_ta) + '</div>'
-        + ((ct.mo_ta || "").length > 100 ? infoBody(esc(ct.mo_ta)) : "")
+        + '<div class="j-clamp2" style="color:var(--text3);font-size:13px;margin-top:3px">' + esc(moTaNgan) + '</div>'
+        + ((ct.mo_ta || "").length > 100 ? infoBody('<div style="white-space:pre-line">' + esc(ct.mo_ta) + '</div>') : "")
         + '<div style="color:var(--text3);font-size:12.5px;margin-top:6px;word-break:break-all">' + esc(ct.ly_do || "") + dl + '</div>'
         + (ct.tien_do && ct.trang_thai === "dang_cai"
           ? '<div style="color:var(--warn-ink);font-size:12.5px;margin-top:5px">' + esc(ct.tien_do) + '</div>' : "")

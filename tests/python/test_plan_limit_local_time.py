@@ -8,11 +8,12 @@ time, so recognising the sentence is enough there. The server hint now formats t
 owner's configured time zone (localefmt.tz) instead of the OS clock (a VPS usually runs UTC), and
 adds the date when the reset falls on another day.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-limit-tz-"))
 os.environ["TZ"] = "UTC"   # the VPS case: OS clock on UTC, owner in Vietnam
@@ -24,9 +25,9 @@ try:
 except Exception:
     pass
 
-import limit_learner  # noqa: E402
-import localefmt      # noqa: E402
-import model_limits   # noqa: E402
+import limit_learner
+import localefmt
+import model_limits
 
 fails = []
 
@@ -38,7 +39,7 @@ def check(name, cond, extra=""):
 
 
 def utc(*a) -> float:
-    return datetime(*a, tzinfo=timezone.utc).timestamp()
+    return datetime(*a, tzinfo=UTC).timestamp()
 
 
 NOW = utc(2026, 11, 1, 15, 0)   # 22:00 in Vietnam

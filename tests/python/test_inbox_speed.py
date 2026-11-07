@@ -10,12 +10,13 @@ lâu").
 
     python tests/python/test_inbox_speed.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-inbox-speed-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -27,7 +28,7 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
+import conversations
 
 _fails = []
 
@@ -107,8 +108,8 @@ check("the inbox does not wait for the accounts before asking for the list",
       "tai(false, tk)" in body and ".then(function () { paintHead(); tai();" not in body)
 
 # ---- the routes still answer ----------------------------------------------------------------------------------------------
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/conversations?limit=40")

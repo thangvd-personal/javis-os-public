@@ -22,8 +22,9 @@ os.environ["JAVIS_STATE_DIR"] = _STATE
 os.environ["BRAINS_DIR"] = _BRAINS
 os.environ.pop("JAVIS_DEV_CORS", None)
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
-from pathlib import Path  # noqa: E402
+from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 _fails = []
 
@@ -37,8 +38,8 @@ def check(name, cond, extra=""):
 # ============================================================
 # 7. replaces: inherit "on" only for the official store release
 # ============================================================
-import pack_install  # noqa: E402
-import packs_store  # noqa: E402
+import pack_install
+import packs_store
 
 SHA = "ab" * 32
 _cache = {"packs": [{"id": "javis.gate", "download": {"sha256": SHA}}]}
@@ -66,7 +67,7 @@ check("7. the consent screen names the replaced packs", "store.inspect.replaces.
 # ============================================================
 # 8. Origin ports on localhost, CORS opening
 # ============================================================
-import web_security as w  # noqa: E402
+import web_security as w
 
 w.invalidate()
 check("8. same origin still passes", w.csrf_decision("POST", "localhost:7777", "http://localhost:7777", False) is None)
@@ -87,8 +88,8 @@ check("8. a WebSocket from the dashboard itself passes", w.ws_decision("localhos
 check("8. a public domain behind a proxy is unaffected",
       w.csrf_decision("POST", "javis.example.com", "https://javis.example.com", True) is None)
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cors = [m for m in main.app.user_middleware if getattr(m.cls, "__name__", "") == "CORSMiddleware"]
 check("8. no CORS opening for other localhost ports by default", not cors)
@@ -132,7 +133,7 @@ check("12. a note shared from inside inbox/ still shows its own image",
 # ============================================================
 # 13. Write hints
 # ============================================================
-import mcp_catalog  # noqa: E402
+import mcp_catalog
 
 for tool in ("forward_email", "share_file", "trash_message", "transfer_funds", "archive_thread", "revoke_token"):
     check(f"13. custom connector '{tool}' counts as write", mcp_catalog.classify({}, tool) == "write")

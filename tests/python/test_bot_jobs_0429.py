@@ -14,7 +14,6 @@ bot. Expected:
 Run:
     python tests/python/test_bot_jobs_0429.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
@@ -24,14 +23,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-import bot_jobs  # noqa: E402
-import my_tasks  # noqa: E402
-import reminders as R  # noqa: E402
-import self_improve  # noqa: E402
-import task_stats  # noqa: E402
-import turn_context  # noqa: E402
-import work_log  # noqa: E402
-from task_store import TaskStore  # noqa: E402
+import bot_jobs
+import my_tasks
+import reminders as R
+import self_improve
+import task_stats
+import turn_context
+import work_log
+from _paths import ROOT, SERVER  # noqa: F401
+from task_store import TaskStore
 
 fails = []
 

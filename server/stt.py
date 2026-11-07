@@ -347,6 +347,7 @@ async def _as_mp3(data: bytes, ten_file: str) -> bytes:
     import os
     import shutil
     import tempfile
+
     import winproc
     if not shutil.which("ffmpeg"):
         return b""
@@ -361,7 +362,7 @@ async def _as_mp3(data: bytes, ten_file: str) -> bytes:
             **winproc.kwargs_no_window())
         try:
             await asyncio.wait_for(proc.wait(), 120)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return b""

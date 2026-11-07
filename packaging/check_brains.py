@@ -13,9 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "server"))
 
-from antigravity_cli import find_antigravity_cli  # noqa: E402
-from claude_cli import find_claude_cli, find_codex_cli  # noqa: E402
-from grok_cli import find_grok_cli  # noqa: E402
+from antigravity_cli import find_antigravity_cli
+from claude_cli import find_claude_cli, find_codex_cli
+from grok_cli import find_grok_cli
 
 BRAINS = (
     ("Claude Code", find_claude_cli),

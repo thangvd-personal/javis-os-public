@@ -22,10 +22,9 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
-
 import localefmt
 
 # Public identifiers of the "Javis OS" GitHub App (owner, 2026-11-01). A client id is not a secret: the device flow is
@@ -35,7 +34,7 @@ APP_SLUG = "javis-os"
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 UA = "javis-os"
 _lock = threading.Lock()
-_pending: Dict[str, Any] = {}
+_pending: dict[str, Any] = {}
 
 
 class OAuthError(Exception):
@@ -63,7 +62,7 @@ def install_url() -> str:
     return f"https://github.com/apps/{app_slug()}/installations/new"
 
 
-def _post(path: str, data: Dict[str, str]) -> Dict[str, Any]:
+def _post(path: str, data: dict[str, str]) -> dict[str, Any]:
     """POST a form to github.com and return its JSON. GitHub answers device-flow errors with 200 and an `error` field."""
     try:
         r = httpx.post(_web() + path, data=data, timeout=20,
@@ -96,7 +95,7 @@ def _error_text(code: str, desc: str = "") -> str:
     return known.get(code) or _c(f"GitHub từ chối đăng nhập: {desc or code}", f"GitHub refused the sign-in: {desc or code}")
 
 
-def start() -> Dict[str, Any]:
+def start() -> dict[str, Any]:
     """Ask GitHub for a device code. Returns what the card shows: the code, the page to type it on, how long it lasts."""
     d = _post("/login/device/code", {"client_id": client_id()})
     if d.get("error"):
@@ -113,7 +112,7 @@ def start() -> Dict[str, Any]:
             "interval": interval, "expires_in": expires}
 
 
-def poll() -> Dict[str, Any]:
+def poll() -> dict[str, Any]:
     """One poll. Returns {status: pending} | {status: done, token: {...}} | {status: error, error}.
 
     The dashboard may poll faster than GitHub allows; a call before `next_at` answers pending without reaching GitHub,
@@ -154,13 +153,13 @@ def poll() -> Dict[str, Any]:
     return {"status": "done", "token": _token_fields(d, now)}
 
 
-def _token_fields(d: Dict[str, Any], now: float) -> Dict[str, Any]:
+def _token_fields(d: dict[str, Any], now: float) -> dict[str, Any]:
     exp = int(d.get("expires_in") or 0)
     return {"access_token": str(d["access_token"]), "refresh_token": str(d.get("refresh_token") or ""),
             "expires_at": (now + exp) if exp else 0}
 
 
-def refresh(refresh_token: str) -> Optional[Dict[str, Any]]:
+def refresh(refresh_token: str) -> dict[str, Any] | None:
     """Renew an expiring user token. Returns the new token fields, or None when GitHub refuses (sign in again)."""
     if not refresh_token:
         return None

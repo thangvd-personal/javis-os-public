@@ -10,11 +10,12 @@ Stats tabs.
 
     python tests/python/test_chatbot_v5_channels.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-cbv5c-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -26,9 +27,9 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
+import channel_accounts
+import chatbot_store
+import conversations
 
 _fails = []
 
@@ -43,9 +44,9 @@ if _STATE not in str(conversations.DB_PATH):
     print(f"FAIL the inbox store is not in the temp dir: {conversations.DB_PATH}. STOP.")
     sys.exit(1)
 
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import routes.channels as ch_routes  # noqa: E402
+import main
+import routes.channels as ch_routes
+from fastapi.testclient import TestClient
 
 RESTARTED, STOPPED = [], []
 ch_routes._DEPS.restart_bot = lambda bid: RESTARTED.append(bid)
@@ -105,7 +106,7 @@ check("taking the bot off the account takes it off its chats", row["bot_id"] == 
 cl.post(f"/channels/accounts/{a2}/bot", data={"bot_id": b1})
 
 # ---- 3. stats ----------------------------------------------------------------------------------------------------------
-import time  # noqa: E402
+import time
 
 t0 = time.time()
 

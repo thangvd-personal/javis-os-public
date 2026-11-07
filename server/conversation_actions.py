@@ -20,7 +20,6 @@ Each function takes a conversation as `conversations.chi_tiet` returns it and ne
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 import channel_accounts
 import localefmt
@@ -85,7 +84,7 @@ def _graph_error(d: dict, fallback: str) -> str:
     return messenger_bot._explain_error(e.get("code"), e.get("message") or fallback, e.get("error_subcode"))
 
 
-async def _graph(method: str, path: str, token: str, params: Optional[dict] = None, client=None) -> dict:
+async def _graph(method: str, path: str, token: str, params: dict | None = None, client=None) -> dict:
     import httpx
     import messenger_bot
     own = client is None

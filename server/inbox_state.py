@@ -18,7 +18,7 @@ customer waits (the inbox's existing "need reply" rule, `conversations.can_tra_l
 """
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 import chatbot_store
 
@@ -31,7 +31,7 @@ def raw_account(conv: dict) -> str:
     return key.split(":", 1)[1] if ":" in key else key
 
 
-def state(conv: dict, bot: Optional[dict], running: bool, pending: Optional[dict] = None, waiting: bool = False,
+def state(conv: dict, bot: dict | None, running: bool, pending: dict | None = None, waiting: bool = False,
           no_bot_wanted: bool = False) -> dict:
     """`{"who", "who_code", "ai_allowed", "pending", "draft"}` for one conversation row.
 

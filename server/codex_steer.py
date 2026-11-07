@@ -277,7 +277,7 @@ class CodexHandle(warm_pool.Handle):
     """A `codex app-server` with its thread open, kept between turns of one conversation."""
     kind = "codex"
 
-    def __init__(self, proc, rpc: "_Rpc", thread_id: str, lane=None):
+    def __init__(self, proc, rpc: _Rpc, thread_id: str, lane=None):
         self.proc = proc
         self.rpc = rpc
         self.thread_id = thread_id
@@ -451,7 +451,6 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
         prompt = cli.instructions.strip() + "\n\n" + prompt   # a thread from before 0.382.0: as before
     lane = None
     if warm_key:
-        import turn_context
         lane = turn_lane.Lane()
     try:
         args = _args(cli, _turn_key(cli, lane))      # an unreadable profile raises Fallback here, as before
@@ -482,7 +481,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             res = await _call(rpc, "turn/start", {"threadId": thread_id, "input": [{"type": "text", "text": prompt}]},
                               time.monotonic() + 30.0, seen)
             turn_id = str(((res.get("turn") or {}).get("id")) or "")
-        except (Fallback, asyncio.TimeoutError, OSError, ValueError) as e:
+        except (TimeoutError, Fallback, OSError, ValueError) as e:
             print(f"[codex warm] turn/start on the warm process failed ({e}), opening a new one", file=sys.stderr)
             turn_id = ""
         except BaseException:
@@ -494,7 +493,6 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
             slot = None
             proc = rpc = None
             seen = []
-            import turn_context
             lane = turn_lane.Lane()
             try:
                 args = _args(cli, _turn_key(cli, lane))
@@ -546,7 +544,7 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                 turn_id = str(((res.get("turn") or {}).get("id")) or "")
                 if not turn_id:
                     raise Fallback("no turn id")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise Fallback("start timed out")
             except (OSError, ValueError) as e:
                 raise Fallback(f"{type(e).__name__}: {e}")

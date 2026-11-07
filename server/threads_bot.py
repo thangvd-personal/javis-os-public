@@ -32,7 +32,6 @@ import time
 from collections import deque
 
 import httpx
-
 import localefmt
 from bot_gateway import HangLuot, dong_vet, parse_chat_ids, ten_tool
 from whatsapp_bot import verify_signature  # noqa: F401  - same Meta signature scheme, re-exported

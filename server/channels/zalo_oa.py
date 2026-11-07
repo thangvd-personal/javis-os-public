@@ -10,8 +10,9 @@ Different from the `zalo` channel, which is the separate Zalo Bot API (bot accou
 """
 from __future__ import annotations
 
-from channels import KenhSpec
 import localefmt
+
+from channels import KenhSpec
 
 SPEC = KenhSpec(
     id="zalo_oa", nhan="Zalo OA", kind="bot", logo="zalo", mau="#0068FF",

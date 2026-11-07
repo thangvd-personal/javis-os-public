@@ -6,17 +6,18 @@ Owner report 2026-11-05: in a voice call with a partner (Partners page) the call
 nor the partner's prompt, and asked who it was it answered "em là ChatGPT". No engine runs here: the pure prompt
 builders, the session -> partner lookup in main.py, and (by reading the code) that every call path uses them.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-vpersona-")
 os.environ["BRAINS_DIR"] = tempfile.mkdtemp(prefix="javis-vpersona-brains-")
 
-import main  # noqa: E402
-import voice_brain  # noqa: E402
-import voice_live  # noqa: E402
-import voice_persona  # noqa: E402
+import main
+import voice_brain
+import voice_live
+import voice_persona
 
 fails = []
 

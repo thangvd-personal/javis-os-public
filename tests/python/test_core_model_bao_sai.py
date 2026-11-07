@@ -12,12 +12,13 @@ Spec: docs/dev/2026-10-javis-core-chi-huy-thong-bao.md mục 1 và 2. Không m�
 - Bàn sự cố: sự cố đang "cần bạn" gom các lần hỏng sau của cùng việc, không báo lại.
 - Zalo bị giành phiên: mốc báo ghi xuống kho.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-core-model-")
 try:
@@ -34,12 +35,12 @@ def check(name, cond, extra=""):
         fails.append(name)
 
 
-import config as cfgmod  # noqa: E402
-import connect_health as CH  # noqa: E402
-import incident_desk as ID  # noqa: E402
-import javis_core  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import config as cfgmod
+import connect_health as CH
+import incident_desk as ID
+import javis_core
+import main
+from fastapi.testclient import TestClient
 
 if os.environ["JAVIS_STATE_DIR"] not in str(cfgmod.STATE_DIR):
     print(f"FAIL state dir is not the temp dir: {cfgmod.STATE_DIR}. STOP.")

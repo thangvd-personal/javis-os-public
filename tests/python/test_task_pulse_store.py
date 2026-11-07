@@ -12,15 +12,14 @@ Expected:
 Run:
     python tests/python/test_task_pulse_store.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
+import my_tasks
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import my_tasks  # noqa: E402
 
 fails = []
 root = Path(tempfile.mkdtemp(prefix="javis-pulse-"))

@@ -11,18 +11,19 @@ question, a much longer text, empty) or a failure falls through to the quick API
 cached; POST /stt/fix with `final` runs the rewrite and still never errors; main.py wires the main brain in a
 sandbox with no tools; the Whisper prompt keeps "Javis" at its end.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-rewrite-"))
 
-import main  # noqa: E402
-import nghe_sua  # noqa: E402
-import transcript_fix  # noqa: E402
-import voice_ear  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import nghe_sua
+import transcript_fix
+import voice_ear
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []

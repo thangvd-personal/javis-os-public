@@ -65,7 +65,7 @@ check("plugin: tool ghi (đăng/ảnh/album/video/sửa/xoá/trả lời) = full
 
 # chưa kết nối → _check chặn
 plug._connected_id = lambda: None
-plug._messenger_pages = lambda: []
+plug._messenger_pages = list
 check("plugin: _check chặn khi chưa nối Fanpage nào", "Chưa nối Fanpage" in (plug._check() or ""))
 
 
@@ -300,7 +300,7 @@ spec2 = importlib.util.spec_from_file_location(
     "meta_pages_graph_msc", str(ROOT / "system" / "plugins" / "meta-pages-graph" / "plugin.py"))
 plug2 = importlib.util.module_from_spec(spec2)
 spec2.loader.exec_module(plug2)
-import channel_accounts  # noqa: E402
+import channel_accounts
 
 aid, _loi = channel_accounts.create_account({
     "channel": "messenger", "token": "1234567890123 EAApagetokenmessenger" + "x" * 40 + " " + "d" * 32,

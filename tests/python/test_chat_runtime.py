@@ -112,6 +112,7 @@ def test_slow_page_gets_stream_pieces_folded_not_dropped():
 
 def test_folding_never_edits_an_event_another_page_holds():
     from collections import deque
+
     from chat_runtime import _xep_hang
 
     first = {"type": "stream", "session_id": "s", "content": "a"}

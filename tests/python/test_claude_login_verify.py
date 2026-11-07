@@ -8,14 +8,14 @@ card's own check then read "Not signed in" with no reason given. A customer on a
 (28/10/2026). Also pinned: a bare "logged in" no longer counts as success (it matched "not logged in"), and a wrong
 code followed by a right one is not answered with the first code's error.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import stat
 import sys
 import tempfile
 from pathlib import Path
 
-import claude_cli   # noqa: E402
+import claude_cli
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

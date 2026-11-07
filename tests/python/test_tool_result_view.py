@@ -1,8 +1,8 @@
 """Explicit result projection preserves authority, errors, pagination and evidence."""
-from _paths import ROOT, SERVER
+import asyncio
 import json
 import unittest
-import asyncio
+
 from tool_result_view import project_result
 
 

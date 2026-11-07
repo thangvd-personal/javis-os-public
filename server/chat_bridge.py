@@ -40,7 +40,8 @@ import json
 import re
 import time
 import unicodedata
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from config import STATE_DIR
 
@@ -55,10 +56,10 @@ MAX_GHI_CHEP = 4000       # mỗi trường của một ghi chép
 SO_GHI_CHEP = STATE_DIR / "gate-notes.json"   # {"<nguồn>|<tên cuộc chat đã gập>": mã hội thoại}
 
 # main gắn vào lúc nạp (`gan`). Lấy LƯỜI qua hàm vì test thay `main._CHAT_RUNTIME` sau khi nạp.
-_HOST: Dict[str, Callable] = {}
+_HOST: dict[str, Callable] = {}
 
 
-def gan(chay_socket: Callable, runtime: Callable, luu_luot: Optional[Callable] = None) -> None:
+def gan(chay_socket: Callable, runtime: Callable, luu_luot: Callable | None = None) -> None:
     """main gọi một lần: `chay_socket(ws)` là vòng nhận tin của khung chat, `runtime()` trả `_CHAT_RUNTIME`,
     `luu_luot(sid, brain, tin_chu, tra_loi)` (async) lưu một lượt đã có sẵn câu trả lời qua đúng đường lưu lượt
     chat (Lịch sử, nhật ký, tự học) và trả mã tin của câu trả lời."""
@@ -207,7 +208,7 @@ def doc(sid: str, n: int = 20) -> dict:
         return {"ok": False, "error": "conversation not found"}
     n = max(1, min(int(n or 20), 60))
     tin = [m for m in st.get_messages(row["id"]) if m.get("role") in ("user", "assistant")]
-    ra: List[dict] = []
+    ra: list[dict] = []
     tong = 0
     for m in reversed(tin):
         chu = _sach(m)
@@ -239,8 +240,8 @@ class _KetNoiAo:
 
     def __init__(self, goi: dict):
         self._goi = [json.dumps(goi, ensure_ascii=False)]
-        self.nhan: List[dict] = []
-        self.cookies: Dict[str, str] = {}
+        self.nhan: list[dict] = []
+        self.cookies: dict[str, str] = {}
 
     async def accept(self):
         return None
@@ -346,7 +347,7 @@ async def ket_qua(sid: str, after_id: int = 0, cho: float = CHO_MAC_DINH) -> dic
 
 # ─────────────────────────── ghi chép ───────────────────────────
 
-def _doc_so() -> Dict[str, str]:
+def _doc_so() -> dict[str, str]:
     try:
         d = json.loads(SO_GHI_CHEP.read_text(encoding="utf-8"))
         return {str(k): str(v) for k, v in d.items()} if isinstance(d, dict) else {}
@@ -354,7 +355,7 @@ def _doc_so() -> Dict[str, str]:
         return {}
 
 
-def _ghi_so(d: Dict[str, str]) -> None:
+def _ghi_so(d: dict[str, str]) -> None:
     SO_GHI_CHEP.parent.mkdir(parents=True, exist_ok=True)
     tam = SO_GHI_CHEP.with_suffix(".json.tmp")
     tam.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -440,7 +441,7 @@ async def ghi_chep(nguon: str, ten: str = "", hoi: str = "", tra_loi: str = "", 
 
 _ID = {"type": "string", "description": "Conversation id from javis_chat_find."}
 
-TOOLS: Dict[str, dict] = {
+TOOLS: dict[str, dict] = {
     "javis_chat_find": {
         "muc": "doc",
         "description": (
@@ -516,7 +517,7 @@ def _du_quyen(mode: str, muc: str = "full") -> bool:
     return m == "full"
 
 
-def tool_specs(mode: str) -> List[dict]:
+def tool_specs(mode: str) -> list[dict]:
     """Dạng tool của hub (`fn`, `description`, `schema`). Tool ghi và tool gửi chỉ hiện ở mức đủ quyền."""
     return [{"fn": ten, "description": t["description"], "schema": t["schema"]}
             for ten, t in TOOLS.items() if _du_quyen(mode, t["muc"])]
@@ -529,7 +530,7 @@ def _so(v: Any, mac_dinh: int) -> int:
         return mac_dinh
 
 
-async def goi_tool(ten: str, args: Optional[dict], mode: str, nguon: str) -> str:
+async def goi_tool(ten: str, args: dict | None, mode: str, nguon: str) -> str:
     """Chạy một tool Gate, trả chuỗi (JSON) như mọi tool của hub. Lỗi bắt đầu bằng `ERROR:`."""
     a = args if isinstance(args, dict) else {}
     t = TOOLS.get(ten)

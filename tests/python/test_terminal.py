@@ -150,7 +150,9 @@ async def _phien_that():
         p.doi_co(140, 45)
         # The resize contract is the kernel's window size of the pty: read it straight back. A broken doi_co fails here
         # on every run, with no shell timing involved.
-        import fcntl, struct, termios
+        import fcntl
+        import struct
+        import termios
         rows, cols = struct.unpack("HHHH", fcntl.ioctl(p._fd, termios.TIOCGWINSZ, b"\0" * 8))[:2]
         check("đổi cỡ khung -> pty mang ngay cỡ mới (45 dòng x 140 cột)", (rows, cols) == (45, 140), (rows, cols))
         # What the shell prints is asked up to three times. A CI run (PR #1053, 05/11/2026) once got the old "30 100"

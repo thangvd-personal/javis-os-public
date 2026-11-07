@@ -14,10 +14,11 @@ Guarded, in order of what would hurt most if it broke:
   5. Removing a Messenger account tells Meta to stop sending the Page's events, and the Page is removed even when
      Meta does not answer. Other channels never call Meta.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-meta-priv-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -26,11 +27,11 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import conversations  # noqa: E402
-import messenger_bot  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import channel_accounts
+import conversations
+import main
+import messenger_bot
+from fastapi.testclient import TestClient
 
 _fails = []
 

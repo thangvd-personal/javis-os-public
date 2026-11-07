@@ -1258,7 +1258,7 @@ def _chuan(text: str) -> str:
 # and outgoing (`channels.zalo_personal.gui`), leaving "@Minh Quý" for the real tag (`--mention`) to find.
 # Since 0.309.0 the stripping lives in `zalo_markup` (also used by the MCP pool for direct tool calls) and also
 # removes broken fragments such as a leftover `href="zm://...">`.
-from zalo_markup import plain_text, strip_mention_markup  # noqa: E402,F401
+from zalo_markup import plain_text, strip_mention_markup
 
 
 def ghi_da_gui(conn_id: str, thread: str, text: str) -> None:

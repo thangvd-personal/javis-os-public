@@ -12,7 +12,6 @@ câu trả lời chỉ hiện khi model viết xong. Test giữ:
 - vòng đang ép gọi tool không hiện chữ xem trước; JAVIS_API_STREAM_TOOLS=0 tắt hẳn;
 - dashboard hiện `delta` và không in lại câu đã hiện.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -20,10 +19,12 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-asv-")
 os.environ.pop("JAVIS_API_STREAM_TOOLS", None)
 
-import engine  # noqa: E402
+import engine
 
 fails = []
 

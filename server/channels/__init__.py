@@ -254,7 +254,7 @@ def cho_giao_dien() -> list[dict]:
     return out
 
 
-def _account_settings(m) -> List[dict]:
+def _account_settings(m) -> list[dict]:
     fn = getattr(m, "account_settings_spec", None)
     try:
         return list(fn()) if callable(fn) else []

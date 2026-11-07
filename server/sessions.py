@@ -28,15 +28,13 @@ import sqlite3
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import hashlib
 import weakref
+from pathlib import Path
+from typing import Any
 
 import reaction_values as RV
-import team_migration
 import subscription_context_store
+import team_migration
 
 # DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/).
 _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
@@ -482,7 +480,7 @@ class SessionStore:
         self._rlocal = threading.local()
         # Weak: a reader belongs to its thread and goes (closed by the GC) when the thread ends. A strong list here
         # leaked one open file per short-lived thread.
-        self._rconns: "weakref.WeakSet[_ReaderConn]" = weakref.WeakSet()
+        self._rconns: weakref.WeakSet[_ReaderConn] = weakref.WeakSet()
         self._rconns_lock = threading.Lock()
         self._closed = False
 
@@ -633,7 +631,7 @@ class SessionStore:
         except sqlite3.Error:
             return False
 
-    def _read_conn(self) -> Optional[sqlite3.Connection]:
+    def _read_conn(self) -> sqlite3.Connection | None:
         """This thread's read-only connection, or None to fall back to the shared one.
 
         Performance (2026-11-05): reads used to share the single write connection and its lock, so opening a chat
@@ -660,7 +658,7 @@ class SessionStore:
             self._rconns.add(c)
         return c
 
-    def _read(self, sql: str, params: tuple = ()) -> List[sqlite3.Row]:
+    def _read(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         rc = self._read_conn()
         if rc is not None:
             try:
@@ -946,7 +944,7 @@ class SessionStore:
             "WHERE r.report_key = ? AND r.goal_id = ?", (str(report_key), str(goal_id)))
         return [dict(r) for r in rows]
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str) -> dict[str, Any] | None:
         rows = self._read("SELECT s.*, COALESCE(c.input_tokens,0) AS last_context_input_tokens, "
                           "COALESCE(c.provider,'') AS last_context_provider FROM sessions s "
                           "LEFT JOIN subscription_request_context c ON c.session_id=s.id WHERE s.id = ?",
@@ -1194,7 +1192,7 @@ class SessionStore:
                 "DELETE FROM message_pins WHERE session_id = ? AND message_id = ?", (session_id, int(message_id))))
         return True
 
-    def pinned_message_ids(self, session_id: str, message_ids: List[int]) -> set:
+    def pinned_message_ids(self, session_id: str, message_ids: list[int]) -> set:
         """The ids among `message_ids` that are pinned in this chat (one read)."""
         ids = [int(x) for x in message_ids or []]
         if not ids:
@@ -1481,7 +1479,7 @@ class SessionStore:
             c.execute("DELETE FROM pin_order WHERE session_id = ?", (session_id,))
         self._write(go)
 
-    def set_pin_order(self, ids: List[str]) -> int:
+    def set_pin_order(self, ids: list[str]) -> int:
         """The owner's order of the pinned chats (0.454.0), first to last. Only pinned chats take a place. Never touches
         `updated_at`. Returns rows ordered."""
         ids = list(dict.fromkeys(str(i) for i in (ids or []) if str(i or "").strip()))
@@ -1574,7 +1572,7 @@ class SessionStore:
         )
         return [dict(r) for r in rows]
 
-    def set_project_order(self, brain: str, ids: List[str]) -> int:
+    def set_project_order(self, brain: str, ids: list[str]) -> int:
         """The owner's order of the projects of `brain` (0.454.0). `ids` first to last; a project of the brain left out
         of the list keeps no order (it goes after the ordered ones). Never touches `updated_at`. Returns rows ordered."""
         ids = [str(i) for i in (ids or []) if str(i or "").strip()]
@@ -1589,7 +1587,7 @@ class SessionStore:
             return n
         return int(self._write(go) or 0)
 
-    def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
         rows = self._read("SELECT * FROM projects WHERE id = ?", (project_id,))
         return dict(rows[0]) if rows else None
 

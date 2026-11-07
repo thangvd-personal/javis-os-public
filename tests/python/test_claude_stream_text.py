@@ -6,13 +6,18 @@ Chủ repo hỏi 01/11/2026: ChatGPT đã hiện chữ ra lần lượt, Claude 
 (StreamEvent text_delta) nhưng map_message bỏ qua, chỉ đẩy chữ khi xong cả AssistantMessage. Test giữ ba điều:
 mẩu chữ ra ngay, khối chữ đầy đủ theo sau KHÔNG lặp lại, và không mất chữ nào khi luồng mẩu thiếu.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 
-from claude_agent_sdk.types import (AssistantMessage, ResultMessage, StreamEvent, TextBlock,  # noqa: E402
-                                    ToolUseBlock)
-import claude_sdk_engine as eng  # noqa: E402
-import claude_stream_text as cst  # noqa: E402
+import claude_sdk_engine as eng
+import claude_stream_text as cst
+from _paths import ROOT, SERVER  # noqa: F401
+from claude_agent_sdk.types import (
+    AssistantMessage,
+    ResultMessage,
+    StreamEvent,
+    TextBlock,
+    ToolUseBlock,
+)
 
 fails = []
 

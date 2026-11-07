@@ -16,11 +16,12 @@ With `stable=True` (Claude Code dashboard lane) those four leave the system prom
 3. every other lane (stable=False) is unchanged: clock, usage, session id and last run stay in;
 4. the Claude Code lane really uses the stable prompt and the header.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="javis-stable-prompt-"))
 for key, relative in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
@@ -32,10 +33,10 @@ try:
 except Exception:
     pass
 
-import channel_context  # noqa: E402
-import context_compiler  # noqa: E402
-import main  # noqa: E402
-import usage_store  # noqa: E402
+import channel_context
+import context_compiler
+import main
+import usage_store
 
 fails = []
 

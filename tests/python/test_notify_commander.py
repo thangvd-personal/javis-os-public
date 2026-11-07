@@ -13,7 +13,6 @@ Spec: docs/dev/2026-10-javis-core-chi-huy-thong-bao.md sections 3 to 6. No netwo
 - the owner's "off" drops a group; Core's "off" still lets urgent notices ring;
 - routes /inbox/react and /notify/policy*, the `javis_notify` chat tool (owner only), the bell's filter UI.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import json
@@ -22,6 +21,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 STATE = tempfile.mkdtemp(prefix="javis-notify-cmd-")
 os.environ["JAVIS_STATE_DIR"] = STATE
 try:
@@ -29,11 +30,11 @@ try:
 except Exception:
     pass
 
-import inbox  # noqa: E402
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-import notify_policy as NP  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import inbox
+import main
+import mcp_hub
+import notify_policy as NP
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -279,7 +280,8 @@ check("bell: only Needed / Not needed on a notice, sent to /inbox/react; no emoj
 check("bell: a Filter tab with each group's mode, rules and undo", 'id="notiTabFilter"' in html and '"/notify/policy/group"' in js and
       '"/notify/policy/undo"' in js and '"/notify/policy/rule"' in js)
 keys = set()
-import re  # noqa: E402
+import re
+
 for m in re.finditer(r'"(noti\.[a-z_]*[a-z])"', js):
     keys.add(m.group(1))
 keys |= {f"noti.grp_{g}" for g in NP.GROUPS} | {f"noti.mode_{m}" for m in NP.MODES} | {"noti.filter_btn"}

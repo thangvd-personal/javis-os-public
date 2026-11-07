@@ -7,12 +7,13 @@ Covers `conversations.insights`: the typical (median) wait when the A.I. answere
 answers while the owner rests (21:00 to 07:00 in the brain's time zone), chats a customer wrote in, private chats that
 are new in the period (an old chat with a new message is not), and customer messages per hour. No network, no model.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-stats-loi-ich-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -23,8 +24,8 @@ try:
 except Exception:
     pass
 
-import conversations  # noqa: E402
-import localefmt  # noqa: E402
+import conversations
+import localefmt
 
 _fails = []
 

@@ -252,9 +252,9 @@ class PushError(github_repos.RepoError):
 
 
 _AUTH_RE = re.compile(r"(could not read Username|Authentication failed|Invalid username or password|"
-                      r"returned error: 401|terminal prompts disabled|Bad credentials)", re.I)
+                      r"returned error: 401|terminal prompts disabled|Bad credentials)", re.IGNORECASE)
 _PERM_RE = re.compile(r"(returned error: 403|returned error: 404|Permission to \S+ denied|"
-                      r"Write access to repository not granted|Repository not found|denied to )", re.I)
+                      r"Write access to repository not granted|Repository not found|denied to )", re.IGNORECASE)
 
 
 def auth_message() -> str:

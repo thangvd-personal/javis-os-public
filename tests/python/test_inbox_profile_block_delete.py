@@ -14,11 +14,12 @@ Guarded, in order of what would hurt most if it broke:
      Zalo from `friend info`.
   5. The table the dashboard reads matches what the server does.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-inbox-pbd-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -27,13 +28,13 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import conversation_actions as ca  # noqa: E402
-import conversations  # noqa: E402
-import zalo_cli  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import channel_accounts
+import conversation_actions as ca
+import conversations
+import main
+import zalo_cli
+import zalo_personal_channel as zc
+from fastapi.testclient import TestClient
 
 _fails = []
 

@@ -374,9 +374,9 @@ class ZaloBot(HangLuot):
         """
         s = " ".join(str(msg.get("text") or msg.get("caption") or "").split())
         ten = str(self.bot_username or "").strip()
-        if ten and re.search(re.escape(ten) + _HET_TU, s, re.I):
+        if ten and re.search(re.escape(ten) + _HET_TU, s, re.IGNORECASE):
             return True
-        return any(re.search("@ ?" + re.escape(t) + _HET_TU, s, re.I) for t in self._ten_tag())
+        return any(re.search("@ ?" + re.escape(t) + _HET_TU, s, re.IGNORECASE) for t in self._ten_tag())
 
     def _ten_tag(self):
         """Names a group tag may carry for this bot: its Javis name, the same name with Zalo's mandatory "Bot "

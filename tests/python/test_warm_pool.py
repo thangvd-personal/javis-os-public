@@ -7,19 +7,20 @@ fingerprint ignores, and the wiring in main.py and the dashboard. The Codex side
 Run:
     python tests/run.py warm_pool
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
-import tempfile
 import sys
+import tempfile
 import time
 import types
 
+from _paths import ROOT, SERVER
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-warm-")
 
-import turn_context  # noqa: E402
-import turn_lane  # noqa: E402
-import warm_pool  # noqa: E402
+import turn_context
+import turn_lane
+import warm_pool
 
 fails = []
 
@@ -171,7 +172,7 @@ asyncio.run(prewarm_race())
 
 
 # ---- a warm Claude client must be quiet before reuse ----
-import anyio  # noqa: E402
+import anyio
 
 
 class _Stream:
@@ -191,7 +192,8 @@ def _handle_with(items):
     return ch
 
 
-import claude_warm  # noqa: E402,F811
+import claude_warm
+
 check("quiet: nothing pending", _handle_with([]).quiet())
 check("quiet: an end-of-turn system note is drained", _handle_with([{"type": "system", "subtype": "session_state_changed"}]).quiet())
 check("not quiet: a background task's news is pending", not _handle_with([{"type": "system", "subtype": "task_started"}]).quiet())
@@ -228,8 +230,7 @@ check("turn_context.py is untouched (pinned by the native qualification evidence
 
 
 # ---- Claude: eligibility and fingerprint ----
-import claude_warm  # noqa: E402
-from claude_cli import claude_engine  # noqa: E402
+from claude_cli import claude_engine
 
 eng = claude_engine(system_prompt="x", cwd=tempfile.mkdtemp(), tag="chat:abc:1")
 os.environ["JAVIS_WARM_BUDGET_MB"] = "400"
@@ -291,7 +292,7 @@ parts_a = claude_warm.fingerprint_parts(eng, opts())
 parts_b = claude_warm.fingerprint_parts(eng, opts(model="opus"))
 check("a miss names what changed", claude_warm.changed_parts(parts_a, parts_b) == ["model"])
 
-import codex_steer  # noqa: E402
+import codex_steer
 
 chome = tempfile.mkdtemp(prefix="javis-codex-home-")
 ccli = types.SimpleNamespace(cli_path=sys.executable, codex_home=chome, cwd=eng.cwd, sandbox=None, model="gpt-5.5",

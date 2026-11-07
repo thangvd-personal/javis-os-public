@@ -10,13 +10,13 @@ Expected:
 Run:
     python tests/python/test_habits_0424.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import asyncio
 import tempfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
-import my_tasks  # noqa: E402
+import my_tasks
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 
 fails = []
 
@@ -35,7 +35,7 @@ def d(n):
 
 
 def done(*days):
-    return {x: {"at": datetime.fromisoformat(x + "T21:30:00").replace(tzinfo=timezone.utc).timestamp(), "by": "me"} for x in days}
+    return {x: {"at": datetime.fromisoformat(x + "T21:30:00").replace(tzinfo=UTC).timestamp(), "by": "me"} for x in days}
 
 
 # ---- schedule ----
@@ -83,8 +83,8 @@ async def notify(chat_id, text, brain="", dedup="", source="habit"):
 
 
 feat = my_tasks.MyTasks(my_tasks.MyTasksDeps(brain_root=lambda b: str(brain), atomic_write_text=atomic_write,
-                                             scheduler_brains=lambda: [], notify=notify, tz=lambda: timezone.utc))
-now = datetime.now(timezone.utc)
+                                             scheduler_brains=list, notify=notify, tz=lambda: UTC))
+now = datetime.now(UTC)
 today = now.date().isoformat()
 early = "00:00"
 # Today's morning agenda counts as sent: between AGENDA_AT and AGENDA_UNTIL (07:30-21:00 here, the test runs in UTC)

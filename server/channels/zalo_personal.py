@@ -17,9 +17,9 @@ import sys
 import time
 
 import localefmt
+import zalo_markup
 
 from channels import KenhSpec
-import zalo_markup
 
 SPEC = KenhSpec(
     id="zalo_personal", nhan="Zalo cá nhân", kind="account", logo="zalo", mau="#0068FF",

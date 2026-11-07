@@ -7,14 +7,13 @@ Owner, 30/10/2026: the Work page was "not very useful and often broken". The aud
 job's full report every 3 seconds, showed the OLDEST finished jobs as History, and hid new jobs once 500 old ones
 piled up; a stopped or finished job could only be retried unchanged.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
-
 import aux_engine
+from _paths import ROOT, SERVER  # noqa: F401
+from fastapi import FastAPI
 from task_store import TaskStore
 from tasks import TasksDeps, TasksFeature
 

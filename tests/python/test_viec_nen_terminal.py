@@ -14,7 +14,6 @@ lệnh máy nên không dựng nổi video (ffmpeg) dù đã hết trần 30 vò
 Cộng: lệnh chạy thật trong brain, câu khai năng lực nói đúng, và hết lượt thì cache hub của
 phiên được dọn (mỗi lượt một mã phiên, không dọn là RAM phình theo số lượt loop).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -22,13 +21,15 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-nenterm-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 BRAIN = Path(tempfile.mkdtemp(prefix="javis-nenterm-brain-"))
 
-import aux_engine  # noqa: E402
-import engine  # noqa: E402
-import mcp_hub  # noqa: E402
+import aux_engine
+import engine
+import mcp_hub
 
 _fails = []
 

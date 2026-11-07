@@ -10,7 +10,6 @@ Owner, 05/11/2026:
    active gateway is mirrored there; a gateway out of quota rests and the next one takes over.
 2. "A way to rotate Antigravity": an extra Google account runs `agy` with its own HOME and file storage (Linux only).
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import json
 import os
@@ -19,13 +18,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-adv-")
 
-import config as cfgmod  # noqa: E402
-import model_routing  # noqa: E402
-import adv_keys  # noqa: E402
-import plan_accounts  # noqa: E402
-import main  # noqa: E402
+import adv_keys
+import config as cfgmod
+import main
+import model_routing
+import plan_accounts
 
 fails = []
 AC, OA = adv_keys.ANTHROPIC, adv_keys.OPENAI
@@ -181,7 +182,8 @@ class _Client:
         return _Resp(200, {"choices": []})
 
 
-import httpx  # noqa: E402
+import httpx
+
 _real = httpx.AsyncClient
 httpx.AsyncClient = _Client
 try:

@@ -28,11 +28,10 @@ import os
 import secrets
 import threading
 import time
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-
 import localefmt
 from messenger_bot import GRAPH, GRAPH_VERSION, _explain_error, appsecret_proof
 
@@ -49,7 +48,7 @@ SCOPES = ("pages_show_list", "pages_messaging", "pages_manage_metadata", "pages_
 IG_SCOPES = ("instagram_basic", "instagram_manage_messages", "instagram_manage_comments")
 
 _lock = threading.Lock()
-_pending: Dict[str, Dict[str, Any]] = {}
+_pending: dict[str, dict[str, Any]] = {}
 
 
 def _c(vi: str, en: str) -> str:

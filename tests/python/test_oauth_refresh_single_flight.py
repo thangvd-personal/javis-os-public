@@ -9,17 +9,18 @@ connecting". Four causes, one check each:
 3. A tool call answered 401 refreshes once and runs again (the server refused before doing anything).
 4. A new bearer no longer closes the open MCP session (hash ignores it, the session gets the new header).
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 import time
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-oauth-refresh-")
 
-import mcp_client  # noqa: E402
-import oauth_mcp  # noqa: E402
-import secrets_store  # noqa: E402
+import mcp_client
+import oauth_mcp
+import secrets_store
 
 fails = []
 

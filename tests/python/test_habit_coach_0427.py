@@ -15,18 +15,17 @@ Expected:
 Run:
     python tests/python/test_habit_coach_0427.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import asyncio
 import json
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
+import gcal_read
+import my_tasks
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import gcal_read  # noqa: E402
-import my_tasks  # noqa: E402
 
 fails = []
 
@@ -88,12 +87,12 @@ async def ask(prompt):
                                             "frozen": "{name} đóng băng rồi"}}})
 
 # A zone where it is about noon now, so the 05:00 coach gate and the 00:00 reminder are both open whenever this runs.
-_utc = datetime.now(timezone.utc)
+_utc = datetime.now(UTC)
 TZ = timezone(timedelta(hours=12 - _utc.hour))
 now = datetime.now(TZ)
 today = now.date().isoformat()
 feat = my_tasks.MyTasks(my_tasks.MyTasksDeps(brain_root=lambda b: str(brain), atomic_write_text=atomic_write,
-                                             scheduler_brains=lambda: [], notify=notify, tz=lambda: TZ, ask=ask))
+                                             scheduler_brains=list, notify=notify, tz=lambda: TZ, ask=ask))
 feat.save("brain", {"rev": 0, "projects": [], "tasks": [
     {"id": "m_due", "title": "Read 30 minutes", "date": today, "repeat": {"unit": "day", "n": 1},
      "habit": {"start": today, "remind": "time", "at": "00:00"}, "done_dates": {}},

@@ -1,9 +1,10 @@
 """Request usage must not confuse duplicated events or turn totals with context."""
-from _paths import ROOT, SERVER
 import ast
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
+
+from _paths import ROOT
 from subscription_usage import CodexUsage
 
 

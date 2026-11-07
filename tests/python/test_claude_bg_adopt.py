@@ -13,14 +13,14 @@ import sys
 import tempfile
 import time
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-cbga-")
-import asyncio  # noqa: E402
+import asyncio
 
-import tien_trinh_nen as T  # noqa: E402
-import turn_done_notice as N  # noqa: E402
-import warm_pool  # noqa: E402
+import tien_trinh_nen as T
+import turn_done_notice as N
+import warm_pool
 
 fails = []
 
@@ -84,7 +84,7 @@ check("detach does not close the process", closed is False)
 
 
 # ---- claude_warm: the mark rides on the engine's options, and the process lingers for its tasks ----
-import claude_warm  # noqa: E402
+import claude_warm
 
 
 class _Opts:
@@ -115,8 +115,8 @@ if T.POSIX:
     T.bo_tag("chat:abc:1")
     check("bo_tag forgets the mark", "chat:abc:1" not in T._MARKS_BY_TAG)
 
-from claude_agent_sdk import SystemMessage  # noqa: E402
-import claude_sdk_engine as eng  # noqa: E402
+import claude_sdk_engine as eng
+from claude_agent_sdk import SystemMessage
 
 
 class _Client:

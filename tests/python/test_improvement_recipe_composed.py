@@ -1,31 +1,17 @@
 """Actual SQL/Fernet/source owners; synthetic fixtures prove no native readiness."""
-from _paths import ROOT, SERVER  # noqa: F401
-
-import copy
-import hashlib
-import importlib.util
 import json
-import sqlite3
-import subprocess
-import threading
 import time
-import types
 import unittest
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
-from improvement_trial_context import ContextSource, capture_context
-from improvement_trial_semantics import capture_semantics
-import test_improvement_host_snapshots as sources
-import test_improvement_preparation as fixtures
-import test_improvement_experiment_selection as selections
-import test_improvement_improver_inputs as prepared_inputs
-from test_improvement_recipe_archive import semantic_capture, traced_selection_cells
-
 import test_improvement_composed_arms as composed
+import test_improvement_experiment_selection as selections
+import test_improvement_host_snapshots as sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
+from test_improvement_recipe_archive import semantic_capture, traced_selection_cells
 
 
 class RecipeComposedTests(unittest.IsolatedAsyncioTestCase):
@@ -47,9 +33,9 @@ class RecipeComposedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_typed_three_actual_independent_semantic_view_pair_archives_own_v4_refs(self):
         import improvement_claude as native
-        from improvement_native_formats import input_version as actual_input_version
         from improvement_comparison_results import ComparisonResults
         from improvement_comparison_schedule import ComparisonSchedule
+        from improvement_native_formats import input_version as actual_input_version
         from improvement_recipe_archive import RecipeArchive
         from improvement_trial_runner import TrialRunner
         from improvement_view_admission import ViewExperimentAdmission
@@ -123,8 +109,8 @@ class RecipeComposedTests(unittest.IsolatedAsyncioTestCase):
     async def test_conflicting_required_parent_result_pins_refuse_all_recipe_publication(self):
         # Removing the conflicting-pin check would select one of these two
         # required historical results and incorrectly publish a recipe.
-        from improvement_recipe_archive import RecipeArchive
         from improvement_comparison_results import ComparisonResults
+        from improvement_recipe_archive import RecipeArchive
         from improvement_trial_results import TrialResults
         with patch.object(sources.HostSnapshotTests, 'context_capture', semantic_capture), \
              patch.object(selections.ExperimentSelectionTests, 'seed_technical_complete_cells', traced_selection_cells):

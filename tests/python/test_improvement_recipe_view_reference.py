@@ -1,32 +1,19 @@
 """Actual SQL/Fernet/source owners; synthetic fixtures prove no native readiness."""
-from _paths import ROOT, SERVER  # noqa: F401
-
 import copy
-import hashlib
-import importlib.util
 import json
 import sqlite3
-import subprocess
-import threading
 import time
-import types
 import unittest
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from unittest.mock import patch
 
 import improvement_store as IM
-from improvement_blobs import AssetUnavailable
-from improvement_trial_context import ContextSource, capture_context
-from improvement_trial_semantics import capture_semantics
 import test_improvement_host_snapshots as sources
-import test_improvement_preparation as fixtures
-import test_improvement_experiment_selection as selections
-import test_improvement_improver_inputs as prepared_inputs
-from test_improvement_recipe_archive import semantic_capture, traced_selection_cells
-
-import test_improvement_view_sources as view_sources
 import test_improvement_view_execution as view_execution
+import test_improvement_view_sources as view_sources
+from _paths import ROOT, SERVER  # noqa: F401
+from improvement_blobs import AssetUnavailable
+from test_improvement_recipe_archive import semantic_capture
 
 
 class RecipeViewReferenceTests(view_sources.SourceFixture, unittest.IsolatedAsyncioTestCase):
@@ -40,9 +27,9 @@ class RecipeViewReferenceTests(view_sources.SourceFixture, unittest.IsolatedAsyn
 
     async def completed_views(self):
         import improvement_claude as native
-        from improvement_trial_runner import TrialRunner
         from improvement_comparison_results import ComparisonResults
         from improvement_recipe_archive import RecipeArchive
+        from improvement_trial_runner import TrialRunner
         service, _ = self.owned_service()
         self.trials, self.executed, self.closed, self.workspaces = service.trials, 0, 0, {}
         actual = []

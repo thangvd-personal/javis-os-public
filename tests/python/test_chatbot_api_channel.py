@@ -17,13 +17,14 @@ Javis generated, and shows the reply. The bot must keep every fence of a Chatbot
   - source: CIDR allow list, no proxy hop; ten wrong keys ban the IP and land in auth_audit.jsonl (prefix only);
   - inbox: the turn is written like any channel, "Take over" makes the next turn silent with handed_over.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-chatbot-api-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -35,16 +36,16 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import channels  # noqa: E402
-import chatbot_doc_tools as dt  # noqa: E402
-import chatbot_grounding  # noqa: E402
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import config as cfgmod  # noqa: E402
-import conversations  # noqa: E402
-import turn_context  # noqa: E402
-from channels import api  # noqa: E402
+import channel_accounts
+import channels
+import chatbot_doc_tools as dt
+import chatbot_grounding
+import chatbot_runtime
+import chatbot_store
+import config as cfgmod
+import conversations
+import turn_context
+from channels import api
 
 _fails = []
 
@@ -116,9 +117,9 @@ check("account form gets the three limit fields", ui and [f["key"] for f in ui["
 check("other channels are not flagged", all(not c["khoa_tu_sinh"] and not c["tran_muc_quyen"]
                                             for c in channels.cho_giao_dien() if c["id"] != "api"))
 
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-import routes.channels as rc  # noqa: E402
+import routes.channels as rc
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 _app = FastAPI()
 rc.register(_app, rc.ChannelsDeps(bot_status=chatbot_runtime.status, main_bot_token=lambda: ""))
@@ -492,7 +493,8 @@ check("main.py: only that exact path is public, no /chatbot-api prefix",
 
 # Through the real route: the source and the key are checked BEFORE the body is read (0.459.0). The test client's
 # address is not on the allow list, so even a body far over the cap answers 403, never 413.
-import main as _main  # noqa: E402
+import main as _main
+
 _turn_app = FastAPI()
 _turn_app.post("/chatbot-api/v1/turn")(_main.chatbot_api_turn)
 r = TestClient(_turn_app).post("/chatbot-api/v1/turn", content=b"x" * (api.BODY_MAX * 4),

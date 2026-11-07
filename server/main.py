@@ -7,19 +7,18 @@ Javis KHÔNG gọi Anthropic API trực tiếp. Mọi reasoning + tool calling �
 """
 import asyncio
 import binascii
-import brain_order  # thứ tự brain trong bảng chọn: chủ tự sắp, còn lại theo tên hiển thị (0.431.0)
 import dataclasses
 import hashlib
 import html as html_mod  # escape lời báo lỗi OAuth trên trang callback (biến cục bộ `html` che tên module)
+import ipaddress
 import json
 import math
-import glob
-import ipaddress
 import os
 import posixpath
 import re
 import secrets
 import shutil
+
 # `sys` phải nằm ở ĐẦU file: rải rác trong file có chỗ `import sys` cục bộ, nhưng cũng có chỗ
 # dùng sys.stderr mà quên import - và vì chúng nằm trong nhánh `except` (đường ghi log lỗi),
 # chúng chỉ nổ đúng lúc đã có sự cố khác, biến một lỗi lẽ ra chỉ cần ghi log thành NameError
@@ -32,6 +31,7 @@ import uuid
 from pathlib import Path
 
 import brain_label  # tên hiển thị của brain, tách khỏi thư mục (0.219.0)
+import brain_order  # thứ tự brain trong bảng chọn: chủ tự sắp, còn lại theo tên hiển thị (0.431.0)
 import brain_seed_i18n  # file hạt giống của brain mới theo ngôn ngữ người dùng
 import fastyaml
 import localefmt  # múi giờ theo cấu hình, thay UTC+7 nhúng cứng
@@ -109,157 +109,159 @@ _read_update_state = update_state.read_state
 _write_update_state = update_state.write_state
 _record_boot_version = update_state.record_boot_version
 _update_outcome = update_state.update_outcome
-import git_brain
+import adv_keys  # gateway lists: Advanced API key (OpenAI route) and Claude Compatible (Anthropic route)
+import agy_update  # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
+import antigravity_cli  # bộ não thứ 10: Antigravity CLI (`agy`) - bản Google chỉ định thay Gemini CLI
+import aux_engine  # engine việc nền: Claude / Codex / API rẻ
+import borrowed_eyes  # mắt mượn: bộ não khác xem hộ ảnh khi model của bot không xem được (0.94.0)
+import claude_auth  # gói Claude Code xác thực bằng gì: phiên subscription hay API key
+import claude_models  # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
+import claude_update  # tự chạy `claude update` hằng ngày để model mới hiện ra
+import coding_store  # trang Coding: phiên gắn repo nào, nhánh nào, worktree nào, mức quyền nào
+import connect_health  # sức khoẻ kết nối: vòng check nền + phân loại lỗi tiếng người
+import core_off  # năng lực MẶC ĐỊNH gỡ được: trạng thái ghi ở STATE_DIR, không sửa cây code
+import cred_exchange  # đổi credential hộ user (vd App Password -> Google master token) khi đấu
 import engine
-import vision_input
-import borrowed_eyes   # mắt mượn: bộ não khác xem hộ ảnh khi model của bot không xem được (0.94.0)
+import git_brain
+import grok_cli  # bộ não thứ 11: Grok Build CLI (`grok`) - gói SuperGrok / X Premium+
+import image_gen  # tạo ảnh bằng gói ChatGPT (OAuth) - Codex Responses + tool image_generation
 import image_vision
-import openai_oauth
-import claude_update   # tự chạy `claude update` hằng ngày để model mới hiện ra
-import agy_update      # cùng việc đó cho Antigravity CLI: `agy update` hằng ngày (0.137.0)
-import claude_models   # model Claude LIVE cho provider anthropic-cli (hỏi bằng API key, nếu có)
-import winproc         # chạy lệnh con câm lặng trên Windows (không nháy console đen)
-import md_repair       # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
-import terminal        # tab Code: pseudo-terminal thật trong dashboard (pty trên POSIX, ống trên Windows)
-import coding_store    # trang Coding: phiên gắn repo nào, nhánh nào, worktree nào, mức quyền nào
-import antigravity_cli   # bộ não thứ 10: Antigravity CLI (`agy`) - bản Google chỉ định thay Gemini CLI
-import grok_cli          # bộ não thứ 11: Grok Build CLI (`grok`) - gói SuperGrok / X Premium+
-import totp            # xác thực 2 lớp (TOTP) cho cổng đăng nhập - thuần toán, không đụng cấu hình
-import claude_auth     # gói Claude Code xác thực bằng gì: phiên subscription hay API key
-import aux_engine   # engine việc nền: Claude / Codex / API rẻ
-import model_routing   # 0.350.0: provider order, per-card model/effort, several accounts per provider
-import plan_accounts   # 0.353.0: several accounts on one subscription plan card (Codex, Grok, Claude Code)
-import adv_keys   # gateway lists: Advanced API key (OpenAI route) and Claude Compatible (Anthropic route)
-import mcp_store
-import mcp_client
+import inbox  # hòm thư: mọi kết quả chạy nền để lại một mẩu thư bền ở server
+import luot_dang_chay  # sổ lượt chat đang chạy theo brain: tool giao việc tự biết khung chat nào hỏi
 import mcp_catalog
+import mcp_client
 import mcp_hub
-from improvement_task_skill_turn import TaskSkillTurn
-import connect_health   # sức khoẻ kết nối: vòng check nền + phân loại lỗi tiếng người
-import purge          # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
-import core_off       # năng lực MẶC ĐỊNH gỡ được: trạng thái ghi ở STATE_DIR, không sửa cây code
-import packs          # GÓI mở rộng: thả thư mục vào STATE_DIR/packs là có thêm connector
-import cred_exchange   # đổi credential hộ user (vd App Password -> Google master token) khi đấu
-import ops_index_watch   # keeps every brain's Javis/index.md current, cheaply
-import plugins_host   # hệ PLUGIN: thư mục Python thả vào, tự thêm tool/hook cho mọi engine qua hub
-import web_security   # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
-import image_gen      # tạo ảnh bằng gói ChatGPT (OAuth) - Codex Responses + tool image_generation
-import media_gc       # dọn vùng cache media (attachments/ + inbox/) theo hạn tuổi + trần dung lượng
-import inbox         # hòm thư: mọi kết quả chạy nền để lại một mẩu thư bền ở server
+import mcp_store
+import md_repair  # chữa file .md bị vòng lưu WYSIWYG của bản <= 0.33.3 làm hỏng
+import media_gc  # dọn vùng cache media (attachments/ + inbox/) theo hạn tuổi + trần dung lượng
+import model_routing  # 0.350.0: provider order, per-card model/effort, several accounts per provider
+import nghe_sua  # sửa chữ nghe nhầm theo ngữ cảnh (David -> Javis) + hotwords cho Whisper
 import notify_policy  # 0.403.0: Javis Core decides which notices ring (groups, levels, modes, the owner's reactions)
-import webpush       # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
-import stt            # nghe tin thoại (Whisper qua Groq) -> chữ, cho kênh Telegram/Zalo
-import luot_dang_chay # sổ lượt chat đang chạy theo brain: tool giao việc tự biết khung chat nào hỏi
-import tool_label     # một dòng mô tả lệnh gọi công cụ (lệnh nào, file nào) cho khối tiến trình
-import nghe_sua       # sửa chữ nghe nhầm theo ngữ cảnh (David -> Javis) + hotwords cho Whisper
+import openai_oauth
+import ops_index_watch  # keeps every brain's Javis/index.md current, cheaply
+import phien_am  # từ tiếng Anh -> cách đọc kiểu Việt (đọc loa + so âm câu nghe được)
+import plan_accounts  # 0.353.0: several accounts on one subscription plan card (Codex, Grok, Claude Code)
+import plugins_host  # hệ PLUGIN: thư mục Python thả vào, tự thêm tool/hook cho mọi engine qua hub
+import purge  # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
+import stt  # nghe tin thoại (Whisper qua Groq) -> chữ, cho kênh Telegram/Zalo
+import terminal  # tab Code: pseudo-terminal thật trong dashboard (pty trên POSIX, ống trên Windows)
+import tool_label  # một dòng mô tả lệnh gọi công cụ (lệnh nào, file nào) cho khối tiến trình
+import totp  # xác thực 2 lớp (TOTP) cho cổng đăng nhập - thuần toán, không đụng cấu hình
 import transcript_fix  # rewrites what the mic heard at the end of a dictation: the main brain, with the chat as context
-import phien_am       # từ tiếng Anh -> cách đọc kiểu Việt (đọc loa + so âm câu nghe được)
+import vision_input
 import voice_privacy
+import web_security  # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
+import webpush  # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
+import winproc  # chạy lệnh con câm lặng trên Windows (không nháy console đen)
+
 voice_privacy.install()
-import zalo_login
-import oauth_mcp
-import system_sync   # tầng năng lực HỆ THỐNG (skill/loop mặc định) - update theo phiên bản app
-import agent_rules   # mục Luật chủ dặn / Bổ sung (tự học) + chốt chặn giữ dòng của chủ
-import skill_router   # nguồn chân lý khám phá skill (canonical <brain>/skills) dùng chung mọi engine
-import skill_usage     # telemetry: đếm skill nào THẬT SỰ được dùng qua javis_use_skill (tín hiệu DƯƠNG một chiều)
-import share_bundle   # xuất/nhập gói agent/skill/workflow (.zip) để chia sẻ giữa brain/người dùng
-import share_store    # link CHIA SẺ CÔNG KHAI của một file trong brain (/s/<token>)
-import share_stats    # view counter of those public links
-import share_render   # dựng trang xem cho link chia sẻ (markdown -> html, khung trang)
-import usage_store   # đếm token/chi phí Javis tự đo (đa nhà cung cấp)
-import usage_index   # dashboard token: index log thô Claude+Codex + query summary/insights
-import usage_parsers as up_parsers   # bảng giá + khớp model, dùng chung với indexer
-import usage_saving   # tiết kiệm đối chứng ngược, mốc sự kiện, dự báo, ngân sách
-import context_runtime   # Phase 0-8: trace + Registry/Resolver/Compiler + canary paths
-import turn_context      # who is talking in this turn, for tool hooks (`turn` in pre/post_tool_call)
-import capability_registry   # Phase 2: registry dẫn xuất, không phải nguồn sự thật
-import capability_resolver   # Phase 3: resolver deterministic chỉ chạy shadow
-import context_compiler      # Phase 4: capsule + quota preflight + quality gate shadow
-import fast_path_runtime     # Phase 5: dashboard API canary, hard quota + single model call
-import evidence_store        # Phase 6: encrypted provenance/artifact store
-import capability_executor   # Phase 6: one-use read lease + schema validation
-import readonly_path_runtime # Phase 6: exact-schema, two-round read-only canary
-import readonly_orchestrator # Phase 7: checkpointed multi-round read-only DAG
-import adaptive_context_runtime # Phase 8: state + sourced memory + lazy skill canaries
-import agent_runtime           # Phase 11: agent = workflow có quyền replan trong quyền đã cấp
-import resonance               # Javis Resonance MVP: một lượt engine chỉ chữ + receipt do host quan sát
-import resonance_store         # Javis Resonance MVP: kho mục tiêu SQLite có revision (M2)
-import resonance_api           # Javis Resonance MVP: API thẻ mục tiêu và phản hồi (M4)
-import limit_learner          # học hạn mức từ chính lỗi nhà cung cấp trả về
-import limit_resume           # tự chạy lại lượt chat khi gói thuê bao mở lại hạn mức
-import quota_scheduler        # sổ cái TPM dùng chung (Việc 6)
-import model_limits           # hạn mức GỢI Ý theo provider, để khai quota profile cho canary
-import model_router           # Phase 12: chọn model theo từng bước, lọc năng lực trước
-import workflow_graph          # Phase 10: workflow -> capability graph (thuần dữ liệu)
-import workflow_runtime        # Phase 10: chạy graph có checkpoint/resume
-import write_path_runtime    # Phase 9: write có xác nhận, idempotency và reconcile
-from telegram_bot import TelegramBot, parse_chat_ids as tg_parse_ids
-import zalo_bot   # kênh Zalo Bot của chủ (API chính thức) - cùng khế ước với TelegramBot
-import owner_channels   # owner's control channels on Slack and WhatsApp (0.71.0)
-import whatsapp_bot     # WhatsApp transport + webhook router (0.71.0)
-import messenger_bot    # Messenger transport + webhook router (0.134.0)
-import messenger_setup  # Messenger connect wizard and health check (0.311.0)
-import messenger_oauth  # Log in with Facebook for the Messenger card (0.434.0)
-import zalo_oa_bot      # Zalo OA transport + webhook router (0.412.0)
-import channel_context   # metadata kênh + gom file trả về kênh chat (port gateway hermes-agent)
-import lang as lang_mod   # chốt ngôn ngữ trả lời cho một lượt
-import lang_registry      # sổ đăng ký: mọi thứ về một ngôn ngữ nằm đúng một chỗ
-import background_status  # việc nền còn sống của một khung chat + bắt lời hứa "xong em báo"
-import tien_trinh_nen     # lệnh chạy ngầm engine bỏ lại: nhận theo dõi, xong tự báo + làm tiếp
-import turn_done_notice   # a long chat turn that finishes rings the bell (the owner has left the screen)
-import chatbot_log       # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
-import chatbot_runtime   # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
+import adaptive_context_runtime  # Phase 8: state + sourced memory + lazy skill canaries
+import agent_assets  # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
 import agent_avatar
-import avatar_upload   # ảnh đại diện tự tải lên của trợ lý và nhóm (0.176.0)
-import agent_tags   # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
-import cli_autoinstall   # trạng thái agy/grok do container Docker tự cài (0.85.1)
-import agent_assets      # tài liệu & link gắn vào MỘT trợ lý (lưu trong frontmatter agent)
-import workflow_chat     # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
-import javis_core        # Javis Core (0.185.0): system assistant pinned in every brain
-import main_prompt_rendering  # pure shared prompt blocks; no live reads
-import main_attachment_rendering  # pure shared attachment templates; no live reads
-import memory_control    # 0.188.0: list/edit/forget memories, learning switch, person profile
-import memory_chat       # 0.190.0: the same, plus agent lessons, from chat (tool javis_memory)
-import memory_receipt    # 0.190.0: the "Đã nhớ · Hoàn tác" line under an answer, and no empty "đã quên"
-import chatbot_cuoc_chat  # danh sách cuộc chat cho ô chọn người/nhóm của form bot
-import chatbot_reply_policy        # bộ phán xử hội thoại nhóm (0.65.0): bot tự quyết nói hay im
-import chatbot_reply_policy_store  # kho quyết định, ca đã học, ngưỡng theo cuộc chat
-import chatbot_reply_policy_review  # vòng tự soát bộ phán xử bằng bộ não chính (0.77.0)
-import chatbot_store     # kho bản ghi bot + token qua secrets_store
-import channel_accounts  # tài khoản kênh dạng token (0.61.0), bot chỉ trỏ tới
-import brain_ident       # one brain, many spellings ("brain", absolute path), #716
-import channels          # sổ đăng ký kênh của Hộp thư hội thoại (0.61.0)
-import conversations     # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
-import zalo_personal_channel   # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
-import deploy_info              # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
-import node_security            # News item when this machine's Node.js misses a security release
-import ollama_catalog           # danh mục model để gợi ý + tìm kiếm
-import ollama_local             # dò/tải/gỡ model trên máy chạy Ollama
-import sessions                  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
-import reaction_values           # T2: khuôn reaction R của hợp đồng (chat riêng)
-import feedback_projector        # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
-import agent_lessons             # T3 phần L: kho bài học có phạm vi (team:/dm:/*) và góp ý của đồng đội
-import agent_budget              # T3 phần L: hạn mức lượt tự phát mỗi trợ lý mỗi ngày (agent_daily_calls)
-import agent_review              # T3 phần L: lượt xem xét reaction, tự rà soát có tự áp và quay lại
-import agent_ledger              # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
-from sessions import get_store   # kho phiên hội thoại (sqlite + fts5): list/resume/search
-import compaction   # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
-import lenh_he_thong   # lõi dùng chung của lệnh "/" hệ thống (web + Telegram): /plan /compact /usage...
-from chat_runtime import ChatRuntime
-import ui_bridge   # tool javis_ui bảo dashboard mở trang/file/việc rồi đợi trình duyệt đáp
-import ui_targets   # đổi lời nói ("mở trang công cụ") thành id trang dashboard hiểu
-import voice_turn_protocol
-import voice_brain   # Voice V2: bộ não giọng nói riêng (Antigravity sống lâu / Groq / Gemini...)
-import voice_live    # Voice V2: nghe nói thẳng qua Gemini Live / OpenAI Realtime
-import voice_ear     # tai nghe lại: model đa ngôn ngữ nghe âm thanh rồi mới chốt chữ (0.65.15)
+import agent_budget  # T3 phần L: hạn mức lượt tự phát mỗi trợ lý mỗi ngày (agent_daily_calls)
+import agent_ledger  # T2: sổ lượt chung (trần máy chủ) và lý do thức theo agent
+import agent_lessons  # T3 phần L: kho bài học có phạm vi (team:/dm:/*) và góp ý của đồng đội
 import agent_notify  # 0.205.0: unread and mute for private partner chats
-import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
-import codex_steer  # 0.213.0: Codex chat turns on app-server take those messages mid-way
-import warm_pool  # 0.382.0: engine processes kept warm between the owner's chat turns
+import agent_review  # T3 phần L: lượt xem xét reaction, tự rà soát có tự áp và quay lại
+import agent_rules  # mục Luật chủ dặn / Bổ sung (tự học) + chốt chặn giữ dòng của chủ
+import agent_runtime  # Phase 11: agent = workflow có quyền replan trong quyền đã cấp
+import agent_tags  # tag của agent (0.100.0): nhiều tag, nhóm cũ thành một tag
+import avatar_upload  # ảnh đại diện tự tải lên của trợ lý và nhóm (0.176.0)
+import background_status  # việc nền còn sống của một khung chat + bắt lời hứa "xong em báo"
+import brain_ident  # one brain, many spellings ("brain", absolute path), #716
+import capability_executor  # Phase 6: one-use read lease + schema validation
+import capability_registry  # Phase 2: registry dẫn xuất, không phải nguồn sự thật
+import capability_resolver  # Phase 3: resolver deterministic chỉ chạy shadow
+import channel_accounts  # tài khoản kênh dạng token (0.61.0), bot chỉ trỏ tới
+import channel_context  # metadata kênh + gom file trả về kênh chat (port gateway hermes-agent)
+import channels  # sổ đăng ký kênh của Hộp thư hội thoại (0.61.0)
+import chatbot_cuoc_chat  # danh sách cuộc chat cho ô chọn người/nhóm của form bot
+import chatbot_log  # nhật ký hội thoại khách + thống kê câu bot trả lời không nổi
+import chatbot_reply_policy  # bộ phán xử hội thoại nhóm (0.65.0): bot tự quyết nói hay im
+import chatbot_reply_policy_review  # vòng tự soát bộ phán xử bằng bộ não chính (0.77.0)
+import chatbot_reply_policy_store  # kho quyết định, ca đã học, ngưỡng theo cuộc chat
+import chatbot_runtime  # bộ giám sát Bot chuyên trách (mỗi bot một poller Telegram)
+import chatbot_store  # kho bản ghi bot + token qua secrets_store
 import claude_warm  # 0.382.0: Claude Code chat turns on a warm process
+import cli_autoinstall  # trạng thái agy/grok do container Docker tự cài (0.85.1)
 import codex_realtime  # ChatGPT Live: một Codex app-server sống lâu, realtime trên gói ChatGPT (0.65.17)
+import codex_steer  # 0.213.0: Codex chat turns on app-server take those messages mid-way
+import compaction  # nén hội thoại dài cho engine API (tóm tắt phần cũ thay vì cắt bỏ)
+import context_compiler  # Phase 4: capsule + quota preflight + quality gate shadow
+import context_runtime  # Phase 0-8: trace + Registry/Resolver/Compiler + canary paths
+import conversations  # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
+import deploy_info  # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
+import evidence_store  # Phase 6: encrypted provenance/artifact store
+import fast_path_runtime  # Phase 5: dashboard API canary, hard quota + single model call
+import feedback_projector  # T2: bộ chiếu phản hồi (outbox của reaction) và khối phản hồi chat riêng
+import javis_core  # Javis Core (0.185.0): system assistant pinned in every brain
+import lang as lang_mod  # chốt ngôn ngữ trả lời cho một lượt
+import lang_registry  # sổ đăng ký: mọi thứ về một ngôn ngữ nằm đúng một chỗ
+import lenh_he_thong  # lõi dùng chung của lệnh "/" hệ thống (web + Telegram): /plan /compact /usage...
+import limit_learner  # học hạn mức từ chính lỗi nhà cung cấp trả về
+import limit_resume  # tự chạy lại lượt chat khi gói thuê bao mở lại hạn mức
+import main_attachment_rendering  # pure shared attachment templates; no live reads
+import main_prompt_rendering  # pure shared prompt blocks; no live reads
+import memory_chat  # 0.190.0: the same, plus agent lessons, from chat (tool javis_memory)
+import memory_control  # 0.188.0: list/edit/forget memories, learning switch, person profile
+import memory_receipt  # 0.190.0: the "Đã nhớ · Hoàn tác" line under an answer, and no empty "đã quên"
+import messenger_bot  # Messenger transport + webhook router (0.134.0)
+import messenger_oauth  # Log in with Facebook for the Messenger card (0.434.0)
+import messenger_setup  # Messenger connect wizard and health check (0.311.0)
+import model_limits  # hạn mức GỢI Ý theo provider, để khai quota profile cho canary
+import model_router  # Phase 12: chọn model theo từng bước, lọc năng lực trước
+import node_security  # News item when this machine's Node.js misses a security release
+import oauth_mcp
+import ollama_catalog  # danh mục model để gợi ý + tìm kiếm
+import ollama_local  # dò/tải/gỡ model trên máy chạy Ollama
+import owner_channels  # owner's control channels on Slack and WhatsApp (0.71.0)
+import quota_scheduler  # sổ cái TPM dùng chung (Việc 6)
+import reaction_values  # T2: khuôn reaction R của hợp đồng (chat riêng)
+import readonly_orchestrator  # Phase 7: checkpointed multi-round read-only DAG
+import readonly_path_runtime  # Phase 6: exact-schema, two-round read-only canary
+import resonance  # Javis Resonance MVP: một lượt engine chỉ chữ + receipt do host quan sát
+import resonance_api  # Javis Resonance MVP: API thẻ mục tiêu và phản hồi (M4)
+import resonance_store  # Javis Resonance MVP: kho mục tiêu SQLite có revision (M2)
+import sessions  # PROJECT_INSTRUCTIONS_MAX cho khối project trong system prompt
+import share_bundle  # xuất/nhập gói agent/skill/workflow (.zip) để chia sẻ giữa brain/người dùng
+import share_render  # dựng trang xem cho link chia sẻ (markdown -> html, khung trang)
+import share_stats  # view counter of those public links
+import share_store  # link CHIA SẺ CÔNG KHAI của một file trong brain (/s/<token>)
+import skill_router  # nguồn chân lý khám phá skill (canonical <brain>/skills) dùng chung mọi engine
+import skill_usage  # telemetry: đếm skill nào THẬT SỰ được dùng qua javis_use_skill (tín hiệu DƯƠNG một chiều)
+import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
+import system_sync  # tầng năng lực HỆ THỐNG (skill/loop mặc định) - update theo phiên bản app
+import tien_trinh_nen  # lệnh chạy ngầm engine bỏ lại: nhận theo dõi, xong tự báo + làm tiếp
+import turn_context  # who is talking in this turn, for tool hooks (`turn` in pre/post_tool_call)
+import turn_done_notice  # a long chat turn that finishes rings the bell (the owner has left the screen)
+import ui_bridge  # tool javis_ui bảo dashboard mở trang/file/việc rồi đợi trình duyệt đáp
+import ui_targets  # đổi lời nói ("mở trang công cụ") thành id trang dashboard hiểu
+import usage_index  # dashboard token: index log thô Claude+Codex + query summary/insights
+import usage_parsers as up_parsers  # bảng giá + khớp model, dùng chung với indexer
+import usage_saving  # tiết kiệm đối chứng ngược, mốc sự kiện, dự báo, ngân sách
+import usage_store  # đếm token/chi phí Javis tự đo (đa nhà cung cấp)
+import voice_brain  # Voice V2: bộ não giọng nói riêng (Antigravity sống lâu / Groq / Gemini...)
+import voice_call  # nút mic là gọi Javis: tự chọn ChatGPT Live / Live API / Cơ bản (0.65.18)
+import voice_ear  # tai nghe lại: model đa ngôn ngữ nghe âm thanh rồi mới chốt chữ (0.65.15)
+import voice_live  # Voice V2: nghe nói thẳng qua Gemini Live / OpenAI Realtime
 import voice_persona  # a voice call from a partner's chat speaks as that partner
-import voice_call     # nút mic là gọi Javis: tự chọn ChatGPT Live / Live API / Cơ bản (0.65.18)
+import voice_turn_protocol
+import warm_pool  # 0.382.0: engine processes kept warm between the owner's chat turns
+import whatsapp_bot  # WhatsApp transport + webhook router (0.71.0)
+import workflow_chat  # persona_cua_phien: kênh agent:/workflow: đổi cách _do_turn chạy lượt
+import workflow_graph  # Phase 10: workflow -> capability graph (thuần dữ liệu)
+import workflow_runtime  # Phase 10: chạy graph có checkpoint/resume
+import write_path_runtime  # Phase 9: write có xác nhận, idempotency và reconcile
+import zalo_bot  # kênh Zalo Bot của chủ (API chính thức) - cùng khế ước với TelegramBot
+import zalo_login
+import zalo_oa_bot  # Zalo OA transport + webhook router (0.412.0)
+import zalo_personal_channel  # Hộp thư hội thoại: đọc tin Zalo cá nhân từ MCP theo cursor
+from chat_runtime import ChatRuntime
+from sessions import (
+    get_store,  # kho phiên hội thoại (sqlite + fts5): list/resume/search
+)
+from telegram_bot import TelegramBot
+from telegram_bot import parse_chat_ids as tg_parse_ids
 
 app = FastAPI(title="Javis OS")
 _CHAT_RUNTIME = ChatRuntime()
@@ -483,7 +485,7 @@ for _mt, _ext in (("application/vnd.openxmlformats-officedocument.spreadsheetml.
                   ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".docx"),
                   ("application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx")):
     mimetypes.add_type(_mt, _ext)
-import tinh_gon  # noqa: E402
+import tinh_gon
 
 
 class _TinhGonStatic(StaticFiles):
@@ -13787,8 +13789,8 @@ async def _send_voice_file(chat_id, path, brain) -> tuple:
     return await _TG_BOT.send_file(path, chat=cid)
 
 
-import my_tasks as my_tasks_mod
 import gcal_read
+import my_tasks as my_tasks_mod
 
 
 async def _habit_coach_ask(prompt: str) -> str:
@@ -13942,7 +13944,7 @@ watch_feature = web_watch.register(app, web_watch.WebWatchDeps(
 ))
 
 # 0.428.0: stats for both tabs of the Tasks page (task_stats.py): what Javis did next to what the owner did.
-import task_stats  # noqa: E402
+import task_stats
 
 
 def _stats_agent_names(brain: str) -> dict:
@@ -13953,7 +13955,7 @@ def _stats_agent_names(brain: str) -> dict:
 
 
 # 0.429.0: which chatbot made a job (bot_jobs.py), so the Tasks page and its stats show a bot's jobs under it.
-import bot_jobs  # noqa: E402
+import bot_jobs
 
 bot_jobs_feature = bot_jobs.register(app, bot_jobs.BotJobsDeps(
     brain_root=_brain_root, list_bots=chatbot_store.list_bots, turns=chatbot_log._nap,
@@ -20725,7 +20727,8 @@ async def _chat_socket(ws):
 
 # Javis Gate (0.440.0): AI bên ngoài nhắn vào hội thoại qua đúng vòng chat ở trên. Lambda để test
 # thay `_CHAT_RUNTIME` sau khi nạp vẫn trúng.
-import chat_bridge  # noqa: E402
+import chat_bridge
+
 
 async def _gate_luu_luot(sid, brain, tin, tra_loi):
     """Ghi chép của Javis Gate (0.441.0): lưu tin của chủ rồi đi ĐÚNG đường lưu một lượt chat (`_persist_turn`:
@@ -27433,6 +27436,7 @@ import routes.github as github_routes
 github_routes.register(app, github_routes.GitHubDeps(brain_root=lambda b: str(_brain_root(b))))
 import github_work
 
+
 # 0.363.0: the gate result (and from G3 the PR and CI news) lands in the chat that owns the repo, plus the inbox.
 def _github_team(sid: str):
     """The team whose chat is `sid`, or None (0.449.0: GitHub repos can be attached to a team chat)."""
@@ -28772,7 +28776,7 @@ class _TeamAdmin:
 # 0.403.0: team notices that wait on the owner (called by name, acceptance, approval, still blocked on them) are urgent
 # questions; the rest (a job blocked, acceptance failed) are important team notices. Matched on team_runner's own words.
 _TEAM_ASKS_OWNER = re.compile(r"gọi bạn trong nhóm|called you in team|chờ bạn nghiệm thu|waits for your acceptance|"
-                              r"xin duyệt|asks for approval|vẫn đang chờ bạn|still waiting for you", re.I)
+                              r"xin duyệt|asks for approval|vẫn đang chờ bạn|still waiting for you", re.IGNORECASE)
 
 
 async def _team_notify(session_id, text):
@@ -30704,6 +30708,7 @@ async def share_qr(token: str = Query(...), origin: str = Query(...), fmt: str =
         return JSONResponse({"ok": False, "error": "bad origin"}, status_code=400)
     try:
         import io
+
         import segno
         buf = io.BytesIO()
         png = fmt == "png"

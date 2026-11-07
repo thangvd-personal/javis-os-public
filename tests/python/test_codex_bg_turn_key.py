@@ -13,17 +13,18 @@ Pinned here, with no model and no network:
   3. no profile: no override
   4. no bound turn: no override, so a job nobody scheduled still cannot dispatch
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-codex-bg-turn-"))
 
-import aux_engine  # noqa: E402
-import config as cfgmod  # noqa: E402
-import team_dispatch  # noqa: E402
-import turn_context  # noqa: E402
+import aux_engine
+import config as cfgmod
+import team_dispatch
+import turn_context
 
 fails = []
 

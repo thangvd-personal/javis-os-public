@@ -6,18 +6,19 @@ Chủ repo 04/11/2026: "làm tự động hóa tên các gói của các nhà cu
 (`prolite` là gói 100 đô), nên tên nằm ở `plan-names.json` của javis-store, máy tải về 6 giờ một lần.
 Test này giữ: đọc không bao giờ chờ mạng, dữ liệu lạ bị bỏ, thứ tự ưu tiên tên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _TMP = tempfile.mkdtemp(prefix="javis-pn-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 U = "https://kho.example/plan-names.json"
 os.environ["JAVIS_PLAN_NAMES_URL"] = U
 
-import plan_names as pn  # noqa: E402
-import plan_limits as pl  # noqa: E402
+import plan_limits as pl
+import plan_names as pn
 
 fails = []
 
@@ -68,7 +69,7 @@ os.environ["JAVIS_PLAN_NAMES_URL"] = U
 pn._STATE["mem"] = None
 
 # 3. Tải: hợp lệ thì lưu, hỏng thì giữ bản cũ.
-import packs_fetch  # noqa: E402
+import packs_fetch
 
 
 async def _tai_tot(url, tran=0, header=None):

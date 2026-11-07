@@ -11,13 +11,14 @@ installs fine and fails later, where nobody looks:
 - Windows script files must stay ASCII (PowerShell 5.1 and wscript read them as ANSI), and the
   Inno script must keep its BOM (it holds Vietnamese text).
 """
-from _paths import ROOT  # noqa: E402
 import os
 import plistlib
 import re
 import shutil
 import subprocess
 import sys
+
+from _paths import ROOT
 
 _fails = []
 
@@ -70,7 +71,7 @@ check("every wscript shortcut in the installer runs open-javis.vbs, never start-
       len(shortcut_lines) == 2 and all("open-javis.vbs" in ln and "start-javis.vbs" not in ln for ln in shortcut_lines),
       shortcut_lines)
 check("the 'open now' checkbox also uses open-javis.vbs and only after a good bootstrap",
-      re.search(r'^Filename: "\{sys\}\\wscript\.exe";.*open-javis\.vbs.*postinstall.*Check: BootstrapOk', iss, re.M) is not None)
+      re.search(r'^Filename: "\{sys\}\\wscript\.exe";.*open-javis\.vbs.*postinstall.*Check: BootstrapOk', iss, re.MULTILINE) is not None)
 check("CANARY: macOS launcher hands an installed Javis to bin/javis-start.sh (opens, never restarts)",
       'exec "${JAVIS_HOME}/bin/javis-start.sh"' in launcher)
 
@@ -134,7 +135,7 @@ check("macOS launcher has a fallback when Terminal automation is denied",
       "if ! osascript" in launcher and "pbcopy" in launcher and "printf 'JAVIS_HOME=%q bash %q" in launcher)
 
 # ---- Javis logo in the installers, optional signing (0.439.1) ----
-import struct  # noqa: E402
+import struct
 
 
 def bmp_info(path):

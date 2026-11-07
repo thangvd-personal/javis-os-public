@@ -17,9 +17,10 @@ import contextlib
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 
 import avatar_upload
 import localefmt
@@ -42,7 +43,7 @@ PINNED_SHOWN = 20            # tin đã ghim hiện ở dải trên khung chat (
 # databases, on every team open and on every refetch an agent message triggers. It feeds a side panel, so a few
 # seconds of staleness is invisible, while computing it each time made switching teams wait on it.
 _USAGE_TTL_S = 15.0
-_usage_cache: Dict[str, tuple] = {}
+_usage_cache: dict[str, tuple] = {}
 _usage_lock = threading.Lock()
 
 

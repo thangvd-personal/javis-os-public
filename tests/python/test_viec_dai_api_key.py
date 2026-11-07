@@ -10,20 +10,21 @@ vậy. Chủ repo chốt: cắm token vào là phải làm được việc, khô
   3. Phanh chống kẹt: thăm dò có tiến triển không bị bắt oan, vòng xoay A-B-A-B bị cắt.
   4. Kết quả tool cũ được rút gọn khi lượt dài vượt ngân sách ngữ cảnh, kết quả mới giữ nguyên.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 _TMP = tempfile.mkdtemp(prefix="javis-viecdai-")
 os.environ["JAVIS_STATE_DIR"] = _TMP
 for _bien in ("JAVIS_MAX_TOOL_ROUNDS", "JAVIS_MAX_TOOL_ROUNDS_CODING", "JAVIS_TOOL_LOOP_BUDGET_CHARS"):
     os.environ.pop(_bien, None)
 
-import engine  # noqa: E402
-import aux_engine  # noqa: E402
+import aux_engine
+import engine
 
 _fails = []
 

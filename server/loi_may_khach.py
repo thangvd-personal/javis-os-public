@@ -78,7 +78,7 @@ def ghi(payload: dict, ua: str = "") -> int:
                 continue
             src = _cat(e.get("src"), 200)
             dong = _so(e.get("dong"))
-            khoa = hashlib.sha1(f"{msg}|{src}|{dong}".encode("utf-8")).hexdigest()[:16]
+            khoa = hashlib.sha1(f"{msg}|{src}|{dong}".encode()).hexdigest()[:16]
             g = theo_khoa.get(khoa)
             if g is None:
                 g = {"key": khoa, "msg": msg, "src": src, "dong": dong, "cot": _so(e.get("cot")),

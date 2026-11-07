@@ -7,14 +7,15 @@ Code path (dedicated bots, `tiet_kiem=True`) passed the whole system prompt as `
 <text>`, so a bot with a ~120 KB agent file plus per-turn context failed every turn with
 "[Errno 7] Argument list too long" and the customer got no reply.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-rawsp-"))
 
-import claude_sdk_engine as eng  # noqa: E402
-import main  # noqa: E402
+import claude_sdk_engine as eng
+import main
 
 _fails = []
 
@@ -52,7 +53,7 @@ check("raw path stays raw: no claude_code preset, no append file",
 check("file is tracked for cleanup after the turn", path in cli._tmp_files)
 
 # The real command the SDK would spawn: no single argument may cross the kernel cap.
-from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport  # noqa: E402
+from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 
 t = SubprocessCLITransport(prompt="xin chào", options=opts)
 # CI has no `claude` binary; the path is only resolved at connect(), and only the arguments matter here.

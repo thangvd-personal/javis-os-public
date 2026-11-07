@@ -6,10 +6,11 @@ Owner, 2026-11-06: besides renaming a link, change the address after /s/, and co
 the slug opens the link while the random token keeps working, a taken or too short slug changes nothing, revoking
 kills both, and a view counts once per visit, never for a link-preview bot, a prefetch, an asset or the owner.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-share-addr-")
 _BRAINS = tempfile.mkdtemp(prefix="javis-share-addr-brains-")
@@ -26,10 +27,10 @@ with open(os.path.join(BRAIN, "apps", "demo", "data.json"), "w", encoding="utf-8
 with open(os.path.join(BRAIN, "notes", "ke-hoach.md"), "w", encoding="utf-8") as f:
     f.write("# Kế hoạch\n\nchữ")
 
-import share_stats  # noqa: E402
-import share_store  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+import share_stats
+import share_store
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app, base_url="http://127.0.0.1")
 _fails = []
@@ -165,7 +166,8 @@ check("counts are written to disk", json.loads(raw)["links"][ntok]["views"] == 2
 check("no raw address or browser string is stored", "testclient" not in raw and "iPhone" not in raw and "Chrome" not in raw)
 
 # ---- 4. QR code (owner, 2026-11-06: "thêm mã QR cho từng link") ----
-import segno  # noqa: E402
+import segno
+
 q = cl.get("/share/qr", params={"token": ntok, "origin": "https://share.example"})
 check("QR comes back as an SVG image", q.status_code == 200 and q.headers["content-type"].startswith("image/svg+xml")
       and q.text.lstrip().startswith(("<?xml", "<svg")), q.status_code)

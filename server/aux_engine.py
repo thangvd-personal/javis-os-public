@@ -524,6 +524,7 @@ class _ApiAuxEngine:
         try:
             import uuid
             from pathlib import Path
+
             import coding_ctx
             import turn_context
             goc = str(Path(self.vault_root).resolve())

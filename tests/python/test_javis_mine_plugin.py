@@ -9,15 +9,15 @@ Expected:
 Run:
     python tests/python/test_javis_mine_plugin.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import tempfile
 from datetime import date
 from pathlib import Path
 
-import my_tasks  # noqa: E402
-import plugins_host  # noqa: E402
+import my_tasks
+import plugins_host
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 

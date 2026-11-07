@@ -172,7 +172,8 @@ os.environ["CLAUDE_CONFIG_DIR"] = _cd
 check("không truyền thư mục thì theo CLAUDE_CONFIG_DIR như CLI", pl.ten_goi_claude() == "Ultra")
 del os.environ["CLAUDE_CONFIG_DIR"]
 
-import claude_cli  # noqa: E402
+import claude_cli
+
 check("thẻ Models: có tên thật thì dùng tên thật", claude_cli._ten_goi_dong("max", "a@x.vn", folder=_cd) == "Ultra")
 check("thẻ Models: thiếu tên thật thì chỉ làm gọn mã (max -> Max)",
       claude_cli._ten_goi_dong("max", "b@x.vn", folder=_cd) == "Max")

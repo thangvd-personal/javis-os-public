@@ -6,7 +6,6 @@ Field report 2026-11-01 (a phone-repair shop): a customer sent a video of the fa
 "em chưa xem được video" twice, so the customer had to call. The video message was dropped when the turn was merged
 (`gop_tin` skipped every type but text, photo and file) and no brain takes a video as input anyway.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import shutil
@@ -16,19 +15,21 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zvid-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import conversations  # noqa: E402,F401
-import chatbot_runtime as cr  # noqa: E402
-import video_vision as vv  # noqa: E402
-import zalo_attachments  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import chatbot_runtime as cr
+import conversations  # noqa: F401
+import video_vision as vv
+import zalo_attachments
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

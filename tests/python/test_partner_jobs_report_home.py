@@ -14,22 +14,23 @@ No engine, network or server: fakes record what they receive.
 
     python tests/python/test_partner_jobs_report_home.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-partner-jobs-"))
 sys.path.insert(0, str(ROOT / "system" / "plugins" / "javis-schedule"))
 
-import incident_desk as idk  # noqa: E402
-import luot_dang_chay  # noqa: E402
-import plugin as sched  # noqa: E402
-import reminders  # noqa: E402
-import self_improve  # noqa: E402
-import turn_context  # noqa: E402
+import incident_desk as idk
+import luot_dang_chay
+import plugin as sched
+import reminders
+import self_improve
+import turn_context
 
 _fails = []
 

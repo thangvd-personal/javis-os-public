@@ -12,16 +12,15 @@ Pinned here:
   3. The page holds each typed message until its ack, resends it from `hello`, drops a socket that gave no ack, and
      keeps showing a held message when the chat is redrawn from the server.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import json
 import time
 from types import SimpleNamespace
 
-from fastapi import WebSocketDisconnect
-
 import main
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
 from chat_runtime import ChatRuntime
+from fastapi import WebSocketDisconnect
 from sessions import SessionStore
 
 APP = (DASHBOARD / "app.js").read_bytes().decode("utf-8")

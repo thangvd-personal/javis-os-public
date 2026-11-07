@@ -21,7 +21,7 @@ import sys
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from config import STATE_DIR
 
@@ -121,7 +121,7 @@ def mode_name(m: str) -> str:
 
 
 # ── classification ──────────────────────────────────────────────────────────────────────────────────────────────────
-def group_of(source: str = "", kind: str = "", viec: Optional[dict] = None, dedup: str = "", group: str = "") -> str:
+def group_of(source: str = "", kind: str = "", viec: dict | None = None, dedup: str = "", group: str = "") -> str:
     """The group of a notice. An explicit `group` wins; a job asking the owner something is a question; else the source."""
     g = str(group or "").strip()
     if g in GROUPS:
@@ -169,7 +169,7 @@ def _key(group: str, sig: str) -> str:
     return f"{group}|{sig}"
 
 
-def mode_of(group: str, d: Optional[dict] = None) -> dict:
+def mode_of(group: str, d: dict | None = None) -> dict:
     d = d if d is not None else _load()
     m = d["groups"].get(group) or {}
     mode = m.get("mode") if m.get("mode") in MODES else DEFAULT_MODE
@@ -177,7 +177,7 @@ def mode_of(group: str, d: Optional[dict] = None) -> dict:
 
 
 # ── the decision ────────────────────────────────────────────────────────────────────────────────────────────────────
-def decide(group: str, level: str, title: str, now: Optional[float] = None, record: bool = True) -> dict:
+def decide(group: str, level: str, title: str, now: float | None = None, record: bool = True) -> dict:
     """{"group", "level", "sig", "verdict": "loud"|"quiet"|"drop", "why"} for one notice.
 
     `why`: "mode" (below the group's mode), "off" (group off by the owner: dropped), "muted" / "always" (a per-kind rule),
@@ -230,7 +230,7 @@ def _change(d: dict, kind: str, target: str, frm: Any, to: Any, reason: str, set
     return c
 
 
-def set_mode(group: str, mode: str, set_by: str = "owner", reason: str = "") -> Optional[dict]:
+def set_mode(group: str, mode: str, set_by: str = "owner", reason: str = "") -> dict | None:
     """Set a group's mode. Returns the change, or None when nothing changed or the input is not valid."""
     if group not in GROUPS or mode not in MODES:
         return None
@@ -245,7 +245,7 @@ def set_mode(group: str, mode: str, set_by: str = "owner", reason: str = "") -> 
         return c
 
 
-def set_rule(group: str, sig: str, rule: Optional[str], set_by: str = "owner", label: str = "", reason: str = "") -> Optional[dict]:
+def set_rule(group: str, sig: str, rule: str | None, set_by: str = "owner", label: str = "", reason: str = "") -> dict | None:
     """Per-kind rule: "mute" (filtered), "always" (always rings unless the owner turned the group off), None (removed)."""
     if group not in GROUPS or not sig or rule not in ("mute", "always", None):
         return None
@@ -264,7 +264,7 @@ def set_rule(group: str, sig: str, rule: Optional[str], set_by: str = "owner", l
         return c
 
 
-def undo(change_id: str) -> Optional[dict]:
+def undo(change_id: str) -> dict | None:
     """Put back what one change replaced. Returns the undone change, or None."""
     with _LOCK:
         d = _load()
@@ -291,7 +291,7 @@ def score_of(value: str = "", axis: str = "") -> int:
     return int(EMOJI_SCORE.get(str(value or ""), 0)) + int(AXES.get(str(axis or ""), 0))
 
 
-def react(item: dict, value: str = "", axis: str = "") -> List[dict]:
+def react(item: dict, value: str = "", axis: str = "") -> list[dict]:
     """The owner reacted to one bell item. Records the feedback, then lets Core adjust. Returns Core's changes.
 
     - "Not needed" (`not_needed`) mutes that kind; on an urgent kind too, since the owner said it.
@@ -305,7 +305,7 @@ def react(item: dict, value: str = "", axis: str = "") -> List[dict]:
     filtered = bool(item.get("filtered"))
     pts = score_of(value, axis)
     label = str(item.get("title") or sig)[:120]
-    changes: List[dict] = []
+    changes: list[dict] = []
     with _LOCK:
         d = _load()
         d["feedback"].append({"ts": _now(), "group": g, "sig": sig, "score": pts, "filtered": filtered,
@@ -383,7 +383,7 @@ def status(changes: int = 20) -> dict:
             "default": DEFAULT_MODE, "modes": list(MODES)}
 
 
-def find_rules(query: str) -> List[dict]:
+def find_rules(query: str) -> list[dict]:
     """Per-kind rules whose label or signature contains `query` (chat tool, op=unmute)."""
     q = signature(query)
     return [r for r in status(0)["rules"] if q and (q in r.get("sig", "") or q in signature(r.get("label") or ""))]

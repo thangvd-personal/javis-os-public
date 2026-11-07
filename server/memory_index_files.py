@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List
 
 CORE = "MEMORY.md"
-_TYPE_INDEX = re.compile(r"^type:\s*['\"]?index['\"]?\s*$", re.M | re.I)
+_TYPE_INDEX = re.compile(r"^type:\s*['\"]?index['\"]?\s*$", re.MULTILINE | re.IGNORECASE)
 _NAME_PREFIXES = ("muc-luc",)
 
 
@@ -32,10 +31,10 @@ def _declares_index(path: Path) -> bool:
     return end > 0 and bool(_TYPE_INDEX.search(head[3:end]))
 
 
-def secondary_indexes(mem_dir) -> List[Path]:
+def secondary_indexes(mem_dir) -> list[Path]:
     """Secondary index files, sorted by name. Never raises."""
     d = Path(mem_dir)
-    out: List[Path] = []
+    out: list[Path] = []
     try:
         files = sorted(d.glob("*.md")) if d.is_dir() else []
     except OSError:
@@ -48,7 +47,7 @@ def secondary_indexes(mem_dir) -> List[Path]:
     return out
 
 
-def index_files(mem_dir) -> List[Path]:
+def index_files(mem_dir) -> list[Path]:
     """MEMORY.md first (when it exists), then the secondary indexes."""
     core = Path(mem_dir) / CORE
     return ([core] if core.is_file() else []) + secondary_indexes(mem_dir)

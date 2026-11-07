@@ -6,21 +6,22 @@ The owner (2026-11-02): the timezone only showed through a plugin. It now has a 
 setup, the server refuses names it cannot load (localefmt used to fall back to UTC+7 in silence), and the clock line in
 every prompt says yesterday, tomorrow and MCP date ranges count from the owner's date, not the server's UTC one.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-tz-")
 
-import config as cfgmod  # noqa: E402
-import context_compiler as cc  # noqa: E402
-import localefmt  # noqa: E402
-import main  # noqa: E402
+import config as cfgmod
+import context_compiler as cc
+import localefmt
+import main
 
 _fails = []
 
@@ -64,7 +65,7 @@ check("empty resets to the default", code == 200 and cfgmod.read_settings()["loc
 # ---- 3. The clock line uses the saved timezone and says report dates count from it ----
 save({"tz": "America/Los_Angeles"})
 # 2026-11-02 03:30 UTC is still 1 November in Los Angeles: the day a report must use is the owner's, not UTC's.
-moc = datetime(2026, 11, 2, 3, 30, tzinfo=timezone.utc).astimezone(localefmt.tz())
+moc = datetime(2026, 11, 2, 3, 30, tzinfo=UTC).astimezone(localefmt.tz())
 line = cc.dong_ho(moc)
 check("clock shows the local date, not the UTC one", "01/11/2026" in line)
 check("clock names the timezone", "America/Los_Angeles" in line and "UTC-8" in line)
@@ -80,7 +81,7 @@ check("unpinned clock uses the saved timezone", today_la.strftime("%d/%m/%Y") in
       or (today_la + timedelta(minutes=1)).strftime("%d/%m/%Y") in real)
 
 # ---- 4. Local MCP servers get the owner's timezone as TZ ----
-import mcp_client  # noqa: E402
+import mcp_client
 
 if os.name != "nt":
     check("a local MCP gets TZ from Settings", mcp_client._owner_tz_env({}) == {"TZ": "America/Los_Angeles"})

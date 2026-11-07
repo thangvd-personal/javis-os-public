@@ -14,7 +14,7 @@ A step without the block works as before: it counts as succeeded and its full te
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 OP = "done"
 OUTCOMES = ("succeeded", "failed")
@@ -30,7 +30,7 @@ HINT = ('Kết thúc bước bằng MỘT khối báo cáo: <!-- JAVIS_TEAM: {"o
         'trong lời văn.')
 
 
-def parse(op: Any) -> Optional[dict]:
+def parse(op: Any) -> dict | None:
     """The report of one `done` directive, or None when it carries nothing usable."""
     if not isinstance(op, dict):
         return None
@@ -69,7 +69,7 @@ def take(ops: list, notes: list) -> tuple:
     return rest, report
 
 
-def input_text(content: str, report: Optional[dict], limit: int, msg_id: Any) -> str:
+def input_text(content: str, report: dict | None, limit: int, msg_id: Any) -> str:
     """What a later step reads of an earlier result: the full text when it fits, else the report (summary and files)
     when the step gave one, else the text cut at `limit` as before."""
     content = str(content or "")

@@ -47,9 +47,9 @@ SECTION_PAIR = dict(zip(VI_SECTIONS, EN_SECTIONS))
 BUMPS = ("minor", "patch")
 
 VER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
-ENTRY_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\]", re.M)
+ENTRY_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\]", re.MULTILINE)
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\.md$")
-VI_MARKS = re.compile("[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]", re.I)
+VI_MARKS = re.compile("[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ]", re.IGNORECASE)
 PR_REF_RE = re.compile(r"\(#(\d+)\)\s*$")
 BANNED_DASHES = ("\u2014", "\u2013")
 
@@ -105,7 +105,7 @@ def parse_fragment(text: str, name: str = "fragment") -> dict:
         if d in text:
             raise FragmentError("contains an em dash or en dash, use '-' or rewrite the sentence")
     text = text.replace("\r\n", "\n").lstrip("﻿")
-    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.S)
+    m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
     if not m:
         raise FragmentError("must start with a '---' header block holding bump: and title:")
     meta: dict[str, str] = {}
@@ -128,7 +128,7 @@ def parse_fragment(text: str, name: str = "fragment") -> dict:
     if PR_REF_RE.search(title) or VER_RE.match(title.split(":", 1)[0]):
         raise FragmentError("title must not carry a version or (#PR), the release bot adds both")
     body = m.group(2)
-    parts = re.split(r"^## (vi|en)\s*$", body, flags=re.M)
+    parts = re.split(r"^## (vi|en)\s*$", body, flags=re.MULTILINE)
     if parts[0].strip():
         raise FragmentError("text before '## vi'")
     langs: dict[str, str] = {}

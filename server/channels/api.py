@@ -46,9 +46,9 @@ import secrets
 import sys
 import time
 from collections import deque
-from typing import Optional
 
 import localefmt
+
 from channels import KenhSpec
 
 SPEC = KenhSpec(
@@ -135,7 +135,7 @@ def key_meta(raw: str) -> dict:
     return {"key_prefix": str(raw or "")[:12], "key_created_at": time.time()}
 
 
-def account_for_key(raw: str) -> Optional[dict]:
+def account_for_key(raw: str) -> dict | None:
     """The account of this channel whose key this is, or None. Constant-time compare of the hashes."""
     raw = str(raw or "").strip()
     if not raw.startswith(KEY_PREFIX):
@@ -163,7 +163,7 @@ def default_settings() -> dict:
     return {s["key"]: s["default"] for s in SETTINGS}
 
 
-def settings_of(account: Optional[dict]) -> dict:
+def settings_of(account: dict | None) -> dict:
     meta = (account or {}).get("meta") or {}
     out = default_settings()
     for s in SETTINGS:
@@ -209,7 +209,7 @@ def account_settings_spec() -> list:
 # ============================================================
 # Permission ceiling
 # ============================================================
-def ceiling_problem(cfg: Optional[dict], meta: Optional[dict] = None) -> str:
+def ceiling_problem(cfg: dict | None, meta: dict | None = None) -> str:
     """Why this bot may not answer on this channel ("" when it may). `meta` applies the per-chat exception of the turn:
     an exception may lower a chat, never raise it above the ceiling."""
     if not cfg:
@@ -230,7 +230,7 @@ def ceiling_problem(cfg: Optional[dict], meta: Optional[dict] = None) -> str:
                          "documents: lower the bot's level on the Chatbot page and the channel answers again.")
 
 
-def _bot_of(account_id: str) -> Optional[dict]:
+def _bot_of(account_id: str) -> dict | None:
     import chatbot_store
     bots = chatbot_store.bots_using_account(account_id)
     return next((b for b in bots if b.get("enabled")), bots[0] if bots else None)
@@ -254,7 +254,7 @@ def allowed_networks() -> list:
     return nets
 
 
-def source_allowed(ip: str, headers: Optional[dict] = None) -> bool:
+def source_allowed(ip: str, headers: dict | None = None) -> bool:
     h = {str(k).lower(): v for k, v in (headers or {}).items()}
     if any(h.get(x) for x in _FORWARD_HEADERS):
         return False
@@ -286,7 +286,7 @@ def _take(key: tuple, now: float) -> None:
     _HITS.setdefault(key, deque()).append(now)
 
 
-def rate_check(account: dict, conversation_id: str, now: Optional[float] = None) -> str:
+def rate_check(account: dict, conversation_id: str, now: float | None = None) -> str:
     """"" when the turn may run (and it is counted), else "conversation" or "account"."""
     now = time.time() if now is None else now
     st = settings_of(account)
@@ -411,8 +411,8 @@ def _bearer(header: str) -> str:
     return h[7:].strip() if h[:7].lower() == "bearer " else ""
 
 
-async def handle_http(auth_header: str, client_ip: str, headers: Optional[dict], body: bytes,
-                      account: Optional[dict] = None) -> tuple:
+async def handle_http(auth_header: str, client_ip: str, headers: dict | None, body: bytes,
+                      account: dict | None = None) -> tuple:
     """One `POST TURN_PATH`. Returns (HTTP status, JSON body). Never raises. `account`: the route already ran `gate`."""
     turn_id = "turn_" + secrets.token_hex(8)
     try:
@@ -423,7 +423,7 @@ async def handle_http(auth_header: str, client_ip: str, headers: Optional[dict],
                     turn_id=turn_id)
 
 
-def gate(auth_header: str, client_ip: str, headers: Optional[dict]) -> tuple:
+def gate(auth_header: str, client_ip: str, headers: dict | None) -> tuple:
     """(account, None) when the source and the key pass, else (None, error tuple). Needs no body, so the route runs it
     BEFORE reading one (maintainer, 0.459.0): a caller from outside, or without the key, never gets to make Javis
     buffer a request body."""
@@ -502,7 +502,7 @@ async def _handle(auth_header, client_ip, headers, body, turn_id, account=None) 
 async def _run(bot, turn, meta, aid, turn_id) -> tuple:
     try:
         out = await asyncio.wait_for(bot.run_turn(turn["text"], meta), TURN_TIMEOUT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(f"[chatbot-api {turn_id}] over {TURN_TIMEOUT_S} seconds", file=sys.stderr)
         return _err(504, "timeout", "Bot trả lời quá lâu, thử lại sau.", "The bot took too long, try again later.",
                     turn_id=turn_id)

@@ -22,9 +22,10 @@ import os
 import re
 import threading
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -40,8 +41,8 @@ class BotJobsDeps:
     brain_root: Callable[[str], str]
     list_bots: Callable[[], list]                    # chatbot_store.list_bots
     turns: Callable[[str], list]                     # chatbot_log._nap: the bot's logged turns, oldest first
-    task_store: Optional[Callable[[], Any]] = None   # the Kanban TaskStore
-    loops: Optional[Callable[[str], list]] = None    # brain root -> parsed loops (self_improve.list_loops)
+    task_store: Callable[[], Any] | None = None   # the Kanban TaskStore
+    loops: Callable[[str], list] | None = None    # brain root -> parsed loops (self_improve.list_loops)
 
 
 def bot_of(created_by: str) -> str:
@@ -228,7 +229,7 @@ def job_map(deps: BotJobsDeps, brain: str, tz=None) -> dict:
 class BotJobs:
     CACHE_S = 20   # the page polls every few seconds; the turn logs need not be read that often
 
-    def __init__(self, deps: BotJobsDeps, tz: Optional[Callable[[], Any]] = None):
+    def __init__(self, deps: BotJobsDeps, tz: Callable[[], Any] | None = None):
         self.deps = deps
         self._tz = tz
         self._cache: dict = {}
@@ -249,7 +250,7 @@ class BotJobs:
         return out
 
 
-def register(app, deps: BotJobsDeps, tz: Optional[Callable[[], Any]] = None) -> BotJobs:
+def register(app, deps: BotJobsDeps, tz: Callable[[], Any] | None = None) -> BotJobs:
     feat = BotJobs(deps, tz)
     app.include_router(feat.router)
     return feat

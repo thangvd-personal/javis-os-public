@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import localefmt
 
-
 # 0.453.0 (issue #898, item 1): a turn that started background work (a background shell, a sub-agent) used to end at its
 # first ResultMessage: Javis disconnected, Claude Code went away with its tasks, and the follow-up that should read their
 # result never came. Seen first on Windows, where Javis' own adoption of leftover processes (tien_trinh_nen) does not run,

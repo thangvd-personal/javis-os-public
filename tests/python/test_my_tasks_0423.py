@@ -10,15 +10,14 @@ Expected:
 Run:
     python tests/python/test_my_tasks_0423.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import json
 import tempfile
 from pathlib import Path
 
+import my_tasks
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import my_tasks  # noqa: E402
 
 fails = []
 roots = {"brain": Path(tempfile.mkdtemp(prefix="javis-my-a-")), "other": Path(tempfile.mkdtemp(prefix="javis-my-b-"))}

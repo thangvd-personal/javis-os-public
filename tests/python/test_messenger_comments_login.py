@@ -18,13 +18,14 @@ No network: Graph is faked. Guarded, in order of what would hurt most if it brok
   6. Routes: the callback and the privacy page are public, finish saves each ticked Page with its
      comment mode, the comment mode can be changed afterwards.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import sys
 import tempfile
 from urllib.parse import parse_qs, urlparse
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-messenger-cmt-")
 
@@ -33,10 +34,9 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import messenger_bot  # noqa: E402
-import messenger_oauth  # noqa: E402
+import httpx
+import messenger_bot
+import messenger_oauth
 
 _fails = []
 
@@ -215,7 +215,8 @@ r, asked = run(_subscribe(True))
 check("feed refused: the Page is still subscribed for messages",
       r.get("ok") and r.get("feed") is False and asked[-1] == "messages,messaging_postbacks", (r, asked))
 
-import messenger_setup  # noqa: E402
+import messenger_setup
+
 item = messenger_setup.comments_item(["pages_messaging"], ["messages"])
 check("comments row is a warning naming what is missing, never red",
       item["ok"] is None and "pages_manage_engagement" in item["detail"] and "feed" in item["detail"], item)
@@ -316,8 +317,8 @@ check("privacy page: both languages, deletion instructions, names escaped",
 # ============================================================
 # 3b. The chatbot answer function: log-only records and stays silent
 # ============================================================
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
+import chatbot_runtime
+import chatbot_store
 
 recorded = []
 orig = (chatbot_store.get_bot, chatbot_store.ap_ngoai_le, chatbot_runtime.ghi_tin_khach)
@@ -341,9 +342,9 @@ check("asking the bot from the inbox on a comment tells the model it is public",
 # ============================================================
 # 6. Routes
 # ============================================================
-import channel_accounts  # noqa: E402
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import channel_accounts
+import main
+from fastapi.testclient import TestClient
 
 # Behind the owner's HTTPS proxy, as on a VPS: the request arrives on localhost with forwarded headers.
 client = TestClient(main.app, base_url="http://localhost",

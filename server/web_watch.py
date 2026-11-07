@@ -41,11 +41,10 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-
-import work_log  # each alert is a finished piece of work for the Tasks page stats (0.428.0)
 from urllib.parse import urlparse
 
 import localefmt
+import work_log  # each alert is a finished piece of work for the Tasks page stats (0.428.0)
 from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
 

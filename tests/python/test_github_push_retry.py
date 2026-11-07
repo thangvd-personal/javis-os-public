@@ -7,7 +7,6 @@ disabled", the person signed in to GitHub again and asked three times to push an
 remembered the worktree state, so every later turn counted as "nothing changed", and the stuck reason was wiped to
 "idle". This file replays that and checks each way back: the next turn, the watcher, a reconnect, the button.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -15,20 +14,22 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghpr-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos  # noqa: E402
-import github_store  # noqa: E402
-import github_work as w  # noqa: E402
+import github_repos
+import github_store
+import github_work as w
 
 _fails = []
 
@@ -54,7 +55,7 @@ async def start_turn(sid, text):
 
 w.configure(notify=notify, start_turn=start_turn,
             session_info=lambda sid: {"title": "Chấm đỏ", "task": task["text"], "engine": "anthropic-cli", "model": "opus"})
-run = lambda coro: asyncio.run(coro)  # noqa: E731
+run = lambda coro: asyncio.run(coro)
 BRAIN = tempfile.mkdtemp(prefix="brain-")
 fake.add_repo("acme/app", files={"README.md": "app\n", "src/a.py": "a = 1\n"})
 github_repos.connect(GOOD_TOKEN)

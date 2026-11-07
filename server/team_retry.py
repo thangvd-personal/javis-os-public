@@ -22,7 +22,6 @@ import os
 import re
 import time
 from datetime import datetime
-from typing import Optional
 
 import limit_learner
 import limit_resume
@@ -43,7 +42,7 @@ TRANSIENT_RE = re.compile(
     r"overloaded|rate[\s_-]?limit|too many requests|\b(?:429|502|503|504|529)\b|temporar(?:y|ily)"
     r"|service unavailable|bad gateway|gateway time-?out|server error|api_error|internal error"
     r"|connection (?:reset|refused|error|aborted|closed|lost)|econnreset|econnrefused|network|socket hang up"
-    r"|read timed out|timed out while|try again", re.I)
+    r"|read timed out|timed out while|try again", re.IGNORECASE)
 PLAN_NAMES = {"claude-code": "Claude", "codex": "ChatGPT", "grok-cli": "SuperGrok", "antigravity-cli": "Google"}
 
 
@@ -63,7 +62,7 @@ def chain_failures(steps: list, step: dict) -> int:
 
 
 def plan(out: dict, *, role: str, tool_roles: tuple, failures: int, provider: str = "",
-         now: Optional[float] = None) -> Optional[dict]:
+         now: float | None = None) -> dict | None:
     """When the failed step should run again on its own: {"kind": "limit" | "transient", "at": epoch, "attempt": n,
     "of": max, "plan": plan name, "reset_text": provider's words}. None: block the job as before."""
     limit = max_retries()

@@ -5,17 +5,19 @@
 Lỗi JS của trình duyệt khách trước đây chỉ biết được qua ảnh chụp màn hình (khách báo 30/10/2026). dashboard/loi-may-khach.js
 gửi về POST /client-errors, server/loi_may_khach.py giữ theo nhóm, trang Sức khoẻ đọc GET /client-errors.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import os
 import sys
 import tempfile
 
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
+
 _tmp = tempfile.mkdtemp(prefix="javis-loi-")
 os.environ["JAVIS_STATE_DIR"] = _tmp
 sys.path.insert(0, str(SERVER))
-import config as cfgmod  # noqa: E402
+import config as cfgmod
+
 cfgmod.STATE_DIR = __import__("pathlib").Path(_tmp)
-import loi_may_khach as L  # noqa: E402
+import loi_may_khach as L
 
 _fails = []
 

@@ -6,16 +6,17 @@ The bug: the scheduler rebuilt the operations index only for brains the loop sch
 brains that once had a loop). A brain with no loop kept the index from the day it was created: "0 agents" while it
 had 18. The fix sweeps every brain but rebuilds only those whose stat-only signature moved, a few per tick.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-opsidx-state-"))
 
-import ops_index_watch as w  # noqa: E402
+import ops_index_watch as w
 
 _fails = []
 
@@ -124,7 +125,7 @@ check("a brain that is gone is forgotten", set(watch2._seen) == set(brains[:3]))
 
 
 # ---- 3. Through main: a brain WITHOUT any loop gets its index updated (the reported bug) ----
-import main  # noqa: E402
+import main
 
 base = Path(tempfile.mkdtemp(prefix="javis-opsidx-brains-"))
 main.BRAINS_DIR = str(base)

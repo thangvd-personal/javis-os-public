@@ -24,8 +24,8 @@ import hashlib
 import os
 import threading
 import time
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 MAX_REBUILDS_PER_SWEEP = 4
 REFRESH_S = 30 * 60
@@ -63,7 +63,7 @@ def _md_files(parts: list, folder) -> None:
     parts.extend(sorted(rows))
 
 
-def _child_manifests(parts: list, folder, names: Tuple[str, ...]) -> None:
+def _child_manifests(parts: list, folder, names: tuple[str, ...]) -> None:
     """The folder itself plus the manifest of each subfolder (skills/<slug>/SKILL.md, plugins/<slug>/plugin.yaml)."""
     if not folder:
         return
@@ -78,7 +78,7 @@ def _child_manifests(parts: list, folder, names: Tuple[str, ...]) -> None:
             _stat(parts, os.path.join(sd, n), keep_missing=False)
 
 
-def brain_signature(root, agents_dir, workflows_dir, plugins_dir: Optional[Path] = None) -> str:
+def brain_signature(root, agents_dir, workflows_dir, plugins_dir: Path | None = None) -> str:
     """Signature of one brain's index inputs. Equal signatures mean nothing the index lists has changed on disk."""
     root = Path(root)
     parts: list = []
@@ -107,16 +107,16 @@ class IndexWatcher:
         self._max = max(1, int(max_rebuilds))
         self._refresh_s = refresh_s
         self._clock = clock
-        self._seen: Dict[str, Tuple[object, float]] = {}
+        self._seen: dict[str, tuple[object, float]] = {}
         self._lock = threading.Lock()   # sweeps run in a worker thread; never let two overlap
 
-    def _sign(self, brain: str, shared) -> Optional[tuple]:
+    def _sign(self, brain: str, shared) -> tuple | None:
         try:
             return (shared, self._signature_of(brain))
         except Exception:
             return None
 
-    def sweep(self, brains: Iterable[str]) -> List[str]:
+    def sweep(self, brains: Iterable[str]) -> list[str]:
         """Rebuild the brains whose index inputs changed (or whose refresh is due). Returns the ones rebuilt."""
         if not self._lock.acquire(blocking=False):
             return []

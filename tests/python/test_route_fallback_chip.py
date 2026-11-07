@@ -7,17 +7,18 @@ the chat still said "Gemini 3.8 Flash" with a green dot. The server now says, fo
 where the turn really runs (`_route_view`): in `/sessions/{id}/meta`, in `/chat/route` for an empty chat, and in a
 "route" frame at the start of every turn. Nothing saved changes, so the chosen model comes back once its quota does.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-routechip-")
 
-import config as cfgmod  # noqa: E402
-import main  # noqa: E402
+import config as cfgmod
+import main
 
 fails = []
 

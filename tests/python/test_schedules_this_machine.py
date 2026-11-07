@@ -5,16 +5,17 @@
 Reminders and loops sync to every machine through the brain repo, so each machine running Javis fired them once.
 The switch lives in settings.json (never synced): off on one machine, the others keep running the schedule.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-sched-here-")
 
-import config as cfgmod   # noqa: E402
-import main               # noqa: E402
+import config as cfgmod
+import main
 
 _fails = []
 

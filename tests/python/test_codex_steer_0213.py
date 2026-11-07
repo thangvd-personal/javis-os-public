@@ -280,7 +280,7 @@ check("background work stays on exec", any(e.get("content") == "EXEC PATH" for e
       and not any(isinstance(r, list) and "app-server" in r for r in rows))
 
 # ---- 0.382.0: streamed text, instructions once, a warm process for the next turn ----
-import warm_pool  # noqa: E402
+import warm_pool
 
 os.environ["JAVIS_WARM_BUDGET_MB"] = "500"
 os.environ["FAKE_NO_CMD"] = "1"

@@ -12,11 +12,12 @@ folder, so the Models page said "not installed" for two brains that were install
 The test lays out exactly those two files in a temp home, empties PATH, and asks the server's
 own finders.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -42,9 +43,9 @@ for k in ("JAVIS_AGY_BIN", "JAVIS_GROK_BIN", "APPDATA"):
     os.environ.pop(k, None)
 (tmp / "state").mkdir()
 
-import claude_cli  # noqa: E402
-from antigravity_cli import find_antigravity_cli  # noqa: E402
-from grok_cli import find_grok_cli  # noqa: E402
+import claude_cli
+from antigravity_cli import find_antigravity_cli
+from grok_cli import find_grok_cli
 
 check("finds agy.exe in %LOCALAPPDATA%\\agy\\bin with that folder off PATH",
       find_antigravity_cli() == str(agy), find_antigravity_cli())

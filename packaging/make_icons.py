@@ -11,8 +11,8 @@ wizard-<pct>.bmp (the tall panel on the first and last page) and wizard-small-<p
 The outputs are committed, so CI and users never need Pillow for this; rerun it only when
 the logo changes.
 """
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 

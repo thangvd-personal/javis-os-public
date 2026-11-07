@@ -11,12 +11,13 @@ No network, no model.
 - The chat tool `javis_core_name` (bundled plugin) writes the same file, owner only.
 - The agent routes still refuse to delete or edit Javis Core, and no longer say it cannot be renamed.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-core-name-")
 try:
@@ -33,7 +34,7 @@ def check(name, cond, extra=""):
         fails.append(name)
 
 
-import javis_core  # noqa: E402
+import javis_core
 
 # ---- 1. the identity file ----
 A = Path(tempfile.mkdtemp(prefix="core-name-a-"))
@@ -70,10 +71,10 @@ check("the role body tells it to fit its style to the user and save it with the 
       "javis_core_name" in javis_core.definition()["body"] and "style" in javis_core.definition()["body"])
 
 # ---- 3. the server: rename button and the Partners list ----
-import config as cfgmod  # noqa: E402
-import main  # noqa: E402
-import mcp_hub  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import config as cfgmod
+import main
+import mcp_hub
+from fastapi.testclient import TestClient
 
 if os.environ["JAVIS_STATE_DIR"] not in str(cfgmod.STATE_DIR):
     print(f"FAIL state dir is not the temp dir: {cfgmod.STATE_DIR}. STOP.")

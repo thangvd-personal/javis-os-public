@@ -13,15 +13,15 @@ Expected:
 Run:
     python tests/python/test_javis_mine_edit.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-import my_tasks  # noqa: E402
-import plugins_host  # noqa: E402
+import my_tasks
+import plugins_host
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -59,7 +59,7 @@ def get(title):
 
 
 today = date.today()
-iso = lambda n: (today + timedelta(days=n)).isoformat()  # noqa: E731
+iso = lambda n: (today + timedelta(days=n)).isoformat()
 
 # ---- a weekly repeat becomes an appointment
 run(op="add", title="Họp team nội dung", repeat="week", days="T2")

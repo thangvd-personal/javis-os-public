@@ -2,14 +2,15 @@
 
 Any handler that does sync file, SQLite, CPU or network work as `async def` stalls every other request, /health
 included; three missed health checks and Traefik drops the route. These pin the fixes found by the audit."""
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import ast
 import inspect
 import os
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 
 def _handler(path: Path, name: str):
@@ -71,13 +72,13 @@ def test_loop_events_reads_only_existing_log_files():
         (folder / "2026-11-03.md").write_text("## [2026-11-03 09:15] tong-hop · loop\nLỗi: x\n", encoding="utf-8")
         (folder / "notes.md").write_text("ignored", encoding="utf-8")
         t0 = time.perf_counter()
-        end = datetime(2027, 1, 1, tzinfo=timezone.utc).timestamp()
-        ev = task_stats.loop_events(d, 0, end, timezone.utc)
+        end = datetime(2027, 1, 1, tzinfo=UTC).timestamp()
+        ev = task_stats.loop_events(d, 0, end, UTC)
         assert time.perf_counter() - t0 < 0.5
         assert [e["status"] for e in sorted(ev, key=lambda e: e["ts"])] == ["ok", "fail"]
         # a window still filters by day
-        lo = datetime(2026, 11, 2, tzinfo=timezone.utc).timestamp()
-        assert [e["status"] for e in task_stats.loop_events(d, lo, end, timezone.utc)] == ["fail"]
+        lo = datetime(2026, 11, 2, tzinfo=UTC).timestamp()
+        assert [e["status"] for e in task_stats.loop_events(d, lo, end, UTC)] == ["fail"]
 
 
 def test_offline_ear_leaves_a_core_and_runs_niced(monkeypatch):

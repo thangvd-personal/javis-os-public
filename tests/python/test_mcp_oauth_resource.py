@@ -12,7 +12,6 @@ This file guards:
   2. _discover keeps the declared resource; start_auth sends it, and the code exchange and refresh send the same value.
   3. A DCR answer whose redirect_uris lack Javis's callback stops before the sign-in page, with an honest error.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
@@ -20,15 +19,17 @@ import tempfile
 import urllib.parse
 from unittest.mock import patch
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-oauth-resource-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import oauth_mcp  # noqa: E402
-import mcp_store  # noqa: E402
-import secrets_store  # noqa: E402
+import mcp_store
+import oauth_mcp
+import secrets_store
 
 _fails = []
 

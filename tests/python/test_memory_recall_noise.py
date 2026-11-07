@@ -10,20 +10,21 @@ Reported on 0.420.2 from a real brain:
   3. always_on matched any substring of the path: "...-google-business-profile.md" took core slots on every turn.
   5. learn and the curator only knew MEMORY.md and appended duplicates of memories listed in a secondary index.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sqlite3
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-memory-noise-"))
 
-from capability_registry import brain_scope  # noqa: E402
-import memory_index  # noqa: E402
-from memory_index import MemoryIndex  # noqa: E402
-import memory_index_files  # noqa: E402
-import memory_control  # noqa: E402
+import memory_control
+import memory_index
+import memory_index_files
+from capability_registry import brain_scope
+from memory_index import MemoryIndex
 
 
 def _write(path: Path, text: str):
@@ -57,8 +58,8 @@ def test_run_log_path_rule():
 
 
 def test_run_log_task_drops_injected_blocks():
-    import main
     import chat_recall
+    import main
     user = "Soạn báo giá cho khách sỉ"
     recall = chat_recall.block([{"title": "chat cũ", "snippet": "giá sỉ là 90 nghìn"}])
     ui = "[NGỮ CẢNH GIAO DIỆN: trang=chat]\n\n"

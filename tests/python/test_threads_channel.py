@@ -16,7 +16,6 @@ Guarded, in order of what would hurt most if it broke:
   6. The token refreshes itself once it is old enough, and the new one is stored.
   7. The channel is in the registry with the Meta card as its way in; Delete hides a reply (only authors delete).
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import hmac
@@ -27,6 +26,8 @@ import tempfile
 import time
 from urllib.parse import parse_qs, urlparse
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-threads-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
 try:
@@ -34,12 +35,11 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import channel_accounts  # noqa: E402
-import channels  # noqa: E402
-import threads_bot  # noqa: E402
-import threads_oauth  # noqa: E402
+import channel_accounts
+import channels
+import httpx
+import threads_bot
+import threads_oauth
 
 _fails = []
 
@@ -234,8 +234,8 @@ check("the code becomes a 60-day token and the account; the dashboard never sees
 # ============================================================
 # 1, 7. Routes and registry
 # ============================================================
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 p = threads_oauth.take(st["state"])
@@ -265,7 +265,8 @@ check("Threads is a bot channel in the registry, text only, connected from the M
       s and s.kind == "bot" and s.logo == "threads" and s.nl("gui_chu") and not s.nl("gui_file")
       and getattr(channels.module("threads"), "CONNECT_CARD", False))
 
-import conversation_actions as ca  # noqa: E402
+import conversation_actions as ca
+
 check("Delete on a Threads reply hides it; profile links to threads.net",
       ca.capabilities({"channel": "threads", "external_chat_id": "r1"}) == ["delete_remote", "profile"])
 pr = run(ca.profile({"channel": "threads", "external_chat_id": "r1", "customer_name": "@lan.nguyen"}))

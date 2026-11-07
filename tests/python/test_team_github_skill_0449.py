@@ -9,11 +9,12 @@ commands of the main chat did not work in a team. Covered here, on the real host
 - GitHub news of a team chat lands in the team chat as a system line; a CI fix round becomes ONE team job;
 - a [SKILL: slug] block in a message or job puts that skill's text into the member's prompt.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-gh-")
 BR = Path(tempfile.mkdtemp(prefix="javis-team-gh-brain-"))
@@ -25,11 +26,11 @@ for slug, name in (("lan", "Lan"), ("minh", "Minh")):
     "---\nname: Viết email\ndescription: Viết email bán hàng ngắn\ngroup: marketing\n---\n"
     "Luôn mở bằng tên người nhận. Tối đa 120 chữ.\n", encoding="utf-8")
 
-import main  # noqa: E402
-import team_runner  # noqa: E402
-import github_repos  # noqa: E402
-import github_work  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import github_repos
+import github_work
+import main
+import team_runner
+from starlette.testclient import TestClient
 
 fails = []
 

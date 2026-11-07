@@ -265,7 +265,7 @@ def ghi_nhom(tag: str, pid: int) -> None:
 ENV_MARK = "JAVIS_BG_MARK"
 _MARKS_BY_TAG: Dict[str, List[str]] = {}
 _CLAUDE_SHELL = re.compile(r"shell-snapshots/snapshot-|pwd -P >\| \S*claude-[0-9a-f]+-cwd")
-_EVAL_INNER = re.compile(r"\beval '(.*?)'(?: < /dev/null)?(?: && pwd -P|$)", re.S)
+_EVAL_INNER = re.compile(r"\beval '(.*?)'(?: < /dev/null)?(?: && pwd -P|$)", re.DOTALL)
 
 
 _SHELL_C = re.compile(r"^(/\S*/)?(sh|bash|zsh|dash)\s+(-\S+\s+)*-c\b")

@@ -10,17 +10,18 @@ Owner, 05/11/2026, with a customer's screenshots:
    - a quota mark on the card the owner had just chosen kept every turn away from it, with no way to lift it.
    And the error said "no other brain is connected" while ChatGPT was signed in.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-disc-")
 
-import config as cfgmod  # noqa: E402
-import antigravity_cli  # noqa: E402
-import main  # noqa: E402
+import antigravity_cli
+import config as cfgmod
+import main
 
 fails = []
 

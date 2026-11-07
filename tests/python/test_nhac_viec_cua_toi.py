@@ -8,14 +8,14 @@ was, and an appointment Javis made from chat (reminder left empty, the page show
 Now a timed task is announced at its time, an empty appointment reminder means 15 minutes before, and a morning list
 names everything on today with the count of overdue tasks. "No reminder" ("0") still means none.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
-import my_tasks  # noqa: E402
-import notify_policy  # noqa: E402
+import my_tasks
+import notify_policy
+from _paths import ROOT, SERVER  # noqa: F401
 
 fails = []
 
@@ -88,11 +88,11 @@ async def notify(chat_id, text, brain="", dedup="", source="habit"):
 
 
 # A zone where it is 08:00 now, so the morning list is due and a task set for 08:00 is on time.
-now_utc = datetime.now(timezone.utc)
+now_utc = datetime.now(UTC)
 tz = timezone(timedelta(minutes=8 * 60 - (now_utc.hour * 60 + now_utc.minute)))
 today = datetime.now(tz).date().isoformat()
 feat = my_tasks.MyTasks(my_tasks.MyTasksDeps(brain_root=lambda b: str(brain), atomic_write_text=atomic_write,
-                                             scheduler_brains=lambda: [], notify=notify, tz=lambda: tz))
+                                             scheduler_brains=list, notify=notify, tz=lambda: tz))
 feat.save("brain", {"rev": 0, "projects": [], "tasks": [
     {"id": "k1", "kind": "task", "title": "Uống thuốc", "date": today, "time": "08:00", "status": "open"},
     {"id": "k2", "kind": "task", "title": "Dọn kho", "date": today, "time": "", "status": "open"},

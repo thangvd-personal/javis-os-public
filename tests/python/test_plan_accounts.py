@@ -218,7 +218,8 @@ R.clear_rest("openai-oauth", "main")
 main._PIN_LIMITED.clear()
 
 # ---- 6d. account 1 signed in again, possibly as another account (0.420.2) --------------------------------------
-import connect_health  # noqa: E402
+import connect_health
+
 connect_health.engine_reconnected = lambda name: None
 _saved_accounts = copy.deepcopy(cfgmod.read_settings()["model"].get("accounts") or {})
 for prov, hint in (("openai-oauth", "codex"), ("grok-cli", "grok-cli"), ("anthropic-cli", "claude-code")):
@@ -268,7 +269,8 @@ s = cfgmod.read_settings()
 s["model"]["accounts"] = _saved_accounts
 cfgmod.write_settings(s)
 
-import aux_engine  # noqa: E402
+import aux_engine
+
 e = P.use(FakeCodex(), "openai-oauth", "acc_b")
 aux_engine._FallbackChain._rest(e, "model_not_found: gpt-x is not available on this plan")
 check("a background 'model not found' does not rest the plan account for chat", not R.resting_until("openai-oauth", "acc_b"))

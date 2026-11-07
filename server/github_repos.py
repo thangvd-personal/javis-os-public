@@ -33,7 +33,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import coding_store
 import localefmt
@@ -826,7 +826,7 @@ def prompt_block(sid: str, brain: str = "") -> str:
     return "\n".join(lines) + "\n"
 
 
-def _work_state_lines(sid: str, repos: List[Dict[str, Any]]) -> List[str]:
+def _work_state_lines(sid: str, repos: list[dict[str, Any]]) -> list[str]:
     """What GitHub really holds for this chat right now, read from github_work's store, never from earlier answers.
 
     Without it the model guessed: asked to "push it" after a failed push it said it was not allowed to and offered to
@@ -857,7 +857,7 @@ def _work_state_lines(sid: str, repos: List[Dict[str, Any]]) -> List[str]:
         return []
 
 
-def forget_session(sid: str) -> Dict[str, Any]:
+def forget_session(sid: str) -> dict[str, Any]:
     """A deleted conversation: remove its worktrees that hold nothing unsaved; keep (and report) the others.
 
     A worktree with work left is kept on disk on purpose: deleting a chat must never delete code. The branch stays in

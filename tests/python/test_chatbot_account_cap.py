@@ -9,11 +9,12 @@
 
     python tests/python/test_chatbot_account_cap.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-cbcap-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -25,9 +26,9 @@ try:
 except Exception:
     pass
 
-import channel_accounts  # noqa: E402
-import channels  # noqa: E402
-import chatbot_store  # noqa: E402
+import channel_accounts
+import channels
+import chatbot_store
 
 _fails = []
 
@@ -82,9 +83,9 @@ check("21 Telegram bots: refused even though the bot has room for Pages", not ok
 check("and the bot is left as it was", len(chatbot_store.account_ids_of(chatbot_store.get_bot(b))) == 50)
 
 # ---- 3. the Channels tab route -----------------------------------------------------------------------------------------
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import routes.channels as ch_routes  # noqa: E402
+import main
+import routes.channels as ch_routes
+from fastapi.testclient import TestClient
 
 ch_routes._DEPS.restart_bot = lambda bid: None
 ch_routes._DEPS.stop_bot = lambda bid: None

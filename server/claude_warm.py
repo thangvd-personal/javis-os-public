@@ -27,7 +27,7 @@ import json
 import os
 import sys
 import time
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import turn_lane
 import warm_pool
@@ -226,13 +226,12 @@ async def _open(opts, handle: ClaudeHandle):
     return handle
 
 
-def _recipe(cli, opts, sysprompt_text: Optional[str]):
+def _recipe(cli, opts, sysprompt_text: str | None):
     """Reopen the same process later (prewarm) on the session it ended with. The prompt file of the turn is gone by
     then, so it is written again for the start-up and removed after."""
     import copy
 
     async def _again() -> ClaudeHandle:
-        import turn_context
         o = copy.copy(opts)
         tmp = None
         extra = dict(getattr(o, "extra_args", None) or {})
@@ -298,7 +297,7 @@ LINGER_MAX_S = 6 * 3600
 _LINGERING: set = set()
 
 
-def _linger(handle: "ClaudeHandle", completion, cap: float = LINGER_MAX_S) -> None:
+def _linger(handle: ClaudeHandle, completion, cap: float = LINGER_MAX_S) -> None:
     async def _run():
         loop = asyncio.get_running_loop()
         deadline = loop.time() + cap
@@ -311,7 +310,7 @@ def _linger(handle: "ClaudeHandle", completion, cap: float = LINGER_MAX_S) -> No
                     break
                 try:
                     msg = await asyncio.wait_for(agen.__anext__(), timeout=left)
-                except (StopAsyncIteration, asyncio.TimeoutError):
+                except (TimeoutError, StopAsyncIteration):
                     break
                 completion.observe(msg, 0, loop.time())
         except Exception as e:  # noqa: BLE001
@@ -354,7 +353,6 @@ async def _query(cli, prompt, key: str, allow_warm: bool) -> AsyncIterator[dict]
     import claude_bg_wait
     import claude_sdk_engine as eng
     import localefmt
-    import turn_context
     from claude_agent_sdk import ResultMessage
 
     IDLE = eng.tran_watchdog("JAVIS_CLAUDE_IDLE_TIMEOUT", "0")
@@ -376,7 +374,7 @@ async def _query(cli, prompt, key: str, allow_warm: bool) -> AsyncIterator[dict]
     if slot is not None and not slot.handle.quiet():
         warm_pool.POOL.release(slot, keep=False)
         slot = None
-    handle: Optional[ClaudeHandle] = None
+    handle: ClaudeHandle | None = None
     if slot is not None:
         handle = slot.handle
         cli._cleanup_tmp()     # the prompt file of this turn is not needed: the process is running already
@@ -442,7 +440,7 @@ async def _query(cli, prompt, key: str, allow_warm: bool) -> AsyncIterator[dict]
                 msg = await asyncio.wait_for(agen.__anext__(), timeout=tran)
             except StopAsyncIteration:
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if ly_do == "bg_nudge":
                     bg.nudge()
                     await client.query(claude_bg_wait.BG_NUDGE)

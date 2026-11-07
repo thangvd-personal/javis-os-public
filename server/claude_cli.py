@@ -872,6 +872,7 @@ def auth_login():
 # Chạy `claude auth login --claudeai` với pipe: đọc LINK nó in cho user mở, nhận CODE user dán rồi
 # ghi vào stdin. Trạng thái giữ ở _LOGIN (1 phiên 1 lúc là đủ). KHÔNG mở browser trên server.
 import re as _re_login
+
 _LOGIN = {"proc": None, "url": "", "done": False, "error": "", "lines": [], "env": None, "verified": None,
           "finalized": False}
 _LOGIN_URL_RE = _re_login.compile(r"https?://\S+")

@@ -7,18 +7,19 @@ connection store or invalidate_cache() keep the old synchronous rule.
 Run:
     python tests/run.py hub_swr
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-hub-swr-")
 BRAIN = Path(tempfile.mkdtemp(prefix="javis-hub-swr-brain-"))
 
-import mcp_client  # noqa: E402
-import mcp_hub  # noqa: E402
-import mcp_store  # noqa: E402
+import mcp_client
+import mcp_hub
+import mcp_store
 
 fails = []
 

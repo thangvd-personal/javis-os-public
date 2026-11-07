@@ -6,12 +6,13 @@ Reported from a Windows Server install: /files/raw answered a bare `Content-Disp
 cannot show an .xlsx saved it as "raw" with no extension; and .xlsx/.docx/.pptx went out as application/octet-stream
 where the system has no mime.types file. A name like "Báo cáo.xlsx" must still give a valid ASCII header.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-files-raw-")
 try:
@@ -19,7 +20,7 @@ try:
 except Exception:
     pass
 
-import main  # noqa: E402
+import main
 
 _fails = []
 

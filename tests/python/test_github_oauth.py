@@ -10,12 +10,13 @@ Covered:
   5. An expiring token is renewed with its refresh token; a refused renewal reads as signed out.
   6. The poll route stores the token server side and never sends it to the browser.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import sys
 import tempfile
 import time
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-gh-oauth-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -25,15 +26,15 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub
 
 fake = FakeGitHub(scopes=None)          # GitHub App tokens carry no X-OAuth-Scopes header
 os.environ["JAVIS_GITHUB_API"] = fake.url
 os.environ["JAVIS_GITHUB_WEB"] = fake.url
 
-import config  # noqa: E402
-import github_oauth  # noqa: E402
-import github_repos  # noqa: E402
+import config
+import github_oauth
+import github_repos
 
 _fails = []
 
@@ -147,9 +148,9 @@ github_repos.disconnect()
 
 # ---- 6. Route ----
 try:
+    import routes.github as gh_routes
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    import routes.github as gh_routes
 except Exception as e:  # pragma: no cover
     print(f"skip route checks: {type(e).__name__}: {e}")
 else:

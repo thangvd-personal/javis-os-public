@@ -127,7 +127,7 @@ check("setup wizard no longer asks about the browser",
       "wzCtBrowser" not in ix and "wzCongCu" not in ix and "wzCtBrowser" not in ap)
 
 # ---- 9b. First-start download (0.375.0) ----
-import asyncio  # noqa: E402
+import asyncio
 
 _orig = (ct.duong_dan_chrome, ct.shutil.which, ct._chay_tai)
 os.environ.pop("JAVIS_SKIP_BROWSER", None)

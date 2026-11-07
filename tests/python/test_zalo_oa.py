@@ -15,7 +15,6 @@ in order of what would hurt most if it broke:
   4. One full turn: the answer goes back to the sender as a plain-text consultation message.
   5. The channel is in the registry as a bot channel with a webhook; domain verification works.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import hashlib
 import hmac
@@ -26,6 +25,8 @@ import tempfile
 import time
 import types
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-zalo-oa-")
 
 try:
@@ -33,12 +34,11 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
-
-import channel_accounts  # noqa: E402
-import channels  # noqa: E402
-import chatbot_store  # noqa: E402
-import zalo_oa_bot as zo  # noqa: E402
+import channel_accounts
+import channels
+import chatbot_store
+import httpx
+import zalo_oa_bot as zo
 
 _fails = []
 
@@ -261,8 +261,8 @@ check("-216 on send refreshes and retries once", ok and state["n"] == n0 + 1, (o
 # ============================================================
 # 6. Endpoints (TestClient)
 # ============================================================
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 client = TestClient(main.app, base_url="http://localhost")
 handled = []

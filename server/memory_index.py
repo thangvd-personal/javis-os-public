@@ -67,7 +67,7 @@ _ALWAYS_ON_WORDS = ("identity", "profile", "core-facts")
 
 def _always_on_path(relative: str) -> bool:
     for part in str(relative or "").casefold().split("/"):
-        stem = part[:-3] if part.endswith(".md") else part
+        stem = part.removesuffix(".md")
         for word in _ALWAYS_ON_WORDS:
             if stem == word or (stem.startswith(word) and stem[len(word)] in "-_. "):
                 return True

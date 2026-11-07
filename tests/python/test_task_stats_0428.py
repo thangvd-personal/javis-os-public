@@ -13,20 +13,19 @@ Expected:
 Run:
     python tests/python/test_task_stats_0428.py
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - puts server/ on sys.path (see tests/python/_paths.py)
 import json
 import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import my_tasks
+import task_stats
+import work_log
+from _paths import ROOT, SERVER  # noqa: F401  - puts server/ on sys.path (see tests/python/_paths.py)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import my_tasks  # noqa: E402
-import task_stats  # noqa: E402
-import work_log  # noqa: E402
-from task_store import TaskStore  # noqa: E402
+from task_store import TaskStore
 
 fails = []
 
@@ -40,7 +39,7 @@ def check(name, cond, info=""):
 TZ = timezone(timedelta(hours=7))
 now = time.time()
 today = datetime.now(TZ).date()
-d = lambda n: (today + timedelta(days=n)).isoformat()  # noqa: E731
+d = lambda n: (today + timedelta(days=n)).isoformat()
 brain = Path(tempfile.mkdtemp(prefix="javis-stats-"))
 root = str(brain.resolve())
 

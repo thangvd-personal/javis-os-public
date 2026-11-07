@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Optional
 
 CONNECTORS = ("google-calendar", "google-workspace")
 TOOL_NAMES = ("list_events", "get_events", "events_list", "list_calendar_events", "googlecalendar_events_list",
@@ -33,7 +32,7 @@ def is_calendar(conn: dict) -> bool:
     return conn.get("connector_id") == "custom" and ("calendar" in text or "gcal" in text)
 
 
-def pick_tool(tools: list) -> Optional[dict]:
+def pick_tool(tools: list) -> dict | None:
     """The tool that lists events: a known name first, else a read-looking tool about events."""
     by = {str(t.get("name") or "").lower(): t for t in tools or [] if isinstance(t, dict)}
     for n in TOOL_NAMES:
@@ -46,7 +45,7 @@ def pick_tool(tools: list) -> Optional[dict]:
     return None
 
 
-def build_args(tool: dict, start_iso: str, end_iso: str, conn: dict) -> Optional[dict]:
+def build_args(tool: dict, start_iso: str, end_iso: str, conn: dict) -> dict | None:
     """Arguments for the list tool from its schema. None when a required argument cannot be filled."""
     schema = tool.get("inputSchema") or tool.get("input_schema") or {}
     props = schema.get("properties") or {}
@@ -94,7 +93,7 @@ def _when(v) -> tuple:
     return s, bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", s))
 
 
-def _event(e: dict) -> Optional[dict]:
+def _event(e: dict) -> dict | None:
     if not isinstance(e, dict) or str(e.get("status") or "").lower() == "cancelled":
         return None
     start, all_day = _when(e.get("start") or e.get("start_time") or e.get("startTime"))

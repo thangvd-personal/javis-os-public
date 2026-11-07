@@ -23,8 +23,8 @@ import json
 import shutil
 import sys
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, List, Optional
 
 import winproc
 
@@ -34,8 +34,8 @@ FRAME_SIDE = 1024                # long side of a frame; enough to read a label 
 FFMPEG_TIMEOUT = 60
 MAX_TRANSCRIBE_SECONDS = 600     # longer clips are not sent to speech-to-text (cost, and Groq's size cap)
 CACHE_SECONDS = 3600
-_CACHE: Dict[str, dict] = {}     # url -> {"ts", "frames", "duration", "speech", "why"}
-_BUSY: Dict[str, asyncio.Lock] = {}
+_CACHE: dict[str, dict] = {}     # url -> {"ts", "frames", "duration", "speech", "why"}
+_BUSY: dict[str, asyncio.Lock] = {}
 
 Transcribe = Callable[[bytes, str], Awaitable[dict]]
 
@@ -52,7 +52,7 @@ async def _run(*args: str, timeout: float = FFMPEG_TIMEOUT) -> tuple:
                                                 **winproc.kwargs_no_window())
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         return -1, b"", "timeout"
@@ -77,7 +77,7 @@ async def probe(path: Path) -> dict:
     return {"duration": dur, "video": "video" in kinds, "audio": "audio" in kinds}
 
 
-def frame_times(duration: float, n: int = FRAMES) -> List[float]:
+def frame_times(duration: float, n: int = FRAMES) -> list[float]:
     """Moments to cut `n` frames at: spread evenly, never the very first or last instant (often black or blurred)."""
     if duration <= 0:
         return [0.0]
@@ -90,7 +90,7 @@ def clock(seconds: float) -> str:
     return f"{s // 60}:{s % 60:02d}"
 
 
-async def cut_frames(video: Path, dest: Path, stem: str, duration: float) -> List[tuple]:
+async def cut_frames(video: Path, dest: Path, stem: str, duration: float) -> list[tuple]:
     """[(path, second)] of the frames cut from `video` into `dest`, oldest first. Missing frames are skipped."""
     out = []
     scale = f"scale='if(gt(iw,ih),min({FRAME_SIDE},iw),-2)':'if(gt(iw,ih),-2,min({FRAME_SIDE},ih))'"
@@ -105,7 +105,7 @@ async def cut_frames(video: Path, dest: Path, stem: str, duration: float) -> Lis
     return out
 
 
-async def sound_of(video: Path, dest: Path, stem: str) -> Optional[bytes]:
+async def sound_of(video: Path, dest: Path, stem: str) -> bytes | None:
     """The clip's sound as a small mono mp3 (what speech-to-text needs), or None."""
     p = dest / f"{stem}_audio.mp3"
     try:
@@ -118,7 +118,7 @@ async def sound_of(video: Path, dest: Path, stem: str) -> Optional[bytes]:
         p.unlink(missing_ok=True)
 
 
-async def look(url: str, dest: Path, msg_id: str, transcribe: Optional[Transcribe] = None) -> dict:
+async def look(url: str, dest: Path, msg_id: str, transcribe: Transcribe | None = None) -> dict:
     """Frames (and speech) of the video at `url`, saved in `dest`. Cached per link for `CACHE_SECONDS`.
 
     Returns {"frames": [(path, second)], "duration", "speech": text or "", "heard": sound was transcribed,
@@ -142,7 +142,7 @@ async def look(url: str, dest: Path, msg_id: str, transcribe: Optional[Transcrib
         return res
 
 
-async def _look(url: str, dest: Path, msg_id: str, transcribe: Optional[Transcribe]) -> dict:
+async def _look(url: str, dest: Path, msg_id: str, transcribe: Transcribe | None) -> dict:
     res = {"frames": [], "duration": 0.0, "speech": "", "heard": False, "why": ""}
     if not url:
         res["why"] = "tin video không kèm link tải"

@@ -7,20 +7,21 @@ job and the owner had to press Create job. "Để tạo thành 1 loop hoàn ch�
 opens the job asked for, and the leader plans and assigns it like any job. Real stores and runner on temporary SQLite,
 a scripted fake engine. No model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-autojob-")
 TEMP = Path(tempfile.mkdtemp(prefix="javis-team-autojob-w-"))
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 

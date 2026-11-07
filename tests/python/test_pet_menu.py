@@ -6,17 +6,18 @@ Owner, 2026-11-05: "Chỉ cần thêm và sắp xếp vị trí thôi là ok r�
 already saved; a save from an older revision is a conflict; a damaged saved value is never written over.
 Runs the real host on a temporary state folder; no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import re
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-petmenu-")
 
-import main  # noqa: E402
-import pet_menu  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+import pet_menu
+from starlette.testclient import TestClient
 
 fails = []
 

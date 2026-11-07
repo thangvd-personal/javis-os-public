@@ -5,19 +5,20 @@
 Owner, 04/11/2026: "sắp xếp thứ tự Project kéo thả như Brain ... các tag và các project hoặc ghim và cả đoạn chat".
 Runs the real host on a temporary state folder; no model call.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import json
 import os
 import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-reorder-")
 BR = Path(tempfile.mkdtemp(prefix="javis-reorder-brain-"))
 
-import main  # noqa: E402
-import ui_order  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
+import main
+import ui_order
+from starlette.testclient import TestClient
 
 fails = []
 
@@ -93,8 +94,10 @@ check("an unknown scope is refused", client.post("/ui/order", data={"scope": "x"
 check("ui_order caps the list", len(ui_order.clean([str(i) for i in range(900)])) == ui_order.MAX_ITEMS)
 
 # ═════ the qualified native trial context still reads the store ═════
-import sqlite3  # noqa: E402
-import improvement_trial_sql_context as SQLCTX  # noqa: E402
+import sqlite3
+
+import improvement_trial_sql_context as SQLCTX
+
 conn = sqlite3.connect(str(store.db_path))
 conn.row_factory = sqlite3.Row
 for table, req, allowed in (("sessions", SQLCTX._SESSION_FIELDS, SQLCTX._SESSION_COLUMNS),

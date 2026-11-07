@@ -6,14 +6,15 @@ Qua đường host thật (main.app, TestClient), không gọi model nào. Các 
 `/sessions/{id}/messages`) mang cờ `pinned`, chỉ câu trả lời mới ghim được, tin hay cuộc không có thì 404, thân sai 400,
 tua lại (xoá tin) và xoá cuộc thì ghim đi theo, ghim của cuộc này không lẫn sang cuộc khác.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-msg-pins-")
 
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 fails = []
 

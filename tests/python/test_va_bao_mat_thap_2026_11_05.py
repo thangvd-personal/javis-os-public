@@ -18,8 +18,9 @@ import tempfile
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-audit-low-")
 
-from _paths import ROOT, SERVER  # noqa: E402,F401
-from pathlib import Path  # noqa: E402
+from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 
@@ -33,7 +34,7 @@ def check(name, cond, extra=""):
 # ============================================================
 # 15. chat-scope token
 # ============================================================
-import config  # noqa: E402
+import config
 
 tok = config.create_api_token("t", scope="chat")
 raw = tok.get("token") or tok.get("raw") or ""
@@ -46,8 +47,8 @@ for path in ("/chatbots", "/chatbots/x/delete", "/chatbot-api/v1/turn", "/sessio
 # ============================================================
 # 14. /health public as an exact path only
 # ============================================================
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 check("14. /health is an exact public path", "/health" in main._AUTH_PUBLIC_EXACT)
 check("14. no public prefix without its trailing slash",
@@ -71,10 +72,11 @@ check("16. WhatsApp picks a free name before writing (no overwrite)",
 # ============================================================
 # 17. Fetch pinned to the vetted address
 # ============================================================
-import httpx  # noqa: E402
-import socket  # noqa: E402
-import web_tools  # noqa: E402
-import web_watch  # noqa: E402
+import socket
+
+import httpx
+import web_tools
+import web_watch
 
 PUBLIC, PRIVATE = "93.184.216.34", "169.254.169.254"
 answers = []

@@ -6,9 +6,9 @@ The stock Docker image runs Codex without its sandbox, so a gated Work step on C
 starts. The message must lead with the recovery (the runner keeps 300 characters of it, the job list 200), name the
 assistant, offer only providers that can run the step, and never suggest full mode.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import localefmt
 import team_gate
+from _paths import ROOT, SERVER  # noqa: F401
 
 localefmt.dat_ngon_ngu_yeu_cau("vi")   # the checks below read the Vietnamese text; English has its own test
 

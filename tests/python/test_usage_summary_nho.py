@@ -13,11 +13,12 @@ Rủi ro của nhớ đệm là im lặng trả số CŨ, nên file này khoá �
   - bên gọi sửa kết quả thì lần sau không bị dính;
   - nhiều luồng cùng hỏi một kỳ: chỉ tính một lần.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 import os
 import sys
 import tempfile
 import threading
+
+from _paths import ROOT, SERVER  # noqa: F401  - nạp server/ vào sys.path (xem tests/python/_paths.py)
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-usagenho-"))
 
@@ -26,7 +27,7 @@ try:
 except Exception:
     pass
 
-import usage_index as u      # noqa: E402
+import usage_index as u
 
 _fails = []
 

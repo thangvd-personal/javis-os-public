@@ -13,23 +13,23 @@ mới là một gói KHÁC: gói cũ không bao giờ được cập nhật, gó
 5. Danh mục Store: thẻ mã cũ thôi hiện, thẻ mới hiện "đã cài" kèm bản mới; chuông báo bản mới.
 6. Gói khai `replaces` một mã không cài thì không đụng gì.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import io
-import json
 import os
 import tempfile
 import zipfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-doima-")
 os.environ["JAVIS_ENABLE_USER_PLUGINS"] = "true"
 
-import packs           # noqa: E402
-import pack_install    # noqa: E402
-import pack_vault      # noqa: E402
-import pack_updates    # noqa: E402
-import plugins_host    # noqa: E402
-from config import STATE_DIR  # noqa: E402
+import pack_install
+import pack_updates
+import pack_vault
+import packs
+import plugins_host
+from config import STATE_DIR
 
 _fails = []
 
@@ -85,7 +85,8 @@ KHO = [{"id": "javis.gate", "version": "2.0.0", "name": {"vi": "Javis Gate"},
        {"id": "javis.javis-trong-chatgpt", "version": "1.0.0", "name": {"vi": "Javis trong ChatGPT"}}]
 up = pack_updates.find_updates(KHO, pack_install.doc_so())
 check("chuông báo bản mới cho gói đổi mã", any(u["id"] == "javis.gate" and u["from"] == "1.0.0" for u in up), up)
-import packs_store  # noqa: E402
+import packs_store
+
 sach = packs_store._lam_sach({"id": "javis.gate", "replaces": ["javis.javis-trong-chatgpt", "", 5], "download": {}})
 check("danh mục giữ trường replaces đã làm sạch", sach["replaces"] == ["javis.javis-trong-chatgpt", "5"], sach)
 check("replaces kiểu lạ (chuỗi) thành rỗng", packs_store._lam_sach({"id": "a", "replaces": "abc"})["replaces"] == [])

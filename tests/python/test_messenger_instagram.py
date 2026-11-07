@@ -15,13 +15,13 @@ Guarded, in order of what would hurt most if it broke:
   6. The Instagram permissions are asked only when the owner ticks Instagram: a Meta app without the Instagram use
      case refuses the whole login over them.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import os
 import sys
 import tempfile
 from urllib.parse import parse_qs, urlparse
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-messenger-ig-")
 os.environ["JAVIS_ALLOWED_HOSTS"] = "testserver"
@@ -30,12 +30,11 @@ try:
 except Exception:
     pass
 
-import httpx  # noqa: E402
 
-import channel_accounts  # noqa: E402
-import conversations  # noqa: E402
-import messenger_bot  # noqa: E402
-import messenger_oauth  # noqa: E402
+import channel_accounts
+import conversations
+import messenger_bot
+import messenger_oauth
 
 _fails = []
 
@@ -225,8 +224,8 @@ check("a file under an Instagram comment is refused in words", not ok and err_, 
 # ============================================================
 # 5. Private reply from an Instagram comment
 # ============================================================
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 SENT = []
 

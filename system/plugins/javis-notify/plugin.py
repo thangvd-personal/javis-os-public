@@ -14,8 +14,8 @@ Năm op:
 from __future__ import annotations
 
 try:
-    import notify_policy as NP
     import inbox
+    import notify_policy as NP
 except Exception:          # chạy ngoài máy chủ
     NP = None
     inbox = None

@@ -8,7 +8,6 @@ saves the login and exits, but the card kept waiting for a code and asked `/clau
 said "signed out", so the owner had to reload the page (report 02/11/2026, Windows). The card now asks
 `/claude/login-poll`, which reads the sign-in process itself.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import stat
 import sys
@@ -16,7 +15,8 @@ import tempfile
 import time
 from pathlib import Path
 
-import claude_cli   # noqa: E402
+import claude_cli
+from _paths import ROOT, SERVER
 
 _fails = []
 

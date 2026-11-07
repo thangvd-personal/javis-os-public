@@ -5,10 +5,8 @@
 Owner, 2026-11-01: "anh muốn không cần groq mà vẫn nghe được", then "làm cả đường 1 và 2 luôn nhé, để không dùng được
 cái này thì dùng cái khác". Until 0.434 only a Groq key could hear, and personal Zalo dropped voice messages outright.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import base64
-import json
 import os
 import shutil
 import subprocess
@@ -17,21 +15,23 @@ import tempfile
 import time
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ear-")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-import channels  # noqa: E402,F401
-import conversations  # noqa: E402,F401
-import chatbot_runtime as cr  # noqa: E402
-import local_stt  # noqa: E402
-import optional_tools as ot  # noqa: E402
-import stt  # noqa: E402
-import zalo_attachments  # noqa: E402
-import zalo_personal_channel as zc  # noqa: E402
-from channels import zalo_personal as zp  # noqa: E402
+import channels  # noqa: F401
+import chatbot_runtime as cr
+import conversations  # noqa: F401
+import local_stt
+import optional_tools as ot
+import stt
+import zalo_attachments
+import zalo_personal_channel as zc
+from channels import zalo_personal as zp
 
 _fails = []
 

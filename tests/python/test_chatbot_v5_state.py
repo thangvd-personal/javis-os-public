@@ -13,12 +13,13 @@ Pins the server side of the new Chatbot page:
   6. Routes: the list carries who fields and who_counts and filters by `who` and `account_ids`; POST /ai switches one
      chat; /mode leaving draft drops the draft; /draft discard and send; /ai-reply passes the owner's instruction.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _STATE = tempfile.mkdtemp(prefix="javis-cbv5-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
@@ -30,10 +31,10 @@ try:
 except Exception:
     pass
 
-import chatbot_runtime  # noqa: E402
-import chatbot_store  # noqa: E402
-import conversations  # noqa: E402
-import inbox_state  # noqa: E402
+import chatbot_runtime
+import chatbot_store
+import conversations
+import inbox_state
 
 _fails = []
 
@@ -180,9 +181,9 @@ check("draft mode: the customer message is in the inbox",
       any(m["text"] == "Giá bao nhiêu em?" for m in conversations.tin_nhan(cid)))
 
 # ---- 6. routes -----------------------------------------------------------------------------------------------------
-from fastapi.testclient import TestClient  # noqa: E402
-import main  # noqa: E402
-import routes.conversations as conv_routes  # noqa: E402
+import main
+import routes.conversations as conv_routes
+from fastapi.testclient import TestClient
 
 cl = TestClient(main.app)
 r = cl.get("/conversations?limit=50").json()

@@ -7,12 +7,11 @@ Codex sends a lead-in as its own agent message (measured on Codex 0.160 `exec --
 answer), and both readers joined every message of the turn into `final`, which channels send as the reply. The
 app-server reader is pinned in test_codex_steer_0213.py.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
-import json
 import sys
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
 from claude_cli import CODEX_LEAD_IN_MAX, CodexCLI, codex_answer_text
 
 try:

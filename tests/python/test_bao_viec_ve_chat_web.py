@@ -33,7 +33,8 @@ import main
 
 # 0.403.0: Javis Core rings only urgent notices by default (that default is tested in test_notify_commander.py). This
 # file checks how important notices are routed, so every group rings from "important" up, as before 0.403.0.
-import notify_policy  # noqa: E402
+import notify_policy
+
 for _g in notify_policy.GROUPS:
     notify_policy.set_mode(_g, "important")
 

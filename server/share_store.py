@@ -25,7 +25,6 @@ import secrets
 import threading
 import time
 import unicodedata
-from pathlib import Path
 
 import localefmt
 from config import STATE_DIR

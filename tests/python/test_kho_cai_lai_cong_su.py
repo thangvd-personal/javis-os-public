@@ -14,7 +14,6 @@ again. Two causes, both guarded here end to end through the real installer:
 2. The Store's "installed" state read only the install ledger. A pack that is only brain items, all of
    them deleted, now reads as not installed, so the card offers Install.
 """
-from _paths import ROOT, SERVER, DASHBOARD  # noqa: E402,F401
 import asyncio
 import io
 import json
@@ -23,11 +22,12 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-kho-cai-lai-")
 
-import pack_install  # noqa: E402
-import pack_vault  # noqa: E402
-from routes import packs as packs_route  # noqa: E402
+import pack_install
+from routes import packs as packs_route
 
 fails = []
 

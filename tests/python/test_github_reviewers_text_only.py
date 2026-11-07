@@ -7,14 +7,15 @@ The reviewer list offered the ChatGPT plan (Codex CLI), but the review turn runs
 `resonance.pick_text_only_link` refuses any engine that keeps native file and shell tools (Codex, Grok, Antigravity).
 So the review could never run on it. The list now holds only engines that can run text-only and are not resting.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import os
 import tempfile
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ghrev-"))
 
-import aux_engine  # noqa: E402
-import main  # noqa: E402
+import aux_engine
+import main
 
 fails = []
 

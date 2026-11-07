@@ -15,10 +15,12 @@ Người dùng báo 02/11: ChatGPT giao việc cho Javis qua Kanban nên không 
 6. Ghi chép (0.441.0): AI bên ngoài lưu phần đáng giữ của cuộc chat bên nó vào Javis, không chạy lượt nào của
    Javis, nhưng vẫn vào Lịch sử, nhật ký và vòng tự học; mỗi cuộc chat bên ngoài một hội thoại "Từ <AI>: <tên>".
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
+
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_API_STREAM_TOOLS"] = "0"
 import tempfile
 from pathlib import Path
@@ -26,13 +28,13 @@ from pathlib import Path
 _STATE = tempfile.mkdtemp(prefix="javis-gate-chat-")
 os.environ["JAVIS_STATE_DIR"] = _STATE
 
-import main  # noqa: E402
-import engine  # noqa: E402
-import chat_bridge as CB  # noqa: E402
-import mcp_hub  # noqa: E402
-import sessions  # noqa: E402
-import share_render  # noqa: E402
-from chat_runtime import ChatRuntime  # noqa: E402
+import chat_bridge as CB
+import engine
+import main
+import mcp_hub
+import sessions
+import share_render
+from chat_runtime import ChatRuntime
 
 _fails = []
 
@@ -296,7 +298,8 @@ check("Javis vẫn không chạy lượt nào sau mọi ghi chép", not GOI_ENGI
 ss.delete(SID_GC)
 txt, loi = goi("javis_chat_note", {"title": "Kế hoạch Tết", "asked": "Ghi lại sau khi xoá"})
 check("chủ xoá hội thoại ghi chép: lần ghi sau mở hội thoại mới", not loi and json.loads(txt)["id"] != SID_GC, txt)
-import localefmt  # noqa: E402
+import localefmt
+
 _nn_goc = localefmt.ngon_ngu_giao_dien
 localefmt.ngon_ngu_giao_dien = lambda *a, **k: "en"
 txt, loi = goi("javis_chat_note", {"title": "Launch plan", "asked": "English UI"})

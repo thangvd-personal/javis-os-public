@@ -12,12 +12,13 @@ link to a real file in the brain was reported as "not found". The leading slash 
 Simulated on Linux: a relative brain path `C:/brain` resolves under the current directory, exactly as
 `C:/brain` does on Windows, so the drive-letter branch runs for real.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import stat
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 SCRATCH = Path(tempfile.mkdtemp(prefix="javis-win898-"))
 for key, relative in {"JAVIS_STATE_DIR": "state", "BRAINS_DIR": "brains", "OBSIDIAN_VAULT_PATH": "vault",
@@ -29,8 +30,8 @@ try:
 except Exception:
     pass
 
-import mcp_client  # noqa: E402
-import main  # noqa: E402
+import main
+import mcp_client
 
 fails = []
 

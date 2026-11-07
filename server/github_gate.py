@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import winproc
 
@@ -97,8 +97,8 @@ def host_os() -> str:
     return "macos" if sys.platform == "darwin" else "linux"
 
 
-_OS_LABEL = (("windows", re.compile(r"windows|win\d", re.I)), ("macos", re.compile(r"mac", re.I)),
-             ("linux", re.compile(r"ubuntu|linux|debian|fedora|alpine", re.I)))
+_OS_LABEL = (("windows", re.compile(r"windows|win\d", re.IGNORECASE)), ("macos", re.compile(r"mac", re.IGNORECASE)),
+             ("linux", re.compile(r"ubuntu|linux|debian|fedora|alpine", re.IGNORECASE)))
 
 
 def _os_of(label: Any) -> str:
@@ -108,7 +108,7 @@ def _os_of(label: Any) -> str:
     return ""
 
 
-def runner_os(job: Dict[str, Any]) -> set:
+def runner_os(job: dict[str, Any]) -> set:
     """OS families a job's `runs-on` asks for. Empty = unknown (self-hosted, an expression we cannot resolve)."""
     ro = job.get("runs-on")
     if isinstance(ro, dict):
@@ -134,7 +134,7 @@ def runner_os(job: Dict[str, Any]) -> set:
 _WIN_SHELLS = ("pwsh", "powershell", "cmd")
 
 
-def commands_from_workflow(text: str, host: Optional[str] = None) -> List[Dict[str, str]]:
+def commands_from_workflow(text: str, host: str | None = None) -> list[dict[str, str]]:
     """`run:` steps of a workflow that make sense on this machine, in order. Each item: {name, run}.
 
     Jobs whose runner is another OS (a macos-latest installer smoke test on a Linux VPS) are left to CI: they cannot

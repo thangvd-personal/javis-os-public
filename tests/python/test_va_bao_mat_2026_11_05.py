@@ -15,7 +15,6 @@ No network. One check per finding, each pinned on the real code path, not on sou
      Sec-Fetch-Site. A tool call on 127.0.0.1 still passes.
   6. <brain>/.grok/ (it holds the hub token) stays out of git and the GitHub backup, and an old commit of it is untracked.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import importlib.util
 import os
@@ -24,6 +23,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-audit-1105-")
 
@@ -39,7 +40,7 @@ def check(name, cond, extra=""):
 # ============================================================
 # 1. Protected write zones below Full access
 # ============================================================
-import mcp_hub  # noqa: E402
+import mcp_hub
 
 brain = Path(tempfile.mkdtemp(prefix="javis-audit-brain-"))
 (brain / "notes").mkdir()
@@ -69,7 +70,7 @@ check("1. a gated Team step keeps its own approval path (not refused by the new 
 # ============================================================
 # 2. Queued work capped at the caller's level
 # ============================================================
-import plugins_host  # noqa: E402
+import plugins_host
 
 cap = plugins_host._cap_job_level
 a, why = cap("javis_schedule", {"op": "create", "name": "n"}, "auto")
@@ -123,8 +124,8 @@ check("4. an unknown op needs the strongest level", plugins_host._required_mode(
 # ============================================================
 # 3 + 5. main.py: CSP on raw files, local tool exemption
 # ============================================================
-import main  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import main
+from fastapi.testclient import TestClient
 
 raw = Path(tempfile.mkdtemp(prefix="javis-audit-raw-"))
 for ten in ("x.html", "x.htm", "x.xhtml", "x.svg", "x.xml", "x.pdf", "x.png", "x.txt"):
@@ -166,7 +167,7 @@ check("5. a loopback request carrying Sec-Fetch-Site needs the login", r.status_
 # ============================================================
 # 6. .grok/ out of git and the backup
 # ============================================================
-import git_brain  # noqa: E402
+import git_brain
 
 check("6. .gitignore block ignores .grok/", ".grok/" in git_brain._GITIGNORE_BODY)
 check("6. the backup skips .grok/", "/.grok/" in git_brain._BACKUP_SKIP_SUBSTR)

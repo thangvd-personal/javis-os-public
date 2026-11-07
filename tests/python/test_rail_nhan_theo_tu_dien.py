@@ -15,7 +15,7 @@ không phụ thuộc khoá của khối chứa nó.
 Chạy:
     python tests/run.py rail_nhan_theo_tu_dien
 """
-from _paths import ROOT  # noqa: E402
+from _paths import ROOT
 
 INDEX = (ROOT / "dashboard" / "index.html").read_text(encoding="utf-8")
 

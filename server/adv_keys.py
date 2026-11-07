@@ -60,7 +60,7 @@ def norm_base(prov: str, base: str) -> str:
 
 
 def new_id(prov: str, seed: str = "") -> str:
-    return _SPEC[prov]["idp"] + hashlib.sha1(f"{seed}{time.time_ns()}".encode("utf-8")).hexdigest()[:10]
+    return _SPEC[prov]["idp"] + hashlib.sha1(f"{seed}{time.time_ns()}".encode()).hexdigest()[:10]
 
 
 def host(base: str) -> str:

@@ -7,12 +7,13 @@ and its worktree then starts from that branch; the PR opened afterwards targets 
 refuse the switch (no work is ever dropped); names that git could misread are refused; going back to the default
 branch clears the saved pick; deleting the chat forgets it.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import os
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-ghb-")
 try:
@@ -20,14 +21,14 @@ try:
 except Exception:
     pass
 
-from _fake_github import FakeGitHub, GOOD_TOKEN, git  # noqa: E402
+from _fake_github import GOOD_TOKEN, FakeGitHub
 
 fake = FakeGitHub()
 os.environ["JAVIS_GITHUB_API"] = fake.url
 
-import github_repos as r  # noqa: E402
-import github_store  # noqa: E402
-import github_work as w  # noqa: E402
+import github_repos as r
+import github_store
+import github_work as w
 
 _fails = []
 

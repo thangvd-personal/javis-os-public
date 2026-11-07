@@ -14,7 +14,6 @@ Test canh ba điều:
 
 Không cần pytest, không chạm mạng, không đụng `STATE_DIR/packs` thật.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import os
 import sys
 import tempfile
@@ -22,6 +21,7 @@ from pathlib import Path
 
 import mcp_catalog
 import packs
+from _paths import ROOT, SERVER  # noqa: F401
 
 _fails = []
 

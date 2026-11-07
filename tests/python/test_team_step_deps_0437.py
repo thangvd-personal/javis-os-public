@@ -5,7 +5,6 @@
 Fake engines only, no model call. Independent parts run together, a part waits only for the parts it names and gets
 only their results as inputs, retries and help continuations keep the part's label, and an old store gains the columns.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import asyncio
 import json
 import os
@@ -13,14 +12,16 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
+from _paths import ROOT, SERVER  # noqa: F401
+
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-team-deps-")
 os.environ.pop("JAVIS_TEAM_AUTO_RETRIES", None)
 STATE = Path(os.environ["JAVIS_STATE_DIR"])
 
-import sessions  # noqa: E402
-import task_store  # noqa: E402
-import team_runner as TR  # noqa: E402
-import team_store  # noqa: E402
+import sessions
+import task_store
+import team_runner as TR
+import team_store
 
 fails = []
 
@@ -67,7 +68,7 @@ class Fake:
                     # A timeout reports broken concurrency without hanging the suite.
                     try:
                         await asyncio.wait_for(self.ready.wait(), timeout=5)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         pass
                     self.together.discard(agent_key)
                 else:

@@ -25,7 +25,6 @@ import os
 import sys
 import threading
 import time
-from typing import Awaitable, Callable, Dict, Optional
 
 SLOT_MB = {"claude": 300, "codex": 80}
 DEFAULT_IDLE_S = 300.0
@@ -50,7 +49,7 @@ def idle_s() -> float:
     return max(10.0, _env_float("JAVIS_WARM_IDLE_S", DEFAULT_IDLE_S))
 
 
-def _cgroup_free_mb() -> Optional[float]:
+def _cgroup_free_mb() -> float | None:
     """Room left under the container's memory limit (cgroup v2, then v1). None without a limit."""
     for limit_p, used_p in (("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
                             ("/sys/fs/cgroup/memory/memory.limit_in_bytes",
@@ -120,7 +119,7 @@ class Handle:
 
 
 class Slot:
-    __slots__ = ("key", "kind", "fingerprint", "handle", "busy", "last_used", "loop", "recipe", "turns")
+    __slots__ = ("busy", "fingerprint", "handle", "key", "kind", "last_used", "loop", "recipe", "turns")
 
     def __init__(self, key: str, kind: str, fingerprint: str, handle: Handle, recipe=None):
         self.key = key
@@ -140,17 +139,17 @@ class Slot:
 
 class Pool:
     def __init__(self):
-        self._slots: Dict[str, Slot] = {}
-        self._recipes: Dict[str, tuple] = {}     # key -> (kind, fingerprint, recipe, saved_at)
+        self._slots: dict[str, Slot] = {}
+        self._recipes: dict[str, tuple] = {}     # key -> (kind, fingerprint, recipe, saved_at)
         self._lock = threading.Lock()
-        self._reaper: Optional[asyncio.Task] = None
+        self._reaper: asyncio.Task | None = None
         self._prewarming: set = set()
-        self._gen: Dict[str, int] = {}           # key -> bumped by every turn that looks for its slot
+        self._gen: dict[str, int] = {}           # key -> bumped by every turn that looks for its slot
         self.stats = {"hits": 0, "misses": 0, "admitted": 0, "refused": 0, "evicted": 0, "expired": 0,
                       "prewarmed": 0}
 
     # ---- turn side ----
-    def take(self, key: str, kind: str, fingerprint: str) -> Optional[Slot]:
+    def take(self, key: str, kind: str, fingerprint: str) -> Slot | None:
         """The warm slot of this conversation when it matches, marked busy. None = run cold. A slot that no longer
         matches (other config, dead process, other event loop) is closed."""
         if not key or budget_mb() <= 0:
@@ -175,13 +174,13 @@ class Pool:
             self._close_soon(stale)
         return None
 
-    def peek(self, key: str) -> Optional[Slot]:
+    def peek(self, key: str) -> Slot | None:
         """The slot of this conversation, untouched (to explain a miss)."""
         with self._lock:
             return self._slots.get(key)
 
     def admit(self, key: str, kind: str, fingerprint: str, handle: Handle, recipe=None, may_evict: bool = True,
-              gen: Optional[int] = None) -> Optional[Slot]:
+              gen: int | None = None) -> Slot | None:
         """A cold turn opened `handle`: keep it for the next turn if the budget allows (evicting idle slots). Returns
         the slot, busy, or None when it did not fit (the caller closes the handle as before).
         A prewarm passes may_evict=False and the generation it started at: it never pushes anyone out, never replaces a
@@ -223,7 +222,7 @@ class Pool:
             self._ensure_reaper()
         return admitted
 
-    def release(self, slot: Slot, keep: bool = True, fingerprint: Optional[str] = None) -> None:
+    def release(self, slot: Slot, keep: bool = True, fingerprint: str | None = None) -> None:
         """End of the turn. keep=False (an error, a process that must exit) closes it. `fingerprint` updates what the
         slot now is (a Claude slot's session id moves on with every turn)."""
         if fingerprint:
@@ -348,7 +347,7 @@ class Pool:
                 if not self._slots:
                     return
 
-    def reap(self, now: Optional[float] = None) -> int:
+    def reap(self, now: float | None = None) -> int:
         """Close idle slots past their idle time and dead ones. Returns how many."""
         now = time.monotonic() if now is None else now
         limit = idle_s()

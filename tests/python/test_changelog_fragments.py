@@ -7,13 +7,14 @@ Now a PR adds changelog.d/<slug>.md and the Release workflow numbers it after th
 checks the fragments in the repo, the numbering on a real throwaway git repo, the PR gate, and
 that the workflows stay wired the way release.yml's header explains.
 """
-from _paths import ROOT, SERVER  # noqa: E402,F401
 import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 _spec = importlib.util.spec_from_file_location("release_tool", ROOT / "tools" / "release.py")
 rel = importlib.util.module_from_spec(_spec)
@@ -131,7 +132,7 @@ check("fragments are removed, README stays",
       [p.name for p in (tmp / "changelog.d").iterdir()] == ["README.md"])
 check("working tree is clean after commit", git(tmp, "status", "--porcelain") == "")
 
-import main  # noqa: E402
+import main
 
 vi = main._parse_changelog((tmp / "CHANGELOG.md").read_text(encoding="utf-8"))
 en = main._parse_changelog((tmp / "CHANGELOG.en.md").read_text(encoding="utf-8"))

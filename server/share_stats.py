@@ -40,7 +40,7 @@ _timer = None
 _BOT_RE = re.compile(
     r"bot\b|bot/|crawl|spider|slurp|preview|facebookexternalhit|facebot|whatsapp|embedly|vkshare|pinterest"
     r"|headless|lighthouse|pagespeed|curl/|wget|python-|httpx|go-http|okhttp|java/|libwww|scrapy|uptime|monitor",
-    re.I)
+    re.IGNORECASE)
 
 
 def is_bot(user_agent: str) -> bool:

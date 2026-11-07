@@ -562,15 +562,15 @@ async def video_cho_bot(meta: dict, root: Path, cfg: dict) -> tuple:
 
     Frames are saved next to the customer's photos (attachments/zalo/<chat>/, swept by media_gc). A video that cannot be
     shown still yields a note, so the model says it could not watch it instead of pretending it did."""
-    import video_vision
     import image_vision
+    import video_vision
     url = str(meta.get("video_url") or "")
     chat = image_vision.SAFE_PART.sub("_", str(meta.get("chat_id") or "chat"))[:64] or "chat"
     dest = image_vision.image_gen._attachments_dir(root) / "zalo" / chat
     msg_id = str(meta.get("video_msg") or meta.get("message_id") or "")
     try:
         res = await asyncio.wait_for(video_vision.look(url, dest, msg_id, _deps.get("transcribe")), VIDEO_TOI_DA_GIAY)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         res = {"frames": [], "why": "xử lý video quá lâu"}
     except Exception as e:      # noqa: BLE001 - a video we cannot get must never cost the customer the reply
         res = {"frames": [], "why": f"xử lý video lỗi: {type(e).__name__}"}
@@ -588,6 +588,7 @@ async def nghe_cho_bot(meta: dict, cfg: dict) -> str:
     voice message (`_deps["transcribe"]`: Groq, OpenAI, Gemini, then the offline Whisper). Files are downloaded to a
     temporary folder with the size-capped, pinned-IP downloader and deleted right after."""
     import tempfile
+
     import zalo_attachments
     urls = [str(u) for u in (meta.get("audio_urls") or []) if str(u or "").startswith("https://")]
     if not urls:
@@ -619,7 +620,7 @@ async def nghe_cho_bot(meta: dict, cfg: dict) -> str:
     try:
         for i, u in enumerate(urls):
             out.append(await asyncio.wait_for(_one(u, i), AUDIO_TOI_DA_GIAY))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         out.append("(khách gửi tin thoại nhưng nghe quá lâu nên bỏ dở. Nhờ khách gõ chữ.) ")
     except Exception as e:      # noqa: BLE001 - a voice message we cannot hear must never cost the reply
         print(f"[chatbot] voice message failed: {type(e).__name__}: {e}", file=sys.stderr)

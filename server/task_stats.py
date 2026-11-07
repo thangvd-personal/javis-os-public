@@ -19,21 +19,21 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Optional
-
-from fastapi import APIRouter, Body, Query
+from typing import Any
 
 import my_tasks as my_tasks_mod
 import work_log
+from fastapi import APIRouter, Body, Query
 
 MINUTES = {"kanban": 20, "reminder": 10, "notify": 2, "loop": 5, "watch": 3}
 KINDS = tuple(MINUTES)
 OWNER_KINDS = ("needs_input", "capability")
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_LOOP_HEAD = re.compile(r"^## \[(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\] (.+?) · loop", re.M)
+_LOOP_HEAD = re.compile(r"^## \[(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})\] (.+?) · loop", re.MULTILINE)
 MAX_DAYS = 400
 
 
@@ -41,10 +41,10 @@ MAX_DAYS = 400
 class TaskStatsDeps:
     brain_root: Callable[[str], str]
     my_tasks: Callable[[], Any]                      # the MyTasks feature
-    task_store: Optional[Callable[[], Any]] = None   # the Kanban TaskStore
-    tz: Optional[Callable[[], Any]] = None
-    agent_names: Optional[Callable[[str], dict]] = None   # brain -> {slug: name}
-    bot_jobs: Optional[Callable[[str], dict]] = None      # brain -> bot_jobs.job_map (0.429.0)
+    task_store: Callable[[], Any] | None = None   # the Kanban TaskStore
+    tz: Callable[[], Any] | None = None
+    agent_names: Callable[[str], dict] | None = None   # brain -> {slug: name}
+    bot_jobs: Callable[[str], dict] | None = None      # brain -> bot_jobs.job_map (0.429.0)
 
 
 # ---------- helpers ----------
@@ -171,7 +171,7 @@ def reminder_last_runs(brain_root: str, since: float, until: float, logged: set)
 def mine_events(store: dict, since: float, until: float, tz, now: float) -> list:
     """{ts, kind: task|habit|appt, by, on_time} for each thing the owner finished between two times."""
     out = []
-    end_of = lambda iso: _ts(_day(iso) + timedelta(days=1), tz)  # noqa: E731
+    end_of = lambda iso: _ts(_day(iso) + timedelta(days=1), tz)
     d0, d1 = _local(since, tz).date(), _local(max(since, until - 1), tz).date()
     for t in store.get("tasks", []):
         if t.get("kind") == "appt":
@@ -262,7 +262,7 @@ class TaskStats:
             pass
         return m
 
-    def compute(self, brain: str, d_from: str, d_to: str, now: Optional[float] = None) -> dict:
+    def compute(self, brain: str, d_from: str, d_to: str, now: float | None = None) -> dict:
         tz = self._tz()
         now = float(now or time.time())
         f, t = _day(d_from), _day(d_to)
@@ -281,13 +281,13 @@ class TaskStats:
         store = self.deps.my_tasks().load(brain)
         me_all = mine_events(store, lo, end, tz, now)
 
-        inr = lambda e, a, b: a <= e["ts"] < b  # noqa: E731
+        inr = lambda e, a, b: a <= e["ts"] < b
         ai = [e for e in ai_all if inr(e, start, end)]
         ai_p = [e for e in ai_all if inr(e, pstart, start)]
         me = [e for e in me_all if inr(e, start, end)]
         me_p = [e for e in me_all if inr(e, pstart, start)]
-        ok = lambda L: [e for e in L if e["status"] == "ok"]  # noqa: E731
-        saved = lambda L: sum(mins.get(e["kind"], 0) for e in ok(L))  # noqa: E731
+        ok = lambda L: [e for e in L if e["status"] == "ok"]
+        saved = lambda L: sum(mins.get(e["kind"], 0) for e in ok(L))
 
         def on_time(L):
             dated = [e for e in L if e.get("on_time") is not None]
@@ -350,7 +350,7 @@ class TaskStats:
 
         me_n, ai_n = len(me), len(ok(ai))
         me_pn, ai_pn = len(me_p), len(ok(ai_p))
-        share = lambda a, b: round(100 * b / (a + b)) if a + b else 0  # noqa: E731
+        share = lambda a, b: round(100 * b / (a + b)) if a + b else 0
         log = store.get("log") or {}
         handoffs = [float(x) for x in (log.get("handoffs") or [])]
 

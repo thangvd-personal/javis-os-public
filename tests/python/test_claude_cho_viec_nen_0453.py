@@ -8,12 +8,13 @@ disconnected at the first ResultMessage. The wait (claude_bg_wait.py) is wired i
 claude_warm.query, which every dashboard chat turn takes; this test drives that lane. The fake client shares ONE message
 stream across receive_response() calls, like the SDK: a later call reads the messages after the first ResultMessage.
 """
-from _paths import ROOT, SERVER  # noqa: F401
 import asyncio
 import os
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-bgwait-"))
 import claude_agent_sdk as sdk
@@ -201,8 +202,9 @@ async def main():
 
 asyncio.run(main())
 
-import hashlib  # noqa: E402
-import json  # noqa: E402
+import hashlib
+import json
+
 pin = json.loads((ROOT / "docs/superpowers/evidence/2026-10-25-m5-native-qualification-cli310.json").read_text())
 check("claude_sdk_engine.py stays byte for byte the qualified source (the wait lives in claude_bg_wait.py)",
       hashlib.sha256((ROOT / "server/claude_sdk_engine.py").read_bytes()).hexdigest()

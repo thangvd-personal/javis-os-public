@@ -17,11 +17,10 @@ from __future__ import annotations
 import secrets
 import threading
 import time
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-
 import localefmt
 from threads_bot import GRAPH, GRAPH_HOST, _err, whoami
 
@@ -34,7 +33,7 @@ TTL = 15 * 60
 SCOPES = ("threads_basic", "threads_read_replies", "threads_manage_replies", "threads_content_publish")
 
 _lock = threading.Lock()
-_pending: Dict[str, Dict[str, Any]] = {}
+_pending: dict[str, dict[str, Any]] = {}
 
 
 def _c(vi: str, en: str) -> str:
@@ -160,4 +159,4 @@ def forget(state: str) -> None:
         _pending.pop(str(state or ""), None)
 
 
-__all__ = ["GRAPH", "SCOPES", "start", "callback", "result", "take", "forget", "login_url"]
+__all__ = ["GRAPH", "SCOPES", "callback", "forget", "login_url", "result", "start", "take"]
