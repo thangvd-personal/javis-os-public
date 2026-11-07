@@ -227,3 +227,6 @@ server/webhook_events.sqlite3*
 # Desktop installers built by packaging/ (CI publishes them on the "desktop" release)
 /dist/
 packaging/windows/Vietnamese.isl
+
+# Module local-ear (thu vien ngoai, model va venv cuc bo)
+server/local-ear/
