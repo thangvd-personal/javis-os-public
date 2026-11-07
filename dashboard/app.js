@@ -19,6 +19,11 @@ function setSessionRunning(sid, on) {
 const SESSION_KEY = "javis.session.v1";
 let convo = [];            // [{role:"user"|"javis", text, atts}]
 let savedSessionId = null; // session_id của Claude để resume sau khi F5
+// Typed messages the server has not confirmed yet (chat_ack), kept in localStorage so a page the phone killed in the
+// background still sends them after it reloads. See _trackUnacked.
+const UNACKED_KEY = "javis.unacked.v1";
+let _unacked = [];
+try { const a = JSON.parse(localStorage.getItem(UNACKED_KEY) || "[]"); if (Array.isArray(a)) _unacked = a; } catch (e) {}
 const stopBtn = document.getElementById("stopBtn");
 let stopTag = null;        // tag phiên chat server phát qua message hello → Stop chỉ ngắt phiên MÌNH
 
@@ -68,6 +73,8 @@ function stopCurrent() {
   if (sid && ws && ws.readyState === WebSocket.OPEN) {
     try { ws.send(JSON.stringify({ action: "stop", session_id: sid })); } catch (e) {}
   }
+  // Stopped: a message of this chat still waiting for its ack must not be sent again on the next socket.
+  if (sid && _unacked.some(u => u.sid === sid)) { _unacked = _unacked.filter(u => u.sid !== sid); _saveUnacked(); }
   if (sid) {
     // Luôn gửi thêm qua HTTP: socket có thể OPEN trên giấy mà đã chết (máy ngủ, đổi Wi-Fi), lệnh
     // Dừng gửi vào đó là rơi mất. Dừng hai lần vô hại, server huỷ theo phiên. Job không phụ thuộc
@@ -569,15 +576,38 @@ function cupMay() {
 }
 // Live (ChatGPT Live hay Live API) mở không được trước khi sẵn sàng: cuộc gọi chuyển sang đường
 // Cơ bản thay vì cúp, báo một dòng (spec mục 4). Lần gọi sau vẫn thử đường chính trước.
-function chuyenSangCoBan() {
+function chuyenSangCoBan(cauDangNoi = "", ghiChu = "call.fallback") {
   if (!voice.isSupported()) { tatRanhTay(); return false; }
   datCheDoGiong(_callInfo.basic_mode || "standard");
-  ghiChuThoang(window.t("call.fallback"));
+  ghiChuThoang(window.t(ghiChu));
   if (callBar) callBar.setEngine(window.t("call.engine_basic"));
   voice.handsFree = true;
   adaptive.start();
-  voice.startListening();
+  // The sentence that was heading to Live is not lost: it goes to the main model as a normal turn.
+  if (cauDangNoi) sendMessage(cauDangNoi);
+  else voice.startListening();
   return true;
+}
+// ChatGPT Live hết lượt giữa chừng (chủ báo 06/11/2026): máy chủ đã cho tài khoản đó nghỉ tới giờ mở lại, nên hỏi
+// lại đường gọi và mở NGAY đường kế tiếp: tài khoản ChatGPT thứ hai, Live qua API key, hay đường Cơ bản (trả lời bằng
+// model chính). Trước đây cuộc gọi cứ nối lại đúng ChatGPT Live đã cạn và báo lỗi mãi. Giới hạn số lần đổi trong một
+// cuộc gọi để hai đường cùng hỏng không đẩy qua đẩy lại vô tận.
+const DOI_DUONG_MAX = 3;
+let _lanDoiDuong = 0;
+async function doiDuongGoi(cauDangNoi) {
+  if (!handsFree) return false;
+  _lanDoiDuong++;
+  let call = null;
+  try { call = await fetch("/voice/call", { cache: "no-store" }).then(r => r.json()); } catch (e) { call = null; }
+  if (!handsFree) return false;
+  if (call && call.voice_mode) _callInfo = call;
+  if (_lanDoiDuong <= DOI_DUONG_MAX && call && call.voice_mode === "live") {
+    _liveWaitingWake = false;
+    if (callBar) callBar.setEngine(tenDuongGoi());
+    return batLive(cauDangNoi || "");
+  }
+  tatLive();
+  return chuyenSangCoBan(cauDangNoi || "", call && call.detail === "quota" ? "call.quota_basic" : "call.fallback");
 }
 async function napCaiDatGiong() {
   try {
@@ -811,7 +841,7 @@ async function batLive(wakeText = "", { som = false, lanThu = 0 } = {}) {
     if (ticket !== _liveStartSeq || !handsFree) return false;
     if (!released) { tatRanhTay(); appendJavisError(window.t("app.voice_focus_mic_busy")); return false; }
   }
-  const phien = { ticket, pendingWake: wakeText, readySeen: false, promise: null, henHuy: 0 };
+  const phien = { ticket, pendingWake: wakeText, readySeen: false, promise: null, henHuy: 0, doiDuong: false };
   let readySeen = false;
   // Câu đánh thức đi làm lời đầu, chỉ khi phiên đã sẵn sàng; nối sớm thì câu tới sau ready.
   phien.guiCauDanhThuc = () => {
@@ -847,7 +877,7 @@ async function batLive(wakeText = "", { som = false, lanThu = 0 } = {}) {
     },
     onReady: (d) => {
       if (ticket !== _liveStartSeq || !handsFree) return;
-      if (!readySeen) { readySeen = phien.readySeen = true; _cuocGoiDaNoi = true; _liveBusyUntil = 0; attention.keepActive(); }
+      if (!readySeen) { readySeen = phien.readySeen = true; _cuocGoiDaNoi = true; _lanDoiDuong = 0; _liveBusyUntil = 0; attention.keepActive(); }
       if (d && d.session_id && !savedSessionId) { savedSessionId = d.session_id; persistSession(); }
       if (d && d.session_id && !_callSid) _callSid = d.session_id;
       // Nối sớm: mic chưa gắn thì câu đánh thức chờ noiTiepPhienSom gửi sau khi gắn mic.
@@ -893,8 +923,18 @@ async function batLive(wakeText = "", { som = false, lanThu = 0 } = {}) {
       _liveJavisText = ""; _liveJavisBubble = null;
       runActions(turn.turnDone());
     },
-    onError: (msg) => {
+    onError: (msg, code) => {
       _liveBusyUntil = 0;
+      if (code === "quota" || code === "use_basic") {
+        // Not a fault to retry: the path is out (ChatGPT plan out of quota). One quiet line, then the next path.
+        phien.doiDuong = true;
+        if (_liveSom !== phien) ghiChuThoang(String(msg || ""));
+        runActions(turn.turnDone());
+        // Mid-call (the line was up): the provider may keep the dead session open, so close it and move on now.
+        // Before the line is up, the failed handshake below takes the same turn.
+        if (readySeen && ticket === _liveStartSeq && handsFree) { tatLive(); doiDuongGoi(""); }
+        return;
+      }
       if (_liveSom === phien) return;   // nối sớm hỏng: im lặng, câu chốt sẽ mở lại từ đầu
       appendJavisError(String(msg || "").startsWith("mic:") ? window.t("app.mic_denied") : (window.t("app.live_error") + " " + msg));
       runActions(turn.turnDone());
@@ -903,6 +943,7 @@ async function batLive(wakeText = "", { som = false, lanThu = 0 } = {}) {
     onClosed: () => {
       if (_liveSom === phien) { _liveSom = null; clearTimeout(phien.henHuy); capNhatThanhGoi(); return; }
       if (!readySeen || ticket !== _liveStartSeq) return;
+      if (phien.doiDuong && handsFree) { doiDuongGoi(""); return; }   // ran out mid-call: next path at once
       // 0.347.0: a Live connection that drops in the middle of a call (network, the provider, the browser) used to
       // hang the whole call up. Now the call waits, like after a silence: speaking reopens Live. Only the Hang up
       // button, the mascot or Esc end the call (owner, 27/10/2026).
@@ -920,6 +961,7 @@ async function batLive(wakeText = "", { som = false, lanThu = 0 } = {}) {
     if (!ok && _liveSom === phien) { _liveSom = null; clearTimeout(phien.henHuy); capNhatThanhGoi(); }
     return ok;
   }
+  if (!ok && phien.doiDuong && handsFree) return doiDuongGoi(phien.pendingWake || wakeText);
   if (!ok) {
     // Mở không được TRƯỚC khi sẵn sàng. Đầu cuộc gọi: chuyển đường Cơ bản như cũ. Giữa cuộc gọi: giữ
     // ChatGPT Live, thử lại rồi chờ (noiLaiHong), không đổi giọng.
@@ -1087,6 +1129,9 @@ document.addEventListener("visibilitychange", () => {
 // bfcache trả trang về từ bộ nhớ (persisted): trạng thái là ảnh chụp cũ, luôn hồi sức.
 window.addEventListener("pageshow", (e) => { if (e.persisted) _resumeSauNgu(true); });
 function _resumeSauNgu(force) {
+  // A message sent before the app went to the background is still unconfirmed: the socket died under it. Reconnect
+  // now whatever the sleep length, `hello` sends it again.
+  if (ws && ws.readyState === WebSocket.OPEN && _unackedOverdue()) { _hiddenAt = 0; _dropDeadSocket(); return; }
   // Ngủ dưới 20 giây (chuyển app qua lại) thì socket thường còn sống, đừng kéo lại hội
   // thoại một cách ồn ào - trừ khi bfcache (force) vì khi đó không biết đã ngủ bao lâu.
   if (!force && (!_hiddenAt || Date.now() - _hiddenAt < 20000)) return;
@@ -1219,6 +1264,8 @@ function handleMessage(data) {
       };
       setSessionRunning(sid, true);
     });
+    // Typed messages the old socket may have swallowed go out again now (the server drops a copy it already has).
+    _resendUnacked();
     // Lượt của phiên đang xem đã xong trong lúc đứt (lỗi hoặc không có chữ thì không có gì để tải
     // lại): bỏ chip "đang suy nghĩ" còn sót, không thì nó đếm mãi trong khi nút Gửi đã mở lại.
     if (savedSessionId && !(turns[savedSessionId] && turns[savedSessionId].running)) hideActivity();
@@ -1252,6 +1299,7 @@ function handleMessage(data) {
     if(data.type==='turn_done' && data.session_id===savedSessionId && _tinChoLuot) guiTinCho();
     return;
   }
+  if (data.type === "chat_ack") { _onChatAck(data); return; }
   if (data.type === "ui_action") {
     // Tool javis_ui (server) bảo dashboard mở trang / file / việc. ui-actions.js kiểm rồi làm
     // và tự trả ui_result về server để tool trả lời model ngay trong lượt.
@@ -1285,6 +1333,15 @@ function handleMessage(data) {
     // chat_reaction vẽ lại reaction của tin đó ở mọi bong bóng đang mở, kể cả khi đổi ở tab khác. Không đụng lượt đang chạy
     // (cả hai gói nằm ngoài KHUNG_LUOT nên không dựng lại turns[sid]).
     try { if (window.JavisChatReactions) window.JavisChatReactions.onFrame(data, { bubble: t && t.bubble }); } catch (e) {}
+    return;
+  }
+  if (data.type === "route") {
+    // Owner, 05/11/2026: each turn says which model really answers. The model chip follows it (amber dot on a fallback
+    // card) and the chat gets one quiet line when the turn moves to a fallback card or back. Outside KHUNG_LUOT: it
+    // comes before "status" and must not start a turn of its own.
+    let _dong = "";
+    try { if (window.JavisModelBar && window.JavisModelBar.noteRoute) _dong = window.JavisModelBar.noteRoute(sid, data); } catch (e) {}
+    if (isActive && _dong) ghiDoiDuong(_dong);
     return;
   }
   if (data.type === "external_message") {
@@ -1722,6 +1779,92 @@ function traTinDutMang() {
   showActivity(Icons.warn(window.t("app.ws_tra_tin")));
 }
 
+// ---- Messages sent but not yet confirmed by the server (owner, 06/11/2026) ----
+// "On the phone I type, press Enter, it spins, I swipe to another app and when I come back the whole exchange is
+// gone, not even in History. Sometimes, not always." A phone often lets the socket die in the background while the
+// page still sees it as OPEN, so ws.send() threw nothing and the message went nowhere. The spinner was local, the
+// server never got the message, and the resync on return redrew the chat from the server without it.
+// Now every typed message carries `client_msg_id` and stays here until the server answers `chat_ack`. No ack within
+// ACK_WAIT_MS means the socket is dead: drop it, and the next `hello` sends what is left again. The server stores
+// the id with the message, so a resend of a message it did get is answered with an ack and never runs twice.
+const ACK_WAIT_MS = 15000, UNACKED_TTL_MS = 30 * 60 * 1000;
+function _saveUnacked() {
+  try {
+    if (_unacked.length) localStorage.setItem(UNACKED_KEY, JSON.stringify(_unacked.slice(-10)));
+    else localStorage.removeItem(UNACKED_KEY);
+  } catch (e) {}
+}
+function _trackUnacked(sid, msg, atts, payload) {
+  _unacked.push({ id: payload.client_msg_id, sid, msg, atts, payload, at: Date.now(), sentAt: 0 });
+  if (_unacked.length > 10) _unacked.shift();
+  _saveUnacked();
+}
+function _dropUnacked(id) {
+  const n = _unacked.length;
+  _unacked = _unacked.filter(u => u.id !== id);
+  if (_unacked.length !== n) _saveUnacked();
+}
+function _sendUnacked(u) {
+  u.sentAt = Date.now();
+  _saveUnacked();
+  const sock = ws;
+  try { sock.send(JSON.stringify(u.payload)); } catch (e) {}
+  setTimeout(() => {
+    if (!_unacked.some(x => x.id === u.id)) return;
+    // Hidden page: timers are throttled and the phone may be asleep, _resumeSauNgu checks again on return.
+    if (sock === ws && ws.readyState === WebSocket.OPEN && !document.hidden) _dropDeadSocket();
+  }, ACK_WAIT_MS);
+}
+// A message waiting longer than ACK_WAIT_MS on the open socket: that socket is dead whatever readyState says.
+function _unackedOverdue() {
+  const now = Date.now();
+  return _unacked.some(u => u.sentAt && now - u.sentAt > ACK_WAIT_MS);
+}
+// From `hello`: the new socket sends again whatever the old one may have lost. Too old (the owner may have moved on)
+// goes back to the input box instead of running on its own.
+function _resendUnacked() {
+  if (!_unacked.length || !(ws && ws.readyState === WebSocket.OPEN)) return;   // held: the next hello sends them
+  const now = Date.now();
+  const stale = _unacked.filter(u => now - u.at > UNACKED_TTL_MS);
+  if (stale.length) {
+    _unacked = _unacked.filter(u => now - u.at <= UNACKED_TTL_MS);
+    _saveUnacked();
+    const mine = stale.filter(u => u.sid === savedSessionId).map(u => u.msg);
+    if (mine.length && !chatInput.value.trim()) {
+      chatInput.value = mine.join("\n");
+      ghiChuThoang(window.t("app.ws_tra_tin"));
+    }
+  }
+  _unacked.forEach(u => {
+    if (!(turns[u.sid] && turns[u.sid].running)) {
+      turns[u.sid] = { text: "", bubble: null, spoke: false, running: true,
+                       id: Number(u.payload.voice_turn_id) || ++_luotSeq };
+    }
+    setSessionRunning(u.sid, true);
+    _sendUnacked(u);
+  });
+}
+function _onChatAck(d) {
+  _dropUnacked(d.client_msg_id);
+  if (!d.dup || d.running) return;
+  // The server already had this message and its turn ended while the socket was down: close the turn here and load
+  // the stored answer.
+  const sid = d.session_id;
+  if (!sid || !(turns[sid] && turns[sid].running)) return;
+  handleMessage({ type: "turn_done", session_id: sid });
+  if (sid === savedSessionId) openStoredSession(sid);
+}
+// Messages still waiting for this chat, drawn under what the server returned, so a resync while one is in flight
+// does not wipe it off the screen. `ds`: the stored messages just drawn.
+function _drawUnacked(id, ds) {
+  const recent = (ds || []).slice(-6).filter(m => m.role === "user").map(m => _chuanTinSo(chuNguoiGo(m.content || "")));
+  _unacked.forEach(u => {
+    if (u.sid !== id || recent.includes(_chuanTinSo(u.msg))) return;
+    appendUserMessage(u.msg, u.atts || [], u.at);
+    convo.push({ role: "user", text: u.msg, atts: u.atts || [], ts: u.at });
+  });
+}
+
 // Phiên cộng sự (agent:/workflow:) -> phiên Trò chuyện đã GỌI nó bằng lệnh "/". Sống trong
 // bộ nhớ trang: tải lại trang là quên, và như vậy là đúng - lúc đó người dùng không còn đang
 // theo dõi cuộc gọi ấy nữa.
@@ -1953,16 +2096,26 @@ function sendMessage(text, opts) {
                           voice_input: _tuGiong, voice_turn_id: String(turns[sid].id),
                           wf_run: !!(opts && opts.wfRun), ...(adaptiveMeta || {}) };
   if(adaptiveMeta) { adaptiveCurrent.set(sid,adaptiveMeta.utterance_id);adaptiveOutbox.set(adaptiveMeta.utterance_id,{payload,element:userElement,since:performance.now()}); }
+  // Held until the server confirms it (chat_ack), resent on the next socket otherwise (see _trackUnacked).
+  // Adaptive voice already has its own receipt (adaptiveOutbox).
+  let _held = null;
+  if (!adaptiveMeta) {
+    payload.client_msg_id = newSid();
+    _trackUnacked(sid, msg, atts.map(a => ({ name: a.name, kind: a.kind, url: a.url || "" })), payload);
+    _held = _unacked[_unacked.length - 1];
+  }
   const _send = () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       // The socket dropped while the first turn waited for the folder pin: nothing was sent,
       // so end the turn here and give the text back instead of losing it silently.
+      if (_held) _dropUnacked(_held.id);
       if (turns[sid]) turns[sid].running = false;
       setSessionRunning(sid, false); hideActivity(); syncActiveUI();
       chatInput.value = msg;
       ghiChuThoang(window.t("app.ws_mat_ket_noi"));
       return;
     }
+    if (_held) { _sendUnacked(_held); return; }
     try { ws.send(JSON.stringify(payload)); } catch (e) {}
   };
   const _w = _pinWait; _pinWait = null;
@@ -2282,7 +2435,7 @@ async function taiTinCu() {
   const nut = _moiTinCu && _moiTinCu.querySelector(".older-btn");
   if (nut) { nut.disabled = true; nut.textContent = window.t("app.older_loading"); }
   try {
-    const u = `/sessions/${encodeURIComponent(st.sid)}/messages?limit=${TIN_MOI_LUOT}` +
+    const u = `/sessions/${encodeURIComponent(st.sid)}/messages?limit=${TIN_MOI_LUOT}&tools=0` +
       `&before_ts=${encodeURIComponent(st.ts)}&before_id=${encodeURIComponent(st.id)}`;
     const d = await (await fetch(u)).json();
     // Đổi phiên giữa chừng thì khúc vừa về là của cuộc khác - vứt đi, đừng chèn nhầm.
@@ -2295,7 +2448,7 @@ async function taiTinCu() {
     _dangChenCu = true;
     _neoChenCu = _moiTinCu ? _moiTinCu.nextSibling : dauKhungChat();
     const them = [];
-    ds.forEach(m => { const t = veTinDaLuu(m, st.brain, st.sid); if (t) them.push(t); });
+    ngoaiAlpine(() => ds.forEach(m => { const t = veTinDaLuu(m, st.brain, st.sid); if (t) them.push(t); }));
     _neoChenCu = null; _dangChenCu = false;
     convo = them.concat(convo);
     st.ts = ds[0].ts; st.id = ds[0].id; st.con = !!d.has_more;
@@ -2329,7 +2482,8 @@ const _phienCache = new Map();               // id -> { sess, at }
 const _phienDangTai = new Map();             // id -> Promise<sess> (gộp các lượt hỏi trùng)
 let _phienMoLuc = null;                      // { id, len } - độ dài convo lúc mở, để biết cuộc đã đổi khi rời đi
 
-function _urlPhien(id) { return `/sessions/${encodeURIComponent(id)}?limit=${TIN_MOI_LUOT}`; }
+// tools=0: the chat view never shows stored tool calls, and they can be most of the payload (see sessions_get).
+function _urlPhien(id) { return `/sessions/${encodeURIComponent(id)}?limit=${TIN_MOI_LUOT}&tools=0`; }
 function _ghiCachePhien(id, sess) {
   if (!id || !sess || sess.error) return;
   _phienCache.delete(id);
@@ -2370,13 +2524,21 @@ function _quenPhienNeuDoi() {
   if (_phienMoLuc && _phienMoLuc.id === savedSessionId && convo.length !== _phienMoLuc.len) _phienCache.delete(_phienMoLuc.id);
 }
 
-async function openStoredSession(id, stillCurrent) {
+async function openStoredSession(id, stillCurrent, opts) {
   // 0.347.0: switching conversation keeps a call (see _callSid). Only the Hang up button, the mascot, Esc or a
   // brain switch end it. Outside a call this still cancels capture, as before.
   if (handsFree) boViecPhienCu(); else tatRanhTay();
   const ticket = ++sessionOpenSeq;
   _quenPhienNeuDoi();
   const conHieuLuc = () => ticket === sessionOpenSeq && (!stillCurrent || stillCurrent());
+  // Performance (2026-11-05): a chat the caller has JUST created (Partners page, New conversation) has no messages,
+  // so asking the server for them was a second round trip in a row for nothing. Draw it empty right away.
+  if (opts && opts.empty) {
+    const rong = { messages: [], has_more: false, brain: currentBrainPath() };
+    _ghiCachePhien(id, rong);
+    _veLaiPhien(id, rong, ticket, false);
+    return;
+  }
   // Có bản trong bộ nhớ: vẽ ngay, rồi so với bản mới.
   const daCo = _docCachePhien(id);
   let veRoi = "";
@@ -2405,8 +2567,9 @@ function _veLaiPhien(id, sess, ticket, capNhat) {
     chatArea.innerHTML = "";
     const ds = sess.messages || [];
     _dangDungLoat = true;
-    try { ds.forEach(m => { const t = veTinDaLuu(m, sess.brain, id); if (t) convo.push(t); }); }
+    try { ngoaiAlpine(() => ds.forEach(m => { const t = veTinDaLuu(m, sess.brain, id); if (t) convo.push(t); })); }
     finally { _dangDungLoat = false; }
+    _drawUnacked(id, ds);
     _tinCu = ds.length
       ? { sid: id, brain: sess.brain, ts: ds[0].ts, id: ds[0].id, con: !!sess.has_more, dangTai: false }
       : null;
@@ -2418,9 +2581,17 @@ function _veLaiPhien(id, sess, ticket, capNhat) {
     // Phiên này đang generate NỀN → gắn bong bóng SỐNG (kèm phần đã stream) để xem tiếp trực tiếp.
     const t = turns[id];
     if (t && t.running) {
-      t.bubble = createStreamingBubble();
-      if (t.text) t.bubble.querySelector(".bubble").innerHTML = markdownToHtml(t.text, undefined, t.bubble.dataset.anhV);
-      showActivity(Icons.msg("pen-line", window.t("app.act_writing")));
+      // Owner, 05/11/2026: back on a chat whose turn has not written a word yet (thinking, running tools), an empty
+      // answer bubble used to sit above the activity chip. Draw the steps so far, a bubble only when there is text
+      // (the "stream" frame makes one as the first words arrive), then the chip. Same rule as redrawRunningTurn.
+      if (t.buocEl) chatAppend(t.buocEl);
+      t.bubble = null;
+      if (t.text) {
+        t.bubble = createStreamingBubble();
+        t.bubble.dataset.md = t.text;
+        t.bubble.querySelector(".bubble").innerHTML = markdownToHtml(t.text, undefined, t.bubble.dataset.anhV);
+      }
+      showActivity(t.text ? Icons.msg("pen-line", window.t("app.act_writing")) : window.t("app.act_thinking"));
       runActions(turn.turnStart());
     } else {
       runActions(turn.turnDone());   // đổi sang phiên không chạy gì: đừng kẹt ở "ĐANG SUY NGHĨ"
@@ -2433,7 +2604,7 @@ function _veLaiPhien(id, sess, ticket, capNhat) {
     ghimDay(ticket);
     syncActiveUI();
     if (capNhat) return;
-    notifySessions();
+    notifySessions("open");
     // Dải việc nền đánh dấu "việc CỦA hội thoại này" theo chat_id, nên đổi phiên là nó sai
     // ngay. Xoá rồi hỏi lại thay vì để chip của phiên trước nằm lại vài giây.
     try { if (window.JavisBackground) window.JavisBackground.reset(); } catch (e) {}
@@ -2456,6 +2627,20 @@ function resetChatView() {
   syncActiveUI();
   try { if (window.JavisBackground) window.JavisBackground.reset(); } catch (e) {}
 }
+// Performance (2026-11-05): clear the chat view the instant New conversation is clicked on the Partners page, while
+// the server makes the chat. Before, the old chat stayed on screen until the new one came back, which read as lag.
+// Quiet on purpose: nothing is persisted and no one is told, the open that follows does both.
+function blankChat() {
+  sessionOpenSeq++;
+  if (handsFree) boViecPhienCu(); else tatRanhTay();
+  _quenPhienNeuDoi();
+  convo = [];
+  hideActivity();
+  _tinCu = null; goMoiTinCu();
+  chatArea.innerHTML = "";
+  savedSessionId = null;
+  syncActiveUI();
+}
 function newChat() {
   sessionOpenSeq++;
   // KHÔNG reset server, KHÔNG đụng lượt đang chạy của phiên khác - chúng chạy nền + tự lưu; vào
@@ -2463,10 +2648,19 @@ function newChat() {
   resetChatView();
   try { chatInput.focus(); } catch (e) {}
 }
-window.JavisSessions = { open: openStoredSession, new: newChat, brain: () => currentBrainPath(), current: () => savedSessionId,
-                         prefetch: prefetchSession };
+window.JavisSessions = { open: openStoredSession, new: newChat, blank: blankChat, brain: () => currentBrainPath(),
+                         current: () => savedSessionId, prefetch: prefetchSession };
 // Báo các UI khác (sidebar Lịch sử trong chat workspace) biết phiên/danh sách vừa đổi
-function notifySessions() { try { window.dispatchEvent(new Event("javis:sessions-changed")); } catch (e) {} }
+// Performance (2026-11-05): `reason` "open" = only WHICH chat is on screen changed (a switch), no message was added.
+// Listeners that count or list messages (history list, unread and job counts) skip their network round on it.
+function notifySessions(reason) {
+  try {
+    const ev = typeof CustomEvent === "function"
+      ? new CustomEvent("javis:sessions-changed", { detail: { reason: reason || "" } })
+      : new Event("javis:sessions-changed");
+    window.dispatchEvent(ev);
+  } catch (e) {}
+}
 
 // Hàng nút dưới bong bóng (giờ + tua lại / trích dẫn / copy). Tách sang chat-acts.js để
 // test được bằng node; ở đây chỉ là lối thoát khi file đó chưa kịp nạp.
@@ -2929,6 +3123,11 @@ newMsgBtn.id = "newMsgBtn"; newMsgBtn.type = "button";
 // tham số là mười chỗ phải nhớ truyền đúng.
 let _neoChenCu = null, _dangChenCu = false, _dangDungLoat = false;
 function chatAppend(el) {
+  // Performance (2026-11-05): a bubble put in while a whole chat is built (opening it from History, F5) or while older
+  // messages load above does not play the fade-in. 30-60 bubbles animating at once each became their own compositor
+  // layer: traced at ~660 ms of layer work per chat switch on a 4x slowed CPU, more than layout and paint together.
+  // A message that arrives live still fades in.
+  if ((_dangDungLoat || _dangChenCu) && el && el.classList) el.classList.add("msg-tinh");
   if (newMsgBtn.parentNode !== chatArea) chatArea.appendChild(newMsgBtn);
   chatArea.insertBefore(el, _neoChenCu || newMsgBtn);
 }
@@ -2938,6 +3137,18 @@ function chatAppend(el) {
 // _dangDungLoat (2026-11-05): a whole chat is being built at once (opening it, F5). Each bubble used to scroll to the
 // bottom as it went in, and each of those scrolls made the browser lay out the whole chat again: 30 messages, 30
 // layouts. Profiled on a 30-message chat that was 90% of the time to open it. The builder scrolls once at the end.
+// Performance (2026-11-05): Alpine watches the whole page and walks every node added anywhere, looking for x- directives.
+// Chat bubbles never carry one (they are built by hand here), yet opening a 30-message chat paid ~80 ms of that walk on a
+// 4x slowed CPU. Alpine skips mutations whose target carries this flag (its own documented escape hatch), so bubbles
+// going in or out of the chat area are no longer walked.
+chatArea._x_ignoreMutationObserver = true;
+// The flag above covers bubbles added to the chat area itself; what is written INTO a bubble after it went in is still
+// walked. Building a whole chat (or a page of older messages) runs inside Alpine.mutateDom, which pauses the watcher for
+// that synchronous call. No x- directive is ever built here, so nothing is missed.
+function ngoaiAlpine(fn) {
+  const A = window.Alpine;
+  return A && typeof A.mutateDom === "function" ? A.mutateDom(fn) : fn();
+}
 const chatScroll = window.JavisChatScroll.attach(chatArea, {
   button: newMsgBtn, msg: ".msg", hold: ".msg-acts:hover, .jr-chat:hover", near: 90,
   suspended: () => _dangChenCu || _dangDungLoat,

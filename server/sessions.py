@@ -713,9 +713,13 @@ class SessionStore:
                                    session_id=session_id)
 
     def append_message(self, session_id: str, role: str, content: str | None,
-                       tool_calls: Any = None, report: dict[str, str] | None = None) -> int:
+                       tool_calls: Any = None, report: dict[str, str] | None = None,
+                       client_msg_id: str | None = None) -> int:
         """`report` (Resonance M4): {"key", "goal_id"} của tin báo cáo do host gửi. Biên nhận ghi trong CÙNG giao dịch
-        với tin, nên không có trạng thái "tin đã lưu mà chưa có biên nhận" hay ngược lại."""
+        với tin, nên không có trạng thái "tin đã lưu mà chưa có biên nhận" hay ngược lại.
+
+        `client_msg_id`: the id the dashboard gave a typed message, so a resend after a dropped socket is recognised
+        (message_by_client_id) instead of running the turn twice. Unique per session (idx_messages_client)."""
         tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
         stored = content if (content is None or isinstance(content, str)) \
             else json.dumps(content, ensure_ascii=False)
@@ -723,9 +727,9 @@ class SessionStore:
 
         def _do(conn):
             cur = conn.execute(
-                "INSERT INTO messages (session_id, role, content, ts, tool_calls_json) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (session_id, role, stored, now, tc_json),
+                "INSERT INTO messages (session_id, role, content, ts, tool_calls_json, client_msg_id) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, role, stored, now, tc_json, client_msg_id or None),
             )
             conn.execute(
                 "UPDATE sessions SET msg_count = msg_count + 1, updated_at = ? WHERE id = ?",
@@ -1310,7 +1314,8 @@ class SessionStore:
         return int(rows[0]["n"]) if rows else 0
 
     def get_messages_page(self, session_id: str, limit: int = 30,
-                          before: tuple[float, int] | None = None) -> dict[str, Any]:
+                          before: tuple[float, int] | None = None,
+                          with_tools: bool = True) -> dict[str, Any]:
         """Một KHÚC tin nhắn tính từ CUỐI lên, cho khung chat tải dần.
 
         `before` là con trỏ (ts, id) của tin GIÀ NHẤT đang hiện trên màn: lượt sau lấy tiếp
@@ -1320,9 +1325,13 @@ class SessionStore:
 
         Trả về `messages` đã xếp XUÔI (cũ trước) để dựng bong bóng theo đúng thứ tự, kèm
         `has_more` cho biết phía trên còn tin nữa không.
+
+        `with_tools=False` (performance, 2026-11-05): the chat view never shows the stored tool calls, and on a chat
+        whose tools read files or web pages they were most of the payload (70% measured on a plain report chat). The
+        column is not even read then, and the messages carry no `tool_calls` key.
         """
         limit = max(1, int(limit))
-        sql = ("SELECT id, role, content, ts, tool_calls_json, "
+        sql = ("SELECT id, role, content, ts, " + ("tool_calls_json, " if with_tools else "") +
             "(SELECT json_object('utterance_id',utterance_id,'message_id',message_id,'response_policy',response_policy,'answer_requested',answer_requested,'state',state) FROM voice_receipts WHERE message_id=messages.id) AS voice_metadata FROM messages "
                "WHERE session_id = ?")
         params: list[Any] = [session_id]

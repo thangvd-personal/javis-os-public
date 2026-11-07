@@ -33,8 +33,8 @@
   <!-- Biến --ic-* cho icon dùng trong content: của CSS. Phải đứng TRƯỚC style.css
        vì style.css tham chiếu các biến này. -->
   <link rel="stylesheet" href="/static/vendor/lucide-icons.css?v=1">
-  <link rel="stylesheet" href="/static/style.css?v=162">
-  <link rel="stylesheet" href="/static/console.css?v=134">
+  <link rel="stylesheet" href="/static/style.css?v=164">
+  <link rel="stylesheet" href="/static/console.css?v=137">
   <!-- Áp tông đã lưu TRƯỚC khi vẽ để không nháy tối rồi mới đổi sang sáng.
        Giá trị cũ "dim" (tông tối-nhạt, gỡ ở 0.9.250) quy về tối; theme.js sẽ ghi đè lại.
        Chưa chọn gì thì SÁNG (2026-11-05; trước đó là "auto"). Chế độ "auto" (0.74.0) tính theo khung giờ "HH:MM-HH:MM", cùng quy tắc với lightAt() trong
@@ -111,6 +111,22 @@
             <path d="M12 6v6M9.5 9.5 12 12l2.5-2.5" />
           </svg>
           <span class="install-app-label" data-i18n="top.install_label">Mở như app</span>
+        </button>
+        <!-- Bật/tắt âm thanh hiệu ứng (06/11/2026), cạnh nút sáng/tối: chỉ bật hoặc tắt, không chỉnh âm lượng.
+             Loa có sóng khi đang bật, loa gạch chéo khi đang tắt; ui-sound.js đặt aria-pressed và tooltip. -->
+        <button class="hud-icon-btn sound-toggle" id="soundToggle" type="button" aria-pressed="true"
+                title="Sound effects are on - click to turn them off"
+                aria-label="Sound effects are on - click to turn them off">
+          <svg class="ic-son" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5Z"/>
+            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>
+          </svg>
+          <svg class="ic-soff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 5 6 9H3v6h3l5 4V5Z"/>
+            <path d="m16 9 6 6M22 9l-6 6"/>
+          </svg>
         </button>
         <button class="hud-icon-btn theme-toggle" id="themeToggle" type="button" aria-pressed="false"
           title="Đang dùng tông tối - bấm để chuyển sang tông sáng"
@@ -734,7 +750,7 @@
             </svg>
           </button>
           <canvas class="dict-wave" id="dictWave" aria-hidden="true"></canvas>
-          <span class="dict-busy" id="dictBusy" hidden data-i18n="dict.busy">Đang chuyển thành chữ...</span>
+          <span class="dict-busy" id="dictBusy" hidden data-i18n="dict.busy">Đang viết lại câu cho đúng...</span>
           <span class="dict-time" id="dictTime" aria-live="off">0:00</span>
           <button type="button" class="dict-stop" id="dictStop" title="Dừng ghi, giữ chữ để sửa"
             data-i18n-title="dict.stop" aria-label="Dừng ghi, giữ chữ để sửa" data-i18n-aria="dict.stop">
@@ -805,11 +821,15 @@
             <span class="grp-name" x-text="g.label"></span>
           </button>
           <div class="rail-grp-items">
+            <!-- Nhãn mục đọc qua getter gọi t(), mà từ điển KHÔNG phải dữ liệu phản ứng của Alpine. Nhóm thường
+                 được dựng lại vì khoá :key="g.label" đổi khi từ điển về; khối "solo:chat" (Trò chuyện trên đầu,
+                 0.480.0) có khoá cố định nên giữ nguyên chữ vẽ lúc từ điển chưa về: rail hiện `page.chat.label`
+                 sau khi cập nhật (khách báo 05/11/2026). Đọc i18nTick ở đây để mọi mục tự vẽ lại khi đổi chữ. -->
             <template x-for="it in g.items" :key="it.id">
-              <button class="rail-item" :class="{ active: $store.nav.active === it.id }" @click="$store.nav.go(it.id)"
-                :title="it.label" :data-page="it.id">
+              <button class="rail-item" :class="{ active: $store.nav.active === it.id }"
+                @click="$store.nav.go(it.id)" :title="($store.nav.i18nTick, it.label)" :data-page="it.id">
                 <span class="rail-ico" x-html="it.icon"></span>
-                <span class="rail-lbl" x-text="it.label"></span>
+                <span class="rail-lbl" x-text="($store.nav.i18nTick, it.label)"></span>
               </button>
             </template>
           </div>
@@ -1212,7 +1232,7 @@
  ],
  "teams": [
   "/static/team-github.js?v=1",
-  "/static/teams.js?v=24"
+  "/static/teams.js?v=25"
  ],
  "packs": [
   "/static/packs.js?v=5"
@@ -1229,7 +1249,7 @@
   "/static/inbox-v5.js?v=4",
   "/static/inbox-channels.js?v=5",
   "/static/inbox-stats.js?v=4",
-  "/static/conversations.js?v=28"
+  "/static/conversations.js?v=30"
  ],
  "usage": [
   "/static/usage.js?v=3"
@@ -1259,6 +1279,7 @@
        hàm vẽ lại theo tông ngay lúc parse, nếu window.javisTheme chưa có thì chúng
        đăng ký hụt và các lớp canvas kẹt ở bảng màu tối. -->
   <script src="/static/theme.js?v=5"></script>
+  <script src="/static/ui-sound.js?v=1"></script>
   <!-- Voice V1: đạo diễn hội thoại (thuần) phải nạp TRƯỚC voice.js và app.js. -->
   <script src="/static/voice-turn.js?v=3"></script>
   <script src="/static/voice-turn-policy.js?v=1"></script>
@@ -1345,7 +1366,7 @@
   <script src="/static/model-picker.js?v=19"></script>
   <script src="/static/composer-plus.js?v=3"></script>
   <script src="/static/composer-folder.js?v=4"></script>
-  <script src="/static/github-connect.js?v=3"></script>
+  <script src="/static/github-connect.js?v=5"></script>
   <script src="/static/branding.js?v=11"></script>
   <script src="/static/quick-settings.js?v=11"></script>
   <script src="/static/remote-access.js?v=2"></script>
@@ -1373,8 +1394,8 @@
   <!-- Bộ phán xử nói / chờ / im của từng trợ lý (T3 phần J 0.156.0): lịch sử quyết định và nút sửa. Nạp TRƯỚC teams.js
        (ngăn Nhóm gọi window.JavisAgentJudge.hydrate); góp phần "judge" vào khung nhịp qua window.JavisPulseParts. -->
   <!-- Nút mic nhập chữ của khung soạn Nhóm (0.176.0): nạp TRƯỚC teams.js. -->
-  <script src="/static/dictate.js?v=4"></script>
-  <script src="/static/composer-dictate.js?v=4"></script>
+  <script src="/static/dictate.js?v=6"></script>
+  <script src="/static/composer-dictate.js?v=7"></script>
   <!-- Trang Hội thoại (hộp thư khách): nạp TRƯỚC console.js để renderConversations uỷ quyền được. -->
   <script src="/static/ht-media.js?v=3"></script>
   <!-- Dashboard Token (trang Mức dùng nâng cấp): nạp TRƯỚC console.js để renderUsage ủy quyền được. -->
@@ -1398,7 +1419,7 @@
   <script src="/static/messenger-connect.js?v=3"></script>
   <script src="/static/voice-catalog.js?v=1"></script>
   <script src="/static/console.js?v=209"></script>
-  <script src="/static/mobile-chat.js?v=16"></script>
+  <script src="/static/mobile-chat.js?v=17"></script>
   <script src="/static/brain-view.js?v=1"></script>
   <script src="/static/push.js?v=3"></script>
   <script src="/static/install-nudge.js?v=2"></script>
@@ -1409,8 +1430,8 @@
   <!-- Linh vật ở mép màn hình. Nạp SAU app.js vì nó chỉ được app.js gọi vào
        (setOrbState -> JavisPet.setState), và sau console.js để trang Cài đặt vẽ được thẻ chọn. -->
   <!-- Mascot menu the owner arranges (Settings > Mascot): load BEFORE pet.js, which builds its menu from it. -->
-  <script src="/static/pet-menu.js?v=3"></script>
-  <script src="/static/pet.js?v=3"></script>
+  <script src="/static/pet-menu.js?v=4"></script>
+  <script src="/static/pet.js?v=4"></script>
   <script src="/static/agent-avatar.js?v=4"></script>
   <!-- (Nút đổi tông TỐI ↔ SÁNG: theme.js đã nạp ở đầu khối script phía trên) -->
   <!-- Alpine self-host (dashboard/vendor): bản unpkg đo được 2.1s lúc first load + chết khi offline -->

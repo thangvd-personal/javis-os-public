@@ -66,7 +66,7 @@
   var _privFor = 0;                     // id of the comment thread whose composer is set to "Message privately" (0.446.0)
   // The mic of the reply box (owner, 2026-11-05: "thêm nút chép lời để nói bằng giọng nói rồi chép lại, khỏi phải gõ").
   // dictate.js does the listening; the state lives here because the 5-second redraw rebuilds the box.
-  var _dict = null, _dictState = "idle", _dictBase = "", _dictConv = 0, _dictSend = false;
+  var _dict = null, _dictState = "idle", _dictBase = "", _dictHeard = "", _dictConv = 0, _dictSend = false;
   var _statusLoc = "", _typeLoc = "";   // bộ lọc (0.65.3), lưu ở trình duyệt qua JavisConvFilters
   var _contactLoc = "";     // 2026-10-25: "1" = only chats where the customer left a phone number or email
   // Chatbot v5 (2026-10-28, docs/dev/2026-10-chatbot-v5-spec.md): who is handling the chat (the quick filters), the ticked
@@ -422,7 +422,11 @@
     attachListResize(body);
     watchPopOutside();
     paintHead();
-    taiTK(false).catch(function () {}).then(function () { paintHead(); tai(); if (_chon) taiTin(false); });
+    // The accounts and the list are asked at the same time (owner, 2026-11-07: the page loaded slowly). The list waits
+    // for the accounts only before it is drawn, since its rows and head name the accounts.
+    var tk = taiTK(false).catch(function () {}).then(function () { paintHead(); });
+    tai(false, tk);
+    if (_chon) taiTin(false, false, tk);
   }
 
   function filterState() {
@@ -677,7 +681,8 @@
 
   // `im` = nhịp tự động: không xoá danh sách đang hiện, mạng hỏng một nhịp thì giữ màn hình cũ.
   // Không phải nhịp (mở trang, đổi bộ lọc, gõ tìm) thì về trang đầu; nhịp thì hỏi lại đúng số dòng người dùng đã tải (tối đa MAX_DONG_NHIP).
-  async function tai(im) {
+  // `cho` (optional): a promise to wait for after the answer and before drawing, so the list can be asked in parallel.
+  async function tai(im, cho) {
     var box = _host && _host.querySelector(".ht-list");
     if (!box) return;
     if (!im) { _soTrang = 1; box.scrollTop = 0; }
@@ -687,6 +692,7 @@
     if (!im) veSdt(null, laSdt(hoi));
     try {
       var d = await api(url);
+      if (cho) await cho;
       // Hỏi Zalo một số có thể mất vài giây: người dùng đã gõ tiếp thì kết quả này cũ, không được đè lên kết quả mới hơn.
       if (hoi !== _q) return;
       if (!im || d.phone_lookup) veSdt(d.phone_lookup, false);
@@ -1318,7 +1324,8 @@
     veDanhSach();
   }
 
-  async function taiTin(im, docLuon) {
+  // `cho` (optional): a promise to wait for before drawing, as in `tai`.
+  async function taiTin(im, docLuon, cho) {
     if (!_chon) return;
     var id = _chon;
     var box = _host.querySelector(".ht-thread");
@@ -1330,6 +1337,7 @@
     try {
       var d = await api("/conversations/" + id + "/messages?" +
                         (dau ? "limit=" + TIN_TRANG : "after=" + _msgs[_msgs.length - 1].id + "&limit=200") + (docLuon ? "&read=1" : ""));
+      if (cho) await cho;
       if (_chon !== id) return;
       _conv = d.conversation; _silence = d.bot_silence || null; _running = !!d.bot_running;
       if (dau) { _msgs = d.messages || []; _conCu = !!d.has_more; }
@@ -2084,6 +2092,26 @@
   // the words, fixes them, then presses Send (or A.I. draft, where the words are the instruction).
   function dictOn(c) { return !!(_dict && _dictState !== "idle" && c && c.id === _dictConv); }
 
+  // Enter while recording stops and sends in one press, like the main chat (owner 2026-11-05). Pressing the mic redraws
+  // it, so the focus falls back to the page and the reply box's own Enter never runs: listen on the document instead.
+  var _dictKeys = false;
+  function watchDictEnter() {
+    if (_dictKeys) return;
+    _dictKeys = true;
+    document.addEventListener("keydown", function (e) {
+      if (!_conv || !dictOn(_conv) || _chon !== _dictConv) return;
+      var A = window.JavisActs;
+      var send = A ? A.enterSends(e, false) : e.key === "Enter" && !e.shiftKey && !e.isComposing;
+      if (!send) return;
+      var tg = e.target, tag = String((tg && tg.tagName) || "").toUpperCase();
+      var ok = !tg || tag === "BODY" || tag === "HTML" || tg === replyBox()
+        || !!(tg.classList && tg.classList.contains("ib-mic"));
+      if (!ok) return;
+      e.preventDefault(); e.stopPropagation();
+      gui(_conv);
+    }, true);
+  }
+
   function micHtml(c) {
     var st = dictOn(c) ? _dictState : "idle";
     var lab = window.t(st === "idle" ? "ib.mic" : st === "transcribing" ? "ib.mic_busy" : "ib.mic_stop");
@@ -2108,6 +2136,13 @@
     try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (e) { return false; }
   }
 
+  // The last messages of the open chat, for the rewrite at the end of a dictation (dictate.js polish).
+  function dictContext() {
+    var D = window.JavisDictate;
+    var m = _host && _host.querySelector(".ht-thread .ht-msgs");
+    return D && D.recentMessages ? D.recentMessages(m, ".ht-msg:not(.ht-react) .ht-bubble", 4) : [];
+  }
+
   function toggleMic(c) {
     var D = window.JavisDictate;
     if (!D) { setNote(window.t("dict.unsupported"), true); return; }
@@ -2117,17 +2152,27 @@
     // A phone would keep the keyboard up over the words; put it away while listening (see composer-dictate.js, 0.409.0).
     if (ta && touchOnly() && document.activeElement === ta) { try { ta.blur(); } catch (e) { /* ignore */ } }
     _dictBase = ta ? ta.value : "";
+    _dictHeard = "";
     _dictConv = c.id;
     _dictSend = false;
     if (_actNote) setNote("");
+    // A computer shows the words in the box while speaking (owner, 2026-11-06: in the chat box, not a bubble above); a
+    // phone keeps them for the end. When the recording ends the main brain rewrites the sentence in context and that is
+    // what lands, or is sent (see composer-dictate.js).
+    var forConv = c.id;
+    var live = !(D.isPhoneUA && D.isPhoneUA());
     var dict = D.create({
-      onText: function (text) {
-        if (_dict !== dict || _chon !== _dictConv) return;
+      context: dictContext,
+      onText: function (text, final) {
+        if (_dict !== dict) return;
+        _dictHeard = String(text || "");
+        if (final || !live || _dictState !== "listening" || _chon !== forConv) return;
         var box = replyBox();
-        if (!box) return;
-        box.value = D.joinText(_dictBase, text);
-        box.style.height = "auto"; box.style.height = box.scrollHeight + "px";
-        box.scrollTop = box.scrollHeight;
+        if (box) {
+          box.value = D.joinText(_dictBase, _dictHeard);
+          box.style.height = "auto"; box.style.height = box.scrollHeight + "px";
+          box.scrollTop = box.scrollHeight;
+        }
       },
       onState: function (st) {
         if (_dict !== dict) return;
@@ -2136,11 +2181,16 @@
         if (st === "idle") _dict = null;
         paintMic();
         if (st !== "idle" || was === "idle") return;
-        var send = _dictSend;
-        _dictSend = false;
+        var send = _dictSend, heard = _dictHeard;
+        _dictSend = false; _dictHeard = "";
         if (_chon !== _dictConv || !_conv) return;
-        if (send) { gui(_conv); return; }
         var box = replyBox();
+        if (box && heard) {
+          box.value = D.joinText(_dictBase, heard);
+          box.style.height = "auto"; box.style.height = box.scrollHeight + "px";
+          box.scrollTop = box.scrollHeight;
+        }
+        if (send) { gui(_conv); return; }
         if (box && !touchOnly()) { try { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } catch (e) { /* ignore */ } }
       },
       onError: function (code) {
@@ -2152,6 +2202,7 @@
     });
     _dict = dict;
     _dictState = "listening";
+    watchDictEnter();
     paintMic();
     dict.start();
   }
@@ -2160,7 +2211,7 @@
   function dropMic() {
     if (!_dict) return;
     var d = _dict;
-    _dict = null; _dictState = "idle"; _dictSend = false;
+    _dict = null; _dictState = "idle"; _dictSend = false; _dictHeard = "";
     try { d.cancel(); } catch (e) { /* ignore */ }
   }
 

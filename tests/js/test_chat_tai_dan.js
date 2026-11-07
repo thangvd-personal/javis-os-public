@@ -42,7 +42,7 @@ check("mở hội thoại cũ kèm limit, không kéo cả cuộc về",
   /\/sessions\/\$\{encodeURIComponent\(id\)\}\?limit=\$\{TIN_MOI_LUOT\}/.test(APP));
 check("có hằng số số tin mỗi lượt", /const TIN_MOI_LUOT = \d+;/.test(APP));
 check("vẫn rơi xuống đáy sau khi dựng xong",
-  /scrollBottom\(true\);\s*\n\s*ghimDay\(ticket\);\s*\n\s*syncActiveUI\(\);\s*\n\s*if \(capNhat\) return;\s*\n\s*notifySessions\(\);/.test(APP));
+  /scrollBottom\(true\);\s*\n\s*ghimDay\(ticket\);\s*\n\s*syncActiveUI\(\);\s*\n\s*if \(capNhat\) return;\s*\n\s*notifySessions\("open"\);/.test(APP));
 // Đặt scrollTop MỘT LẦN là không đủ: thanh mốc hội thoại chèn vào rồi bật lề phải làm bong
 // bóng xuống dòng, ảnh tải xong mới đẩy chiều cao ra. Đo thật trên cuộc 120 tin: mở xong
 // đứng cách đáy 174px, câu trả lời gần nhất bị cắt. Nên phải ghim lại trong một quãng ngắn.
@@ -70,7 +70,7 @@ check("còn nút bấm tay khi trình duyệt không có IntersectionObserver",
 check("có cờ chặn cuộn trong lúc chèn ngược", /let _neoChenCu = null, _dangChenCu = false(, _dangDungLoat = false)?;/.test(APP));
 // 2026-11-05: building a whole chat (open, F5) also holds the scroll, then scrolls once: one layout, not one per bubble.
 check("dựng cả cuộc chat chỉ cuộn một lần ở cuối",
-  /_dangDungLoat = true;\s*\n\s*try \{ ds\.forEach\(/.test(APP) && /finally \{ _dangDungLoat = false; \}/.test(APP));
+  /_dangDungLoat = true;\s*\n\s*try \{ ngoaiAlpine\(\(\) => ds\.forEach\(/.test(APP) && /finally \{ _dangDungLoat = false; \}/.test(APP));
 // scrollBottom goes through chat-scroll.js, which does not scroll while suspended() says older messages go in.
 const CS = require(path.join(__dirname, "..", "..", "dashboard", "chat-scroll.js"));
 const fakeArea = { scrollHeight: 2000, clientHeight: 400, scrollTop: 100, addEventListener() {}, querySelector: () => null };

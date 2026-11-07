@@ -59,14 +59,29 @@ _reviewers: Callable[[], list[str]] | None = None
 _brain_root: Callable[[str], str] = lambda b: b
 REVIEW_DIFF_MAX = 60000
 REVIEW_TIMEOUT_S = 600
+# Reviewers of another family tried for one head before the review is skipped (owner, 05/11/2026: one engine that cannot
+# run used to skip the review outright, with no reason shown).
+REVIEW_TRY_MAX = 2
 LESSONS_MAX = 30
 # Provider families: a reviewer from the author's own family is not a second pair of eyes.
 _FAMILY = {"anthropic-cli": "claude", "anthropic-api": "claude", "anthropic-compat": "claude",
            "openai-oauth": "openai", "openai": "openai"}
 
+# A push or PR that failed after a green gate is retried, never left for the person to notice (owner, 06/11/2026: "once
+# GitHub is connected it must push on its own, like Claude's cloud sessions"). Retries: the next turn of the chat, the
+# watcher on this backoff, a reconnect of GitHub (right away), and the "Push again" button.
+SHIP_RETRY_S = (60, 120, 300, 600, 1800)
+SHIP_RETRY_MAX = 30         # about 13 hours of tries; a reconnect or the button still retries after that
+
 _last_gate: dict[str, str] = {}
 _running: dict[str, bool] = {}
 _lock = threading.Lock()
+# Last green gate per chat and repo, with the worktree fingerprint it holds for: a retry of a failed push reuses it
+# instead of running every local check again for code that did not change.
+_ok_reports: dict[str, tuple[str, dict[str, Any]]] = {}
+# Chat+repo keys a push is in flight for (one event loop: a plain set is enough to keep two pushes from racing).
+_SHIPPING: set = set()
+_BG_TASKS: set = set()
 
 
 def _c(vi: str, en: str) -> str:
@@ -228,22 +243,78 @@ def _final_branch(sid: str, repo: dict[str, Any], title: str) -> str:
     return new if r.returncode == 0 else cur
 
 
+class PushError(github_repos.RepoError):
+    """A push or PR step that failed, with what kind of failure it is (decides the wording and the retry)."""
+
+    def __init__(self, message: str, kind: str):
+        super().__init__(message)
+        self.kind = kind        # auth | perm | diverged | other
+
+
+_AUTH_RE = re.compile(r"(could not read Username|Authentication failed|Invalid username or password|"
+                      r"returned error: 401|terminal prompts disabled|Bad credentials)", re.I)
+_PERM_RE = re.compile(r"(returned error: 403|returned error: 404|Permission to \S+ denied|"
+                      r"Write access to repository not granted|Repository not found|denied to )", re.I)
+
+
+def auth_message() -> str:
+    return _c("GitHub không nhận đăng nhập của Javis khi đẩy code: chưa kết nối, hoặc token đã hết hạn hay bị thu hồi. "
+              "Vào trang Kết nối, đăng nhập lại GitHub. Kết nối xong Javis tự đẩy lại ngay, không cần nhắn gì, code "
+              "đã commit trên máy không mất.",
+              "GitHub did not accept Javis's sign-in when pushing: not connected, or the token expired or was revoked. "
+              "Sign in to GitHub again on the Connections page. Once connected Javis pushes again on its own, no "
+              "message needed; the committed code on this machine is safe.")
+
+
+def _perm_message(full_name: str) -> str:
+    login = (github_repos.status().get("login") or "?") if github_repos.token() else "?"
+    return _c(f"Tài khoản GitHub {login} không có quyền ghi vào {full_name}. Đăng nhập bằng nút Đăng nhập với GitHub thì "
+              "cài app Javis cho repo này (trang Kết nối, phần chọn repo); dùng token thì token cần quyền ghi Contents "
+              "(token cổ điển: quyền repo). Sửa xong Javis tự đẩy lại.",
+              f"GitHub account {login} cannot write to {full_name}. With Sign in with GitHub, install the Javis app on "
+              "this repo (Connections page, repo picker); with a token, it needs Contents write (classic token: the "
+              "repo scope). Once fixed Javis pushes again on its own.")
+
+
+def push_error(stderr: str, branch: str, full_name: str) -> PushError:
+    """A failed `git ls-remote` or `git push`, in words a person can act on (never the raw git prompt error)."""
+    raw = str(stderr or "")
+    msg = github_repos._redact(raw.strip().splitlines()[-1] if raw.strip() else "?")
+    if "non-fast-forward" in raw or "fetch first" in raw:
+        return PushError(_c(f"Nhánh {branch} trên GitHub có commit mà máy này không có, Javis không ghi đè. ({msg})",
+                            f"Branch {branch} on GitHub has commits this machine lacks; Javis does not overwrite "
+                            f"them. ({msg})"), "diverged")
+    if _AUTH_RE.search(raw):
+        return PushError(auth_message(), "auth")
+    if _PERM_RE.search(raw):
+        return PushError(_perm_message(full_name), "perm")
+    return PushError(_c(f"Đẩy lên không được: {msg}. Javis tự thử lại sau ít phút.",
+                        f"Push failed: {msg}. Javis tries again in a few minutes."), "other")
+
+
+def fail_kind(e: BaseException) -> str:
+    if isinstance(e, PushError):
+        return e.kind
+    if isinstance(e, GitHubError):
+        return "auth" if e.status == 401 else ("perm" if e.status in (403, 404) else "other")
+    return "other" if github_repos.token() else "auth"
+
+
 def push(repo: dict[str, Any], branch: str) -> tuple[str, bool]:
     """Push HEAD to origin/<branch>. Returns (sha, pushed_now). Never forces."""
-    wt = repo["worktree"]
+    wt, fn = repo["worktree"], repo.get("full_name") or ""
     sha = github_repos.git_out(["rev-parse", "HEAD"], wt)
-    remote = github_repos.git(["ls-remote", "origin", f"refs/heads/{branch}"], wt, auth=True).stdout.split()
+    if not github_repos.token():
+        raise PushError(auth_message(), "auth")
+    ls = github_repos.git(["ls-remote", "origin", f"refs/heads/{branch}"], wt, auth=True, check=False)
+    if ls.returncode != 0:
+        raise push_error(ls.stderr or ls.stdout, branch, fn)
+    remote = (ls.stdout or "").split()
     if remote and remote[0] == sha:
         return sha, False
     p = github_repos.git(["push", "origin", f"HEAD:refs/heads/{branch}"], wt, auth=True, check=False, timeout=300)
     if p.returncode != 0:
-        msg = github_repos._redact((p.stderr or "").strip().splitlines()[-1] if p.stderr else "?")
-        if "non-fast-forward" in (p.stderr or "") or "fetch first" in (p.stderr or ""):
-            raise github_repos.RepoError(_c(f"Nhánh {branch} trên GitHub có commit mà máy này không có, Javis không "
-                                            f"ghi đè. ({msg})",
-                                            f"Branch {branch} on GitHub has commits this machine lacks; Javis does "
-                                            f"not overwrite them. ({msg})"))
-        raise github_repos.RepoError(_c(f"Đẩy lên không được: {msg}", f"Push failed: {msg}"))
+        raise push_error(p.stderr or p.stdout, branch, fn)
     github_repos.git(["branch", f"--set-upstream-to=origin/{branch}"], wt, check=False)
     return sha, True
 
@@ -299,7 +370,13 @@ def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> 
     title = (task_line[:100] or (info.get("title") or "").strip() or _c("Thay đổi từ Javis", "Changes from Javis"))
     row = st().ensure(sid, fn, brain=brain, worktree=repo["worktree"], base_branch=_base_name(repo),
                       engine=str(info.get("engine") or ""), model=str(info.get("model") or ""))
-    if not row.get("pr_number") or row.get("integ") == "merged":
+    pending = ship_failed(row)
+    if pending and pending.get("task"):
+        # A retry of a push that failed: the job is the one asked for back then, not the "push it" sent since.
+        info["task"] = pending["task"]
+    if pending and row.get("title") and row.get("integ") != "merged":
+        title = row["title"]
+    elif not row.get("pr_number") or row.get("integ") == "merged":
         # A new job: its request names it, and it targets the base the chat picked now (0.368.0).
         row = st().update(sid, fn, title=title[:200], base_branch=_base_name(repo))
     else:
@@ -310,6 +387,8 @@ def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> 
                           integ="no_pr", post_merge="", merged_sha="", fix_rounds=0, rerun_used=0)
     sha = commit_all(repo["worktree"], f"{title[:72]}\n\nJavis chat {sid[:8]}")
     branch = row.get("branch") or _final_branch(sid, repo, title)
+    if branch != row.get("branch"):
+        st().update(sid, fn, branch=branch)     # decided once: a retry after a failed push uses the same branch
     pushed_sha, pushed_now = push(repo, branch)
     pr = ensure_pr(repo, branch, title, pr_body(info, report, sid))
     fields = dict(branch=branch, head_sha=pushed_sha, exec="done", stuck_reason="",
@@ -392,17 +471,82 @@ async def after_turn(sid: str, brain: str, user_message: str = "") -> list[dict[
                 st().update(sid, r["full_name"], fix_rounds=0)
     out = []
     for repo in repos:
+        key = _key(sid, repo["full_name"])
+        if key in _SHIPPING:
+            continue        # a retry of this repo's push is running right now; it picks up this turn's state
+        _SHIPPING.add(key)
         try:
             out.append(await _after_turn_repo(sid, brain, repo, user_message))
         except Exception as e:  # noqa: BLE001 - one repo's failure must not stop the others
             await _say(sid, f"**{repo['full_name']}**: {e}", False)
+        finally:
+            _SHIPPING.discard(key)
     return [x for x in out if x]
 
 
-async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_message: str = "") -> dict[str, Any] | None:
+def _key(sid: str, full_name: str) -> str:
+    return f"{sid}:{str(full_name or '').lower()}"
+
+
+def ship_failed(row: dict[str, Any] | None) -> dict[str, Any]:
+    """The pending retry of a push or PR that failed after a green gate, {} when there is none."""
+    return dict(((row or {}).get("gate") or {}).get("ship_failed") or {})
+
+
+def _gate_for_ship(sid: str, brain: str, repo: dict[str, Any], retry: bool = False) -> dict[str, Any] | None:
+    """The gate of this turn. `retry`: a push that failed earlier is owed, so an unchanged worktree is not "nothing
+    to do" (it was: the gate remembered the state and every later turn skipped it, so the push never ran again)."""
+    key = _key(sid, repo["full_name"])
+    if retry:
+        # The commit made before the failed push changed the fingerprint, so the plain gate would run every check
+        # again for code that already passed them.
+        try:
+            fp = fingerprint(repo["worktree"])
+        except github_repos.RepoError:
+            return None
+        cached = _ok_reports.get(key)
+        if cached and cached[0] == fp:
+            with _lock:
+                _last_gate[f"{sid}:{repo.get('full_name')}"] = fp
+            return cached[1]
+    report = gate_repo(sid, brain, repo)
+    if report is None and retry:
+        report = gate_repo(sid, brain, repo, force=True)
+    if report and report.get("ok"):
+        _remember_ok(sid, repo, report)
+    return report
+
+
+def _remember_ok(sid: str, repo: dict[str, Any], report: dict[str, Any]) -> None:
+    try:
+        _ok_reports[_key(sid, repo["full_name"])] = (fingerprint(repo["worktree"]), report)
+    except github_repos.RepoError:
+        pass
+
+
+def _mark_ship_failed(sid: str, fn: str, reason: str, kind: str) -> dict[str, Any]:
+    row = st().get(sid, fn) or {}
+    gate = dict(row.get("gate") or {})
+    prev = dict(gate.get("ship_failed") or {})
+    tries = int(prev.get("tries") or 0) + 1
+    now = time.time()
+    gate["ship_failed"] = {"kind": kind, "tries": tries, "at": now,
+                           "next_at": now + SHIP_RETRY_S[min(tries, len(SHIP_RETRY_S)) - 1],
+                           "task": prev.get("task") or str(_session(sid).get("task") or "")[:2000]}
+    return st().update(sid, fn, exec="stuck", stuck_reason=reason, gate=gate)
+
+
+async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_message: str = "",
+                           retry: bool = False) -> dict[str, Any] | None:
     fn = repo["full_name"]
     row = st().get(sid, fn) or {}
+    owed = bool(ship_failed(row))
     if not await asyncio.to_thread(_unpushed, repo, row):
+        if owed:
+            # GitHub already has this commit (pushed some other way): nothing is owed any more.
+            gate = dict(row.get("gate") or {})
+            gate.pop("ship_failed", None)
+            st().update(sid, fn, gate=gate, exec="done" if row.get("head_sha") else "idle", stuck_reason="")
         # A review round that changed nothing: the author weighed the findings and rejected them (spec 10). Its
         # reasons are in the chat; the findings no longer hold the merge.
         if row and _is_review_turn(user_message) and (row.get("gate") or {}).get("review_open"):
@@ -415,11 +559,20 @@ async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_mess
         return None
     st().ensure(sid, fn, brain=brain, worktree=repo["worktree"])
     st().update(sid, fn, exec="running", stuck_reason="")
-    report = await asyncio.to_thread(gate_repo, sid, brain, repo)
+    report = await asyncio.to_thread(_gate_for_ship, sid, brain, repo, retry or owed)
     if report is None:
-        st().update(sid, fn, exec="done" if row.get("head_sha") else "idle")
+        if owed:
+            # Nothing ran (another gate holds the repo): keep the failure showing, never a silent "idle".
+            st().update(sid, fn, exec="stuck", stuck_reason=row.get("stuck_reason") or "")
+        else:
+            st().update(sid, fn, exec="done" if row.get("head_sha") else "idle")
         return None
     row = st().get(sid, fn) or {}
+    if not report["ok"] and owed:
+        # Red now: nothing is owed to GitHub until the code is fixed, so the watcher stops retrying (and re-gating).
+        gate = dict(row.get("gate") or {})
+        gate.pop("ship_failed", None)
+        row = st().update(sid, fn, gate=gate)
     if not report["ok"]:
         head = await asyncio.to_thread(github_repos.git_out, ["rev-parse", "HEAD"], repo["worktree"])
         why = _c("Kiểm tra ở máy đỏ trước khi đẩy lên", "Local checks failed before push") if not report["secrets"] \
@@ -427,26 +580,107 @@ async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_mess
         details = github_gate.summary(report) + _fail_output(report)
         await asyncio.to_thread(learn_from_gate, brain, fn, report)
         await _say(sid, f"**{fn}**\n{github_gate.summary(report)}", False)
-        await request_fix(row, why, details, f"{sid}:{fn}:gate:{head}:{_fingerprint_short(repo)}")
+        if not await request_fix(row, why, details, f"{sid}:{fn}:gate:{head}:{_fingerprint_short(repo)}"):
+            # No fix turn started: either request_fix already marked the row stuck, or this exact state was already
+            # sent for a fix and the turn changed nothing. Either way nobody is working on it now, so it must not
+            # stay "running" (the chat icon pulsed orange forever next to a merged repo).
+            if (st().get(sid, fn) or {}).get("exec") == "running":
+                st().update(sid, fn, exec="stuck", stuck_reason=why)
         return report
-    if not repo.get("can_push", True):
-        reason = _c("Token không có quyền đẩy lên repo này.", "The token cannot push to this repo.")
-        st().update(sid, fn, exec="stuck", stuck_reason=reason)
-        await _say(sid, f"**{fn}**: {reason}", False)
-        return report
+    return await _ship_and_say(sid, brain, repo, report, owed)
+
+
+async def _ship_and_say(sid: str, brain: str, repo: Dict[str, Any], report: Dict[str, Any],
+                        owed: bool) -> Dict[str, Any]:
+    """Gate green: push and open the PR, say it in the chat. A failure is remembered and retried, not dropped."""
+    fn = repo["full_name"]
     try:
+        if not repo.get("can_push", True):
+            raise PushError(_perm_message(fn), "perm")
         row = await asyncio.to_thread(ship, sid, brain, repo, report)
     except (github_repos.RepoError, GitHubError) as e:
-        st().update(sid, fn, exec="stuck", stuck_reason=str(e))
-        await _say(sid, f"**{fn}**: {e}", False)
+        kind = fail_kind(e)
+        reason = str(e) if isinstance(e, PushError) else (auth_message() if kind == "auth" else str(e))
+        # ship() may have committed before the push failed: remember the green gate for the committed state, so the
+        # retry pushes right away instead of running every check again.
+        await asyncio.to_thread(_remember_ok, sid, repo, report)
+        row = await asyncio.to_thread(_mark_ship_failed, sid, fn, reason, kind)
+        head = await asyncio.to_thread(github_repos.git_out, ["rev-parse", "HEAD"], repo["worktree"])
+        # Said once per commit and kind of failure: the watcher's retries do not repeat it every few minutes.
+        await _say(sid, f"**{fn}**: {reason}", False, once=f"shipfail:{sid}:{fn}:{head}:{kind}")
         return report
-    if row.get("_pushed_now"):
-        msg = _c(f"Đã đẩy lên nhánh `{row['branch']}`, PR #{row['pr_number']}: {row['pr_url']}\nĐang chờ CI.",
-                 f"Pushed to `{row['branch']}`, PR #{row['pr_number']}: {row['pr_url']}\nWaiting for CI.")
+    if row.get("_pushed_now") or owed:
+        again = _c("Đã đẩy lại được. ", "Pushed after all. ") if owed else ""
+        msg = _c(f"{again}Đã đẩy lên nhánh `{row['branch']}`, PR #{row['pr_number']}: {row['pr_url']}\nĐang chờ CI.",
+                 f"{again}Pushed to `{row['branch']}`, PR #{row['pr_number']}: {row['pr_url']}\nWaiting for CI.")
         summary = github_gate.summary(report)
         await _say(sid, f"**{fn}**\n{summary}\n{msg}" if summary else f"**{fn}**\n{msg}", True,
                    once=f"pushed:{sid}:{fn}:{row['head_sha']}")
     return report
+
+
+async def retry_ship(sid: str, full_name: str, by_person: bool = False) -> dict[str, Any]:
+    """Push again a commit whose push or PR failed. `by_person`: the "Push again" button, which also raises the reason
+    when it still fails, so the panel can show it."""
+    row = st().get(sid, full_name)
+    if not row:
+        raise github_repos.RepoError(_c("Cuộc này chưa có việc GitHub nào cho repo đó.",
+                                        "This chat has no GitHub work for that repo."))
+    fn = row["full_name"]
+    key = _key(sid, fn)
+    if key in _SHIPPING:
+        if by_person:
+            raise github_repos.RepoError(_c("Javis đang đẩy repo này rồi, chờ chút.", "Javis is pushing this repo already."))
+        return row
+    if not await asyncio.to_thread(github_repos.token):
+        if by_person:
+            raise github_repos.RepoError(auth_message())
+        return row
+    repos = await asyncio.to_thread(github_repos.session_repos, sid, row.get("brain") or "")
+    repo = next((r for r in repos if r.get("worktree") and r["full_name"].lower() == fn.lower()), None)
+    if repo is None:
+        if by_person:
+            raise github_repos.RepoError(_c("Repo này không còn gắn với cuộc trò chuyện.",
+                                            "This repo is no longer attached to the chat."))
+        return row
+    _SHIPPING.add(key)
+    try:
+        await _after_turn_repo(sid, row.get("brain") or "", repo, retry=True)
+    finally:
+        _SHIPPING.discard(key)
+    row = st().get(sid, fn) or row
+    if by_person and ship_failed(row):
+        raise github_repos.RepoError(row.get("stuck_reason") or _c("Vẫn chưa đẩy được.", "Still not pushed."))
+    return row
+
+
+async def retry_due(force: bool = False) -> int:
+    """Retry the failed pushes whose wait is over. `force`: GitHub was just connected again, retry all of them now."""
+    rows = await asyncio.to_thread(st().ship_pending)
+    if not rows or not await asyncio.to_thread(github_repos.token):
+        return 0
+    now, n = time.time(), 0
+    for row in rows:
+        sf = ship_failed(row)
+        if not force and (float(sf.get("next_at") or 0) > now or int(sf.get("tries") or 0) >= SHIP_RETRY_MAX):
+            continue
+        try:
+            await retry_ship(row["sid"], row["full_name"])
+            n += 1
+        except Exception as e:  # noqa: BLE001 - one row must not stop the others
+            print(f"[github retry] {row.get('full_name')}: {type(e).__name__}: {e}")
+    return n
+
+
+def on_connected() -> None:
+    """GitHub was connected again (token, backup token or sign-in): push what failed for want of it, right away."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    t = loop.create_task(retry_due(force=True))
+    _BG_TASKS.add(t)
+    t.add_done_callback(_BG_TASKS.discard)
 
 
 def _fingerprint_short(repo: dict[str, Any]) -> str:
@@ -933,17 +1167,27 @@ def _family(provider: str) -> str:
     return _FAMILY.get(provider or "", provider or "")
 
 
-def pick_reviewer(author_provider: str) -> str:
-    """The first available engine of ANOTHER family than the author's, "" when there is none (spec 10)."""
+def pick_reviewers(author_provider: str) -> List[str]:
+    """Available engines of ANOTHER family than the author's, in the Models page order (spec 10)."""
     try:
         avail = list(_reviewers() if _reviewers else [])
     except Exception:
         avail = []
     fam = _family(author_provider)
-    for p in avail:
-        if _family(p) != fam:
-            return p
-    return ""
+    return [p for p in avail if _family(p) != fam]
+
+
+def pick_reviewer(author_provider: str) -> str:
+    """The first available engine of ANOTHER family than the author's, "" when there is none (spec 10)."""
+    lst = pick_reviewers(author_provider)
+    return lst[0] if lst else ""
+
+
+def _short_reason(e: BaseException) -> str:
+    if isinstance(e, asyncio.TimeoutError):
+        return _c("quá thời gian chờ", "timed out")
+    msg = " ".join(str(e or "").split())
+    return (msg[:160] + "...") if len(msg) > 160 else (msg or type(e).__name__)
 
 
 def parse_findings(raw: str) -> list[dict[str, Any]] | None:
@@ -978,31 +1222,55 @@ async def cross_review(row: dict[str, Any]) -> dict[str, Any]:
     gate = dict(row.get("gate") or {})
     if gate.get("reviewed_sha") == head:
         return row
-    reviewer = pick_reviewer(row.get("engine") or "")
-    if not reviewer or _review is None:
+    candidates = pick_reviewers(row.get("engine") or "")[:REVIEW_TRY_MAX]
+    if not candidates or _review is None:
         gate["reviewed_sha"] = head
         gate["review_skipped"] = True
         row = st().update(sid, fn, gate=gate)
         if row.get("pr_number") and st().mark_step(f"noreview:{fn}:{row['pr_number']}"):
             try:
                 await asyncio.to_thread(github_repos.client().comment, fn, row["pr_number"],
-                                        "Not cross-reviewed: only one engine family is connected to Javis.")
+                                        "Not cross-reviewed: no engine of another family that can review text-only "
+                                        "is ready in Javis.")
             except Exception:
                 pass
+            # Owner, 05/11/2026: say why in the chat too. A plan run through a CLI (ChatGPT, Grok Build, Antigravity)
+            # keeps its own file and shell tools, and a diff from a repo is untrusted input, so it never reviews.
+            await _say(sid, _c(f"**{fn}**: chưa review chéo được. Review chéo cần một engine khác họ với engine đã viết "
+                               "code, chạy ở chế độ chỉ chữ: Claude, hoặc một nhà dùng API key (OpenAI, Gemini, "
+                               "DeepSeek, OpenRouter...). Gói ChatGPT, Grok Build và Antigravity chạy qua CLI còn "
+                               "công cụ đọc ghi file nên không được dùng để đọc diff của repo.",
+                               f"**{fn}**: not cross-reviewed. A cross review needs an engine of another family than "
+                               "the author, run text-only: Claude, or a provider on an API key (OpenAI, Gemini, "
+                               "DeepSeek, OpenRouter...). The ChatGPT, Grok Build and Antigravity plans run through a "
+                               "CLI that keeps file tools, so they never read a repo's diff."), True,
+                       once=f"noreviewsay:{fn}:{row['pr_number']}")
         return row
     if not st().mark_step(f"review:{fn}:{head}"):
         return row
     gate["review_running"] = True
     st().update(sid, fn, gate=gate)
     findings: list[dict[str, Any]] | None = None
+    reviewer, why = candidates[0], ""
+    prompt = ""
     try:
         diff = await asyncio.to_thread(_review_diff, row)
         task = str(_session(sid).get("task") or row.get("title") or "")[:2000]
         prompt = REVIEW_PROMPT.format(title=row.get("title") or "", repo=fn, diff=diff, task=task)
-        raw = await asyncio.wait_for(_review(prompt, reviewer), timeout=REVIEW_TIMEOUT_S)
-        findings = parse_findings(raw)
-    except Exception as e:  # noqa: BLE001 - a broken reviewer must not hold the PR forever
-        print(f"[github review] {fn}: {type(e).__name__}: {e}")
+    except Exception as e:  # noqa: BLE001
+        why = _short_reason(e)
+        print(f"[github review] {fn}: diff: {type(e).__name__}: {e}")
+    for cand in candidates if prompt else []:
+        reviewer = cand
+        try:
+            raw = await asyncio.wait_for(_review(prompt, cand), timeout=REVIEW_TIMEOUT_S)
+            findings = parse_findings(raw)
+            if findings is not None:
+                break
+            why = _c("câu trả lời không đúng khuôn JSON", "the answer was not the JSON asked for")
+        except Exception as e:  # noqa: BLE001 - a broken reviewer must not hold the PR forever: try the next one
+            why = _short_reason(e)
+            print(f"[github review] {fn}: {cand}: {type(e).__name__}: {e}")
     gate = dict((st().get(sid, fn) or row).get("gate") or {})
     gate.pop("review_running", None)
     gate["reviewed_sha"] = head
@@ -1010,8 +1278,9 @@ async def cross_review(row: dict[str, Any]) -> dict[str, Any]:
     if findings is None:
         gate["review_skipped"] = True
         row = st().update(sid, fn, gate=gate)
-        await _say(sid, _c(f"**{fn}**: review chéo bằng {reviewer} không chạy được, bỏ qua lần này.",
-                           f"**{fn}**: cross review with {reviewer} did not run; skipped this time."), True,
+        tried = ", ".join(candidates)
+        await _say(sid, _c(f"**{fn}**: review chéo bằng {tried} không chạy được ({why}), bỏ qua lần này.",
+                           f"**{fn}**: cross review with {tried} did not run ({why}); skipped this time."), True,
                    once=f"reviewfail:{fn}:{head}")
         return row
     if not findings:
@@ -1124,8 +1393,10 @@ async def tick() -> int:
 
 
 def reconcile_on_start() -> None:
-    """A restart in the middle of a gate leaves `exec=running`: put it back so the next turn or tick decides."""
-    for row in st().active():
+    """A restart in the middle of a gate leaves `exec=running`: put it back so the next turn or tick decides.
+
+    Every running row, not only pushed ones: a repo whose first gate never passed has no head_sha yet."""
+    for row in st().running():
         if row["exec"] == "running" and row["ci"] not in ("pending", "running"):
             st().update(row["sid"], row["full_name"], exec="done" if row["head_sha"] else "idle")
 
@@ -1146,6 +1417,10 @@ async def run_watcher() -> None:
                     delay = POLL_FAST_S
         except Exception as e:  # noqa: BLE001
             print(f"[github watcher] {type(e).__name__}: {e}")
+        try:
+            await retry_due()
+        except Exception as e:  # noqa: BLE001
+            print(f"[github retry] {type(e).__name__}: {e}")
         await asyncio.sleep(delay)
 
 
@@ -1154,7 +1429,12 @@ async def run_watcher() -> None:
 # ============================================================
 def session_state(sid: str) -> dict[str, Any]:
     rows = st().for_session(sid)
-    return {"icon": github_store.icon(rows), "repos": [_row_view(r) for r in rows],
+    repos = []
+    for r in rows:
+        v = _row_view(r)
+        v["merging"] = merging(sid, r["full_name"])
+        repos.append(v)
+    return {"icon": github_store.icon(rows), "repos": repos,
             "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
 
@@ -1173,7 +1453,48 @@ def cancel_next(sid: str, qid: int) -> dict[str, Any]:
             "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
 
+# Merges a person started, keyed by chat and repo. Each one runs as its own task, not as part of the HTTP request:
+# closing the panel, the tab or the phone app drops the request, and the server used to cancel the merge with it
+# (owner, 2026-11-06: "press Merge, close it, it should still merge in the background").
+_PERSON_MERGES: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
+
+def _person_key(sid: str, full_name: str) -> str:
+    return f"{sid}\n{str(full_name or '').lower()}"
+
+
+def merging(sid: str, full_name: str) -> bool:
+    """True while a merge a person started for this chat and repo is still running."""
+    t = _PERSON_MERGES.get(_person_key(sid, full_name))
+    return bool(t is not None and not t.done())
+
+
+def _person_merge_done(key: str, task: asyncio.Task[dict[str, Any]]) -> None:
+    if _PERSON_MERGES.get(key) is task:
+        _PERSON_MERGES.pop(key, None)
+    if task.cancelled():
+        return
+    err = task.exception()      # read it, so a merge nobody waits for any more never logs "exception never retrieved"
+    if err is not None and not isinstance(err, github_repos.RepoError):
+        print(f"[github merge] {key.split(chr(10))[-1]}: {type(err).__name__}: {err}")
+
+
 async def merge_by_person(sid: str, full_name: str) -> dict[str, Any]:
+    """A person pressed Merge. The merge runs detached and the caller only waits for it.
+
+    If the request goes away (panel closed, tab closed, connection lost), the merge keeps going and the chat still hears
+    the result. Pressing Merge again while one is running joins it instead of starting a second merge.
+    """
+    key = _person_key(sid, full_name)
+    task = _PERSON_MERGES.get(key)
+    if task is None or task.done():
+        task = asyncio.get_running_loop().create_task(_merge_by_person(sid, full_name))
+        _PERSON_MERGES[key] = task
+        task.add_done_callback(lambda t, k=key: _person_merge_done(k, t))
+    return await asyncio.shield(task)
+
+
+async def _merge_by_person(sid: str, full_name: str) -> dict[str, Any]:
     row = st().get(sid, full_name)
     if not row or not row.get("pr_number"):
         raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repo đó.", "This chat has no PR for that repo."))

@@ -1918,7 +1918,7 @@
       focusPicker: false, focusBack: null, searchOpen: false, searchResults: null, searchQuery: "", jumped: null,
       openMember: null, advOpen: false, turns: [], sideOpener: null, rowMenu: null, focusRowMenu: false, swallowClick: false,
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
-      renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle",
+      renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle", dictSend: false,
       atts: [], folder: null, repos: [], ghIcon: null, skills: null, skillsBrain: "", info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
       autoOpened: false, unclamped: {}, outbox: [] };
   }
@@ -2237,7 +2237,13 @@
     }
     var built = listItems();
     var prev = S.listCache && S.listCache.team === S.team.team_id && S.listCache.box === box ? S.listCache.items : null;
-    S.listCache = { team: S.team.team_id, box: box, items: listSync(box, built.items, prev, htmlNodes) };
+    // Performance (2026-11-05): Alpine walks every node added anywhere on the page looking for x- directives; message
+    // nodes never carry one. Same two steps as the main chat (app.js chatAppend): the list itself is flagged, and the
+    // sync runs inside Alpine.mutateDom so what is written into a message is not walked either.
+    box._x_ignoreMutationObserver = true;
+    var A = typeof window !== "undefined" && window.Alpine;
+    var sync = function () { return listSync(box, built.items, prev, htmlNodes); };
+    S.listCache = { team: S.team.team_id, box: box, items: A && typeof A.mutateDom === "function" ? A.mutateDom(sync) : sync() };
     // The latest assistant message keeps its Like button visible (like Zalo); older ones show it on hover.
     var lastAgent = null;
     for (var li = built.list.length - 1; li >= 0; li--) if (built.list[li].author_kind === "agent") { lastAgent = built.list[li].id; break; }
@@ -2338,16 +2344,24 @@
 
   // The "+" menu of the composer: Assign as a job (on/off), Mention an assistant, Search this team. Room for more later
   // without growing the composer row (the old always-visible "Assign job" pill took a third of a phone's width).
+  // The GitHub mark of the main chat (github-connect.js), so a team chat's repo looks the same (owner, 2026-11-06).
+  // The branch icon only when that file is missing.
+  function ghLogo() {
+    var G = typeof window !== "undefined" && window.JavisGithubRepos;
+    return G && G.logo ? G.logo : ic("git-branch");
+  }
+
   function plusMenuHtml(off) {
     if (!S.plusOpen || off) return "";
+    // `icon` is an icon name, or ready markup when it starts with "<" (the GitHub logo).
     var item = function (attr, icon, label, checked) {
-      return '<button type="button" ' + attr + ">" + ic(icon) + "<span>" + esc(label) + "</span>" +
+      return '<button type="button" ' + attr + ">" + (icon.charAt(0) === "<" ? icon : ic(icon)) + "<span>" + esc(label) + "</span>" +
         (checked ? '<span class="tm-plus-on">' + ic("check") + "</span>" : "") + "</button>";
     };
     return '<div class="tm-plus-menu" role="menu" aria-label="' + esc(tw("teams.plus")) + '">' +
       item('role="menuitem" data-plus-attach="1"', "paperclip", tw("teams.attach")) +
       item('role="menuitem" data-plus-folder="1"', "folder", tw("cp.pin_folder")) +
-      item('role="menuitem" data-plus-github="1"', "git-branch", tw("gh.menu")) +
+      item('role="menuitem" data-plus-github="1"', ghLogo(), tw("gh.menu")) +
       item('role="menuitemcheckbox" aria-checked="' + (S.asJob ? "true" : "false") + '" class="tm-asjob" title="' +
         esc(tw("teams.as_job_title")) + '"', "list-todo", tw("teams.as_job"), S.asJob) +
       item('role="menuitem" data-insert-at="1"', "at-sign", tw("teams.mention_insert")) +
@@ -2366,6 +2380,13 @@
 
   // ───────────── mic: speak, the words land in the input (dictate.js) ─────────────
 
+  // The last messages of the open team, for the rewrite at the end of a dictation (dictate.js polish).
+  function dictContext() {
+    var D = typeof window !== "undefined" && window.JavisDictate;
+    var box = S.el && S.el.querySelector(".tm-msgs");
+    return D && D.recentMessages ? D.recentMessages(box, ".tm-msg .tm-text", 4) : [];
+  }
+
   function toggleMic() {
     var D = typeof window !== "undefined" && window.JavisDictate;
     if (!D) { setNote(tw("teams.mic_unsupported")); return; }
@@ -2373,19 +2394,35 @@
     if (S.dictState === "transcribing") return;
     var input = S.el.querySelector(".tm-input");
     S.dictBase = input ? input.value : "";
-    var forTeam = S.activeId;
+    S.dictSend = false;
+    var forTeam = S.activeId, heard = "";
+    // A computer shows the words in the box while speaking (owner, 2026-11-06: in the chat box, not a bubble above); a
+    // phone keeps them for the end. When the recording ends the main brain rewrites the sentence in context and that is
+    // what lands, or is sent (see composer-dictate.js).
+    var live = !(D.isPhoneUA && D.isPhoneUA());
     S.dict = D.create({
-      onText: function (text) {
-        var inp = S.el.querySelector(".tm-input");
-        if (!inp || S.activeId !== forTeam) return;
-        inp.value = D.joinText(S.dictBase, text);
-        S.pending = null;
-        grow(inp);
-        drawHint();
+      context: dictContext,
+      onText: function (text, final) {
+        heard = String(text || "");
+        if (final || !live || S.dictState !== "listening" || S.activeId !== forTeam) return;
+        var box = S.el.querySelector(".tm-input");
+        if (box) { box.value = D.joinText(S.dictBase, heard); grow(box); box.scrollTop = box.scrollHeight; }
       },
       onState: function (st) {
+        var was = S.dictState;
         S.dictState = st;
+        // Send pressed while recording (button or Enter): it waited for the rewritten words, now it goes.
+        var sendNow = st === "idle" && was !== "idle" && S.dictSend;
+        if (st === "idle") S.dictSend = false;
         if (S.activeId !== forTeam) return;
+        var inp0 = st === "idle" && heard ? S.el.querySelector(".tm-input") : null;
+        if (inp0) {
+          inp0.value = D.joinText(S.dictBase, heard);
+          heard = "";
+          S.pending = null;
+          grow(inp0);
+          drawHint();
+        }
         var btn = S.el.querySelector(".tm-mic");
         if (!btn) return;
         btn.classList.toggle("is-rec", st !== "idle");
@@ -2393,6 +2430,7 @@
         var lab = tw(st === "idle" ? "teams.mic" : st === "transcribing" ? "teams.mic_busy" : "teams.mic_stop");
         btn.setAttribute("aria-label", lab); btn.title = lab;
         btn.innerHTML = ic(st === "idle" ? "mic" : st === "transcribing" ? "loader" : "square");
+        if (sendNow) { send(); return; }
         if (st === "idle") { var inp = S.el.querySelector(".tm-input"); if (inp) inp.focus(); }
       },
       onError: function (code) {
@@ -3005,8 +3043,12 @@
     if (input) input.value = "";
     setNote("");
     useTeam(id);
+    // Performance (2026-11-05): ask the server FIRST, then draw. Drawing the whole page (header, cached messages,
+    // composer) took 150-300 ms on a 4x slowed CPU, and the three requests only left after it: every switch waited
+    // for that drawing plus the round trip. Now the round trip runs while the page draws.
+    var loads = Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]);
     drawAll(true);
-    Promise.all([loadTeam(), loadQueue(), loadMsgs(false)]).then(function () {
+    loads.then(function () {
       if (S.activeId !== id) return;
       // Drawn from the cache, the chat was already on screen: this redraw reuses the unchanged message nodes.
       drawAll(true);
@@ -3260,7 +3302,7 @@
       // 0.449.0: the GitHub repos of the team chat. The name opens the picker; the status (once pushed) opens the detail.
       var G = window.JavisTeamGithub, names = S.repos.map(function (r) { return r.full_name; });
       var stKey = S.ghIcon && S.ghIcon.state ? "gh.st_" + S.ghIcon.state : "";
-      h += '<span class="tm-chip tm-chip-gh" title="' + esc(tw("gh.chip_label", { names: names.join(", ") })) + '">' + ic("git-branch") +
+      h += '<span class="tm-chip tm-chip-gh" title="' + esc(tw("gh.chip_label", { names: names.join(", ") })) + '">' + ghLogo() +
         '<button type="button" class="tm-chip-name" data-gh-open="1">' + esc(G ? G.chipText(names, 18) : names[0]) + "</button>" +
         (stKey ? '<button type="button" class="tm-chip-st tm-gh-st" data-gh-status="1">' + esc(tw(stKey)) + "</button>" : "") + "</span>";
     }
@@ -3454,10 +3496,10 @@
       : '<button type="button" class="ws-btn" data-folder-open="1">' + ic("folder") + " " + esc(tw("cp.pin_folder")) + "</button>") + "</section>";
     h += '<section class="tm-info-sec"><h4>' + esc(tw("gh.menu")) + "</h4>" + (S.repos.length
       ? S.repos.map(function (r) {
-        return '<div class="tm-info-row">' + ic("git-branch") + '<span class="tm-info-grow" title="' + esc(r.worktree || r.full_name) + '">' +
+        return '<div class="tm-info-row">' + ghLogo() + '<span class="tm-info-grow" title="' + esc(r.worktree || r.full_name) + '">' +
           esc(r.full_name) + (r.branch ? ' <span class="tm-sub">' + esc(r.branch) + "</span>" : "") + "</span></div>";
       }).join("") + '<button type="button" class="ws-btn" data-gh-open="1">' + esc(tw("teams.change")) + "</button>"
-      : '<button type="button" class="ws-btn" data-gh-open="1">' + ic("git-branch") + " " + esc(tw("teams.gh_attach")) + "</button>") + "</section>";
+      : '<button type="button" class="ws-btn" data-gh-open="1">' + ghLogo() + " " + esc(tw("teams.gh_attach")) + "</button>") + "</section>";
     if (!I) return h + '<p class="tm-sub">' + esc(tw("common.loading")) + "</p>";
     var imgs = I.files.filter(function (f) { return f.image; });
     var docs = I.files.filter(function (f) { return !f.image; });
@@ -3491,6 +3533,12 @@
   function send() {
     var input = S.el.querySelector(".tm-input");
     if (!input || !S.team) return;
+    // Recording: stop, wait for the final words, then send them (owner 2026-11-05: Enter sends, no stop press first).
+    if (S.dict && S.dictState !== "idle") {
+      S.dictSend = true;
+      if (S.dict.active()) S.dict.stop();
+      return;
+    }
     var typed = input.value.trim();
     if (S.atts.some(function (a) { return a.busy; })) { setNote(tw("teams.attach_wait")); return; }
     // A file that failed to upload is not dropped silently: remove it or send it again first (main chat wording).
@@ -4718,7 +4766,9 @@
     // Same Enter rules as the main chat (chat-acts.js): never while an IME is composing, and a touch screen keeps Enter
     // as a new line (the Send button sends).
     var A = actsApi();
-    if (e.target.classList && e.target.classList.contains("tm-input") && A && A.enterSends(e, S.composing && S.composing())) {
+    // While recording the focus usually sits on the mic just pressed: Enter there sends too, instead of only stopping.
+    var onMic = S.dictState !== "idle" && e.target.classList && e.target.classList.contains("tm-mic");
+    if (e.target.classList && (onMic || e.target.classList.contains("tm-input")) && A && A.enterSends(e, S.composing && S.composing())) {
       e.preventDefault();
       send();
     }

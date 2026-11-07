@@ -186,12 +186,24 @@ class Store:
             rows = self._db.execute("SELECT * FROM work WHERE sid=? ORDER BY created_at", (sid,)).fetchall()
         return [self._row(r) for r in rows]
 
+    def running(self) -> list[dict[str, Any]]:
+        """Rows marked as being worked on right now, pushed or not (for the restart cleanup)."""
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM work WHERE exec='running'").fetchall()
+        return [self._row(r) for r in rows]
+
     def active(self) -> list[dict[str, Any]]:
         """Rows the watcher must look at: a pushed commit whose CI or PR is not settled yet."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT * FROM work WHERE head_sha != '' AND (ci IN ('pending','running') OR "
                 "integ IN ('pr_open','ready') OR (integ='merged' AND post_merge='pending'))").fetchall()
+        return [self._row(r) for r in rows]
+
+    def ship_pending(self) -> list[dict[str, Any]]:
+        """Rows whose gate was green but whose push or PR failed (github_work retries them)."""
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM work WHERE exec='stuck' AND gate LIKE '%\"ship_failed\"%'").fetchall()
         return [self._row(r) for r in rows]
 
     def for_repo(self, brain: str, full_name: str) -> list[dict[str, Any]]:
@@ -320,6 +332,10 @@ def icon(rows: list[dict[str, Any]]) -> dict[str, Any]:
     Returns {state, running, merged_warning}. state: "" (no GitHub work), working, ready, merged, broken.
     Secondary marks ride along in `sub`: waiting_ci, waiting_review, stuck.
     """
+    # A repo attached to the chat with nothing pushed and nothing going on says nothing about the chat's GitHub work.
+    # Without this, one merged repo next to an untouched one read as "working" forever.
+    rows = [r for r in rows if r.get("head_sha") or r["exec"] in ("running", "stuck")
+            or r["ci"] in ("pending", "running") or r["integ"] not in ("", "no_pr")]
     if not rows:
         return {"state": "", "running": 0, "sub": "", "merged_warning": False}
     running = sum(1 for r in rows if r["exec"] == "running" or r["ci"] in ("pending", "running"))

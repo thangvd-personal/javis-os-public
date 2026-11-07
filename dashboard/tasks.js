@@ -463,7 +463,9 @@
   // moved or deleted), nothing overdue is left and at least one thing got done. A day left unclean freezes the chain;
   // clearing its leftovers the next day thaws it; two unclean days in a row lose it. An empty day neither adds nor breaks.
   // `store.clean.days` ({iso: "c" | "i" | "e" | "x"}) is the server's verdict up to yesterday; today is judged live here.
-  var STAR_MAX = 3, MILES_T = [10, 25, 50, 100, 200, 500, 1000];
+  // One star a day (owner, 2026-11-06: "mỗi ngày lựa chọn 1 ngôi sao hy vọng thôi"): three was too many to choose
+  // between. Starring another task of that day moves the star there instead of refusing.
+  var STAR_MAX = 1, MILES_T = [10, 25, 50, 100, 200, 500, 1000];
   function isTaskItem(i) { return !!i && i.src === "mine" && !i.appt && !(i.raw && habitOn(i.raw)); }
   // A star belongs to the day of its task (owner, 2026-11-05: "I star tomorrow's tasks ahead of time"), so each day has
   // its own STAR_MAX slots: tomorrow's stars never fill today's, and starring tomorrow's task keeps it on tomorrow.
@@ -513,13 +515,19 @@
   async function getJSON(url) {
     try { var r = await fetch(url, { cache: "no-store" }); return r.ok ? await r.json() : null; } catch (e) { return null; }
   }
+  // A failed request (404 from an older server, 500) answers {"detail": ...} without "ok", which act() read as success.
+  async function asResult(r) {
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok && (!j || j.ok === undefined)) j = { ok: false, error: (j && typeof j.detail === "string" && j.detail) || ("HTTP " + r.status) };
+    return j;
+  }
   async function postForm(url, fields) {
     var fd = new FormData();
     Object.keys(fields || {}).forEach(function (k) { if (fields[k] != null) fd.append(k, fields[k]); });
-    try { var r = await fetch(url, { method: "POST", body: fd }); return await r.json(); } catch (e) { return { ok: false, error: String(e) }; }
+    try { return asResult(await fetch(url, { method: "POST", body: fd })); } catch (e) { return { ok: false, error: String(e) }; }
   }
   async function postJSON(url, body) {
-    try { var r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); return await r.json(); }
+    try { return asResult(await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })); }
     catch (e) { return { ok: false, error: String(e) }; }
   }
   function mine(body) { return postJSON(body.__url, Object.assign({ brain: brain() }, body, { __url: undefined })); }
@@ -548,13 +556,14 @@
       getJSON("/kanban?brain=" + enc + "&history=40"), getJSON("/viec/all"), getJSON("/reminders?brain=" + enc),
       getJSON("/watch?brain=" + enc), getJSON("/incidents?limit=50"), getJSON("/loops/log?brain=" + enc + "&limit=60"),
       S.agents ? Promise.resolve(null) : getJSON("/agents?brain=" + enc + "&prompt=0&system=1"),
-      getJSON("/my-tasks?brain=" + enc), getJSON("/tasks/bots?brain=" + enc)
+      getJSON("/my-tasks?brain=" + enc), getJSON("/tasks/bots?brain=" + enc), getJSON("/schedules/this-machine")
     ]);
     if (!S || S !== st) return;   // the page closed (or opened again) while these were on their way
     if (res[6]) S.agents = (res[6].agents || res[6] || []).filter(function (a) { return a && a.slug; });
     S.brains = ((res[1] && res[1].brains) || []).map(function (x) { return { name: x.label || x.name, path: x.path, def: x.is_default }; });
     S.notify = (res[2] && res[2].notify) || {};
     if (res[8]) S.bots = res[8];
+    if (res[9]) S.runsHere = res[9].runs !== false;
     S.ai = model({ kanban: res[0] || {}, viec: res[1] || {}, rems: res[2] || {}, watch: res[3] || {}, incidents: res[4] || {}, loopLog: res[5] || {}, brain: b,
       bots: S.bots || {}, agents: S.agents || [] });
     S.my = res[7] && res[7].ok ? res[7] : (S.my || { tasks: [], projects: [] });
@@ -812,20 +821,20 @@
     }
     var time = it.over ? '<span class="c-over">' + esc(shortDate(it.date)) + "</span>" + (it.time ? "<small>" + esc(it.time) + "</small>" : "") : esc(it.time || "");
     var lead = it.src === "mine" ? (habitOn(it.raw) && it.id === "m:" + it.raw.id ? habitCk(it.raw) : ck(it)) : stIcon(it);
-    var task = isTaskItem(it) && it.id.indexOf("md:") !== 0 && !FIN[it.st];
+    var task = isTaskItem(it) && it.id.indexOf("md:") !== 0 && !FIN[it.st], hOver = habitOver(it);
     // Inside the overdue box (or the Overdue list) of my tab the red date on the left already says it: no "Overdue d/m" chip.
-    var chips = task && it.over && S.inOver ? "" : chip(it);
+    var chips = (task || hOver) && it.over && S.inOver ? "" : chip(it);
     // Bold only carries weight when it is rare (owner, 2026-11-04): a priority, an overdue task or one waiting on the owner.
     var imp = !FIN[it.st] && (starOn(it) || it.over || it.st === "ask");
     // Icons sit flush right on every row (owner, 2026-11-04): no empty slot where a row has no star.
     var sb = task ? starBtn(it) : "";
-    return '<div class="nv-item' + (imp ? " imp" : "") + (FIN[it.st] ? " done" : "") + '"><div class="nv-rw' + (it.src === "mine" ? ' mine" style="--n:' + ((task ? triN(it) : 0) + (sb ? 1 : 0)) : "") + '"><button type="button" class="nv-row' + (FIN[it.st] ? " done" : "") + (imp ? " imp" : "") + (S.sel === it.id ? " sel" : "") + '" data-open="' + esc(it.id) + '">'
+    return '<div class="nv-item' + (imp ? " imp" : "") + (FIN[it.st] ? " done" : "") + '"><div class="nv-rw' + (it.src === "mine" ? ' mine" style="--n:' + ((task ? triN(it) : hOver ? 2 : 0) + (sb ? 1 : 0)) : "") + '"><button type="button" class="nv-row' + (FIN[it.st] ? " done" : "") + (imp ? " imp" : "") + (S.sel === it.id ? " sel" : "") + '" data-open="' + esc(it.id) + '">'
       + '<span class="nv-tm">' + time + '</span><span class="nv-st">' + lead + "</span>"
       + '<span class="nv-body"><span class="nv-ti">' + esc(it.title) + "</span>" + meta(it)
       + (it.st === "ask" && it.reason ? '<span class="nv-note c-ask">' + esc(it.reason) + "</span>" : "")
       + (it.st === "calm" && it.reason ? '<span class="nv-note">' + esc(it.reason) + "</span>" : "") + "</span>"
       + (chips ? '<span class="nv-chipcol">' + chips + "</span>" : "") + "</button>"
-      + (it.src === "mine" ? '<span class="nv-ra">' + (task ? triIcons(it) : "") + sb + "</span>"
+      + (it.src === "mine" ? '<span class="nv-ra">' + (task ? triIcons(it) : hOver ? habitOverIcons(it) : "") + sb + "</span>"
         : runBtn(it) + '<button type="button" class="nv-dots" data-act="menu" data-id="' + esc(it.id) + '" aria-label="' + esc(tw("nv.a.more")) + '">' + ic("ellipsis") + "</button>") + "</div>"
       + subFold(it) + "</div>";
   }
@@ -834,7 +843,7 @@
   function starOn(it) { return !!(it && it.raw && it.raw.star && it.date && it.date >= today()); }
   function starBtn(it) {
     // No star on repeats or habits (owner, 2026-11-04): a priority is a choice for one day, a repeat comes back every day
-    // and would keep its star (one of the 3 slots) forever. Routines already have their own pull (streak, reminder).
+    // and would keep the day's one star forever. Routines already have their own pull (streak, reminder).
     if (it.raw.repeat || it.id.indexOf("mo:") === 0 || it.id.indexOf("mn:") === 0) return "";
     var on = starOn(it);
     return '<button type="button" class="nv-starb' + (on ? " on" : "") + '" data-act="star" data-id="' + esc(it.id) + '" aria-pressed="' + on + '" aria-label="' + esc(tw(on ? "nv.pu.unstar" : "nv.pu.star", { t: it.title })) + '" title="' + esc(tw(on ? "nv.pu.unstar_t" : "nv.pu.star_t")) + '">' + ic("star") + "</button>";
@@ -854,6 +863,13 @@
     return b("tri-move", "calendar", "nv.pu.t_move") + b("m-del", "trash-2", "nv.pu.t_del", "bad");
   }
   function triN(it) { return it.raw.repeat ? 3 : 2; }
+  // A missed time of a habit (owner, 2026-11-06): Skip this time and Delete, like any overdue repeat. No Move: a habit
+  // lives on its schedule, a one-off copy on another day would not count for its streak.
+  function habitOver(it) { return it.src === "mine" && it.over && !FIN[it.st] && !!it.raw && habitOn(it.raw) && it.id.indexOf("mo:") === 0; }
+  function habitOverIcons(it) {
+    var b = function (act_, icon, key, cls) { return '<button type="button" class="nv-starb nv-tri1' + (cls ? " " + cls : "") + '" data-act="' + act_ + '" data-id="' + esc(it.id) + '" aria-label="' + esc(tw(key) + ": " + it.title) + '" title="' + esc(tw(key)) + '">' + ic(icon) + "</button>"; };
+    return b("tri-skip", "skip-forward", "nv.pu.t_skip") + b("m-del", "trash-2", "nv.pu.t_del_rep", "bad");
+  }
   function triIcons(it) {
     var b = function (act_, icon, key, cls) { return '<button type="button" class="nv-starb nv-tri1' + (cls ? " " + cls : "") + '" data-act="' + act_ + '" data-id="' + esc(it.id) + '" aria-label="' + esc(tw(key) + ": " + it.title) + '" title="' + esc(tw(key)) + '">' + ic(icon) + "</button>"; };
     if (it.raw.repeat) return b("tri-skip", "skip-forward", "nv.pu.t_skip") + b("tri-move", "calendar", "nv.pu.t_move_once") + b("m-del", "trash-2", "nv.pu.t_del_rep", "bad");
@@ -917,6 +933,12 @@
     return { today: "nv.empty.today", over: "nv.empty.over", rep: "nv.empty.rep", done: "nv.empty.done" }[v] || "nv.empty.list";
   }
   function statsCtx() { return { tab: S.tab, brain: brain(), redraw: function () { if (S) render(); }, avatar: avatar }; }
+  // Reminders and loops sync to every machine; this switch (kept per machine) stops them firing here too.
+  function hereRow() {
+    var on = S.runsHere !== false;
+    return '<div class="nv-ask" role="status">' + ic(on ? "play" : "pause", "c-ask") + '<span class="nv-ask-t">' + esc(tw(on ? "nv.here.on" : "nv.here.off"))
+      + '</span><button type="button" class="nv-btn sm" data-act="here" data-v="' + (on ? "0" : "1") + '">' + esc(tw(on ? "nv.here.stop" : "nv.here.start")) + "</button></div>";
+  }
   function viewHtml(v) {
     var h = '<div class="nv-vh"><h2>' + esc(viewTitle(v)) + "</h2>" + (v === "over" ? overBtn() : "") + "</div>";
     var me = S.tab === "me";
@@ -924,6 +946,7 @@
     var empty = me && v !== "done" && v !== "rep" ? emptyMine(v) : '<div class="nv-empty">' + esc(tw(emptyKey(v))) + "</div>";
     if (v === "rep") {
       var R = byRepTimeline(M().recurring.filter(function (r) { return !r.habit && (!q() || r.title.toLowerCase().indexOf(q()) >= 0); }));
+      if (!me) h += hereRow();
       return h + (R.length ? R.map(function (r) { return repRow(r); }).join("") : empty);
     }
     if (v === "habit") return h + habitView();
@@ -1705,6 +1728,9 @@
           var hk = habitCalc(t, today());
           if (hk.rest) return doAct("hrest", id);
           S.lit = { id: t.id, ice: hk.frozen }; S.hmsg = 0;
+          // Thawing cracks the ice (blue shards) before the flame; lighting throws orange sparks.
+          sfx(hk.frozen ? "thaw" : "lit");
+          if (el && el.getBoundingClientRect) { var hb = el.getBoundingClientRect(); burst(hb.left + hb.width / 2, hb.top + hb.height / 2, false, hk.frozen ? "ice" : "fire"); }
           try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { /* not on desktop */ }
           clearTimeout(S.litT); S.litT = setTimeout(function () { if (S) { S.lit = null; render(); } }, 700);
           var res = await act(mine({ __url: "/my-tasks/check", id: m.id, date: date }), "", null);
@@ -1778,6 +1804,7 @@
         return act(postForm("/kanban/task/grant", { brain: b, id: it.ref }), tw("nv.ok.granted"));
       case "approve": return act(postForm("/kanban/task/move", { brain: b, id: it.ref, status: "done" }), tw("nv.ok.approved"));
       case "resolve": return act(postJSON("/incidents/resolve", { id: id }), tw("nv.ok.resolved"));
+      case "here": return act(postForm("/schedules/this-machine", { runs: el.dataset.v }), el.dataset.v === "1" ? tw("nv.here.start_ok") : tw("nv.here.stop_ok"));
       case "gochan": if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("channels"); return;
       case "orch": return act(postForm("/kanban/orchestration", { brain: b, mode: el.dataset.v }), el.dataset.v === "off" ? tw("nv.orch.off_ok") : tw("nv.orch.on_ok"));
       case "overall": {
@@ -1853,16 +1880,18 @@
         if (starOn(it)) return act(mine({ __url: "/my-tasks/update", id: sk.id, star: false }), "");
         // The star counts for the task's own day. Only an undated or overdue task is brought to today to be starred.
         var bring = (!it.date || it.date < today()) && !sk.repeat, sday = bring ? today() : it.date;
-        if (starsOn(S.me, sday).length >= STAR_MAX) {
-          shake("pu-star"); buzz([8, 30, 8]);
-          popStar(sday === today() ? tw("nv.pu.star_full", { n: STAR_MAX }) : tw("nv.pu.star_full_day", { n: STAR_MAX, d: dayLabel(sday).replace(/^./, function (c) { return c.toUpperCase(); }) }), "suspicious"); return;
-        }
+        // The day already has its star: it moves to this task (undo puts it back).
+        var prevStars = starsOn(S.me, sday).filter(function (x) { return x.raw.id !== sk.id; }).map(function (x) { return x.raw.id; });
         var sbody = { __url: "/my-tasks/update", id: sk.id, star: true };
         if (bring) sbody.date = today();
         buzz(10);
         var quiet = S.sheet && S.sheet.kind === "morning";
-        return act(mine(sbody), bring && !quiet ? tw("nv.pu.ok_star_today", { t: it.title }) : "",
-          bring ? function () { return mine({ __url: "/my-tasks/update", id: sk.id, star: false, date: sk.date, time: sk.time }); } : null);
+        var starJob = Promise.all(prevStars.map(function (pid) { return mine({ __url: "/my-tasks/update", id: pid, star: false }); })).then(function () { return mine(sbody); });
+        var starMsg = prevStars.length ? tw("nv.pu.ok_star_moved", { t: it.title }) : bring && !quiet ? tw("nv.pu.ok_star_today", { t: it.title }) : "";
+        return act(starJob, starMsg, prevStars.length || bring ? function () {
+          return Promise.all([mine(Object.assign({ __url: "/my-tasks/update", id: sk.id, star: false }, bring ? { date: sk.date, time: sk.time } : {}))]
+            .concat(prevStars.map(function (pid) { return mine({ __url: "/my-tasks/update", id: pid, star: true }); })));
+        } : null);
       }
       case "tri-move":
         if (it && it.raw.repeat) { var mt = it.raw, md0 = it.over ? today() : addDays(it.occ && it.occ > today() ? it.occ : today(), 1); S.sheet = { kind: "date", id: id, once: true, d: { date: md0, time: mt.time || "", vm: md0.slice(0, 7) } }; return renderLayer(); }
@@ -2131,6 +2160,7 @@
     if (pp) pp.hidden = true;
     if (tt) { tt.hidden = true; clearTimeout(toastT); }
     if (S.sheet.type !== "over") confetti();
+    sfx(S.sheet.thaw ? "thaw" : "cel");
     buzz([12, 60, 18]);
   }
   function celHtml(sh) {
@@ -2151,6 +2181,7 @@
       var rw = box.closest(".nv-rw"); if (rw) { var rr = rw.querySelector(".nv-row"); if (rr) rr.classList.add("done"); }
       var bx = box.getBoundingClientRect(); burst(bx.left + bx.width / 2, bx.top + bx.height / 2, star);
     }
+    sfx(star ? "star" : "tick");
     buzz(star ? [10, 40, 14] : 12);
     await new Promise(function (res) { setTimeout(res, 450); });
     var r = await act(mine({ __url: "/my-tasks/check", id: m.id, date: date }), "", null);
@@ -2166,15 +2197,18 @@
     }
     return r;
   }
+  // ---- sounds (owner, 2026-11-06: "nút tích nghe thật đã tai, nút phá băng cũng vậy") ----
+  // The synth lives in ui-sound.js with the on/off switch beside the light/dark one; nothing plays when it is off.
+  function sfx(kind) { try { if (window.JavisSound) window.JavisSound.play(kind); } catch (e) { /* no sound is fine */ } }
   // ---- effects (all of them skipped with reduced motion) ----
   function calm() { return window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches; }
   function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) { /* desktop */ } }
-  function burst(x, y, star) {
+  function burst(x, y, star, cls) {
     if (calm()) return;
-    var n = star ? 9 : 7;
+    var n = cls === "ice" ? 12 : star ? 9 : 7;
     for (var i = 0; i < n; i++) {
-      var s = document.createElement("span"), a = Math.PI * 2 * i / n + Math.random() * 0.5, r = (star ? 40 : 26) + Math.random() * 16;
-      s.className = "nv-spark" + (star ? " st" : ""); s.style.left = x + "px"; s.style.top = y + "px";
+      var s = document.createElement("span"), a = Math.PI * 2 * i / n + Math.random() * 0.5, r = (star ? 40 : cls === "ice" ? 36 : 26) + Math.random() * 16;
+      s.className = "nv-spark" + (star ? " st" : "") + (cls ? " " + cls : ""); s.style.left = x + "px"; s.style.top = y + "px";
       s.style.setProperty("--dx", (Math.cos(a) * r).toFixed(1) + "px"); s.style.setProperty("--dy", (Math.sin(a) * r).toFixed(1) + "px");
       if (star) s.innerHTML = ic("star");
       document.body.appendChild(s); setTimeout(function (el) { el.remove(); }.bind(null, s), 760);
