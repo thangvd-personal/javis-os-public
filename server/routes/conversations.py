@@ -186,7 +186,7 @@ def register(app, deps: ConversationsDeps):
                                      conversations.khach_dang_cho(row, self.hesitant),
                                      no_bot_wanted=str(row.get("channel_account_id") or "") in self.no_bot)
 
-    def _attach_state(items: list, ctx: "_StateCtx") -> None:
+    def _attach_state(items: list, ctx: _StateCtx) -> None:
         for it in items:
             st = ctx.of(it)
             bot = ctx.bots.get(str(it.get("bot_id") or "")) or {}
@@ -706,7 +706,7 @@ def register(app, deps: ConversationsDeps):
         return {"ok": True, "silent": False, "text": r["text"], "taught": bool((done or {}).get("taught")),
                 "conversation": conversations.chi_tiet(conv_id)}
 
-    def _detail_with_state(conv_id: int) -> Optional[dict]:
+    def _detail_with_state(conv_id: int) -> dict | None:
         """`chi_tiet` plus the "who is handling it" fields (Chatbot v5)."""
         d = conversations.chi_tiet(conv_id)
         if d:
