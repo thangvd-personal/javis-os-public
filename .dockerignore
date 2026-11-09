@@ -41,6 +41,8 @@ vault/
 # cục bộ đều nướng khoá bí mật của chính mình vào image. Build trên GHCR chạy từ checkout
 # sạch nên không dính, đó là lý do lỗi này sống lâu mà không ai thấy.
 server/state/
+server/*/state/
+server/*-*-*-*-*/
 server/settings.json
 server/.sessions.json
 server/.secret_key

@@ -71,7 +71,11 @@ _RESULT_MAX = 16
 
 
 def _cache_dir() -> Path:
-    return Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent / "state"))) / "cache" / "graph"
+    try:
+        from config import STATE_DIR
+        return Path(STATE_DIR) / "cache" / "graph"
+    except Exception:
+        return Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent / "state"))) / "cache" / "graph"
 
 
 def _cache_file(root: str) -> Path:

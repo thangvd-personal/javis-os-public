@@ -22,7 +22,19 @@ fi
 
 PORT="${JAVIS_PORT:-7777}"
 HOST="${JAVIS_HOST:-127.0.0.1}"
-STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server/state}"
+if [ -z "${JAVIS_STATE_DIR:-}" ] || [ "${JAVIS_STATE_DIR:-}" = "$APP_DIR/server/state" ]; then
+  USER_ID=""
+  if [ -f "$APP_DIR/server/state/auth.json" ]; then
+    USER_ID=$(grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$APP_DIR/server/state/auth.json" | head -1 | sed 's/.*"user_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  fi
+  if [ -n "$USER_ID" ]; then
+    STATE_DIR="$APP_DIR/server/state/$USER_ID"
+  else
+    STATE_DIR="$APP_DIR/server/state"
+  fi
+else
+  STATE_DIR="$JAVIS_STATE_DIR"
+fi
 PIDF="$STATE_DIR/javis.pid"
 URL="http://localhost:${PORT}"
 

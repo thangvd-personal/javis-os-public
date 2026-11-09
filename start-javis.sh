@@ -18,7 +18,20 @@ fi
 PORT="${JAVIS_PORT:-7777}"
 HOST="${JAVIS_HOST:-127.0.0.1}"
 NAME="${JAVIS_NAME:-javis}"
-STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server/state}"
+if [ -z "${JAVIS_STATE_DIR:-}" ] || [ "${JAVIS_STATE_DIR:-}" = "$APP_DIR/server/state" ]; then
+  USER_ID=""
+  if [ -f "$APP_DIR/server/state/auth.json" ]; then
+    USER_ID=$(grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$APP_DIR/server/state/auth.json" | head -1 | sed 's/.*"user_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  fi
+  if [ -n "$USER_ID" ]; then
+    STATE_DIR="$APP_DIR/server/state/$USER_ID"
+  else
+    STATE_DIR="$APP_DIR/server/state"
+  fi
+else
+  STATE_DIR="$JAVIS_STATE_DIR"
+fi
+export JAVIS_STATE_DIR="$STATE_DIR"
 PIDF="$STATE_DIR/javis.pid"
 LOG="$STATE_DIR/javis.log"
 PY="$APP_DIR/.venv/bin/python"
@@ -46,8 +59,10 @@ else
     export JAVIS_STATE_DIR="$STATE_DIR"
     export JAVIS_PORT="$PORT"
     export JAVIS_HOST="$HOST"
-    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$LOG" 2>&1 &
-    echo $! > "$PIDF"
+    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" < /dev/null > "$LOG" 2>&1 &
+    PID=$!
+    echo $PID > "$PIDF"
+    disown $PID 2>/dev/null || true
   )
 fi
 

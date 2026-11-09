@@ -219,8 +219,10 @@ server/engine_down_notified.json
 server/client_errors.json
 server/client_errors.tmp
 
-# Thư mục lưu trạng thái mặc định của Javis OS (STATE_DIR mặc định là server/state/)
+# Thư mục lưu trạng thái mặc định của Javis OS (STATE_DIR mặc định là server/state/[user_id]/)
 server/state/
+server/*/state/
+server/*-*-*-*-*/
 
 # Dữ liệu trạng thái chạy, cache và cấu hình runtime trong server/ (STATE_DIR mặc định là server/state/).
 # Toàn bộ file JSON runtime phát sinh liên tục trong quá trình làm việc, không push lên Git.

@@ -12,18 +12,225 @@ import time
 from pathlib import Path
 
 # Mọi state Javis tự ghi (settings, auth sessions, loop config) nằm ở JAVIS_STATE_DIR.
-# Mặc định = server/state/. Docker/VPS đặt = /data/state (volume ghi được,
+# Mặc định = server/state/ hoặc server/[user_id]/state/. Docker/VPS đặt = /data/state (volume ghi được,
 # vì code tree /app là read-only trong container).
+def get_auth_path() -> Path:
+    if os.getenv("JAVIS_AUTH_PATH"):
+        return Path(os.getenv("JAVIS_AUTH_PATH")).resolve()
+    raw = os.getenv("JAVIS_STATE_DIR", "").strip()
+    if raw:
+        p_raw = Path(raw)
+        if not p_raw.is_absolute():
+            p_raw = (Path(__file__).parent.parent / p_raw).resolve()
+        server_dir = Path(__file__).parent.resolve()
+        if p_raw != server_dir and p_raw != (server_dir / "state") and not str(p_raw).startswith(str(server_dir / "state")):
+            return p_raw / "auth.json"
+        if (p_raw / "auth.json").exists():
+            return p_raw / "auth.json"
+    p = Path(__file__).parent / "state" / "auth.json"
+    if p.exists():
+        return p
+    if (Path(__file__).parent / "auth.json").exists():
+        return Path(__file__).parent / "auth.json"
+    return p
+
+AUTH_PATH = get_auth_path()
+
+
+def read_auth() -> dict:
+    auth_file = get_auth_path()
+    try:
+        if auth_file.exists():
+            data = json.loads(auth_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                try:
+                    import secrets_store
+                    sec = (data.get("totp") or {}).get("secret")
+                    if sec and isinstance(sec, str) and sec.startswith("enc:"):
+                        data["totp"]["secret"] = secrets_store.decrypt(sec)
+                    for u in data.get("users", []):
+                        if isinstance(u, dict):
+                            usec = (u.get("totp") or {}).get("secret")
+                            if usec and isinstance(usec, str) and usec.startswith("enc:"):
+                                u["totp"]["secret"] = secrets_store.decrypt(usec)
+                except Exception:
+                    pass
+                return data
+    except Exception:
+        pass
+    return {
+        "user_id": "",
+        "username": "",
+        "password_hash": "",
+        "salt": "",
+        "totp": {"enabled": False, "secret": "", "recovery": [], "last_step": 0},
+        "users": [],
+    }
+
+
+def write_auth(data: dict) -> None:
+    auth_file = get_auth_path()
+    out = json.loads(json.dumps(data))
+    try:
+        import secrets_store
+        sec = (out.get("totp") or {}).get("secret")
+        if sec and isinstance(sec, str) and not sec.startswith("enc:"):
+            out["totp"]["secret"] = secrets_store.encrypt(sec)
+        for u in out.get("users", []):
+            if isinstance(u, dict):
+                usec = (u.get("totp") or {}).get("secret")
+                if usec and isinstance(usec, str) and not usec.startswith("enc:"):
+                    u["totp"]["secret"] = secrets_store.encrypt(usec)
+    except Exception:
+        pass
+    try:
+        auth_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = auth_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except Exception:
+            pass
+        tmp.replace(auth_file)
+    except Exception:
+        auth_file.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def get_user(user_id: str = None, username: str = None) -> dict | None:
+    a = read_auth()
+    users = a.get("users", [])
+    if isinstance(users, list):
+        for u in users:
+            if not isinstance(u, dict):
+                continue
+            if user_id and u.get("user_id") == user_id:
+                return u
+            if username and u.get("username", "").strip().casefold() == username.strip().casefold():
+                return u
+    if user_id and a.get("user_id") == user_id:
+        return a
+    if username and a.get("username", "").strip().casefold() == username.strip().casefold():
+        return a
+    return None
+
+
+def list_users() -> list[dict]:
+    a = read_auth()
+    users = a.get("users")
+    if isinstance(users, list) and users:
+        return users
+    if a.get("user_id") or a.get("username"):
+        return [{
+            "user_id": a.get("user_id", ""),
+            "username": a.get("username", ""),
+            "password_hash": a.get("password_hash", ""),
+            "salt": a.get("salt", ""),
+            "totp": a.get("totp", {"enabled": False, "secret": "", "recovery": [], "last_step": 0}),
+        }]
+    return []
+
+
+def save_user(user_dict: dict) -> dict:
+    import uuid
+    a = read_auth()
+    users = list(a.get("users", []))
+    uid = user_dict.get("user_id") or str(uuid.uuid4())
+    user_dict["user_id"] = uid
+    if "totp" not in user_dict:
+        user_dict["totp"] = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
+
+    found = False
+    for i, u in enumerate(users):
+        if isinstance(u, dict) and (u.get("user_id") == uid or (user_dict.get("username") and u.get("username", "").strip().casefold() == user_dict["username"].strip().casefold())):
+            users[i] = user_dict
+            found = True
+            break
+    if not found:
+        users.append(user_dict)
+
+    a["users"] = users
+    if not a.get("user_id") or a.get("user_id") == uid:
+        a["user_id"] = uid
+        a["username"] = user_dict.get("username", "")
+        a["password_hash"] = user_dict.get("password_hash", "")
+        a["salt"] = user_dict.get("salt", "")
+        a["totp"] = user_dict.get("totp", {})
+        if "env_applied" in user_dict:
+            a["env_applied"] = user_dict["env_applied"]
+    write_auth(a)
+    return user_dict
+
+
+def delete_user(user_id: str) -> bool:
+    a = read_auth()
+    users = [u for u in a.get("users", []) if isinstance(u, dict) and u.get("user_id") != user_id]
+    if len(users) == len(a.get("users", [])):
+        return False
+    a["users"] = users
+    if a.get("user_id") == user_id:
+        if users:
+            first = users[0]
+            a["user_id"] = first.get("user_id", "")
+            a["username"] = first.get("username", "")
+            a["password_hash"] = first.get("password_hash", "")
+            a["salt"] = first.get("salt", "")
+            a["totp"] = first.get("totp", {})
+        else:
+            a.update(user_id="", username="", password_hash="", salt="", totp={"enabled": False, "secret": "", "recovery": [], "last_step": 0})
+    write_auth(a)
+    return True
+
+
+def get_user_state_dir(user_id: str = None) -> Path:
+    _s_dir = Path(__file__).parent.resolve()
+    raw = os.getenv("JAVIS_STATE_DIR", "").strip()
+    if raw:
+        p_raw = Path(raw)
+        if not p_raw.is_absolute():
+            p_raw = (_s_dir.parent / p_raw).resolve()
+        if p_raw != _s_dir and p_raw != (_s_dir / "state") and not str(p_raw).startswith(str(_s_dir / "state")):
+            base = p_raw
+        else:
+            base = _s_dir / "state"
+    else:
+        base = _s_dir / "state"
+    if not user_id:
+        a = read_auth()
+        user_id = os.getenv("JAVIS_USER_ID", "").strip() or a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
+    if user_id:
+        p = base / user_id
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
 _raw_state = os.getenv("JAVIS_STATE_DIR", "").strip()
+_server_dir = Path(__file__).parent.resolve()
+_auth_info = read_auth()
+_active_uid = (
+    os.getenv("JAVIS_USER_ID", "").strip()
+    or _auth_info.get("user_id")
+    or (_auth_info.get("users", [{}])[0].get("user_id") if _auth_info.get("users") else "")
+)
+
 if _raw_state:
     _p = Path(_raw_state)
     if not _p.is_absolute():
         _p = (Path(__file__).parent.parent / _p).resolve()
-    if _p.resolve() == Path(__file__).parent.resolve():
-        _p = _p / "state"
-    STATE_DIR = _p
+    if _p.resolve() == _server_dir or _p.resolve() == (_server_dir / "state"):
+        if _active_uid:
+            STATE_DIR = _server_dir / "state" / _active_uid
+        else:
+            STATE_DIR = _server_dir / "state"
+    else:
+        STATE_DIR = _p
 else:
-    STATE_DIR = Path(__file__).parent / "state"
+    if _active_uid:
+        STATE_DIR = _server_dir / "state" / _active_uid
+    else:
+        STATE_DIR = _server_dir / "state"
+
 try:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 except Exception:
@@ -961,7 +1168,9 @@ def read_settings():
     except OSError:
         sig = None
     if sig is not None and sig == _SETTINGS_CACHE["sig"] and _SETTINGS_CACHE["cfg"] is not None:
-        return json.loads(_SETTINGS_CACHE["cfg"])
+        res = json.loads(_SETTINGS_CACHE["cfg"])
+        res["auth"] = read_auth()
+        return res
     cfg = json.loads(json.dumps(_DEFAULT))   # deep copy
     _DOC_TU_BAK[0] = False
     data = _doc_file_settings()
@@ -979,6 +1188,8 @@ def read_settings():
     if sig is not None and not tu_bak:
         _SETTINGS_CACHE["sig"] = sig
         _SETTINGS_CACHE["cfg"] = json.dumps(cfg, ensure_ascii=False)
+    # Auth is stored separately in auth.json for multi-user support
+    cfg["auth"] = read_auth()
     return cfg
 
 
@@ -1006,6 +1217,48 @@ def write_settings(cfg):
     if not isinstance(cfg, dict):
         raise TypeError("write_settings cần một dict cấu hình đầy đủ")
     with _SETTINGS_LOCK:
+        if "auth" not in cfg:
+            # Caller popped "auth" to reset/clear account credentials
+            a_cur = read_auth()
+            a_cur.update(username="", password_hash="", salt="")
+            a_cur.pop("env_applied", None)
+            if a_cur.get("user_id"):
+                for u in a_cur.get("users", []):
+                    if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
+                        u.update(username="", password_hash="", salt="")
+                        u.pop("env_applied", None)
+            write_auth(a_cur)
+        elif isinstance(cfg["auth"], dict):
+            a_cur = read_auth()
+            new_a = cfg["auth"]
+            if new_a.get("password_hash") or new_a.get("username") or new_a.get("totp"):
+                if not a_cur.get("user_id"):
+                    import uuid
+                    a_cur["user_id"] = str(uuid.uuid4())
+                for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied"):
+                    if k in new_a:
+                        a_cur[k] = new_a[k]
+                users = list(a_cur.get("users", []))
+                found = False
+                for idx, u in enumerate(users):
+                    if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
+                        users[idx] = {k: a_cur.get(k) for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in a_cur}
+                        found = True
+                        break
+                if not found:
+                    users.append({k: a_cur.get(k) for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in a_cur})
+                a_cur["users"] = users
+                write_auth(a_cur)
+            elif not new_a.get("password_hash") and a_cur.get("password_hash"):
+                a_cur.update(username="", password_hash="", salt="")
+                a_cur.pop("env_applied", None)
+                if a_cur.get("user_id"):
+                    for u in a_cur.get("users", []):
+                        if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
+                            u.update(username="", password_hash="", salt="")
+                            u.pop("env_applied", None)
+                write_auth(a_cur)
+
         # MẢNH = thiếu quá nửa khoá gốc. Mảnh thật chỉ có một, hai khoá; còn cấu hình đầy đủ mà bỏ
         # hẳn một mục có chủ đích (đặt lại tài khoản: `pop("auth")` rồi ghi) vẫn phải xoá được.
         thieu = [k for k in _DEFAULT if k not in cfg]
@@ -1019,13 +1272,15 @@ def write_settings(cfg):
             _deep_merge(day_du, json.loads(json.dumps(cfg)))
             cfg = day_du
         _chan_ghi_trang(cfg)
+        _SETTINGS_CACHE["sig"] = None
+        _SETTINGS_CACHE["cfg"] = None
         _write_settings_full(cfg)
 
 
 def _da_cai_dat(d) -> bool:
     """Cấu hình này là của một máy ĐÃ cài đặt: qua trình cài đặt, hoặc đã có mật khẩu admin."""
     d = d if isinstance(d, dict) else {}
-    return bool(d.get("setup_done")) or bool(str(((d.get("auth") or {}).get("password_hash")) or ""))
+    return bool(d.get("setup_done")) or bool(str(((d.get("auth") or {}).get("password_hash")) or "")) or bool(read_auth().get("password_hash"))
 
 
 def _chan_ghi_trang(cfg) -> None:
@@ -1064,6 +1319,7 @@ def _chan_ghi_trang(cfg) -> None:
 def _write_settings_full(cfg):
     # Deep-copy rồi mã hoá BẢN SAO: caller vẫn giữ cfg plaintext để dùng tiếp (không bị hỏng).
     out = json.loads(json.dumps(cfg))
+    out.pop("auth", None)
     try:
         import secrets_store
         _transform_secret_fields(out, secrets_store.encrypt)   # encrypt idempotent (bỏ qua enc:/plain:)
@@ -1179,8 +1435,9 @@ def hash_password(password, salt=None):
 
 
 def auth_enabled(cfg=None):
-    cfg = cfg or read_settings()
-    return bool(cfg.get("auth", {}).get("password_hash"))
+    if cfg is not None and isinstance(cfg, dict) and "auth" in cfg:
+        return bool(cfg["auth"].get("password_hash"))
+    return bool(read_auth().get("password_hash"))
 
 
 def require_login():
@@ -1227,23 +1484,50 @@ def verify_password(password, cfg=None):
     """Exact match first (an older hash may have been stored WITH a space), then the cleaned
     form, so a space the keyboard slipped in never locks the owner out. A password that is
     only whitespace never matches."""
-    cfg = cfg or read_settings()
-    a = cfg.get("auth", {})
-    if not a.get("password_hash") or not clean_password(password):
+    if not clean_password(password):
         return False
-    for cand in dict.fromkeys((str(password), clean_password(password))):
-        h, _ = hash_password(cand, a.get("salt"))
-        if secrets.compare_digest(h, a["password_hash"]):
-            return True
+    a = (cfg.get("auth") if cfg and isinstance(cfg, dict) and "auth" in cfg else None) or read_auth()
+    if a.get("password_hash"):
+        for cand in dict.fromkeys((str(password), clean_password(password))):
+            h, _ = hash_password(cand, a.get("salt"))
+            if secrets.compare_digest(h, a["password_hash"]):
+                return True
+    for u in a.get("users", []):
+        if isinstance(u, dict) and u.get("password_hash"):
+            for cand in dict.fromkeys((str(password), clean_password(password))):
+                h, _ = hash_password(cand, u.get("salt"))
+                if secrets.compare_digest(h, u["password_hash"]):
+                    return True
     return False
+
+
+def verify_password_for_user(username: str, password: str) -> dict | None:
+    if not username or not clean_password(password):
+        return None
+    user = get_user(username=username)
+    if not user or not user.get("password_hash"):
+        return None
+    for cand in dict.fromkeys((str(password), clean_password(password))):
+        h, _ = hash_password(cand, user.get("salt"))
+        if secrets.compare_digest(h, user["password_hash"]):
+            return user
+    return None
 
 
 def username_matches(typed, cfg=None) -> bool:
     """Usernames are not secrets: ignore case and surrounding spaces. A phone capitalises the
-    first letter on its own, and "Phong" vs "phong" must not read as "wrong password"."""
-    cfg = cfg or read_settings()
-    want = str((cfg.get("auth", {}) or {}).get("username") or "").strip().casefold()
-    return bool(want) and str(typed or "").strip().casefold() == want
+    first letter on its own, and 'Phong' vs 'phong' must not read as 'wrong password'."""
+    typed_clean = str(typed or "").strip().casefold()
+    if not typed_clean:
+        return False
+    a = (cfg.get("auth") if cfg and isinstance(cfg, dict) and "auth" in cfg else None) or read_auth()
+    want = str(a.get("username") or "").strip().casefold()
+    if want and typed_clean == want:
+        return True
+    for u in a.get("users", []):
+        if isinstance(u, dict) and str(u.get("username") or "").strip().casefold() == typed_clean:
+            return True
+    return False
 
 
 # ---- Xác thực 2 lớp (TOTP). Toán nằm ở totp.py, đây chỉ là chỗ CẤT ----
@@ -1278,19 +1562,19 @@ def totp_hong(cfg=None):
     .secret_key trong STATE_DIR bị mất/đổi (đổi volume, chép state thiếu file ẩn),
     hoặc máy thiếu lib cryptography.
 
-    Vụ 16/08: chủ bật 2FA, cập nhật xong UI báo "Chưa bật" trong khi settings.json vẫn
+    Vụ 16/08: chủ bật 2FA, cập nhật xong UI báo "Chưa bật" trong khi settings.json/auth.json vẫn
     ghi enabled=true. Trước đây trạng thái này ÂM THẦM thành fail-open: totp_enabled
     trả False nên cổng đăng nhập thôi hỏi mã luôn - ai có mật khẩu là vào thẳng, đúng
     thứ 2FA phải chặn. Nó phải LỘ RA (UI + log) và cổng phải fail-closed (nhận mã
     khôi phục - mã đó BĂM chứ không mã hoá nên sống sót qua mất key)."""
     try:
-        raw = json.loads(SETTINGS_PATH.read_text(encoding="utf-8")) if SETTINGS_PATH.exists() else {}
+        raw = read_auth()
     except Exception:
         return False
-    t = (raw.get("auth") or {}).get("totp") or {}
+    t = raw.get("totp") or {}
     if not (isinstance(t, dict) and t.get("enabled") and str(t.get("secret") or "").strip()):
         return False
-    return not totp_secret(cfg)   # file CÓ secret mà đọc ra rỗng → giải mã hỏng
+    return not totp_secret(cfg)   # file CÓ secret mà đọc ra rỗng -> giải mã hỏng
 
 
 def secret_paths_hong():
@@ -1331,9 +1615,8 @@ def totp_recovery_left(cfg=None):
 
 
 def totp_set(secret="", enabled=None, recovery=None, last_step=None):
-    """Ghi cấu hình 2FA. Tham số nào để None thì giữ nguyên giá trị cũ."""
-    cfg = read_settings()
-    a = cfg.setdefault("auth", {})
+    """Ghi cấu hình 2FA vào auth.json. Tham số nào để None thì giữ nguyên giá trị cũ."""
+    a = read_auth()
     t = a.get("totp")
     if not isinstance(t, dict):
         t = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
@@ -1347,16 +1630,24 @@ def totp_set(secret="", enabled=None, recovery=None, last_step=None):
     if last_step is not None:
         t["last_step"] = int(last_step)
     a["totp"] = t
-    write_settings(cfg)
+    if a.get("user_id"):
+        for u in a.get("users", []):
+            if isinstance(u, dict) and u.get("user_id") == a["user_id"]:
+                u["totp"] = t
+    write_auth(a)
     return t
 
 
 def totp_tat():
-    """Tắt hẳn 2FA: xoá secret, xoá mã khôi phục, xoá dấu bước đã dùng."""
-    cfg = read_settings()
-    cfg.setdefault("auth", {})["totp"] = {"enabled": False, "secret": "", "recovery": [],
-                                          "last_step": 0}
-    write_settings(cfg)
+    """Tắt hẳn 2FA: xoá secret, xoá mã khôi phục, xoá dấu bước đã dùng trong auth.json."""
+    a = read_auth()
+    t = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
+    a["totp"] = t
+    if a.get("user_id"):
+        for u in a.get("users", []):
+            if isinstance(u, dict) and u.get("user_id") == a["user_id"]:
+                u["totp"] = t
+    write_auth(a)
 
 
 def totp_ghi_buoc(buoc):

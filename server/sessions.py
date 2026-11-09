@@ -36,17 +36,10 @@ import reaction_values as RV
 import subscription_context_store
 import team_migration
 
-# DB nằm cùng nơi settings.json/.sessions.json (JAVIS_STATE_DIR, mặc định server/state/).
-_env_sess_state = os.getenv("JAVIS_STATE_DIR", "").strip()
-if _env_sess_state:
-    _p_sess = Path(_env_sess_state)
-    if not _p_sess.is_absolute():
-        _p_sess = (Path(__file__).parent.parent / _p_sess).resolve()
-    if _p_sess.resolve() == Path(__file__).parent.resolve():
-        _p_sess = _p_sess / "state"
-    _STATE_DIR = _p_sess
-else:
-    _STATE_DIR = Path(__file__).parent / "state"
+# DB nằm cùng nơi settings.json/.sessions.json (config.STATE_DIR).
+from config import STATE_DIR as _CONFIG_STATE_DIR
+
+_STATE_DIR = _CONFIG_STATE_DIR
 _DEFAULT_DB = _STATE_DIR / "conversations.db"
 DB_PATH = Path(os.getenv("JAVIS_SESSIONS_DB", str(_DEFAULT_DB)))
 
