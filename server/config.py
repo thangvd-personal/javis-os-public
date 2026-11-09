@@ -181,6 +181,22 @@ def delete_user(user_id: str) -> bool:
     return True
 
 
+from contextvars import ContextVar
+
+current_user_id: ContextVar[str] = ContextVar("current_user_id", default="")
+
+
+def get_current_user_id() -> str:
+    uid = current_user_id.get()
+    if uid:
+        return uid
+    env_uid = os.getenv("JAVIS_USER_ID", "").strip()
+    if env_uid:
+        return env_uid
+    a = read_auth()
+    return a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
+
+
 def get_user_state_dir(user_id: str = None) -> Path:
     _s_dir = Path(__file__).parent.resolve()
     raw = os.getenv("JAVIS_STATE_DIR", "").strip()
@@ -195,8 +211,7 @@ def get_user_state_dir(user_id: str = None) -> Path:
     else:
         base = _s_dir / "state"
     if not user_id:
-        a = read_auth()
-        user_id = os.getenv("JAVIS_USER_ID", "").strip() or a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
+        user_id = get_current_user_id()
     if user_id:
         p = base / user_id
         p.mkdir(parents=True, exist_ok=True)
@@ -1531,16 +1546,19 @@ def username_matches(typed, cfg=None) -> bool:
 
 
 # ---- Xác thực 2 lớp (TOTP). Toán nằm ở totp.py, đây chỉ là chỗ CẤT ----
-def _totp_conf(cfg=None):
+def _totp_conf(cfg=None, user_dict=None):
+    if user_dict and isinstance(user_dict, dict) and "totp" in user_dict:
+        t = user_dict.get("totp")
+        return t if isinstance(t, dict) else {}
     a = (cfg or read_settings()).get("auth", {}) or {}
     t = a.get("totp") or {}
     return t if isinstance(t, dict) else {}
 
 
-def totp_enabled(cfg=None):
+def totp_enabled(cfg=None, user_dict=None):
     """2FA đã BẬT THẬT chưa. Có secret mà chưa xác nhận bằng một mã đúng thì vẫn là CHƯA -
     bật trước khi người dùng chứng minh app của họ sinh đúng mã là tự khoá mình ra ngoài."""
-    t = _totp_conf(cfg)
+    t = _totp_conf(cfg, user_dict=user_dict)
     return bool(t.get("enabled")) and bool(t.get("secret"))
 
 
@@ -1553,28 +1571,25 @@ def kept_totp(cfg=None) -> dict:
     return {"totp": t} if isinstance(t, dict) and t.get("enabled") else {}
 
 
-def totp_secret(cfg=None):
-    return str(_totp_conf(cfg).get("secret") or "")
+def totp_secret(cfg=None, user_dict=None):
+    return str(_totp_conf(cfg, user_dict=user_dict).get("secret") or "")
 
 
-def totp_hong(cfg=None):
+def totp_hong(cfg=None, user_dict=None):
     """2FA đang BẬT trong file nhưng secret KHÔNG GIẢI MÃ ĐƯỢC - thường do file
     .secret_key trong STATE_DIR bị mất/đổi (đổi volume, chép state thiếu file ẩn),
-    hoặc máy thiếu lib cryptography.
-
-    Vụ 16/08: chủ bật 2FA, cập nhật xong UI báo "Chưa bật" trong khi settings.json/auth.json vẫn
-    ghi enabled=true. Trước đây trạng thái này ÂM THẦM thành fail-open: totp_enabled
-    trả False nên cổng đăng nhập thôi hỏi mã luôn - ai có mật khẩu là vào thẳng, đúng
-    thứ 2FA phải chặn. Nó phải LỘ RA (UI + log) và cổng phải fail-closed (nhận mã
-    khôi phục - mã đó BĂM chứ không mã hoá nên sống sót qua mất key)."""
+    hoặc máy thiếu lib cryptography."""
     try:
         raw = read_auth()
     except Exception:
         return False
-    t = raw.get("totp") or {}
+    if user_dict and isinstance(user_dict, dict) and "totp" in user_dict:
+        t = user_dict.get("totp") or {}
+    else:
+        t = raw.get("totp") or {}
     if not (isinstance(t, dict) and t.get("enabled") and str(t.get("secret") or "").strip()):
         return False
-    return not totp_secret(cfg)   # file CÓ secret mà đọc ra rỗng -> giải mã hỏng
+    return not totp_secret(cfg, user_dict=user_dict)   # file CÓ secret mà đọc ra rỗng -> giải mã hỏng
 
 
 def secret_paths_hong():
@@ -1602,22 +1617,29 @@ def secret_paths_hong():
     return hong
 
 
-def totp_last_step(cfg=None):
+def totp_last_step(cfg=None, user_dict=None):
     try:
-        return int(_totp_conf(cfg).get("last_step") or 0)
+        return int(_totp_conf(cfg, user_dict=user_dict).get("last_step") or 0)
     except (TypeError, ValueError):
         return 0
 
 
-def totp_recovery_left(cfg=None):
-    r = _totp_conf(cfg).get("recovery")
+def totp_recovery_left(cfg=None, user_dict=None):
+    r = _totp_conf(cfg, user_dict=user_dict).get("recovery")
     return len(r) if isinstance(r, list) else 0
 
 
-def totp_set(secret="", enabled=None, recovery=None, last_step=None):
+def totp_set(secret="", enabled=None, recovery=None, last_step=None, user_id=None):
     """Ghi cấu hình 2FA vào auth.json. Tham số nào để None thì giữ nguyên giá trị cũ."""
     a = read_auth()
-    t = a.get("totp")
+    uid = user_id or a.get("user_id")
+    target_user = None
+    if uid:
+        for u in a.get("users", []):
+            if isinstance(u, dict) and u.get("user_id") == uid:
+                target_user = u
+                break
+    t = (target_user.get("totp") if target_user else a.get("totp")) or {}
     if not isinstance(t, dict):
         t = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
     if secret is not None:
@@ -1629,33 +1651,34 @@ def totp_set(secret="", enabled=None, recovery=None, last_step=None):
         t["recovery"] = [dict(zip(("hash", "salt"), hash_password(m))) for m in recovery]
     if last_step is not None:
         t["last_step"] = int(last_step)
-    a["totp"] = t
-    if a.get("user_id"):
-        for u in a.get("users", []):
-            if isinstance(u, dict) and u.get("user_id") == a["user_id"]:
-                u["totp"] = t
+    if target_user:
+        target_user["totp"] = t
+    if not a.get("user_id") or a.get("user_id") == uid:
+        a["totp"] = t
     write_auth(a)
     return t
 
 
-def totp_tat():
+def totp_tat(user_id=None):
     """Tắt hẳn 2FA: xoá secret, xoá mã khôi phục, xoá dấu bước đã dùng trong auth.json."""
     a = read_auth()
+    uid = user_id or a.get("user_id")
     t = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
-    a["totp"] = t
-    if a.get("user_id"):
+    if uid:
         for u in a.get("users", []):
-            if isinstance(u, dict) and u.get("user_id") == a["user_id"]:
+            if isinstance(u, dict) and u.get("user_id") == uid:
                 u["totp"] = t
+    if not a.get("user_id") or a.get("user_id") == uid:
+        a["totp"] = t
     write_auth(a)
 
 
-def totp_ghi_buoc(buoc):
-    """Ghi lại bước TOTP vừa dùng → mã đó không xài lại được nữa dù còn trong 30 giây."""
-    totp_set(secret=None, last_step=int(buoc))
+def totp_ghi_buoc(buoc, user_id=None):
+    """Ghi lại bước TOTP vừa dùng -> mã đó không xài lại được nữa dù còn trong 30 giây."""
+    totp_set(secret=None, last_step=int(buoc), user_id=user_id)
 
 
-def totp_dung_ma_khoi_phuc(ma):
+def totp_dung_ma_khoi_phuc(ma, user_id=None):
     """Tiêu một mã khôi phục. True nếu khớp (và mã đó bị XOÁ khỏi danh sách).
 
     Xoá ngay khi dùng là điều kiện để "mã dùng một lần" đúng nghĩa: giữ lại thì một tờ giấy
@@ -1665,8 +1688,15 @@ def totp_dung_ma_khoi_phuc(ma):
     can = _t.chuan_hoa_ma_khoi_phuc(ma)
     if not can:
         return False
-    cfg = read_settings()
-    t = (cfg.get("auth", {}) or {}).get("totp") or {}
+    a = read_auth()
+    uid = user_id or a.get("user_id")
+    target_user = None
+    if uid:
+        for u in a.get("users", []):
+            if isinstance(u, dict) and u.get("user_id") == uid:
+                target_user = u
+                break
+    t = (target_user.get("totp") if target_user else a.get("totp")) or {}
     ds = t.get("recovery")
     if not isinstance(ds, list):
         return False
@@ -1677,27 +1707,64 @@ def totp_dung_ma_khoi_phuc(ma):
         if secrets.compare_digest(h, str(m.get("hash") or "")):
             ds.pop(i)
             t["recovery"] = ds
-            cfg["auth"]["totp"] = t
-            write_settings(cfg)
+            if target_user:
+                target_user["totp"] = t
+            if not a.get("user_id") or a.get("user_id") == uid:
+                a["totp"] = t
+            write_auth(a)
             return True
     return False
 
 
-# ---- Session (lưu ra file → restart KHÔNG bị đăng xuất) ----
-# Lưu {token: created_ts} để session CÓ HẠN (chống token bất tử nếu lỡ rò).
+# ---- Session (lưu ra file -> restart KHÔNG bị đăng xuất) ----
+# Lưu {token: {"user_id": ..., "username": ..., "ts": ..., "last_active": ...}} để session CÓ HẠN.
+# Tương thích ngược: nếu value là số float ts thì vẫn đọc và kiểm tra bình thường.
 import time as _time
 
-_SESS_PATH = STATE_DIR / ".sessions.json"
+_SESSIONS_LOCK = threading.Lock()
 _SESSION_TTL = 30 * 86400   # 30 ngày
 
 
-def _load_sessions():
+def get_sessions_path() -> Path:
+    raw = os.getenv("JAVIS_SESSIONS_PATH", "").strip()
+    if raw:
+        return Path(raw).resolve()
+    # Mặc định đặt ở cấp hệ thống cạnh auth.json
+    p = get_auth_path().parent / ".sessions.json"
+    if p.exists():
+        return p
+    old = STATE_DIR / ".sessions.json"
+    if old.exists():
+        return old
+    return p
+
+
+_SESS_PATH = get_sessions_path()
+
+
+def _session_ts(val) -> float:
+    if isinstance(val, dict):
+        return float(val.get("ts", val.get("created_at", 0)))
     try:
-        if _SESS_PATH.exists():
-            data = json.loads(_SESS_PATH.read_text(encoding="utf-8"))
+        return float(val)
+    except Exception:
+        return 0.0
+
+
+def _load_sessions():
+    sess_path = get_sessions_path()
+    try:
+        if sess_path.exists():
+            data = json.loads(sess_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                return {k: float(v) for k, v in data.items()}
-            if isinstance(data, list):   # tương thích định dạng cũ → coi như vừa tạo
+                res = {}
+                for k, v in data.items():
+                    if isinstance(v, dict):
+                        res[k] = v
+                    elif isinstance(v, (int, float)):
+                        res[k] = float(v)
+                return res
+            if isinstance(data, list):   # tương thích định dạng cũ -> coi như vừa tạo
                 return {k: _time.time() for k in data}
     except Exception:
         pass
@@ -1708,42 +1775,101 @@ SESSIONS = _load_sessions()
 
 
 def _save_sessions():
+    sess_path = get_sessions_path()
     try:
-        _SESS_PATH.write_text(json.dumps(SESSIONS), encoding="utf-8")
+        sess_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = sess_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(SESSIONS), encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except Exception:
+            pass
+        tmp.replace(sess_path)
     except Exception:
-        return
+        try:
+            sess_path.write_text(json.dumps(SESSIONS), encoding="utf-8")
+        except Exception:
+            return
     try:
-        # Raw login session tokens: owner-only, like .secret_key and .hub_token (no-op on Windows).
-        os.chmod(_SESS_PATH, 0o600)
+        os.chmod(sess_path, 0o600)
     except Exception:
         pass
 
 
-def new_session():
-    t = secrets.token_urlsafe(32)
-    SESSIONS[t] = _time.time()
-    _save_sessions()
-    return t
+def new_session(user_id: str = None, username: str = None) -> str:
+    with _SESSIONS_LOCK:
+        t = secrets.token_urlsafe(32)
+        now_ts = _time.time()
+        if not user_id:
+            a = read_auth()
+            user_id = a.get("user_id") or ""
+            if not username:
+                username = a.get("username") or ""
+        SESSIONS[t] = {
+            "user_id": str(user_id or ""),
+            "username": str(username or ""),
+            "ts": now_ts,
+            "last_active": now_ts,
+        }
+        _save_sessions()
+        return t
 
 
 def valid_session(token):
     if not token or token not in SESSIONS:
         return False
-    if _time.time() - SESSIONS.get(token, 0) > _SESSION_TTL:
-        SESSIONS.pop(token, None)
-        _save_sessions()
+    entry = SESSIONS.get(token)
+    if _time.time() - _session_ts(entry) > _SESSION_TTL:
+        with _SESSIONS_LOCK:
+            SESSIONS.pop(token, None)
+            _save_sessions()
         return False
     return True
 
 
+def get_session_info(token: str) -> dict | None:
+    if not token or not valid_session(token):
+        return None
+    val = SESSIONS.get(token)
+    if isinstance(val, dict):
+        return {
+            "user_id": val.get("user_id", ""),
+            "username": val.get("username", ""),
+            "ts": float(val.get("ts", 0)),
+            "last_active": float(val.get("last_active", 0)),
+        }
+    a = read_auth()
+    return {
+        "user_id": a.get("user_id", ""),
+        "username": a.get("username", ""),
+        "ts": _session_ts(val),
+        "last_active": _session_ts(val),
+    }
+
+
+def get_session_user_id(token: str) -> str:
+    info = get_session_info(token)
+    return info["user_id"] if info else ""
+
+
+def update_session_activity(token: str) -> None:
+    if not token or token not in SESSIONS:
+        return
+    val = SESSIONS.get(token)
+    if isinstance(val, dict):
+        val["last_active"] = _time.time()
+
+
 def drop_session(token):
-    SESSIONS.pop(token, None)
-    _save_sessions()
+    with _SESSIONS_LOCK:
+        SESSIONS.pop(token, None)
+        _save_sessions()
 
 
 def clear_sessions():
-    SESSIONS.clear()
-    _save_sessions()
+    with _SESSIONS_LOCK:
+        SESSIONS.clear()
+        _save_sessions()
 
 
 

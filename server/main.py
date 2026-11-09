@@ -453,7 +453,9 @@ async def _auth_guard(request: Request, call_next):
                   # khi đúng tiền tố, để request thường không phải đi tra danh sách plugin.
                   or ((path.startswith("/ext/") or path.startswith("/.well-known/"))
                       and plugins_host.http_cong_khai(path, request.method)))
-        if not public and not cfgmod.valid_session(request.cookies.get("javis_session", "")):
+        session_token = request.cookies.get("javis_session", "")
+        has_session = cfgmod.valid_session(session_token)
+        if not public and not has_session:
             # Client ngoài trình duyệt (CLI, script, cron) không có cookie. Nhánh token là
             # đường DUY NHẤT của chúng - xem docs/dev/2026-08-cli-spec.md. Đặt SAU nhánh
             # cookie để dashboard không phải đọc file token mỗi request.
@@ -461,6 +463,15 @@ async def _auth_guard(request: Request, call_next):
                 return JSONResponse({"error": "unauthorized", "auth_required": True,
                                      "setup_required": not cfgmod.auth_enabled()},
                                     status_code=401)
+        if has_session:
+            sess_info = cfgmod.get_session_info(session_token)
+            if sess_info:
+                uid = sess_info.get("user_id", "")
+                uname = sess_info.get("username", "")
+                request.state.user_id = uid
+                request.state.username = uname
+                cfgmod.current_user_id.set(uid)
+                cfgmod.update_session_activity(session_token)
     return await call_next(request)
 
 
@@ -1487,24 +1498,45 @@ async def auth_status(request: Request):
     cfg = cfgmod.read_settings()
     enabled = cfgmod.auth_enabled(cfg)
     require = cfgmod.require_login()
-    has_session = cfgmod.valid_session(request.cookies.get("javis_session", ""))
+    session_token = request.cookies.get("javis_session", "")
+    has_session = cfgmod.valid_session(session_token)
+    sess_info = cfgmod.get_session_info(session_token) if has_session else None
+    sess_user = None
+    if sess_info and sess_info.get("user_id"):
+        sess_user = cfgmod.get_user(user_id=sess_info["user_id"])
+    active_totp_user = sess_user or (cfg.get("auth") or {})
+
     # authed: có session thật; HOẶC bản local không bắt buộc login + chưa đặt mật khẩu (giữ UX cũ).
     authed = has_session or (not enabled and not require)
+    res_user = ""
+    res_uid = ""
+    if authed:
+        if sess_user:
+            res_user = sess_user.get("username", "")
+            res_uid = sess_user.get("user_id", "")
+        elif sess_info:
+            res_user = sess_info.get("username", "")
+            res_uid = sess_info.get("user_id", "")
+        else:
+            res_user = cfg.get("auth", {}).get("username", "")
+            res_uid = cfg.get("auth", {}).get("user_id", "")
+
     return {"needs_setup": not enabled, "auth_required": enabled or require,
             "require_login": require, "authed": authed,
             # 2FA lộ ra ở đây là CỐ Ý và không phải rò rỉ: màn đăng nhập cần biết có hỏi ô mã
             # hay không, mà việc "tài khoản này có 2FA" thì kẻ tấn công cũng biết ngay sau lần
             # nhập mật khẩu đầu tiên. Số mã khôi phục còn lại thì chỉ trả khi ĐÃ đăng nhập.
-            "totp_enabled": cfgmod.totp_enabled(cfg),
+            "totp_enabled": cfgmod.totp_enabled(cfg, user_dict=active_totp_user),
             # 2FA bật trong file mà secret không giải mã được (mất/đổi .secret_key). Lộ ra
             # cùng lý lẽ với totp_enabled: sau lần nhập mật khẩu đầu thì kẻ tấn công cũng
             # tự biết, còn CHỦ thì cần biết NGAY để khỏi tưởng 2FA "tự tắt".
-            "totp_broken": cfgmod.totp_hong(cfg),
-            "totp_recovery_left": (cfgmod.totp_recovery_left(cfg) if authed else None),
+            "totp_broken": cfgmod.totp_hong(cfg, user_dict=active_totp_user),
+            "totp_recovery_left": (cfgmod.totp_recovery_left(cfg, user_dict=active_totp_user) if authed else None),
             # install.sh có thể ghi JAVIS_SETUP_2FA=1 vào .env khi người cài chọn bật 2FA.
             # Đây chỉ là LỜI NHẮC cho giao diện mở sẵn màn bật, không phải một cơ chế bảo mật.
-            "totp_suggested": (_env_bat("JAVIS_SETUP_2FA") and not cfgmod.totp_enabled(cfg)),
-            "username": (cfg.get("auth", {}).get("username", "") if authed else "")}
+            "totp_suggested": (_env_bat("JAVIS_SETUP_2FA") and not cfgmod.totp_enabled(cfg, user_dict=active_totp_user)),
+            "username": res_user,
+            "user_id": res_uid}
 
 
 @app.post("/auth/setup")
@@ -1524,7 +1556,8 @@ async def auth_setup(request: Request, username: str = Form(...), password: str 
     cfg["auth"] = {**cfgmod.kept_totp(cfg), "username": username.strip() or "admin",
                    "password_hash": h, "salt": salt}
     cfgmod.write_settings(cfg)
-    return _session_cookie(JSONResponse({"ok": True}), cfgmod.new_session(), request)
+    uid = (cfgmod.read_auth() or {}).get("user_id", "")
+    return _session_cookie(JSONResponse({"ok": True}), cfgmod.new_session(user_id=uid, username=username.strip() or "admin"), request)
 
 
 # Rate-limit đăng nhập (chống brute-force) - đếm theo IP, khoá tạm sau N lần sai.
@@ -1561,27 +1594,34 @@ async def auth_login(request: Request, username: str = Form(...), password: str 
     cfg = cfgmod.read_settings()
     if not cfgmod.auth_enabled(cfg):
         return {"ok": True, "note": localefmt.chu("auth chưa bật", "auth is not enabled")}
-    if not cfgmod.username_matches(username, cfg) or not cfgmod.verify_password(password, cfg):
-        _login_fail(ip)
-        await asyncio.sleep(0.5)   # làm chậm brute-force online
-        loi = localefmt.chu("Sai tài khoản hoặc mật khẩu.", "Wrong username or password.")
-        # Account set from the server environment (Docker, Hostinger): a reset there also sets
-        # the USERNAME to JAVIS_ADMIN_USER (default "admin"), which is easy to miss when the
-        # account was first created under another name. Say so. The default name is public in
-        # the docs, so this tells an attacker nothing new.
-        if isinstance((cfg.get("auth") or {}).get("env_applied"), dict):
-            loi += " " + localefmt.chu(
-                "Máy chủ này đặt tài khoản qua biến môi trường: tên đăng nhập là JAVIS_ADMIN_USER "
-                "(mặc định admin), mật khẩu là JAVIS_ADMIN_PASSWORD của lần Redeploy gần nhất.",
-                "This server sets the account from its environment: the username is JAVIS_ADMIN_USER "
-                "(default admin) and the password is JAVIS_ADMIN_PASSWORD from the last redeploy.")
-        return JSONResponse({"ok": False, "error": loi}, status_code=401)
+    # Tìm user trong danh sách users hoặc kiểm tra fallback tài khoản chính
+    matched_user = cfgmod.verify_password_for_user(username, password)
+    if not matched_user:
+        if not cfgmod.username_matches(username, cfg) or not cfgmod.verify_password(password, cfg):
+            _login_fail(ip)
+            await asyncio.sleep(0.5)   # làm chậm brute-force online
+            loi = localefmt.chu("Sai tài khoản hoặc mật khẩu.", "Wrong username or password.")
+            # Account set from the server environment (Docker, Hostinger): a reset there also sets
+            # the USERNAME to JAVIS_ADMIN_USER (default "admin"), which is easy to miss when the
+            # account was first created under another name. Say so. The default name is public in
+            # the docs, so this tells an attacker nothing new.
+            if isinstance((cfg.get("auth") or {}).get("env_applied"), dict):
+                loi += " " + localefmt.chu(
+                    "Máy chủ này đặt tài khoản qua biến môi trường: tên đăng nhập là JAVIS_ADMIN_USER "
+                    "(mặc định admin), mật khẩu là JAVIS_ADMIN_PASSWORD của lần Redeploy gần nhất.",
+                    "This server sets the account from its environment: the username is JAVIS_ADMIN_USER "
+                    "(default admin) and the password is JAVIS_ADMIN_PASSWORD from the last redeploy.")
+            return JSONResponse({"ok": False, "error": loi}, status_code=401)
+        matched_user = cfg.get("auth") or {}
+
+    user_uid = matched_user.get("user_id") if isinstance(matched_user, dict) else None
+    user_name = (matched_user.get("username") if isinstance(matched_user, dict) else "") or username
     # totp_hong: 2FA bật trong file nhưng secret không giải mã được (mất .secret_key).
     # Vẫn PHẢI hỏi mã (fail-closed) - chỉ mã khôi phục qua được vì nó băm, không mã hoá.
     # Trước 0.35.6 nhánh này fail-open: totp_enabled trả False nên cổng thôi hỏi mã luôn,
     # tức 2FA âm thầm biến mất đúng lúc chủ tin là nó đang bật.
-    _tfa_hong = cfgmod.totp_hong(cfg)
-    if cfgmod.totp_enabled(cfg) or _tfa_hong:
+    _tfa_hong = cfgmod.totp_hong(cfg, user_dict=matched_user)
+    if cfgmod.totp_enabled(cfg, user_dict=matched_user) or _tfa_hong:
         ma = (code or "").strip()
         if not ma:
             # 401 kèm needs_2fa để giao diện hiện ô mã. KHÔNG tính là một lần sai: người dùng
@@ -1594,12 +1634,12 @@ async def auth_login(request: Request, username: str = Form(...), password: str 
                                            if _tfa_hong else localefmt.chu("Nhập mã xác thực 2 lớp.",
                                                                            "Enter your two-factor code."))},
                                 status_code=401)
-        buoc = totp.kiem(cfgmod.totp_secret(cfg), ma,
-                         buoc_da_dung=cfgmod.totp_last_step(cfg))
+        buoc = totp.kiem(cfgmod.totp_secret(cfg, user_dict=matched_user), ma,
+                         buoc_da_dung=cfgmod.totp_last_step(cfg, user_dict=matched_user))
         if buoc is not None:
-            cfgmod.totp_ghi_buoc(buoc)
-        elif cfgmod.totp_dung_ma_khoi_phuc(ma):
-            con = cfgmod.totp_recovery_left()
+            cfgmod.totp_ghi_buoc(buoc, user_id=user_uid)
+        elif cfgmod.totp_dung_ma_khoi_phuc(ma, user_id=user_uid):
+            con = cfgmod.totp_recovery_left(cfg, user_dict=matched_user)
             print(f"[auth] đăng nhập bằng MÃ KHÔI PHỤC, còn {con} mã", file=__import__('sys').stderr)
         else:
             _login_fail(ip)
@@ -1620,7 +1660,7 @@ async def auth_login(request: Request, username: str = Form(...), password: str 
                                                               "The code is wrong or has already been used."))},
                                 status_code=401)
     _LOGIN_FAILS.pop(ip, None)
-    return _session_cookie(JSONResponse({"ok": True}), cfgmod.new_session(), request)
+    return _session_cookie(JSONResponse({"ok": True}), cfgmod.new_session(user_id=user_uid, username=user_name), request)
 
 
 # ---- Xác thực 2 lớp: bật / xác nhận / tắt ----
@@ -1755,7 +1795,21 @@ async def auth_password(request: Request, current_password: str = Form(""),
     if not cfgmod.auth_enabled(cfg):
         return JSONResponse({"ok": False, "error": localefmt.chu("Chưa có tài khoản nào - đặt mật khẩu lần đầu đã.", "No account yet - set the first password first.")},
                             status_code=400)
-    if not cfgmod.verify_password(current_password, cfg):
+    session_token = request.cookies.get("javis_session", "")
+    sess_info = cfgmod.get_session_info(session_token) if session_token else None
+    sess_uid = sess_info.get("user_id") if sess_info else None
+    target_user = cfgmod.get_user(user_id=sess_uid) if sess_uid else None
+
+    curr_ok = False
+    if target_user and target_user.get("password_hash"):
+        for cand in dict.fromkeys((str(current_password), cfgmod.clean_password(current_password))):
+            h, _ = cfgmod.hash_password(cand, target_user.get("salt"))
+            if secrets.compare_digest(h, target_user["password_hash"]):
+                curr_ok = True
+                break
+    if not curr_ok:
+        curr_ok = cfgmod.verify_password(current_password, cfg)
+    if not curr_ok:
         await asyncio.sleep(0.5)   # cùng nhịp làm chậm với /auth/login
         return JSONResponse({"ok": False, "error": localefmt.chu("Sai mật khẩu hiện tại.", "Wrong current password.")}, status_code=401)
     ten = (username or "").strip()
@@ -1764,23 +1818,80 @@ async def auth_password(request: Request, current_password: str = Form(""),
         return JSONResponse({"ok": False, "error": localefmt.chu("Mật khẩu tối thiểu 8 ký tự", "Password must be at least 8 characters")}, status_code=400)
     if not password and not ten:
         return JSONResponse({"ok": False, "error": localefmt.chu("Không có gì để đổi.", "Nothing to change.")}, status_code=400)
-    # GHI ĐÈ TỪNG KHOÁ, không thay cả object `auth`: 2FA cũng nằm trong đó, gán đè nguyên cục
-    # là lặng lẽ tắt xác thực 2 lớp của người ta ngay lúc họ vừa đổi mật khẩu.
-    a = dict(cfg.get("auth") or {})
-    if ten:
-        a["username"] = ten
-    if password:
-        a["password_hash"], a["salt"] = cfgmod.hash_password(password)
-    cfg["auth"] = a
-    cfgmod.write_settings(cfg)
+
+    if target_user:
+        if ten:
+            target_user["username"] = ten
+        if password:
+            target_user["password_hash"], target_user["salt"] = cfgmod.hash_password(password)
+        cfgmod.save_user(target_user)
+        res_name = target_user.get("username", "")
+        res_uid = target_user.get("user_id", "")
+    else:
+        a = dict(cfg.get("auth") or {})
+        if ten:
+            a["username"] = ten
+        if password:
+            a["password_hash"], a["salt"] = cfgmod.hash_password(password)
+        cfg["auth"] = a
+        cfgmod.write_settings(cfg)
+        res_name = a.get("username", "")
+        res_uid = a.get("user_id", "")
+
     if not password:
-        return {"ok": True, "username": a.get("username", "")}
-    # Đổi mật khẩu = hạ MỌI phiên cũ (máy khác, trình duyệt khác) rồi cấp lại phiên cho chính
-    # máy này. Thiếu bước này thì cái phiên mà người ta đổi mật khẩu để đuổi đi vẫn sống thêm
-    # 30 ngày, và việc đổi coi như không có tác dụng.
-    cfgmod.clear_sessions()
-    return _session_cookie(JSONResponse({"ok": True, "username": a.get("username", "")}),
-                           cfgmod.new_session(), request)
+        return {"ok": True, "username": res_name}
+
+    cfgmod.drop_session(session_token)
+    new_tok = cfgmod.new_session(user_id=res_uid, username=res_name)
+    return _session_cookie(JSONResponse({"ok": True, "username": res_name}),
+                           new_tok, request)
+
+
+@app.get("/auth/users")
+async def auth_users_list(request: Request):
+    """Danh sách người dùng trong hệ thống (chỉ lộ user_id, username, totp_enabled)."""
+    if (loi := _doi_phien_that(request)) is not None:
+        return loi
+    users = cfgmod.list_users()
+    res = []
+    for u in users:
+        if isinstance(u, dict):
+            res.append({
+                "user_id": u.get("user_id", ""),
+                "username": u.get("username", ""),
+                "totp_enabled": bool((u.get("totp") or {}).get("enabled")),
+            })
+    return {"ok": True, "users": res}
+
+
+@app.post("/auth/users")
+async def auth_users_create(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Tạo người dùng mới (đòi hỏi session đăng nhập của tài khoản hiện tại)."""
+    if (loi := _doi_phien_that(request)) is not None:
+        return loi
+    uname = (username or "").strip()
+    if not uname:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Thiếu tên đăng nhập.", "Missing username.")}, status_code=400)
+    existing = cfgmod.get_user(username=uname)
+    if existing:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Tên đăng nhập đã tồn tại.", "Username already exists.")}, status_code=400)
+    pwd = cfgmod.clean_password(password)
+    if len(pwd) < 8:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Mật khẩu tối thiểu 8 ký tự.", "Password must be at least 8 characters.")}, status_code=400)
+    h, salt = cfgmod.hash_password(pwd)
+    import uuid
+    new_uid = str(uuid.uuid4())
+    new_user = {
+        "user_id": new_uid,
+        "username": uname,
+        "password_hash": h,
+        "salt": salt,
+        "totp": {"enabled": False, "secret": "", "recovery": [], "last_step": 0},
+    }
+    cfgmod.save_user(new_user)
+    # Tự động khởi tạo thư mục state cho user mới
+    cfgmod.get_user_state_dir(new_uid)
+    return {"ok": True, "user_id": new_uid, "username": uname}
 
 
 @app.get("/auth/tokens")

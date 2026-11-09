@@ -166,7 +166,7 @@ def run_tests():
         check("user3 khong the dang nhap", c.verify_password_for_user("bob", pw3) is None)
 
         # ------------------------------------------------------------
-        # 6. Kiem tra endpoint FastAPI
+        # 6. Kiem tra endpoint FastAPI va Session mang danh tinh
         # ------------------------------------------------------------
         import main
         from fastapi.testclient import TestClient
@@ -176,15 +176,59 @@ def run_tests():
         # Dang nhap user1
         r1 = client.post("/auth/login", data={"username": "thangvd", "password": pw1})
         check(f"API login user1 thanh cong (status {r1.status_code})", r1.status_code == 200 and r1.json().get("ok"))
+        tok1 = r1.cookies.get("javis_session")
+        check("login user1 co cookie javis_session", bool(tok1))
+        check("session user1 mang dung user_id1", c.get_session_user_id(tok1) == uid1)
+        check("session user1 mang dung username thangvd", (c.get_session_info(tok1) or {}).get("username") == "thangvd")
 
         # Dang nhap user2 bang mat khau moi
         r2 = client.post("/auth/login", data={"username": "alice", "password": new_pw2})
         check(f"API login user2 thanh cong (status {r2.status_code})", r2.status_code == 200 and r2.json().get("ok"))
+        tok2 = r2.cookies.get("javis_session")
+        check("login user2 co cookie javis_session", bool(tok2))
+        check("session user2 mang dung user_id2", c.get_session_user_id(tok2) == uid2)
+        check("session user2 mang dung username alice", (c.get_session_info(tok2) or {}).get("username") == "alice")
+        check("hai token session cua 2 user doc lap", tok1 != tok2)
+
+        # Kiem tra /auth/status phan biet dung user
+        st1 = client.get("/auth/status", cookies={"javis_session": tok1}).json()
+        check("status user1 tra ve dung user_id", st1.get("user_id") == uid1 and st1.get("username") == "thangvd")
+
+        st2 = client.get("/auth/status", cookies={"javis_session": tok2}).json()
+        check("status user2 tra ve dung user_id", st2.get("user_id") == uid2 and st2.get("username") == "alice")
 
         # Dang nhap user2 bang sai mat khau
         main._LOGIN_FAILS.clear()
         r_fail = client.post("/auth/login", data={"username": "alice", "password": "wrongpassword"})
         check("API login sai mat khau tra ve 401", r_fail.status_code == 401)
+
+        # Kiem tra tao user qua API /auth/users
+        r_new_user = client.post("/auth/users", data={"username": "charlie", "password": "PasswordCharlie123!"}, cookies={"javis_session": tok1})
+        check("API tao user moi charlie thanh cong", r_new_user.status_code == 200 and r_new_user.json().get("ok"))
+        charlie_uid = r_new_user.json().get("user_id")
+
+        r_users = client.get("/auth/users", cookies={"javis_session": tok1}).json()
+        u_names = [u.get("username") for u in r_users.get("users", [])]
+        check("danh sach users qua API chua charlie", "charlie" in u_names)
+
+        # User charlie vua tao dang nhap duoc ngay
+        r_charlie_login = client.post("/auth/login", data={"username": "charlie", "password": "PasswordCharlie123!"})
+        check("user charlie dang nhap thanh cong", r_charlie_login.status_code == 200 and r_charlie_login.json().get("ok"))
+        tok_charlie = r_charlie_login.cookies.get("javis_session")
+        check("session charlie mang dung user_id", c.get_session_user_id(tok_charlie) == charlie_uid)
+
+        # Kiem tra doi mat khau cho user2 qua /auth/password
+        pw_alice_3 = "AlicePassV3#123"
+        r_change_pw = client.post("/auth/password", data={"current_password": new_pw2, "password": pw_alice_3}, cookies={"javis_session": tok2})
+        check("alice doi mat khau thanh cong", r_change_pw.status_code == 200 and r_change_pw.json().get("ok"))
+
+        # Alice dang nhap duoc bang mat khau v3
+        r_alice_v3 = client.post("/auth/login", data={"username": "alice", "password": pw_alice_3})
+        check("alice dang nhap duoc bang mat khau v3", r_alice_v3.status_code == 200 and r_alice_v3.json().get("ok"))
+
+        # User1 van dang nhap binh thuong voi pw1
+        r_user1_still_ok = client.post("/auth/login", data={"username": "thangvd", "password": pw1})
+        check("user1 van dang nhap binh thuong", r_user1_still_ok.status_code == 200 and r_user1_still_ok.json().get("ok"))
 
     finally:
         shutil.rmtree(test_state_root, ignore_errors=True)
