@@ -785,10 +785,25 @@ class WebWatchDeps:
 class WebWatchFeature:
     def __init__(self, deps: WebWatchDeps):
         self.deps = deps
-        self.store = Store(Path(deps.state_dir()) / "web_watch.sqlite3")
+        self._stores: dict[Path, Store] = {}
         self._task: asyncio.Task | None = None
         self._busy: set = set()
         self.router = self._make_router()
+
+    @property
+    def store(self) -> Store:
+        p = Path(self.deps.state_dir())
+        if not hasattr(self, "_stores"):
+            self._stores = {}
+        if p not in self._stores:
+            self._stores[p] = Store(p / "web_watch.sqlite3")
+        return self._stores[p]
+
+    @store.setter
+    def store(self, val: Store) -> None:
+        if not hasattr(self, "_stores"):
+            self._stores = {}
+        self._stores[Path(self.deps.state_dir())] = val
 
     # ---------- tạo, sửa ----------
     def create(

@@ -256,6 +256,13 @@ SETTINGS_PATH = STATE_DIR / "settings.json"
 # vì code tree dashboard/ là read-only trong container.
 BRANDING_DIR = STATE_DIR / "branding"
 
+
+def get_settings_path(user_id: str = None) -> Path:
+    uid = user_id or current_user_id.get()
+    if uid:
+        return get_user_state_dir(uid) / "settings.json"
+    return SETTINGS_PATH
+
 _DEFAULT = {
     "workspace_name": "Javis OS",
     "setup_done": False,                       # đã qua bộ cài đặt lần đầu chưa
@@ -820,9 +827,10 @@ _SETTINGS_CACHE = {"sig": None, "cfg": None}
 _SETTINGS_LOCK = threading.RLock()
 
 
-def _bak_path() -> Path:
+def _bak_path(path: Path = None) -> Path:
     """Bản tốt gần nhất trước lần ghi cuối. Tính lại mỗi lần gọi vì test đổi SETTINGS_PATH."""
-    return SETTINGS_PATH.with_name(SETTINGS_PATH.name + ".bak")
+    target = path or get_settings_path()
+    return target.with_name(target.name + ".bak")
 
 
 class SettingsUnreadable(RuntimeError):
@@ -836,7 +844,7 @@ class SettingsUnreadable(RuntimeError):
 _READ_TRIES = 6
 
 
-def _doc_file_settings() -> dict:
+def _doc_file_settings(path: Path = None) -> dict:
     """Nội dung settings.json trên đĩa (CHƯA trộn mặc định, chưa giải mã). {} khi chưa có file.
 
     File có mà đọc hỏng (JSON cụt, byte rác) thì KHÔNG coi như rỗng. Trước 0.86.2 nhánh này nuốt
@@ -848,12 +856,13 @@ def _doc_file_settings() -> dict:
     được thì ném `SettingsUnreadable` thay vì trả {}. Trả {} ở đây chính là trả "máy mới cài": giao
     diện hiện lại trình cài đặt và lần lưu kế tiếp (chủ repo 15/10/2026: lưu kênh Lark) ghi cấu hình
     trống đè lên tài khoản, model và kênh admin thật."""
-    if not SETTINGS_PATH.exists():
+    target = path or get_settings_path()
+    if not target.exists():
         return {}
     e = None
     for lan in range(_READ_TRIES):
         try:
-            data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+            data = json.loads(target.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 return data
             raise ValueError(f"settings.json không phải object JSON ({type(data).__name__})")
@@ -863,21 +872,21 @@ def _doc_file_settings() -> dict:
             e = loi
             time.sleep(0.03 * (lan + 1))
     if e is not None:
-        hong = SETTINGS_PATH.with_name(SETTINGS_PATH.name + ".bad")
+        hong = target.with_name(target.name + ".bad")
         try:
             if isinstance(e, OSError):
                 raise e      # file bị khoá chứ nội dung không hỏng: không có bản hỏng nào để giữ
-            raw = SETTINGS_PATH.read_bytes()
-            hong = SETTINGS_PATH.with_name(f"{SETTINGS_PATH.name}.bad-{hashlib.sha1(raw).hexdigest()[:8]}")
+            raw = target.read_bytes()
+            hong = target.with_name(f"{target.name}.bad-{hashlib.sha1(raw).hexdigest()[:8]}")
             if not hong.exists():   # cùng một bản hỏng thì chỉ giữ một lần
                 hong.write_bytes(raw)
         except Exception:
             pass
         print(f"[config] settings.json ĐỌC HỎNG ({type(e).__name__}: {e}). Đã giữ bản hỏng ở {hong.name}; "
-              f"đang dùng bản dự phòng {_bak_path().name} nếu có.", file=__import__("sys").stderr)
+              f"đang dùng bản dự phòng {_bak_path(target).name} nếu có.", file=__import__("sys").stderr)
         for lan in range(_READ_TRIES):
             try:
-                data = json.loads(_bak_path().read_text(encoding="utf-8"))
+                data = json.loads(_bak_path(target).read_text(encoding="utf-8"))
                 if isinstance(data, dict):
                     _DOC_TU_BAK[0] = True
                     return data
@@ -901,13 +910,14 @@ def _doc_file_settings() -> dict:
 _DOC_TU_BAK = [False]
 
 
-def _ghi_nguyen_tu(text: str) -> None:
+def _ghi_nguyen_tu(text: str, path: Path = None) -> None:
     """Ghi settings.json NGUYÊN TỬ: ghi file tạm cạnh nó, fsync, rồi os.replace.
 
     Ghi thẳng (write_text) mà tiến trình chết giữa chừng (container bị dừng lúc cập nhật, máy mất
     điện) là để lại file JSON cụt, và đọc cụt thì trước đây ra cấu hình mặc định. Trước khi thay,
     chép bản đang tốt sang `.bak` để còn đường lùi nếu bản mới có vấn đề."""
-    tmp = SETTINGS_PATH.with_name(f".{SETTINGS_PATH.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    target = path or get_settings_path()
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
@@ -916,28 +926,28 @@ def _ghi_nguyen_tu(text: str) -> None:
                 os.fsync(f.fileno())
             except OSError:
                 pass
-        if SETTINGS_PATH.exists():
+        if target.exists():
             try:
-                cu = SETTINGS_PATH.read_bytes()
+                cu = target.read_bytes()
                 if isinstance(json.loads(cu.decode("utf-8")), dict):   # chỉ lưu bản TỐT làm dự phòng
                     # Ghi .bak cũng NGUYÊN TỬ: nó là đường lùi khi settings.json đọc hỏng, mà ghi thẳng
                     # thì người đọc đúng lúc này thấy một .bak cụt, đúng lúc nó cần .bak nhất.
-                    bak_tmp = _bak_path().with_name(f".{_bak_path().name}.{os.getpid()}.{threading.get_ident()}.tmp")
+                    bak_tmp = _bak_path(target).with_name(f".{_bak_path(target).name}.{os.getpid()}.{threading.get_ident()}.tmp")
                     bak_tmp.write_bytes(cu)
                     try:
-                        os.replace(bak_tmp, _bak_path())
+                        os.replace(bak_tmp, _bak_path(target))
                     except OSError:
                         try:
                             bak_tmp.unlink()
                         except OSError:
                             pass
-                os.chmod(tmp, SETTINGS_PATH.stat().st_mode & 0o777)
+                os.chmod(tmp, target.stat().st_mode & 0o777)
             except Exception:
                 pass
         # Windows: file đang bị một tiến trình khác mở đọc thì replace có thể bị từ chối thoáng qua.
         for lan in range(5):
             try:
-                os.replace(tmp, SETTINGS_PATH)
+                os.replace(tmp, target)
                 break
             except PermissionError:
                 if lan == 4:
@@ -1176,19 +1186,41 @@ def _ui_lang_ban_cu(cfg: dict, data: dict) -> None:
         cfg.setdefault("locale", {})["ui_lang"] = "vi"
 
 
-def read_settings():
+_SETTINGS_CACHES: dict[str, dict] = {}
+
+
+def read_settings(user_id: str = None, settings_path: Path = None):
+    if _SETTINGS_CACHE["sig"] is None:
+        _SETTINGS_CACHES.clear()
+    target = Path(settings_path) if settings_path else get_settings_path(user_id)
+    target_str = str(target.resolve())
     try:
-        st = SETTINGS_PATH.stat()
+        st = target.stat()
         sig = (st.st_mtime_ns, st.st_size)
     except OSError:
         sig = None
-    if sig is not None and sig == _SETTINGS_CACHE["sig"] and _SETTINGS_CACHE["cfg"] is not None:
-        res = json.loads(_SETTINGS_CACHE["cfg"])
-        res["auth"] = read_auth()
+    cache = _SETTINGS_CACHES.get(target_str)
+    if sig is not None and cache and sig == cache.get("sig") and cache.get("cfg") is not None:
+        res = json.loads(cache["cfg"])
+        uid = user_id or current_user_id.get()
+        u = get_user(user_id=uid) if uid else None
+        a = read_auth()
+        if u:
+            res["auth"] = {
+                "user_id": u.get("user_id", ""),
+                "username": u.get("username", ""),
+                "password_hash": u.get("password_hash", ""),
+                "salt": u.get("salt", ""),
+                "totp": u.get("totp", {"enabled": False, "secret": "", "recovery": [], "last_step": 0}),
+                "users": a.get("users", []),
+            }
+        else:
+            res["auth"] = a
         return res
+
     cfg = json.loads(json.dumps(_DEFAULT))   # deep copy
     _DOC_TU_BAK[0] = False
-    data = _doc_file_settings()
+    data = _doc_file_settings(target)
     tu_bak = _DOC_TU_BAK[0]
     _deep_merge(cfg, data)
     _ui_lang_ban_cu(cfg, data)
@@ -1196,32 +1228,50 @@ def read_settings():
     _no_rong_pham_vi_bo_nao(cfg)
     _ap_muc_mac_dinh(cfg)
     try:
-        import secrets_store  # lazy: secrets_store import config → tránh vòng lặp import
+        import secrets_store  # lazy: secrets_store import config -> tránh vòng lặp import
         _transform_secret_fields(cfg, secrets_store.decrypt)
     except Exception as e:
         print(f"[config] giải mã secret lỗi: {e}", file=__import__('sys').stderr)
     if sig is not None and not tu_bak:
-        _SETTINGS_CACHE["sig"] = sig
-        _SETTINGS_CACHE["cfg"] = json.dumps(cfg, ensure_ascii=False)
-    # Auth is stored separately in auth.json for multi-user support
-    cfg["auth"] = read_auth()
+        _SETTINGS_CACHES[target_str] = {
+            "sig": sig,
+            "cfg": json.dumps(cfg, ensure_ascii=False)
+        }
+        if target == SETTINGS_PATH:
+            _SETTINGS_CACHE["sig"] = sig
+            _SETTINGS_CACHE["cfg"] = _SETTINGS_CACHES[target_str]["cfg"]
+    uid = user_id or current_user_id.get()
+    u = get_user(user_id=uid) if uid else None
+    a = read_auth()
+    if u:
+        cfg["auth"] = {
+            "user_id": u.get("user_id", ""),
+            "username": u.get("username", ""),
+            "password_hash": u.get("password_hash", ""),
+            "salt": u.get("salt", ""),
+            "totp": u.get("totp", {"enabled": False, "secret": "", "recovery": [], "last_step": 0}),
+            "users": a.get("users", []),
+        }
+    else:
+        cfg["auth"] = a
     return cfg
 
 
-def update_settings(patch: dict) -> dict:
+def update_settings(patch: dict, user_id: str = None, settings_path: Path = None) -> dict:
     """Cập nhật TỪNG PHẦN: gộp `patch` (đệ quy) lên cấu hình hiện tại rồi ghi, trong một khoá.
 
     Dùng cho mọi chỗ chỉ muốn đổi vài trường (`{"whatsapp": {"verify_token": ...}}`). Đừng đưa
     mảnh như thế vào `write_settings`: hàm đó THAY TOÀN BỘ file bằng thứ được đưa vào. Trả về cấu
     hình đầy đủ sau khi ghi."""
+    target = Path(settings_path) if settings_path else get_settings_path(user_id)
     with _SETTINGS_LOCK:
-        cfg = read_settings()
+        cfg = read_settings(user_id=user_id, settings_path=target)
         _deep_merge(cfg, json.loads(json.dumps(patch)))
-        write_settings(cfg)
+        write_settings(cfg, user_id=user_id, settings_path=target)
         return cfg
 
 
-def write_settings(cfg):
+def write_settings(cfg, user_id: str = None, settings_path: Path = None):
     """THAY TOÀN BỘ settings.json bằng `cfg` - một cấu hình ĐẦY ĐỦ lấy từ read_settings() rồi sửa.
 
     Lưới an toàn (0.86.2): `cfg` thiếu khoá gốc mà mọi cấu hình đầy đủ đều có (read_settings luôn
@@ -1231,49 +1281,9 @@ def write_settings(cfg):
     (khách báo 08/10). Mảnh như thế giờ được gộp như update_settings, kèm một dòng log chỉ chỗ gọi."""
     if not isinstance(cfg, dict):
         raise TypeError("write_settings cần một dict cấu hình đầy đủ")
+    target = Path(settings_path) if settings_path else get_settings_path(user_id)
+    target_str = str(target.resolve())
     with _SETTINGS_LOCK:
-        if "auth" not in cfg:
-            # Caller popped "auth" to reset/clear account credentials
-            a_cur = read_auth()
-            a_cur.update(username="", password_hash="", salt="")
-            a_cur.pop("env_applied", None)
-            if a_cur.get("user_id"):
-                for u in a_cur.get("users", []):
-                    if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
-                        u.update(username="", password_hash="", salt="")
-                        u.pop("env_applied", None)
-            write_auth(a_cur)
-        elif isinstance(cfg["auth"], dict):
-            a_cur = read_auth()
-            new_a = cfg["auth"]
-            if new_a.get("password_hash") or new_a.get("username") or new_a.get("totp"):
-                if not a_cur.get("user_id"):
-                    import uuid
-                    a_cur["user_id"] = str(uuid.uuid4())
-                for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied"):
-                    if k in new_a:
-                        a_cur[k] = new_a[k]
-                users = list(a_cur.get("users", []))
-                found = False
-                for idx, u in enumerate(users):
-                    if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
-                        users[idx] = {k: a_cur.get(k) for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in a_cur}
-                        found = True
-                        break
-                if not found:
-                    users.append({k: a_cur.get(k) for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in a_cur})
-                a_cur["users"] = users
-                write_auth(a_cur)
-            elif not new_a.get("password_hash") and a_cur.get("password_hash"):
-                a_cur.update(username="", password_hash="", salt="")
-                a_cur.pop("env_applied", None)
-                if a_cur.get("user_id"):
-                    for u in a_cur.get("users", []):
-                        if isinstance(u, dict) and u.get("user_id") == a_cur["user_id"]:
-                            u.update(username="", password_hash="", salt="")
-                            u.pop("env_applied", None)
-                write_auth(a_cur)
-
         # MẢNH = thiếu quá nửa khoá gốc. Mảnh thật chỉ có một, hai khoá; còn cấu hình đầy đủ mà bỏ
         # hẳn một mục có chủ đích (đặt lại tài khoản: `pop("auth")` rồi ghi) vẫn phải xoá được.
         thieu = [k for k in _DEFAULT if k not in cfg]
@@ -1283,22 +1293,74 @@ def write_settings(cfg):
             print(f"[config] write_settings nhận một MẢNH (thiếu {', '.join(thieu[:4])}...) - gộp thay vì "
                   f"ghi đè cả file. Hãy dùng update_settings. Gọi từ: {noi[-300:]}",
                   file=__import__("sys").stderr)
-            day_du = read_settings()
+            day_du = read_settings(user_id=user_id, settings_path=target)
             _deep_merge(day_du, json.loads(json.dumps(cfg)))
             cfg = day_du
-        _chan_ghi_trang(cfg)
+        _chan_ghi_trang(cfg, target)
+
+        if "auth" not in cfg:
+            # Caller popped "auth" to reset/clear account credentials
+            a_cur = read_auth()
+            uid = user_id or current_user_id.get() or a_cur.get("user_id")
+            if uid:
+                for u in a_cur.get("users", []):
+                    if isinstance(u, dict) and u.get("user_id") == uid:
+                        u.update(username="", password_hash="", salt="")
+                        u.pop("env_applied", None)
+            if a_cur.get("user_id") == uid or not uid:
+                a_cur.update(username="", password_hash="", salt="")
+                a_cur.pop("env_applied", None)
+            write_auth(a_cur)
+        elif isinstance(cfg["auth"], dict):
+            a_cur = read_auth()
+            new_a = cfg["auth"]
+            uid = user_id or new_a.get("user_id") or current_user_id.get()
+            if not uid:
+                import uuid
+                uid = a_cur.get("user_id") or str(uuid.uuid4())
+            new_a["user_id"] = uid
+            if new_a.get("password_hash") or new_a.get("username") or (new_a.get("totp") and new_a["totp"].get("enabled")):
+                if not a_cur.get("user_id"):
+                    a_cur["user_id"] = uid
+                users = list(a_cur.get("users", []))
+                found = False
+                for idx, u in enumerate(users):
+                    if isinstance(u, dict) and u.get("user_id") == uid:
+                        users[idx] = {**u, **{k: new_a[k] for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in new_a}}
+                        found = True
+                        break
+                if not found:
+                    users.append({k: new_a[k] for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in new_a})
+                a_cur["users"] = users
+                if a_cur.get("user_id") == uid:
+                    for k in ("username", "password_hash", "salt", "totp", "env_applied"):
+                        if k in new_a:
+                            a_cur[k] = new_a[k]
+                write_auth(a_cur)
+            elif not new_a.get("password_hash"):
+                if uid:
+                    for u in a_cur.get("users", []):
+                        if isinstance(u, dict) and u.get("user_id") == uid:
+                            u.update(username="", password_hash="", salt="")
+                            u.pop("env_applied", None)
+                    if a_cur.get("user_id") == uid:
+                        a_cur.update(username="", password_hash="", salt="")
+                        a_cur.pop("env_applied", None)
+                    write_auth(a_cur)
+
+        _SETTINGS_CACHES.pop(target_str, None)
         _SETTINGS_CACHE["sig"] = None
         _SETTINGS_CACHE["cfg"] = None
-        _write_settings_full(cfg)
+        _write_settings_full(cfg, target)
 
 
 def _da_cai_dat(d) -> bool:
     """Cấu hình này là của một máy ĐÃ cài đặt: qua trình cài đặt, hoặc đã có mật khẩu admin."""
     d = d if isinstance(d, dict) else {}
-    return bool(d.get("setup_done")) or bool(str(((d.get("auth") or {}).get("password_hash")) or "")) or bool(read_auth().get("password_hash"))
+    return bool(d.get("setup_done")) or bool(str(((d.get("auth") or {}).get("password_hash")) or ""))
 
 
-def _chan_ghi_trang(cfg) -> None:
+def _chan_ghi_trang(cfg, path: Path = None) -> None:
     """Lưới cuối (0.166.4): không ghi một cấu hình TRỐNG đè lên máy đã cài đặt.
 
     Cấu hình trống = mất tài khoản (không mật khẩu, setup_done False) VÀ đưa những mục khác mà file trên
@@ -1308,10 +1370,11 @@ def _chan_ghi_trang(cfg) -> None:
 
     Đặt lại tài khoản có chủ đích (lấy cấu hình đầy đủ, `pop("auth")` rồi ghi) vẫn đi qua: các mục khác
     vẫn giữ giá trị trên đĩa, không mục nào bị kéo về mặc định."""
-    if _da_cai_dat(cfg) or not SETTINGS_PATH.exists():
+    target = path or get_settings_path()
+    if _da_cai_dat(cfg) or not target.exists():
         return
     try:
-        tren_dia = _doc_file_settings()
+        tren_dia = _doc_file_settings(target)
     except SettingsUnreadable:
         tren_dia = None                     # không đọc được bản thật thì càng không được đè lên nó
     if tren_dia is not None:
@@ -1331,7 +1394,8 @@ def _chan_ghi_trang(cfg) -> None:
     raise SettingsUnreadable("Từ chối ghi một cấu hình trống đè lên máy đã cài đặt")
 
 
-def _write_settings_full(cfg):
+def _write_settings_full(cfg, path: Path = None):
+    target = path or get_settings_path()
     # Deep-copy rồi mã hoá BẢN SAO: caller vẫn giữ cfg plaintext để dùng tiếp (không bị hỏng).
     out = json.loads(json.dumps(cfg))
     out.pop("auth", None)
@@ -1348,20 +1412,20 @@ def _write_settings_full(cfg):
     try:
         t = (out.get("auth") or {}).get("totp")
         if isinstance(t, dict) and t.get("enabled") and not str(t.get("secret") or ""):
-            raw_cu = _doc_file_settings()
+            raw_cu = _doc_file_settings(target)
             cu = str((((raw_cu.get("auth") or {}).get("totp") or {}).get("secret")) or "")
             if cu:
                 t["secret"] = cu
     except Exception:
         pass
     try:
-        _giu_secret_khong_giai_duoc(out)
+        _giu_secret_khong_giai_duoc(out, target)
     except Exception as e:      # noqa: BLE001 - tấm che hỏng thì vẫn ghi như cũ, không chặn việc lưu
         print(f"[config] giữ secret khi khoá lệch lỗi: {e}", file=__import__('sys').stderr)
-    _ghi_nguyen_tu(json.dumps(out, ensure_ascii=False, indent=2))
+    _ghi_nguyen_tu(json.dumps(out, ensure_ascii=False, indent=2), target)
 
 
-def _giu_secret_khong_giai_duoc(out):
+def _giu_secret_khong_giai_duoc(out, path: Path = None):
     """KHÔNG ghi rỗng đè lên một secret mà máy này không giải mã được (0.81.1).
 
     Khoá `.secret_key` lệch (volume dựng lại, file khoá mất hay chép từ máy khác) thì read_settings giải mã mọi secret ra
@@ -1371,17 +1435,18 @@ def _giu_secret_khong_giai_duoc(out):
 
     Luật: bản CŨ trong file là "enc:..." mà máy này KHÔNG giải được, và bản MỚI rỗng hoặc thiếu -> giữ bản cũ. Khoá đúng
     thì không đụng gì: chủ xoá key là xoá được. Giá trị mới chủ vừa gõ (khác rỗng) luôn thắng."""
-    if not SETTINGS_PATH.exists():
+    target = path or get_settings_path()
+    if not target.exists():
         return
     import secrets_store
-    raw_cu = _doc_file_settings()
-    for path in _SECRET_PATHS:
-        if path == "auth.totp.secret":
+    raw_cu = _doc_file_settings(target)
+    for path_key in _SECRET_PATHS:
+        if path_key == "auth.totp.secret":
             # 2FA có tấm che RIÊNG ngay trên (giữ khi còn bật): tắt 2FA lúc khoá lệch (đăng nhập bằng mã khôi phục rồi
             # tắt) phải xoá được secret, không được hồi sinh nó ở đây.
             continue
-        parts = path.split(".")
-        for cha_cu, key in _secret_keys(raw_cu, path):
+        parts = path_key.split(".")
+        for cha_cu, key in _secret_keys(raw_cu, path_key):
             cu = cha_cu.get(key)
             if not (isinstance(cu, str) and cu.startswith("enc:")) or secrets_store.decrypt(cu):
                 continue

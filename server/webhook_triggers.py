@@ -512,18 +512,38 @@ class WebhookFeature(webhook_worker.WebhookWorker):
         self._worker_init()
         self._fails: dict = {}                     # address -> deque of failed-auth times (RAM: protection only)
         self._ack_ms: deque = deque(maxlen=2000)   # receive latency of recent 202s (health)
-        self.vault = webhook_secrets.Vault(Path(self.deps.state_dir()))
+        self._vaults: dict = {}
+        self._stores: dict = {}
         self.router = self._make_router()
+
+    @property
+    def vault(self) -> webhook_secrets.Vault:
+        p = Path(self.deps.state_dir())
+        if not hasattr(self, "_vaults"):
+            self._vaults = {}
+        if p not in self._vaults:
+            self._vaults[p] = webhook_secrets.Vault(p)
+        return self._vaults[p]
+
+    @vault.setter
+    def vault(self, val: webhook_secrets.Vault) -> None:
+        if not hasattr(self, "_vaults"):
+            self._vaults = {}
+        self._vaults[Path(self.deps.state_dir())] = val
 
     # ── store and migration ──
     def store(self) -> webhook_store.Store:
-        if self._store is None:
+        p = Path(self.deps.state_dir())
+        if not hasattr(self, "_stores"):
+            self._stores = {}
+        if p not in self._stores:
             with self._store_lock:
-                if self._store is None:
-                    st = webhook_store.Store(Path(self.deps.state_dir()) / "webhook_events.sqlite3")
+                if p not in self._stores:
+                    st = webhook_store.Store(p / "webhook_events.sqlite3")
                     self._migrate_json(st)
+                    self._stores[p] = st
                     self._store = st
-        return self._store
+        return self._stores[p]
 
     def _path(self) -> Path:
         return Path(self.deps.state_dir()) / "webhooks.json"

@@ -29,6 +29,14 @@ from config import STATE_DIR
 
 DB_PATH = STATE_DIR / "github_work.db"
 
+
+def get_db_path(user_id: str = None) -> Path:
+    from config import get_user_state_dir, current_user_id
+    uid = user_id or current_user_id.get()
+    if uid:
+        return get_user_state_dir(uid) / "github_work.db"
+    return DB_PATH
+
 EXEC = ("idle", "running", "done", "stuck")
 CI = ("none", "pending", "running", "green", "red", "no_ci", "cancelled")
 INTEG = ("no_pr", "pr_open", "ready", "merged", "conflict", "merge_failed")
@@ -41,8 +49,8 @@ _COLS = ("sid", "full_name", "brain", "branch", "worktree", "base_branch", "head
 
 
 class Store:
-    def __init__(self, path: Path = DB_PATH):
-        self.path = Path(path)
+    def __init__(self, path: Path | None = None):
+        self.path = Path(path) if path is not None else get_db_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(self.path), check_same_thread=False)
@@ -314,15 +322,17 @@ class Store:
         return [dict(r) for r in rows]
 
 
-_STORE: Store | None = None
+_STORES: dict[Path, Store] = {}
 _STORE_LOCK = threading.Lock()
 
 
-def store() -> Store:
+def store(user_id: str = None) -> Store:
     global _STORE
+    path = get_db_path(user_id)
     with _STORE_LOCK:
-        if _STORE is None:
-            _STORE = Store()
+        if path not in _STORES:
+            _STORES[path] = Store(path)
+        _STORE = _STORES[path]
         return _STORE
 
 

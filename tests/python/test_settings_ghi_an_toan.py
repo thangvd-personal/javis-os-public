@@ -34,6 +34,7 @@ import threading
 from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ["JAVIS_STATE_DIR"] = tempfile.mkdtemp(prefix="javis-settings-safe-")
+os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
 import config as cfgmod
 
 try:

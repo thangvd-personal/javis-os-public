@@ -221,11 +221,13 @@ class ObserveRuntime:
 
     def __init__(self, state_dir: Path | str | None = None,
                  settings_reader: Callable[[], dict] | None = None):
+        self._explicit_state_dir = Path(state_dir) if state_dir is not None else None
         self.state_dir = Path(state_dir or config.STATE_DIR)
         self.path = self.state_dir / "runtime.db"
         self._settings_reader = settings_reader or config.read_settings
         self._lock = threading.RLock()
         self._db: sqlite3.Connection | None = None
+        self._dbs: dict[Path, sqlite3.Connection] = {}
         self._cleaned = False
 
     def _policy(self) -> dict:
@@ -260,10 +262,13 @@ class ObserveRuntime:
 
     def _conn(self) -> sqlite3.Connection:
         with self._lock:
-            if self._db is not None:
+            target_dir = self._explicit_state_dir or config.get_user_state_dir()
+            target_path = target_dir / "runtime.db"
+            if target_path in self._dbs:
+                self._db = self._dbs[target_path]
                 return self._db
-            self.state_dir.mkdir(parents=True, exist_ok=True)
-            db = sqlite3.connect(str(self.path), check_same_thread=False, timeout=10)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            db = sqlite3.connect(str(target_path), check_same_thread=False, timeout=10)
             db.row_factory = sqlite3.Row
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("PRAGMA foreign_keys=ON")
@@ -493,17 +498,19 @@ class ObserveRuntime:
                 "ON runtime_invocations(session_id,status,effect)"
             )
             db.commit()
+            self._dbs[target_path] = db
             self._db = db
-            self._cleanup_once()
+            self._cleanup_once(db)
             return db
 
-    def _cleanup_once(self) -> None:
-        if self._cleaned or self._db is None:
+    def _cleanup_once(self, db: sqlite3.Connection | None = None) -> None:
+        conn = db or self._db
+        if self._cleaned or conn is None:
             return
         self._cleaned = True
         cutoff = time.time() - self._policy()["retention_days"] * 86400
         try:
-            old = [r[0] for r in self._db.execute(
+            old = [r[0] for r in conn.execute(
                 "SELECT id FROM runtime_tasks WHERE created_at < ?", (cutoff,)
             ).fetchall()]
             if old:
@@ -512,9 +519,9 @@ class ObserveRuntime:
                               "runtime_capability_leases", "runtime_evidence",
                               "runtime_evidence_refs", "runtime_events", "runtime_checkpoints",
                               "runtime_steps"):
-                    self._db.execute(f"DELETE FROM {table} WHERE task_id IN ({marks})", old)
-                self._db.execute(f"DELETE FROM runtime_tasks WHERE id IN ({marks})", old)
-                self._db.commit()
+                    conn.execute(f"DELETE FROM {table} WHERE task_id IN ({marks})", old)
+                conn.execute(f"DELETE FROM runtime_tasks WHERE id IN ({marks})", old)
+                conn.commit()
         except Exception:
             pass
 
@@ -2194,8 +2201,17 @@ class ObserveRuntime:
 
     def close(self) -> None:
         with self._lock:
+            for db in list(self._dbs.values()):
+                try:
+                    db.close()
+                except Exception:
+                    pass
+            self._dbs.clear()
             if self._db is not None:
-                self._db.close()
+                try:
+                    self._db.close()
+                except Exception:
+                    pass
                 self._db = None
 
 

@@ -2561,14 +2561,20 @@ _RESONANCE_STORE = None
 _LAZY_LOCK = __import__("threading").RLock()
 
 
-def _resonance_store():
+_RESONANCE_STORES: dict[Path, resonance_store.GoalStore] = {}
+
+
+def _resonance_store(user_id: str = None):
     """Kho mục tiêu, mở lười: brain chưa bật Resonance thì không tạo file resonance.sqlite3 nào."""
     global _RESONANCE_STORE
-    if _RESONANCE_STORE is None:
-        with _LAZY_LOCK:
-            if _RESONANCE_STORE is None:
-                _RESONANCE_STORE = resonance_store.GoalStore()
-    return _RESONANCE_STORE
+    uid = user_id or cfgmod.current_user_id.get()
+    state_dir = cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)
+    path = state_dir / "resonance.sqlite3"
+    with _LAZY_LOCK:
+        if path not in _RESONANCE_STORES:
+            _RESONANCE_STORES[path] = resonance_store.GoalStore(path)
+        _RESONANCE_STORE = _RESONANCE_STORES[path]
+        return _RESONANCE_STORE
 
 
 def _resonance_turn_provider(brain) -> str:
@@ -14128,7 +14134,7 @@ async def _webhook_send(chat_id, text, viec=None, web="", brain="", dedup=""):
 
 
 webhook_feature = webhook_lazy.register(app, dict(
-    state_dir=lambda: cfgmod.STATE_DIR,
+    state_dir=lambda: cfgmod.get_user_state_dir(),
     run_task=lambda brain, text, level: reminders_feature._run_task(
         brain, text, level, intro=__import__("webhook_triggers").TASK_INTRO),
     run_workflow=_webhook_run_workflow,
@@ -14183,7 +14189,7 @@ async def _watch_summarize(prompt: str) -> str:
 
 
 watch_feature = web_watch.register(app, web_watch.WebWatchDeps(
-    state_dir=lambda: cfgmod.STATE_DIR,
+    state_dir=lambda: cfgmod.get_user_state_dir(),
     brain_root=lambda b: str(Path(_brain_root(b)).resolve()),
     send=_watch_send,
     summarize=_watch_summarize,
@@ -14217,7 +14223,7 @@ task_stats_feature = task_stats.register(app, task_stats.TaskStatsDeps(
 import login_vault
 
 login_vault.register(app, login_vault.LoginVaultDeps(
-    state_dir=lambda: cfgmod.STATE_DIR,
+    state_dir=lambda: cfgmod.get_user_state_dir(),
     has_session=lambda r: cfgmod.valid_session(r.cookies.get("javis_session", "")),
     fetch=web_watch.fetch,
 ))

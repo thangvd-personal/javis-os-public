@@ -279,6 +279,136 @@ def run_tests():
         check("API /sessions user2 chua phien cua user2", "Chat cua user2" in u2_titles)
         check("API /sessions user2 KHONG chua phien cua user1", "Chat cua user1" not in u2_titles)
 
+        # ------------------------------------------------------------
+        # 8. Kiem tra co lap settings.json theo User
+        # ------------------------------------------------------------
+        c.current_user_id.set(uid1)
+        cfg1 = c.read_settings()
+        cfg1["workspace_name"] = "Workspace of User 1"
+        c.write_settings(cfg1)
+
+        c.current_user_id.set(uid2)
+        cfg2 = c.read_settings()
+        cfg2["workspace_name"] = "Workspace of User 2"
+        c.write_settings(cfg2)
+
+        p_set1 = c.get_settings_path(uid1)
+        p_set2 = c.get_settings_path(uid2)
+        check("settings user1 luu tai dir1", str(dir1) in str(p_set1))
+        check("settings user2 luu tai dir2", str(dir2) in str(p_set2))
+
+        c.current_user_id.set(uid1)
+        check("user1 doc dung workspace_name user1", c.read_settings().get("workspace_name") == "Workspace of User 1")
+
+        c.current_user_id.set(uid2)
+        check("user2 doc dung workspace_name user2", c.read_settings().get("workspace_name") == "Workspace of User 2")
+
+        # ------------------------------------------------------------
+        # 9. Kiem tra co lap customer_conversations.sqlite3 theo User
+        # ------------------------------------------------------------
+        import conversations
+        c.current_user_id.set(uid1)
+        p_conv1 = conversations.get_db_path()
+        check("conversations user1 tro vao dir1", str(dir1) in str(p_conv1))
+        res1 = conversations.ghi_su_kien({
+            "channel": "telegram",
+            "account_id": "bot_1",
+            "external_chat_id": "chat_u1",
+            "sender_type": "customer",
+            "sender_id": "cust_1",
+            "sender_name": "Khach User 1",
+            "text": "Hello user 1",
+        })
+        c1_id = res1.get("conversation_id")
+        check("ghi su kien user 1 thanh cong", bool(c1_id))
+
+        c.current_user_id.set(uid2)
+        p_conv2 = conversations.get_db_path()
+        check("conversations user2 tro vao dir2", str(dir2) in str(p_conv2))
+        check("cuoc chat cua bot 1 khong ton tai o user2", len(conversations.cuoc_chat_cua_tai_khoan("telegram", "bot_1")) == 0)
+        check("danh sach hoi thoai user2 rong", len(conversations.danh_sach()) == 0)
+
+        res2 = conversations.ghi_su_kien({
+            "channel": "telegram",
+            "account_id": "bot_2",
+            "external_chat_id": "chat_u2",
+            "sender_type": "customer",
+            "sender_id": "cust_2",
+            "sender_name": "Khach User 2",
+            "text": "Hello user 2",
+        })
+        c2_id = res2.get("conversation_id")
+        check("ghi su kien user 2 thanh cong", bool(c2_id))
+        conv_u2 = conversations.chi_tiet(c2_id)
+        check("hoi thoai cua user2 mang dung chat_u2", (conv_u2 or {}).get("external_chat_id") == "chat_u2")
+
+        c.current_user_id.set(uid1)
+        conv_u1 = conversations.chi_tiet(c1_id)
+        check("hoi thoai cua user1 mang dung chat_u1", (conv_u1 or {}).get("external_chat_id") == "chat_u1")
+        check("cuoc chat cua bot 2 khong ton tai o user1", len(conversations.cuoc_chat_cua_tai_khoan("telegram", "bot_2")) == 0)
+
+        # ------------------------------------------------------------
+        # 10. Kiem tra co lap runtime.db theo User
+        # ------------------------------------------------------------
+        import context_runtime
+        c.current_user_id.set(uid1)
+        rt = context_runtime.get_runtime()
+        trace1 = rt.start_turn("sess-1", "brain", "dashboard")
+        rt.record_runtime_event(trace1, "custom.event.u1", {"hello": "u1"})
+        p_rt1 = dir1 / "runtime.db"
+        check("runtime.db user1 duoc tao o dir1", p_rt1.exists())
+
+        c.current_user_id.set(uid2)
+        trace2 = rt.start_turn("sess-2", "brain", "dashboard")
+        rt.record_runtime_event(trace2, "custom.event.u2", {"hello": "u2"})
+        p_rt2 = dir2 / "runtime.db"
+        check("runtime.db user2 duoc tao o dir2", p_rt2.exists())
+        check("user2 khong thay task cua user1 trong runtime", rt.get_task(trace1.task_id) is None)
+
+        # ------------------------------------------------------------
+        # 11. Kiem tra co lap login_vault.sqlite3 va web_watch.sqlite3 theo User
+        # ------------------------------------------------------------
+        c.current_user_id.set(uid1)
+        lv_store1 = main.login_vault.LoginVault(main.login_vault.LoginVaultDeps(
+            state_dir=lambda: c.get_user_state_dir(),
+            has_session=lambda r: True,
+            fetch=lambda *a, **k: None,
+        )).store
+        check("login_vault store1 nam trong dir1", str(dir1) in str(lv_store1.path))
+        lv_store1.add({"id": "lid1", "name": "Login 1", "cookies_enc": "enc:test", "domains": "[]", "created_at": 1, "updated_at": 1})
+
+        c.current_user_id.set(uid2)
+        lv_store2 = main.login_vault.LoginVault(main.login_vault.LoginVaultDeps(
+            state_dir=lambda: c.get_user_state_dir(),
+            has_session=lambda r: True,
+            fetch=lambda *a, **k: None,
+        )).store
+        check("login_vault store2 nam trong dir2", str(dir2) in str(lv_store2.path))
+        check("user2 khong thay cookie cua user1", lv_store2.get("lid1") is None)
+
+        c.current_user_id.set(uid1)
+        check("watch_feature store user1 tro vao dir1", str(dir1) in str(main.watch_feature.store.path))
+
+        c.current_user_id.set(uid2)
+        check("watch_feature store user2 tro vao dir2", str(dir2) in str(main.watch_feature.store.path))
+
+        # ------------------------------------------------------------
+        # 12. Kiem tra co lap github_work.db theo User
+        # ------------------------------------------------------------
+        import github_store
+        c.current_user_id.set(uid1)
+        gh_store1 = github_store.store()
+        check("github store 1 tro vao dir1", str(dir1) in str(gh_store1.path))
+        gh_store1.ensure("sid1", "owner/repo1", branch="feature-1")
+
+        c.current_user_id.set(uid2)
+        gh_store2 = github_store.store()
+        check("github store 2 tro vao dir2", str(dir2) in str(gh_store2.path))
+        check("user2 khong thay github work cua user1", gh_store2.get("sid1", "owner/repo1") is None)
+
+        c.current_user_id.set(uid1)
+        check("user1 thay github work cua minh", gh_store1.get("sid1", "owner/repo1") is not None)
+
     finally:
         shutil.rmtree(test_state_root, ignore_errors=True)
 

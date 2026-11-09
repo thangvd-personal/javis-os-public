@@ -43,6 +43,14 @@ from config import STATE_DIR
 
 DB_PATH = STATE_DIR / "customer_conversations.sqlite3"
 
+
+def get_db_path(user_id: str = None) -> Path:
+    from config import get_user_state_dir, current_user_id
+    uid = user_id or current_user_id.get()
+    if uid:
+        return get_user_state_dir(uid) / "customer_conversations.sqlite3"
+    return DB_PATH
+
 # Kênh mà kho hiểu. Adapter mới chỉ cần chuẩn hoá về sự kiện chung và dùng một giá trị ở đây.
 # Kênh kho hiểu = SỔ ĐĂNG KÝ KÊNH (server/channels). Trước 0.61.0 danh sách này chép tay ở đây
 # (kèm vài kênh "chừa chỗ" chưa có adapter); nay thêm kênh là thêm một module ở sổ, kho tự nhận.
@@ -161,18 +169,17 @@ _db_path: Path | None = None
 # ============================================================
 # Kết nối
 # ============================================================
-def _conn() -> sqlite3.Connection:
-    """Mở (một lần) kết nối tới kho. Đường dẫn tính lúc gọi để test đổi STATE_DIR được."""
+_DBS: dict[Path, sqlite3.Connection] = {}
+
+
+def _conn(user_id: str = None) -> sqlite3.Connection:
+    """Mở kết nối tới kho cho user hiện tại. Đường dẫn tính lúc gọi để phân tách multi-user."""
     global _db, _db_path
     with _lock:
-        path = Path(DB_PATH)
-        if _db is not None and _db_path == path:
+        path = Path(get_db_path(user_id))
+        if path in _DBS:
+            _db, _db_path = _DBS[path], path
             return _db
-        if _db is not None:
-            try:
-                _db.close()
-            except Exception:
-                pass
         path.parent.mkdir(parents=True, exist_ok=True)
         db = sqlite3.connect(str(path), timeout=10, check_same_thread=False)
         db.row_factory = sqlite3.Row
@@ -181,6 +188,7 @@ def _conn() -> sqlite3.Connection:
         db.executescript(_SCHEMA)
         _nang_cap(db)
         db.commit()
+        _DBS[path] = db
         _db, _db_path = db, path
         return db
 
@@ -514,7 +522,7 @@ def _don_sao_luu_cat_nhom() -> int:
     """Xoá bản sao lưu của lần cắt nhóm cũ đã quá `NGAY_GIU_SAO_LUU` ngày. Trả số file đã xoá. Không ném."""
     n = 0
     try:
-        goc = Path(DB_PATH)
+        goc = Path(get_db_path())
         for f in goc.parent.glob(goc.name + ".bak-truoc-cat-nhom-*"):
             try:
                 if _now() - f.stat().st_mtime > NGAY_GIU_SAO_LUU * 86400:
@@ -550,7 +558,7 @@ def cat_nhom_cu(giu: int = GIU_TIN_NHOM) -> dict:
                 " WHERE c.chat_type='group' GROUP BY m.conversation_id HAVING COUNT(*) > ?", (int(giu),)).fetchall()]
             if ds:
                 ngay = datetime.now().strftime("%Y%m%d-%H%M%S")
-                bak = Path(str(DB_PATH) + f".bak-truoc-cat-nhom-{ngay}")
+                bak = Path(str(get_db_path()) + f".bak-truoc-cat-nhom-{ngay}")
                 dst = sqlite3.connect(str(bak))
                 try:
                     db.backup(dst)
@@ -1671,7 +1679,7 @@ def insights_cached(since: float, until: float, account: str = "", now: Optional
     the end out, since the end moves on every call."""
     now = time.time() if now is None else float(now)
     closed = float(until) < now - 1
-    key = (str(_db_path or DB_PATH), round(float(since), 3), round(float(until), 3) if closed else "open", str(account or ""))
+    key = (str(_db_path or get_db_path()), round(float(since), 3), round(float(until), 3) if closed else "open", str(account or ""))
     hit = _insights_cache.get(key)
     if hit and hit[0] > now:
         return copy.deepcopy(hit[1])
