@@ -802,3 +802,28 @@ Giữ nguyên thứ tự ở Phần 9, thêm bốn việc mới. Việc **0**, *
 6. **`_save_sessions` là lỗi đang tồn tại**, nên sửa kể cả khi chưa multi-user. **0.153.0 vẫn chưa sửa.**
 7. **Giữ FastAPI + SQLite.** Django/DRF thay tầng không thiếu và không cho tầng đang thiếu. PostgreSQL tách riêng.
 8. **Mới ở 0.153.0: hệ quyền thứ hai đã mọc lên** trong nhóm chat team (`team_authority` + trần nhóm + Toàn quyền trưởng nhóm), với điểm quyết định riêng ở `team_runner._apply_admin`. `can()` phải hợp nhất **ba** điểm, không phải hai. Chi tiết ở Phần 12.2.
+
+---
+
+## Phần 13. Cập nhật triển khai multi-user và phân lập thư mục state (2026-11-09)
+
+Đã hoàn thiện triển khai kiến trúc multi-user trên nền FastAPI + SQLite mà không cần nhân bản service:
+
+### 13.1 Tách biệt xác thực hệ thống và trạng thái người dùng
+- Toàn bộ thông tin tài khoản được tách khỏi `settings.json` sang `server/state/auth.json` (danh sách `users`, mỗi người dùng có `user_id` định dạng UUID v4, `username`, `password_hash`, `salt`, `totp`).
+- Thư mục trạng thái của từng người dùng được cô lập hoàn toàn tại `server/state/[user_id]/`.
+- Các tệp trạng thái và cơ sở dữ liệu SQLite (`settings.json`, `conversations.db`, `customer_conversations.sqlite3`, `kanban.sqlite3`, `runtime.db`, `login_vault.sqlite3`, `web_watch.sqlite3`, `github_work.db`, `resonance.sqlite3`, `packs/`, `cache/`...) đều nằm trọn vẹn trong `server/state/[user_id]/`.
+
+### 13.2 Session mang danh tính người dùng và ContextVar
+- `new_session(user_id, username)` lưu `user_id` cùng token trong `.sessions.json`.
+- Middleware `_auth_guard` đọc cookie phiên và gán ContextVar `current_user_id` cho từng request HTTP/WebSocket.
+- Mọi hàm truy xuất đường dẫn trạng thái `get_user_state_dir(user_id=None)` tự động nhận diện `user_id` từ ContextVar của request hiện tại hoặc fallback về user đầu tiên/mặc định khi chạy ngoài request (background jobs, CLI).
+- Dynamic Connection Pooling cho SQLite: các module lưu trữ duy trì connection pool theo đường dẫn tệp thực tế của từng tenant, loại bỏ hoàn toàn rủi ro xung đột lock giữa nhiều người dùng đồng thời.
+
+### 13.3 API và Giao diện quản lý
+- Cung cấp endpoints quản trị tài khoản:
+  - `GET /auth/users`: danh sách tài khoản, trạng thái 2FA và cờ `is_current`.
+  - `POST /auth/users`: tạo tài khoản người dùng mới kèm thư mục trạng thái riêng biệt.
+  - `POST /auth/password`: đổi mật khẩu tài khoản người dùng hiện tại.
+- Tích hợp giao diện quản lý người dùng trên Dashboard (trang Cài đặt -> Tài khoản).
+- Bộ kiểm thử tự động toàn diện tại `tests/python/test_multi_user_auth.py` (68/68 kiểm tra xanh 100%).

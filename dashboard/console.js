@@ -7218,6 +7218,26 @@
       </div>
       ${auth.has_password ? `
       <div class="cview-section">
+        <h3>${esc(window.t("cs.ac_users_head"))}</h3>
+        <div class="gcard" style="max-width:560px">
+          <div class="gcard-meta" style="margin-bottom:12px">${esc(window.t("cs.ac_users_intro"))}</div>
+          <div id="usrList" class="tk-list"></div>
+          <details class="cb-them-tk" style="margin-top:14px">
+            <summary>${ic("plus", { cls: "ic-sm" })} ${esc(window.t("cs.ac_add_user"))}</summary>
+            <div style="margin-top:10px">
+              <label class="js-lbl">${esc(window.t("common.account"))}</label>
+              <input class="js-input" id="nuName" placeholder="${esc(window.t("cs.ac_user_ph"))}">
+              <label class="js-lbl">${esc(window.t("cs.ac_pw"))}</label>
+              <input class="js-input" id="nuPass" type="password" placeholder="${esc(window.t("cs.ac_pw_min"))}">
+              <div class="js-actions" style="margin-top:10px">
+                <button class="gcard-btn" id="nuCreate">${esc(window.t("cs.ac_create_user"))}</button>
+              </div>
+              <div class="gcard-meta" id="nuStatus"></div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="cview-section">
         <h3>${esc(window.t("cs.ac_2fa_head"))} <span style="opacity:.5">${esc(window.t("cs.ac_2fa_sub"))}</span></h3>
         <div class="gcard tfa-card" style="max-width:560px" id="tfaCard">
           <div class="gcard-meta" id="tfaHead">${esc(window.t("settings.checking"))}</div>
@@ -7247,6 +7267,33 @@
         </div>
       </div>`;
     renderTokens();
+    if (auth.has_password) {
+      renderUsers();
+      const nuBtn = document.getElementById("nuCreate");
+      if (nuBtn) {
+        nuBtn.onclick = async () => {
+          const st = document.getElementById("nuStatus");
+          const u = (document.getElementById("nuName").value || "").trim();
+          const p = document.getElementById("nuPass").value;
+          if (!u) { st.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_user_ph")); return; }
+          if (!p || p.length < 8) { st.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_pw_min")); return; }
+          st.textContent = window.t("settings.saving");
+          const fd = new FormData();
+          fd.append("username", u);
+          fd.append("password", p);
+          try {
+            const r = await (await fetch("/auth/users", { method: "POST", body: fd })).json();
+            if (!r.ok) { st.innerHTML = Icons.warn(r.error || window.t("cs.ac_err_dot")); return; }
+            st.innerHTML = OK_ICON + " " + esc(window.t("cs.ac_user_created"));
+            document.getElementById("nuName").value = "";
+            document.getElementById("nuPass").value = "";
+            renderUsers();
+          } catch (e) {
+            st.innerHTML = WARN_ICON + " " + esc(window.t("cs.ch_net_err"));
+          }
+        };
+      }
+    }
     document.getElementById("tkCreate").onclick = async () => {
       const st = document.getElementById("tkStatus");
       st.textContent = window.t("cs.ac_creating");
@@ -7510,6 +7557,26 @@
         renderTokens();
       };
     });
+  }
+
+  async function renderUsers() {
+    const box = document.getElementById("usrList");
+    if (!box) return;
+    let d;
+    try { d = await (await fetch("/auth/users")).json(); }
+    catch (e) { box.innerHTML = `<div class="gcard-meta">${WARN_ICON} ${esc(window.t("cs.ch_net_err"))}</div>`; return; }
+    const us = d.users || [];
+    if (!us.length) { box.innerHTML = ""; return; }
+    box.innerHTML = us.map(u => {
+      const isCur = u.is_current ? ` <span style="color:var(--accent);font-weight:600">(${esc(window.t("cs.ac_user_current"))})</span>` : "";
+      const tfa = u.totp_enabled ? " · 2FA" : "";
+      return `<div class="tk-row">
+        <div class="tk-info">
+          <b>${esc(u.username)}${isCur}</b>
+          <span class="tk-meta"><code>${esc(u.user_id)}</code>${tfa}</span>
+        </div>
+      </div>`;
+    }).join("");
   }
 
   // ---- Lưu 1 section settings ----

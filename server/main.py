@@ -1849,17 +1849,20 @@ async def auth_password(request: Request, current_password: str = Form(""),
 
 @app.get("/auth/users")
 async def auth_users_list(request: Request):
-    """Danh sách người dùng trong hệ thống (chỉ lộ user_id, username, totp_enabled)."""
+    """Danh sách người dùng trong hệ thống (chỉ lộ user_id, username, totp_enabled, is_current)."""
     if (loi := _doi_phien_that(request)) is not None:
         return loi
     users = cfgmod.list_users()
+    current_uid = cfgmod.get_current_user_id()
     res = []
     for u in users:
         if isinstance(u, dict):
+            uid = u.get("user_id", "")
             res.append({
-                "user_id": u.get("user_id", ""),
+                "user_id": uid,
                 "username": u.get("username", ""),
                 "totp_enabled": bool((u.get("totp") or {}).get("enabled")),
+                "is_current": (uid == current_uid) if current_uid else False,
             })
     return {"ok": True, "users": res}
 
