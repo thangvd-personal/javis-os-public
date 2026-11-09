@@ -199,7 +199,9 @@ class TasksFeature:
     def __init__(self, deps: TasksDeps):
         self.deps = deps
         state_dir = Path(deps.state_dir or (Path(__file__).parent / "state"))
-        self.store = TaskStore(state_dir / "kanban.sqlite3")
+        self._default_store = TaskStore(state_dir / "kanban.sqlite3")
+        self._stores: dict[str, TaskStore] = {"__default__": self._default_store}
+        self._stores_lock = threading.Lock()
         # Sổ "làm đúng một lần" (0.238.0) nằm cạnh kho việc: cùng thư mục trạng thái, sao lưu cùng nhau.
         once_ledger.configure(state_dir / "once_ledger.sqlite3")
         self.max_workers = max(1, min(8, int(os.getenv("JAVIS_KANBAN_MAX_WORKERS", "2"))))
@@ -222,6 +224,33 @@ class TasksFeature:
         self._verifying: set[str] = set()
         self._verify_jobs: set[asyncio.Task] = set()
         self.router = self._make_router()
+
+    @property
+    def store(self) -> TaskStore:
+        try:
+            import config
+            uid = config.get_current_user_id()
+            if not uid:
+                return self._default_store
+            key = str(uid)
+            st = self._stores.get(key)
+            if st is not None:
+                return st
+            with self._stores_lock:
+                st = self._stores.get(key)
+                if st is not None:
+                    return st
+                user_state_dir = config.get_user_state_dir(uid)
+                st = TaskStore(user_state_dir / "kanban.sqlite3")
+                self._stores[key] = st
+                return st
+        except Exception:
+            return self._default_store
+
+    @store.setter
+    def store(self, value: TaskStore):
+        self._default_store = value
+        self._stores["__default__"] = value
 
     # ------------------------------------------------------------------
     # Board identity, migration and portable snapshot

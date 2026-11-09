@@ -225,10 +225,59 @@ def run_tests():
         # Alice dang nhap duoc bang mat khau v3
         r_alice_v3 = client.post("/auth/login", data={"username": "alice", "password": pw_alice_3})
         check("alice dang nhap duoc bang mat khau v3", r_alice_v3.status_code == 200 and r_alice_v3.json().get("ok"))
+        tok_alice_v3 = r_alice_v3.cookies.get("javis_session")
 
         # User1 van dang nhap binh thuong voi pw1
         r_user1_still_ok = client.post("/auth/login", data={"username": "thangvd", "password": pw1})
         check("user1 van dang nhap binh thuong", r_user1_still_ok.status_code == 200 and r_user1_still_ok.json().get("ok"))
+
+        # ------------------------------------------------------------
+        # 7. Kiem tra co lap Store (SessionStore & TaskStore) theo User
+        # ------------------------------------------------------------
+        import sessions
+        # Dat ContextVar cho user1
+        c.current_user_id.set(uid1)
+        store1 = sessions.get_store()
+        check("store1 tro vao dung db cua user1", str(dir1) in str(store1.db_path))
+        s1_id = store1.create_session(title="Chat cua user1", brain="brain")
+        store1.append_message(s1_id, "user", "Tin nhan bi mat cua user1")
+
+        # Chuyen ContextVar sang user2
+        c.current_user_id.set(uid2)
+        store2 = sessions.get_store()
+        check("store2 tro vao dung db cua user2", str(dir2) in str(store2.db_path))
+        check("hai store cua 2 user doc lap", store1 != store2)
+        check("user2 khong thay session cua user1", store2.get_session(s1_id) is None)
+
+        s2_id = store2.create_session(title="Chat cua user2", brain="brain")
+        store2.append_message(s2_id, "user", "Tin nhan rieng cua user2")
+        check("user1 khong thay session cua user2", store1.get_session(s2_id) is None)
+
+        # Kiem tra TasksFeature.store (Kanban)
+        c.current_user_id.set(uid1)
+        t_store1 = main.tasks_feature.store
+        check("task store 1 tro vao dung dir1", str(dir1) in str(t_store1.path))
+        tid1 = t_store1.enqueue("brain", "Task cua user1", "Noi dung task 1")
+
+        c.current_user_id.set(uid2)
+        t_store2 = main.tasks_feature.store
+        check("task store 2 tro vao dung dir2", str(dir2) in str(t_store2.path))
+        check("hai task store doc lap", t_store1 != t_store2)
+        check("user2 khong thay task cua user1", t_store2.get_task(tid1) is None)
+
+        tid2 = t_store2.enqueue("brain", "Task cua user2", "Noi dung task 2")
+        check("user1 khong thay task cua user2", t_store1.get_task(tid2) is None)
+
+        # Kiem tra API /sessions cach ly theo session cookie cua tung user
+        s_list_u1 = client.get("/sessions", cookies={"javis_session": tok1}).json()
+        u1_titles = [s.get("title") for s in s_list_u1.get("sessions", [])]
+        check("API /sessions user1 chua phien cua user1", "Chat cua user1" in u1_titles)
+        check("API /sessions user1 KHONG chua phien cua user2", "Chat cua user2" not in u1_titles)
+
+        s_list_u2 = client.get("/sessions", cookies={"javis_session": tok_alice_v3}).json()
+        u2_titles = [s.get("title") for s in s_list_u2.get("sessions", [])]
+        check("API /sessions user2 chua phien cua user2", "Chat cua user2" in u2_titles)
+        check("API /sessions user2 KHONG chua phien cua user1", "Chat cua user1" not in u2_titles)
 
     finally:
         shutil.rmtree(test_state_root, ignore_errors=True)

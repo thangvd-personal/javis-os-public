@@ -2204,12 +2204,30 @@ class _ReaderConn(sqlite3.Connection):
 # Singleton toàn process (1 connection + app-lock).
 _store: SessionStore | None = None
 _store_lock = threading.Lock()
+_STORES: dict[str, SessionStore] = {}
 
 
-def get_store() -> SessionStore:
-    global _store
-    if _store is None:
-        with _store_lock:
-            if _store is None:
-                _store = SessionStore()
-    return _store
+def get_store(user_id: str = None) -> SessionStore:
+    if os.getenv("JAVIS_SESSIONS_DB"):
+        global _store
+        if _store is None:
+            with _store_lock:
+                if _store is None:
+                    _store = SessionStore(Path(os.getenv("JAVIS_SESSIONS_DB")))
+        return _store
+
+    import config
+    uid = user_id or config.get_current_user_id()
+    key = str(uid or "__default__")
+    store = _STORES.get(key)
+    if store is not None:
+        return store
+    with _store_lock:
+        store = _STORES.get(key)
+        if store is not None:
+            return store
+        user_state_dir = config.get_user_state_dir(uid)
+        db_path = user_state_dir / "conversations.db"
+        store = SessionStore(db_path=db_path)
+        _STORES[key] = store
+        return store
