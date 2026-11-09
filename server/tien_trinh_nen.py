@@ -61,7 +61,7 @@ try:
     import config as _cfg
     _STATE_DIR = Path(_cfg.STATE_DIR)
 except Exception:          # chạy lẻ trong test
-    _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
+    _STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent / "state")))
 
 POSIX = os.name != "nt"
 

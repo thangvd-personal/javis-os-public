@@ -350,7 +350,7 @@ User=$(whoami)
 WorkingDirectory=$APP_DIR/server
 Environment="JAVIS_HOST=127.0.0.1"
 Environment="JAVIS_PORT=$PORT"
-Environment="JAVIS_STATE_DIR=$APP_DIR/server"
+Environment="JAVIS_STATE_DIR=$APP_DIR/server/state"
 Environment="PATH=$APP_DIR/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=$PY -m uvicorn main:app --host 127.0.0.1 --port $PORT
 Restart=always
@@ -367,7 +367,7 @@ UNIT
   ok "Service installed. Logs: journalctl -u $SVC -f"
 else
   warn "systemd not available - starting under nohup..."
-  ( cd "$APP_DIR/server" && JAVIS_STATE_DIR="$APP_DIR/server" JAVIS_PORT="$PORT" nohup "$PY" -m uvicorn main:app --host 127.0.0.1 --port "$PORT" > "$APP_DIR/server/javis.log" 2>&1 & )
+  ( cd "$APP_DIR/server" && JAVIS_STATE_DIR="$APP_DIR/server/state" JAVIS_PORT="$PORT" nohup "$PY" -m uvicorn main:app --host 127.0.0.1 --port "$PORT" > "$APP_DIR/server/javis.log" 2>&1 & )
   ok "Started. Logs: $APP_DIR/server/javis.log"
 fi
 

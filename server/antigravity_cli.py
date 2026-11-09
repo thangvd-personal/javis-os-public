@@ -450,7 +450,7 @@ def _tep_nho_duong() -> Path:
         import config
         base = Path(config.STATE_DIR)
     except Exception:
-        base = Path(os.environ.get("JAVIS_STATE_DIR") or Path(__file__).parent)
+        base = Path(os.environ.get("JAVIS_STATE_DIR") or (Path(__file__).parent / "state"))
     return base / _NHO_DUONG
 
 
@@ -626,7 +626,7 @@ def _viet_file_ngu_canh(cwd: str, noi_dung: str) -> tuple[str, str]:
         import config
         goc = Path(config.STATE_DIR)
     except Exception:
-        goc = Path(os.environ.get("JAVIS_STATE_DIR") or Path(__file__).parent)
+        goc = Path(os.environ.get("JAVIS_STATE_DIR") or (Path(__file__).parent / "state"))
     thu_muc = goc / _THU_MUC_NGU_CANH
     thu_muc.mkdir(parents=True, exist_ok=True)
     _don_ngu_canh_cu(thu_muc)

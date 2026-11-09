@@ -22,7 +22,7 @@ fi
 
 PORT="${JAVIS_PORT:-7777}"
 HOST="${JAVIS_HOST:-127.0.0.1}"
-STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server}"
+STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server/state}"
 PIDF="$STATE_DIR/javis.pid"
 URL="http://localhost:${PORT}"
 
@@ -139,15 +139,15 @@ echo "[2/3] Dang bat lai Javis OS chay NEN (port $PORT)..."
 if [ -f "$APP_DIR/start-javis.sh" ]; then
   bash "$APP_DIR/start-javis.sh"
 else
-  mkdir -p "$APP_DIR/server"
+  mkdir -p "$APP_DIR/server/state"
   PY="$APP_DIR/.venv/bin/python"
   (
     cd "$APP_DIR/server"
-    export JAVIS_STATE_DIR="$APP_DIR/server"
+    export JAVIS_STATE_DIR="$APP_DIR/server/state"
     export JAVIS_PORT="$PORT"
     export JAVIS_HOST="$HOST"
-    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$APP_DIR/server/javis.log" 2>&1 &
-    echo $! > "$APP_DIR/server/javis.pid"
+    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$APP_DIR/server/state/javis.log" 2>&1 &
+    echo $! > "$APP_DIR/server/state/javis.pid"
   )
 fi
 

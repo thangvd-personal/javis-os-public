@@ -12,9 +12,18 @@ import time
 from pathlib import Path
 
 # Mọi state Javis tự ghi (settings, auth sessions, loop config) nằm ở JAVIS_STATE_DIR.
-# Mặc định = server/ (không đổi trên máy cũ). Docker/VPS đặt = /data/state (volume ghi được,
+# Mặc định = server/state/. Docker/VPS đặt = /data/state (volume ghi được,
 # vì code tree /app là read-only trong container).
-STATE_DIR = Path(os.getenv("JAVIS_STATE_DIR", str(Path(__file__).parent)))
+_raw_state = os.getenv("JAVIS_STATE_DIR", "").strip()
+if _raw_state:
+    _p = Path(_raw_state)
+    if not _p.is_absolute():
+        _p = (Path(__file__).parent.parent / _p).resolve()
+    if _p.resolve() == Path(__file__).parent.resolve():
+        _p = _p / "state"
+    STATE_DIR = _p
+else:
+    STATE_DIR = Path(__file__).parent / "state"
 try:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 except Exception:

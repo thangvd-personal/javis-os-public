@@ -16,7 +16,7 @@ fi
 
 PORT="${JAVIS_PORT:-7777}"
 NAME="${JAVIS_NAME:-javis}"
-STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server}"
+STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server/state}"
 PIDF="$STATE_DIR/javis.pid"
 
 echo "Dang tim va tat Javis OS..."

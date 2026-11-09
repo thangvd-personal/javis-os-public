@@ -60,7 +60,7 @@ cat > "${PLIST}" <<PLISTEOF
     <key>WorkingDirectory</key><string>${APP_DIR}/server</string>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>JAVIS_STATE_DIR</key><string>${APP_DIR}/server</string>
+        <key>JAVIS_STATE_DIR</key><string>${APP_DIR}/server/state</string>
         <key>PATH</key><string>${PATH_STR}</string>
     </dict>
     <key>RunAtLoad</key><true/>

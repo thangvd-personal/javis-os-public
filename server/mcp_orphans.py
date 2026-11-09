@@ -66,7 +66,7 @@ def _path() -> Path:
         from config import STATE_DIR
         return Path(STATE_DIR) / _FILE
     except Exception:      # noqa: BLE001 - no config (bare test): keep it next to this module
-        return Path(__file__).parent / _FILE
+        return Path(__file__).parent / "state" / _FILE
 
 
 def _load() -> dict[str, dict]:

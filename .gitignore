@@ -95,6 +95,7 @@ server/capability_registry.db
 server/capability_registry.db-wal
 server/capability_registry.db-shm
 server/capability_registry.db*.corrupt-*
+server/github_work.db*
 # Bổ sung 0.9.241: 6 artifact dưới đây vừa KHÔNG track vừa KHÔNG ignore, nên một cú
 # `git add -A` là commit thẳng dữ liệu chạy + trạng thái deploy vào repo.
 server/kanban.sqlite3*
@@ -218,7 +219,10 @@ server/engine_down_notified.json
 server/client_errors.json
 server/client_errors.tmp
 
-# Dữ liệu trạng thái chạy, cache và cấu hình runtime trong server/ (STATE_DIR mặc định là server/).
+# Thư mục lưu trạng thái mặc định của Javis OS (STATE_DIR mặc định là server/state/)
+server/state/
+
+# Dữ liệu trạng thái chạy, cache và cấu hình runtime trong server/ (STATE_DIR mặc định là server/state/).
 # Toàn bộ file JSON runtime phát sinh liên tục trong quá trình làm việc, không push lên Git.
 server/cache/
 server/*.json

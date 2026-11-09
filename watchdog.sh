@@ -29,7 +29,7 @@ if [ -f .env ]; then
 fi
 PORT="${JAVIS_PORT:-7777}"
 LABEL="${JAVIS_LAUNCHD_LABEL:-com.javis.os}"
-STATE_DIR="${JAVIS_STATE_DIR:-$PWD/server}"
+STATE_DIR="${JAVIS_STATE_DIR:-$PWD/server/state}"
 TARGET="gui/$(id -u)/$LABEL"
 NGUONG="${JAVIS_WATCHDOG_FAILS:-3}"
 DEM_FILE="$STATE_DIR/watchdog-fails"

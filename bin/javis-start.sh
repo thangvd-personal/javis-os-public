@@ -51,7 +51,7 @@ if [ ! -x "${PY}" ]; then
 fi
 
 cd "${APP_DIR}/server" || exit 1
-JAVIS_STATE_DIR="${APP_DIR}/server" nohup "${PY}" \
+JAVIS_STATE_DIR="${APP_DIR}/server/state" nohup "${PY}" \
   -m uvicorn main:app --host 127.0.0.1 --port "${PORT}" > "${LOG}" 2>&1 &
 echo $! > "${PIDF}"
 

@@ -78,7 +78,7 @@ else
       kill $PIDS 2>/dev/null || true
       sleep 2
     fi
-    ( cd server && JAVIS_STATE_DIR="$PWD" nohup ../.venv/bin/python -m uvicorn main:app \
+    ( cd server && JAVIS_STATE_DIR="$PWD/state" nohup ../.venv/bin/python -m uvicorn main:app \
         --host "${JAVIS_HOST:-127.0.0.1}" --port "$PORT" > javis.log 2>&1 & )
     echo "==> Restarted (nohup). Logs: server/javis.log"
   fi

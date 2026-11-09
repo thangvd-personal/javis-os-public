@@ -198,7 +198,7 @@ class TasksDeps:
 class TasksFeature:
     def __init__(self, deps: TasksDeps):
         self.deps = deps
-        state_dir = Path(deps.state_dir or Path(__file__).parent)
+        state_dir = Path(deps.state_dir or (Path(__file__).parent / "state"))
         self.store = TaskStore(state_dir / "kanban.sqlite3")
         # Sổ "làm đúng một lần" (0.238.0) nằm cạnh kho việc: cùng thư mục trạng thái, sao lưu cùng nhau.
         once_ledger.configure(state_dir / "once_ledger.sqlite3")

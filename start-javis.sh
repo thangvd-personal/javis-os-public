@@ -18,7 +18,7 @@ fi
 PORT="${JAVIS_PORT:-7777}"
 HOST="${JAVIS_HOST:-127.0.0.1}"
 NAME="${JAVIS_NAME:-javis}"
-STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server}"
+STATE_DIR="${JAVIS_STATE_DIR:-$APP_DIR/server/state}"
 PIDF="$STATE_DIR/javis.pid"
 LOG="$STATE_DIR/javis.log"
 PY="$APP_DIR/.venv/bin/python"

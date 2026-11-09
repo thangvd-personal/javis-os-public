@@ -258,7 +258,14 @@ _BIN_NHO = {"data": None}
 def _state_dir() -> Path:
     """Thư mục state của Javis. Đọc env trực tiếp để claude_cli không phải import config."""
     d = os.getenv("JAVIS_STATE_DIR", "").strip()
-    return Path(d) if d else Path(__file__).resolve().parent
+    if d:
+        p = Path(d)
+        if not p.is_absolute():
+            p = (Path(__file__).resolve().parent.parent / p).resolve()
+        if p.resolve() == Path(__file__).resolve().parent:
+            p = p / "state"
+        return p
+    return Path(__file__).resolve().parent / "state"
 
 
 def _doc_bin_nho() -> dict:
