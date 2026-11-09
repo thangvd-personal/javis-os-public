@@ -35,16 +35,48 @@ for label, base in (("voice_live.SYSTEM_PROMPT", voice_live.SYSTEM_PROMPT),
                     ("voice_brain.SYSTEM_PROMPT", voice_brain.SYSTEM_PROMPT)):
     check(f"{label} opens with the clause voice_persona swaps", base.startswith(voice_persona.OPENING))
     out = voice_persona.apply(base, "Người viết", "BLOCK")
-    check(f"{label} as a partner names the partner, not Javis",
-          out.startswith("Bạn là Người viết, một cộng sự của chủ trong Javis,") and out.endswith("BLOCK")
+    check(f"{label} front-loads partner identity before the generic voice prompt",
+          out.startswith("BLOCK\n\nBạn là Người viết, một cộng sự của chủ trong Javis,")
           and voice_persona.OPENING not in out)
 
 block = voice_persona.identity_block("Người viết", "viết bài", "Viết súc tích.", "## Luật chủ dặn\n- không emoji")
 check("identity block: name, role, Javis context",
       "**Người viết**" in block and "Vai trò: viết bài." in block and "Javis OS" in block)
 check("identity block: never claims to be ChatGPT", "KHÔNG tự nhận là ChatGPT" in block)
+check("identity block: explicit English identification",
+      'When asked in English "Who are you?"' in block and "I\'m Người viết" in block)
 check("identity block: carries the partner file and memory", "Viết súc tích." in block and "không emoji" in block)
-check("identity block caps a long file", len(voice_persona.identity_block("A", "", "x" * 20000)) < 6000)
+check("identity block caps a long file at the new budget",
+      voice_persona.BODY_CHARS >= 12000
+      and voice_persona.BODY_CHARS <= 24000
+      and len(voice_persona.identity_block("A", "", "x" * 50000))
+      < voice_persona.BODY_CHARS + 1600)
+check("memory is bounded separately",
+      "m" * voice_persona.MEMORY_CHARS in voice_persona.identity_block("A", "", "", "m" * 50000)
+      and "m" * (voice_persona.MEMORY_CHARS + 1) not in voice_persona.identity_block("A", "", "", "m" * 50000))
+check("operational truth guard fits any partner, not only a sales one",
+      "khách" not in voice_persona.ALWAYS_ON and "công cụ" in voice_persona.ALWAYS_ON)
+check("operational truth guard is never truncated",
+      voice_persona.ALWAYS_ON in voice_persona.identity_block("A", "", "x" * 50000, "m" * 50000))
+pinned_body = ("filler " * 3000 + "\n" + voice_persona.VOICE_RULES_START
+               + "\nAlways verify facts with tools\n" + voice_persona.VOICE_RULES_END)
+pinned_prompt = voice_persona.identity_block("A", "", pinned_body)
+check("opt-in voice rules survive clipping without duplicate markers",
+      "Always verify facts with tools" in pinned_prompt
+      and voice_persona.VOICE_RULES_START not in pinned_prompt
+      and voice_persona.VOICE_RULES_END not in pinned_prompt
+      and pinned_prompt.find("Always verify facts with tools") < pinned_prompt.find("filler"))
+check("incomplete voice marker preserves original body",
+      voice_persona._priority_body("text " + voice_persona.VOICE_RULES_START) == "text " + voice_persona.VOICE_RULES_START)
+from unittest.mock import patch
+with patch.dict(os.environ, {"JAVIS_VOICE_AGENT_BODY_CHARS": "18000",
+                              "JAVIS_VOICE_AGENT_MEMORY_CHARS": "999999"}):
+    check("voice budgets support bounded environment overrides",
+          voice_persona._env_budget("JAVIS_VOICE_AGENT_BODY_CHARS", 12000, 24000) == 18000
+          and voice_persona._env_budget("JAVIS_VOICE_AGENT_MEMORY_CHARS", 6000, 12000) == 12000)
+with patch.dict(os.environ, {"JAVIS_VOICE_AGENT_BODY_CHARS": "invalid"}):
+    check("bad override falls back to default",
+          voice_persona._env_budget("JAVIS_VOICE_AGENT_BODY_CHARS", 12000, 24000) == 12000)
 check("custom prompt without the opening gets the block in front",
       voice_persona.apply("Một prompt khác.", "A", "BLOCK") == "BLOCK\n\nMột prompt khác.")
 
@@ -56,7 +88,9 @@ class _Fake(voice_live.LiveProvider):
 
 prov = _Fake("key")
 prov.system = voice_persona.apply(prov.system, "Người viết", block)
-check("Live provider prompt speaks as the partner", prov.system.startswith("Bạn là Người viết"))
+check("Live provider prompt speaks as the partner, identity first",
+      prov.system.startswith(block + "\n\n") and "Bạn là Người viết, một cộng sự của chủ trong Javis," in prov.system
+      and voice_persona.OPENING not in prov.system)
 
 conf = {"provider": "openai", "model": "m", "api_key": "k", "system": "PROMPT RIÊNG"}
 b = voice_brain._make(conf)
@@ -90,7 +124,9 @@ check("persona carries the partner's name and file",
       persona is not None and persona[0] == "Người viết" and "Viết súc tích." in persona[1])
 fast = main._voice_brain_conf({"provider": "openai"}, sid_agent, "brain")
 check("fast lane conf of a partner chat speaks as the partner",
-      fast.get("system", "").startswith("Bạn là Người viết") and fast["provider"] == "openai")
+      fast.get("system", "").startswith(persona[1] + "\n\n")
+      and "Bạn là Người viết, một cộng sự của chủ trong Javis," in fast.get("system", "")
+      and fast["provider"] == "openai")
 check("fast lane conf of a plain chat is unchanged",
       main._voice_brain_conf({"provider": "openai"}, sid_plain, "brain") == {"provider": "openai"})
 

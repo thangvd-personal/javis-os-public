@@ -13,7 +13,23 @@ function setSessionRunning(sid, on) {
   if (!sid) return;
   if (on) window.JavisRunning.add(sid); else window.JavisRunning.delete(sid);
   try { if (window.JavisChatSide && window.JavisChatSide.refresh) window.JavisChatSide.refresh(); } catch (e) {}
+  emitTurnProgress(sid);
 }
+// A chat turn started, made a step, or ended. The Jobs tab of the Partners page (agent-jobs.js) listens to show the
+// assistant's running chat turn with its plan: a chat turn is not a queued job, so the tab looked empty while the
+// assistant was clearly working (owner, 08/11/2026).
+function emitTurnProgress(sid) {
+  try { window.dispatchEvent(new CustomEvent("javis:chat-turn", { detail: { sid: sid } })); } catch (e) {}
+}
+// { sid, running, steps, buoc } of a chat's turn (the open chat when `sid` is empty), or null when none ran here.
+window.JavisChatLive = {
+  turn: function (sid) {
+    const id = sid || savedSessionId;
+    const t = id ? turns[id] : null;
+    if (!t) return null;
+    return { sid: id, running: !!t.running, steps: (t.buoc && t.buoc.so) || 0, buoc: t.buoc || null };
+  },
+};
 
 // Lưu & khôi phục phiên gần nhất (hội thoại + số liệu + session Claude)
 const SESSION_KEY = "javis.session.v1";
@@ -639,6 +655,8 @@ async function napCaiDatGiong() {
     voice.sttUpload = upload;
   } catch (e) {}
 }
+// 2026-11-08: a call or dictation in a partner's chat is heard by the ear of that partner's own model.
+voice.sttSession = () => savedSessionId || "";
 napCaiDatGiong();
 window.JavisVoiceMode = { refresh: napCaiDatGiong, get: () => voiceMode };
 
@@ -1038,6 +1056,7 @@ function connect() {
   // Mất socket là trạng thái THẬT người dùng cần thấy ("ĐANG KẾT NỐI LẠI"), không phải đoán.
   ws.onclose = (e) => {
     _ghiDut(e && e.code, !!(e && e.wasClean), _wsMoLuc);
+    if (!_wsMoLuc) _checkLoginAfterRefusal();
     _wsMoLuc = 0;
     try { runActions(turn.wsDown()); } catch (e2) {}
     baoDutMang(true);
@@ -1074,6 +1093,22 @@ function _ghiDut(code, clean, moLuc) {
   _wsDut.push({ code: String(code == null ? "" : code), clean: !!clean, open_s: moLuc ? (now - moLuc) / 1000 : 0,
     at: now / 1000 });
   if (_wsDut.length > 10) _wsDut.shift();
+}
+// ---- A socket refused at the handshake: maybe the login, not the network (users, 07/11/2026) ----
+// The server refuses /ws when the session cookie is no longer valid (it expired after 30 days, a password change or a
+// reset signed every browser out). The browser only sees a socket that never opened, so the page said "Mất kết nối
+// tới máy chủ" and retried every 3 seconds forever, every list read 0, and restarting the server changed nothing.
+// Ask /auth/status (public, cheap) at most every 15 s; signed out means the sign-in screen, not "reconnecting".
+let _loginCheckAt = 0;
+async function _checkLoginAfterRefusal() {
+  if (Date.now() - _loginCheckAt < 15000) return;
+  _loginCheckAt = Date.now();
+  const s = await _fetchAuthStatus(1, 0);
+  if (!(s && s.auth_required && !s.authed)) return;
+  baoDutMang(false);
+  await initAuthGate();
+  const err = document.getElementById("authErr");
+  if (err && authOverlay && authOverlay.classList.contains("open")) err.textContent = window.t("app.ws_login_lost");
 }
 function _baoDutVeMayChu() {
   if (!_wsDut.length) return;
@@ -1333,6 +1368,11 @@ function handleMessage(data) {
     // chat_reaction vẽ lại reaction của tin đó ở mọi bong bóng đang mở, kể cả khi đổi ở tab khác. Không đụng lượt đang chạy
     // (cả hai gói nằm ngoài KHUNG_LUOT nên không dựng lại turns[sid]).
     try { if (window.JavisChatReactions) window.JavisChatReactions.onFrame(data, { bubble: t && t.bubble }); } catch (e) {}
+    // 2026-11-08: a chat answered while another one is on screen (the owner switched away mid-turn): refresh its kept
+    // copy now, so going back draws the answer at once.
+    try {
+      if (data.type === "turn_saved" && sid && sid !== savedSessionId && _phienCache.has(sid)) _taiPhien(sid).catch(() => {});
+    } catch (e) {}
     return;
   }
   if (data.type === "route") {
@@ -1405,6 +1445,11 @@ function handleMessage(data) {
     if (data.type === "steer_read" && isActive && t) { try { moveTurnBelow(t); } catch (e) {} }
     return;
   }
+  if (data.type === "session_read") {
+    // 0.491.0: a chat was read (this tab or another): its red unread dot goes away in every history list.
+    try { window.dispatchEvent(new CustomEvent("javis:session-read", { detail: data })); } catch (e) {}
+    return;
+  }
   if (data.type === "agent_read") {
     // 0.205.0: a partner chat was read or muted (this tab or another): the Partners list reads its counts again.
     try { window.dispatchEvent(new CustomEvent("javis:agent-read", { detail: data })); } catch (e) {}
@@ -1446,16 +1491,20 @@ function handleMessage(data) {
     if (isActive) { runActions(turn.turnStart()); showActivity(escapeHtml(data.content || "")); syncActiveUI(); }
   } else if (data.type === "tool_call") {
     if (t && window.JavisSteps) t.buoc = window.JavisSteps.nhan(t.buoc, data);
+    emitTurnProgress(sid);
     if (isActive) {
       runActions(turn.toolCall(data.tool || ""));
       veKhoiBuoc(t, true);
       // chip = dong dang chay + dong ho, luon nam duoi khoi. Ghi cung nhan RO VIEC nhu khoi
       // ("Chay lenh: git status") thay cho "Dang goi: Bash" (0.64.44).
       const _nhan = window.JavisSteps ? window.JavisSteps.nhanDong(data) : (data.content || "");
-      showActivity(escapeHtml(_nhan));
+      // The engine just updated its plan: the chip says where it is in it ("Plan 2/5: Write the tests").
+      const _plan = (data.plan && window.JavisSteps && window.JavisSteps.planLine) ? window.JavisSteps.planLine(t && t.buoc) : "";
+      showActivity(escapeHtml(_plan || _nhan));
     }
   } else if (data.type === "tool_result") {
     if (t && window.JavisSteps) t.buoc = window.JavisSteps.nhan(t.buoc, data);
+    emitTurnProgress(sid);
     if (isActive) { veKhoiBuoc(t, true); showActivity(Icons.msg("check", window.t("app.act_analyzing"), { cls: "ic-ok" })); }
   } else if (data.type === "stream") {
     if (!t) return;
@@ -1634,6 +1683,9 @@ function handleMessage(data) {
     if (sid) delete turns[sid];
     if (isActive && _tinChoLuot) guiTinCho();   // câu người dùng chen ngang: lượt cũ dừng hẳn rồi thì gửi
     if (isActive) guiCauChoLuot();               // câu nói lúc đang trả lời (cuộc gọi): gửi nếu loa đã im
+    // 2026-11-08: a finished turn may have changed what the console pages show (a skill, a connection, a setting):
+    // forget the copies they would otherwise draw first (fetch-gop.js).
+    try { if (window.JavisFetchGop && window.JavisFetchGop.forget) window.JavisFetchGop.forget(); } catch (e) {}
     notifySessions();
     // Lượt vừa xong có thể đã giao việc nền. Đây là ĐÚNG khoảnh khắc người dùng đọc câu trả
     // lời "em đã giao 3 việc" và tự hỏi nó có chạy thật không - dải phải trả lời được ngay.
@@ -1642,6 +1694,14 @@ function handleMessage(data) {
     // chạy nền (0.290.0): mục tiêu của chat đó ghi nhận vòng đã xong, mở lại chat là nó đi tiếp.
     try { if (window.JavisLenh) window.JavisLenh.hetLuot(sid); } catch (e) {}
     lamMoiCayVault(t, t ? t.text : "");
+    // The likely next message in the empty box (chat-suggest.js). Not during a voice call: nobody types there.
+    try {
+      if (isActive && chatSuggest && !handsFreeActive() && convo.length && convo[convo.length - 1].role === "javis") {
+        const _want = sid;
+        chatSuggest.request(convo.slice(-6).map(m => ({ role: m.role === "user" ? "user" : "assistant", text: m.text })))
+          .then(() => { if (savedSessionId !== _want) dropSuggest(); });
+      }
+    } catch (e) {}
   }
 }
 
@@ -1788,6 +1848,9 @@ function traTinDutMang() {
 // ACK_WAIT_MS means the socket is dead: drop it, and the next `hello` sends what is left again. The server stores
 // the id with the message, so a resend of a message it did get is answered with an ack and never runs twice.
 const ACK_WAIT_MS = 15000, UNACKED_TTL_MS = 30 * 60 * 1000;
+// Sockets a message may go out on without an ack before it goes back to the input box. Without a cap, a message the
+// server fails on every time (a bug, a broken disk) was resent on every reconnect, forever (users, 07/11/2026).
+const MAX_RESENDS = 3;
 function _saveUnacked() {
   try {
     if (_unacked.length) localStorage.setItem(UNACKED_KEY, JSON.stringify(_unacked.slice(-10)));
@@ -1806,6 +1869,7 @@ function _dropUnacked(id) {
 }
 function _sendUnacked(u) {
   u.sentAt = Date.now();
+  u.tries = (u.tries || 0) + 1;
   _saveUnacked();
   const sock = ws;
   try { sock.send(JSON.stringify(u.payload)); } catch (e) {}
@@ -1834,6 +1898,14 @@ function _resendUnacked() {
       chatInput.value = mine.join("\n");
       ghiChuThoang(window.t("app.ws_tra_tin"));
     }
+  }
+  const failed = _unacked.filter(u => u.tries >= MAX_RESENDS);
+  if (failed.length) {
+    _unacked = _unacked.filter(u => !(u.tries >= MAX_RESENDS));
+    _saveUnacked();
+    const mine = failed.filter(u => u.sid === savedSessionId).map(u => u.msg);
+    if (mine.length && !chatInput.value.trim()) chatInput.value = mine.join("\n");
+    if (mine.length) ghiChuThoang(window.t("app.ws_tin_loi"));
   }
   _unacked.forEach(u => {
     if (!(turns[u.sid] && turns[u.sid].running)) {
@@ -1875,6 +1947,7 @@ const _gocCongSu = {};
 // dù câu trong ô nhập có nghe như đang nói về chính quy trình.
 function sendMessage(text, opts) {
   if (window.JavisWorkspace && !window.JavisWorkspace.canSend()) return;
+  try { dropSuggest(); } catch (e) {}   // a suggestion belongs to the reply it followed
   let msg = (text || chatInput.value).trim();
   // Lệnh / : session-command chạy tại chỗ; skill-command bung thành lời gọi skill.
   // `opts.prefix` = tin do lệnh /plan, /goal (hoặc vòng tự động của /goal) gửi: khối chỉ dẫn đã
@@ -2475,20 +2548,37 @@ let sessionOpenSeq = 0;
 // tới 1-2 giây) rồi mới vẽ. Giờ khúc tin cuối của vài cuộc gần nhất được giữ trong bộ nhớ: mở lại là vẽ NGAY từ đó,
 // đồng thời hỏi máy chủ bản mới; bản mới khác thì vẽ lại, giống thì thôi (không nháy). Rê chuột hay chạm vào một
 // mục trong danh sách cũng hỏi trước (prefetchSession), nên lần mở ĐẦU cũng thường đã có sẵn.
-const _PHIEN_CACHE_MAX = 16;
-const _PHIEN_CACHE_TTL = 5 * 60 * 1000;     // quá hạn thì không vẽ từ cache nữa, chờ bản mới như cũ
+// 2026-11-08 (owner: "chuyển từ hội thoại này sang hội thoại khác bị delay mấy giây"): 50 chats instead of 16, kept
+// in this browser across reloads (chat-cache.js), and no 5-minute limit. The copy is only ever a first paint: the
+// server is asked every time and the chat redrawn when its answer differs, so an old copy cannot stay on screen.
+const _PHIEN_CACHE_MAX = 50;
+const _PHIEN_CACHE_TTL = 7 * 24 * 3600 * 1000;
 const _PREFETCH_TUOI = 15 * 1000;            // bản tải trước còn mới trong khoảng này thì khỏi hỏi lại
+const _WARM_MAX = 8;                      // chats the history list warms by itself once the page is idle
+const _WARM_FRESH_MS = 10 * 60 * 1000;        // ...unless a copy this fresh is already kept
 const _phienCache = new Map();               // id -> { sess, at }
 const _phienDangTai = new Map();             // id -> Promise<sess> (gộp các lượt hỏi trùng)
 let _phienMoLuc = null;                      // { id, len } - độ dài convo lúc mở, để biết cuộc đã đổi khi rời đi
+// The copies kept by earlier visits, read once at start (oldest first, so the newest stay last in the LRU order).
+// openStoredSession waits for this read only while it races the server's answer.
+let _keptChatsLoading = null;
+try {
+  if (window.JavisChatCache) _keptChatsLoading = window.JavisChatCache.all().then((ds) => {
+    for (let i = Math.min(ds.length, _PHIEN_CACHE_MAX) - 1; i >= 0; i--) {
+      if (!_phienCache.has(ds[i].id)) _phienCache.set(ds[i].id, { sess: ds[i].sess, at: ds[i].at });
+    }
+  }).catch(() => {}).finally(() => { _keptChatsLoading = null; });
+} catch (e) {}
 
 // tools=0: the chat view never shows stored tool calls, and they can be most of the payload (see sessions_get).
 function _urlPhien(id) { return `/sessions/${encodeURIComponent(id)}?limit=${TIN_MOI_LUOT}&tools=0`; }
 function _ghiCachePhien(id, sess) {
   if (!id || !sess || sess.error) return;
+  const at = Date.now();
   _phienCache.delete(id);
-  _phienCache.set(id, { sess, at: Date.now() });
+  _phienCache.set(id, { sess, at });
   while (_phienCache.size > _PHIEN_CACHE_MAX) _phienCache.delete(_phienCache.keys().next().value);
+  try { if (window.JavisChatCache) window.JavisChatCache.put(id, sess, at); } catch (e) {}
 }
 function _docCachePhien(id) {
   const e = _phienCache.get(id);
@@ -2518,10 +2608,34 @@ function prefetchSession(id) {
   if (e && Date.now() - e.at < _PREFETCH_TUOI) return;
   _taiPhien(id).catch(() => {});
 }
-// Rời một cuộc mà nó đã có thêm tin (mình gửi, Javis trả lời): bản trong bộ nhớ đã cũ, bỏ đi để lần sau không vẽ
-// lại một khúc thiếu tin rồi mới nhảy.
+// Phones have no hover: once the history list is drawn and the page idle, warm its first chats one at a time
+// (2026-11-08). Skipped on a data-saving connection; a chat with a fresh enough copy is not asked again.
+let _warming = false;
+function prefetchMany(ids) {
+  if (_warming || !Array.isArray(ids)) return;
+  try { if (navigator.connection && navigator.connection.saveData) return; } catch (e) {}
+  const now = Date.now();
+  const todo = ids.filter((id) => {
+    const e = id && _phienCache.get(id);
+    return id && id !== savedSessionId && !_phienDangTai.has(id) && !(e && now - e.at < _WARM_FRESH_MS);
+  }).slice(0, _WARM_MAX);
+  if (!todo.length) return;
+  _warming = true;
+  const whenIdle = (fn) => (typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 2000 }) : setTimeout(fn, 400));
+  const next = () => {
+    const id = todo.shift();
+    if (!id) { _warming = false; return; }
+    whenIdle(() => { _taiPhien(id).catch(() => {}).finally(next); });
+  };
+  next();
+}
+// Rời một cuộc mà nó đã có thêm tin (mình gửi, Javis trả lời): bản trong bộ nhớ đã cũ.
+// 2026-11-08: ask for the new copy right away instead of dropping the old one. Dropping it is why going back to the
+// chat being taught always waited for the server; now the copy is usually fresh again before the owner returns.
 function _quenPhienNeuDoi() {
-  if (_phienMoLuc && _phienMoLuc.id === savedSessionId && convo.length !== _phienMoLuc.len) _phienCache.delete(_phienMoLuc.id);
+  if (_phienMoLuc && _phienMoLuc.id === savedSessionId && convo.length !== _phienMoLuc.len) {
+    _taiPhien(_phienMoLuc.id).catch(() => {});
+  }
 }
 
 async function openStoredSession(id, stillCurrent, opts) {
@@ -2539,15 +2653,25 @@ async function openStoredSession(id, stillCurrent, opts) {
     _veLaiPhien(id, rong, ticket, false);
     return;
   }
+  // Stage 2 (2026-11-08): the reads a chat switch makes (messages, model bar, jobs strip, coding and GitHub chips)
+  // leave together in one batch from the second switch on (fetch-gop.js visit).
+  try { if (window.JavisFetchGop && window.JavisFetchGop.visit) window.JavisFetchGop.visit("chat", { sid: id }); } catch (e) {}
   // Có bản trong bộ nhớ: vẽ ngay, rồi so với bản mới.
-  const daCo = _docCachePhien(id);
+  let daCo = _docCachePhien(id);
+  const fresh = _taiPhien(id);   // the server is asked at once, whatever is kept
+  if (!daCo && _keptChatsLoading) {
+    // Just after a reload the kept copies may still be on their way from IndexedDB: take whichever comes first.
+    await Promise.race([_keptChatsLoading, fresh.catch(() => {})]);
+    if (!conHieuLuc()) return;
+    daCo = _docCachePhien(id);
+  }
   let veRoi = "";
   if (daCo) {
     _veLaiPhien(id, daCo.sess, ticket, false);
     veRoi = _vanTayPhien(daCo.sess);
   }
   try {
-    const sess = await _taiPhien(id);
+    const sess = await fresh;
     if (!conHieuLuc() || !sess || sess.error) return;
     // Bản mới y hệt bản đã vẽ: giữ nguyên màn (không nháy, không mất chỗ cuộn).
     if (veRoi && veRoi === _vanTayPhien(sess)) return;
@@ -2561,6 +2685,7 @@ async function openStoredSession(id, stillCurrent, opts) {
 // sách, dọn dải việc nền) đã chạy ở lượt vẽ đầu, khỏi chạy lần hai.
 function _veLaiPhien(id, sess, ticket, capNhat) {
   try {
+    try { if (!capNhat) dropSuggest(); } catch (e) {}   // tests lift this function out alone
     convo = [];
     hideActivity();
     goMoiTinCu();
@@ -2617,6 +2742,7 @@ function resetChatView() {
   // Partners page opens one, and that used to hang the call up. A brain switch still ends it, at its own call site.
   if (handsFree) boViecPhienCu(); else tatRanhTay();
   _quenPhienNeuDoi();
+  try { dropSuggest(); } catch (e) {}   // tests lift this function out alone
   convo = [];
   hideActivity();          // dọn chip + timer trước khi xoá trắng khung
   _tinCu = null; goMoiTinCu();
@@ -2634,6 +2760,7 @@ function blankChat() {
   sessionOpenSeq++;
   if (handsFree) boViecPhienCu(); else tatRanhTay();
   _quenPhienNeuDoi();
+  try { dropSuggest(); } catch (e) {}   // tests lift this function out alone
   convo = [];
   hideActivity();
   _tinCu = null; goMoiTinCu();
@@ -2649,7 +2776,7 @@ function newChat() {
   try { chatInput.focus(); } catch (e) {}
 }
 window.JavisSessions = { open: openStoredSession, new: newChat, blank: blankChat, brain: () => currentBrainPath(),
-                         current: () => savedSessionId, prefetch: prefetchSession };
+                         current: () => savedSessionId, prefetch: prefetchSession, prefetchMany: prefetchMany };
 // Báo các UI khác (sidebar Lịch sử trong chat workspace) biết phiên/danh sách vừa đổi
 // Performance (2026-11-05): `reason` "open" = only WHICH chat is on screen changed (a switch), no message was added.
 // Listeners that count or list messages (history list, unread and job counts) skip their network round on it.
@@ -3786,9 +3913,32 @@ loadCustomBrains();
   const saved = localStorage.getItem("javis.graphSource");
   if (saved && [...graphSource.options].some(o => o.value === saved)) {
     graphSource.value = saved;
+  } else if (saved && saved.startsWith("path:") && saved.length > 5) {
+    // A brain inside BRAINS_DIR: its option only arrives with GET /brains (brains-ui.js), after every page has already
+    // started. Falling back to Brain Default here sent the first requests of the open page to the wrong brain, and when
+    // /brains failed (the page opened while the server restarted after an update) the whole visit stayed there: the
+    // Teams page listed the other brain's teams and created new ones in it (user report, 08/11/2026). Select the saved
+    // brain under a provisional option instead; brains-ui.js swaps it for the real one, or falls back to Brain Default
+    // out loud when the brain no longer exists.
+    const dir = saved.slice(5);
+    const name = dir.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || dir;
+    const opt = document.createElement("option");
+    opt.value = saved;
+    opt.textContent = name;
+    opt.dataset.brain = "1";
+    opt.dataset.pending = "1";
+    opt.dataset.brainName = name;
+    opt.dataset.brainLabel = name;
+    const grp = graphSource.querySelector("optgroup");
+    if (grp) graphSource.insertBefore(opt, grp);
+    else graphSource.appendChild(opt);
+    graphSource.value = saved;
   } else {
     graphSource.value = "brain";
   }
+  // The chat compares every later `change` with this: it must start from the brain really in use, not from the
+  // select's value before this restore (a later switch to Brain Default would otherwise keep the old brain's chat).
+  _lastBrain = currentBrainPath();
 })();
 
 // ============================================
@@ -4513,6 +4663,7 @@ chatInput.addEventListener("input", () => {
     ? Math.round(window.innerHeight * 0.4) : 200;
   chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
   sendTypingHint();
+  try { if (chatSuggest) chatSuggest.onInput(); } catch (e) {}
 });
 // 0.382.0: tell the server the owner started typing, at most once every 20 s per conversation, so it can reopen this
 // conversation's engine process before the message lands (warm_pool.prewarm). Nothing is sent while a turn runs.
@@ -4530,7 +4681,16 @@ function sendTypingHint() {
 // Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
 // chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
 const chatInputComposing = window.JavisActs.trackComposition(chatInput);
+// 2026-11-07: the likely next message shows grey in the empty box once Javis answers; Tab (or the Tab chip on a
+// phone) fills it in. Shared with the Team chat (chat-suggest.js).
+const chatSuggest = window.JavisSuggest ? window.JavisSuggest.attach({
+  input: () => chatInput,
+  chipHost: () => { const row = document.getElementById("cpRow"); return row ? [row, row.querySelector(".cp-gap")] : null; },
+  composing: () => chatInputComposing(),
+}) : null;
+function dropSuggest() { try { if (chatSuggest) chatSuggest.clear(); } catch (e) {} }
 chatInput.addEventListener("keydown", (e) => {
+  if (chatSuggest && chatSuggest.onKeydown(e)) return;
   if (window.JavisActs.enterSends(e, chatInputComposing())) { e.preventDefault(); sendMessage(); }
 });
 sendBtn.addEventListener("click", () => sendMessage());

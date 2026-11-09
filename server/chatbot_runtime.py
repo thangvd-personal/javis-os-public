@@ -140,7 +140,8 @@ BI_LIEN_TIEP_DE_GOI = 2
 _deps: dict[str, Callable] = {}
 
 
-def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=None, notify=None, transcribe=None):
+def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=None, notify=None, transcribe=None,
+         admin_tokens=None):
     """main.py cấp ba thứ: lõi một lượt, đường tới brain, và cách đọc file Agent.
 
     `session_probe(key) -> (sid, số tin lịch sử RAM)` và `session_undo(key, giữ)` chỉ cho BẢN NHÁP ở Hộp thư (0.65.5): lấy phiên
@@ -151,8 +152,13 @@ def wire(*, answer, brain_root, read_agent, session_probe=None, session_undo=Non
     Thiếu thì lượt hỏng chỉ còn trong nhật ký bot và báo người trực.
 
     `transcribe(bytes, file name) -> awaitable dict` like `stt.groq_nghe` (0.433.0): hears what is said in a video a
-    customer sends. Missing means the bot gets the video's frames only, and is told it did not hear the sound."""
+    customer sends. Missing means the bot gets the video's frames only, and is told it did not hear the sound.
+
+    `admin_tokens() -> {channel: token}` (2026-11-08): the tokens of the owner's RUNNING admin bots (Admin channels
+    page). A dedicated bot never polls one of them: two pollers on one Zalo Bot token split the messages at random, so
+    the owner's admin chat went missing into the bot's customer inbox (`start_bot`, `release_admin_token`)."""
     _deps["answer"] = answer
+    _deps["admin_tokens"] = admin_tokens
     _deps["transcribe"] = transcribe
     _deps["notify"] = notify
     _deps["brain_root"] = brain_root
@@ -557,6 +563,27 @@ AUDIO_TOI_DA_GIAY = 240      # download + hear every voice message of one turn  
 VIDEO_TOI_DA_GIAY = 180      # download + frames + speech of one video; past this the bot answers without it
 
 
+def _hear_for(cfg: dict):
+    """The ear callable for one bot: `_deps["transcribe"]` told which agent the bot speaks as (2026-11-08), so the
+    agent's own model's vendor hears first (owner: "an agent on a vendor's model uses that vendor's ear, not the main
+    model's"). None when no ear is wired."""
+    hear = _deps.get("transcribe")
+    agent = (cfg or {}).get("agent") if isinstance((cfg or {}).get("agent"), dict) else None
+    if hear is None or not agent:
+        return hear
+    try:
+        import inspect
+        takes_agent = "agent" in inspect.signature(hear).parameters
+    except (TypeError, ValueError):
+        takes_agent = False
+    if not takes_agent:
+        return hear
+
+    async def _hear(data, name):
+        return await hear(data, name, agent=agent)
+    return _hear
+
+
 async def video_cho_bot(meta: dict, root: Path, cfg: dict) -> tuple:
     """(frame paths, note for the model) of the video in this turn (`meta["video_url"]`, 0.433.0).
 
@@ -569,8 +596,8 @@ async def video_cho_bot(meta: dict, root: Path, cfg: dict) -> tuple:
     dest = image_vision.image_gen._attachments_dir(root) / "zalo" / chat
     msg_id = str(meta.get("video_msg") or meta.get("message_id") or "")
     try:
-        res = await asyncio.wait_for(video_vision.look(url, dest, msg_id, _deps.get("transcribe")), VIDEO_TOI_DA_GIAY)
-    except TimeoutError:
+        res = await asyncio.wait_for(video_vision.look(url, dest, msg_id, _hear_for(cfg)), VIDEO_TOI_DA_GIAY)
+    except (asyncio.TimeoutError, TimeoutError):
         res = {"frames": [], "why": "xử lý video quá lâu"}
     except Exception as e:      # noqa: BLE001 - a video we cannot get must never cost the customer the reply
         res = {"frames": [], "why": f"xử lý video lỗi: {type(e).__name__}"}
@@ -585,15 +612,15 @@ async def nghe_cho_bot(meta: dict, cfg: dict) -> str:
 
     Returns the lines that go in front of the customer's typed words: what each message said, or, when it could not be
     heard, a line saying so (the bot then asks the customer to type, never guesses). Uses the same ears as every other
-    voice message (`_deps["transcribe"]`: Groq, OpenAI, Gemini, then the offline Whisper). Files are downloaded to a
-    temporary folder with the size-capped, pinned-IP downloader and deleted right after."""
+    voice message (`_deps["transcribe"]`: the bot's agent's own vendor first, then the other ears). Files are downloaded
+    to a temporary folder with the size-capped, pinned-IP downloader and deleted right after."""
     import tempfile
 
     import zalo_attachments
     urls = [str(u) for u in (meta.get("audio_urls") or []) if str(u or "").startswith("https://")]
     if not urls:
         return ""
-    hear = _deps.get("transcribe")
+    hear = _hear_for(cfg)
     out = []
 
     async def _one(url: str, i: int) -> str:
@@ -2466,6 +2493,13 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
                                      f"Channel '{kenh}' has no transport yet"))
             continue
         aid = tk["id"]
+        if token == _admin_token(kenh):
+            loi.append(localefmt.chu(
+                f"Token {nhan_kenh} này đang là bot của Kênh Admin, bot chuyên trách không dùng chung được. "
+                "Tạo một bot riêng, hoặc gọi cộng sự ngay trong chat admin bằng /agent <tên>.",
+                f"This {nhan_kenh} token is the Admin channel's bot, a dedicated bot cannot share it. "
+                "Create a separate bot, or call a partner in the admin chat with /agent <name>."))
+            continue
         chung = dict(
             download_dir=_inbox_dir(cfg),
             commands=LENH_KHACH,      # menu của khách, KHÔNG phải menu quản trị của chủ
@@ -2501,6 +2535,32 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
                                                       f"This bot has no {nhan_kenh} token yet")
     _RUNNING[bot_id] = {"pollers": pollers, "cfg": cfg, "started": time.time(), "answered": 0}
     return True, ("; ".join(loi) if loi else "")
+
+
+def _admin_token(kenh: str) -> str:
+    """The token of the owner's running admin bot on this channel, "" when none (see `wire`)."""
+    fn = _deps.get("admin_tokens")
+    if not fn:
+        return ""
+    try:
+        return str((fn() or {}).get(str(kenh or "")) or "").strip()
+    except Exception as e:  # noqa: BLE001 - a settings read error must not stop every bot
+        print(f"[chatbot admin token] {type(e).__name__}: {e}", file=sys.stderr)
+        return ""
+
+
+def release_admin_token(kenh: str) -> list:
+    """The admin bot of `kenh` just started: restart every dedicated bot polling its token, so `start_bot` drops that
+    account and the admin bot is the only one reading it. Returns the ids restarted."""
+    tok = _admin_token(kenh)
+    if not tok:
+        return []
+    out = []
+    for bid, run in list(_RUNNING.items()):
+        if any(str(getattr(tb, "token", "") or "").strip() == tok for tb in (run.get("pollers") or {}).values()):
+            start_bot(bid)
+            out.append(bid)
+    return out
 
 
 def stop_bot(bot_id: str) -> bool:

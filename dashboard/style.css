@@ -1521,6 +1521,31 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .steps-sum-now:not(:empty)::before { content: "· "; }
 /* Bước cuối đang chạy: đậm hơn một chút để mắt biết đang đứng ở đâu trong danh sách. */
 .steps-list .step-live { color: var(--text2); }
+/* The turn's plan (chat-steps.js planHtml): the engine's own checklist, open even while the step list is folded.
+   Larger than the steps around it because this is the part people read, on a phone too. */
+.steps-plan {
+  margin: 4px 0 6px; padding: 10px 12px; max-width: 560px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1);
+  font-size: 14px; line-height: 1.45; color: var(--text2);
+}
+.plan-head {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--text3);
+}
+.plan-head svg { width: 14px; height: 14px; }
+.plan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.plan-item { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.plan-item svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; }
+.plan-text { min-width: 0; overflow-wrap: anywhere; }
+.plan-done { color: var(--text3); }
+.plan-done .plan-text { text-decoration: line-through; }
+.plan-done svg { color: var(--green); }
+.plan-active { color: var(--text); font-weight: 600; }
+.plan-active svg { color: var(--accent2); }
+.plan-live svg { animation: planPulse 1.4s ease-in-out infinite; }
+@keyframes planPulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .plan-live svg { animation: none; } }
+@media (max-width: 640px) { .steps-plan { font-size: 15px; } }
 
 /* Dòng ghi chú thoáng qua (cửa tạp âm bỏ một lượt). Nhạt và căn giữa để mắt lướt qua chứ
    không đọc như một lượt hội thoại - nó tự tắt sau vài giây. */
@@ -1604,6 +1629,14 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cp-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
 .cp-gap { flex: 1 1 auto; }
+/* Suggested next message (chat-suggest.js, 2026-11-07): the grey placeholder of the empty box IS the suggestion, and
+   this chip fills it in (the way on a phone, which has no Tab key). Main chat and Teams share it. */
+.sug-tab { flex: none; align-self: center; font: 600 12px/1 var(--font); padding: 6px 9px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--text2); cursor: pointer; white-space: nowrap; }
+.sug-tab:hover { border-color: var(--accent); color: var(--accent); }
+.sug-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sug-tab[hidden] { display: none; }
+@media (pointer: coarse) { .sug-tab { font-size: 14px; padding: 8px 11px; } }
 .cp-plus, .cp-limit {
   flex: none; width: 32px; height: 32px; border-radius: 50%; padding: 0;
   border: 1px solid var(--border); background: transparent; color: var(--text2);
@@ -2411,6 +2444,10 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cside-item.ghim:hover .act > :not(.pin) { opacity: 1; }
 .ci-title { color: var(--text); font-size: 14px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 0.491.0: a chat Javis answered after the owner last looked at it: red dot before the title, title in full weight. */
+.ci-unread { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+  margin-right: 6px; vertical-align: middle; position: relative; top: -1px; }
+.cside-item.has-unread .ci-title { font-weight: 800; }
 .ci-meta { display: flex; gap: 8px; align-items: center; font-size: 12px;
   color: var(--text3); margin-top: 3px; }
 .ci-badge { border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; font-size: 11px; }
@@ -2901,7 +2938,9 @@ body.jv-artpanel-open { overflow: hidden; }
   /* VÙNG AN TOÀN (0.65.30, cùng bài với .jv-lb): mở Javis từ màn hình chính iPhone thì thanh
      trạng thái trong suốt (black-translucent) đè lên mép trên, nên thanh tên file + nút nằm lẫn
      dưới đồng hồ và vạch pin. Đệm ở chính lớp này; box-sizing border-box toàn cục nên inset:0
-     vẫn phủ kín màn hình. Máy không có tai thỏ thì env() bằng 0, không đổi gì. */
+     vẫn phủ kín màn hình. Máy không có tai thỏ thì env() bằng 0, không đổi gì.
+     2026-11-08: the bar is "default" now (index.html), so the top inset is 0 in portrait; the padding stays for
+     icons added before that change and for the notch in landscape. */
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
            env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 /* Phóng to = phủ KÍN màn hình, kể cả rail bên trái.
@@ -4245,6 +4284,13 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .pet-hex input { width: 8.5em; margin: 0; padding: 6px 10px; font: 16px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
   text-transform: uppercase; color: var(--text); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; }
 .pet-hex input[aria-invalid="true"] { border-color: #d83137; }
+/* Own picture (pet.js anhHtml): upload / remove buttons, then the tab-icon switch. 16px: often opened on a phone. */
+.aa-upload.pet-upload { justify-content: flex-start; margin: 6px 0 0; }
+.pet-upload .gcard-btn { width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 6px; }
+.aa-upload-msg.pet-upload-msg { text-align: left; margin: 6px 0 0; font-size: 15px; }
+.pet-favicon { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; font-size: 16px; color: var(--text2); cursor: pointer; }
+.pet-favicon input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+@media (pointer: coarse) { .pet-upload .gcard-btn { min-height: 44px; } }
 /* Thanh trượt Kích cỡ / Cỡ mắt, hai đầu có nhãn để biết kéo bên nào là to ra. */
 .pet-range-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 16px; color: var(--text3); }
 .pet-range-row span { flex: none; }
@@ -4818,6 +4864,12 @@ a.cp-mi.gh-more-conn { text-decoration: none; color: inherit; }
 .gh-row-head code { font-size: 16px; word-break: break-all; }
 .gh-row-state { color: var(--text2); }
 .gh-checks { margin: 0; padding-left: 18px; color: var(--text2); }
+.gh-findings ul { margin: 4px 0 0; padding-left: 18px; color: var(--text2); }
+.gh-findings li + li { margin-top: 4px; }
+.gh-rv-now { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gh-rv-now select { width: auto; max-width: 220px; font-size: 16px; }
+.gh-rv-line { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.gh-rv-line .gh-sw { margin-left: auto; }
 .gh-chk-failure, .gh-chk-timed_out { color: var(--danger-ink, #b3261e); }
 .gh-chk-success { color: var(--green, #2c7a4b); }
 .gh-auto { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; cursor: pointer; }

@@ -1176,7 +1176,7 @@ class RemindersFeature:
                     cli.mcp_config = mcpf
                     cli.mcp_strict = True
         cli = aux_engine.apply(self.deps, cli, mode=mq, tag="reminder")
-        # Trần chung cho fork nền (mặc định 1 giờ, env JAVIS_BG_MAX_WALL_S). Số cứng 300s cũ
+        # Trần chung cho fork nền (mặc định không giới hạn từ 2026-11-07, env JAVIS_BG_MAX_WALL_S). Số cứng 300s cũ
         # từng giết việc lịch thật đang chạy dở - xem doc tại aux_engine.bg_max_wall_s.
         cli.max_wall_s = aux_engine.bg_max_wall_s()
         if not cli.is_available():
@@ -1227,7 +1227,7 @@ class RemindersFeature:
         router = APIRouter()
 
         @router.get("/reminders")
-        async def reminders_list(brain: str = Query("brain")):
+        def reminders_list(brain: str = Query("brain")):
             rems = sorted(self._load(brain).get("reminders", []),
                           key=lambda r: float(r.get("due_at", 0)))
             pending = [self._view(r) for r in rems if r.get("status") == "pending"]
@@ -1290,7 +1290,7 @@ class RemindersFeature:
                     "cron_human": cron_util.describe_cron(rem["cron"]) if rem["cron"] else ""}
 
         @router.get("/reminders/scripts")
-        async def reminders_scripts(brain: str = Query("brain")):
+        def reminders_scripts(brain: str = Query("brain")):
             """Liệt kê script chạy được (job không-LLM) đặt trong <brain>/Javis/scripts.
             Tự tạo thư mục nếu chưa có để user biết chỗ bỏ file vào."""
             d = self._scripts_dir(brain)

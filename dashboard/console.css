@@ -318,7 +318,7 @@ body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user
 /* The background model card: the model chip icon in front. */
 .aux-now .aux-ic { width: 40px; height: 40px; }
 .aux-now-txt { flex: 1; }
-/* "Connect another provider": three real logos stacked, the names, an arrow that says it opens upward. */
+/* "Connect another provider": three real logos stacked, the names, an arrow that turns over when the list below opens. */
 .ord-more { display: flex; width: 100%; max-width: 760px; align-items: center; gap: 12px; margin: 0 0 10px; padding: 12px 14px;
   border-radius: 18px; border: 1px dashed var(--border); text-align: left; }
 .ord-stack { display: flex; flex: none; }
@@ -328,9 +328,8 @@ body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user
 .ord-more-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ord-more-t b { color: var(--text); font-size: 16px; }
 .ord-more-t span { color: var(--text3); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ord-more-c { flex: none; color: var(--text3); }
-.prov-card.ord-flash { animation: ordFlash 1.6s ease-out; }
-@keyframes ordFlash { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: none; } }
+.ord-more-c { flex: none; color: var(--text3); transition: transform .2s; }
+.ord-more[aria-expanded="true"] .ord-more-c { transform: rotate(180deg); }
 /* Sheets in the Tasks page's style: grouped finger-sized rows, an icon tile, a short line under the label. */
 .ord-sheet-head .prov-logo { flex: none; }
 .ord-sheet-head small { display: block; font-size: 14px; font-weight: 500; color: var(--text3); overflow: hidden; text-overflow: ellipsis; }
@@ -387,6 +386,11 @@ button.ord-mi:hover, button.ord-mi:focus-visible { background: var(--bg3); }
 .prov-help summary { cursor: pointer; color: var(--text2); }
 .prov-help > div { margin-top: 4px; color: var(--text2); }
 .prov-action .js-input { margin-bottom: 0; flex: 1; }
+/* The account name asked at a card's first sign-in (owner 07/11/2026): its own full row above the buttons, 16px so iOS
+   does not zoom in. An empty box the sign-in waits for, here or in the add-account sheet, turns red. */
+.prov-action .prov-acname { flex: 1 1 100%; max-width: 420px; font-size: 16px; }
+.prov-action .prov-acname + .gcard-btn { margin-left: 0; }
+.js-input.need:placeholder-shown { border-color: var(--red); box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent); }
 /* Claude sign-in code (0.308.0): the box takes the row, at least 240px before the button wraps under it on a phone;
    16px so iOS does not zoom in, monospace so a mistyped character is easy to spot. */
 .prov-code { margin-top: 6px; max-width: 560px; }
@@ -2717,6 +2721,9 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 /* A channel set up on its own Connections card (Messenger, 0.438.3) hides the token part and Save. */
 #htTokenPart[hidden], .ht-form-acts .ht-save[hidden] { display: none; }
 .ht-card-hint .ht-mo-the { margin-left: 4px; }
+.ht-zo-oauth { margin-top: 12px; line-height: 1.5; }
+.ht-zo-oauth code { word-break: break-all; }
+.ht-zo-oauth .s-btn, .ht-zo-oauth .s-btn-ghost { margin: 8px 0 4px; }
 /* Drag the list column (2026-10-25), wide screens only: width from --ht-list-w (col-resize.js), handle in the 12px gap
    right of the list; snapped into a strip (.ht-mini) the rows show only an initial, with a dot for unread. */
 @media (min-width: 901px) {
@@ -3749,6 +3756,12 @@ span.tmp-lead { cursor: default; }
 .aj-n { font-size: 12px; opacity: .8; }
 .aj-sec { display: flex; flex-direction: column; gap: 6px; }
 .aj-sec-h { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: var(--text2); }
+/* The assistant's chat turn running now (agent-jobs.js liveHtml): same card as a running job, plus the engine's plan. */
+.aj-live-card { padding: 10px; border-radius: 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  background: var(--surface-1); display: flex; flex-direction: column; gap: 6px; }
+.aj-live-line { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--text); }
+.aj-live-line svg { width: 16px; height: 16px; flex: none; color: var(--accent); }
+.aj-live-plan { margin: 0; max-width: none; }
 .aj-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .aj-job { padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-1); display: flex;
   flex-direction: column; gap: 6px; border-left-width: 4px; }
@@ -3783,7 +3796,7 @@ span.tmp-lead { cursor: default; }
    hàng với nút bật tắt auto và nhỏ thôi"): giờ chat gần nhất và công tắc Auto chung một cụm nhỏ ở góc dưới phải của thẻ.
    Công tắc có trên mọi trợ lý (tắt thì xám). Nút ba chấm luôn ở góc trên phải; dòng chữ cuối chừa chỗ cho cụm. */
 .ws-item-wrap.has-end > .ws-item-more { top: 6px; transform: none; }
-.ws-item-wrap.has-end .ws-item-text > :last-child { padding-right: 104px; }
+.ws-item-wrap.has-end .ws-item-text > :last-child:not(.ws-item-top) { padding-right: 104px; }
 .ws-item-end { position: absolute; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 6px;
   pointer-events: none; }
 .ws-item-end > .ws-auto, .ws-item-end > .ws-rs-confirm { pointer-events: auto; position: relative; }
@@ -3804,6 +3817,22 @@ span.tmp-lead { cursor: default; }
   .ws-item-end > .ws-auto::after, .ws-item-end > .ws-rs-confirm::after { content: ""; position: absolute; inset: -12px -6px; }
 }
 .rsa-desc { color: var(--text2); }
+/* 2026-11-07 (owner: the grey role line under the name "vừa xấu vừa không đọc được thông tin gì cả"): an assistant card
+   shows its name only, on the top line beside the avatar; the role opens whole from an (i) in the top right corner, on
+   the name's row and right above the Auto switch, its centre on the same vertical line as the switch's centre (owner:
+   "căn dọc phải bằng với công tắc"): the switch is 24px wide, 4px inside the pill, the pill 8px from the edge, so its
+   centre is 24px from the card's right edge and the 20px (i) sits at right 14px. The "..." (shown on hover) moves to
+   the left of the (i). The name row keeps room for both; the touch area stays small so it does not swallow taps meant
+   for Auto. */
+.ws-item-wrap.has-end .ws-item-text { align-self: flex-start; }
+.ws-item-info { position: absolute; right: 14px; top: 8px; display: flex; }
+.ws-item-info > .info-i { margin-left: 0; }
+.ws-item-wrap.has-info > .ws-item-more { right: 36px; }
+.ws-item-wrap.has-info .ws-item-top { padding-right: 30px; }
+@media (hover: none), (max-width: 600px) { .ws-item-info > .info-i::after { inset: -6px; } }
+.info-pop .ws-info-name { margin: 0 0 4px; }
+.info-pop .ws-info-role { margin: 0; white-space: pre-line; }
+.info-pop .ws-info-tags { margin: 8px 0 0; color: var(--text3); }
 
 /* Tab Công việc: lọc nguồn, bước kế tiếp, mục được kiểm, form Giao việc hai bước, Xem thêm (0.142.0, bổ sung). */
 .aj-next { font-size: 13px; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
@@ -3874,11 +3903,24 @@ span.tmp-lead { cursor: default; }
 .ws-item-text { flex: 1 1 auto; }
 .ws-item-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .ws-item-top > strong { flex: 1 1 auto; min-width: 0; }
-/* 0.185.0: Javis Core, the system assistant. A small System badge on its row and on its card; the row keeps the
-   accent edge like a pinned one. */
+/* 0.185.0: Javis Core, the system assistant. A small System badge on its card; the row keeps the accent edge like a
+   pinned one. */
 .ws-sys { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.5;
   color: var(--accent); background: var(--accent-wash); border: 1px solid var(--accent); }
 .ws-item-wrap.he > .ws-item { border-left: 3px solid var(--accent); border-radius: 9px; }
+/* 2026-11-08 (owner): the card's second line, under the name and beside the avatar: System badge, then tag chips. One
+   line, never wrapping, level with the time and Auto corner on the right. workspace.js fitCardTags sizes it up to that
+   corner and folds the chips that would be cut into "+n"; only the first chip may shrink, and only when it is alone.
+   Before that runs (hidden page) the last line of the text keeps 104px clear for the corner (rule above). */
+.ws-item-sub { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: 4px; overflow: hidden; }
+.ws-item-sub .ws-sys { font-size: 12px; padding: 0 7px; line-height: 16px; }
+.ws-item-sub .ws-tags { flex: 0 1 auto; flex-wrap: nowrap; margin-top: 0; overflow: hidden; }
+.ws-item-sub .ws-tag { flex: none; font-size: 12px; line-height: 16px; }
+.ws-item-sub .ws-tag:first-child { flex: 0 1 auto; min-width: 2.6em; }
+.ws-item-sub.measure .ws-tag:first-child { flex: none; }
+@media (max-width: 900px) {
+  .ws-item-sub .ws-sys, .ws-item-sub .ws-tag { font-size: 14px; line-height: 20px; }
+}
 .ws-item-time { flex: none; font-size: 12px; color: var(--text3); font-variant-numeric: tabular-nums; }
 
 /* 0.148.0: tay kéo đổi bề rộng cột (col-resize.js) ở trang đồ thị (cột Vault, cột hội thoại) và trang Trò chuyện (cột
@@ -4076,6 +4118,8 @@ button.tm-gh-st { border: 0; background: none; padding: 0; font: inherit; font-s
 .tm-info-head { display: flex; align-items: center; gap: 12px; padding: 4px 2px 12px; }
 .tm-info-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tm-info-name strong { font-size: 17px; overflow-wrap: anywhere; }
+/* Team name with the (i) that holds its description (2026-11-07). */
+.tm-info-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .tm-info-sec { border-top: 1px solid var(--border); padding: 12px 2px; }
 .tm-info-sec h4 { margin: 0 0 8px; font-size: 15px; font-weight: 600; color: var(--text); }
 .tm-info-sechead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
@@ -4107,7 +4151,8 @@ button.tm-gh-st { border: 0; background: none; padding: 0; font: inherit; font-s
 @media (min-width: 901px) {
   .wspage.ws-mini > .ws-left { padding: 12px 8px; gap: 10px; }
   .wspage.ws-mini .ws-filters, .wspage.ws-mini .ws-empty, .wspage.ws-mini .ws-item-text,
-  .wspage.ws-mini .ws-item-end, .wspage.ws-mini .ws-item-more, .wspage.ws-mini .ws-grp-more { display: none; }
+  .wspage.ws-mini .ws-item-end, .wspage.ws-mini .ws-item-more, .wspage.ws-mini .ws-item-info,
+  .wspage.ws-mini .ws-grp-more { display: none; }
   .wspage.ws-mini .ws-seg { flex-direction: column; gap: 4px; }
   .wspage.ws-mini .ws-seg button, .wspage.ws-mini .ws-left-foot .ws-btn { font-size: 0; gap: 0; padding: 8px 0;
     justify-content: center; }
@@ -4318,6 +4363,9 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
    the navbar bell's .notification-badge). A muted team keeps its count, in grey. */
 .tm-team { position: relative; }
 .tm-unread { flex: none; height: 20px; min-width: 20px; border-radius: 10px; font-size: 12px; box-shadow: none; }
+/* 0.491.0: red means unread everywhere (the chat history rows carry a red dot), so the count of a team or partner chat
+   that still wants the owner is red too; a muted one stays grey. */
+.tm-unread:not(.is-muted) { background: var(--red); color: #fff; }
 .tm-unread.is-muted { background: var(--surface-2); color: var(--text2); }
 /* 0.204.0: was ".tm-at", the same class as the @mentions in messages, which it squeezed into a 20px circle. */
 .tm-at-badge { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;

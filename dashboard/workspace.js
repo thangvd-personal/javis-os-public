@@ -773,13 +773,17 @@
           .map(function (a) { return { slug: a.slug, name: a.name || a.slug }; });
       },
       openChat: function (sid) { var x = dangChon(); if (x) moPhien(x, false, sid); },
+      // The chat beside the tab is this assistant's: its running turn shows at the top of the tab.
+      liveTurn: function () { return window.JavisChatLive ? window.JavisChatLive.turn() : null; },
       openTeam: function (teamId, taskId) {
         // teams.js nạp chậm (nap-cham.js, 0.417.0): chờ nó rồi mở.
         nhom(["congviec", "teams"], function () {
           if (window.JavisTeams && window.JavisTeams.open) window.JavisTeams.open(teamId, taskId);
         });
       },
-      openWork: function () { if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("kanban"); } });
+      openWork: function () { if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("kanban"); },
+      // A workflow run the assistant took part in: open that workflow on this page, on the run's chat when it has one.
+      openWorkflow: function (wfSlug, sid) { if (wfSlug) openCommand("workflow", wfSlug, sid || ""); } });
   }
 
   // (0.62.0 đã bỏ hàm dongBoNhomForm ở đây. Nó tồn tại chỉ để vá một xung đột tự gây ra:
@@ -1081,6 +1085,7 @@
       var lai = S.el && S.el.querySelector("#wsList"); if (lai) lai.scrollTop = cuon;
     };
     noiDanhSach(host);
+    if (laTag) watchCardTags(host);
   }
   // Hàng tiêu đề của MỘT nhóm: nút thu gọn/mở (tên + số người) và nút "..." quản lý.
   // Hai nút ngang hàng trong một khối, không lồng nhau (button trong button là HTML sai).
@@ -1096,15 +1101,62 @@
   // Chip tag của một agent: tối đa 3 chip, còn lại gộp "+n" (đủ tên ở title). Chip xuống dòng trong
   // cột (CSS .ws-tags), không đẩy cột ra ngang. Tên tag do người dùng gõ nên luôn qua esc().
   var CHIP_TOI_DA = 3;
-  function chipTagHtml(x) {
+  // `max` caps the chips for a tighter spot (the card's one-line sub row uses CARD_TAG_MAX).
+  function chipTagHtml(x, max) {
     var tg = tagsCua(x);
     if (!tg.length) return "";
-    var hien = tg.slice(0, CHIP_TOI_DA), du = tg.length - hien.length;
+    var cap = max > 0 ? max : CHIP_TOI_DA;
+    var hien = tg.slice(0, cap), du = tg.length - hien.length;
     return '<span class="ws-tags" aria-label="' + esc(t("ws.tags_aria")) + '">' +
       // title = tên đầy đủ: tag cũ dài (dữ liệu trước 0.100.0 không cắt, R1) bị CSS cắt chữ thì vẫn đọc được.
       hien.map(function (g) { return '<span class="ws-tag" title="' + esc(g) + '">' + esc(g) + '</span>'; }).join("") +
-      (du > 0 ? '<span class="ws-tag ws-tag-more" title="' + esc(tg.slice(CHIP_TOI_DA).join(", ")) + '">' +
+      (du > 0 ? '<span class="ws-tag ws-tag-more" title="' + esc(tg.slice(cap).join(", ")) + '">' +
         esc(t("ws.tag_more", { n: du })) + '</span>' : "") + '</span>';
+  }
+  // 2026-11-08 (owner: "chữ Hệ thống nên cho xuống dòng bên dưới, bên trái, cạnh avatar", "tên của các agent nên gắn với
+  // tag của nó ở dưới dòng đó"): an assistant card's second line, under the name and right beside the avatar, carries
+  // the System badge (Javis Core) and the assistant's tags, on the same row as the time and Auto switch in the right
+  // corner. One line only: two chips, the rest folded into "+n" (every name in its title), each chip cuts its own text.
+  var CARD_TAG_MAX = 2;
+  function cardSubInner(x, he, max) {
+    return (he ? '<span class="ws-sys">' + esc(t("ws.system_badge")) + '</span>' : "") + chipTagHtml(x, max);
+  }
+  function cardSubHtml(x, he) {
+    var inner = cardSubInner(x, he, CARD_TAG_MAX);
+    return inner ? '<span class="ws-item-sub">' + inner + '</span>' : "";
+  }
+  // The room on that line ends where the time / Auto corner starts, and the corner's width moves with the time, the
+  // unread pill and the column width. So after each draw, and when the column is resized, a row keeps as many WHOLE
+  // chips as fit (up to CHIP_TOI_DA) and folds the rest into "+n"; the first chip always stays and cuts its own text
+  // only when it alone is too long. With no layout (a hidden page, tests) the CSS fallback keeps 104px clear instead.
+  function fitCardTags(host) {
+    if (!host || !host.querySelectorAll) return;
+    host.querySelectorAll(".ws-item-sub").forEach(function (sub) {
+      var wrap = sub.closest ? sub.closest(".ws-item-wrap") : null;
+      var btn = wrap && wrap.querySelector("[data-slug]"), end = wrap && wrap.querySelector(".ws-item-end");
+      var x = btn && danhSach().find(function (m) { return m.slug === btn.dataset.slug; });
+      var tg = x ? tagsCua(x) : [];
+      if (!tg.length || !end || !sub.getBoundingClientRect) return;
+      var room = Math.floor(end.getBoundingClientRect().left - sub.getBoundingClientRect().left - 8);
+      if (!(room > 0) || !sub.clientWidth) return;
+      sub.style.paddingRight = "0"; sub.style.maxWidth = room + "px";
+      var he = wrap.classList.contains("he");
+      sub.classList.add("measure");    // chips do not shrink while measuring: a cut chip must count as "does not fit"
+      for (var k = Math.min(tg.length, CHIP_TOI_DA); k >= 1; k--) {
+        sub.innerHTML = cardSubInner(x, he, k);
+        var box = sub.querySelector(".ws-tags");
+        if (k === 1 || !box || box.scrollWidth <= box.clientWidth + 1) break;
+      }
+      sub.classList.remove("measure");
+    });
+  }
+  function watchCardTags(host) {
+    fitCardTags(host);
+    if (typeof ResizeObserver === "undefined" || S.tagRoHost === host) return;
+    if (S.tagRo) S.tagRo.disconnect();
+    S.tagRoHost = host;
+    S.tagRo = new ResizeObserver(function () { fitCardTags(host); });
+    S.tagRo.observe(host);
   }
   // HTML của MỘT hàng. Tách khỏi veDanhSach để chỗ kia chỉ còn lo nhóm - phân trang, và để
   // test dựng được một hàng mà không cần cả trang.
@@ -1133,15 +1185,17 @@
     // (prefers-reduced-motion, xem style.css) và trình đọc màn hình không thấy vòng quay
     // nào cả, nên thêm một chữ vào dòng phụ và một <title> vào icon.
     var chay = S.loai === "workflow" && dangChay(x.slug);
-    var phu = S.loai === "agent" ? (x.role || "") : (x.group || "Chung") + " · " + cacBuoc(x).length + " " + t("studio.steps");
+    // 2026-11-07 (owner: "phần mô tả này nên gom vào 1 nút (i)... vừa xấu vừa không đọc được thông tin gì cả"): an
+    // assistant's role is no longer a cut-off grey line under the name. It opens whole in the (i) next to the name.
+    var phu = S.loai === "agent" ? "" : (x.group || "Chung") + " · " + cacBuoc(x).length + " " + t("studio.steps");
     if (chay) phu += " · " + t("ws.running");
     // Nút "..." KHÔNG được lồng trong nút chọn mục: button trong button là HTML sai và
     // trình duyệt tự tách thẻ ra, làm cú bấm rơi vào chỗ không ai ngờ. Nên bọc cả hai trong
     // một khối và để chúng là hai nút ngang hàng.
     // 0.175.0 (chủ repo 16/10/2026: "nhiều thông tin, ghim bàn tay, nút Auto quá to che hết"): mỗi thẻ còn HAI dòng chữ
     // (tên + giờ, vai trò) và một dòng trạng thái CHỈ khi có chuyện: "Cần bạn n", "Đang làm n" bằng chữ (thay biểu tượng bàn
-    // tay dễ nhầm với dấu ghim) và nhãn Auto nhỏ khi Auto đang bật. Tag không vẽ trên thẻ nữa (đã có ô lọc theo tag ở đầu
-    // cột, tên tag vẫn đọc được ở tooltip). Dấu ghim không vẽ: thẻ ghim đã nằm dưới tiêu đề "Đã ghim".
+    // tay dễ nhầm với dấu ghim) và nhãn Auto nhỏ khi Auto đang bật. Dấu ghim không vẽ: thẻ ghim đã nằm dưới tiêu đề "Đã ghim".
+    // 2026-11-08: tags are back on the card, as the one-line row under the name (cardSubHtml), with the System badge.
     var laAgent = S.loai === "agent";
     var he = laAgent && !!x.system;   // Javis Core: no Auto switch, no "..." menu (the server refuses those anyway)
     var tg = laAgent ? tagsCua(x) : [];
@@ -1155,15 +1209,16 @@
     var title = laAgent ? [x.name, x.role || ""].concat(tg.length ? [t("ws.tags_aria") + ": " + tg.join(", ")] : [])
       .filter(Boolean).join("\n") : "";
     var nTin = laAgent ? chuaDoc(x.slug) : 0;
+    var info = laAgent ? agentInfoHtml(x, tg) : "";
     return '<div class="ws-item-wrap' + (x.pinned ? " ghim" : "") + (x.hidden ? " an" : "") + (he ? " he" : "") + (coTt ? " co-tt" : "") + (nTin ? " has-unread" : "") +
-      (laAgent ? " has-end" : "") + '"' + (jst ? ' data-st="' + jst + '"' : "") + '>' +
+      (laAgent ? " has-end" : "") + (info ? " has-info" : "") + '"' + (jst ? ' data-st="' + jst + '"' : "") + '>' +
       '<button type="button" class="ws-item' + (x.slug === chon ? " on" : "") + '" aria-pressed="' + (x.slug === chon) + '" data-slug="' + esc(x.slug) + '"' +
         (title ? ' title="' + esc(title) + '"' : "") + '>' +
       '<span class="ws-item-ic">' + (laAgent ? avatar(x, 40)
         : (chay ? ic("loader", { cls: "ic-spin", title: t("ws.running") }) : ic("workflow"))) + '</span>' +
-      '<span class="ws-item-text"><span class="ws-item-top"><strong>' + esc(x.name) + '</strong>' +
-      (he ? '<span class="ws-sys">' + esc(t("ws.system_badge")) + '</span>' : "") + '</span>' +
-      '<small>' + esc(phu) + '</small>' +
+      '<span class="ws-item-text"><span class="ws-item-top"><strong>' + esc(x.name) + '</strong></span>' +
+      (laAgent ? cardSubHtml(x, he) : "") +
+      (phu ? '<small>' + esc(phu) + '</small>' : "") +
       (coTt ? '<span class="ws-item-tt">' + bd + '</span>' : "") + '</span>' +
       '</button>' +
       // 0.190.0 (owner, 16/10/2026: "thời gian phải cùng hàng với nút bật tắt auto và nhỏ thôi"): giờ chat gần nhất và
@@ -1176,7 +1231,19 @@
               { saving: !he && !!S.rsSaving[x.slug], locked: he }) : "") + '</div>' : "") +
       (he ? "" : '<button type="button" class="ws-item-more" data-more="' + esc(x.slug) + '" title="' +
         esc(t("ws.manage")) + '" aria-label="' + esc(t("ws.manage")) + '">' + ic("ellipsis-vertical") + '</button>') +
-      '</div>';
+      info + '</div>';
+  }
+  // The (i) on an assistant card: top right, on the name's row, above the Auto switch. Outside the select button (no
+  // button inside a button); info-tip.js opens the hidden block in a popup. No role and no tags means no button.
+  function agentInfoHtml(x, tg) {
+    var J = typeof window !== "undefined" && window.JavisInfo;
+    var role = String(x.role || "").trim();
+    if (!J || (!role && !tg.length)) return "";
+    return '<span class="ws-item-info">' + J.btn(t("ws.about_agent", { ten: x.name || x.slug })) +
+      J.body('<p class="ws-info-name"><strong>' + esc(x.name || x.slug) + '</strong></p>' +
+        (role ? '<p class="ws-info-role">' + esc(role) + '</p>' : "") +
+        (tg.length ? '<p class="ws-info-tags">' + esc(t("ws.tags_aria")) + ": " + esc(tg.join(", ")) + '</p>' : "")) +
+      '</span>';
   }
   // Nối dây cho các nút vừa vẽ. Gọi lại sau MỖI lần vẽ: innerHTML mới là node mới, handler cũ
   // chết theo node cũ.
@@ -1605,6 +1672,10 @@
     chatReady(false); veGiua(item);
     if (!item) return false;
     var still = function () { return active && ticket === opening && conDangXem(item); };
+    // 2026-11-08 (customer report: "chỉ bấm vào chat là không được"): the chat box stays locked until this open ends,
+    // so an open that hangs (a read that never answers) left a locked box with no word on screen. Past OPEN_WAIT_MS the
+    // error and its Retry show; the box still unlocks by itself if the open finishes after all.
+    var slow = setTimeout(function () { if (still() && !ready) veLoi(t("ws.err_session_slow")); }, OPEN_WAIT_MS);
     try {
       // Performance (2026-11-05): the right column (settings form, Auto block, history list) belongs to the PARTNER, not
       // to one chat. New conversation and a history click keep the same partner, so it is not rebuilt: rebuilding it
@@ -1651,15 +1722,23 @@
       if (!window.JavisSessions || window.JavisSessions.current() !== id) throw new Error(t("ws.err_session"));
       if (!item.system) _phienGanNhat[khoaGanNhat(item)] = id;
       chatReady(true);
+      clearOpenError();
       luuViTri(id);
       if (S.loai === "agent" && coTinChuaDoc(item.slug)) daDoc(item.slug);   // 0.205.0: opening the chat reads it
       if (S.loai === "workflow") veBuoc(item, tienDoHienTai(item));
       else ganCongHuong(item, id);
       return true;
     } catch (e) {
-      if (still()) { veLoi(t("ws.err_session")); if (window.JavisSessions) window.JavisSessions.new(); }
+      if (still()) { clearOpenError(); veLoi(t("ws.err_session")); if (window.JavisSessions) window.JavisSessions.new(); }
       return false;
+    } finally {
+      clearTimeout(slow);
     }
+  }
+  var OPEN_WAIT_MS = 12000;
+  function clearOpenError() {
+    var el = S.el && S.el.querySelector("#wsIdentity"); if (!el) return;
+    el.querySelectorAll(".ws-err, #wsRetry").forEach(function (n) { n.remove(); });
   }
   async function chayQuyTrinh() {
     var item = dangChon();
@@ -1821,7 +1900,7 @@
       ? window.JavisAgentJobs.statusText(S.jc[x.slug]) : "";
     var st = tt ? window.JavisAgentJobs.statusOf(S.jc[x.slug]) : "";
     window.JavisColResize.miniTip.show(b, { ava: anh ? anh.innerHTML : "", name: ten ? ten.textContent : "",
-      time: gio ? gio.textContent : "", sub: phu ? phu.textContent : "", stText: tt, st: st });
+      time: gio ? gio.textContent : "", sub: phu ? phu.textContent : (x && x.role) || "", stText: tt, st: st });
   }
   function noiKeoBien(page) {
     page.querySelectorAll("[data-resize]").forEach(function (h) {

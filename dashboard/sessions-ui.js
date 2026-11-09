@@ -17,6 +17,40 @@
   function brain() { try { return (window.JavisSessions && window.JavisSessions.brain()) || "brain"; } catch (e) { return "brain"; } }
   function currentId() { try { return (window.JavisSessions && window.JavisSessions.current()) || null; } catch (e) { return null; } }
 
+  // 0.491.0: unread chats. The server marks a chat unread when Javis answered after the owner last looked at it; the
+  // chat open on a visible screen counts as read, so its row never shows the dot and the server is told.
+  function chatOnScreen() {
+    if (document.visibilityState && document.visibilityState !== "visible") return false;
+    var area = document.getElementById("chatArea");
+    return !!(area && area.getClientRects().length);
+  }
+  // One timer per chat: a quick switch from chat A to chat B must still report A as read.
+  var readTimers = {};
+  function markRead(sid) {
+    if (!sid || readTimers[sid]) return;
+    // Several events fire for one turn; they collapse into one request.
+    readTimers[sid] = setTimeout(function () {
+      delete readTimers[sid];
+      try { fetch("/sessions/" + encodeURIComponent(sid) + "/read", { method: "POST" }).catch(function () {}); } catch (e) {}
+    }, 400);
+  }
+  function markCurrentRead() {
+    var sid = currentId();
+    if (sid && chatOnScreen()) { markRead(sid); clearDot(sid); }
+  }
+  // Drop the dot of one chat from the rows on screen and from the cached list, without reloading.
+  function clearDot(sid) {
+    if (cached && cached.items) cached.items.forEach(function (x) { if (x.id === sid) x.unread = false; });
+    if (!listEl) return;
+    var rows = listEl.querySelectorAll(".cside-item[data-sid]");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute("data-sid") !== sid) continue;
+      rows[i].classList.remove("has-unread");
+      var dot = rows[i].querySelector(".ci-unread");
+      if (dot && dot.parentNode) dot.parentNode.removeChild(dot);
+    }
+  }
+
   function fmtT(ts) {
     try {
       var d = new Date(ts * 1000), now = new Date();
@@ -1888,8 +1922,11 @@
       // chiếm chỗ của giờ và số tin trong một cột hẹp ("agent:ng" trên từng dòng).
       // Lịch sử của một Agent gồm cả hội thoại của bot chuyên trách với khách (kênh `bot:<tên>`, 0.65.0):
       // ở đó nhãn kênh KHÔNG thừa, vì nó phân biệt cuộc khách nhắn với cuộc chủ tự chat với Agent.
-      var laBot = (s.channel || "").toString().indexOf("bot:") === 0;
-      var ch = kenhLoc ? "" : (s.channel || "").toString();
+      // 2026-11-08: the owner's admin-channel chats join the histories too (Javis Core's: `zalo`, `telegram`...; an
+      // agent's: `zalo@<slug>`), labelled by the app they came from. The `@<slug>` part never shows.
+      var rawCh = (s.channel || "").toString();
+      var laBot = rawCh.indexOf("bot:") === 0;
+      var ch = (kenhLoc && rawCh === kenhLoc) ? "" : rawCh.split("@")[0];
       var chLabel = (kenhLoc && laBot) ? window.t("sess.bot_badge")
         : (ch === "telegram" ? "TG" : (ch && ch !== "web" ? ch.slice(0, 8) : ""));
       var isRun = !!(window.JavisRunning && window.JavisRunning.has(s.id));
@@ -1905,8 +1942,12 @@
       // xuống giữa danh sách thì không còn thấy cái nhãn ấy nữa. Vạch màu bên trái và dấu ghim
       // luôn hiện đi theo từng hàng, đúng khuôn danh sách trợ lý / quy trình của trang Cộng sự
       // (chủ dự án chốt 16/09 sau khi dùng bản 0.59.20).
-      var item = el('<div class="cside-item' + (s.id === cur ? " active" : "") + (isRun ? " running" : "") + (s.pinned ? " ghim" : "") + '">' +
-        '<div class="ci-title">' + (isRun ? '<span class="ci-run" title="' + esc(window.t("sess.running")) + '">' + ic("loader", { cls: "ic-spin" }) + '</span> ' : '') +
+      // Red dot for a chat Javis answered after the owner last looked. The chat open on screen is being read right now.
+      var chuaDoc = !!s.unread;
+      if (chuaDoc && s.id === cur && chatOnScreen()) { chuaDoc = false; s.unread = false; markRead(s.id); }
+      var item = el('<div class="cside-item' + (s.id === cur ? " active" : "") + (isRun ? " running" : "") + (s.pinned ? " ghim" : "") + (chuaDoc ? " has-unread" : "") + '">' +
+        '<div class="ci-title">' + (chuaDoc ? '<span class="ci-unread" role="img" title="' + esc(window.t("sess.unread")) + '" aria-label="' + esc(window.t("sess.unread")) + '"></span>' : '') +
+        (isRun ? '<span class="ci-run" title="' + esc(window.t("sess.running")) + '">' + ic("loader", { cls: "ic-spin" }) + '</span> ' : '') +
         (tt.dau || "") +
         esc(s.title || s.preview || window.t("sess.untitled")) + '</div>' +
         '<div class="ci-meta"><span>' + fmtT(s.updated_at) + '</span>' + (tt.meta || "") +
@@ -1950,6 +1991,13 @@
       listEl.appendChild(more);
     }
     listEl.scrollTop = keepScroll;
+    // 2026-11-08: warm the first chats of the list once the page is idle (app.js prefetchMany), so the first tap on a
+    // phone, which has no hover, finds them ready too.
+    try {
+      if (window.JavisSessions && window.JavisSessions.prefetchMany) {
+        window.JavisSessions.prefetchMany(items.slice(0, 8).map(function (s) { return s.id; }));
+      }
+    } catch (e) {}
   }
 
   async function doSearch(q) {
@@ -2068,10 +2116,19 @@
 
   // Cập nhật khi có lượt chat mới / đổi phiên / đổi brain
   window.addEventListener("javis:sessions-changed", function (e) {
+    // 0.491.0: every change of chat, every finished turn and every background message that lands: the chat on
+    // screen is read, so its red dot goes out here and on the server.
+    markCurrentRead();
     // Performance (2026-11-05): a plain switch to a chat already in the list changes nothing in the list but which row
     // is lit. Re-fetching it (and its GitHub icons) on every click cost two round trips and redrew every row.
     if (e && e.detail && e.detail.reason === "open" && chiToDongDangMo()) return;
     refresh();
+  });
+  document.addEventListener("visibilitychange", markCurrentRead);
+  // Read in this tab or another one: the dot goes away here too.
+  window.addEventListener("javis:session-read", function (e) {
+    var sid = e && e.detail && e.detail.session_id;
+    if (sid) clearDot(sid);
   });
   // Chip phải tự sống KHÔNG phụ thuộc cột trái: refresh() thoát sớm khi chưa mount sidebar,
   // mà chip còn đứng ở màn Javis nơi cột đó chưa bao giờ mount. Đổi phiên là đổi project có

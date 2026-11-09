@@ -40,8 +40,9 @@ TIMINGS = ROOT / "tests" / "test_timings.json"
 # MỘT MÌNH sau cùng: lượt CI e243532 đỏ ở test_khoi_dong_nhe (tỉ lệ 6.63 > 5.0) chỉ vì 3 file khác đang chiếm CPU lúc đo.
 # Danh sách lấy từ chính các test đo thời gian mà tests/python/test_ci_noi_ro_test_do.py đã ghim; thêm vào khi có test mới
 # kiểu này. Thiếu tên ở đây không làm sót test, chỉ làm test đó chạy chung với các file khác.
+# test_khoi_dong_nhe.py left this list on 2026-11-07: it no longer times anything (it lists the packages main loads).
 CHAY_RIENG = frozenset({
-    "test_khoi_dong_nhe.py", "test_khoi_dong_cham.py", "test_settings_khong_treo_theo_cli.py",
+    "test_khoi_dong_cham.py", "test_settings_khong_treo_theo_cli.py",
     "test_dua_token_claude.py", "test_terminal.py", "test_claude_khong_tu_dang_xuat.py",
 })
 
@@ -254,7 +255,7 @@ def main() -> int:
     # Chốt trung tâm (review T3 J P2-2): MỌI test chạy qua đây đều không dựng được engine phán xử hay lượt học thật, kể cả
     # test không nạp tests/python/_paths.py. `agent_judge.Judge` từ chối mọi hàm hỏi model chưa đánh dấu là engine giả.
     env = dict(os.environ, PYTHONIOENCODING="utf-8", JAVIS_NO_REAL_JUDGE_ENGINE="1", JAVIS_NO_REAL_REVIEW_ENGINE="1",
-               JAVIS_NO_REAL_TEAM_ENGINE="1")
+               JAVIS_NO_REAL_TEAM_ENGINE="1", JAVIS_NO_STT_MODEL_DISCOVERY="1")
 
     viec = []
     if not chi_js:

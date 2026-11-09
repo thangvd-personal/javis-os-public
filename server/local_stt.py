@@ -52,16 +52,16 @@ def describe() -> dict:
         "id": "local_ear",
         "ten": localefmt.chu("Bộ nghe offline (Whisper)", "Offline ear (Whisper)"),
         "mo_ta": localefmt.chu(
-            "Nghe tin thoại và lời nói trong video khách gửi ngay trên máy này, không cần API key nào. Javis chỉ dùng "
-            "khi không có key Groq, OpenAI hay Gemini, hoặc các key đó đang lỗi. Tải về khoảng 1 GB (small) hoặc 2.5 GB (medium). "
+            "Nghe tin thoại và lời nói trong video khách gửi ngay trên máy này, không cần API key nào. Javis chỉ "
+            "dùng khi không có gói ChatGPT hay key Groq, OpenAI, Gemini, hoặc tất cả đang lỗi. Tải về khoảng 1 GB (small) hoặc 4.8 GB (medium). "
             "Máy yếu nghe chậm hơn (một video 30 giây mất vài chục giây) và nghe tiếng Việt kém hơn Groq.\n\n"
             "Hướng dẫn cấu hình và nâng cấp:\n"
             "- Đổi mô hình tốt hơn: thêm JAVIS_LOCAL_STT_MODEL=medium hoặc large-v3-turbo vào file .env (mặc định: small).\n"
             "- Tùy chỉnh số luồng CPU: thêm JAVIS_LOCAL_STT_THREADS=4 vào file .env để xử lý nhanh hơn.\n"
             "- Tải nhanh hơn và tránh giới hạn: thêm HF_TOKEN=hf_... vào file .env.\n"
             "- Áp dụng mô hình mới: sau khi sửa .env, khởi động lại Javis, bấm 'Gỡ bỏ' rồi bấm 'Cài đặt' lại trên thẻ này.",
-            "Hears voice messages and the speech in customers' videos on this machine, with no API key. Javis uses it "
-            "only when there is no Groq, OpenAI or Gemini key, or those keys fail. About 1 GB (small) or 2.5 GB (medium) to download. "
+            "Hears voice messages and the speech in customers' videos on this machine, with no API key. Javis uses "
+            "it only when there is no ChatGPT plan and no Groq, OpenAI or Gemini key, or all of them fail. About 1 GB (small) or 4.8 GB (medium) to download. "
             "A weak machine hears slowly (a 30 second video can take tens of seconds) and less accurately than Groq.\n\n"
             "Configuration and upgrade guide:\n"
             "- Switch to a better model: add JAVIS_LOCAL_STT_MODEL=medium or large-v3-turbo to .env (defaults to small).\n"
