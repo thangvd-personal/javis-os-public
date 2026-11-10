@@ -29,19 +29,7 @@ if [ -f .env ]; then
 fi
 PORT="${JAVIS_PORT:-7777}"
 LABEL="${JAVIS_LAUNCHD_LABEL:-com.javis.os}"
-if [ -z "${JAVIS_STATE_DIR:-}" ] || [ "${JAVIS_STATE_DIR:-}" = "$PWD/server/state" ]; then
-  USER_ID=""
-  if [ -f "$PWD/server/state/auth.json" ]; then
-    USER_ID=$(grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$PWD/server/state/auth.json" | head -1 | sed 's/.*"user_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  fi
-  if [ -n "$USER_ID" ]; then
-    STATE_DIR="$PWD/server/state/$USER_ID"
-  else
-    STATE_DIR="$PWD/server/state"
-  fi
-else
-  STATE_DIR="$JAVIS_STATE_DIR"
-fi
+STATE_DIR="${JAVIS_STATE_DIR:-$PWD/server/state}"
 TARGET="gui/$(id -u)/$LABEL"
 NGUONG="${JAVIS_WATCHDOG_FAILS:-3}"
 DEM_FILE="$STATE_DIR/watchdog-fails"

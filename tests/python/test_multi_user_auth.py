@@ -132,14 +132,14 @@ def run_tests():
         dir1 = c.get_user_state_dir(uid1)
         dir2 = c.get_user_state_dir(uid2)
 
-        check("duong dan state user1 chua user_id1", uid1 in str(dir1))
+        # uid1 is the PRIMARY account (first one saved): it keeps the legacy state folder so an
+        # upgraded install finds its data and .secret_key where they were. Others get <root>/<uid>.
+        check("primary account keeps the legacy state folder", dir1 == c.Path(test_state_root).resolve())
         check("duong dan state user2 chua user_id2", uid2 in str(dir2))
         check("hai thu muc state phai khac nhau hoan toan", dir1 != dir2)
 
         # Kiem tra quy uoc duong dan mac dinh server/state/[user_id]
-        server_dir = c.Path(c.__file__).parent.resolve()
-        expected_user_dir = server_dir / "state" / uid1
-        check("get_user_state_dir theo mac dinh nam trong server/state/[user_id]", expected_user_dir.name == uid1 and expected_user_dir.parent.name == "state")
+        check("second account lives in <root>/<user_id>", dir2 == c.Path(test_state_root).resolve() / uid2)
 
         # Thu ghi du lieu vao state user1
         f1 = dir1 / "user_data.txt"

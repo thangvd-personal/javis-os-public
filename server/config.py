@@ -14,26 +14,84 @@ from pathlib import Path
 # Mọi state Javis tự ghi (settings, auth sessions, loop config) nằm ở JAVIS_STATE_DIR.
 # Mặc định = server/state/ hoặc server/[user_id]/state/. Docker/VPS đặt = /data/state (volume ghi được,
 # vì code tree /app là read-only trong container).
+#
+# Multi-user layout. STATE ROOT holds what belongs to the whole install (auth.json, .sessions.json).
+# The PRIMARY account (the top-level account of auth.json, the one an upgrade migrated) keeps
+# STATE_DIR exactly where it was, so `.secret_key`, absolute paths saved in state files and Docker
+# volumes are never moved. Every other account gets `<root>/<user_id>/`.
+def _is_uuid(name: str) -> bool:
+    import uuid
+    try:
+        return str(uuid.UUID(name)) == name
+    except ValueError:
+        return False
+
+
+def _state_root() -> Path:
+    server_dir = Path(__file__).parent.resolve()
+    raw = os.getenv("JAVIS_STATE_DIR", "").strip()
+    if not raw:
+        return server_dir / "state"
+    p = Path(raw)
+    if not p.is_absolute():
+        p = (server_dir.parent / p).resolve()
+    if p == server_dir:
+        return server_dir / "state"
+    # The start/stop scripts export the primary account's own folder (<root>/<user_id>).
+    if _is_uuid(p.name):
+        return p.parent
+    return p
+
+
 def get_auth_path() -> Path:
     if os.getenv("JAVIS_AUTH_PATH"):
         return Path(os.getenv("JAVIS_AUTH_PATH")).resolve()
-    raw = os.getenv("JAVIS_STATE_DIR", "").strip()
-    if raw:
-        p_raw = Path(raw)
-        if not p_raw.is_absolute():
-            p_raw = (Path(__file__).parent.parent / p_raw).resolve()
-        server_dir = Path(__file__).parent.resolve()
-        if p_raw != server_dir and p_raw != (server_dir / "state") and not str(p_raw).startswith(str(server_dir / "state")):
-            return p_raw / "auth.json"
-        if (p_raw / "auth.json").exists():
-            return p_raw / "auth.json"
-    p = Path(__file__).parent / "state" / "auth.json"
-    if p.exists():
-        return p
-    if (Path(__file__).parent / "auth.json").exists():
-        return Path(__file__).parent / "auth.json"
-    return p
+    return _state_root() / "auth.json"
 
+
+def _write_auth_raw(out: dict, auth_file: Path) -> None:
+    auth_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = auth_file.with_name(f".{auth_file.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    os.replace(tmp, auth_file)
+
+
+def _migrate_legacy_auth() -> None:
+    """One-time upgrade: copy the account from `settings.json` into a new auth.json.
+
+    Before multi-user the only account lived in `settings.json["auth"]`. Without this step an
+    updated install has no auth.json, auth_enabled() is False, login answers "auth is not
+    enabled" and the first-run setup screen comes back, which on a public VPS lets the first
+    visitor take the machine. The old block stays in settings.json (a downgrade still signs in);
+    read_settings ignores it once auth.json exists. Secrets are copied as stored (`enc:` stays
+    encrypted with the same `.secret_key`, which does not move)."""
+    import uuid
+    auth_file = get_auth_path()
+    if auth_file.exists():
+        return
+    legacy = _state_root() / "settings.json"
+    try:
+        data = json.loads(legacy.read_text(encoding="utf-8")) if legacy.exists() else {}
+    except Exception:
+        return   # unreadable settings: read_settings has its own recovery, do not guess here
+    a = data.get("auth") if isinstance(data, dict) else None
+    if not isinstance(a, dict) or not (a.get("password_hash") or (a.get("totp") or {}).get("enabled")):
+        return
+    acc = {k: a[k] for k in ("username", "password_hash", "salt", "totp", "env_applied") if k in a}
+    acc.setdefault("totp", {"enabled": False, "secret": "", "recovery": [], "last_step": 0})
+    acc["user_id"] = str(uuid.uuid4())
+    try:
+        _write_auth_raw({**acc, "users": [dict(acc)]}, auth_file)
+        print(f"[config] migrated the account from settings.json to {auth_file}", file=__import__("sys").stderr)
+    except Exception as e:
+        print(f"[config] could not migrate the account to {auth_file}: {e}", file=__import__("sys").stderr)
+
+
+_migrate_legacy_auth()
 AUTH_PATH = get_auth_path()
 
 
@@ -186,6 +244,11 @@ from contextvars import ContextVar
 current_user_id: ContextVar[str] = ContextVar("current_user_id", default="")
 
 
+def primary_user_id() -> str:
+    a = read_auth()
+    return a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
+
+
 def get_current_user_id() -> str:
     uid = current_user_id.get()
     if uid:
@@ -193,58 +256,32 @@ def get_current_user_id() -> str:
     env_uid = os.getenv("JAVIS_USER_ID", "").strip()
     if env_uid:
         return env_uid
-    a = read_auth()
-    return a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
+    return primary_user_id()
+
+
+def _user_dir(root: Path, user_id: str) -> Path:
+    """Folder of one account. The primary account keeps the legacy folder (the root itself)
+    unless `<root>/<user_id>/` already exists, so an upgraded install finds its settings,
+    databases and `.secret_key` where they always were and nothing has to be moved."""
+    if not user_id:
+        return root
+    own = root / user_id
+    if user_id == primary_user_id() and not own.is_dir():
+        return root
+    return own
 
 
 def get_user_state_dir(user_id: str = None) -> Path:
-    _s_dir = Path(__file__).parent.resolve()
-    raw = os.getenv("JAVIS_STATE_DIR", "").strip()
-    if raw:
-        p_raw = Path(raw)
-        if not p_raw.is_absolute():
-            p_raw = (_s_dir.parent / p_raw).resolve()
-        if p_raw != _s_dir and p_raw != (_s_dir / "state") and not str(p_raw).startswith(str(_s_dir / "state")):
-            base = p_raw
-        else:
-            base = _s_dir / "state"
-    else:
-        base = _s_dir / "state"
     if not user_id:
         user_id = get_current_user_id()
-    if user_id:
-        p = base / user_id
-        p.mkdir(parents=True, exist_ok=True)
-        return p
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+    if user_id and not _is_uuid(user_id):
+        raise ValueError(f"invalid user_id: {user_id!r}")
+    p = _user_dir(_state_root(), user_id)
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-_raw_state = os.getenv("JAVIS_STATE_DIR", "").strip()
-_server_dir = Path(__file__).parent.resolve()
-_auth_info = read_auth()
-_active_uid = (
-    os.getenv("JAVIS_USER_ID", "").strip()
-    or _auth_info.get("user_id")
-    or (_auth_info.get("users", [{}])[0].get("user_id") if _auth_info.get("users") else "")
-)
-
-if _raw_state:
-    _p = Path(_raw_state)
-    if not _p.is_absolute():
-        _p = (Path(__file__).parent.parent / _p).resolve()
-    if _p.resolve() == _server_dir or _p.resolve() == (_server_dir / "state"):
-        if _active_uid:
-            STATE_DIR = _server_dir / "state" / _active_uid
-        else:
-            STATE_DIR = _server_dir / "state"
-    else:
-        STATE_DIR = _p
-else:
-    if _active_uid:
-        STATE_DIR = _server_dir / "state" / _active_uid
-    else:
-        STATE_DIR = _server_dir / "state"
+STATE_DIR = _user_dir(_state_root(), os.getenv("JAVIS_USER_ID", "").strip() or primary_user_id())
 
 try:
     STATE_DIR.mkdir(parents=True, exist_ok=True)

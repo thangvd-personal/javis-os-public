@@ -4,10 +4,13 @@ Each block pins one bug that was reproduced against the running app:
 1. Login must check username and password against the SAME account
    (`admin` + bob's password used to sign in as admin).
 2. A password change drops every other session of that account, and only that account.
+3. An install upgraded from single-user keeps its account (migrated from settings.json to
+   auth.json) and its state folder.
 """
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 from _paths import ROOT, SERVER  # noqa: F401
 
@@ -78,6 +81,54 @@ check("admin's session survives bob's password change", c.valid_session(tok_admi
 check("bob's current device gets a fresh bob session",
       c.get_session_user_id(bob_a.cookies.get("javis_session")) == bob_uid)
 check("bob signs in with the new password", login(client(), "bob", "bobnewpass123").status_code == 200)
+
+# ---- 3. Upgrade from a single-user install: the account moves to auth.json ----
+# config migrates at import time, so the old layout is booted in a fresh interpreter.
+import json  # noqa: E402
+import subprocess  # noqa: E402
+
+legacy_root = Path(tempfile.mkdtemp(prefix="javis-mu-legacy-"))
+h, s = c.hash_password("oldpass123")
+(legacy_root / "settings.json").write_text(json.dumps(
+    {"setup_done": True, "workspace_name": "Old shop", "auth": {"username": "owner", "password_hash": h, "salt": s}}),
+    encoding="utf-8")
+(legacy_root / "kanban.sqlite3").write_bytes(b"")
+probe = r"""
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import config as c
+from fastapi.testclient import TestClient
+import main
+cl = TestClient(main.app, client=("127.0.0.1", 50000), base_url="http://localhost:7777")
+r = cl.post("/auth/login", data={"username": "owner", "password": "oldpass123"})
+print(json.dumps({"enabled": c.auth_enabled(), "login": r.status_code, "note": r.json().get("note"),
+                  "uid": c.get_session_user_id(cl.cookies.get("javis_session")),
+                  "state": str(c.STATE_DIR), "user_dir": str(c.get_user_state_dir()),
+                  "ws": c.read_settings().get("workspace_name")}))
+"""
+env = {**os.environ, "JAVIS_STATE_DIR": str(legacy_root)}
+out = subprocess.run([sys.executable, "-c", probe, str(SERVER)], cwd=str(SERVER), env=env,
+                     capture_output=True, text=True, timeout=240)
+try:
+    res = json.loads(out.stdout.strip().splitlines()[-1])
+except Exception:
+    res = {}
+    print(out.stdout[-2000:], out.stderr[-2000:])
+migrated = json.loads((legacy_root / "auth.json").read_text(encoding="utf-8")) if (legacy_root / "auth.json").exists() else {}
+check("upgrade: auth.json is created from settings.json", migrated.get("username") == "owner"
+      and bool(migrated.get("user_id")) and len(migrated.get("users") or []) == 1)
+check("upgrade: login stays enabled (no setup screen)", res.get("enabled") is True)
+check("upgrade: the old owner signs in with the old password", res.get("login") == 200 and not res.get("note"))
+check("upgrade: the session carries the migrated user_id", res.get("uid") == migrated.get("user_id"))
+check("upgrade: the primary account keeps the old state folder", res.get("state") == str(legacy_root)
+      and res.get("user_dir") == str(legacy_root))
+check("upgrade: existing settings are still read", res.get("ws") == "Old shop")
+check("upgrade: data files were not moved", (legacy_root / "kanban.sqlite3").exists())
+# The start scripts used to export <root>/<uid>; that must resolve to the same root.
+check("a <root>/<user_id> JAVIS_STATE_DIR resolves to the root", subprocess.run(
+    [sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import config as c; print(c.get_auth_path())", str(SERVER)],
+    cwd=str(SERVER), env={**env, "JAVIS_STATE_DIR": str(legacy_root / migrated.get("user_id", "x"))},
+    capture_output=True, text=True, timeout=120).stdout.strip().endswith(str(legacy_root / "auth.json")))
 
 # ---- end ----
 print()
