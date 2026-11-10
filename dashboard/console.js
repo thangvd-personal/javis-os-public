@@ -7222,13 +7222,18 @@
         <div class="gcard" style="max-width:560px">
           <div class="gcard-meta" style="margin-bottom:12px">${esc(window.t("cs.ac_users_intro"))}</div>
           <div id="usrList" class="tk-list"></div>
-          <details class="cb-them-tk" style="margin-top:14px">
+          <details class="cb-them-tk" id="nuBox" style="margin-top:14px;display:none">
             <summary>${ic("plus", { cls: "ic-sm" })} ${esc(window.t("cs.ac_add_user"))}</summary>
             <div style="margin-top:10px">
               <label class="js-lbl">${esc(window.t("common.account"))}</label>
               <input class="js-input" id="nuName" placeholder="${esc(window.t("cs.ac_user_ph"))}">
               <label class="js-lbl">${esc(window.t("cs.ac_pw"))}</label>
               <input class="js-input" id="nuPass" type="password" placeholder="${esc(window.t("cs.ac_pw_min"))}">
+              <label class="js-lbl">${esc(window.t("cs.ac_user_role"))}</label>
+              <select class="js-input" id="nuRole">
+                <option value="member">${esc(window.t("cs.ac_role_member"))}</option>
+                <option value="admin">${esc(window.t("cs.ac_role_admin"))}</option>
+              </select>
               <div class="js-actions" style="margin-top:10px">
                 <button class="gcard-btn" id="nuCreate">${esc(window.t("cs.ac_create_user"))}</button>
               </div>
@@ -7281,6 +7286,7 @@
           const fd = new FormData();
           fd.append("username", u);
           fd.append("password", p);
+          fd.append("role", (document.getElementById("nuRole") || {}).value || "member");
           try {
             const r = await (await fetch("/auth/users", { method: "POST", body: fd })).json();
             if (!r.ok) { st.innerHTML = Icons.warn(r.error || window.t("cs.ac_err_dot")); return; }
@@ -7566,17 +7572,36 @@
     try { d = await (await fetch("/auth/users")).json(); }
     catch (e) { box.innerHTML = `<div class="gcard-meta">${WARN_ICON} ${esc(window.t("cs.ch_net_err"))}</div>`; return; }
     const us = d.users || [];
+    // Only an admin may add or delete accounts; the server enforces it, this only hides the form.
+    const nuBox = document.getElementById("nuBox");
+    if (nuBox) nuBox.style.display = d.can_manage ? "" : "none";
     if (!us.length) { box.innerHTML = ""; return; }
     box.innerHTML = us.map(u => {
       const isCur = u.is_current ? ` <span style="color:var(--accent);font-weight:600">(${esc(window.t("cs.ac_user_current"))})</span>` : "";
       const tfa = u.totp_enabled ? " · 2FA" : "";
+      const role = window.t(u.role === "admin" ? "cs.ac_role_admin" : "cs.ac_role_member");
+      const del = d.can_manage && !u.is_primary && !u.is_current
+        ? `<button class="gcard-btn ghost usr-del" data-id="${esc(u.user_id)}" data-name="${esc(u.username)}">${esc(window.t("cs.ac_user_delete"))}</button>`
+        : "";
       return `<div class="tk-row">
         <div class="tk-info">
           <b>${esc(u.username)}${isCur}</b>
-          <span class="tk-meta"><code>${esc(u.user_id)}</code>${tfa}</span>
+          <span class="tk-meta">${esc(role)}${tfa}</span>
         </div>
+        ${del}
       </div>`;
     }).join("");
+    box.querySelectorAll(".usr-del").forEach(b => {
+      b.onclick = async () => {
+        if (!confirm(window.t("cs.ac_user_delete_confirm").replace("{name}", b.dataset.name || ""))) return;
+        const fd = new FormData(); fd.append("user_id", b.dataset.id || "");
+        try {
+          const r = await (await fetch("/auth/users/delete", { method: "POST", body: fd })).json();
+          if (!r.ok) alert(r.error || window.t("cs.ac_err_dot"));
+        } catch (e) { alert(window.t("cs.ch_net_err")); }
+        renderUsers();
+      };
+    });
   }
 
   // ---- Lưu 1 section settings ----

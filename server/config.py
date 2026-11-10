@@ -280,6 +280,27 @@ def primary_user_id() -> str:
     return a.get("user_id") or (a.get("users", [{}])[0].get("user_id") if a.get("users") else "")
 
 
+# Roles. The primary account (the one that ran setup, or the migrated single-user account) is
+# always "admin" and cannot be demoted, so the install never ends up with nobody able to manage
+# it. Accounts created from the dashboard are "member" unless created as admin.
+ROLES = ("admin", "member")
+
+
+def user_role(user_id: str) -> str:
+    if not user_id:
+        return ""
+    if user_id == primary_user_id():
+        return "admin"
+    u = get_user(user_id=user_id)
+    if not u:
+        return ""
+    return "admin" if u.get("role") == "admin" else "member"
+
+
+def is_admin(user_id: str) -> bool:
+    return user_role(user_id) == "admin"
+
+
 def get_current_user_id() -> str:
     uid = current_user_id.get()
     if uid:

@@ -7,6 +7,7 @@ Each block pins one bug that was reproduced against the running app:
 3. An install upgraded from single-user keeps its account (migrated from settings.json to
    auth.json) and its state folder.
 4. A WebSocket (chat, voice, terminal) runs as the account of its session cookie.
+5. Roles: only an admin manages accounts and install-wide settings; the primary admin stays.
 """
 import os
 import sys
@@ -165,6 +166,43 @@ check("admin's WebSocket runs as admin", seen_admin.get("resolved") == admin_uid
 check("the identity does not leak out of the connection", c.current_user_id.get() == "")
 src = (SERVER / "main.py").read_text(encoding="utf-8")
 check("the WebSocket identity middleware is installed", "app.add_middleware(_WebSocketUser)" in src)
+
+# ---- 5. Roles ----
+check("the primary account is admin", c.user_role(admin_uid) == "admin")
+check("an account created without a role is a member", c.user_role(bob_uid) == "member")
+bob5 = client()
+login(bob5, "bob", "bobnewpass123")
+admin5 = client()
+login(admin5, "admin", "adminpass123")
+r = bob5.post("/auth/users", data={"username": "eve", "password": "evepass123"})
+check("a member cannot create accounts", r.status_code == 403 and c.get_user(username="eve") is None)
+for path in ("/auth/tokens", "/update", "/plugins/toggle", "/mcp/add", "/backup/now", "/terminal/close"):
+    check(f"a member is refused POST {path}", bob5.post(path, data={}).status_code == 403)
+check("a member is refused GET /terminal/status", bob5.get("/terminal/status").status_code == 403)
+lst = bob5.get("/auth/users").json()
+check("a member sees only their own account", [u["username"] for u in lst.get("users", [])] == ["bob"]
+      and lst.get("can_manage") is False)
+lst = admin5.get("/auth/users").json()
+check("an admin sees every account", {"admin", "bob"} <= {u["username"] for u in lst.get("users", [])}
+      and lst.get("can_manage") is True)
+r = admin5.post("/auth/users", data={"username": "carol", "password": "carolpass123", "role": "admin"})
+check("an admin creates another admin", r.status_code == 200 and c.user_role(r.json().get("user_id")) == "admin")
+carol_uid = r.json().get("user_id")
+check("an unknown role is refused", admin5.post("/auth/users", data={
+    "username": "dan", "password": "danpass1234", "role": "root"}).status_code == 400)
+carol = client()
+login(carol, "carol", "carolpass123")
+check("a second admin may create accounts", carol.post("/auth/users", data={
+    "username": "dave", "password": "davepass123"}).status_code == 200)
+check("nobody deletes the primary admin", carol.post("/auth/users/delete", data={"user_id": admin_uid}).status_code == 400)
+check("an admin cannot delete the account in use", carol.post("/auth/users/delete", data={"user_id": carol_uid}).status_code == 400)
+check("a member cannot delete accounts", bob5.post("/auth/users/delete", data={"user_id": carol_uid}).status_code == 403)
+tok_bob5 = bob5.cookies.get("javis_session")
+r = admin5.post("/auth/users/delete", data={"user_id": bob_uid})
+check("an admin deletes bob", r.status_code == 200 and c.get_user(user_id=bob_uid) is None)
+check("a deleted account is signed out everywhere", not c.valid_session(tok_bob5))
+check("a deleted account can no longer sign in", login(client(), "bob", "bobnewpass123").status_code == 401)
+check("the terminal WebSocket checks the admin role", "cfgmod.is_admin(cfgmod.get_session_user_id(ws.cookies" in src)
 
 # ---- end ----
 print()

@@ -472,7 +472,30 @@ async def _auth_guard(request: Request, call_next):
                 request.state.username = uname
                 cfgmod.current_user_id.set(uid)
                 cfgmod.update_session_activity(session_token)
+                if _admin_only(path, request.method) and not cfgmod.is_admin(uid):
+                    return JSONResponse({"ok": False, "error": localefmt.chu(
+                        "Chỉ tài khoản quản trị mới làm được việc này.",
+                        "Only an admin account can do this.")}, status_code=403)
     return await call_next(request)
+
+
+# Install-wide actions (multi-user): they change the machine for EVERY account, so a "member"
+# account may not run them. One list, checked once in `_auth_guard`, instead of a check in each
+# route. Prefixes listed with a trailing "/" match what lies under them only.
+# - any method: the Terminal is a shell on the server, and account management is admin business
+#   (GET /auth/users is answered per role inside the route, so it is not listed).
+# - writes only: reading the plugin/MCP/backup pages stays harmless, changing them does not.
+_ADMIN_ONLY_ANY = ("/terminal/", "/ws/terminal")
+_ADMIN_ONLY_WRITE = ("/auth/users", "/auth/tokens", "/auth/disable", "/update", "/plugins/", "/mcp/", "/backup/")
+
+
+def _admin_only(path: str, method: str) -> bool:
+    def hit(prefixes):
+        return any(path == p.rstrip("/") or path.startswith(p if p.endswith("/") else p + "/")
+                   for p in prefixes)
+    if hit(_ADMIN_ONLY_ANY):
+        return True
+    return method.upper() not in ("GET", "HEAD", "OPTIONS") and hit(_ADMIN_ONLY_WRITE)
 
 
 def _bearer(request) -> str:
@@ -1888,32 +1911,42 @@ async def auth_password(request: Request, current_password: str = Form(""),
 
 @app.get("/auth/users")
 async def auth_users_list(request: Request):
-    """Danh sách người dùng trong hệ thống (chỉ lộ user_id, username, totp_enabled, is_current)."""
+    """Danh sách tài khoản. Admin thấy tất cả; member chỉ thấy chính mình (không lộ ai khác dùng máy).
+    Chỉ trả user_id, username, role, totp_enabled, is_current, is_primary."""
     if (loi := _doi_phien_that(request)) is not None:
         return loi
-    users = cfgmod.list_users()
     current_uid = cfgmod.get_current_user_id()
+    primary = cfgmod.primary_user_id()
+    admin = cfgmod.is_admin(current_uid)
     res = []
-    for u in users:
-        if isinstance(u, dict):
-            uid = u.get("user_id", "")
-            res.append({
-                "user_id": uid,
-                "username": u.get("username", ""),
-                "totp_enabled": bool((u.get("totp") or {}).get("enabled")),
-                "is_current": (uid == current_uid) if current_uid else False,
-            })
-    return {"ok": True, "users": res}
+    for u in cfgmod.list_users():
+        if not isinstance(u, dict):
+            continue
+        uid = u.get("user_id", "")
+        if not admin and uid != current_uid:
+            continue
+        res.append({
+            "user_id": uid,
+            "username": u.get("username", ""),
+            "role": cfgmod.user_role(uid),
+            "totp_enabled": bool((u.get("totp") or {}).get("enabled")),
+            "is_current": bool(current_uid) and uid == current_uid,
+            "is_primary": uid == primary,
+        })
+    return {"ok": True, "users": res, "can_manage": admin}
 
 
 @app.post("/auth/users")
-async def auth_users_create(request: Request, username: str = Form(...), password: str = Form(...)):
-    """Tạo người dùng mới (đòi hỏi session đăng nhập của tài khoản hiện tại)."""
+async def auth_users_create(request: Request, username: str = Form(...), password: str = Form(...),
+                            role: str = Form("member")):
+    """Tạo tài khoản mới. Chỉ admin (chặn ở `_auth_guard`, danh sách `_ADMIN_ONLY_WRITE`)."""
     if (loi := _doi_phien_that(request)) is not None:
         return loi
     uname = (username or "").strip()
     if not uname:
         return JSONResponse({"ok": False, "error": localefmt.chu("Thiếu tên đăng nhập.", "Missing username.")}, status_code=400)
+    if role not in cfgmod.ROLES:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Vai trò không hợp lệ.", "Invalid role.")}, status_code=400)
     existing = cfgmod.get_user(username=uname)
     if existing:
         return JSONResponse({"ok": False, "error": localefmt.chu("Tên đăng nhập đã tồn tại.", "Username already exists.")}, status_code=400)
@@ -1928,12 +1961,32 @@ async def auth_users_create(request: Request, username: str = Form(...), passwor
         "username": uname,
         "password_hash": h,
         "salt": salt,
+        "role": role,
         "totp": {"enabled": False, "secret": "", "recovery": [], "last_step": 0},
     }
     cfgmod.save_user(new_user)
     # Tự động khởi tạo thư mục state cho user mới
     cfgmod.get_user_state_dir(new_uid)
-    return {"ok": True, "user_id": new_uid, "username": uname}
+    return {"ok": True, "user_id": new_uid, "username": uname, "role": role}
+
+
+@app.post("/auth/users/delete")
+async def auth_users_delete(request: Request, user_id: str = Form(...)):
+    """Xoá một tài khoản và đăng xuất nó ở mọi nơi. Chỉ admin. Không xoá được tài khoản chính
+    (admin gốc của máy) và không tự xoá mình, để máy không bao giờ còn lại không ai quản trị.
+    Thư mục state của tài khoản đó GIỮ NGUYÊN trên đĩa: xoá dữ liệu là việc không làm lại được."""
+    if (loi := _doi_phien_that(request)) is not None:
+        return loi
+    if user_id == cfgmod.primary_user_id():
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không xoá được tài khoản quản trị chính.",
+                                                                 "The primary admin account cannot be deleted.")}, status_code=400)
+    if user_id == cfgmod.get_current_user_id():
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tự xoá tài khoản đang dùng.",
+                                                                 "You cannot delete the account you are using.")}, status_code=400)
+    if not cfgmod.delete_user(user_id):
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không có tài khoản này.", "No such account.")}, status_code=404)
+    cfgmod.drop_user_sessions(user_id)
+    return {"ok": True}
 
 
 @app.get("/auth/tokens")
@@ -21226,6 +21279,11 @@ async def terminal_close(session: str = Form(...)):
 async def terminal_ws(ws: WebSocket, session: str = Query(""), brain: str = Query("brain"),
                       cols: int = Query(80), rows: int = Query(24)):
     if cfgmod.gate_active() and not cfgmod.valid_session(ws.cookies.get("javis_session", "")):
+        await ws.close(code=1008)
+        return
+    # A shell on the server is install-wide power: admin accounts only (the HTTP list
+    # _ADMIN_ONLY_ANY never sees a websocket scope). No login gate = single local owner.
+    if cfgmod.gate_active() and not cfgmod.is_admin(cfgmod.get_session_user_id(ws.cookies.get("javis_session", ""))):
         await ws.close(code=1008)
         return
     await ws.accept()
