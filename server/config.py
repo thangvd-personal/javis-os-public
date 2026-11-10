@@ -1563,21 +1563,20 @@ def clean_password(password) -> str:
 def verify_password(password, cfg=None):
     """Exact match first (an older hash may have been stored WITH a space), then the cleaned
     form, so a space the keyboard slipped in never locks the owner out. A password that is
-    only whitespace never matches."""
+    only whitespace never matches.
+
+    Checks ONE account only: `cfg["auth"]` (the account of the current request, see
+    read_settings) or the primary account in auth.json. It must never scan the `users` list:
+    accepting any user's password here let `admin` + bob's password sign in as admin."""
     if not clean_password(password):
         return False
     a = (cfg.get("auth") if cfg and isinstance(cfg, dict) and "auth" in cfg else None) or read_auth()
-    if a.get("password_hash"):
-        for cand in dict.fromkeys((str(password), clean_password(password))):
-            h, _ = hash_password(cand, a.get("salt"))
-            if secrets.compare_digest(h, a["password_hash"]):
-                return True
-    for u in a.get("users", []):
-        if isinstance(u, dict) and u.get("password_hash"):
-            for cand in dict.fromkeys((str(password), clean_password(password))):
-                h, _ = hash_password(cand, u.get("salt"))
-                if secrets.compare_digest(h, u["password_hash"]):
-                    return True
+    if not a.get("password_hash"):
+        return False
+    for cand in dict.fromkeys((str(password), clean_password(password))):
+        h, _ = hash_password(cand, a.get("salt"))
+        if secrets.compare_digest(h, a["password_hash"]):
+            return True
     return False
 
 
@@ -1602,12 +1601,7 @@ def username_matches(typed, cfg=None) -> bool:
         return False
     a = (cfg.get("auth") if cfg and isinstance(cfg, dict) and "auth" in cfg else None) or read_auth()
     want = str(a.get("username") or "").strip().casefold()
-    if want and typed_clean == want:
-        return True
-    for u in a.get("users", []):
-        if isinstance(u, dict) and str(u.get("username") or "").strip().casefold() == typed_clean:
-            return True
-    return False
+    return bool(want) and typed_clean == want
 
 
 # ---- Xác thực 2 lớp (TOTP). Toán nằm ở totp.py, đây chỉ là chỗ CẤT ----

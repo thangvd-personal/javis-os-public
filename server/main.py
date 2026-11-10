@@ -1594,25 +1594,24 @@ async def auth_login(request: Request, username: str = Form(...), password: str 
     cfg = cfgmod.read_settings()
     if not cfgmod.auth_enabled(cfg):
         return {"ok": True, "note": localefmt.chu("auth chưa bật", "auth is not enabled")}
-    # Tìm user trong danh sách users hoặc kiểm tra fallback tài khoản chính
+    # Username and password must match the SAME account. get_user() also covers an auth.json that
+    # only has the legacy top-level account, so there is no second, looser check to fall back to.
     matched_user = cfgmod.verify_password_for_user(username, password)
     if not matched_user:
-        if not cfgmod.username_matches(username, cfg) or not cfgmod.verify_password(password, cfg):
-            _login_fail(ip)
-            await asyncio.sleep(0.5)   # làm chậm brute-force online
-            loi = localefmt.chu("Sai tài khoản hoặc mật khẩu.", "Wrong username or password.")
-            # Account set from the server environment (Docker, Hostinger): a reset there also sets
-            # the USERNAME to JAVIS_ADMIN_USER (default "admin"), which is easy to miss when the
-            # account was first created under another name. Say so. The default name is public in
-            # the docs, so this tells an attacker nothing new.
-            if isinstance((cfg.get("auth") or {}).get("env_applied"), dict):
-                loi += " " + localefmt.chu(
-                    "Máy chủ này đặt tài khoản qua biến môi trường: tên đăng nhập là JAVIS_ADMIN_USER "
-                    "(mặc định admin), mật khẩu là JAVIS_ADMIN_PASSWORD của lần Redeploy gần nhất.",
-                    "This server sets the account from its environment: the username is JAVIS_ADMIN_USER "
-                    "(default admin) and the password is JAVIS_ADMIN_PASSWORD from the last redeploy.")
-            return JSONResponse({"ok": False, "error": loi}, status_code=401)
-        matched_user = cfg.get("auth") or {}
+        _login_fail(ip)
+        await asyncio.sleep(0.5)   # làm chậm brute-force online
+        loi = localefmt.chu("Sai tài khoản hoặc mật khẩu.", "Wrong username or password.")
+        # Account set from the server environment (Docker, Hostinger): a reset there also sets
+        # the USERNAME to JAVIS_ADMIN_USER (default "admin"), which is easy to miss when the
+        # account was first created under another name. Say so. The default name is public in
+        # the docs, so this tells an attacker nothing new.
+        if isinstance((cfg.get("auth") or {}).get("env_applied"), dict):
+            loi += " " + localefmt.chu(
+                "Máy chủ này đặt tài khoản qua biến môi trường: tên đăng nhập là JAVIS_ADMIN_USER "
+                "(mặc định admin), mật khẩu là JAVIS_ADMIN_PASSWORD của lần Redeploy gần nhất.",
+                "This server sets the account from its environment: the username is JAVIS_ADMIN_USER "
+                "(default admin) and the password is JAVIS_ADMIN_PASSWORD from the last redeploy.")
+        return JSONResponse({"ok": False, "error": loi}, status_code=401)
 
     user_uid = matched_user.get("user_id") if isinstance(matched_user, dict) else None
     user_name = (matched_user.get("username") if isinstance(matched_user, dict) else "") or username
