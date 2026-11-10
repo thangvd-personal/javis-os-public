@@ -587,6 +587,43 @@ app.add_middleware(_NenTinh, minimum_size=1024)
 app.add_middleware(web_security.WebSocketGuard, gate_active=lambda: cfgmod.gate_active())
 
 
+class _WebSocketUser:
+    """Bind the signed-in account to a WebSocket, as `_auth_guard` does for HTTP.
+
+    `@app.middleware("http")` never sees websocket scopes, so without this `current_user_id`
+    stayed empty on /ws, /ws/voice-live and /ws/terminal and every chat turn fell back to the
+    primary account: bob's chat was saved into the admin's conversations and ran on the admin's
+    settings. The ContextVar is set before the route runs, so the whole connection (and every
+    task it spawns, which copies the context) works as that account. The session check itself
+    stays in each route."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "websocket":
+            return await self.app(scope, receive, send)
+        from http.cookies import SimpleCookie
+        jar = SimpleCookie()
+        for k, v in scope.get("headers") or []:
+            if k.decode("latin-1").lower() == "cookie":
+                try:
+                    jar.load(v.decode("latin-1"))
+                except Exception:      # noqa: BLE001 - a malformed cookie header binds nobody
+                    pass
+        tok = jar["javis_session"].value if "javis_session" in jar else ""
+        uid = cfgmod.get_session_user_id(tok) if tok else ""
+        reset = cfgmod.current_user_id.set(uid) if uid else None
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if reset is not None:
+                cfgmod.current_user_id.reset(reset)
+
+
+app.add_middleware(_WebSocketUser)
+
+
 @app.middleware("http")
 async def _static_cache_headers(request: Request, call_next):
     """Asset tĩnh có ?v= (cache-bust theo VERSION, index.html tự gắn) → cho cache 1 năm immutable.

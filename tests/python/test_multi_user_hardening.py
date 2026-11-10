@@ -6,6 +6,7 @@ Each block pins one bug that was reproduced against the running app:
 2. A password change drops every other session of that account, and only that account.
 3. An install upgraded from single-user keeps its account (migrated from settings.json to
    auth.json) and its state folder.
+4. A WebSocket (chat, voice, terminal) runs as the account of its session cookie.
 """
 import os
 import sys
@@ -129,6 +130,41 @@ check("a <root>/<user_id> JAVIS_STATE_DIR resolves to the root", subprocess.run(
     [sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); import config as c; print(c.get_auth_path())", str(SERVER)],
     cwd=str(SERVER), env={**env, "JAVIS_STATE_DIR": str(legacy_root / migrated.get("user_id", "x"))},
     capture_output=True, text=True, timeout=120).stdout.strip().endswith(str(legacy_root / "auth.json")))
+
+# ---- 4. A WebSocket runs as the account of its session cookie ----
+from starlette.websockets import WebSocket  # noqa: E402
+
+
+@main.app.websocket("/ws/_test_whoami")
+async def _whoami(ws: WebSocket):
+    await ws.accept()
+    await ws.send_json({"ctx": c.current_user_id.get(), "resolved": c.get_current_user_id(),
+                        "state": str(c.get_user_state_dir())})
+    await ws.close()
+
+
+main.app.middleware_stack = None   # rebuild so the route added above is served
+
+
+def ws_whoami(cl):
+    # Pass the cookie explicitly: the test client's WS host is not the cookie's domain.
+    tok = cl.cookies.get("javis_session")
+    with cl.websocket_connect("/ws/_test_whoami", headers={"cookie": f"javis_session={tok}"}) as w:
+        return w.receive_json()
+
+
+bob_ws = client()
+login(bob_ws, "bob", "bobnewpass123")
+admin_ws = client()
+login(admin_ws, "admin", "adminpass123")
+seen_bob = ws_whoami(bob_ws)
+seen_admin = ws_whoami(admin_ws)
+check("bob's WebSocket runs as bob", seen_bob.get("ctx") == bob_uid and seen_bob.get("resolved") == bob_uid)
+check("bob's WebSocket uses bob's state folder", seen_bob.get("state") == str(c.get_user_state_dir(bob_uid)))
+check("admin's WebSocket runs as admin", seen_admin.get("resolved") == admin_uid)
+check("the identity does not leak out of the connection", c.current_user_id.get() == "")
+src = (SERVER / "main.py").read_text(encoding="utf-8")
+check("the WebSocket identity middleware is installed", "app.add_middleware(_WebSocketUser)" in src)
 
 # ---- end ----
 print()
