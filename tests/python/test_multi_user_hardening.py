@@ -3,6 +3,7 @@
 Each block pins one bug that was reproduced against the running app:
 1. Login must check username and password against the SAME account
    (`admin` + bob's password used to sign in as admin).
+2. A password change drops every other session of that account, and only that account.
 """
 import os
 import sys
@@ -62,6 +63,21 @@ cl = client()
 r = login(cl, "bob", "bobpass123")
 check("bob signs in as bob", r.status_code == 200
       and c.get_session_user_id(cl.cookies.get("javis_session")) == bob_uid)
+
+# ---- 2. Password change signs THIS account out everywhere, and only this account ----
+bob_a, bob_b, admin_2 = client(), client(), client()
+login(bob_a, "bob", "bobpass123")
+login(bob_b, "bob", "bobpass123")
+login(admin_2, "admin", "adminpass123")
+tok_bob_b = bob_b.cookies.get("javis_session")
+tok_admin = admin_2.cookies.get("javis_session")
+r = bob_a.post("/auth/password", data={"current_password": "bobpass123", "password": "bobnewpass123"})
+check("bob changes his password", r.status_code == 200 and r.json().get("ok"))
+check("bob's session on another device is dropped", not c.valid_session(tok_bob_b))
+check("admin's session survives bob's password change", c.valid_session(tok_admin))
+check("bob's current device gets a fresh bob session",
+      c.get_session_user_id(bob_a.cookies.get("javis_session")) == bob_uid)
+check("bob signs in with the new password", login(client(), "bob", "bobnewpass123").status_code == 200)
 
 # ---- end ----
 print()

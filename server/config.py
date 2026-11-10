@@ -1188,6 +1188,10 @@ def _ui_lang_ban_cu(cfg: dict, data: dict) -> None:
 
 _SETTINGS_CACHES: dict[str, dict] = {}
 
+# Credential fields of one account in auth.json. user_id first: write_settings skips it when
+# copying onto the legacy top-level account, whose user_id is fixed.
+_AUTH_KEYS = ("user_id", "username", "password_hash", "salt", "totp", "env_applied")
+
 
 def read_settings(user_id: str = None, settings_path: Path = None):
     if _SETTINGS_CACHE["sig"] is None:
@@ -1324,18 +1328,25 @@ def write_settings(cfg, user_id: str = None, settings_path: Path = None):
                     a_cur["user_id"] = uid
                 users = list(a_cur.get("users", []))
                 found = False
+                # REPLACE the account's credential fields with what the caller wrote, like the
+                # old `cfg["auth"] = {...}` did. Merging kept a stale `env_applied` marker that
+                # the caller had deliberately left out, and provision_admin_from_env then reset
+                # the password on boot. Fields outside _AUTH_KEYS (none yet) are kept.
+                fields = {k: new_a[k] for k in _AUTH_KEYS if k in new_a}
                 for idx, u in enumerate(users):
                     if isinstance(u, dict) and u.get("user_id") == uid:
-                        users[idx] = {**u, **{k: new_a[k] for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in new_a}}
+                        users[idx] = {**{k: v for k, v in u.items() if k not in _AUTH_KEYS}, **fields}
                         found = True
                         break
                 if not found:
-                    users.append({k: new_a[k] for k in ("user_id", "username", "password_hash", "salt", "totp", "env_applied") if k in new_a})
+                    users.append(fields)
                 a_cur["users"] = users
                 if a_cur.get("user_id") == uid:
-                    for k in ("username", "password_hash", "salt", "totp", "env_applied"):
+                    for k in _AUTH_KEYS[1:]:
                         if k in new_a:
                             a_cur[k] = new_a[k]
+                        else:
+                            a_cur.pop(k, None)
                 write_auth(a_cur)
             elif not new_a.get("password_hash"):
                 if uid:
@@ -1929,6 +1940,22 @@ def clear_sessions():
     with _SESSIONS_LOCK:
         SESSIONS.clear()
         _save_sessions()
+
+
+def drop_user_sessions(user_id: str, keep: str = "") -> int:
+    """Sign one account out everywhere (password change), leaving other accounts signed in.
+
+    A legacy session stored as a bare timestamp predates user ids and belongs to the primary
+    account, so it is dropped together with that account's sessions. Returns how many went."""
+    primary = read_auth().get("user_id") or ""
+    with _SESSIONS_LOCK:
+        drop = [t for t, v in SESSIONS.items() if t != keep and (
+            (v.get("user_id") or primary) if isinstance(v, dict) else primary) == user_id]
+        for t in drop:
+            SESSIONS.pop(t, None)
+        if drop:
+            _save_sessions()
+        return len(drop)
 
 
 

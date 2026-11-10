@@ -1840,7 +1840,10 @@ async def auth_password(request: Request, current_password: str = Form(""),
     if not password:
         return {"ok": True, "username": res_name}
 
-    cfgmod.drop_session(session_token)
+    # Đổi mật khẩu = hạ MỌI phiên cũ CỦA TÀI KHOẢN NÀY (máy khác, trình duyệt khác) rồi cấp lại
+    # phiên cho chính máy này. Thiếu bước này thì cái phiên mà người ta đổi mật khẩu để đuổi đi vẫn
+    # sống thêm 30 ngày. Phiên của tài khoản KHÁC giữ nguyên: đổi mật khẩu của bob không đá admin.
+    cfgmod.drop_user_sessions(res_uid)
     new_tok = cfgmod.new_session(user_id=res_uid, username=res_name)
     return _session_cookie(JSONResponse({"ok": True, "username": res_name}),
                            new_tok, request)
