@@ -64,9 +64,10 @@ cfgmod.totp_set(secret="JBSWY3DPEHPK3PXP", enabled=True,
                 recovery=["ABCD-EFGH", "JKMN-PQRS"], last_step=7)
 check("tiền đề: 2FA đang bật, chưa hỏng",
       cfgmod.totp_enabled() and not cfgmod.totp_hong())
-raw = json.loads(cfgmod.SETTINGS_PATH.read_text(encoding="utf-8"))
+# The account lives in auth.json since multi-user (settings.json no longer carries "auth").
+raw = json.loads(cfgmod.get_auth_path().read_text(encoding="utf-8"))
 check("tiền đề: secret nằm dạng enc: trong file",
-      str(raw["auth"]["totp"]["secret"]).startswith("enc:"))
+      str(raw["totp"]["secret"]).startswith("enc:"))
 
 # ---- 1. Mất key → phải HỎNG CÓ TIẾNG ----
 _mat_key()
@@ -76,11 +77,11 @@ check("secret_paths_hong liệt kê đúng auth.totp.secret",
       "auth.totp.secret" in cfgmod.secret_paths_hong())
 
 # ---- 2. Vòng ghi không được PHÁ blob ----
-blob_truoc = raw["auth"]["totp"]["secret"]
+blob_truoc = raw["totp"]["secret"]
 cfgmod.write_settings(cfgmod.read_settings())        # một lần lưu settings bất kỳ
-raw2 = json.loads(cfgmod.SETTINGS_PATH.read_text(encoding="utf-8"))
+raw2 = json.loads(cfgmod.get_auth_path().read_text(encoding="utf-8"))
 check("CANARY: blob mã hoá SỐNG SÓT qua write_settings khi khoá đang lỗi",
-      raw2["auth"]["totp"]["secret"] == blob_truoc)
+      raw2["totp"]["secret"] == blob_truoc)
 
 # Khôi phục lại là đường quan trọng nhất của việc giữ blob: tìm lại được key cũ thì
 # 2FA sống lại nguyên vẹn, không cần bật lại.
@@ -95,15 +96,15 @@ check("mã khôi phục tiêu xong là hết (còn 1)", cfgmod.totp_recovery_lef
 
 # ---- 4. Tắt 2FA thật vẫn xoá được (nhánh giữ-blob không cản đường tắt) ----
 cfgmod.totp_tat()
-raw3 = json.loads(cfgmod.SETTINGS_PATH.read_text(encoding="utf-8"))
-check("totp_tat vẫn xoá sạch được secret", raw3["auth"]["totp"]["secret"] == ""
-      and not raw3["auth"]["totp"]["enabled"])
+raw3 = json.loads(cfgmod.get_auth_path().read_text(encoding="utf-8"))
+check("totp_tat vẫn xoá sạch được secret", raw3["totp"]["secret"] == ""
+      and not raw3["totp"]["enabled"])
 check("tắt xong thì hết hỏng, về 'chưa bật' thật", not cfgmod.totp_hong())
 
 # ---- 5. Đối chiếu dây nối: cổng đăng nhập + status + UI ----
 src = (SERVER / "main.py").read_text(encoding="utf-8")
 check("CANARY: cổng đăng nhập fail-closed (hỏi mã cả khi khoá hỏng)",
-      "cfgmod.totp_enabled(cfg) or _tfa_hong" in src)
+      "cfgmod.totp_enabled(cfg, user_dict=matched_user) or _tfa_hong" in src)
 check("/auth/status lộ totp_broken cho UI", '"totp_broken"' in src)
 check("khởi động hô to danh sách secret hỏng", "secret_paths_hong()" in src)
 

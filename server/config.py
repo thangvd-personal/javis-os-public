@@ -95,6 +95,24 @@ _migrate_legacy_auth()
 AUTH_PATH = get_auth_path()
 
 
+def _read_auth_raw() -> dict:
+    """auth.json as stored on disk, secrets still `enc:`. {} when missing or unreadable."""
+    try:
+        data = json.loads(get_auth_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _raw_account(raw: dict, user_id: str = "") -> dict:
+    """One account inside a raw auth.json: the `users` entry with that id, else the top level."""
+    if user_id:
+        for u in raw.get("users") or []:
+            if isinstance(u, dict) and u.get("user_id") == user_id:
+                return u
+    return raw
+
+
 def read_auth() -> dict:
     auth_file = get_auth_path()
     try:
@@ -129,16 +147,29 @@ def read_auth() -> dict:
 def write_auth(data: dict) -> None:
     auth_file = get_auth_path()
     out = json.loads(json.dumps(data))
+    old = _read_auth_raw()
     try:
         import secrets_store
-        sec = (out.get("totp") or {}).get("secret")
-        if sec and isinstance(sec, str) and not sec.startswith("enc:"):
-            out["totp"]["secret"] = secrets_store.encrypt(sec)
+
+        def _seal(acc: dict, old_acc: dict) -> None:
+            t = acc.get("totp")
+            if not isinstance(t, dict):
+                return
+            sec = t.get("secret")
+            if sec and isinstance(sec, str) and not sec.startswith("enc:"):
+                t["secret"] = secrets_store.encrypt(sec)
+            elif t.get("enabled") and not sec:
+                # .secret_key lost or changed: read_auth decrypted the 2FA secret to "". Writing
+                # that back would destroy the blob that the old key can still open. Keep it, so
+                # 2FA stays ON and fail-closed (recovery codes are hashed and still work).
+                cu = str(((old_acc or {}).get("totp") or {}).get("secret") or "")
+                if cu.startswith("enc:") and not secrets_store.decrypt(cu):
+                    t["secret"] = cu
+
+        _seal(out, old)
         for u in out.get("users", []):
             if isinstance(u, dict):
-                usec = (u.get("totp") or {}).get("secret")
-                if usec and isinstance(usec, str) and not usec.startswith("enc:"):
-                    u["totp"]["secret"] = secrets_store.encrypt(usec)
+                _seal(u, _raw_account(old, u.get("user_id", "")) if u.get("user_id") else {})
     except Exception:
         pass
     try:
@@ -1685,15 +1716,13 @@ def totp_secret(cfg=None, user_dict=None):
 def totp_hong(cfg=None, user_dict=None):
     """2FA đang BẬT trong file nhưng secret KHÔNG GIẢI MÃ ĐƯỢC - thường do file
     .secret_key trong STATE_DIR bị mất/đổi (đổi volume, chép state thiếu file ẩn),
-    hoặc máy thiếu lib cryptography."""
-    try:
-        raw = read_auth()
-    except Exception:
-        return False
-    if user_dict and isinstance(user_dict, dict) and "totp" in user_dict:
-        t = user_dict.get("totp") or {}
-    else:
-        t = raw.get("totp") or {}
+    hoặc máy thiếu lib cryptography.
+
+    Đọc auth.json THÔ (chưa giải mã): read_auth đã giải mã ra rỗng thì không còn phân biệt được
+    "chưa bật" với "khoá hỏng", và 2FA âm thầm tắt (fail-open) đúng lúc chủ tin nó đang bật."""
+    raw = _read_auth_raw()
+    uid = (user_dict or {}).get("user_id", "") if isinstance(user_dict, dict) else ""
+    t = _raw_account(raw, uid).get("totp") or {}
     if not (isinstance(t, dict) and t.get("enabled") and str(t.get("secret") or "").strip()):
         return False
     return not totp_secret(cfg, user_dict=user_dict)   # file CÓ secret mà đọc ra rỗng -> giải mã hỏng
@@ -1721,6 +1750,9 @@ def secret_paths_hong():
                 c = c.get(p) if isinstance(c, dict) else None
             if isinstance(r, str) and r.startswith("enc:") and not (c or ""):
                 hong.append(duong)
+    # The 2FA secret moved to auth.json (multi-user); report it under its old name.
+    if "auth.totp.secret" not in hong and totp_hong():
+        hong.append("auth.totp.secret")
     return hong
 
 
