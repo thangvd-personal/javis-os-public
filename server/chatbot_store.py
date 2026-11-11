@@ -29,9 +29,24 @@ import channel_accounts  # tài khoản kênh dạng token (0.61.0): bot chỉ T
 import channels  # sổ đăng ký kênh: nơi duy nhất biết kênh nào gắn được bot
 import lang_registry  # sổ đăng ký ngôn ngữ: hợp lệ hoá trường ngon_ngu của bot
 import localefmt
-from config import STATE_DIR
+import config as cfgmod
 
-STORE_PATH = STATE_DIR / "chatbots.json"
+_STORE_NAME = "chatbots.json"
+STORE_PATH = cfgmod.STATE_DIR / _STORE_NAME
+
+
+def store_path() -> "Path":
+    """The bot file of the account this turn runs as.
+
+    The primary account keeps the legacy file (STATE_DIR/chatbots.json), so an upgraded install finds
+    every bot where it was. Tests pin STORE_PATH to a temp file; honouring that keeps them on one store.
+    """
+    if STORE_PATH != cfgmod.STATE_DIR / _STORE_NAME:
+        return STORE_PATH
+    uid = cfgmod.current_user_id.get()
+    if uid:
+        return cfgmod.get_user_state_dir(uid) / _STORE_NAME
+    return cfgmod.STATE_DIR / _STORE_NAME
 
 _lock = threading.Lock()
 
@@ -218,14 +233,14 @@ def _now() -> float:
 
 def _load() -> dict:
     try:
-        d = json.loads(STORE_PATH.read_text(encoding="utf-8"))
+        d = json.loads(store_path().read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {"version": 1, "bots": []}
     except Exception:
         # File hỏng (sửa tay, đĩa đầy giữa chừng): KHÔNG xoá, đổi tên để còn cứu, rồi bắt đầu lại.
         # Mất danh sách bot đã đau, mất luôn bản gốc để dò thì không cứu được nữa.
         try:
-            STORE_PATH.rename(STORE_PATH.with_suffix(".json.hong"))
+            store_path().rename(store_path().with_suffix(".json.hong"))
         except Exception:
             pass
         return {"version": 1, "bots": []}
@@ -257,10 +272,10 @@ def _di_tru(d: dict) -> bool:
 
 
 def _save(d: dict) -> None:
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STORE_PATH.with_suffix(".json.tmp")
+    store_path().parent.mkdir(parents=True, exist_ok=True)
+    tmp = store_path().with_suffix(".json.tmp")
     tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, STORE_PATH)   # ghi nguyên tử: mất điện giữa chừng không để lại file cụt
+    os.replace(tmp, store_path())   # ghi nguyên tử: mất điện giữa chừng không để lại file cụt
 
 
 def _slugify(name: str) -> str:

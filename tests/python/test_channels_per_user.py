@@ -242,6 +242,74 @@ jid = asyncio.run(_start_admin_job())
 check("the admin reads their own job", (main._CHAT_JOBS.get(owner_admin, jid) or {}).get("job_id") == jid)
 check("bob cannot read the admin's job", main._CHAT_JOBS.get(owner_bob, jid) is None)
 
+# ── 7b. Dedicated customer bots and their channel accounts are per account ───
+import channel_accounts  # noqa: E402
+import chatbot_runtime  # noqa: E402
+import chatbot_store  # noqa: E402
+import messenger_bot  # noqa: E402
+
+
+def _seed_bot(uid, token, name):
+    with cfgmod.as_user(uid):
+        aid, why = channel_accounts.create_account({"channel": "telegram", "token": token, "label": name})
+        assert aid, why
+        d = chatbot_store._load()
+        bid = f"bot_{name}"
+        d["bots"].append({"id": bid, "slug": name, "name": name, "channel": "telegram", "brain": "Brain Default",
+                          "agent_slug": "cskh", "enabled": True, "accounts": [aid]})
+        chatbot_store._save(d)
+        return bid
+
+
+bid_admin = _seed_bot(ADMIN, "cb-admin", "admin-shop")
+bid_bob = _seed_bot(BOB, "cb-bob", "bob-shop")
+with cfgmod.as_user(ADMIN):
+    admin_sees = [b["id"] for b in chatbot_store.list_bots()]
+    admin_accs = [a.get("label") for a in channel_accounts.list_accounts(channel="telegram")]
+with cfgmod.as_user(BOB):
+    bob_sees = [b["id"] for b in chatbot_store.list_bots()]
+check("the admin does not see bob's customer bot", bid_bob not in admin_sees and bid_admin in admin_sees, str(admin_sees))
+check("bob does not see the admin's customer bot", bid_admin not in bob_sees and bid_bob in bob_sees, str(bob_sees))
+check("channel accounts are per account too", "bob-shop" not in admin_accs, str(admin_accs))
+check("bob's bot file lives in bob's state", (cfgmod.get_user_state_dir(BOB) / "chatbots.json").exists())
+
+chatbot_runtime._deps.setdefault("answer", lambda *a, **k: None)   # wired at server startup, not in this test
+chatbot_runtime._deps.setdefault("brain_root", lambda b: str(_BRAINS / b))
+res = chatbot_runtime.sync_all()
+run_a, run_b = chatbot_runtime._RUNNING.get(bid_admin), chatbot_runtime._RUNNING.get(bid_bob)
+check("sync starts every account's customer bots", bool(run_a and run_b), str(res))
+check("each running bot remembers its account", (run_a or {}).get("user_id") == ADMIN and (run_b or {}).get("user_id") == BOB)
+check("bob's poller runs on bob's token", run_b and any(getattr(t, "token", "") == "cb-bob" for t in run_b["pollers"].values()))
+check("a pass for one account leaves the other's bots running", chatbot_runtime.sync_all() and bid_admin in chatbot_runtime._RUNNING
+      and bid_bob in chatbot_runtime._RUNNING)
+
+
+class _Owned:
+    user_id = BOB
+
+
+async def _webhook_task():
+    async def _who():
+        return cfgmod.current_user_id.get()
+    with cfgmod.as_user(ADMIN):            # a cookie-less webhook runs as the primary account
+        return await messenger_bot._spawn(_Owned(), _who())
+
+
+check("a webhook event runs as the account that owns the bot", asyncio.run(_webhook_task()) == BOB)
+
+with cfgmod.as_user(BOB):
+    _ms_id, _ms_why = channel_accounts.create_account({"channel": "messenger", "label": "bob-page",
+                                     "token": "123456789 EAA" + "x" * 60 + " " + "b0" * 16})
+check("bob saves a messenger account", bool(_ms_id), _ms_why)
+with cfgmod.as_user(ADMIN):
+    secrets_seen = main._ms_account_secrets()
+check("the webhook signature check knows a member's app secret", "b0" * 16 in secrets_seen, str(secrets_seen))
+with cfgmod.as_user(BOB):
+    vt_bob = main._ms_verify_token()
+with cfgmod.as_user(ADMIN):
+    vt_admin = main._ms_verify_token()
+check("the webhook verify token is one per machine", vt_bob and vt_bob == vt_admin)
+
 # ── 8. Deleting an account stops its bots ────────────────────────────────────
 member_bot = main._tg_bot_of(BOB)
 r = admin.post("/auth/users/delete", data={"user_id": BOB})
@@ -249,6 +317,8 @@ check("admin deletes bob", r.status_code == 200 and r.json().get("ok"), str(r.te
 check("the deleted account's bot is gone", main._CH_BOTS.get(("telegram", BOB)) is None
       and member_bot.status == "stopped")
 check("the admin bot still runs", main._TG_BOT is admin_tg and admin_tg.status == "running")
+check("the deleted account's customer bots stop", bid_bob not in chatbot_runtime._RUNNING)
+check("the admin's customer bot keeps running", bid_admin in chatbot_runtime._RUNNING)
 
 print()
 if fails:

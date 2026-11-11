@@ -24056,6 +24056,10 @@ def _stop_user_channels(uid: str) -> None:
                 print(f"[{_oc.key} stop {uid[:8]}] {type(e).__name__}: {e}", file=sys.stderr)
     for key in [k for k in _CH_STATE if k[1] == uid]:
         _CH_STATE.pop(key, None)
+    try:
+        chatbot_runtime.stop_user_bots(uid)   # its dedicated customer bots too, not only the owner channels
+    except Exception as e:  # noqa: BLE001
+        print(f"[chatbot stop {uid[:8]}] {type(e).__name__}: {e}", file=sys.stderr)
 
 
 # ĐA PHIÊN theo tài khoản: mỗi chat_id giữ NGỮ CẢNH RIÊNG để không lẫn hội thoại giữa
@@ -27000,22 +27004,45 @@ async def zalo_bot_test():
 # server/owner_channels.py; this block only wires it and exposes the same four endpoints the
 # Zalo control bot has (status, restart, allow, test), plus the WhatsApp webhook.
 # ============================================================
+def _machine_settings() -> dict:
+    """Settings of the primary account. The webhook verify tokens and Zalo OA site codes belong
+    to this machine's one public URL, and Meta's handshake arrives with no cookie, so a member
+    saving their own copy would never match what the handshake checks."""
+    with cfgmod.as_user(cfgmod.primary_user_id()):
+        return cfgmod.read_settings()
+
+
 def _wa_verify_token() -> str:
     """The handshake string Meta echoes when the webhook is set up. Generated once."""
-    w = cfgmod.read_settings().get("whatsapp", {}) or {}
+    w = _machine_settings().get("whatsapp", {}) or {}
     tok = str(w.get("verify_token") or "").strip()
     if not tok:
         tok = secrets.token_urlsafe(24)
-        cfgmod.update_settings({"whatsapp": {"verify_token": tok}})
+        with cfgmod.as_user(cfgmod.primary_user_id()):
+            cfgmod.update_settings({"whatsapp": {"verify_token": tok}})
     return tok
+
+
+def _accounts_every_user(channel: str) -> list:
+    """(account, token) of one channel across EVERY account on this machine.
+
+    Customer-bot webhooks arrive without a cookie, so they run as the primary account; the
+    signature check must still know the app secrets a member's own accounts were saved with.
+    """
+    out = []
+    for uid in cfgmod.list_user_ids() or [""]:
+        with cfgmod.as_user(uid):
+            for a in channel_accounts.list_accounts(channel=channel):
+                out.append((a, channel_accounts.get_token(a.get("id", ""))))
+    return out
 
 
 def _wa_account_secrets() -> list:
     """App secrets of the customer-bot WhatsApp accounts (one Meta app per account)."""
     out = []
     try:
-        for a in channel_accounts.list_accounts(channel="whatsapp"):
-            cr = whatsapp_bot.split_credentials(channel_accounts.get_token(a.get("id", "")))
+        for _a, tok in _accounts_every_user("whatsapp"):
+            cr = whatsapp_bot.split_credentials(tok)
             if cr.get("app_secret"):
                 out.append(cr["app_secret"])
     except Exception as e:
@@ -27120,11 +27147,12 @@ async def chatbot_api_turn(request: Request):
 # ============================================================
 def _ms_verify_token() -> str:
     """The handshake string Meta echoes when the Messenger webhook is set up. Generated once."""
-    m = cfgmod.read_settings().get("messenger", {}) or {}
+    m = _machine_settings().get("messenger", {}) or {}
     tok = str(m.get("verify_token") or "").strip()
     if not tok:
         tok = secrets.token_urlsafe(24)
-        cfgmod.update_settings({"messenger": {"verify_token": tok}})
+        with cfgmod.as_user(cfgmod.primary_user_id()):
+            cfgmod.update_settings({"messenger": {"verify_token": tok}})
     return tok
 
 
@@ -27132,8 +27160,8 @@ def _ms_account_secrets() -> list:
     """App secrets of the Messenger accounts (one Meta app per account, often one app for all)."""
     out = []
     try:
-        for a in channel_accounts.list_accounts(channel="messenger"):
-            cr = messenger_bot.split_credentials(channel_accounts.get_token(a.get("id", "")))
+        for _a, tok in _accounts_every_user("messenger"):
+            cr = messenger_bot.split_credentials(tok)
             if cr.get("app_secret"):
                 out.append(cr["app_secret"])
     except Exception as e:
@@ -27466,7 +27494,7 @@ async def messenger_privacy():
     pages = []
     try:
         pages = [(a.get("meta") or {}).get("bot_name") or a.get("label") or ""
-                 for a in channel_accounts.list_accounts(channel="messenger")]
+                 for a, _tok in _accounts_every_user("messenger")]
     except Exception:
         pages = []
     return HTMLResponse(messenger_oauth.privacy_html(brand, pages))
@@ -27525,11 +27553,12 @@ async def messenger_check(request: Request):
 # ============================================================
 def _th_verify_token() -> str:
     """The handshake string Threads echoes when its webhook is set up in the App Dashboard. Generated once."""
-    m = cfgmod.read_settings().get("threads", {}) or {}
+    m = _machine_settings().get("threads", {}) or {}
     tok = str(m.get("verify_token") or "").strip()
     if not tok:
         tok = secrets.token_urlsafe(24)
-        cfgmod.update_settings({"threads": {"verify_token": tok}})
+        with cfgmod.as_user(cfgmod.primary_user_id()):
+            cfgmod.update_settings({"threads": {"verify_token": tok}})
     return tok
 
 
@@ -27537,8 +27566,8 @@ def _th_account_secrets() -> list:
     import threads_bot
     out = []
     try:
-        for a in channel_accounts.list_accounts(channel="threads"):
-            cr = threads_bot.split_credentials(channel_accounts.get_token(a.get("id", "")))
+        for _a, tok in _accounts_every_user("threads"):
+            cr = threads_bot.split_credentials(tok)
             if cr.get("app_secret"):
                 out.append(cr["app_secret"])
     except Exception as e:
@@ -27772,7 +27801,7 @@ def _zo_webhook_url(request: Request) -> str:
 
 
 def _zo_site_codes() -> list:
-    z = cfgmod.read_settings().get("zalo_oa", {}) or {}
+    z = _machine_settings().get("zalo_oa", {}) or {}
     return [str(c) for c in (z.get("site_codes") or []) if str(c or "").strip()]
 
 
@@ -27780,8 +27809,8 @@ def _zo_account_secrets() -> list:
     """(App ID, OA secret key) of every Zalo OA account, for the webhook signature check."""
     out = []
     try:
-        for a in channel_accounts.list_accounts(channel="zalo_oa"):
-            cr = zalo_oa_bot.split_credentials(channel_accounts.get_token(a.get("id", "")))
+        for _a, tok in _accounts_every_user("zalo_oa"):
+            cr = zalo_oa_bot.split_credentials(tok)
             if cr.get("oa_secret"):
                 out.append((cr.get("app_id", ""), cr["oa_secret"]))
     except Exception as e:
@@ -27923,7 +27952,8 @@ async def zalo_oa_site_verification(request: Request):
     codes = [c for c in _zo_site_codes() if c != code]
     if not body.get("remove"):
         codes = ([code] + codes)[:10]
-    cfgmod.update_settings({"zalo_oa": {"site_codes": codes}})
+    with cfgmod.as_user(cfgmod.primary_user_id()):
+        cfgmod.update_settings({"zalo_oa": {"site_codes": codes}})
     return {"ok": True, "code": code, "site_codes": codes,
             "file": f"/zalo_verifier{code}.html"}
 

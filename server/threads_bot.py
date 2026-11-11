@@ -151,6 +151,18 @@ def _notifications(payload: dict) -> list:
     return out
 
 
+def _spawn(bot, coro):
+    """Start one webhook event as the account that owns `bot`. The task copies the context it
+    is created in, so every store read inside the event (tokens, comment mode, the bot's own
+    settings) resolves to that account, not the primary one a cookie-less webhook runs as."""
+    import config
+    uid = getattr(bot, "user_id", "") or ""
+    if not uid:
+        return asyncio.create_task(coro)
+    with config.as_user(uid):
+        return asyncio.create_task(coro)
+
+
 async def handle_webhook(payload: dict) -> int:
     """Hand each new reply to the bot of the account it is about. Returns how many were handed over."""
     n = 0
@@ -164,7 +176,7 @@ async def handle_webhook(payload: dict) -> int:
         if not bot:
             print(f"[threads] reply for account {target} but no bot runs for it", file=sys.stderr)
             continue
-        asyncio.create_task(bot._safe_reply(value))
+        _spawn(bot, bot._safe_reply(value))
         n += 1
     return n
 

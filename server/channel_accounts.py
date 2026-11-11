@@ -34,9 +34,21 @@ import brain_ident
 import channels
 import localefmt
 import secrets_store
-from config import STATE_DIR
+import config as cfgmod
 
-STORE_PATH = STATE_DIR / "channel_accounts.json"
+_STORE_NAME = "channel_accounts.json"
+STORE_PATH = cfgmod.STATE_DIR / _STORE_NAME
+
+
+def store_path() -> "Path":
+    """The channel-account file of the account this turn runs as. Same rule as `chatbot_store.store_path`:
+    the primary account keeps the legacy file, and a pinned STORE_PATH (the tests) stays one store."""
+    if STORE_PATH != cfgmod.STATE_DIR / _STORE_NAME:
+        return STORE_PATH
+    uid = cfgmod.current_user_id.get()
+    if uid:
+        return cfgmod.get_user_state_dir(uid) / _STORE_NAME
+    return cfgmod.STATE_DIR / _STORE_NAME
 _lock = threading.RLock()
 
 LABEL_MAX = 80
@@ -49,12 +61,12 @@ def _now() -> float:
 
 def _load() -> dict:
     try:
-        d = json.loads(STORE_PATH.read_text(encoding="utf-8"))
+        d = json.loads(store_path().read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {"version": 1, "accounts": []}
     except Exception:
         try:
-            STORE_PATH.rename(STORE_PATH.with_suffix(".json.hong"))
+            store_path().rename(store_path().with_suffix(".json.hong"))
         except Exception:
             pass
         return {"version": 1, "accounts": []}
@@ -64,10 +76,10 @@ def _load() -> dict:
 
 
 def _save(d: dict) -> None:
-    STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STORE_PATH.with_suffix(".json.tmp")
+    store_path().parent.mkdir(parents=True, exist_ok=True)
+    tmp = store_path().with_suffix(".json.tmp")
     tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    os.replace(tmp, STORE_PATH)
+    os.replace(tmp, store_path())
 
 
 def _clean_kenh(v: Any) -> str:

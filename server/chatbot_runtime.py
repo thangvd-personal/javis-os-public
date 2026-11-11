@@ -2481,6 +2481,11 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
     if not any(tok for _, tok in ds):
         return False, localefmt.chu(f"Chưa có token {nhan_kenh} cho bot này", f"This bot has no {nhan_kenh} token yet")
     stop_bot(bot_id)      # huỷ TRƯỚC khi tạo: hai poller cùng token thì máy chủ trả 409 và cả hai chết
+    import config
+    # The account this bot belongs to (multi-user). Its store was just read in this context, so every callback is
+    # bound here: a webhook (Messenger, WhatsApp) or a poll task must not read another account's bot store.
+    uid = config.current_user_id.get()
+    _cua = (lambda fn: config.bind_user(fn, uid)) if uid else (lambda fn: fn)
     pollers = {}
     loi = []
     for tk, token in ds:
@@ -2503,8 +2508,8 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
         chung = dict(
             download_dir=_inbox_dir(cfg),
             commands=LENH_KHACH,      # menu của khách, KHÔNG phải menu quản trị của chủ
-            precheck_fn=_gan_tai_khoan(_make_precheck_fn(bot_id), aid, 1),
-            event_fn=_make_event_fn(bot_id),         # vào nhóm / bị đá / nhóm đổi id khi nâng cấp
+            precheck_fn=_cua(_gan_tai_khoan(_make_precheck_fn(bot_id), aid, 1)),
+            event_fn=_cua(_make_event_fn(bot_id)),   # vào nhóm / bị đá / nhóm đổi id khi nâng cấp
             # Bot này nói chuyện với KHÁCH, nên không được để lộ một dòng trạng thái nào của Javis.
             giau_trang_thai=True,
         )
@@ -2514,26 +2519,27 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
             # Lớp vận chuyển Zalo cần đọc cấu hình bot SỐNG (chế độ trả lời trong nhóm) để biết có
             # nên chờ nhường trước khi trả lời tin không ai gọi tên. Đọc lại mỗi lần chứ không giữ
             # bản chụp: chủ đổi chế độ ở trang Chatbot là có tác dụng ngay.
-            chung["cfg_fn"] = (lambda _b=bot_id: chatbot_store.get_bot(_b) or {})
+            chung["cfg_fn"] = _cua(lambda _b=bot_id: chatbot_store.get_bot(_b) or {})
             chung["policy"] = PolicyHooks(bot_id)      # bộ phán xử hội thoại nhóm (0.65.0)
         if kenh == "zalo":
             # Zalo Bot sees a group tag only as text "@<display name>", which no Zalo API returns (#885): it matches the
             # names the owner gave this bot, read live like above.
-            chung["cfg_fn"] = (lambda _b=bot_id: chatbot_store.get_bot(_b) or {})
+            chung["cfg_fn"] = _cua(lambda _b=bot_id: chatbot_store.get_bot(_b) or {})
         tb = Lop(
             token,
             "",                       # KHÔNG whitelist: bot khách hàng vốn để người lạ nhắn.
-            _gan_tai_khoan(_make_answer_fn(bot_id), aid, 1),
-            _gan_tai_khoan(_make_command_fn(cfg), aid, 3),
+            _cua(_gan_tai_khoan(_make_answer_fn(bot_id), aid, 1)),
+            _cua(_gan_tai_khoan(_make_command_fn(cfg), aid, 3)),
             **chung,
         )
         tb.account_id = aid
+        tb.user_id = uid        # webhook events run as this account (see *_bot._spawn)
         tb.start()
         pollers[aid] = tb
     if not pollers:
         return False, "; ".join(loi) or localefmt.chu(f"Chưa có token {nhan_kenh} cho bot này",
                                                       f"This bot has no {nhan_kenh} token yet")
-    _RUNNING[bot_id] = {"pollers": pollers, "cfg": cfg, "started": time.time(), "answered": 0}
+    _RUNNING[bot_id] = {"pollers": pollers, "cfg": cfg, "started": time.time(), "answered": 0, "user_id": uid}
     return True, ("; ".join(loi) if loi else "")
 
 
@@ -2590,7 +2596,8 @@ def release_admin_token(kenh: str) -> list:
     out = []
     for bid, run in list(_RUNNING.items()):
         if any(str(getattr(tb, "token", "") or "").strip() in toks for tb in (run.get("pollers") or {}).values()):
-            start_bot(bid)
+            with _as_owner(run):
+                start_bot(bid)
             out.append(bid)
     return out
 
@@ -2668,22 +2675,43 @@ def sync_all() -> dict:
     Gọi lúc khởi động server và sau mỗi lần sửa cấu hình. Ý tưởng giống `restart_telegram`
     nhưng cho nhiều bot.
     """
-    muon = {b["id"]: b for b in chatbot_store.enabled_bots()}
-    for bid in list(_RUNNING):
-        if bid not in muon:
-            stop_bot(bid)
+    import config
     ok, loi = 0, {}
-    for bid in muon:
-        if bid in _RUNNING and any(tb._task and not tb._task.done()
-                                   for tb in _RUNNING[bid].get("pollers", {}).values()):
-            ok += 1
-            continue
-        thanh, err = start_bot(bid)
-        if thanh:
-            ok += 1
-        else:
-            loi[bid] = err
+    # One pass per account (multi-user): each account's bots live in its own store, and a pass only stops the bots
+    # it owns. Before setup there are no accounts and the single pass runs as the local owner, as before.
+    for uid in (config.list_user_ids() or [""]):
+        with config.as_user(uid):
+            muon = {b["id"]: b for b in chatbot_store.enabled_bots()}
+            for bid in [b for b, run in _RUNNING.items() if run.get("user_id", "") == uid]:
+                if bid not in muon:
+                    stop_bot(bid)
+            for bid in muon:
+                if bid in _RUNNING and any(tb._task and not tb._task.done()
+                                           for tb in _RUNNING[bid].get("pollers", {}).values()):
+                    ok += 1
+                    continue
+                thanh, err = start_bot(bid)
+                if thanh:
+                    ok += 1
+                else:
+                    loi[bid] = err
     return {"running": ok, "errors": loi}
+
+
+def _as_owner(run: dict):
+    """Context of the account a running bot belongs to, for a restart started from somewhere else."""
+    import contextlib
+    import config
+    uid = (run or {}).get("user_id", "")
+    return config.as_user(uid) if uid else contextlib.nullcontext()
+
+
+def stop_user_bots(user_id: str) -> list:
+    """A deleted account's dedicated bots stop answering customers. Returns the ids stopped."""
+    out = [bid for bid, run in list(_RUNNING.items()) if user_id and run.get("user_id", "") == user_id]
+    for bid in out:
+        stop_bot(bid)
+    return out
 
 
 def quen_bot(bot_id: str) -> None:

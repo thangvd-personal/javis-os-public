@@ -849,7 +849,7 @@ Dashboard (Cài đặt > Tài khoản) hiện vai trò từng người. Form th�
 
 ### 13.4 Chưa làm (giới hạn đã biết)
 
-- ~~Kênh của chủ máy dùng chung~~ Xong: hub MCP có token theo tài khoản, kết nối MCP theo tài khoản, bot Telegram/Zalo/Slack/WhatsApp/Discord/Lark và các file `tg_*.json` theo tài khoản (`test_channels_per_user.py`). `/chat/jobs` tách chủ job theo tài khoản (file `chat_jobs.json` vẫn một file cho cả máy, mỗi job gắn chủ). Còn lại: Messenger.
+- ~~Kênh của chủ máy dùng chung~~ Xong: hub MCP có token theo tài khoản, kết nối MCP theo tài khoản, bot Telegram/Zalo/Slack/WhatsApp/Discord/Lark và các file `tg_*.json` theo tài khoản (`test_channels_per_user.py`). `/chat/jobs` tách chủ job theo tài khoản (file `chat_jobs.json` vẫn một file cho cả máy, mỗi job gắn chủ). Chatbot khách hàng (`chatbots.json`, `channel_accounts.json`) cũng theo tài khoản: `sync_all` bật bot của mọi tài khoản, webhook Messenger/WhatsApp/Threads/Zalo OA chạy sự kiện dưới tên chủ bot (`_spawn`), danh sách app secret để kiểm chữ ký gom từ mọi tài khoản. Mã xác minh webhook và site code Zalo OA để cấp máy (đọc từ settings của tài khoản chính).
 - **Còn khoảng 50 chỗ `cfgmod.STATE_DIR` trong `main.py`** (và nhiều module khác). Đó là state cấp máy (cache, log cập nhật, pid, registry năng lực...) và trỏ vào thư mục của tài khoản chính. Store nào chứa dữ liệu NGƯỜI DÙNG còn sót thì phải chuyển sang `get_user_state_dir()`, mỗi lần một store kèm test.
 - **Kho đăng ký vòng lặp** (`loop_feature.scheduler_brains`) dùng chung cả máy. Hiện nó được lọc theo `_brain_allowed` ở mọi chỗ đọc, chưa tách hẳn.
 - **Sao lưu git** (`/backup/*`, chỉ admin) chụp `BRAINS_DIR` kể cả `.users/`, tức brain của mọi tài khoản đi chung một remote.

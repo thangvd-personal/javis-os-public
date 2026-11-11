@@ -240,6 +240,18 @@ def instagram_of(account_id: str) -> dict:
     return {"id": ig, "username": str(m.get("ig_username") or ""), "on": bool(ig) and m.get("instagram") != "off"}
 
 
+def _spawn(bot, coro):
+    """Start one webhook event as the account that owns `bot`. The task copies the context it
+    is created in, so every store read inside the event (tokens, comment mode, the bot's own
+    settings) resolves to that account, not the primary one a cookie-less webhook runs as."""
+    import config
+    uid = getattr(bot, "user_id", "") or ""
+    if not uid:
+        return asyncio.create_task(coro)
+    with config.as_user(uid):
+        return asyncio.create_task(coro)
+
+
 async def handle_webhook(payload: dict) -> int:
     """Route a verified webhook payload to the bots it is for. Returns how many events were
     handed over. Echoes (the Page's own outgoing messages), reads and deliveries are skipped."""
@@ -261,7 +273,7 @@ async def handle_webhook(payload: dict) -> int:
         for ch in changes:
             com = comment_event(ch.get("value") or {}, pid)
             if com:
-                asyncio.create_task(bot._safe_comment(com))
+                _spawn(bot, bot._safe_comment(com))
                 n += 1
         for ev in events:
             msg = ev.get("message") or {}
@@ -269,7 +281,7 @@ async def handle_webhook(payload: dict) -> int:
                 continue
             if not msg and not ev.get("postback"):
                 continue
-            asyncio.create_task(bot._safe_event(ev))
+            _spawn(bot, bot._safe_event(ev))
             n += 1
     return n
 
@@ -289,7 +301,7 @@ def _handle_instagram(payload: dict) -> int:
                 continue
             com = ig_comment_event(ch.get("value") or {}, ig)
             if com:
-                asyncio.create_task(bot._safe_comment(com))
+                _spawn(bot, bot._safe_comment(com))
                 n += 1
         for ev in entry.get("messaging") or []:
             msg = ev.get("message") or {}
@@ -297,7 +309,7 @@ def _handle_instagram(payload: dict) -> int:
                 continue
             if not msg and not ev.get("postback"):
                 continue
-            asyncio.create_task(bot._safe_event(ev, instagram=True))
+            _spawn(bot, bot._safe_event(ev, instagram=True))
             n += 1
     return n
 

@@ -134,6 +134,18 @@ def registered() -> dict:
     return dict(_REGISTRY)
 
 
+def _spawn(bot, coro):
+    """Start one webhook event as the account that owns `bot`. The task copies the context it
+    is created in, so every store read inside the event (tokens, comment mode, the bot's own
+    settings) resolves to that account, not the primary one a cookie-less webhook runs as."""
+    import config
+    uid = getattr(bot, "user_id", "") or ""
+    if not uid:
+        return asyncio.create_task(coro)
+    with config.as_user(uid):
+        return asyncio.create_task(coro)
+
+
 async def handle_webhook(payload: dict) -> int:
     """Route a verified webhook payload to the bots it is for. Returns how many messages were
     handed over. Statuses (sent/delivered/read) are ignored; failures among them are logged."""
@@ -158,7 +170,7 @@ async def handle_webhook(payload: dict) -> int:
             contacts = {str(c.get("wa_id")): ((c.get("profile") or {}).get("name") or "")
                         for c in value.get("contacts") or []}
             for msg in value.get("messages") or []:
-                asyncio.create_task(bot._safe_message(msg, contacts))
+                _spawn(bot, bot._safe_message(msg, contacts))
                 n += 1
     return n
 

@@ -330,6 +330,18 @@ def _oa_of(ev: dict) -> str:
     return str((ev.get("recipient") or {}).get("id") or ev.get("oa_id") or "")
 
 
+def _spawn(bot, coro):
+    """Start one webhook event as the account that owns `bot`. The task copies the context it
+    is created in, so every store read inside the event (tokens, comment mode, the bot's own
+    settings) resolves to that account, not the primary one a cookie-less webhook runs as."""
+    import config
+    uid = getattr(bot, "user_id", "") or ""
+    if not uid:
+        return asyncio.create_task(coro)
+    with config.as_user(uid):
+        return asyncio.create_task(coro)
+
+
 async def handle_webhook(payload: dict) -> int:
     """Route a verified webhook event to the bot of its OA. Returns how many events were handed
     over. The OA's own outgoing messages (`oa_send_*`) and non-message events are skipped."""
@@ -342,7 +354,7 @@ async def handle_webhook(payload: dict) -> int:
     if not bot:
         print(f"[zalo_oa] event for OA {oa} but no bot runs for it", file=sys.stderr)
         return 0
-    asyncio.create_task(bot._safe_event(ev))
+    _spawn(bot, bot._safe_event(ev))
     return 1
 
 
