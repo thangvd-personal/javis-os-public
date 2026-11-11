@@ -1753,7 +1753,7 @@ def _ten_hien_thi(cfg=None) -> str:
 # Secret ĐANG CHỜ xác nhận, giữ trong RAM chứ không ghi settings. Ghi xuống đĩa trước khi
 # người dùng chứng minh app của họ sinh đúng mã là để lại một secret nửa vời trong file cấu
 # hình; restart giữa chừng thì nó nằm đó mãi mà chẳng ai dùng.
-_TOTP_CHO = {}          # {"secret": str, "ts": float}
+_TOTP_CHO = {}          # {user_id: {"secret": str, "ts": float}}: one pending secret per account
 _TOTP_CHO_TTL = 15 * 60
 
 
@@ -1767,8 +1767,7 @@ async def auth_2fa_start(request: Request):
         return JSONResponse({"ok": False, "error": localefmt.chu("2FA đang bật rồi - tắt trước nếu muốn đổi.", "2FA is already on - turn it off first to change it.")},
                             status_code=400)
     secret = totp.sinh_secret()
-    _TOTP_CHO.clear()
-    _TOTP_CHO.update(secret=secret, ts=time.time())
+    _TOTP_CHO[cfgmod.get_current_user_id()] = {"secret": secret, "ts": time.time()}
     uri = totp.otpauth_uri(secret, _ten_hien_thi(cfg),
                            cfg.get("workspace_name") or "Javis OS")
     return {"ok": True, "secret": secret, "uri": uri, "qr_svg": totp.qr_svg(uri)}
@@ -1779,7 +1778,8 @@ async def auth_2fa_enable(request: Request, code: str = Form(...)):
     """Xác nhận bằng một mã đúng rồi mới BẬT. Trả mã khôi phục đúng MỘT lần."""
     if (loi := _doi_phien_that(request)) is not None:
         return loi
-    cho = dict(_TOTP_CHO)
+    uid = cfgmod.get_current_user_id()
+    cho = dict(_TOTP_CHO.get(uid) or {})
     if not cho.get("secret") or time.time() - float(cho.get("ts") or 0) > _TOTP_CHO_TTL:
         return JSONResponse({"ok": False, "error": localefmt.chu("Phiên bật 2FA đã hết hạn - bấm Bật lại.", "The 2FA setup session expired - click Enable again.")},
                             status_code=400)
@@ -1791,8 +1791,8 @@ async def auth_2fa_enable(request: Request, code: str = Form(...)):
             "Wrong code. Check the time on your phone, "
             "then enter the code it shows now.")}, status_code=400)
     ma_khoi_phuc = totp.sinh_ma_khoi_phuc()
-    cfgmod.totp_set(secret=cho["secret"], enabled=True, recovery=ma_khoi_phuc, last_step=buoc)
-    _TOTP_CHO.clear()
+    cfgmod.totp_set(secret=cho["secret"], enabled=True, recovery=ma_khoi_phuc, last_step=buoc, user_id=uid)
+    _TOTP_CHO.pop(uid, None)
     return {"ok": True, "recovery": ma_khoi_phuc}
 
 
@@ -2095,6 +2095,11 @@ async def auth_disable(request: Request, password: str = Form(""), code: str = F
             "mở dashboard ngay trên máy cá nhân chạy Javis.",
             "Login cannot be turned off on a server reachable from outside (VPS, Docker, tunnel). "
             "It can only be turned off from the personal machine running Javis.")}, status_code=403)
+    if cfgmod.get_current_user_id() != cfgmod.primary_user_id():
+        # Login is machine-wide: only the primary account may switch it off, with its own password.
+        return JSONResponse({"ok": False, "error": localefmt.chu(
+            "Chỉ tài khoản chính mới tắt được đăng nhập.",
+            "Only the primary account can turn off login.")}, status_code=403)
     ip = request.client.host if request.client else "?"
     if _login_locked(ip):
         return JSONResponse({"ok": False, "error": localefmt.chu("Quá nhiều lần sai - thử lại sau ít phút.", "Too many failed attempts - try again in a few minutes.")}, status_code=429)

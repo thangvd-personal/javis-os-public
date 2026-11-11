@@ -849,12 +849,12 @@ Dashboard (Cài đặt > Tài khoản) hiện vai trò từng người. Form th�
 
 ### 13.4 Chưa làm (giới hạn đã biết)
 
-- **Kênh của chủ máy vẫn dùng chung:** bot Telegram/Zalo/Messenger, hub MCP (`hub_token`, file `.mcp_hub_*.json`), các file `tg_*.json`, `chat_jobs.json`. Chúng gắn với tài khoản chính. Tin nhắn qua Telegram chạy như tài khoản chính.
+- ~~Kênh của chủ máy dùng chung~~ Xong: hub MCP có token theo tài khoản, kết nối MCP theo tài khoản, bot Telegram/Zalo/Slack/WhatsApp/Discord/Lark và các file `tg_*.json` theo tài khoản (`test_channels_per_user.py`). Còn lại: `chat_jobs.json` và Messenger.
 - **Còn khoảng 50 chỗ `cfgmod.STATE_DIR` trong `main.py`** (và nhiều module khác). Đó là state cấp máy (cache, log cập nhật, pid, registry năng lực...) và trỏ vào thư mục của tài khoản chính. Store nào chứa dữ liệu NGƯỜI DÙNG còn sót thì phải chuyển sang `get_user_state_dir()`, mỗi lần một store kèm test.
 - **Kho đăng ký vòng lặp** (`loop_feature.scheduler_brains`) dùng chung cả máy. Hiện nó được lọc theo `_brain_allowed` ở mọi chỗ đọc, chưa tách hẳn.
 - **Sao lưu git** (`/backup/*`, chỉ admin) chụp `BRAINS_DIR` kể cả `.users/`, tức brain của mọi tài khoản đi chung một remote.
 - **Phần 8 vẫn chưa làm:** chưa có `can()`, bảng `grants`, chia sẻ brain giữa người dùng, và `Principal` vẫn là literal `"owner"` (việc 3, 5, 6 và mới-3, mới-4 của lộ trình). Vai trò ở 13.2 là RBAC tối thiểu, không thay cho Phần 8.
-- **2FA theo người** đã có trong dữ liệu và ở đăng nhập. Các route `/auth/2fa/*` và `/auth/disable` vẫn thao tác trên tài khoản chính.
+- ~~2FA theo người~~ Xong: `/auth/2fa/*` thao tác trên tài khoản đang đăng nhập, secret chờ xác nhận tách theo tài khoản, `/auth/disable` chỉ tài khoản chính gọi được (`test_2fa_per_user.py`).
 
 ## Phần 14. Rà soát và sửa (2026-11-09)
 

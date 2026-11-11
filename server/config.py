@@ -1847,7 +1847,7 @@ def totp_recovery_left(cfg=None, user_dict=None):
 def totp_set(secret="", enabled=None, recovery=None, last_step=None, user_id=None):
     """Ghi cấu hình 2FA vào auth.json. Tham số nào để None thì giữ nguyên giá trị cũ."""
     a = read_auth()
-    uid = user_id or a.get("user_id")
+    uid = user_id or get_current_user_id()   # the account of this request, not always the primary
     target_user = None
     if uid:
         for u in a.get("users", []):
@@ -1877,7 +1877,7 @@ def totp_set(secret="", enabled=None, recovery=None, last_step=None, user_id=Non
 def totp_tat(user_id=None):
     """Tắt hẳn 2FA: xoá secret, xoá mã khôi phục, xoá dấu bước đã dùng trong auth.json."""
     a = read_auth()
-    uid = user_id or a.get("user_id")
+    uid = user_id or get_current_user_id()   # the account of this request, not always the primary
     t = {"enabled": False, "secret": "", "recovery": [], "last_step": 0}
     if uid:
         for u in a.get("users", []):
@@ -1904,7 +1904,7 @@ def totp_dung_ma_khoi_phuc(ma, user_id=None):
     if not can:
         return False
     a = read_auth()
-    uid = user_id or a.get("user_id")
+    uid = user_id or get_current_user_id()   # the account of this request, not always the primary
     target_user = None
     if uid:
         for u in a.get("users", []):
