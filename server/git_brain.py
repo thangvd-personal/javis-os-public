@@ -634,6 +634,10 @@ def _learned_private(rel: str) -> bool:
 
 def _backup_skip(rel: str, sync_images: bool = False) -> bool:
     r = "/" + rel.replace("\\", "/") + "/"
+    # `.users/` holds the OTHER accounts' brains (multi-user). The backup is the primary account's: one repo
+    # must not carry every member's notes, and a restore must not write them back over a member's own files.
+    if r.startswith("/.users/"):
+        return True
     if any(s in r for s in _BACKUP_SKIP_SUBSTR):
         return True
     if _learned_private(rel):
@@ -727,6 +731,8 @@ def _sync_mirror(src: str, mirror: str, sync_images: bool = False) -> dict:
                 continue
             if _raw_kept_out(rel):
                 continue   # out of scope: never pruned, see _raw_kept_out
+            if rel.startswith(".users/"):
+                continue   # another account's brains: never pushed, never pruned
             if la_anh(fn) and not la_file_chu(fn):
                 if not sync_images:
                     continue
