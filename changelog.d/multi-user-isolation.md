@@ -14,6 +14,7 @@ title: Every account's engines reach the MCP hub as that account
 - **Danh sách brain mà bộ hẹn giờ vòng lặp quét (`loop_config.json`) theo từng tài khoản.** Trước đây một tài khoản đăng ký brain ngoài thì lượt quét của mọi tài khoản đều ghé brain đó.
 - **Hồ sơ người dùng theo từng tài khoản.** Trước đây cả máy có một hồ sơ, nên member đọc và ghi đè hồ sơ của admin, và câu trả lời cho member dùng hồ sơ của admin.
 - **Tự học theo từng tài khoản.** Công tắc tự học, danh sách brain được học và hàng chờ học tách theo tài khoản. Trước đây điều member nói có thể được học vào brain của admin, và member tắt tự học là tắt cho cả máy.
+- **Danh sách sự cố việc nền theo từng tài khoản.** Trước đây member thấy việc hỏng của admin kèm nội dung lỗi và đánh dấu đã xử lý được.
 - **Sao lưu GitHub không còn mang brain của tài khoản khác.** Trước đây bản sao lưu của tài khoản chính chụp cả thư mục `.users/`, nên ghi chú của mọi member đi chung một repo. Giờ chỉ brain của tài khoản chính được đẩy lên, và khôi phục không ghi đè file của member.
 
 ## en
@@ -28,4 +29,5 @@ title: Every account's engines reach the MCP hub as that account
 - **The loop scheduler's brain list (`loop_config.json`) is per account.** Before, a brain one account registered was visited by every account's scheduler pass.
 - **The person profile is per account.** Before, the machine had one profile, so a member read and overwrote the admin's, and the member's answers were shaped by the admin's profile.
 - **Self-learning is per account.** The learning switches, the list of brains it learns and the learning queue are kept per account. Before, what a member said could be learned into the admin's brain, and a member turning learning off turned it off for the whole machine.
+- **The list of failed background runs is per account.** Before, a member saw the admin's failed jobs with their error text and could mark them resolved.
 - **The GitHub backup no longer carries other accounts' brains.** Before, the primary account's backup included the `.users/` folder, so every member's notes went to one repo. Now only the primary account's brains are pushed, and a restore never writes over a member's files.

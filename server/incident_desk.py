@@ -24,7 +24,7 @@ A report may name the chat the job came from (`chat`: "web:<session id>", a Tele
 triages and retries here, and the incident stays on this list, but its messages go to that chat, so a job made in a
 partner chat no longer reports its failures to Javis Core instead (the host routes an empty chat to Javis Core).
 
-Store: STATE_DIR/incidents.json (last KEEP incidents). Turn the desk off with the setting
+Store: <account state>/incidents.json (last KEEP incidents, one file per account). Turn the desk off with the setting
 `incidents.enabled = false`. The module does not import main.
 """
 from __future__ import annotations

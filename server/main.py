@@ -14522,8 +14522,15 @@ async def _incident_retry_reminder(inc: dict) -> tuple:
     return True, "reminder fired again"
 
 
+def _incident_state_dir():
+    """incidents.json of the account this runs as: a failed job's error text belongs to its own account. The
+    primary account keeps the legacy file."""
+    uid = cfgmod.current_user_id.get()
+    return cfgmod.get_user_state_dir(uid) if uid else cfgmod.STATE_DIR
+
+
 incident_desk = incident_desk_mod.IncidentDesk(incident_desk_mod.IncidentDeps(
-    state_dir=lambda: cfgmod.STATE_DIR,
+    state_dir=_incident_state_dir,
     ask=_incident_ask,
     post=_incident_post,
     retry={"kanban": _incident_retry_kanban, "reminder": _incident_retry_reminder},
