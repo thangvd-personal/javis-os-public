@@ -39,7 +39,11 @@ import turn_context
 from config import STATE_DIR
 from fastapi.responses import JSONResponse, Response
 
-_TOKEN_PATH = STATE_DIR / ".hub_token"
+# The machine token (STATE_DIR/.hub_token) belongs to the primary account and stays valid, so
+# every config file written before per-account tokens keeps working. Any other account gets its
+# own token in its own state folder: a hub request then names its account, instead of always
+# running as the primary (docs/dev/multi-user-QA.md, 13.4 follow-up).
+_TOKEN_NAME = ".hub_token"
 _AUDIT_PATH = STATE_DIR / "mcp_audit.jsonl"
 _CACHE_TTL = 60
 # Vòng dò có nguồn bị BỎ QUA (quá hạn/lỗi) thì danh sách tool là bản THIẾU. Cache nó đủ 60
@@ -66,25 +70,80 @@ _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".heic"}
 _mem_token = None   # fallback khi STATE_DIR không ghi được - PHẢI ngẫu nhiên, không được hằng số
 
 
+def _token_path(user_id: str = "") -> Path:
+    """Token file of one account. "" is the primary account, whose file is the legacy one."""
+    if user_id:
+        return config.get_user_state_dir(user_id) / _TOKEN_NAME
+    return STATE_DIR / _TOKEN_NAME
+
+
+def _read_or_make_token(path: Path) -> str:
+    if path.exists():
+        t = path.read_text(encoding="utf-8").strip()
+        if t:
+            return t
+    t = _secrets.token_urlsafe(32)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(t, encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+    except Exception:
+        pass
+    return t
+
+
 def hub_token():
+    """Token of the account this turn runs as. A background job of a member must not be handed
+    the primary account's token, or its tools would write into the primary's stores."""
     global _mem_token
     try:
-        if _TOKEN_PATH.exists():
-            t = _TOKEN_PATH.read_text(encoding="utf-8").strip()
-            if t:
-                return t
-        t = _secrets.token_urlsafe(32)
-        _TOKEN_PATH.write_text(t, encoding="utf-8")
-        try:
-            os.chmod(_TOKEN_PATH, 0o600)
-        except Exception:
-            pass
-        return t
+        return _read_or_make_token(_token_path(config.current_user_id.get()))
     except Exception as e:
         print(f"[hub] token: {e}", file=sys.stderr)
         if not _mem_token:
             _mem_token = _secrets.token_urlsafe(32)
         return _mem_token
+
+
+def hub_token_for(user_id: str) -> str:
+    """Token of one account, for a caller that already knows which account (a config file written
+    for that account's engine)."""
+    return _read_or_make_token(_token_path(user_id))
+
+
+def _machine_token() -> str:
+    """The primary account's token, read through `hub_token` so there is one source for it."""
+    with config.as_user(""):
+        return hub_token()
+
+
+def account_of_token(token: str) -> str:
+    """The account a bearer token belongs to.
+
+    The legacy machine token (and a token minted before any account existed) maps to "" and the
+    request runs as the primary account, exactly as before. Anything else maps to the account
+    whose state folder holds that token, or "" when it matches none."""
+    got = (token or "").strip()
+    if not got:
+        return ""
+    try:
+        if _secrets.compare_digest(got, _machine_token()):
+            return ""
+    except Exception:
+        return ""
+    try:
+        ids = config.list_user_ids()
+    except Exception:
+        ids = []
+    for uid in ids:
+        if uid == config.primary_user_id():
+            continue
+        try:
+            if _secrets.compare_digest(got, hub_token_for(uid)):
+                return uid
+        except Exception:
+            continue
+    return ""
 
 
 def hub_port():
@@ -1705,7 +1764,7 @@ def _rpc_error(mid, code, message):
 # không đòi phải câm. Nên chỗ này suy ra brain đang mở, và đổi lại thì NÓI RA: mọi kết quả tool
 # đi theo đường suy-ra đều kèm một dòng ghi rõ đang chạy brain nào. Chạy nhầm brain mà người
 # dùng nhìn thấy ngay ở câu trả lời thì không còn là chạy nhầm im lặng nữa.
-_BRAIN_CACHE = {"ts": 0.0, "root": "", "nguon": ""}
+_BRAIN_CACHE: dict = {}   # current_user_id -> {"ts", "root", "nguon"}
 _BRAIN_TTL = 10.0     # đủ ngắn để đổi brain ở dashboard có hiệu lực gần như tức thì
 
 
@@ -1720,15 +1779,12 @@ def _brains_dir() -> Path:
 
 
 def _brain_duy_nhat() -> str:
-    """Đường dẫn brain DUY NHẤT trên máy, hoặc "" nếu có 0 hay nhiều hơn 1.
+    """Đường dẫn brain DUY NHẤT của tài khoản đang chạy, hoặc "" nếu có 0 hay nhiều hơn 1.
 
     Đây là ca không thể nhầm: không có brain nào khác để mà nhầm sang. Dùng cho máy vừa cài,
-    chưa chat lượt nào nên chưa suy được brain đang mở."""
-    try:
-        ds = [d for d in sorted(_brains_dir().iterdir())
-              if d.is_dir() and not d.name.startswith(".")]
-    except OSError:
-        return ""
+    chưa chat lượt nào nên chưa suy được brain đang mở. Chỉ tính brain của chính tài khoản đó,
+    nên brain của tài khoản khác không bao giờ là "brain duy nhất" của ai."""
+    ds = _brains_of()
     if len(ds) != 1:
         return ""
     try:
@@ -1765,14 +1821,33 @@ def _brain_tu_phien(ung) -> str:
 
 def quen_brain_dang_mo() -> None:
     """Xoá cache brain đang mở. Gọi sau khi đổi brain nếu cần hiệu lực ngay (test dùng)."""
-    _BRAIN_CACHE.update({"ts": 0.0, "root": "", "nguon": ""})
+    _BRAIN_CACHE.clear()
+
+
+def _brains_of(user_id: str = "") -> list:
+    """Brain folders of ONE account. The primary account owns the plain folders of BRAINS_DIR;
+    every other account owns `BRAINS_DIR/.users/<user_id>/` (see main._user_brains_dir). Kept
+    here, not imported from main, because main imports this module."""
+    base = _brains_dir()
+    uid = user_id or config.get_current_user_id()
+    if uid and uid != config.primary_user_id():
+        base = base / ".users" / uid
+    try:
+        return sorted(d for d in base.iterdir() if d.is_dir() and not d.name.startswith("."))
+    except OSError:
+        return []
 
 
 def _brain_dang_mo() -> tuple:
-    """(đường_dẫn, nguồn) brain suy ra được. ("", "") nghĩa là không suy được."""
+    """(đường_dẫn, nguồn) brain suy ra được. ("", "") nghĩa là không suy được.
+
+    Keyed by account: two accounts chatting at once must not share one cached answer, and a
+    member with no header must land on THEIR brain, never the primary account's."""
     now = time.time()
-    if now - _BRAIN_CACHE["ts"] < _BRAIN_TTL:
-        return _BRAIN_CACHE["root"], _BRAIN_CACHE["nguon"]
+    uid = config.current_user_id.get()
+    hit = _BRAIN_CACHE.get(uid)
+    if hit and now - hit["ts"] < _BRAIN_TTL:
+        return hit["root"], hit["nguon"]
     root, nguon = "", ""
     try:
         import sessions
@@ -1782,11 +1857,39 @@ def _brain_dang_mo() -> tuple:
     except Exception as e:
         print(f"[hub brain] {type(e).__name__}: {e}", file=sys.stderr)
     if not root:
-        mot = _brain_duy_nhat()
-        if mot:
-            root, nguon = mot, "duy-nhat"
-    _BRAIN_CACHE.update({"ts": now, "root": root, "nguon": nguon})
+        ds = _brains_of(uid)
+        if len(ds) == 1:
+            try:
+                root, nguon = str(ds[0].resolve()), "duy-nhat"
+            except OSError:
+                root, nguon = str(ds[0]), "duy-nhat"
+    _BRAIN_CACHE[uid] = {"ts": now, "root": root, "nguon": nguon}
     return root, nguon
+
+
+_brain_gate = None
+
+
+def set_brain_gate(fn) -> None:
+    """main.py hands over `_brain_allowed`, the one rule for which brain an account may open.
+    Same pattern as brain_ident.set_default_dir: main imports this module, not the reverse."""
+    global _brain_gate
+    _brain_gate = fn
+
+
+def vault_allowed(path) -> bool:
+    """May the account of this request use `path` as its brain? Without main (unit tests that
+    import only the hub) the floor still holds: another account's brain is never allowed."""
+    if _brain_gate is not None:
+        try:
+            return bool(_brain_gate(str(path)))
+        except Exception:
+            return False
+    try:
+        rel = Path(path).resolve().relative_to((_brains_dir() / ".users").resolve())
+    except (ValueError, OSError):
+        return True
+    return bool(rel.parts) and rel.parts[0] == config.get_current_user_id()
 
 
 def resolve_vault(raw_vault):
@@ -1932,9 +2035,24 @@ async def handle_http(request):
     """POST /hub/mcp - auth bằng Bearer hub_token (KHÔNG dùng session dashboard)."""
     auth = request.headers.get("authorization") or ""
     # compare_digest: /hub/mcp là endpoint public (không cookie), token là lớp auth duy nhất
-    # → so sánh hằng-thời-gian chống dò theo timing.
-    if not _secrets.compare_digest(auth, f"Bearer {hub_token()}"):
+    # → so sánh hằng-thời-gian chống dò theo timing. The token also names the account: the
+    # machine token is the primary account, a per-account token is that account.
+    bearer = auth[7:] if auth.startswith("Bearer ") else ""
+    uid = account_of_token(bearer)
+    if not uid and not (bearer and _secrets.compare_digest(bearer, _machine_token())):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
+    with config.as_user(uid or config.primary_user_id()):
+        return await _handle_http_as_account(request)
+
+
+async def _handle_http_as_account(request):
+    """The rest of `handle_http`, run as the account the bearer token named."""
+    raw_vault = request.headers.get("x-javis-vault")
+    if raw_vault:
+        vault_root, vault_nguon, _ = resolve_vault(raw_vault)
+        if vault_nguon == "header" and not vault_allowed(vault_root):
+            return JSONResponse({"error": "forbidden: this brain belongs to another account"},
+                                status_code=403)
     mode = (request.headers.get("x-javis-mode") or "full").strip().lower()
     # Engine SDK đấu plugin in-process gửi header này để hub bỏ nhóm plugin (tránh tool trùng)
     include_plugins = (request.headers.get("x-javis-no-plugins") or "").strip() != "1"
@@ -2067,7 +2185,8 @@ def claude_config_path(mode="full", vault_root=None, bot=False):
     if bot:
         headers["X-Javis-Bot"] = "1"
         hau_to += "_bot"
-    p = STATE_DIR / f".mcp_hub_{mode}{hau_to}.json"
+    # Per account: the file carries that account's hub token, and accounts share no file.
+    p = config.get_user_state_dir() / f".mcp_hub_{mode}{hau_to}.json"
     # X-Javis-Engine=claude: báo hub đây là engine Claude (có tool native mcp__* của connector
     # tài khoản Claude) → javis_connections/lazy search kèm gợi ý ambient. Codex/engine API không gắn.
     p.write_text(json.dumps({"mcpServers": {"javis": {
@@ -2106,7 +2225,7 @@ def antigravity_config_path(mode="full", vault_root=None):
         entry = antigravity_cli.hub_entry(hub_url(), headers)
     except Exception:
         entry = {"serverUrl": hub_url(), "url": hub_url(), "headers": headers, "disabled": False}
-    p = STATE_DIR / f".mcp_agy_{mode}{hau_to}.json"
+    p = config.get_user_state_dir() / f".mcp_agy_{mode}{hau_to}.json"
     p.write_text(json.dumps({"mcpServers": {"javis": entry}}, ensure_ascii=False),
                  encoding="utf-8")
     try:
@@ -2132,7 +2251,13 @@ def codex_profile_name():
     Cổng mặc định giữ nguyên tên "javis" để máy đang chạy không phải sinh file mới.
     """
     p = hub_port()
-    return "javis" if p == 7777 else f"javis-{p}"
+    name = "javis" if p == 7777 else f"javis-{p}"
+    # The profile carries the hub token, and the token names the account. Accounts other than
+    # the primary get their own profile file so one never runs Codex with another's token.
+    uid = config.current_user_id.get()
+    if uid and uid != config.primary_user_id():
+        name += "-" + uid[:8]
+    return name
 
 
 def codex_profile_path():

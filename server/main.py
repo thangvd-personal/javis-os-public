@@ -7850,6 +7850,9 @@ def _brain_allowed(path: str) -> bool:
         return False
 
 
+mcp_hub.set_brain_gate(_brain_allowed)
+
+
 def _brain_root(brain: str) -> str:
     if not brain or brain == "brain":
         return str(_default_brain_dir())
