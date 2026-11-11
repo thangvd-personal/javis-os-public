@@ -19,14 +19,110 @@ import config as cfgmod
 import localefmt
 import mcp_catalog
 import secrets_store
-from config import STATE_DIR
 
 # Registry bị ghi từ cả event-loop (endpoint) lẫn thread thường (zalo_login) →
 # khoá quanh mọi chu trình load-modify-save để không lost-update.
 _LOCK = threading.RLock()
 
-STORE = STATE_DIR / "mcp_servers.json"
+# One store per account, in that account's state folder. The primary account keeps the legacy
+# file (STATE_DIR/mcp_servers.json) so an upgraded install finds every connection where it was.
+# Tests pin STORE to a temp file; honouring that assignment keeps them on one store.
+STORE = cfgmod.STATE_DIR / "mcp_servers.json"
 _LEGACY_STORE = Path(__file__).parent / "mcp_servers.json"   # vị trí cũ (trước khi theo STATE_DIR)
+_STORE_NAME = "mcp_servers.json"
+
+
+def store_path(user_id: str = None) -> Path:
+    """The connection file of one account. None follows the account of this turn."""
+    if STORE != cfgmod.STATE_DIR / _STORE_NAME:
+        return STORE
+    if user_id is None:
+        user_id = cfgmod.current_user_id.get()
+    if user_id:
+        return cfgmod.get_user_state_dir(user_id) / _STORE_NAME
+    return cfgmod.STATE_DIR / _STORE_NAME
+
+
+def shares_path(user_id: str = "") -> Path:
+    """Who the owner of a connection has shared it with. Lives next to the owner's store, so a
+    share never outlives the account that granted it."""
+    return store_path(user_id) .parent / "mcp_shares.json"
+
+
+def _load_shares(user_id: str = "") -> dict:
+    try:
+        raw = json.loads(shares_path(user_id).read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_shares(d: dict, user_id: str = "") -> None:
+    p = shares_path(user_id)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def share_connection(cid: str, user_id: str, perm: str) -> bool:
+    """Let `user_id` use connection `cid` of the CURRENT account, capped at `perm`.
+
+    `perm` empty revokes. Only an admin grants a share, and only of a connection they own:
+    the caller runs as that account, so the connection has to be in their own store."""
+    perm = (perm or "").strip()
+    if perm and perm not in mcp_catalog.PERM_RANK:
+        return False
+    if not _find(_load(), cid):
+        return False
+    d = _load_shares()
+    entry = dict(d.get(cid) or {})
+    if perm:
+        entry[user_id] = perm
+    else:
+        entry.pop(user_id, None)
+    if entry:
+        d[cid] = entry
+    else:
+        d.pop(cid, None)
+    _save_shares(d)
+    return True
+
+
+def shares_of(cid: str) -> dict:
+    """{user_id: perm} the current account has granted on one connection."""
+    return dict(_load_shares().get(cid) or {})
+
+
+def shared_with_me() -> list:
+    """Connections other accounts have shared with the current account, capped at the share.
+
+    Read-only by construction: nothing here writes back into the owner's store."""
+    me = cfgmod.get_current_user_id()
+    if not me:
+        return []
+    out = []
+    for uid in cfgmod.list_user_ids():
+        if uid == me:
+            continue
+        try:
+            granted = _load_shares(uid)
+        except Exception:
+            continue
+        if not granted:
+            continue
+        own = _load_of(uid)
+        for c in own.get("connections") or []:
+            perm = (granted.get(c.get("id")) or {}).get(me)
+            if not perm:
+                continue
+            rank = min(mcp_catalog.PERM_RANK.get(c.get("perm") or "full", 2),
+                       mcp_catalog.PERM_RANK.get(perm, 0))
+            capped = next(k for k, v in mcp_catalog.PERM_RANK.items() if v == rank)
+            pub = _public(c)
+            pub["perm"] = capped
+            pub["shared"] = True
+            pub["shared_from"] = uid
+            out.append(pub)
+    return out
 CONFIG = Path(__file__).parent / ".mcp_config.json"
 
 WRITE_HINTS = mcp_catalog.WRITE_HINTS   # giữ tương thích import cũ
@@ -55,10 +151,26 @@ def _locked(fn):
     return wrap
 
 
+def _load_of(user_id: str) -> dict:
+    """One account's store, read without the lock. Sharing reads another account's file and must
+    not take the lock they might already hold."""
+    path = store_path(user_id)
+    try:
+        if path.exists():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict) and raw.get("version") == 2 and "connections" in raw:
+                return raw
+    except Exception as e:
+        print(f"[mcp_store] lỗi đọc {path.name}: {e}", file=sys.stderr)
+    return {"version": 2, "connections": []}
+
+
 @_locked
 def _load():
     raw = None
-    path = STORE if STORE.exists() else (_LEGACY_STORE if _LEGACY_STORE.exists() else None)
+    mine = store_path()
+    path = mine if mine.exists() else (STORE if STORE.exists() else
+                                       (_LEGACY_STORE if _LEGACY_STORE.exists() else None))
     if path:
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -127,7 +239,9 @@ def _hub_on():
 
 def _save(d):
     with _LOCK:
-        STORE.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+        path = store_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
     # Hub bật (mặc định): KHÔNG sinh file fallback .mcp_config.json - file đó chứa header/env
     # ĐÃ GIẢI MÃ (plaintext), để nằm lại là vô hiệu hoá mã hoá at-rest. Xoá bản cũ nếu có.
     if _hub_on():
@@ -141,6 +255,11 @@ def _save(d):
 
 def _find(d, cid):
     return next((c for c in d["connections"] if c.get("id") == cid), None)
+
+
+def owns(cid) -> bool:
+    """Does the current account own this connection? A share is not ownership."""
+    return _find(_load(), cid) is not None
 
 
 def _public(c):
@@ -163,7 +282,8 @@ def _public(c):
 # API v2 - connections
 # ============================================================
 def list_connections():
-    return [_public(c) for c in _load()["connections"]]
+    own = [_public(c) for c in _load()["connections"]]
+    return own + shared_with_me()
 
 
 def get_connection(cid):
@@ -175,6 +295,10 @@ def connection_secrets(cid):
     """Trả map secrets (fields) ĐÃ GIẢI MÃ của 1 connection - chỉ cho code nội bộ
     (vd oauth_mcp lấy client_id/client_secret BYO). TUYỆT ĐỐI không trả ra frontend."""
     c = _find(_load(), cid)
+    if c is None:
+        # A connection shared with this account: OAuth refresh and stdio credential files still
+        # need its client id/secret, read server-side from the owner's store, never sent out.
+        c = next((x for _, x, _ in _shared_raw() if x.get("id") == cid), None)
     return secrets_store.decrypt_map((c or {}).get("secrets") or {})
 
 
@@ -305,6 +429,13 @@ WORKSPACE_MCP_DOCKER_ENV = {
 }
 
 
+def _state_dir() -> Path:
+    """State folder of the account this turn runs as, for the credential folders a connection
+    keeps beside its store."""
+    uid = cfgmod.current_user_id.get()
+    return cfgmod.get_user_state_dir(uid) if uid else cfgmod.STATE_DIR
+
+
 def _cred_dir(conn, con=None):
     """{env, path} thư mục token RIÊNG của 1 connection, hoặc None nếu connector không khai.
 
@@ -317,7 +448,7 @@ def _cred_dir(conn, con=None):
         return None
     slug = conn.get("slug") or conn.get("id") or ""
     return {"env": cd["env"],
-            "path": STATE_DIR / "connector-cred" / f"{conn.get('connector_id')}-{slug}"}
+            "path": _state_dir() / "connector-cred" / f"{conn.get('connector_id')}-{slug}"}
 
 
 def forget_cred_dir(conn):
@@ -347,7 +478,7 @@ def forget_cred_dir_by_id(cid):
 @_locked
 def delete_connection(cid):
     try:
-        for fp in (STATE_DIR / "connector-files").glob(f"{cid}-*"):
+        for fp in (_state_dir() / "connector-files").glob(f"{cid}-*"):
             fp.unlink()   # dọn file secret đã materialize (service account JSON...)
     except Exception:
         pass
@@ -392,16 +523,80 @@ def set_default(cid):
 def resolved(enabled_only=True):
     """Danh sách connection ĐẦY ĐỦ (secret THẬT đã giải mã) cho hub/client nội bộ.
     TUYỆT ĐỐI không trả kết quả hàm này ra frontend.
+
+    A connection shared with this account is included too, with `perm` lowered to the share and
+    `shared_from` naming the owner. Its secrets are read from the owner's file.
     Mỗi phần tử: {id, connector_id, label, slug, namespace, transport, url, command, args,
     headers, env, perm, deny_tools, is_default, connector(dict catalog hoặc None)}."""
     d = _load()
-    conns = [c for c in d["connections"] if c.get("enabled") or not enabled_only]
+    me = cfgmod.current_user_id.get()
+    items = [(c, None, "") for c in d["connections"] if c.get("enabled") or not enabled_only]
+    for owner, c, cap in _shared_raw():
+        if c.get("enabled") or not enabled_only:
+            items.append((c, cap, owner))
+    conns = [c for c, _, _ in items]
     counts = {}
     for c in conns:
         counts[c["connector_id"]] = counts.get(c["connector_id"], 0) + 1
     out = []
     taken_ns = set()
-    for c in conns:
+    for c, cap, owner in items:
+        # A shared connection keeps its credential folders in the OWNER's state folder.
+        with cfgmod.as_user(owner or me):
+            spec = _dial_spec(c, counts, taken_ns)
+        if spec is None:
+            continue
+        if owner:
+            rank = min(mcp_catalog.PERM_RANK.get(spec["perm"], 2), mcp_catalog.PERM_RANK.get(cap, 0))
+            spec["perm"] = next(k for k, v in mcp_catalog.PERM_RANK.items() if v == rank)
+            spec["shared_from"] = owner
+        out.append(spec)
+    return out
+
+
+def _shared_raw() -> list:
+    """(owner, raw connection, share perm) for every connection shared with this account."""
+    me = cfgmod.get_current_user_id()
+    out = []
+    for uid in cfgmod.list_user_ids():
+        if uid == me:
+            continue
+        granted = _load_shares(uid)
+        if not granted:
+            continue
+        for c in _load_of(uid).get("connections") or []:
+            perm = (granted.get(c.get("id")) or {}).get(me)
+            if perm:
+                out.append((uid, c, perm))
+    return out
+
+
+def foreign_ids() -> set:
+    """Ids of connections other accounts own and have NOT shared with this account."""
+    me = cfgmod.get_current_user_id()
+    mine = {c.get("id") for c in _load()["connections"]}
+    mine.update(c.get("id") for _, c, _ in _shared_raw())
+    out = set()
+    for uid in cfgmod.list_user_ids():
+        if uid != me:
+            out.update(c.get("id") for c in _load_of(uid).get("connections") or [])
+    return out - mine
+
+
+def owner_of(cid) -> str:
+    """Account whose store holds connection `cid`, seen from the current account: "" for its
+    own (or unknown), the owner's id for a connection shared with it."""
+    if _find(_load(), cid):
+        return ""
+    for owner, c, _ in _shared_raw():
+        if c.get("id") == cid:
+            return owner
+    return ""
+
+
+def _dial_spec(c, counts, taken_ns):
+    """One stored connection into the dial spec `resolved` returns, or None to skip it."""
+    if True:   # keeps the body at its old indentation, so `git blame` still points at its history
         con = mcp_catalog.get(c["connector_id"])
         # CHỐT MỒ CÔI. Kết nối trỏ vào một connector không còn tồn tại (người dùng đã GỠ nó,
         # hoặc hạ cấp app xuống bản chưa có nó) thì KHÔNG dựng dial spec.
@@ -417,7 +612,7 @@ def resolved(enabled_only=True):
         # `custom` là ca CỐ Ý, không phải mồ côi: connector do người dùng tự khai nên không bao
         # giờ có mặt trong catalog. Phân biệt bằng đúng chuỗi đó, y như chỗ đặt namespace dưới.
         if con is None and c["connector_id"] != "custom":
-            continue
+            return None
         secrets = secrets_store.decrypt_map(c.get("secrets") or {})
         headers = {}
         if con:
@@ -494,7 +689,7 @@ def resolved(enabled_only=True):
             # Connector kiểu zalo-agent-cli: account active là TOÀN CỤC theo home dir
             # → mỗi connection 1 home riêng để nhiều tài khoản chạy song song không giẫm nhau.
             home = (c.get("config") or {}).get("home_dir") or str(
-                STATE_DIR / "connector-home" / f"{c['connector_id']}-{c.get('slug')}")
+                _state_dir() / "connector-home" / f"{c['connector_id']}-{c.get('slug')}")
             env.setdefault("HOME", home)
             env.setdefault("USERPROFILE", home)
         # Field dạng FILE (vd service account JSON của Google): nội dung dán khi kết nối
@@ -506,7 +701,7 @@ def resolved(enabled_only=True):
             if not val:
                 continue
             try:
-                fdir = STATE_DIR / "connector-files"
+                fdir = _state_dir() / "connector-files"
                 fdir.mkdir(parents=True, exist_ok=True)
                 fp = fdir / f"{c['id']}-{f['key']}{f.get('file_ext', '.json')}"
                 try:
@@ -531,7 +726,7 @@ def resolved(enabled_only=True):
                 import oauth_mcp  # import TRỄ: oauth_mcp import mcp_store ở cấp module
                 blob = oauth_mcp.credentials_file(c["id"], of["format"])
                 if blob:
-                    fdir = STATE_DIR / "connector-files"
+                    fdir = _state_dir() / "connector-files"
                     fdir.mkdir(parents=True, exist_ok=True)
                     fp = fdir / f"{c['id']}-oauth{of.get('ext', '.json')}"
                     try:
@@ -547,7 +742,7 @@ def resolved(enabled_only=True):
                     env[of["env"]] = str(fp)
             except Exception as e:
                 print(f"[mcp_store] oauth file {c['id']}: {e}", file=sys.stderr)
-        out.append({
+        return {
             "id": c["id"], "connector_id": c["connector_id"], "label": c.get("label"),
             "slug": c.get("slug"), "namespace": ns,
             "transport": c.get("transport") or "http",
@@ -566,8 +761,7 @@ def resolved(enabled_only=True):
             "config": c.get("config") or {},
             "perm": c.get("perm") or "full", "deny_tools": c.get("deny_tools") or [],
             "is_default": bool(c.get("is_default")), "auth": c.get("auth"), "connector": con,
-        })
-    return out
+        }
 
 
 def orphans():

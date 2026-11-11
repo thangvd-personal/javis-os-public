@@ -486,7 +486,8 @@ async def _auth_guard(request: Request, call_next):
 #   (GET /auth/users is answered per role inside the route, so it is not listed).
 # - writes only: reading the plugin/MCP/backup pages stays harmless, changing them does not.
 _ADMIN_ONLY_ANY = ("/terminal/", "/ws/terminal")
-_ADMIN_ONLY_WRITE = ("/auth/users", "/auth/tokens", "/auth/disable", "/update", "/plugins/", "/mcp/", "/backup/")
+_ADMIN_ONLY_WRITE = ("/auth/users", "/auth/tokens", "/auth/disable", "/update", "/plugins/", "/mcp/", "/backup/",
+                     "/connect/share", "/connect/core-toggle")
 
 
 def _admin_only(path: str, method: str) -> bool:
@@ -6405,9 +6406,45 @@ async def connect_substack_resolve_uid(q: str = Query("")):
     return {"ok": True, "user_id": uid, "name": d.get("name") or "", "handle": handle, "publications": pubs}
 
 
+def _not_owner(cid) -> JSONResponse | None:
+    """403 when `cid` is a connection another account shared with this one: a share lends the
+    use of a connection, never the right to change or remove it."""
+    if cid and not mcp_store.owns(cid) and mcp_store.owner_of(cid):
+        return JSONResponse({"ok": False, "error": localefmt.chu(
+            "Kết nối này được chia sẻ cho bạn, chỉ chủ kết nối mới sửa được.",
+            "This connection is shared with you; only its owner can change it.")}, status_code=403)
+    return None
+
+
+@app.post("/connect/share")
+async def connect_share(request: Request):
+    """Admin lets one account use one of the admin's own connections, capped at `perm`
+    (readonly, safe, full). An empty `perm` revokes. Admin-only via `_ADMIN_ONLY_WRITE`."""
+    data = await request.json()
+    cid = (data.get("id") or "").strip()
+    uid = (data.get("user_id") or "").strip()
+    if not cid or not uid or uid == cfgmod.get_current_user_id() or uid not in cfgmod.list_user_ids():
+        return JSONResponse({"ok": False, "error": localefmt.chu(
+            "Thiếu kết nối hoặc tài khoản không hợp lệ", "Missing connection or invalid account")},
+            status_code=400)
+    if not mcp_store.share_connection(cid, uid, data.get("perm") or ""):
+        return JSONResponse({"ok": False, "error": localefmt.chu(
+            "Chỉ chia sẻ được kết nối của chính bạn, với quyền readonly, safe hoặc full",
+            "You can only share your own connection, as readonly, safe or full")}, status_code=400)
+    mcp_hub.invalidate_cache()
+    return {"ok": True, "shares": mcp_store.shares_of(cid)}
+
+
+@app.get("/connect/share")
+async def connect_share_list(id: str = Query("")):
+    return {"shares": mcp_store.shares_of((id or "").strip())}
+
+
 @app.post("/connect/update")
 async def connect_update(request: Request):
     data = await request.json()
+    if (deny := _not_owner(data.get("id"))):
+        return deny
     ok = mcp_store.update_connection(data.get("id"), data)
     mcp_hub.invalidate_cache()
     return {"ok": ok}
@@ -6416,6 +6453,8 @@ async def connect_update(request: Request):
 @app.post("/connect/toggle")
 async def connect_toggle(request: Request):
     data = await request.json()
+    if (deny := _not_owner(data.get("id"))):
+        return deny
     en = mcp_store.toggle_connection(data.get("id"))
     mcp_hub.invalidate_cache()
     _write_codex_profile()
@@ -6442,6 +6481,8 @@ async def connect_delete(request: Request):
     nối có thể để lại những gì."""
     data = await request.json()
     cid = (data.get("id") or "").strip()
+    if (deny := _not_owner(cid)):
+        return deny
     bao_cao = await purge.purge_connection(
         cid,
         mode=("hard" if data.get("hard") else "trash"),
@@ -6464,6 +6505,8 @@ async def connect_relogin(request: Request):
     cid = (data.get("id") or "").strip()
     if not cid:
         return JSONResponse({"ok": False, "error": localefmt.chu("Thiếu id kết nối", "Missing connection id")}, status_code=400)
+    if (deny := _not_owner(cid)):
+        return deny
     done = mcp_store.forget_cred_dir_by_id(cid)
     mcp_client.pool.invalidate(cid)   # giết tiến trình con đang giữ token cũ trong RAM
     mcp_hub.invalidate_cache()
@@ -6482,6 +6525,8 @@ async def connect_relogin(request: Request):
 @app.post("/connect/default")
 async def connect_default(request: Request):
     data = await request.json()
+    if (deny := _not_owner(data.get("id"))):
+        return deny
     return {"ok": mcp_store.set_default(data.get("id"))}
 
 
@@ -6517,6 +6562,8 @@ async def connect_zalo_cancel(request: Request):
 async def connect_oauth_start(request: Request):
     data = await request.json()
     conn_id = data.get("id")
+    if (deny := _not_owner(conn_id)):   # signing in again would replace the owner's token
+        return deny
     # fields: client_id/secret user tự khai (BYO) cho provider không DCR (vd Google). Rỗng với Meta.
     fields = {k: v for k, v in (data.get("fields") or {}).items() if v}
     # Dùng lại key client từ connection Google khác (copy server-side, xem reuse_client_fields)

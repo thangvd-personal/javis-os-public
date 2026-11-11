@@ -45,6 +45,15 @@ from fastapi.responses import JSONResponse, Response
 # running as the primary (docs/dev/multi-user-QA.md, 13.4 follow-up).
 _TOKEN_NAME = ".hub_token"
 _AUDIT_PATH = STATE_DIR / "mcp_audit.jsonl"
+
+
+def _audit_path() -> Path:
+    """Audit log of the account this turn runs as: one account never reads another's tool calls.
+    The primary account keeps the legacy file. Tests pin `_AUDIT_PATH`, and that pin wins."""
+    if _AUDIT_PATH != STATE_DIR / "mcp_audit.jsonl":
+        return _AUDIT_PATH
+    uid = config.current_user_id.get()
+    return config.get_user_state_dir(uid) / "mcp_audit.jsonl" if uid else _AUDIT_PATH
 _CACHE_TTL = 60
 # Vòng dò có nguồn bị BỎ QUA (quá hạn/lỗi) thì danh sách tool là bản THIẾU. Cache nó đủ 60
 # giây là đóng băng cái thiếu đó: mọi lượt chat mở trong cửa sổ ấy nhận một hộp công cụ vắng
@@ -191,9 +200,9 @@ OWNER_ONLY_TOOLS = frozenset({"javis_reply_policy", "javis_reply_policy_tune", "
 # ============================================================
 def _audit_append(rec):
     try:
-        if _AUDIT_PATH.exists() and _AUDIT_PATH.stat().st_size > 5_000_000:
-            _AUDIT_PATH.replace(_AUDIT_PATH.with_suffix(".jsonl.1"))
-        with _AUDIT_PATH.open("a", encoding="utf-8") as f:
+        if _audit_path().exists() and _audit_path().stat().st_size > 5_000_000:
+            _audit_path().replace(_audit_path().with_suffix(".jsonl.1"))
+        with _audit_path().open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"[hub audit] {e}", file=sys.stderr)
@@ -218,10 +227,10 @@ def audit_scrub(conn_id, drop=False) -> int:
     Ghi lại bằng tmp + replace vì `_audit_append` mở file ở chế độ append KHÔNG khoá: sửa tại
     chỗ mà gặp đúng lúc một tool call đang ghi là mất dòng đó.
     """
-    if not conn_id or not _AUDIT_PATH.exists():
+    if not conn_id or not _audit_path().exists():
         return 0
     try:
-        lines = _AUDIT_PATH.read_text(encoding="utf-8").splitlines()
+        lines = _audit_path().read_text(encoding="utf-8").splitlines()
     except OSError as e:
         print(f"[hub audit] doc de don: {e}", file=sys.stderr)
         return 0
@@ -243,9 +252,9 @@ def audit_scrub(conn_id, drop=False) -> int:
     if not touched:
         return 0
     try:
-        tmp = _AUDIT_PATH.with_suffix(".jsonl.tmp")
+        tmp = _audit_path().with_suffix(".jsonl.tmp")
         tmp.write_text((("\n".join(out)) + "\n") if out else "", encoding="utf-8")
-        tmp.replace(_AUDIT_PATH)
+        tmp.replace(_audit_path())
     except OSError as e:
         print(f"[hub audit] ghi lai: {e}", file=sys.stderr)
         return 0
@@ -254,9 +263,9 @@ def audit_scrub(conn_id, drop=False) -> int:
 
 def audit_tail(limit=50, conn_id=None):
     try:
-        if not _AUDIT_PATH.exists():
+        if not _audit_path().exists():
             return []
-        lines = _AUDIT_PATH.read_text(encoding="utf-8").splitlines()
+        lines = _audit_path().read_text(encoding="utf-8").splitlines()
         out = []
         for line in reversed(lines):
             try:
@@ -1502,7 +1511,7 @@ def _store_mtime():
     Đây là đường CHẬM (trong TTL 60 giây sẵn có), dành cho ca thả thư mục vào bằng tay. Đổi qua
     endpoint thì đã gọi thẳng `invalidate_cache()` nên có hiệu lực ngay."""
     tong = 0.0
-    for f in (mcp_store.STORE, STATE_DIR / "core-off.json", STATE_DIR / "packs"):
+    for f in (mcp_store.store_path(), STATE_DIR / "core-off.json", STATE_DIR / "packs"):
         try:
             tong += f.stat().st_mtime
         except OSError:
@@ -1548,9 +1557,11 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
     # phiên (cwd, biến môi trường, tiến trình nền). Hai phiên cùng repo cùng chip mà dùng chung
     # cache là phiên này chạy lệnh trong terminal của phiên kia.
     _sid_ctx = getattr(coding_ctx_cua_phien, "session_id", "") if workspace_root else ""
+    # The account is in the key: each account has its own connections (and shares), so one
+    # account's cached tool list must never be served to another.
     key = (mode, str(vault_root or ""), bool(include_plugins), bool(include_ambient),
            bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _quyen_ctx, bool(for_bot),
-           str(_sid_ctx or ""))
+           str(_sid_ctx or ""), config.current_user_id.get())
     from improvement_task_skill_scope import ScopeUnavailable, current
     task_scope = current(vault_root or '')
     cache = task_scope._hub_cache if task_scope is not None else _cache

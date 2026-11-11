@@ -24,21 +24,46 @@ import secrets_store
 from config import STATE_DIR
 
 _STORE_PATH = STATE_DIR / ".oauth_mcp.json"
-_pending = {}    # state -> {conn_id, verifier, token_endpoint, client_id, redirect_uri, ts}
+_pending = {}    # state -> {conn_id, verifier, token_endpoint, client_id, redirect_uri, ts, user_id}
 _PENDING_TTL = 600
+
+
+def _store_path():
+    """Token file of the account this turn runs as. The primary account keeps the legacy file.
+    Tests pin `_STORE_PATH` to a temp file, and that pin wins."""
+    import config
+    if _STORE_PATH != STATE_DIR / ".oauth_mcp.json":
+        return _STORE_PATH
+    uid = config.current_user_id.get()
+    return config.get_user_state_dir(uid) / ".oauth_mcp.json" if uid else _STORE_PATH
 
 
 def _load():
     try:
-        if _STORE_PATH.exists():
-            return json.loads(_STORE_PATH.read_text(encoding="utf-8"))
+        path = _store_path()
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         pass
     return {}
 
 
 def _save(d):
-    _STORE_PATH.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+    path = _store_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _as_owner(conn_id):
+    """Run as the account that owns `conn_id`. A connection shared with this account keeps its
+    token in the OWNER's file; the member uses it and never holds a copy."""
+    import config
+    owner = ""
+    try:
+        owner = mcp_store.owner_of(conn_id)
+    except Exception:
+        pass
+    return config.as_user(owner or config.current_user_id.get())
 
 
 def _conn(conn_id):
@@ -73,6 +98,11 @@ def required_scopes(conn_id):
 
 
 def granted_scopes(conn_id):
+    with _as_owner(conn_id):
+        return _granted_scopes(conn_id)
+
+
+def _granted_scopes(conn_id):
     """Scope nhà cung cấp THẬT SỰ cấp, đọc từ token response. [] nghĩa là CHƯA BIẾT
     (token lưu trước bản này, hoặc nhà cung cấp không trả trường scope - vd Meta)."""
     ent = _load().get(conn_id) or {}
@@ -389,7 +419,8 @@ async def start_auth(conn_id, redirect_uri, _retry=0):
     now = time.time()
     for k in [k for k, v in _pending.items() if now - v["ts"] > _PENDING_TTL]:
         _pending.pop(k, None)
-    _pending[state] = {"conn_id": conn_id, "verifier": verifier, "token_endpoint": token_endpoint,
+    import config
+    _pending[state] = {"user_id": config.current_user_id.get(), "conn_id": conn_id, "verifier": verifier, "token_endpoint": token_endpoint,
                        "client_id": client_id, "client_secret": client_secret,
                        "redirect_uri": redirect_uri, "provider": provider, "ts": now,
                        "discovery": not explicit, "retry": _retry, "resource": resource}
@@ -431,6 +462,15 @@ def _email_from_id_token(idt):
 
 
 async def handle_callback(state, code, error="", error_description=""):
+    """The provider's redirect carries no Javis session, so the account comes from the pending
+    record `start_auth` wrote: the token lands in the file of whoever started the sign-in."""
+    import config
+    p = _pending.get(state or "") or {}
+    with config.as_user(p.get("user_id") or config.current_user_id.get()):
+        return await _handle_callback(state, code, error, error_description)
+
+
+async def _handle_callback(state, code, error="", error_description=""):
     p = _pending.pop(state or "", None)
     if not p:
         return {"ok": False, "error": localefmt.chu("Phiên OAuth không hợp lệ hoặc đã hết hạn - thử lại từ đầu",
@@ -564,6 +604,11 @@ def _bearer(ent) -> dict:
 
 
 async def auth_headers(conn_id, force=False, rejected=""):
+    with _as_owner(conn_id):
+        return await _auth_headers(conn_id, force=force, rejected=rejected)
+
+
+async def _auth_headers(conn_id, force=False, rejected=""):
     """{"Authorization": "Bearer ..."} cho connection oauth; tự refresh khi sắp hết hạn.
 
     `force` (0.400.0): the server just answered 401 to the header `rejected` (the full "Bearer ..." value). Refresh
@@ -584,6 +629,11 @@ async def auth_headers(conn_id, force=False, rejected=""):
 
 
 def credentials_file(conn_id, fmt):
+    with _as_owner(conn_id):
+        return _credentials_file(conn_id, fmt)
+
+
+def _credentials_file(conn_id, fmt):
     """Nội dung file credential cho connector STDIO dùng OAuth. Trả chuỗi JSON, hoặc "" nếu chưa
     đăng nhập / thiếu dữ kiện / format không biết.
 
@@ -610,6 +660,11 @@ def credentials_file(conn_id, fmt):
 
 
 def status(conn_id):
+    with _as_owner(conn_id):
+        return _status(conn_id)
+
+
+def _status(conn_id):
     ent = _load().get(conn_id) or {}
     rep = scope_report(conn_id)
     return {"connected": bool(ent.get("access_token")), "expires_at": float(ent.get("expires_at") or 0),

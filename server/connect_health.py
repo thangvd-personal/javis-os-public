@@ -230,21 +230,31 @@ async def check_by_id(conn_id, pool=None) -> dict:
 
 async def sweep(pool=None) -> int:
     """Quét mọi connection đang bật. Trả số connection đã check."""
+    import config
     n = 0
-    for conn in mcp_store.resolved(enabled_only=True):
-        try:
-            await check_one(conn, pool)
-            n += 1
-        except Exception as e:   # lỗi 1 connection không được giết cả vòng
-            print(f"[connect health] {conn.get('label')}: {type(e).__name__}: {e}",
-                  file=sys.stderr)
+    # Every account's own connections. A shared one is checked once, from its owner.
+    for uid in config.list_user_ids() or [""]:
+        with config.as_user(uid):
+            conns = [c for c in mcp_store.resolved(enabled_only=True) if not c.get("shared_from")]
+            for conn in conns:
+                try:
+                    await check_one(conn, pool)
+                    n += 1
+                except Exception as e:   # lỗi 1 connection không được giết cả vòng
+                    print(f"[connect health] {conn.get('label')}: {type(e).__name__}: {e}",
+                          file=sys.stderr)
     return n
 
 
 def snapshot() -> dict:
     """Trạng thái hiện có cho GET /connect/health. Connection chưa check thì vắng mặt
     (UI hiểu là 'chưa rõ' - chấm vàng)."""
-    return {cid: _hien(rec) for cid, rec in _state.items()}
+    try:
+        hidden = mcp_store.foreign_ids()
+    except Exception:
+        hidden = set()
+    # Another account's connection that is not shared with this one is not its business.
+    return {cid: _hien(rec) for cid, rec in _state.items() if cid not in hidden}
 
 
 def forget(conn_id) -> None:

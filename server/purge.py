@@ -51,6 +51,19 @@ TRASH_DIR = STATE_DIR / "purge-trash"
 HOME_DIR = STATE_DIR / "connector-home"
 CRED_DIR = STATE_DIR / "connector-cred"
 FILES_DIR = STATE_DIR / "connector-files"
+_DEFAULT_DIRS = {"TRASH_DIR": TRASH_DIR, "HOME_DIR": HOME_DIR, "CRED_DIR": CRED_DIR, "FILES_DIR": FILES_DIR}
+
+
+def _dir(name: str) -> Path:
+    """Folder `name` of the account this turn runs as: purging one account's connection never
+    touches another account's files. The primary account keeps the legacy folders. Tests pin
+    the module constants to temp folders, and that pin wins."""
+    pinned = globals()[name]
+    if pinned != _DEFAULT_DIRS[name]:
+        return pinned
+    import config
+    uid = config.current_user_id.get()
+    return config.get_user_state_dir(uid) / pinned.name if uid else pinned
 
 # Bao lâu thì dọn hẳn thứ đã chuyển vào thùng rác.
 TRASH_DAYS = 30
@@ -90,7 +103,7 @@ def _thu_muc_home(conn: dict) -> list[Path]:
     khai = ((conn.get("config") or {}).get("home_dir") or "").strip()
     if khai:
         p = Path(khai)
-        if _an_toan_de_xoa(p, HOME_DIR):
+        if _an_toan_de_xoa(p, _dir("HOME_DIR")):
             ra.append(p)
         else:
             # Người dùng trỏ home ra ngoài vùng Javis quản. Không đụng, nhưng phải NÓI RA
@@ -98,9 +111,9 @@ def _thu_muc_home(conn: dict) -> list[Path]:
             print(f"[purge] bo qua home ngoai vung: {khai}", file=sys.stderr)
     cid = conn.get("connector_id") or ""
     slug = conn.get("slug") or ""
-    if cid and slug and HOME_DIR.is_dir():
-        for p in HOME_DIR.glob(f"{cid}-{slug}*"):
-            if p.is_dir() and _an_toan_de_xoa(p, HOME_DIR) and p not in ra:
+    if cid and slug and _dir("HOME_DIR").is_dir():
+        for p in _dir("HOME_DIR").glob(f"{cid}-{slug}*"):
+            if p.is_dir() and _an_toan_de_xoa(p, _dir("HOME_DIR")) and p not in ra:
                 ra.append(p)
     return ra
 
@@ -109,14 +122,14 @@ def _thu_muc_cred(conn: dict) -> Path | None:
     cid, slug = conn.get("connector_id") or "", conn.get("slug") or conn.get("id") or ""
     if not cid:
         return None
-    p = CRED_DIR / f"{cid}-{slug}"
-    return p if (p.is_dir() and _an_toan_de_xoa(p, CRED_DIR)) else None
+    p = _dir("CRED_DIR") / f"{cid}-{slug}"
+    return p if (p.is_dir() and _an_toan_de_xoa(p, _dir("CRED_DIR"))) else None
 
 
 def _tep_secret(cid: str) -> list[Path]:
-    if not cid or not FILES_DIR.is_dir():
+    if not cid or not _dir("FILES_DIR").is_dir():
         return []
-    return [p for p in FILES_DIR.glob(f"{cid}-*") if _an_toan_de_xoa(p, FILES_DIR)]
+    return [p for p in _dir("FILES_DIR").glob(f"{cid}-*") if _an_toan_de_xoa(p, _dir("FILES_DIR"))]
 
 
 def _co(p: Path) -> int:
@@ -222,7 +235,7 @@ async def purge_connection(cid: str, *, mode: str = "trash", purge_audit: bool =
     cred = _thu_muc_cred(conn)
     can_don = [p for p in homes + ([cred] if cred else []) if p.exists()]
     if mode == "trash" and can_don:
-        kho = TRASH_DIR / f"conn-{cid}__{int(time.time())}"
+        kho = _dir("TRASH_DIR") / f"conn-{cid}__{int(time.time())}"
         try:
             kho.mkdir(parents=True, exist_ok=True)
             ghi = []
@@ -283,13 +296,13 @@ async def purge_connection(cid: str, *, mode: str = "trash", purge_audit: bool =
 
 def gc_trash(days: int = TRASH_DAYS) -> int:
     """Dọn hẳn thứ đã nằm trong thùng rác quá `days` ngày. Trả về số thư mục đã xoá."""
-    if not TRASH_DIR.is_dir():
+    if not _dir("TRASH_DIR").is_dir():
         return 0
     han = time.time() - days * 86400
     n = 0
-    for p in list(TRASH_DIR.iterdir()):
+    for p in list(_dir("TRASH_DIR").iterdir()):
         try:
-            if p.is_dir() and p.stat().st_mtime < han and _an_toan_de_xoa(p, TRASH_DIR):
+            if p.is_dir() and p.stat().st_mtime < han and _an_toan_de_xoa(p, _dir("TRASH_DIR")):
                 shutil.rmtree(p, ignore_errors=True)
                 n += 1
         except OSError:
