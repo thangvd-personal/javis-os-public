@@ -36,9 +36,23 @@ import threading
 import time
 import uuid
 
-from config import STATE_DIR
+import config as cfgmod
 
-STORE = STATE_DIR / "inbox.json"
+STORE = cfgmod.STATE_DIR / "inbox.json"
+NEWS_STORE = cfgmod.STATE_DIR / "news_read.json"
+
+
+def _store(name: str):
+    """The file of the account this turn runs as. A test that pins STORE/NEWS_STORE keeps its path.
+
+    The bell holds each account's own notices: before this, every account shared one file, so a member read and
+    cleared the admin's. No account (before setup, or a test) keeps the machine file, as before.
+    """
+    pinned = STORE if name == "inbox.json" else NEWS_STORE
+    if pinned != cfgmod.STATE_DIR / name:
+        return pinned
+    uid = cfgmod.current_user_id.get()
+    return (cfgmod.get_user_state_dir(uid) if uid else cfgmod.STATE_DIR) / name
 
 # Ghi từ nhiều nơi (endpoint, scheduler nền, thread bot) → khoá quanh cả chu trình
 # load-modify-save, đúng lối mcp_store đang dùng.
@@ -61,7 +75,7 @@ MAX_BODY = 600
 
 def _load() -> dict:
     try:
-        raw = STORE.read_text(encoding="utf-8")
+        raw = _store("inbox.json").read_text(encoding="utf-8")
     except OSError:
         return {"version": 1, "items": []}
     try:
@@ -69,7 +83,7 @@ def _load() -> dict:
     except Exception as e:
         # File hỏng: đừng ném lỗi lên tận endpoint làm chết cả chuông. Báo ra stderr rồi
         # coi như hòm rỗng - mất thư cũ còn hơn mất luôn hòm.
-        print(f"[inbox] hỏng {STORE.name}: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[inbox] hỏng {_store('inbox.json').name}: {type(e).__name__}: {e}", file=sys.stderr)
         return {"version": 1, "items": []}
     if not isinstance(d, dict):
         return {"version": 1, "items": []}
@@ -81,12 +95,13 @@ def _load() -> dict:
 
 def _save(d: dict) -> None:
     try:
-        STORE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = STORE.with_suffix(".json.tmp")
+        p = _store("inbox.json")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(STORE)
+        tmp.replace(p)
     except OSError as e:
-        print(f"[inbox] ghi {STORE.name} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[inbox] ghi {_store('inbox.json').name} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def _tieu_de(text: str) -> str:
@@ -288,15 +303,14 @@ def xoa(item_id: str) -> bool:
 #
 # The "News" tab is computed for everyone (`GET /notifications`), so the items are not stored once per person; only
 # WHICH of them this account has read is. It used to live in each browser's localStorage, so the phone and the
-# laptop disagreed. One instance has one account (the owner), so one file holds that account's read set; reading on
-# one device clears it on every device, and switching brains changes nothing.
-NEWS_STORE = STATE_DIR / "news_read.json"
+# laptop disagreed. Each account has one file (`_store`), so reading on one device clears it on every device of that
+# account, and switching brains changes nothing.
 NEWS_MAX = 500
 
 
 def _news_load() -> dict:
     try:
-        d = json.loads(NEWS_STORE.read_text(encoding="utf-8"))
+        d = json.loads(_store("news_read.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         d = {}
     ids = d.get("read") if isinstance(d, dict) else None
@@ -322,9 +336,11 @@ def news_mark(ids, *, initialized: bool = False) -> dict:
         d["read"] = d["read"][-NEWS_MAX:]
         if initialized:
             d["initialized"] = True
-        tmp = NEWS_STORE.with_name(NEWS_STORE.name + ".tmp")
+        p = _store("news_read.json")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".tmp")
         tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(NEWS_STORE)
+        tmp.replace(p)
         return d
 
 

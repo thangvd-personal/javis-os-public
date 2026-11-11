@@ -13747,7 +13747,8 @@ async def _bo_vao_hom_thu(owner_chat, text, *, kind="answer", label="", source="
     try:
         # Ai đang mở dashboard thì chấm đỏ trên chuông phải nhảy NGAY, không đợi lần
         # tải lại trang sau. Đi chung đường WebSocket sẵn có của khung chat.
-        await _CHAT_RUNTIME.publish({"type": "inbox", "session_id": item["session_id"]})
+        await _CHAT_RUNTIME.publish({"type": "inbox", "session_id": item["session_id"],
+                                     "_user": cfgmod.current_user_id.get()})   # only this account's pages
     except Exception as e:
         print(f"[inbox] bắn WebSocket lỗi: {type(e).__name__}: {e}", file=sys.stderr)
     if quiet:
@@ -18857,7 +18858,7 @@ async def _chat_socket(ws):
         # reconnects and resyncs from `hello` instead of hanging on a half-dead connection.
         asyncio.ensure_future(_real_ws.close(code=1011))
 
-    _CHAT_RUNTIME.add_client(client_id, send_client, _drop_client)
+    _CHAT_RUNTIME.add_client(client_id, send_client, _drop_client, user_id=cfgmod.current_user_id.get())
     await send_client({
         "type": "hello",
         "stop_tag": conn_tag,

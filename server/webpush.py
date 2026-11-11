@@ -39,10 +39,20 @@ import time
 from urllib.parse import urlsplit
 
 # `cryptography` (about 20 ms) loads in the functions that sign or encrypt, not at `import main` (0.274.0).
+import config as cfgmod
 from config import STATE_DIR
 
 VAPID_FILE = STATE_DIR / "vapid.json"
 SUBS_FILE = STATE_DIR / "push_subs.json"
+
+
+def _subs_file():
+    """Push subscriptions of the account this turn runs as: a notice for one account must not ring another's phone.
+    A test that pins SUBS_FILE keeps its path; no account keeps the machine file. The VAPID key stays per machine."""
+    if SUBS_FILE != STATE_DIR / "push_subs.json":
+        return SUBS_FILE
+    uid = cfgmod.current_user_id.get()
+    return (cfgmod.get_user_state_dir(uid) if uid else STATE_DIR) / "push_subs.json"
 _LOCK = threading.RLock()
 
 # Dịch vụ đẩy chỉ bảo đảm nhận nổi 4096 byte SAU khi mã hoá. Phần bọc (salt 16 + rs 4 +
@@ -226,7 +236,7 @@ def giai_ma(body: bytes, khoa_rieng_ua, auth: str) -> bytes:
 # ============================================================
 def _load_subs() -> dict:
     try:
-        d = json.loads(SUBS_FILE.read_text(encoding="utf-8"))
+        d = json.loads(_subs_file().read_text(encoding="utf-8"))
         if isinstance(d, dict) and isinstance(d.get("subs"), list):
             return d
     except (OSError, ValueError):
@@ -236,12 +246,13 @@ def _load_subs() -> dict:
 
 def _save_subs(d: dict) -> None:
     try:
-        SUBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = SUBS_FILE.with_suffix(".json.tmp")
+        p = _subs_file()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-        tmp.replace(SUBS_FILE)
+        tmp.replace(p)
     except OSError as e:
-        print(f"[webpush] ghi {SUBS_FILE.name} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[webpush] ghi {_subs_file().name} lỗi: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def dang_ky(sub: dict, nhan: str = "", phien: str = "") -> tuple:

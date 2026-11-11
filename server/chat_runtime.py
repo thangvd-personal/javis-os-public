@@ -46,6 +46,7 @@ class _Client:
     pending: asyncio.Future | None = None
     since: float = 0.0
     backlog: deque = field(default_factory=deque)
+    user_id: str = ""          # the account the page is signed in as ("" = no account, before setup)
 
 
 @dataclass
@@ -64,9 +65,10 @@ class ChatRuntime:
         self._clients: dict[str, _Client] = {}
         self._jobs: dict[str, ChatJob] = {}
 
-    def add_client(self, client_id: str, writer: Writer, on_drop: Callable[[], None] | None = None) -> None:
+    def add_client(self, client_id: str, writer: Writer, on_drop: Callable[[], None] | None = None,
+                   user_id: str = "") -> None:
         """`on_drop()` closes the page's socket when the runtime gives up on it (stuck sends)."""
-        self._clients[client_id] = _Client(writer, on_drop)
+        self._clients[client_id] = _Client(writer, on_drop, user_id=user_id or "")
 
     def remove_client(self, client_id: str) -> None:
         c = self._clients.pop(client_id, None)
@@ -155,7 +157,13 @@ class ChatRuntime:
         return out
 
     async def publish(self, event: dict) -> None:
-        """Cập nhật snapshot rồi fan-out; writer tự nuốt lỗi socket đã chết."""
+        """Cập nhật snapshot rồi fan-out; writer tự nuốt lỗi socket đã chết.
+
+        An event carrying `_user` goes only to pages signed in as that account (an account's bell must not ring on
+        another account's page); the key is taken off before sending. Without it every page gets the event."""
+        user_id = event.get("_user") if "_user" in event else None
+        if user_id is not None:
+            event = {k: v for k, v in event.items() if k != "_user"}
         session_id = str(event.get("session_id") or "")
         job = self.get_job(session_id) if session_id else None
         if job:
@@ -170,6 +178,8 @@ class ChatRuntime:
         now = asyncio.get_running_loop().time()
         sends = []
         for cid, c in list(self._clients.items()):
+            if user_id is not None and c.user_id != user_id:
+                continue
             if c.pending is not None or c.backlog:
                 # This page is still busy with an earlier event (`pending` clears only once the next one is taken
                 # from the backlog, so order holds): queue behind it, or give up on it.
