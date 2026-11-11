@@ -268,7 +268,7 @@ body = (re.search(r"async def _voice_bg_task\([\s\S]*?\n        async def _start
         or [""])[0]
 check("nhấc được thân _voice_bg_task", bool(body))
 check("việc nền xong thì dọn khoá phiên dùng một lần khỏi _TG_SESS",
-      "_TG_SESS.pop(" in body, body[-400:] if body else "")
+      "_tg_sess_of().pop(" in body, body[-400:] if body else "")   # map phiên RAM của tài khoản đang chạy
 check("kết quả vẫn đi về khung chat bằng push_to_chat", "push_to_chat(conv_sid" in body)
 check("việc nền vẫn ghim vào khung chat đang nói (phien_kho=conv_sid)",
       re.search(r"_voice_ask_javis\(request, conv_sid, brain,", body) is not None)

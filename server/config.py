@@ -330,6 +330,32 @@ class as_user:
         return False
 
 
+def bind_user(fn, user_id: str):
+    """`fn`, always run as `user_id`, also when the caller is in another account's context.
+
+    For callbacks handed to a long-lived object (an owner bot's answer, command and precheck): the
+    transport calls them from its poll task, a webhook or a test, and none of those is guaranteed to
+    carry the account the bot belongs to. A coroutine function is bound through the await too,
+    because calling it only builds the coroutine; its body runs later, in whoever awaits it."""
+    if fn is None:
+        return None
+    import functools
+    import inspect
+
+    @functools.wraps(fn)
+    def wrapped(*a, **k):
+        with as_user(user_id):
+            res = fn(*a, **k)
+        if not inspect.isawaitable(res):
+            return res
+
+        async def _run():
+            with as_user(user_id):
+                return await res
+        return _run()
+    return wrapped
+
+
 def get_current_user_id() -> str:
     uid = current_user_id.get()
     if uid:

@@ -2493,7 +2493,7 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
                                      f"Channel '{kenh}' has no transport yet"))
             continue
         aid = tk["id"]
-        if token == _admin_token(kenh):
+        if token in _admin_tokens(kenh):
             loi.append(localefmt.chu(
                 f"Token {nhan_kenh} này đang là bot của Kênh Admin, bot chuyên trách không dùng chung được. "
                 "Tạo một bot riêng, hoặc gọi cộng sự ngay trong chat admin bằng /agent <tên>.",
@@ -2538,26 +2538,58 @@ def start_bot(bot_id: str) -> tuple[bool, str]:
 
 
 def _admin_token(kenh: str) -> str:
-    """The token of the owner's running admin bot on this channel, "" when none (see `wire`)."""
+    """The token of the owner's running admin bot on this channel, "" when none (see `wire`).
+
+    Multi-user: every account's owner bots count, not only the account the caller happens to be. A dedicated
+    customer bot must not poll a member's admin token either, or the two pollers split that member's messages."""
     fn = _deps.get("admin_tokens")
     if not fn:
         return ""
     try:
-        return str((fn() or {}).get(str(kenh or "")) or "").strip()
+        got = fn() or {}
+        if isinstance(got, dict):
+            return str(got.get(str(kenh or "")) or "").strip()
+        return str(got or "").strip()
     except Exception as e:  # noqa: BLE001 - a settings read error must not stop every bot
         print(f"[chatbot admin token] {type(e).__name__}: {e}", file=sys.stderr)
         return ""
 
 
+def _admin_tokens(kenh: str) -> set:
+    """Every account's running admin token on `kenh`. `admin_tokens` may return one account's `{channel: token}`
+    (the old shape) or, per account, a set of tokens."""
+    fn = _deps.get("admin_tokens")
+    if not fn:
+        return set()
+    try:
+        import config
+        out = set()
+        for uid in (config.list_user_ids() or [""]):
+            with config.as_user(uid):
+                got = fn() or {}
+            if isinstance(got, dict):
+                t = str(got.get(str(kenh or "")) or "").strip()
+                if t:
+                    out.add(t)
+            elif got:
+                out.add(str(got).strip())
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[chatbot admin tokens] {type(e).__name__}: {e}", file=sys.stderr)
+        return set()
+
+
 def release_admin_token(kenh: str) -> list:
     """The admin bot of `kenh` just started: restart every dedicated bot polling its token, so `start_bot` drops that
-    account and the admin bot is the only one reading it. Returns the ids restarted."""
-    tok = _admin_token(kenh)
-    if not tok:
+    account and the admin bot is the only one reading it. Returns the ids restarted.
+
+    Every account's admin token counts: a member starting theirs must free it too, not only the primary account."""
+    toks = _admin_tokens(kenh)
+    if not toks:
         return []
     out = []
     for bid, run in list(_RUNNING.items()):
-        if any(str(getattr(tb, "token", "") or "").strip() == tok for tb in (run.get("pollers") or {}).values()):
+        if any(str(getattr(tb, "token", "") or "").strip() in toks for tb in (run.get("pollers") or {}).values()):
             start_bot(bid)
             out.append(bid)
     return out

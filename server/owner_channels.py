@@ -55,6 +55,52 @@ class OwnerChannel:
         self.bot = None
         self.queue: dict[str, dict] = {}
         self.deps: dict[str, Callable] = {}
+        # One bot and one pairing queue PER ACCOUNT (multi-user). The fields above are the primary
+        # account's, kept as plain attributes so every caller and test that reads `ch.bot` or
+        # `ch.queue` keeps working. Any other account lives in the dicts, keyed by user id.
+        self._bots: dict[str, object] = {}
+        self._queues: dict[str, dict] = {}
+
+
+    # ---- per account ------------------------------------------------------------------
+    def _uid(self) -> str:
+        """The account this call belongs to. Empty before setup, which is the primary account."""
+        import config
+        return config.current_user_id.get() or config.primary_user_id()
+
+    def _primary(self, uid: str = "") -> bool:
+        import config
+        uid = uid or self._uid()
+        return not uid or uid == config.primary_user_id()
+
+    def bot_of(self, uid: str = "") -> object:
+        uid = uid or self._uid()
+        return self.bot if self._primary(uid) else self._bots.get(uid)
+
+    def _set_bot(self, bot, uid: str = "") -> None:
+        uid = uid or self._uid()
+        if self._primary(uid):
+            self.bot = bot
+        elif bot is None:
+            self._bots.pop(uid, None)
+        else:
+            self._bots[uid] = bot
+
+    def queue_of(self, uid: str = "") -> dict:
+        uid = uid or self._uid()
+        if self._primary(uid):
+            return self.queue
+        return self._queues.setdefault(uid, {})
+
+    def stop_all(self) -> None:
+        """Shutdown: every account's bot, not only the one the request happens to be."""
+        self.stop()
+        for uid in list(self._bots):
+            bot = self._bots.pop(uid)
+            try:
+                bot.stop()
+            except Exception as e:  # noqa: BLE001 - shutdown must finish for the next account
+                print(f"[{self.key} stop {uid[:8]}] {type(e).__name__}: {e}", file=sys.stderr)
 
     # ---- wiring -----------------------------------------------------------------------
     def wire(self, **deps):
@@ -79,7 +125,8 @@ class OwnerChannel:
         return all(str(c.get(k) or "").strip() for k in self.required)
 
     def running(self) -> bool:
-        return bool(self.bot and self.bot._task and not self.bot._task.done())
+        b = self.bot_of()
+        return bool(b and b._task and not b._task.done())
 
     # ---- pairing ----------------------------------------------------------------------
     def _who(self, meta) -> str:
@@ -89,8 +136,8 @@ class OwnerChannel:
 
     def _prune(self):
         now = time.time()
-        for k in [k for k, v in self.queue.items() if now - v.get("ts", 0) > QUEUE_TTL]:
-            self.queue.pop(k, None)
+        for k in [k for k, v in self.queue_of().items() if now - v.get("ts", 0) > QUEUE_TTL]:
+            self.queue_of().pop(k, None)
 
     def _refusal(self, code: str) -> str:
         return localefmt.chu(
@@ -106,7 +153,7 @@ class OwnerChannel:
         if not who:
             return ""
         name = str((meta or {}).get("user_name") or "")[:80]
-        old = self.queue.get(who)
+        old = self.queue_of().get(who)
         if old:
             old["ts"] = time.time()
             old["lan"] = old.get("lan", 0) + 1
@@ -115,10 +162,10 @@ class OwnerChannel:
                 return ""          # one refusal per 10 minutes, so nobody floods the queue
             old["nhac"] = time.time()
             return self._refusal(old["ma"])
-        if len(self.queue) >= QUEUE_MAX:
-            self.queue.pop(min(self.queue, key=lambda k: self.queue[k].get("ts", 0)), None)
+        if len(self.queue_of()) >= QUEUE_MAX:
+            self.queue_of().pop(min(self.queue_of(), key=lambda k: self.queue_of()[k].get("ts", 0)), None)
         code = f"{secrets.randbelow(9000) + 1000}"
-        self.queue[who] = {"chat_id": who, "ten": name, "ma": code, "ts": time.time(),
+        self.queue_of()[who] = {"chat_id": who, "ten": name, "ma": code, "ts": time.time(),
                            "nhac": time.time(), "lan": 1}
         return self._refusal(code)
 
@@ -142,33 +189,47 @@ class OwnerChannel:
         return str(Path(root) / "inbox" / self.key)
 
     def restart(self) -> bool:
-        if self.bot:
+        """Restart THIS account's bot. Another account's bot is a different object and is not touched.
+
+        The bot is built and started inside `config.as_user`, so its poll task (an asyncio task copies
+        the context it was created in) serves this account for its whole life."""
+        import config
+        uid = self._uid()
+        old = self.bot_of(uid)
+        if old:
             try:
-                self.bot.stop()
+                old.stop()
             except Exception as e:
                 print(f"[{self.key} stop] {e}", file=sys.stderr)
-            self.bot = None
+            self._set_bot(None, uid)
         c = self.cfg()
         if not (c.get("enabled") and self.configured(c)):
             return False
         Lop = self._transport()
         # No allow-list for the transport: `precheck` handles strangers and hands them a code.
-        self.bot = Lop(self._credentials(c), "", self.answer, self.deps.get("command"),
-                       download_dir=self.inbox_dir, precheck_fn=self.precheck,
-                       stt_fn=self.deps.get("stt"))
-        self.bot.start()
+        bot = Lop(self._credentials(c), "", config.bind_user(self.answer, uid),
+                  config.bind_user(self.deps.get("command"), uid),
+                  download_dir=config.bind_user(self.inbox_dir, uid),
+                  precheck_fn=config.bind_user(self.precheck, uid),
+                  stt_fn=self.deps.get("stt"))
+        with config.as_user(uid):
+            bot.start()
+        self._set_bot(bot, uid)
         return True
 
     def stop(self):
-        if self.bot:
-            self.bot.stop()
-            self.bot = None
+        """Stop THIS account's bot."""
+        uid = self._uid()
+        bot = self.bot_of(uid)
+        if bot:
+            bot.stop()
+            self._set_bot(None, uid)
 
     # ---- API helpers ------------------------------------------------------------------
     def status(self) -> dict:
         c = self.cfg()
         self._prune()
-        b = self.bot
+        b = self.bot_of()
         return {
             "enabled": bool(c.get("enabled")), "configured": self.configured(c),
             "allow": c.get("allow", ""), "allow_ids": self.allowed(c),
@@ -177,7 +238,7 @@ class OwnerChannel:
             "last_error": (b.last_error if b else "") or "",
             "bot_name": (b.bot_username if b else "") or "",
             "loi_danh_tinh": (getattr(b, "loi_danh_tinh", "") if b else "") or "",
-            "cho": sorted(self.queue.values(), key=lambda x: x.get("ts", 0), reverse=True),
+            "cho": sorted(self.queue_of().values(), key=lambda x: x.get("ts", 0), reverse=True),
         }
 
     def allow(self, who: str, on: bool) -> list:
@@ -193,7 +254,7 @@ class OwnerChannel:
                 import config
                 up = config.update_settings
             up({self.key: {"allow": ", ".join(ids)}})
-        self.queue.pop(who, None)
+        self.queue_of().pop(who, None)
         return self.allowed()
 
     def _sender(self):
@@ -323,6 +384,11 @@ def get(key: str):
     return None
 
 
+def bot_of(ch, uid: str = "") -> object:
+    """That channel's bot for one account (the current one when `uid` is empty)."""
+    return ch.bot_of(uid)
+
+
 def by_prefix(owner_chat: str):
     """(channel, raw id) for an owner_chat like "slack:D123", or (None, "")."""
     s = str(owner_chat or "")
@@ -335,9 +401,14 @@ def by_prefix(owner_chat: str):
 def whatsapp_app_secrets(account_secrets=()) -> list:
     """Every app secret a valid WhatsApp webhook may be signed with: the control number's plus
     each customer-bot account's."""
+    import config
     out = []
-    s = str(WHATSAPP.cfg().get("app_secret") or "").strip()
-    if s:
-        out.append(s)
+    # Every account's control number: Meta calls one public webhook with no session, so the request carries no
+    # account, and a member's number would fail the check if only the primary account's secret counted.
+    for uid in (config.list_user_ids() or [""]):
+        with config.as_user(uid):
+            s = str(WHATSAPP.cfg().get("app_secret") or "").strip()
+        if s and s not in out:
+            out.append(s)
     out.extend(x for x in account_secrets if x)
     return out

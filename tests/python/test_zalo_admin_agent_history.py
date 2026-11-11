@@ -159,7 +159,7 @@ check("/stop on Zalo cancels the tag the Zalo turn runs under", _cancelled == ["
 _src = (Path(SERVER) / "main.py").read_text(encoding="utf-8")
 _rz = _src[_src.index("def restart_zalo_bot():"):]
 _rz = _rz[:_rz.index("\n\n\n")]
-check("the Zalo admin bot is wired to _zalo_answer and _zalo_command", "_zalo_answer, _zalo_command" in _rz)
+check("the Zalo admin bot is wired to _zalo_answer and _zalo_command", '_ch_late("_zalo_answer", uid), _ch_late("_zalo_command", uid)' in _rz)
 
 # ================================================================
 # 3. Partners page histories
@@ -232,7 +232,7 @@ check("runtime: the admin token is recognised per channel", chatbot_runtime._adm
       and chatbot_runtime._admin_token("telegram") == "")
 _rt = (Path(SERVER) / "chatbot_runtime.py").read_text(encoding="utf-8")
 check("runtime: start_bot skips an account on the admin token, before making its poller",
-      _rt.index("if token == _admin_token(kenh):") < _rt.index("        tb = Lop(\n"))
+      _rt.index("if token in _admin_tokens(kenh):") < _rt.index("        tb = Lop(\n"))
 check("restarting an admin bot makes dedicated bots let go of its token",
       'chatbot_runtime.release_admin_token("zalo")' in _rz and "admin_tokens=_admin_bot_tokens" in _src)
 

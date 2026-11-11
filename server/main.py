@@ -1987,6 +1987,7 @@ async def auth_users_delete(request: Request, user_id: str = Form(...)):
     if not cfgmod.delete_user(user_id):
         return JSONResponse({"ok": False, "error": localefmt.chu("Không có tài khoản này.", "No such account.")}, status_code=404)
     cfgmod.drop_user_sessions(user_id)
+    _stop_user_channels(user_id)
     return {"ok": True}
 
 
@@ -2258,7 +2259,7 @@ def _routing_connected_ids(cfg) -> list:
 def _routing_telegram_chat_keys(cfg) -> list:
     """Telegram chats the owner talks in: configured ids plus every chat the bot remembers (not customer bots)."""
     keys = [str(x) for x in tg_parse_ids((cfg.get("telegram") or {}).get("chat_id", ""))]
-    for k in list(_TG_SID_MAP.keys()):
+    for k in list(_tg_sid_of().keys()):
         if not str(k).startswith("bot:") and "@" not in str(k):
             keys.append(str(k))
     return keys
@@ -14224,17 +14225,19 @@ def _notify_live_warn() -> str:
     qua và tự khỏi), chỉ để nói ra ở trang Việc. Rỗng = không có gì đáng báo."""
     try:
         loi = []
-        if _TG_BOT and _TG_BOT.status in ("error", "conflict"):
+        _tb, _zb = _tg_bot_of(), _zalo_bot_of()
+        if _tb and _tb.status in ("error", "conflict"):
             loi.append(localefmt.chu(
-                f"bot Telegram đang lỗi ({_TG_BOT.status}): {(_TG_BOT.last_error or '')[:160]}",
-                f"Telegram bot error ({_TG_BOT.status}): {(_TG_BOT.last_error or '')[:160]}"))
-        if _ZALO_BOT and _ZALO_BOT.status == "error":
-            loi.append(localefmt.chu(f"bot Zalo đang lỗi: {(_ZALO_BOT.last_error or '')[:160]}",
-                                     f"Zalo bot error: {(_ZALO_BOT.last_error or '')[:160]}"))
+                f"bot Telegram đang lỗi ({_tb.status}): {(_tb.last_error or '')[:160]}",
+                f"Telegram bot error ({_tb.status}): {(_tb.last_error or '')[:160]}"))
+        if _zb and _zb.status == "error":
+            loi.append(localefmt.chu(f"bot Zalo đang lỗi: {(_zb.last_error or '')[:160]}",
+                                     f"Zalo bot error: {(_zb.last_error or '')[:160]}"))
         for _oc in owner_channels.ALL:
-            if _oc.bot and _oc.bot.status == "error":
-                loi.append(localefmt.chu(f"{_oc.label} đang lỗi: {(_oc.bot.last_error or '')[:160]}",
-                                         f"{_oc.label} error: {(_oc.bot.last_error or '')[:160]}"))
+            _ob = _oc.bot_of()
+            if _ob and _ob.status == "error":
+                loi.append(localefmt.chu(f"{_oc.label} đang lỗi: {(_ob.last_error or '')[:160]}",
+                                         f"{_oc.label} error: {(_ob.last_error or '')[:160]}"))
         return "; ".join(loi)
     except Exception:
         return ""
@@ -14260,12 +14263,13 @@ async def _send_voice_file(chat_id, path, brain) -> tuple:
     """The voice note as an audio message where the channel needs the file itself. Telegram: the asking chat, or the
     owner's own chat when the reminder has none (same rule as _report_route). The web chat plays the link already."""
     cid = str(chat_id or "").strip()
-    if cid.startswith(("web:", "zalo:")) or _TG_BOT is None:
+    _tb = _tg_bot_of()
+    if cid.startswith(("web:", "zalo:")) or _tb is None:
         return False, "no file channel"
     cid = cid or _owner_telegram_id()
     if not cid:
         return False, "no Telegram chat"
-    return await _TG_BOT.send_file(path, chat=cid)
+    return await _tb.send_file(path, chat=cid)
 
 
 import gcal_read
@@ -15819,22 +15823,27 @@ async def _start_scheduler():
             print(f"[packs] đã tắt gói '{x['id']}': {x['reason']}")
     except Exception as e:
         print(f"[packs compat] {type(e).__name__}: {e}", file=__import__('sys').stderr)
-    try:
-        restart_telegram()   # bật bot Telegram nếu đã cấu hình
-    except Exception as e:
-        print(f"[telegram start] {e}", file=__import__('sys').stderr)
-    try:
-        restart_zalo_bot()   # bật bot Zalo nếu đã cấu hình
-    except Exception as e:
-        print(f"[zalo start] {e}", file=__import__('sys').stderr)
     for _oc in owner_channels.ALL:
-        try:
-            _oc.wire(answer=_tg_answer, command=_tg_command, stt=_stt_nghe,
-                     brain_root_for=lambda key: _brain_root(_tg_brain(key)),
-                     read_settings=cfgmod.read_settings, update_settings=cfgmod.update_settings)
-            _oc.restart()   # Slack / WhatsApp control channel, if configured
-        except Exception as e:
-            print(f"[{_oc.key} start] {type(e).__name__}: {e}", file=__import__('sys').stderr)
+        _oc.wire(answer=_tg_answer, command=_tg_command, stt=_stt_nghe,
+                 brain_root_for=lambda key: _brain_root(_tg_brain(key)),
+                 read_settings=cfgmod.read_settings, update_settings=cfgmod.update_settings)
+    # Multi-user: every account's own owner bots (Telegram, Zalo, Slack, WhatsApp, Discord, Lark), each in its
+    # own context. Startup has no request, so a bare call started the primary account's bots only.
+    for _uid in (cfgmod.list_user_ids() or [""]):
+        with cfgmod.as_user(_uid):
+            try:
+                restart_telegram()   # bật bot Telegram nếu đã cấu hình
+            except Exception as e:
+                print(f"[telegram start] {e}", file=__import__('sys').stderr)
+            try:
+                restart_zalo_bot()   # bật bot Zalo nếu đã cấu hình
+            except Exception as e:
+                print(f"[zalo start] {e}", file=__import__('sys').stderr)
+            for _oc in owner_channels.ALL:
+                try:
+                    _oc.restart()   # Slack / WhatsApp control channel, if configured
+                except Exception as e:
+                    print(f"[{_oc.key} start] {type(e).__name__}: {e}", file=__import__('sys').stderr)
     try:
         # DI TRÚ 0.62.4: tài khoản kênh có trước bản này chưa có trường `brain`. Suy từ con bot
         # đang trực nó; không bot nào trực thì để rỗng (= hiện ở mọi brain) chứ không đoán đại.
@@ -18063,7 +18072,7 @@ async def _voice_ask_javis(request: str, conv_sid: str, brain: str, key: str = "
         return f"Bộ não chính lỗi: {type(e).__name__}: {e}"
     finally:
         if own_key:
-            _TG_SESS.pop(_agent_sess_key(key, agent), None)
+            _tg_sess_of().pop(_agent_sess_key(key, agent), None)
     if isinstance(out, dict):
         return channel_context.strip_control_blocks(str(out.get("text") or ""))[:6000] or "(không có nội dung)"
     return str(out or "")[:6000]
@@ -19110,7 +19119,7 @@ async def _chat_socket(ws):
                             brain, lang=_lang_qd, project_id=_row0.get("project_id") or "",
                             session_id=conv_sid or "", stable=stable,
                         ) + channel_context.build_channel_block(
-                            "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
+                            "dashboard", {"session_id": conv_sid}, telegram_running=bool(_tg_bot_of()),
                             port=_javis_port(), brain_root=_brain_root(brain), session_in_turn=stable,
                         ) + _khoi_coding(_row0, brain)
                 return _legacy_prompts[_key]
@@ -19139,7 +19148,7 @@ async def _chat_socket(ws):
                         lang=_lang_qd, project_id=_row0.get("project_id") or "",
                         session_id=conv_sid or "", stable=stable,
                     ) + channel_context.build_channel_block(
-                        "dashboard", {"session_id": conv_sid}, telegram_running=bool(_TG_BOT),
+                        "dashboard", {"session_id": conv_sid}, telegram_running=bool(_tg_bot_of()),
                         port=_javis_port(), brain_root=_brain_root(brain), session_in_turn=stable,
                     ) + _khoi_coding(_row0, brain)
 
@@ -19801,7 +19810,7 @@ async def _chat_socket(ws):
                              if _row0.get("project_id") else ""
                         ) + _javis_core_block(conv_sid or "") + channel_context.build_channel_block(
                             "dashboard", {"session_id": conv_sid},
-                            telegram_running=bool(_TG_BOT), port=_javis_port(),
+                            telegram_running=bool(_tg_bot_of()), port=_javis_port(),
                             brain_root=_brain_root(brain),
                         ) + _khoi_coding(_row0, brain)   # 0.362.0: pinned folder and GitHub repos reach API brains too
 
@@ -20896,7 +20905,7 @@ async def _chat_socket(ws):
                 # Khoá dùng một lần thì phiên RAM của nó cũng phải chết theo. `_TG_SESS` chỉ
                 # được dọn khi bot Telegram khởi động lại, nên nói chuyện cả buổi là cả trăm
                 # khoá chết nằm lại, mỗi khoá còn ôm một đối tượng engine CLI.
-                _TG_SESS.pop(khoa_mach, None)
+                _tg_sess_of().pop(khoa_mach, None)
             await push_to_chat(conv_sid, out or "(việc nền xong nhưng không có nội dung)", viec=viec)
 
         async def _start_steer_turn(conv_sid, texts, brain, ids):
@@ -22925,7 +22934,7 @@ async def _uoc_tinh_tiet_kiem(brain: str = "brain") -> dict:
 
     def _dung_prompt_cu() -> str:
         return build_system_prompt(brain) + channel_context.build_channel_block(
-            "dashboard", {"session_id": "uoc-tinh"}, telegram_running=bool(_TG_BOT),
+            "dashboard", {"session_id": "uoc-tinh"}, telegram_running=bool(_tg_bot_of()),
             port=_javis_port(), brain_root=_brain_root(brain))
 
     try:
@@ -23941,6 +23950,109 @@ async def runtime_task_resume(task_id: str):
 # Telegram bot - nhắn Telegram ↔ Javis (dùng engine theo Settings; CLI thì có cả MCP)
 # ============================================================
 _TG_BOT = None
+_ZALO_BOT = None
+# Multi-user: every owner channel is PER ACCOUNT. The module globals (`_TG_BOT`, `_TG_SESS`,
+# `_TG_SID_MAP`, `_TG_BRAIN_MAP`, `_TG_AGENT_MAP`, `_ZALO_BOT`, `_ZALO_CHO`) and the legacy files in
+# STATE_DIR stay the PRIMARY account's, so an upgraded install and every test reading them keep
+# working. Any other account gets its own objects here, and its files in its own state folder.
+# Before this, a member saving a Telegram token restarted the one bot of the machine.
+_CH_BOTS: dict = {}       # (channel, user id) -> bot of a non-primary account
+_CH_STATE: dict = {}      # (map name, user id) -> dict of a non-primary account
+
+
+def _ch_uid(uid: str = "") -> str:
+    return uid or cfgmod.get_current_user_id()
+
+
+def _ch_primary(uid: str = "") -> bool:
+    uid = _ch_uid(uid)
+    return not uid or uid == cfgmod.primary_user_id()
+
+
+def _tg_bot_of(uid: str = ""):
+    """The owner Telegram bot of one account (the current one when `uid` is empty)."""
+    uid = _ch_uid(uid)
+    return _TG_BOT if _ch_primary(uid) else _CH_BOTS.get(("telegram", uid))
+
+
+def _zalo_bot_of(uid: str = ""):
+    """The owner Zalo bot of one account (the current one when `uid` is empty)."""
+    uid = _ch_uid(uid)
+    return _ZALO_BOT if _ch_primary(uid) else _CH_BOTS.get(("zalo", uid))
+
+
+def _ch_set_bot(channel: str, bot, uid: str) -> None:
+    global _TG_BOT, _ZALO_BOT
+    if _ch_primary(uid):
+        if channel == "telegram":
+            _TG_BOT = bot
+        else:
+            _ZALO_BOT = bot
+    elif bot is None:
+        _CH_BOTS.pop((channel, uid), None)
+    else:
+        _CH_BOTS[(channel, uid)] = bot
+
+
+def _ch_state_file(name: str, uid: str = "") -> Path:
+    """Where one account keeps a channel map: the legacy STATE_DIR file for the primary account
+    (read from the module constant, so a test that pins it wins), its own state folder otherwise."""
+    uid = _ch_uid(uid)
+    if _ch_primary(uid):
+        return {"tg_sid.json": _TG_SID_PATH, "tg_brain.json": _TG_BRAIN_PATH,
+                "tg_agent.json": _TG_AGENT_PATH}[name]
+    return cfgmod.get_user_state_dir(uid) / name
+
+
+def _ch_map(name: str, primary: dict, load, uid: str = "") -> dict:
+    uid = _ch_uid(uid)
+    if _ch_primary(uid):
+        return primary
+    key = (name, uid)
+    if key not in _CH_STATE:
+        _CH_STATE[key] = load(uid) if load else {}
+    return _CH_STATE[key]
+
+
+def _tg_sess_of(uid: str = "") -> dict:
+    return _ch_map("sess", _TG_SESS, None, uid)
+
+
+def _tg_sid_of(uid: str = "") -> dict:
+    return _ch_map("sid", _TG_SID_MAP, _tg_load_sid_map, uid)
+
+
+def _tg_brain_map_of(uid: str = "") -> dict:
+    return _ch_map("brain", _TG_BRAIN_MAP, _tg_load_brain_map, uid)
+
+
+def _tg_agent_map_of(uid: str = "") -> dict:
+    return _ch_map("agent", _TG_AGENT_MAP, _tg_load_agent_map, uid)
+
+
+def _zalo_cho_of(uid: str = "") -> dict:
+    return _ch_map("zalo_cho", _ZALO_CHO, None, uid)
+
+
+def _stop_user_channels(uid: str) -> None:
+    """A deleted account's owner bots stop polling: its token must not keep answering as nobody."""
+    for channel in ("telegram", "zalo"):
+        bot = _CH_BOTS.pop((channel, uid), None)
+        if bot:
+            try:
+                bot.stop()
+            except Exception as e:  # noqa: BLE001 - deleting the account goes on
+                print(f"[{channel} stop {uid[:8]}] {type(e).__name__}: {e}", file=sys.stderr)
+    with cfgmod.as_user(uid):
+        for _oc in owner_channels.ALL:
+            try:
+                _oc.stop()
+            except Exception as e:  # noqa: BLE001
+                print(f"[{_oc.key} stop {uid[:8]}] {type(e).__name__}: {e}", file=sys.stderr)
+    for key in [k for k in _CH_STATE if k[1] == uid]:
+        _CH_STATE.pop(key, None)
+
+
 # ĐA PHIÊN theo tài khoản: mỗi chat_id giữ NGỮ CẢNH RIÊNG để không lẫn hội thoại giữa
 # các người dùng chung 1 bot. Map chat_id(str) -> phiên:
 #   {"cli": engine Claude|None,   # session Claude riêng (giữ session_id để resume)
@@ -23973,10 +24085,11 @@ _TG_BRAIN_PATH = cfgmod.STATE_DIR / "tg_brain.json"
 _TG_SID_PATH = cfgmod.STATE_DIR / "tg_sid.json"
 
 
-def _tg_load_sid_map() -> dict:
+def _tg_load_sid_map(uid: str = "") -> dict:
     try:
-        if _TG_SID_PATH.exists():
-            d = json.loads(_TG_SID_PATH.read_text(encoding="utf-8"))
+        f = _ch_state_file("tg_sid.json", uid) if uid else _TG_SID_PATH
+        if f.exists():
+            d = json.loads(f.read_text(encoding="utf-8"))
             if isinstance(d, dict):
                 return {str(k): str(v) for k, v in d.items()}
     except Exception:
@@ -23989,7 +24102,7 @@ _TG_SID_MAP = _tg_load_sid_map()
 
 def _tg_save_sid_map() -> None:
     try:
-        _atomic_write_text(_TG_SID_PATH, json.dumps(_TG_SID_MAP, ensure_ascii=False, indent=2))
+        _atomic_write_text(_ch_state_file("tg_sid.json"), json.dumps(_tg_sid_of(), ensure_ascii=False, indent=2))
     except Exception as e:
         import sys
         print(f"[tg sid map write] {type(e).__name__}: {e}", file=sys.stderr)
@@ -23998,16 +24111,17 @@ def _tg_save_sid_map() -> None:
 def _tg_nho_sid(sess, sid: str) -> None:
     """Ghi nhớ chat này đang ở phiên nào, để restart xong còn nối lại."""
     key = str(sess.get("key") or "")
-    if not key or not sid or _TG_SID_MAP.get(key) == sid:
+    m = _tg_sid_of()
+    if not key or not sid or m.get(key) == sid:
         return
-    _TG_SID_MAP[key] = sid
+    m[key] = sid
     _tg_save_sid_map()
 
 
 def _tg_quen_sid(sess) -> None:
     """Bỏ liên kết bền (đổi brain, /reset). Không xoá bản ghi hội thoại, chỉ thôi nối vào nó."""
     key = str(sess.get("key") or "")
-    if key and _TG_SID_MAP.pop(key, None) is not None:
+    if key and _tg_sid_of().pop(key, None) is not None:
         _tg_save_sid_map()
 
 
@@ -24042,10 +24156,11 @@ def _tg_ngat_mach(sess, tru=None):
             sess[khoa] = None
 
 
-def _tg_load_brain_map() -> dict:
+def _tg_load_brain_map(uid: str = "") -> dict:
     try:
-        if _TG_BRAIN_PATH.exists():
-            d = json.loads(_TG_BRAIN_PATH.read_text(encoding="utf-8"))
+        f = _ch_state_file("tg_brain.json", uid) if uid else _TG_BRAIN_PATH
+        if f.exists():
+            d = json.loads(f.read_text(encoding="utf-8"))
             if isinstance(d, dict):
                 return {str(k): str(v) for k, v in d.items()}
     except Exception:
@@ -24058,7 +24173,7 @@ _TG_BRAIN_MAP = _tg_load_brain_map()
 
 def _tg_save_brain_map() -> None:
     try:
-        _atomic_write_text(_TG_BRAIN_PATH, json.dumps(_TG_BRAIN_MAP, ensure_ascii=False, indent=2))
+        _atomic_write_text(_ch_state_file("tg_brain.json"), json.dumps(_tg_brain_map_of(), ensure_ascii=False, indent=2))
     except Exception as e:
         import sys
         print(f"[tg brain map write] {type(e).__name__}: {e}", file=sys.stderr)
@@ -24094,7 +24209,8 @@ def _agent_sess_key(chat_id, agent) -> str:
 def _tg_session(chat_id):
     """Lấy (tạo nếu chưa có) phiên riêng của 1 chat_id. chat_id rỗng → gộp vào 'default'."""
     key = str(chat_id or "default")
-    s = _TG_SESS.get(key)
+    sessions = _tg_sess_of()
+    s = sessions.get(key)
     if s is None:
         s = {
             "cli": None, "codex": None, "or": None,
@@ -24104,7 +24220,7 @@ def _tg_session(chat_id):
             # "bot:<id>:<chat>" với bot chuyên trách).
             "key": key,
         }
-        _TG_SESS[key] = s
+        sessions[key] = s
     return s
 
 
@@ -24113,16 +24229,18 @@ def _tg_brain(chat_id):
     trước restart) -> brain mặc định (Settings/loop). Map bền lưu TÊN brain nên brain đã xoá/đổi
     tên thì tự dọn entry cũ và rơi về mặc định, không kẹt vào brain không còn."""
     key = str(chat_id or "default")
-    sess = _TG_SESS.get(key) or {}
+    sess = _tg_sess_of().get(key) or {}
     b = sess.get("brain")
-    if b and os.path.isdir(b):
+    if b and os.path.isdir(b) and _brain_allowed(b):
         return b
-    name = _TG_BRAIN_MAP.get(key)
+    bmap = _tg_brain_map_of()
+    name = bmap.get(key)
     if name:
-        p = str(Path(BRAINS_DIR) / name)
+        # The account's own brains folder: a member's chat must never resolve a name to the admin's brain.
+        p = str(_user_brains_dir() / name)
         if os.path.isdir(p):
             return p
-        _TG_BRAIN_MAP.pop(key, None)   # brain đã biến mất → dọn, khỏi kẹt
+        bmap.pop(key, None)   # brain đã biến mất → dọn, khỏi kẹt
         _tg_save_brain_map()
     return _read_loop_config().get("brain", "brain")
 
@@ -24133,7 +24251,7 @@ def _tg_set_brain(chat_id, brain_path):
     sess = _tg_session(chat_id)
     sess["brain"] = str(brain_path)
     try:
-        _TG_BRAIN_MAP[str(chat_id or "default")] = Path(str(brain_path)).name
+        _tg_brain_map_of()[str(chat_id or "default")] = Path(str(brain_path)).name
         _tg_save_brain_map()
     except Exception:
         pass
@@ -24146,7 +24264,7 @@ def _tg_set_brain(chat_id, brain_path):
 
 def _tg_chat_busy(chat) -> bool:
     """Chat này đang có lượt trả lời chạy dở không (đa phiên: _current là dict theo chat)."""
-    cur = getattr(_TG_BOT, "_current", None)
+    cur = getattr(_tg_bot_of(), "_current", None)
     if not isinstance(cur, dict):
         return False
     t = cur.get(str(chat)) if chat else None
@@ -24231,7 +24349,7 @@ def _tg_conv_sid(store, sess, brain, engine_label, model, channel="telegram"):
     tiếng hoặc đã dài quá 200 tin thì vẫn sang khúc mới. Khôi phục không phải là được miễn
     luật xoay. Đổi brain và /reset gọi `_tg_quen_sid` nên xoá luôn cả liên kết bền.
     """
-    sid = sess.get("sid") or _TG_SID_MAP.get(str(sess.get("key") or ""))
+    sid = sess.get("sid") or _tg_sid_of().get(str(sess.get("key") or ""))
     ly_do = "chưa có phiên nào cho chat này"
     # The project of the session a rotation retires: the next chunk is the same conversation, so it
     # stays in that project. Only a rotation carries it, never a missing record or a brain change.
@@ -24618,7 +24736,7 @@ def _manual_session_probe(key: str):
     """(sid trong kho, số tin lịch sử RAM) của phiên bot `key`, cho BẢN NHÁP ở Hộp thư (0.65.5): nháp đọc kho làm ngữ cảnh
     nhưng không được để lại dấu vết (xem `chatbot_runtime.manual_answer`)."""
     s = _tg_session(key)
-    return str(s.get("sid") or _TG_SID_MAP.get(key, "") or ""), len(s.get("bot") or [])
+    return str(s.get("sid") or _tg_sid_of().get(key, "") or ""), len(s.get("bot") or [])
 
 
 def _manual_session_undo(key: str, keep: int) -> None:
@@ -26258,7 +26376,7 @@ async def _tg_command(cmd, arg, chat=None, meta=None):
         lines = [f"• {w.get('name')} ({w.get('status')})" for w in wfs[:20]]
         return {"reply": "⚡ Workflows:\n" + "\n".join(lines) + "\n\n(Hiện chạy trên dashboard; chạy qua Telegram sẽ thêm sau.)"}
     if cmd == "retry":
-        last = (_TG_SESS.get(chat_key) or {}).get("last")
+        last = (_tg_sess_of().get(chat_key) or {}).get("last")
         if not last:
             return {"reply": "Chưa có câu nào để gửi lại."}
         return {"ask": last}
@@ -26312,10 +26430,11 @@ async def _tg_command(cmd, arg, chat=None, meta=None):
 _TG_AGENT_PATH = cfgmod.STATE_DIR / "tg_agent.json"
 
 
-def _tg_load_agent_map() -> dict:
+def _tg_load_agent_map(uid: str = "") -> dict:
     try:
-        if _TG_AGENT_PATH.exists():
-            d = json.loads(_TG_AGENT_PATH.read_text(encoding="utf-8"))
+        f = _ch_state_file("tg_agent.json", uid) if uid else _TG_AGENT_PATH
+        if f.exists():
+            d = json.loads(f.read_text(encoding="utf-8"))
             if isinstance(d, dict):
                 return {str(k): v for k, v in d.items()
                         if isinstance(v, dict) and v.get("slug") and v.get("brain")}
@@ -26329,7 +26448,7 @@ _TG_AGENT_MAP = _tg_load_agent_map()   # chat -> {"brain": brain root, "slug": a
 
 def _tg_save_agent_map() -> None:
     try:
-        _atomic_write_text(_TG_AGENT_PATH, json.dumps(_TG_AGENT_MAP, ensure_ascii=False, indent=2))
+        _atomic_write_text(_ch_state_file("tg_agent.json"), json.dumps(_tg_agent_map_of(), ensure_ascii=False, indent=2))
     except Exception as e:
         print(f"[tg agent map write] {type(e).__name__}: {e}", file=__import__('sys').stderr)
 
@@ -26428,13 +26547,13 @@ def _tg_agent_list_text(rows, head="") -> str:
 def _tg_agent_pinned(chat, root, rows):
     """(row, notice) of the agent picked with /agent for this chat. A pick whose brain changed (/brain)
     or whose agent is gone is dropped, with a notice saying Javis answers again."""
-    pin = _TG_AGENT_MAP.get(str(chat))
+    pin = _tg_agent_map_of().get(str(chat))
     if not pin:
         return None, ""
     hit = next((r for r in rows if r["slug"] == pin.get("slug")), None)
     if hit and str(pin.get("brain")) == str(root):
         return hit, ""
-    _TG_AGENT_MAP.pop(str(chat), None)
+    _tg_agent_map_of().pop(str(chat), None)
     _tg_save_agent_map()
     return None, localefmt.chu(
         f"(Cộng sự '{pin.get('slug')}' đã chọn không còn trong brain này, Javis trả lời lại từ đây.)",
@@ -26535,7 +26654,7 @@ async def _tg_owner_command(cmd, arg, chat=None, meta=None):
         rows = _tg_agent_rows(root)
         a = arg.strip()
         if a and _agent_name_key(a) in _TG_AGENT_OFF:
-            had = _TG_AGENT_MAP.pop(chat_key, None)
+            had = _tg_agent_map_of().pop(chat_key, None)
             if had:
                 _tg_save_agent_map()
             return {"reply": localefmt.chu("Javis trả lời chat này như thường.",
@@ -26555,7 +26674,7 @@ async def _tg_owner_command(cmd, arg, chat=None, meta=None):
                 else f"Không thấy cộng sự '{a}' trong brain này. Có:",
                 "Several partners share that name, pick one by its slug:" if hits
                 else f"No partner '{a}' in this brain. There are:"))}
-        _TG_AGENT_MAP[chat_key] = {"brain": str(root), "slug": hits[0]["slug"]}
+        _tg_agent_map_of()[chat_key] = {"brain": str(root), "slug": hits[0]["slug"]}
         _tg_save_agent_map()
         name = hits[0]["name"]
         return {"reply": localefmt.chu(
@@ -26566,7 +26685,7 @@ async def _tg_owner_command(cmd, arg, chat=None, meta=None):
         # The chat's agent conversations live in their own sessions (`_agent_sess_key`): /reset
         # starts those over too, not only Javis's.
         pre = chat_key + "@"
-        for k in {k for k in list(_TG_SESS) + list(_TG_SID_MAP) if str(k).startswith(pre)}:
+        for k in {k for k in list(_tg_sess_of()) + list(_tg_sid_of()) if str(k).startswith(pre)}:
             s = _tg_session(k)
             _tg_ngat_mach(s)
             s["or"] = None
@@ -26579,7 +26698,7 @@ async def _tg_owner_command(cmd, arg, chat=None, meta=None):
             "/agent <name> - pick the partner that answers this chat (/agent off: back to Javis) · "
             "@<name> <question> - ask a partner once")
     elif cmd == "status" and isinstance(res, dict) and "reply" in res:
-        pin = _TG_AGENT_MAP.get(chat_key)
+        pin = _tg_agent_map_of().get(chat_key)
         if pin:
             res["reply"] += "\n" + localefmt.chu(f"Cộng sự: {pin.get('slug')} (/agent off để về Javis)",
                                                  f"Partner: {pin.get('slug')} (/agent off to go back to Javis)")
@@ -26643,7 +26762,6 @@ async def _stt_nghe(data, ten="", agent=None):
 # ============================================================
 # Kênh Zalo Bot của CHỦ (API chính thức). Xem docs/dev/2026-08-zalo-bot-spec.md
 # ============================================================
-_ZALO_BOT = None
 # Hàng chờ ghép nối: người lạ nhắn cho bot -> vào đây kèm MÃ, chủ bấm một nút là vào whitelist.
 #
 # Vì sao không chép cách của Telegram: bên đó bắt chủ đi tìm Chat ID bằng @userinfobot rồi tự
@@ -26658,18 +26776,20 @@ ZALO_CHAT_PREFIX = "zalo:"     # owner_chat của việc giao từ Zalo: "zalo:<
 
 
 def _zalo_don_cho():
-    het = [k for k, v in _ZALO_CHO.items() if time.time() - v.get("ts", 0) > _ZALO_CHO_TTL]
+    cho = _zalo_cho_of()
+    het = [k for k, v in cho.items() if time.time() - v.get("ts", 0) > _ZALO_CHO_TTL]
     for k in het:
-        _ZALO_CHO.pop(k, None)
+        cho.pop(k, None)
 
 
 def _zalo_ghi_cho(meta) -> str:
     """Đưa một chat lạ lên hàng chờ, trả câu bot nên đáp ("" = im, vừa đáp gần đây rồi)."""
     _zalo_don_cho()
+    cho = _zalo_cho_of()
     cid = str((meta or {}).get("chat_id") or "").strip()
     if not cid:
         return ""
-    cu = _ZALO_CHO.get(cid)
+    cu = cho.get(cid)
     if cu:
         cu["lan"] = cu.get("lan", 0) + 1
         cu["ten"] = str((meta or {}).get("user_name") or cu.get("ten") or "")[:80]
@@ -26679,10 +26799,10 @@ def _zalo_ghi_cho(meta) -> str:
             return ""      # im: không để người lạ bơm tin làm ngập cả hàng chờ lẫn chat của họ
         cu["nhac"] = time.time()
         return _zalo_cau_tu_choi(cu["ma"])
-    if len(_ZALO_CHO) >= _ZALO_CHO_MAX:
-        _ZALO_CHO.pop(min(_ZALO_CHO, key=lambda k: _ZALO_CHO[k].get("ts", 0)), None)
+    if len(cho) >= _ZALO_CHO_MAX:
+        cho.pop(min(cho, key=lambda k: cho[k].get("ts", 0)), None)
     ma = f"{secrets.randbelow(9000) + 1000}"
-    _ZALO_CHO[cid] = {"chat_id": cid, "ten": str((meta or {}).get("user_name") or "")[:80],
+    cho[cid] = {"chat_id": cid, "ten": str((meta or {}).get("user_name") or "")[:80],
                       "ma": ma, "ts": time.time(), "nhac": time.time(), "lan": 1}
     return _zalo_cau_tu_choi(ma)
 
@@ -26767,20 +26887,32 @@ def _admin_bot_tokens() -> dict:
     return out
 
 
+def _ch_late(name: str, uid: str):
+    """A bot callback that looks `name` up in this module when called (so a patched function is the one that runs)
+    and runs it as account `uid` (`config.bind_user`)."""
+    return cfgmod.bind_user(lambda *a, **k: globals()[name](*a, **k), uid)
+
+
 def restart_zalo_bot():
-    """Bật lại bot Zalo theo cấu hình settings.zalo_bot (tắt bot cũ nếu có)."""
-    global _ZALO_BOT
+    """Bật lại bot Zalo của TÀI KHOẢN đang gọi theo settings.zalo_bot của nó (tắt bot cũ của nó nếu có).
+
+    Multi-user: bot của tài khoản khác không bị đụng. Bot dựng và chạy trong `as_user`, mọi callback
+    gắn tài khoản (`_ch_late`), nên lượt, brain và kho đều là của tài khoản sở hữu bot."""
+    uid = _ch_uid()
     z = cfgmod.read_settings().get("zalo_bot", {})
-    if _ZALO_BOT:
-        _ZALO_BOT.stop()
-        _ZALO_BOT = None
+    old = _zalo_bot_of(uid)
+    if old:
+        old.stop()
+        _ch_set_bot("zalo", None, uid)
     if z.get("enabled") and z.get("token"):
         # KHÔNG truyền whitelist xuống lớp vận chuyển: `_zalo_precheck` lo phần đó và còn trả
         # về mã ghép nối. Truyền cả hai là người lạ ăn hai câu từ chối cho một tin.
-        _ZALO_BOT = zalo_bot.ZaloBot(z["token"], "", _zalo_answer, _zalo_command,
-                                     download_dir=_zalo_inbox_dir,
-                                     precheck_fn=_zalo_precheck, stt_fn=_stt_nghe)
-        _ZALO_BOT.start()
+        bot = zalo_bot.ZaloBot(z["token"], "", _ch_late("_zalo_answer", uid), _ch_late("_zalo_command", uid),
+                               download_dir=_ch_late("_zalo_inbox_dir", uid),
+                               precheck_fn=_ch_late("_zalo_precheck", uid), stt_fn=_stt_nghe)
+        with cfgmod.as_user(uid):
+            bot.start()
+        _ch_set_bot("zalo", bot, uid)
         try:
             chatbot_runtime.release_admin_token("zalo")   # a dedicated bot still polling this token lets go of it
         except Exception as e:  # noqa: BLE001 - the admin bot runs either way
@@ -26792,16 +26924,17 @@ def restart_zalo_bot():
 @app.get("/zalo-bot/status")
 async def zalo_bot_status():
     z = cfgmod.read_settings().get("zalo_bot", {})
-    running = bool(_ZALO_BOT and _ZALO_BOT._task and not _ZALO_BOT._task.done())
+    _zb = _zalo_bot_of()
+    running = bool(_zb and _zb._task and not _zb._task.done())
     _zalo_don_cho()
-    cho = sorted(_ZALO_CHO.values(), key=lambda x: x.get("ts", 0), reverse=True)
+    cho = sorted(_zalo_cho_of().values(), key=lambda x: x.get("ts", 0), reverse=True)
     return {"enabled": bool(z.get("enabled")), "token_set": bool(z.get("token")),
             "chat_id": z.get("chat_id", ""), "chat_ids": tg_parse_ids(z.get("chat_id")),
             "running": running,
-            "status": (_ZALO_BOT.status if _ZALO_BOT else "off"),
-            "last_error": (_ZALO_BOT.last_error if _ZALO_BOT else ""),
-            "bot_name": (_ZALO_BOT.bot_username if _ZALO_BOT else ""),
-            "loi_danh_tinh": (_ZALO_BOT.loi_danh_tinh if _ZALO_BOT else ""),
+            "status": (_zb.status if _zb else "off"),
+            "last_error": (_zb.last_error if _zb else ""),
+            "bot_name": (_zb.bot_username if _zb else ""),
+            "loi_danh_tinh": (_zb.loi_danh_tinh if _zb else ""),
             "cho": cho}
 
 
@@ -26823,7 +26956,7 @@ async def zalo_bot_allow(chat_id: str = Form(...), on: str = Form("1")):
             ids.append(cid)
         cfgmod.update_settings({"zalo_bot": {"chat_id": ", ".join(ids)}})
     # Ra khỏi hàng chờ dù chủ chọn gì: cho phép rồi thì hết chờ, mà bấm bỏ qua cũng là đã quyết.
-    _ZALO_CHO.pop(cid, None)
+    _zalo_cho_of().pop(cid, None)
     z = cfgmod.read_settings().get("zalo_bot", {})
     return {"ok": True, "chat_ids": tg_parse_ids(z.get("chat_id"))}
 
@@ -27799,18 +27932,25 @@ async def zalo_oa_verifier_file(code: str):
 
 
 def restart_telegram():
-    """Bật lại bot theo cấu hình settings.telegram (tắt bot cũ nếu có)."""
-    global _TG_BOT
+    """Bật lại bot Telegram của TÀI KHOẢN đang gọi theo settings.telegram của nó (tắt bot cũ của nó nếu có).
+
+    Multi-user: bot và phiên của tài khoản khác không bị đụng (xem `restart_zalo_bot`)."""
+    uid = _ch_uid()
     t = cfgmod.read_settings().get("telegram", {})
-    if _TG_BOT:
-        _TG_BOT.stop()
-        _TG_BOT = None
-    _TG_SESS.clear()   # xoá mọi phiên hội thoại cũ khi khởi động lại bot
+    old = _tg_bot_of(uid)
+    if old:
+        old.stop()
+        _ch_set_bot("telegram", None, uid)
+    _tg_sess_of(uid).clear()   # xoá mọi phiên hội thoại cũ của tài khoản này khi khởi động lại bot
     if t.get("enabled") and t.get("token"):
         # `_tg_owner_*`: the shared turn and commands, plus talking to an agent (`@<agent>`, /agent).
-        _TG_BOT = TelegramBot(t["token"], t.get("chat_id", ""), _tg_owner_answer, _tg_owner_command, _tg_callback,
-                              download_dir=_tg_inbox_dir, stt_fn=_stt_nghe, precheck_fn=_tg_owner_precheck)
-        _TG_BOT.start()
+        bot = TelegramBot(t["token"], t.get("chat_id", ""),
+                          *(_ch_late(n, uid) for n in ("_tg_owner_answer", "_tg_owner_command", "_tg_callback")),
+                          download_dir=_ch_late("_tg_inbox_dir", uid), stt_fn=_stt_nghe,
+                          precheck_fn=_ch_late("_tg_owner_precheck", uid))
+        with cfgmod.as_user(uid):
+            bot.start()
+        _ch_set_bot("telegram", bot, uid)
         try:
             chatbot_runtime.release_admin_token("telegram")   # same as the Zalo admin bot (`restart_zalo_bot`)
         except Exception as e:  # noqa: BLE001 - the admin bot runs either way
@@ -27822,15 +27962,16 @@ def restart_telegram():
 @app.get("/telegram/status")
 async def telegram_status():
     t = cfgmod.read_settings().get("telegram", {})
-    running = bool(_TG_BOT and _TG_BOT._task and not _TG_BOT._task.done())
+    _tb = _tg_bot_of()
+    running = bool(_tb and _tb._task and not _tb._task.done())
     return {"enabled": bool(t.get("enabled")), "token_set": bool(t.get("token")),
             "chat_id": t.get("chat_id", ""), "chat_ids": tg_parse_ids(t.get("chat_id")),
             "running": running,
-            "status": (_TG_BOT.status if _TG_BOT else "off"),
-            "last_error": (_TG_BOT.last_error if _TG_BOT else ""),
+            "status": (_tb.status if _tb else "off"),
+            "last_error": (_tb.last_error if _tb else ""),
             # Menu lệnh "/" đặt hụt: bot vẫn chạy, chỉ là gõ "/" không sổ ra danh sách. Tách
             # khỏi last_error vì vòng poll xoá last_error sau mỗi lượt thành công.
-            "loi_menu_lenh": (getattr(_TG_BOT, "loi_menu_lenh", "") if _TG_BOT else "")}
+            "loi_menu_lenh": (getattr(_tb, "loi_menu_lenh", "") if _tb else "")}
 
 
 @app.post("/telegram/restart")
@@ -28789,17 +28930,18 @@ async def telegram_send_file(payload: dict = Body(...)):
     path = str((payload or {}).get("path", "")).strip().strip('"')
     caption = str((payload or {}).get("caption", "")).strip()
     chat_id = str((payload or {}).get("chat_id", "")).strip()
-    if not (_TG_BOT and _TG_BOT._task and not _TG_BOT._task.done()):
+    _tb = _tg_bot_of()
+    if not (_tb and _tb._task and not _tb._task.done()):
         return {"ok": False, "error": "Bot Telegram chưa chạy (bật ở Settings → Telegram)."}
     if not path:
         return {"ok": False, "error": "Thiếu path"}
     # chỉ nhận chat_id nằm trong whitelist (chống gửi tới ID lạ); ngoài whitelist → về chủ bot
-    target = chat_id if (chat_id and chat_id in (_TG_BOT.chat_ids or [])) else None
-    ok, err = await _TG_BOT.send_file(path, caption, chat=target)
+    target = chat_id if (chat_id and chat_id in (_tb.chat_ids or [])) else None
+    ok, err = await _tb.send_file(path, caption, chat=target)
     if ok:
         # ghi nhận vào ĐÚNG phiên để auto-attach cuối lượt không gửi lại file này lần nữa
         try:
-            sess = _TG_SESS.get(chat_id) if chat_id else None
+            sess = _tg_sess_of().get(chat_id) if chat_id else None
             if sess is not None:
                 sess["sent"].add(os.path.normcase(os.path.normpath(os.path.abspath(path))))
         except Exception:
@@ -29254,7 +29396,12 @@ async def _shutdown_mcp_pool():
         pass
     for _oc in owner_channels.ALL:
         try:
-            _oc.stop()
+            _oc.stop_all()
+        except Exception:
+            pass
+    for _bot in list(_CH_BOTS.values()):
+        try:
+            _bot.stop()
         except Exception:
             pass
     try:
