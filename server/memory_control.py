@@ -14,8 +14,8 @@ Limits, stated where the person can read them (docs and the screen): a brain kep
 its git history, and a backup made before forgetting still has it. Forgetting does not delete chat history; deleting
 a chat does not delete memory.
 
-A per-person profile shared by every brain lives in `STATE_DIR/user_profile.md` (spec 10.2). One instance has one
-account, so one file. It is loaded before the brain's own memory, which therefore wins where they differ (10.3).
+A per-person profile shared by every brain lives in `<account state>/user_profile.md` (spec 10.2), one file per
+account. It is loaded before the brain's own memory, which therefore wins where they differ (10.3).
 """
 from __future__ import annotations
 
@@ -235,8 +235,11 @@ def forget_memory(mem_dir: Path, slug: str) -> dict:
 # ── person profile shared by every brain ──────────────────────────────────────
 
 def _profile_path() -> Path:
+    """The profile of the account this turn runs as: a member must not read, overwrite or be prompted with another
+    account's profile. The primary account keeps the old file (its state folder is the machine's)."""
     import config as cfgmod
-    return Path(cfgmod.STATE_DIR) / "user_profile.md"
+    uid = cfgmod.current_user_id.get()
+    return (cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)) / "user_profile.md"
 
 
 def read_profile() -> str:
