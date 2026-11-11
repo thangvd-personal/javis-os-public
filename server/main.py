@@ -28869,15 +28869,19 @@ _CHAT_JOBS = chat_jobs.ChatJobs(cfgmod.STATE_DIR / "chat_jobs.json")
 
 
 def _chat_job_owner(request: Request) -> str:
-    """Who owns a job: the API token that called, else the signed-in owner (cookie, or a server with
-    no login gate). Jobs never cross owners, so one token cannot read another token's answers."""
+    """Who owns a job: the API token that called, else the signed-in account (cookie, or a server with
+    no login gate). Jobs never cross owners, so one token or account cannot read another's answers.
+    The primary account keeps the bare "owner" key it had before multi-user."""
     tid = str(getattr(request.state, "api_token_id", "") or "")
     if not tid and _bearer(request):
         # No gate on this server, so the middleware never checked the token: resolve it here so two
         # tokens still keep their jobs apart.
         entry = cfgmod.verify_api_token(_bearer(request), duong_dan_router(request))
         tid = str((entry or {}).get("id") or "")
-    return ("token:" + tid) if tid else "owner"
+    if tid:
+        return "token:" + tid
+    uid = cfgmod.get_current_user_id()
+    return "owner" if uid == cfgmod.primary_user_id() else "user:" + uid
 
 
 @app.post("/chat/jobs")

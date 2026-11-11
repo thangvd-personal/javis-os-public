@@ -213,6 +213,35 @@ with cfgmod.as_user(ADMIN):
     toks = chatbot_runtime._admin_tokens("telegram")
 check("the admin-token guard sees every account's owner bot", {"tg-admin", "tg-bob"} <= toks, str(toks))
 
+# ── 7b. /chat/jobs: a background chat answer belongs to the account that started it ──
+class _Req:
+    class state:
+        api_token_id = ""
+    headers = {}
+
+
+with cfgmod.as_user(ADMIN):
+    owner_admin = main._chat_job_owner(_Req())
+with cfgmod.as_user(BOB):
+    owner_bob = main._chat_job_owner(_Req())
+check("the primary account keeps the old job owner key", owner_admin == "owner", owner_admin)
+check("a member's chat jobs have their own owner key", owner_bob == "user:" + BOB, owner_bob)
+
+
+async def _job_answer():
+    return {"text": "admin's private answer"}
+
+
+async def _start_admin_job():
+    jid, _why = main._CHAT_JOBS.start(owner_admin, "lane-admin", _job_answer)
+    await asyncio.sleep(0.05)
+    return jid
+
+
+jid = asyncio.run(_start_admin_job())
+check("the admin reads their own job", (main._CHAT_JOBS.get(owner_admin, jid) or {}).get("job_id") == jid)
+check("bob cannot read the admin's job", main._CHAT_JOBS.get(owner_bob, jid) is None)
+
 # ── 8. Deleting an account stops its bots ────────────────────────────────────
 member_bot = main._tg_bot_of(BOB)
 r = admin.post("/auth/users/delete", data={"user_id": BOB})
