@@ -15690,8 +15690,8 @@ async def _start_scheduler():
                     print(f"[loop tick] {type(lpe).__name__}: {lpe}", file=__import__('sys').stderr)
                 # 2) Engine tự học: debounce tick (rewire sau lượt) + curator định kỳ
                 try:
-                    await learn_feature.tick()
-                    await learn_feature.curator_tick()
+                    await _for_each_user(learn_feature.tick)
+                    await _for_each_user(learn_feature.curator_tick)
                 except Exception as le:
                     print(f"[learn tick] {type(le).__name__}: {le}", file=__import__('sys').stderr)
                 # 3) Kanban: chỉ đánh thức dispatcher riêng. Không await model run tại đây.

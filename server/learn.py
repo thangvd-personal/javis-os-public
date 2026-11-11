@@ -421,7 +421,7 @@ ALLOWED_WRITE_PREFIXES = ["memory", "Memory", "Wiki", "skills", ".claude/skills"
 class LearnFeature:
     def __init__(self, deps: LearnDeps):
         self.deps = deps
-        self.config_path = Path(deps.state_dir) / "learn_config.json"
+        self._state_dir = Path(deps.state_dir)
         self.DEFAULT = {
             "enabled": True,                    # mặc định BẬT tự học ngay
             "mode": "auto",                     # dry-run | suggest | auto - mặc định tự ghi (không cần git)
@@ -457,9 +457,31 @@ class LearnFeature:
             "last_run": 0.0, "last_summary": "", "last_status": "",
         }
         self.lock = asyncio.Lock()             # serialize batch trong-process
-        self._pending: dict[str, dict] = {}    # brain -> {count, dense, urgent, last_ts, convs:set, jobs:list}
+        # account -> brain -> {count, dense, urgent, last_ts, convs:set, jobs:list}. Per account because brain names are
+        # per account: "brain" is each account's own default brain, so one shared map learned a member's turns into the
+        # admin's brain.
+        self._pending_by_user: dict[str, dict[str, dict]] = {}
         self._pending_lock = asyncio.Lock()
         self.router = self._make_router()
+
+    @property
+    def _pending(self) -> dict[str, dict]:
+        """The pending map of the account this code runs as."""
+        import config as cfgmod
+        return self._pending_by_user.setdefault(cfgmod.current_user_id.get(), {})
+
+    @property
+    def config_path(self) -> Path:
+        """learn_config.json of the account this code runs as (multi-user): its switches and the brains it learns.
+        The primary account keeps the legacy file. A `state_dir` that is not the server's (tests) is used as given."""
+        try:
+            import config as cfgmod
+            uid = cfgmod.current_user_id.get()
+            if uid and self._state_dir.resolve() == Path(cfgmod.STATE_DIR).resolve():
+                return cfgmod.get_user_state_dir(uid) / "learn_config.json"
+        except Exception:
+            pass
+        return self._state_dir / "learn_config.json"
 
     # ── config ──
     # Migration chạy ĐÚNG MỘT LẦN rồi ghi cờ. Không ép giá trị mỗi lần đọc: làm thế thì
