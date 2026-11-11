@@ -1347,18 +1347,24 @@ class _Reject(Exception):
 _DEFAULT: list = [None]
 
 
-def wire(host: ReviewHost | None) -> ReviewHost | None:
-    """`main.py` nối host học mặc định (một lần lúc khởi động) rồi gọi `register_with_pulse()`."""
+def wire(host: ReviewHost | Callable[[], ReviewHost | None] | None) -> ReviewHost | Callable | None:
+    """`main.py` nối host học mặc định (một lần lúc khởi động) rồi gọi `register_with_pulse()`.
+
+    `host` may also be a resolver returning the host of the account running now (multi-user): a host keeps in-process
+    state keyed by integer reason ids, and those ids collide across accounts' stores."""
     _DEFAULT[0] = host
     return host
 
 
 def default() -> ReviewHost | None:
-    return _DEFAULT[0]
+    h = _DEFAULT[0]
+    if h is not None and not isinstance(h, ReviewHost) and callable(h):
+        return h()
+    return h
 
 
 def _need() -> ReviewHost:
-    h = _DEFAULT[0]
+    h = default()
     if h is None:
         raise RuntimeError("agent_review chưa được nối (main.py gọi agent_review.wire)")
     return h

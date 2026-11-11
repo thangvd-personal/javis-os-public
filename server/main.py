@@ -2679,6 +2679,21 @@ def _resonance_store(user_id: str = None):
         return _RESONANCE_STORE
 
 
+def _resonance_store_exists(user_id: str = None) -> bool:
+    """Does this account (default: the current one) already have a resonance store? Never creates the file.
+
+    Multi-user: each account's store lives in its own state folder. The old probe checked the primary account's file and
+    the module global, which points at whichever account opened a store last, so a member's store looked missing (or an
+    admin's looked present) depending on who called before."""
+    uid = user_id or cfgmod.current_user_id.get()
+    try:
+        state_dir = cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)
+    except ValueError:
+        return False
+    path = state_dir / "resonance.sqlite3"
+    return path in _RESONANCE_STORES or path.is_file()
+
+
 def _resonance_turn_provider(brain) -> str:
     """Provider của bộ não chính cho lượt này (chỉ để ghi hồ sơ bản nộp A4). Lỗi thì rỗng."""
     try:
@@ -2726,7 +2741,7 @@ def _resonance_turn_agent(conv_sid, brain, get_session):
             return None
         if _brain_key(session_row.get("brain")) != _brain_key(brain):
             return None
-        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not _resonance_store_exists():
             return None
         slug, bkey = persona[1], _brain_key(brain)
         if not (_agents_dir(brain) / f"{slug}.md").is_file():
@@ -2772,8 +2787,7 @@ def _resonance_turn_enabled(root) -> bool:
     try:
         t = turn_context.current() or {}
         ag = t.get("agent") or {}
-        if not ag.get("key") or (_RESONANCE_STORE is None
-                                 and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file()):
+        if not ag.get("key") or not _resonance_store_exists():
             return False
         return not resonance.agent_gate(_resonance_store(), _brain_key(root), ag["key"], ag.get("config_version"))[1]
     except Exception as e:  # noqa: BLE001
@@ -9399,7 +9413,7 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # A1: xoá qua host thì mã Cộng hưởng của agent này nghỉ hẳn. Tạo lại cùng tên là agent MỚI, phải bật lại; mục
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
-        if _RESONANCE_STORE is not None or (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if _resonance_store_exists():
             gone = _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
             if gone:
                 # T3 (6.3): xoá agent thì mọi tín hiệu hữu ích của mã đó thành `void` (không để lại tác động).
@@ -12627,7 +12641,7 @@ def _dm_session_pin(conv_sid):
     if not conv_sid:
         return None
     try:
-        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not _resonance_store_exists():
             return None
         return _resonance_store().session_pin(conv_sid)
     except Exception as _e:  # noqa: BLE001
@@ -12753,7 +12767,7 @@ def _dm_feedback_prompt(brain, slug, conv_sid) -> str:
     `dm:<agent_key>`, mọi phiên chat riêng của agent gộp chung). Mã agent tra theo ghim của phiên, không thì dòng sống
     của slug; chưa có kho resonance.sqlite3 thì không tạo kho chỉ để đọc. Lỗi thì rỗng, không làm hỏng lượt."""
     try:
-        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not _resonance_store_exists():
             return ""
         rs = _resonance_store()
         pin = rs.session_pin(conv_sid) if conv_sid else None
@@ -12792,7 +12806,7 @@ def _dm_agent_key(brain, slug, conv_sid="", register=False):
     """Mã bền của trợ lý cho ngữ cảnh chat riêng `dm:<agent_key>`: ghim của phiên, không thì dòng sống của slug. `register`:
     chưa có thì cấp mã (KHÔNG bật Auto), như reaction chat riêng. Không tra được: ""."""
     try:
-        if not register and _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not register and not _resonance_store_exists():
             return ""
         rs = _resonance_store()
         pin = rs.session_pin(conv_sid) if conv_sid else None
@@ -29500,7 +29514,7 @@ def _team_agent_info(root, agent_key, surface=None):
     """Thành viên theo mã bền: slug hiện tại, tên, lời nhắc hệ thống của agent (vai, bộ nhớ, luật chủ dặn, bài học) và
     model riêng. None khi mã đã nghỉ, file mất hay chưa có sổ danh tính: bộ chạy coi như thành viên đã rời."""
     try:
-        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not _resonance_store_exists():
             return None
         reg = _resonance_store().agent_by_key(root, agent_key)
     except Exception:  # noqa: BLE001
@@ -29937,20 +29951,24 @@ import agent_judge
 import agent_judge_store
 
 _AGENT_JUDGE = [None]
-_AGENT_JUDGE_STORE = [None]
+_AGENT_JUDGE_STORES: dict = {}
 _JUDGE_VIEW_REGISTERED = [False]
 
 
 def _agent_judge_store(create=True):
     """Kho `agent_judge.sqlite3`, mở lười: chưa có lượt phán xử nào thì không tạo file (đọc trả None)."""
-    if _AGENT_JUDGE_STORE[0] is None:
-        path = Path(cfgmod.STATE_DIR) / agent_judge_store.STORE_NAME
+    # One store per account (multi-user), in that account's state folder, like resonance.sqlite3.
+    uid = cfgmod.current_user_id.get()
+    path = (cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)) / agent_judge_store.STORE_NAME
+    st = _AGENT_JUDGE_STORES.get(path)
+    if st is None:
         if not create and not path.is_file():
             return None
         with _LAZY_LOCK:
-            if _AGENT_JUDGE_STORE[0] is None:
-                _AGENT_JUDGE_STORE[0] = agent_judge_store.JudgeStore(path)
-    return _AGENT_JUDGE_STORE[0]
+            st = _AGENT_JUDGE_STORES.get(path)
+            if st is None:
+                st = _AGENT_JUDGE_STORES[path] = agent_judge_store.JudgeStore(path)
+    return st
 
 
 # ── Learned-knowledge mirror (owner request 2026-10-25): what bots and agents learned also lives in the brain folder
@@ -29960,7 +29978,7 @@ import learned_mirror
 
 def _learned_resonance(create: bool):
     """The resonance store for the mirror: never created just to read."""
-    if not create and _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+    if not create and not _resonance_store_exists():
         return None
     return _resonance_store()
 
@@ -30021,7 +30039,7 @@ def _agent_judge_engine_label():
 
 def _agent_judge_resonance_on(agent_key):
     try:
-        if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+        if not _resonance_store_exists():
             return False
         a = _resonance_store().agent_any(agent_key) or {}
         return bool(a.get("status") == "active" and a.get("enabled"))
@@ -30251,7 +30269,7 @@ def _team_learning():
             return (t.get("status"), t.get("team_rev")) if t else None
 
         def _store():
-            if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            if not _resonance_store_exists():
                 return None
             return _resonance_store()
         _TEAM_LEARNING[0] = agent_lessons.TeamLearning(_store, task_state=_task_state)
@@ -30791,7 +30809,7 @@ def _agent_persona(root, slug, agent_key=None):
         return ""
     if agent_key is not None:
         try:
-            if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+            if not _resonance_store_exists():
                 return ""
             reg = _resonance_store().agent_by_key(root, agent_key)
         except Exception:  # noqa: BLE001
@@ -30820,7 +30838,7 @@ def _agent_jobs_key(root, slug, register=False):
     """Mã bền của trợ lý (theo slug hiện tại). `register`: chưa có thì cấp (không bật Auto)."""
     if register:
         return _TEAM_API.register_agent(root, slug)["agent_key"]
-    if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+    if not _resonance_store_exists():
         return None
     row = _resonance_store().agent(root, slug)
     return row["agent_key"] if row and row.get("status") == "active" else None
@@ -30829,7 +30847,7 @@ def _agent_jobs_key(root, slug, register=False):
 def _agent_jobs_keys(root):
     """{slug: agent_key hay ""} mọi trợ lý của brain (một lần đọc sổ danh tính, không cấp mã mới)."""
     keys = {}
-    if _RESONANCE_STORE is not None or (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+    if _resonance_store_exists():
         for a in _resonance_store().agents(root):
             if a.get("status") == "active":
                 keys[a["slug"]] = a["agent_key"]
@@ -31124,14 +31142,16 @@ async def agent_jobs_assign(slug: str, request: Request, brain: str = "brain"):
 import agent_pulse
 import agent_pulse_host
 
-_PULSE_HOST = [None]
+# One host per account (multi-user). A host keeps in-process state keyed by integer reason ids (in-flight reasons) and a
+# context refresh mark; reason ids collide across accounts' stores, so one shared host skipped a member's reasons.
+_PULSE_HOSTS: dict = {}
 _PULSE_TICK_BUSY = [False]
 _PULSE_LOOP = [None]
 
 
 def _pulse_store():
-    """Kho resonance nếu đã có (không tạo kho chỉ để chạy nhịp hay để đọc)."""
-    if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+    """Kho resonance của tài khoản đang chạy nếu đã có (không tạo kho chỉ để chạy nhịp hay để đọc)."""
+    if not _resonance_store_exists():
         return None
     return _resonance_store()
 
@@ -31433,8 +31453,12 @@ def _pulse_send(key, ctx, text, meta):
 
 
 def _pulse_notify(key, ctx, text):
-    _pulse_on_loop(_bo_vao_hom_thu("", text, kind="report", label=localefmt.chu("Nhịp trợ lý", "Assistant pulse"),
-                                   source="pulse"))
+    # Bound to the account explicitly: the coroutine hops to the loop thread, and the bell must land in this account's
+    # inbox whatever context that hop carries.
+    notice = cfgmod.bind_user(lambda: _bo_vao_hom_thu("", text, kind="report", source="pulse",
+                                                      label=localefmt.chu("Nhịp trợ lý", "Assistant pulse")),
+                              cfgmod.current_user_id.get())
+    _pulse_on_loop(notice())
 
 
 def _pulse_interacted(p):
@@ -31454,21 +31478,32 @@ def _pulse_interacted(p):
 
 
 def _pulse_host():
-    if _PULSE_HOST[0] is None:
-        _PULSE_HOST[0] = agent_pulse_host.PulseHost(agent_pulse_host.PulseHostDeps(
-            store=_pulse_store, agents=_pulse_agents, contexts=_pulse_contexts, busy=_pulse_busy,
-            busy_snapshot=_pulse_busy_snapshot, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, opportunities=_pulse_opportunities,
-            persona=_pulse_persona, engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
-            can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
-            notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
-            brain_of=_pulse_brain_of, judge_payload=lambda c: _judge_team_payload(c)))
-        # Dựng bộ phán xử cùng lúc (đăng ký hàm phục vụ lý do related_review/wait_unblocked và hàm gửi), để sau khởi động
-        # lại các lý do còn chờ có người phục vụ ngay, không phải đợi tới tin nhóm đầu tiên.
-        try:
-            _agent_judge()
-        except Exception as _e:  # noqa: BLE001
-            print(f"[pulse host judge] {type(_e).__name__}: {_e}", file=sys.stderr)
-    return _PULSE_HOST[0]
+    """The pulse host of the account running now, built on first use and kept for the life of the process."""
+    uid = cfgmod.current_user_id.get()
+    host = _PULSE_HOSTS.get(uid)
+    if host is None:
+        with _LAZY_LOCK:
+            host = _PULSE_HOSTS.get(uid)
+            if host is None:
+                host = _PULSE_HOSTS[uid] = _build_pulse_host()
+    return host
+
+
+def _build_pulse_host():
+    host = agent_pulse_host.PulseHost(agent_pulse_host.PulseHostDeps(
+        store=_pulse_store, agents=_pulse_agents, contexts=_pulse_contexts, busy=_pulse_busy,
+        busy_snapshot=_pulse_busy_snapshot, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, opportunities=_pulse_opportunities,
+        persona=_pulse_persona, engine_for=lambda k, c, p: _pulse_engine_for(k, c, p),
+        can_enqueue=_pulse_can_enqueue, enqueue=_pulse_enqueue, propose=_pulse_propose, send=_pulse_send,
+        notify=_pulse_notify, interacted=_pulse_interacted, project_pending=_feedback_pulse_tick,
+        brain_of=_pulse_brain_of, judge_payload=lambda c: _judge_team_payload(c)))
+    # Dựng bộ phán xử cùng lúc (đăng ký hàm phục vụ lý do related_review/wait_unblocked và hàm gửi), để sau khởi động
+    # lại các lý do còn chờ có người phục vụ ngay, không phải đợi tới tin nhóm đầu tiên.
+    try:
+        _agent_judge()
+    except Exception as _e:  # noqa: BLE001
+        print(f"[pulse host judge] {type(_e).__name__}: {_e}", file=sys.stderr)
+    return host
 
 
 async def _pulse_tick():
@@ -31480,11 +31515,22 @@ async def _pulse_tick():
     _PULSE_TICK_BUSY[0] = True
     try:
         _PULSE_LOOP[0] = asyncio.get_running_loop()
-        if "1" in (os.environ.get("JAVIS_PULSE_TICK_PAUSED"), os.environ.get("JAVIS_RESONANCE_TICK_PAUSED")):
-            await _feedback_pulse_tick()
-            return
-        await _learn_tick()
-        await _pulse_host().tick()
+        paused = "1" in (os.environ.get("JAVIS_PULSE_TICK_PAUSED"), os.environ.get("JAVIS_RESONANCE_TICK_PAUSED"))
+        # Every account that already has a resonance store gets one pass, as that account, on its own host (multi-user).
+        # Before setup there are no accounts and the pass runs once, as before. A scan the host spawns copies the
+        # context, so it still resolves to the account it was claimed for after this loop moves on.
+        for uid in (cfgmod.list_user_ids() or [""]):
+            if uid and not _resonance_store_exists(uid):
+                continue
+            with cfgmod.as_user(uid):
+                try:
+                    if paused:
+                        await _feedback_pulse_tick()
+                        continue
+                    await _learn_tick()
+                    await _pulse_host().tick()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[pulse tick] {type(e).__name__}: {e}", file=sys.stderr)
     except Exception as e:  # noqa: BLE001
         print(f"[pulse tick] {type(e).__name__}: {e}", file=sys.stderr)
     finally:
@@ -31572,7 +31618,7 @@ agent_pulse_host.register(app, agent_pulse_host.PulseRouteDeps(
 def _judge_agent_key(root, slug):
     if _agent_md_path(root, slug) is None:
         return None
-    if _RESONANCE_STORE is None and not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").is_file():
+    if not _resonance_store_exists():
         return None
     row = _resonance_store().agent(root, slug)
     return row["agent_key"] if row and row.get("status") == "active" else None
@@ -31727,11 +31773,32 @@ def _learn_engine_for(key, ctx, purpose):
 
 
 agent_budget.wire(_pulse_store)
-agent_review.wire(agent_review.ReviewHost(agent_review.ReviewDeps(
-    store=_pulse_store, reactions=_feedback_projector(), engine_for=lambda k, c, p: _learn_engine_for(k, c, p),
-    persona=_pulse_persona, try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, send=_learn_send,
-    publish=lambda ev: _CHAT_RUNTIME.publish(ev), judge_payload=_learn_judge_payload, contexts=_pulse_contexts,
-    legacy=_learn_legacy)))
+_REVIEW_HOSTS: dict = {}
+
+
+def _review_host():
+    """The learning host of the account running now (multi-user), built on first use. Like the pulse host, it keeps
+    in-process state keyed by integer reason ids (running, backoff), and those ids collide across accounts' stores."""
+    uid = cfgmod.current_user_id.get()
+    host = _REVIEW_HOSTS.get(uid)
+    if host is None:
+        with _LAZY_LOCK:
+            host = _REVIEW_HOSTS.get(uid)
+            if host is None:
+                host = _REVIEW_HOSTS[uid] = agent_review.ReviewHost(agent_review.ReviewDeps(
+                    store=_pulse_store, reactions=_feedback_projector(),
+                    engine_for=lambda k, c, p: _learn_engine_for(k, c, p), persona=_pulse_persona,
+                    try_busy=_pulse_try_busy, release_busy=_pulse_release_busy, send=_learn_send,
+                    publish=lambda ev: _CHAT_RUNTIME.publish(ev), judge_payload=_learn_judge_payload,
+                    contexts=_pulse_contexts, legacy=_learn_legacy))
+    return host
+
+
+async def _review_on_judge_send(decision, payload, mode):
+    await _review_host().on_judge_send(decision, payload, mode)
+
+
+agent_review.wire(_review_host)
 agent_review.register_with_pulse()
 memory_chat.wire(memory_chat.Deps(
     memory_dir=lambda root: _brain_memory_dir(root),
@@ -31749,7 +31816,7 @@ def _learn_register_sender():
     try:
         import agent_judge  # noqa: WPS433
         if getattr(agent_judge, "default", None) and agent_judge.default() is not None:
-            agent_judge.register_sender(agent_review.default().on_judge_send)
+            agent_judge.register_sender(_review_on_judge_send)
             _LEARN_SENDER[0] = True
     except ImportError:
         return

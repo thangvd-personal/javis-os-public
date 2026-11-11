@@ -555,7 +555,7 @@ key = rt.json()["agent"]["agent_key"]
 mst = main._resonance_store()
 mctx = f"dm:{key}"
 main._pulse_opportunities = lambda k_, c_, iv: ([opp("goal:gx", kind="goal_waiting")] if c_ == mctx else [])
-main._PULSE_HOST[0] = None
+main._PULSE_HOSTS.clear()
 AP.ensure_row(mst, key, mctx)
 due_now(mst, key, mctx, 1.0)
 

@@ -511,7 +511,7 @@ class Judge:
         self.concurrency = int(concurrency)
         self._senders: list = []
         self._team_handler: Callable[[list], Any] | None = None
-        self._last_prune = 0.0
+        self._last_prune: dict = {}   # {store path: last prune}; one judge serves every account's store
         self._admit_lock = threading.Lock()
         self._related_admitted: dict = {}   # {(context_ref, root_ref, agent_key): lúc nhận} cho "một lượt mỗi tin gốc"
 
@@ -1410,8 +1410,9 @@ class Judge:
                     items.append({"wait": st.get_wait(w["id"]), "action": "expired", "reason_id": None})
                 continue
             items.append({"wait": w, "action": "released", "reason_id": w.get("reason_id")})
-        if now - self._last_prune >= PRUNE_EVERY_S:
-            self._last_prune = now
+        pkey = str(getattr(st, "path", id(st)))
+        if now - self._last_prune.get(pkey, 0.0) >= PRUNE_EVERY_S:
+            self._last_prune[pkey] = now
             try:
                 st.prune(now=now)
             except Exception as ex:  # noqa: BLE001

@@ -90,7 +90,7 @@ check("hạn mức ngày import được và nối kho mặc định (P và J g�
       and agent_budget.try_spend(lan["agent_key"], "proactive_judge") == (True, ""))
 main._learn_register_sender()
 check("bộ gửi riêng của lượt xem xét reaction đã đăng ký với bộ phán xử",
-      any(getattr(f, "__func__", None) is agent_review.ReviewHost.on_judge_send for f in main._AGENT_JUDGE[0]._senders))
+      main._review_on_judge_send in main._AGENT_JUDGE[0]._senders)
 check("hàm gửi chung của phán xử bỏ qua tin của lượt xem xét reaction (không gửi hai lần)",
       main._judge_send({"agent_key": lan["agent_key"], "context_ref": f"dm:{lan['agent_key']}", "decision_id": 8},
                        {"draft": "Bản sửa", "origin": "reaction_review"}, "send") is None)
