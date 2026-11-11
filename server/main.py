@@ -14117,7 +14117,8 @@ def _background_brains():
     except Exception:
         pass
     try:
-        # The loop registry is shared by the whole install: keep only the brains this account may open.
+        # The loop registry is per account now (self_improve.config_path); the filter stays as a guard for a
+        # registry written before that split, which still lists every account's brains in the primary file.
         values.extend(b for b in (loop_feature.scheduler_brains() or [])
                       if b == "brain" or _brain_allowed(b.removeprefix("path:")))
     except Exception:

@@ -198,7 +198,7 @@ class LoopFeature:
         self.deps = deps
         # loop_config.json cũ GIỮ NGUYÊN vị trí: nguồn migrate + nơi lưu field "brain" legacy
         # (Telegram đọc) + danh sách "brains" mà scheduler quét.
-        self.config_path = Path(deps.state_dir) / "loop_config.json"
+        self._state_dir = Path(deps.state_dir)
         self.DEFAULT = {
             "enabled": False, "brain": "brain", "mode": "full",
             "goal": "business", "custom_goal": "",
@@ -211,6 +211,20 @@ class LoopFeature:
         self.router = self._make_router()
 
     # ══════════════════════ legacy config I/O (giữ chữ ký cho shim main.py) ══════════════════════
+
+    @property
+    def config_path(self) -> Path:
+        """loop_config.json of the account this code runs as (multi-user). It holds the scheduler's brain list, so
+        one shared file made every account's tick visit the brains another account registered. The primary account
+        keeps the legacy file. A `state_dir` that is not the server's (tests) is used as given."""
+        try:
+            import config as cfgmod
+            uid = cfgmod.current_user_id.get()
+            if uid and self._state_dir.resolve() == Path(cfgmod.STATE_DIR).resolve():
+                return cfgmod.get_user_state_dir(uid) / "loop_config.json"
+        except Exception:
+            pass
+        return self._state_dir / "loop_config.json"
 
     def _read_legacy_raw(self) -> dict:
         cfg = dict(self.DEFAULT)
