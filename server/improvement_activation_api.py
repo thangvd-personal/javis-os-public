@@ -53,7 +53,7 @@ def _fail(error):
 def register(app, deps: ActivationApiDeps):
     async def owner(brain: str):
         root = await asyncio.to_thread(deps.resolve_brain, brain)
-        return Principal("owner", "owner", root)
+        return Principal.of_owner(root)
 
     async def not_bundled(principal, kind, pointer_id):
         # M6: a bundle member leaves service only with its bundle, so the state is never half new.

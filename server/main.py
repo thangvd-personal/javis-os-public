@@ -48,6 +48,7 @@ from fastapi import (
     File,
     Form,
     Header,
+    HTTPException,
     Query,
     Request,
     UploadFile,
@@ -235,6 +236,7 @@ import share_bundle  # xuất/nhập gói agent/skill/workflow (.zip) để chia
 import share_render  # dựng trang xem cho link chia sẻ (markdown -> html, khung trang)
 import share_stats  # view counter of those public links
 import share_store  # link CHIA SẺ CÔNG KHAI của một file trong brain (/s/<token>)
+import brain_grants  # tài khoản nào được mở brain của tài khoản khác (multi-user, bước 3)
 import skill_router  # nguồn chân lý khám phá skill (canonical <brain>/skills) dùng chung mọi engine
 import skill_usage  # telemetry: đếm skill nào THẬT SỰ được dùng qua javis_use_skill (tín hiệu DƯƠNG một chiều)
 import steer_inbox  # 0.206.0: messages the owner sends while a turn runs
@@ -2692,6 +2694,15 @@ def _resonance_store_exists(user_id: str = None) -> bool:
         return False
     path = state_dir / "resonance.sqlite3"
     return path in _RESONANCE_STORES or path.is_file()
+
+
+def _admin_principal(by, brain):
+    """Who a team admin op acts as. `by` is "leader:<agent_key>" for a Full-authority leader, else the owner. Before,
+    the leader ran as kind "owner" with id "leader:<key>", so every owner-only gate stayed open on that path."""
+    by = str(by or "")
+    if by.startswith("leader:"):
+        return resonance_store.Principal.of_leader(by[len("leader:"):], brain)
+    return resonance_store.Principal.of_owner(brain)
 
 
 def _resonance_turn_provider(brain) -> str:
@@ -5355,7 +5366,16 @@ def _apply_codex_hub(cli, vault_root=None):
         mcp_hub.dat_codex_vault(cli.extra_config, vault_root)
     # Profile is the hub entry only when the hub is on: then each query adds the turn's key.
     cli.hub_turn = _hub_enabled()
+    # Multi-user: a brain shared READ-ONLY. Codex has no per-call allowlist, so its own sandbox is the only fence.
+    # A Telegram engine is reused across turns, so lift the fence again when the brain changes.
+    if vault_root and _brain_read_only(str(vault_root)):
+        cli.sandbox, cli._viewer_fence = claude_cli.codex_sandbox_cho_mode("suggest"), True
+    elif getattr(cli, "_viewer_fence", False):
+        cli.sandbox, cli._viewer_fence = None, False
     return cli
+
+
+_VIEWER_DENY_TOOLS = ("Write", "Edit", "MultiEdit", "NotebookEdit", "Bash")
 
 
 def _apply_mcp(cli, mode="full", brain=None):
@@ -5384,6 +5404,16 @@ def _apply_mcp(cli, mode="full", brain=None):
             cli.mcp_strict = bool(cfgmod.read_settings().get("mcp", {}).get("strict")) and cli.mcp_config is not None
             dis = mcp_store.disallowed_tools()
             cli.disallowed_tools = dis or None
+        # Multi-user: a brain shared READ-ONLY. The hub already blocks outside actions at `suggest`, but Claude's
+        # native tools write files without the hub, so they are denied outright.
+        # A Telegram engine is reused across turns, so the fence comes off again when the brain changes.
+        if getattr(cli, "_viewer_fence", False):
+            cli.disallowed_tools = [t for t in (cli.disallowed_tools or []) if t not in _VIEWER_DENY_TOOLS] or None
+            cli._viewer_fence = False
+        if brain and _brain_read_only(brain):
+            cli.disallowed_tools = list(dict.fromkeys(list(getattr(cli, "disallowed_tools", None) or [])
+                                                      + list(_VIEWER_DENY_TOOLS)))
+            cli._viewer_fence = True
     except Exception as e:
         print(f"[mcp apply] {e}", file=__import__('sys').stderr)
     return cli
@@ -7913,6 +7943,25 @@ def _default_brain_dir() -> Path:
 brain_ident.set_default_dir(_default_brain_dir)
 
 
+def _shared_role(path, uid: str = "") -> str:
+    """`editor`/`viewer` when `path` is a brain another account shared with this one and they accepted, else ""."""
+    uid = uid or cfgmod.get_current_user_id()
+    try:
+        return brain_grants.role_of(path, uid) if uid else ""
+    except Exception:
+        return ""
+
+
+def _brain_read_only(brain: str) -> bool:
+    """The current account only holds a viewer grant on this brain: every write is refused."""
+    return _shared_role(_brain_root(brain)) == "viewer"
+
+
+def _deny_viewer_write(brain: str) -> None:
+    if _brain_read_only(brain):
+        raise HTTPException(403, localefmt.chu("Brain này chỉ được chia sẻ cho bạn ở chế độ xem", "This brain is shared with you read-only"))
+
+
 def _brain_allowed(path: str) -> bool:
     """May the current account open this brain folder?
 
@@ -7920,6 +7969,8 @@ def _brain_allowed(path: str) -> bool:
     - A member: only folders inside their own brains folder.
     - An admin (the machine owner): any other folder, as before multi-user (`path:<folder>`)."""
     uid = cfgmod.get_current_user_id()
+    if _shared_role(path, uid):
+        return True
     owner = _brain_owner(path)
     if owner and owner != uid:
         return False
@@ -7992,7 +8043,7 @@ def _khoi_coding(row, brain: str = "") -> str:
         return ""
 
 
-def _muc_quyen_luot_chat(row, user_message="") -> str:
+def _muc_quyen_luot_chat(row, user_message="", brain="") -> str:
     """Mức quyền của lượt: phiên coding lấy theo chip trên trang, còn lại giữ `full` như cũ.
 
     Khung chat thường xưa nay chạy `full` (mặc định của `_apply_mcp`); đổi mặc định đó ở đây
@@ -8003,6 +8054,9 @@ def _muc_quyen_luot_chat(row, user_message="") -> str:
     (suggest < auto < full) nên `/plan` chỉ có thể SIẾT một lượt, không bao giờ nới quyền.
     """
     if lenh_he_thong.la_luot_ke_hoach(user_message):
+        return "suggest"
+    # Multi-user: a brain another account shared READ-ONLY runs every turn at `suggest`.
+    if brain and _brain_read_only(brain):
         return "suggest"
     try:
         sid = (row or {}).get("id") or ""
@@ -8653,6 +8707,23 @@ def _list_brains_sync() -> dict:
         order = (cfgmod.read_settings() or {}).get(brain_order.SETTINGS_KEY) or []
     except Exception:
         order = []
+    # Multi-user: brains other accounts shared with this one, once accepted. Listed after the account's own, and
+    # marked `shared` (editor/viewer) so the picker can tell them apart; `path` is their address, not `name`.
+    try:
+        for g in brain_grants.for_grantee(cfgmod.get_current_user_id(), status="accepted"):
+            sp = Path(g["brain"])
+            if not sp.is_dir():
+                continue
+            try:
+                notes = _count_md(str(sp), _BRAINS_MD_CAP)
+            except Exception:
+                notes = 0
+            owner = cfgmod.get_user(user_id=g.get("owner") or "") or {}
+            out.append({"name": sp.name, "label": brain_label.display(sp), "path": str(sp), "notes": notes,
+                        "notes_capped": notes >= _BRAINS_MD_CAP, "is_default": False,
+                        "shared": g.get("role"), "shared_by": owner.get("username") or ""})
+    except Exception:
+        pass
     return {"dir": str(base), "brains": brain_order.sort(out, order)}
 
 
@@ -8661,6 +8732,89 @@ async def list_brains():
     """Liệt kê mọi brain trong BRAINS_DIR (mỗi folder con = 1 brain) + số note .md.
     Dropdown chọn brain đổ từ đây (server-side) thay vì localStorage."""
     return await asyncio.to_thread(_list_brains_sync)
+
+
+def _own_brain_dir(brain: str) -> Path | None:
+    """The brain folder `brain` names when it is one of the CURRENT account's own brains (a direct child of its
+    brains folder), else None. Only such a brain may be shared: not one shared with them, not a `path:` folder."""
+    uid = cfgmod.get_current_user_id()
+    raw = (brain or "").removeprefix("path:").strip()
+    if not raw:
+        return None
+    base = _user_brains_dir(uid)
+    p = Path(raw) if os.path.isabs(raw) else base / raw
+    try:
+        p = p.resolve()
+        if not p.is_dir() or p.parent != base.resolve() or p.name.startswith("."):
+            return None
+    except OSError:
+        return None
+    return p if not _shared_role(p, uid) else None
+
+
+@app.post("/brains/share")
+async def brain_share(brain: str = Form(...), username: str = Form(...), role: str = Form("viewer")):
+    """Invite another account to one of the caller's own brains, or change their role. Admin only. The invite stays
+    `pending` (invisible to them) until they accept it."""
+    uid = cfgmod.get_current_user_id()
+    if not cfgmod.is_admin(uid):
+        return JSONResponse({"error": localefmt.chu("Chỉ admin mới chia sẻ được brain", "Only an admin can share a brain")}, status_code=403)
+    p = _own_brain_dir(brain)
+    if p is None:
+        return JSONResponse({"error": localefmt.chu("Đây không phải brain của bạn", "Not one of your brains")}, status_code=403)
+    target = cfgmod.get_user(username=(username or "").strip()) or {}
+    gid = target.get("user_id") or ""
+    if not gid:
+        return JSONResponse({"error": localefmt.chu("Không có tài khoản này", "No such account")}, status_code=404)
+    if role not in brain_grants.ROLES:
+        return JSONResponse({"error": localefmt.chu("Vai trò phải là editor hoặc viewer", "role must be editor or viewer")}, status_code=400)
+    if gid == uid:
+        return JSONResponse({"error": localefmt.chu("Đây là tài khoản của chính bạn", "That is your own account")}, status_code=400)
+    row = brain_grants.grant(p, uid, gid, role)
+    return {"ok": True, "brain": row["brain"], "username": target.get("username"), "role": row["role"],
+            "status": row["status"]}
+
+
+@app.post("/brains/share/accept")
+async def brain_share_accept(brain: str = Form(...)):
+    """The invited account accepts a brain shared with it."""
+    row = brain_grants.accept(brain.removeprefix("path:"), cfgmod.get_current_user_id())
+    if not row:
+        return JSONResponse({"error": localefmt.chu("Không có lời mời nào cho brain này", "No invitation for this brain")}, status_code=404)
+    return {"ok": True, "brain": row["brain"], "role": row["role"]}
+
+
+@app.post("/brains/share/revoke")
+async def brain_share_revoke(brain: str = Form(...), username: str = Form("")):
+    """The owner takes a share back (`username` = who loses it), or the invited account declines/leaves (no
+    `username`). Access ends at once: the next request no longer passes the brain gate."""
+    uid = cfgmod.get_current_user_id()
+    raw = brain.removeprefix("path:")
+    if username:
+        p = _own_brain_dir(raw)
+        if p is None:
+            return JSONResponse({"error": localefmt.chu("Đây không phải brain của bạn", "Not one of your brains")}, status_code=403)
+        gid = (cfgmod.get_user(username=username.strip()) or {}).get("user_id") or ""
+        ok = bool(gid) and brain_grants.revoke(p, gid)
+    else:
+        ok = brain_grants.revoke(raw, uid)
+    if not ok:
+        return JSONResponse({"error": localefmt.chu("Không có lượt chia sẻ này", "No such share")}, status_code=404)
+    return {"ok": True}
+
+
+@app.get("/brains/shares")
+async def brain_shares():
+    """What the caller shared out (with the role and status of each) and the invitations waiting for them."""
+    uid = cfgmod.get_current_user_id()
+
+    def _name(u):
+        return (cfgmod.get_user(user_id=u) or {}).get("username") or ""
+    mine = [{"brain": r["brain"], "username": _name(r["grantee"]), "role": r["role"], "status": r["status"]}
+            for r in brain_grants._read() if r.get("owner") == uid]
+    invites = [{"brain": r["brain"], "name": Path(r["brain"]).name, "from": _name(r["owner"]), "role": r["role"]}
+               for r in brain_grants.for_grantee(uid, status="pending")]
+    return {"shared_out": mine, "invites": invites}
 
 
 @app.post("/brains/order")
@@ -9195,7 +9349,7 @@ def _core_auto_on(brain: str) -> None:
             return
         javis_core.ensure_file(_brain_root(brain))
         rs = _resonance_store()
-        owner = resonance_store.Principal("owner", "owner", bkey)
+        owner = resonance_store.Principal.of_owner(bkey)
         live = rs.agent(bkey, javis_core.SLUG)
         if live is None or not live.get("enabled"):
             if live is not None and live.get("status") == "missing":
@@ -9414,7 +9568,7 @@ async def delete_agent(slug: str = Form(...), brain: str = Form("brain")):
     # tiêu và phiên cũ giữ mã cũ. Chưa có kho thì không tạo kho chỉ để ghi việc này.
     try:
         if _resonance_store_exists():
-            gone = _resonance_store().agent_retire(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)
+            gone = _resonance_store().agent_retire(resonance_store.Principal.of_owner(_brain_key(brain)), slug)
             if gone:
                 # T3 (6.3): xoá agent thì mọi tín hiệu hữu ích của mã đó thành `void` (không để lại tác động).
                 agent_pulse.void_agent(_resonance_store(), gone["agent_key"])
@@ -9503,6 +9657,7 @@ async def agent_assets_list(slug: str, brain: str = Query("brain")):
 @app.post("/agents/{slug}/assets/files")
 async def agent_assets_add_file(slug: str, path: str = Form(...), name: str = Form(""),
                                 brain: str = Form("brain")):
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     try:
         # Kiểm đường dẫn TRƯỚC khi ghi vào frontmatter: không có bước này thì lưu được một
         # path trèo ra ngoài brain rồi mới vỡ lúc nạp nội dung vào prompt.
@@ -9788,6 +9943,9 @@ def _files_ceiling(brain: str) -> Path:
     # Multi-user: a member account is always locked inside its brain, whatever JAVIS_FILES_ROOT says
     # (a wider ceiling would open the other accounts' brains and the server's own files).
     if env and cfgmod.gate_active() and not cfgmod.is_admin(cfgmod.get_current_user_id()):
+        env = ""
+    # A brain another account shared is locked to its own root, for every role.
+    if env and _shared_role(broot):
         env = ""
     ceil = None
     if env:
@@ -10140,6 +10298,7 @@ async def files_md_hong_sua(brain: str = Form("brain"), paths: str = Form("")):
 
     Ghi bằng _atomic_write_text nên không có cảnh file bị cắt nửa chừng. Brain có bật sao lưu
     git thì mọi thay đổi vẫn lần lại được như mọi lần sửa khác."""
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     from starlette.concurrency import run_in_threadpool
     chi = None
     if (paths or "").strip():
@@ -10187,6 +10346,7 @@ def files_read(brain: str = Query("brain"), path: str = Query(...)):
 
 @app.post("/files/write")
 async def files_write(brain: str = Form("brain"), path: str = Form(...), content: str = Form("")):
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     try:
         f = _safe_path(brain, path)
     except ValueError as e:
@@ -10198,6 +10358,7 @@ async def files_write(brain: str = Form("brain"), path: str = Form(...), content
 
 @app.post("/files/mkdir")
 async def files_mkdir(brain: str = Form("brain"), path: str = Form(""), name: str = Form(...)):
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     try:
         d = _safe_path(brain, (path.rstrip("/") + "/" + _sanitize_filename(name)).lstrip("/"))
     except ValueError as e:
@@ -10208,6 +10369,7 @@ async def files_mkdir(brain: str = Form("brain"), path: str = Form(""), name: st
 
 @app.post("/files/delete")
 async def files_delete(brain: str = Form("brain"), path: str = Form(...)):
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     try:
         p = _safe_path(brain, path)
     except ValueError as e:
@@ -10226,6 +10388,7 @@ async def files_delete(brain: str = Form("brain"), path: str = Form(...)):
 
 @app.post("/files/rename")
 async def files_rename(brain: str = Form("brain"), path: str = Form(...), newname: str = Form(...)):
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     try:
         p = _safe_path(brain, path)
         parent_rel = str(Path(path).parent).replace("\\", "/")
@@ -10258,6 +10421,7 @@ async def files_upload(file: UploadFile = File(...), brain: str = Form("brain"),
                        path: str = Form(""), folder: str = Form("")):
     """Tải file vào brain. Đưa `folder` (tên logic) thì server tự tìm đúng thư mục thật;
     không thì dùng `path` như cũ (tương đối TRẦN duyệt)."""
+    _deny_viewer_write(brain)   # multi-user: a brain shared read-only refuses every write
     if folder:
         mau = _THU_MUC_LOGIC.get(folder.strip().lower())
         if not mau:
@@ -12679,8 +12843,8 @@ def _agent_overlay(brain, slug, surface, agent_key=None, session_created_at=None
         return improvement_agent.effective_overlay(
             root, key, surface, agent_text=path.read_text(encoding="utf-8"),
             memory_text=mem.read_text(encoding="utf-8") if mem.is_file() else "", session_created_at=session_created_at,
-            skill_served=skill_served, on_drift=lambda: _improvement_agents().reconcile(resonance_store.Principal(
-                "owner", "owner", str(Path(root).resolve(strict=True)))))
+            skill_served=skill_served, on_drift=lambda: _improvement_agents().reconcile(resonance_store.Principal.of_owner(
+                str(Path(root).resolve(strict=True)))))
     except Exception as _e:  # noqa: BLE001
         print(f"[agent procedure] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
         return "", ""
@@ -12696,7 +12860,7 @@ def _stage_learned_procedure(brain, slug, text, source="learn"):
     try:
         if _improvement_read_store() is None:
             return None
-        principal = resonance_store.Principal("owner", "owner", str(Path(_brain_root(brain)).resolve(strict=True)))
+        principal = resonance_store.Principal.of_owner(str(Path(_brain_root(brain)).resolve(strict=True)))
         service = _improvement_agents()
         if not service.enrolled(principal, slug):
             return None
@@ -12816,7 +12980,7 @@ def _dm_agent_key(brain, slug, conv_sid="", register=False):
         if row and row.get("status") == "active":
             return row["agent_key"]
         if register and _agent_md_path(_brain_key(brain), slug) is not None:
-            return rs.agent_register(resonance_store.Principal("owner", "owner", _brain_key(brain)), slug)["agent_key"]
+            return rs.agent_register(resonance_store.Principal.of_owner(_brain_key(brain)), slug)["agent_key"]
     except Exception as _e:  # noqa: BLE001
         print(f"[dm agent key] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
     return ""
@@ -19317,7 +19481,7 @@ async def _chat_socket(ws):
                     "grok-cli", actual_model or "", kind)
                 kcli = grok_cli.GrokCLI(cwd=_cwd_luot_chat(_row0, brain), model=actual_model,
                                         tag=turn_tag, instructions=sysprompt)
-                kcli.mode = _muc_quyen_luot_chat(_row0, user_message)
+                kcli.mode = _muc_quyen_luot_chat(_row0, user_message, brain=brain)
                 # Hub trỏ BRAIN kể cả khi cwd là repo: MCP, cron và nhắc hẹn thuộc bộ não của
                 # người dùng, không thuộc cây mã nguồn đang mở.
                 _apply_grok_hub(kcli, _brain_root(brain))
@@ -19415,7 +19579,7 @@ async def _chat_socket(ws):
                     "antigravity-cli", actual_model or "", kind)
                 acli = antigravity_cli.AntigravityCLI(cwd=_cwd_luot_chat(_row0, brain), model=actual_model,
                                                       tag=turn_tag, instructions=sysprompt)
-                acli.mode = _muc_quyen_luot_chat(_row0, user_message)
+                acli.mode = _muc_quyen_luot_chat(_row0, user_message, brain=brain)
                 # Hub trỏ BRAIN kể cả khi cwd là repo - xem chú thích ở nhánh Grok.
                 _apply_antigravity_hub(acli, _brain_root(brain))
                 # The Google account to run (extra accounts: Linux only, plan_accounts). After the hub, so an extra
@@ -19926,7 +20090,7 @@ async def _chat_socket(ws):
                                 # /plan hạ lượt xuống suggest), như engine CLI ở cùng trang.
                                 # 0.259.0: mọi khung chat của chủ (không riêng Coding) nhận
                                 # thư mục làm việc và terminal; /plan hạ lượt xuống suggest.
-                                mode=_muc_quyen_luot_chat(_row0, user_message),
+                                mode=_muc_quyen_luot_chat(_row0, user_message, brain=brain),
                                 coding_row=_row0, owner_sid=conv_sid,
                             )
                             async for ev in gen:
@@ -20069,7 +20233,7 @@ async def _chat_socket(ws):
                 cli.system_prompt = sysprompt
                 # mode: `full` cho mọi phiên như xưa nay; riêng phiên coding lấy theo chip Mức
                 # quyền của trang đó, vì ở trang ấy người dùng CHỌN mức chứ không thừa kế.
-                _apply_mcp(cli, mode=_muc_quyen_luot_chat(_row0, user_message), brain=brain)   # gắn MCP do Javis quản lý (nhiều shop POSCake...)
+                _apply_mcp(cli, mode=_muc_quyen_luot_chat(_row0, user_message, brain=brain), brain=brain)   # gắn MCP do Javis quản lý (nhiều shop POSCake...)
                 _streamed = ""      # phần đã stream - phương án dự phòng khi luồng đứt trước 'final'
                 _cli_sid = None
                 _cost = None
@@ -25823,7 +25987,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         _chu_tg = not bot
         async for ev in (await _api_stream_mcp(
                 prov, api_key, api_model, sess["or"], reasoning, brain=brain,
-                mode=_muc_quyen_luot_chat(None, text) if _chu_tg else "full",
+                mode=_muc_quyen_luot_chat(None, text, brain=brain) if _chu_tg else ("suggest" if _brain_read_only(brain) else "full"),
                 owner_sid=(str(conv_sid or f"{channel}-{chat_id}") if _chu_tg else ""),
                 owner_chat=(str(chat_id) if _chu_tg and channel == "telegram" else ""))):
             if ev["type"] == "text":
@@ -25877,7 +26041,7 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         # Cùng luật với nhánh CLI của web: tên model nhà khác không đưa cho `claude`.
         cli.model = ((api_model if prov == "anthropic-cli" else "")
                      or mcfg.get("claude_model") or None)
-        _apply_mcp(cli, brain=brain)
+        _apply_mcp(cli, mode="suggest" if _brain_read_only(brain) else "full", brain=brain)
         _plan_account_apply(cli, "anthropic-cli", mcfg)   # 0.353.0: the Claude account that should run now
         t0 = time.time()
         written = []   # file agent ghi bằng tool Write trong lượt này (ứng viên auto-gửi)
@@ -29903,7 +30067,7 @@ class _TeamAdmin:
             raise FileNotFoundError(slug)
         store = _resonance_store()
         brain = _brain_key(root)
-        a = store.agent_set_enabled(resonance_store.Principal("owner", by, brain), slug, bool(on))
+        a = store.agent_set_enabled(_admin_principal(by, brain), slug, bool(on))
         if on and a is not None:
             # Auto ĐÃ bật và đã ghi; đánh thức lỗi không được biến cả lệnh thành "chưa áp dụng" (review T1 #5). Trả lỗi
             # đánh thức để bộ chạy ghi nhật ký nhóm; lần kiểm lại agent_recheck vẫn đánh thức sau.
@@ -30617,7 +30781,7 @@ def _dm_reaction_author(sess: dict) -> tuple:
         live = rs.agent(bkey, slug)
         return (live["agent_key"], int(live["config_version"])) if live else ("", 0)
     try:
-        rs.agent_register(resonance_store.Principal("owner", "owner", bkey), slug)
+        rs.agent_register(resonance_store.Principal.of_owner(bkey), slug)
     except Exception as _e:   # noqa: BLE001
         print(f"[dm reaction register] {slug}: {type(_e).__name__}: {_e}", file=sys.stderr)
     a = rs.session_agent(bkey, sid, slug, float(sess.get("created_at") or 0), pin=True)
@@ -30896,7 +31060,7 @@ def _agent_jobs_teams(key, root):
 def _agent_jobs_sources(root, key):
     goals = _resonance_store() if key else None
     teams = _TEAM_API.teams() if (key and _TEAM_API.exists()) else None
-    return goals, teams, resonance_store.Principal("owner", "owner", root)
+    return goals, teams, resonance_store.Principal.of_owner(root)
 
 
 # 0.205.0: unread counts and mute for private partner chats (server/agent_notify.py).
@@ -32185,7 +32349,7 @@ def _auto_learning_policy_on(root):
         store = _improvement_read_store()
         if store is None:
             return True
-        principal = resonance_store.Principal("owner", "owner", str(Path(root).resolve(strict=True)))
+        principal = resonance_store.Principal.of_owner(str(Path(root).resolve(strict=True)))
         return store.get_policy(principal).get("mode") != "off"
     except Exception as _e:  # noqa: BLE001 - unknown policy: do not learn
         print(f"[auto-learning policy] {type(_e).__name__}: {_e}", file=sys.stderr)
@@ -32237,7 +32401,7 @@ def _auto_learning_settings(root):
 
 
 def _auto_learning_principal(root):
-    return resonance_store.Principal("owner", "owner", str(Path(root).resolve(strict=True)))
+    return resonance_store.Principal.of_owner(str(Path(root).resolve(strict=True)))
 
 
 def _auto_learning_agent_procedure(root, slug):
@@ -32418,7 +32582,7 @@ def _improvement_suspend_skill(brain, slug):
     try:
         root = str(Path(_brain_root(brain)).resolve(strict=True))
         if _improvement_read_store() is not None:
-            _improvement_activations().suspend_source(resonance_store.Principal("owner", "owner", root), slug)
+            _improvement_activations().suspend_source(resonance_store.Principal.of_owner(root), slug)
     except Exception as error:  # noqa: BLE001 - bookkeeping must never fail the skill toggle
         print(f"[improvement activation] suspend {slug}: {type(error).__name__}: {error}", file=sys.stderr)
 

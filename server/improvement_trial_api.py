@@ -129,7 +129,7 @@ def register(app, deps: TrialApiDeps):
             root = await _settled_call(deps.resolve_brain, brain)
             if type(root) is not str or not root:
                 raise TypeError("concrete_trial_brain_required")
-            principal = Principal("owner", "owner", root)
+            principal = Principal.of_owner(root)
             for identifier in identifiers:
                 _identifier(identifier)
             number = _attempt(attempt) if attempt is not None else None

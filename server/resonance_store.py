@@ -445,6 +445,23 @@ class Principal:
     def by(self) -> str:
         return f"{self.kind}:{self.id}"
 
+    @classmethod
+    def of_owner(cls, brain_id: str) -> Principal:
+        """The signed-in person acting through the host: `id` is their account's user_id (multi-user), so every `by`
+        column says who did it. Before setup there are no accounts and `id` stays "owner", as in single-user."""
+        import config
+        try:
+            uid = config.get_current_user_id()
+        except Exception:  # noqa: BLE001
+            uid = ""
+        return cls("owner", uid or "owner", brain_id)
+
+    @classmethod
+    def of_leader(cls, agent_key: str, brain_id: str) -> Principal:
+        """A team leader holding Full authority, acting for the owner inside the caps the owner granted. Its own kind,
+        so owner-only gates stay closed to it; only the calls a leader may make accept it."""
+        return cls("leader", agent_key, brain_id)
+
 
 # Called as fn(brain_id, slug, agent_key) after a NEW agent key for (brain, slug) is committed by `agent_register` or a
 # first `agent_set_enabled`. learned_mirror uses it to import the agent's mirrored knowledge from the brain folder before
@@ -670,6 +687,11 @@ class GoalStore:
                 "created_at": r["created_at"], "updated_at": r["updated_at"]}
 
     @staticmethod
+    def _owner_or_leader(p: Principal) -> None:
+        if p.kind not in ("owner", "leader"):
+            raise PermissionError("chỉ chủ dự án hoặc trưởng nhóm có Toàn quyền mới đổi được sổ đăng ký agent")
+
+    @staticmethod
     def _owner_only(p: Principal) -> None:
         if p.kind != "owner":
             raise PermissionError("chỉ chủ dự án mới đổi được sổ đăng ký agent")
@@ -746,7 +768,7 @@ class GoalStore:
         Tắt một agent chưa đăng ký thì không có gì để làm (trả None). Agent `missing` không bật được tới khi
         chủ dự án xác nhận (`agent_confirm`), nhưng tắt thì luôn được. Đặt lại đúng giá trị đang có không tăng version.
         Kiểm file agent còn tồn tại là việc của người gọi (host biết cấu trúc brain), không phải của kho."""
-        self._owner_only(p)
+        self._owner_or_leader(p)
         slug = str(slug or "").strip()
         if not slug:
             raise AgentStateError("thiếu slug agent")

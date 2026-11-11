@@ -102,7 +102,7 @@ def register(app, deps: ResonanceApiDeps):
         root = deps.brain_key(brain or "")
         if not root or not Path(root).is_dir():
             return None, None
-        return root, RS.Principal("owner", "owner", root)
+        return root, RS.Principal.of_owner(root)
 
     def _off(why: str) -> JSONResponse:
         return _err(403, f"Trợ lý chưa bật Auto ({why})", f"The assistant has Auto turned off ({why})",
@@ -260,7 +260,7 @@ def register(app, deps: ResonanceApiDeps):
             return _off(str(e))
         if g.agent_key != ag["agent_key"]:
             return _err(409, "Tin này đã gắn với mục tiêu của trợ lý khác", "This message already belongs to another goal")
-        return {"ok": True, "goal": await _view(store, RS.Principal("owner", "owner", root), g.id, root)}
+        return {"ok": True, "goal": await _view(store, RS.Principal.of_owner(root), g.id, root)}
 
 
 def register_agents(app, deps: ResonanceApiDeps):
@@ -270,7 +270,7 @@ def register_agents(app, deps: ResonanceApiDeps):
         root = deps.brain_key(brain or "")
         if not root or not Path(root).is_dir():
             return None, None
-        return root, RS.Principal("owner", "owner", root)
+        return root, RS.Principal.of_owner(root)
 
     def _manage(brain: str):
         root, owner = _ctx(brain)
@@ -287,7 +287,7 @@ def register_agents(app, deps: ResonanceApiDeps):
                 "registered": reg is not None, "agent_key": (reg or {}).get("agent_key"),
                 "enabled": bool((reg or {}).get("enabled")), "status": (reg or {}).get("status") or "unregistered",
                 "config_version": (reg or {}).get("config_version"),
-                "goals_open": len(store.list_open(RS.Principal("owner", "owner", root), agent_key=reg["agent_key"]))
+                "goals_open": len(store.list_open(RS.Principal.of_owner(root), agent_key=reg["agent_key"]))
                 if reg else 0,
                 "reviewer": _reviewer_of(store, root, reg)}
 
@@ -451,7 +451,7 @@ def register_learning(app, deps: ResonanceApiDeps):
         root = deps.brain_key(brain or "")
         if not root or not Path(root).is_dir():
             return None, None
-        return root, RS.Principal("owner", "owner", root)
+        return root, RS.Principal.of_owner(root)
 
     def _sha(text: str) -> str:
         return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()
@@ -655,7 +655,7 @@ def register_a4(app, deps: ResonanceApiDeps):
         root = deps.brain_key(brain or "")
         if not root or not Path(root).is_dir():
             return None, None, _err(404, "Không tìm thấy brain", "Brain not found")
-        return root, RS.Principal("owner", "owner", root), None
+        return root, RS.Principal.of_owner(root), None
 
     @app.get("/goals/{goal_id}/drafts/{submission_id}")
     async def goal_draft(goal_id: str, submission_id: str, brain: str = "brain"):
@@ -693,7 +693,7 @@ def register_a5(app, deps: ResonanceApiDeps):
         root = deps.brain_key(brain or "")
         if not root or not Path(root).is_dir():
             return None, None
-        return root, RS.Principal("owner", "owner", root)
+        return root, RS.Principal.of_owner(root)
 
     @app.post("/resonance/agents/reviewer")
     async def resonance_agent_reviewer(request: Request, brain: str = "brain"):

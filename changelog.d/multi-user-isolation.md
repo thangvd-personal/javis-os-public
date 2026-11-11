@@ -19,6 +19,7 @@ title: Every account's engines reach the MCP hub as that account
 - **Trợ lý của member giờ tự chủ động như của admin.** Trước đây nhịp chủ động của trợ lý (tự xem việc, nhắc, đề xuất) chỉ chạy trên dữ liệu của tài khoản chính, nên trợ lý của member không bao giờ tự lên tiếng, và nhãn "nên nói / nên im" của member ghi nhầm vào kho của admin.
 - **Học tự động từ chat theo từng tài khoản.** Mỗi tài khoản có bộ học riêng, dùng cài đặt, engine và chính sách của chính mình.
 - **Sao lưu GitHub không còn mang brain của tài khoản khác.** Trước đây bản sao lưu của tài khoản chính chụp cả thư mục `.users/`, nên ghi chú của mọi member đi chung một repo. Giờ chỉ brain của tài khoản chính được đẩy lên, và khôi phục không ghi đè file của member.
+- **Nhật ký Resonance ghi đúng tài khoản đã làm, và trưởng nhóm không còn quyền của chủ.** Trước đây mọi thao tác của chủ đều ghi `owner:owner`, nên không biết tài khoản nào đã làm. Giờ ghi `owner:<user_id>`. Trưởng nhóm có Toàn quyền trước đây chạy dưới danh nghĩa chủ nên mở được mọi cổng chỉ dành cho chủ; giờ nó có loại riêng và chỉ bật tắt được agent.
 
 ## en
 ### Security
@@ -37,3 +38,4 @@ title: Every account's engines reach the MCP hub as that account
 - **A member's assistants now speak up on their own, like the admin's.** Before, the assistants' proactive pulse (checking work, reminding, proposing) ran only on the primary account's data, so a member's assistants never spoke up, and a member's "should speak / should stay quiet" labels were saved into the admin's store.
 - **Automatic learning from chat is per account.** Each account has its own learner, using its own settings, engine and policy.
 - **The GitHub backup no longer carries other accounts' brains.** Before, the primary account's backup included the `.users/` folder, so every member's notes went to one repo. Now only the primary account's brains are pushed, and a restore never writes over a member's files.
+- **The Resonance log records which account acted, and a team leader no longer holds owner rights.** Before, every owner action was logged as `owner:owner`, so no one could tell which account did it. Now it records `owner:<user_id>`. A team leader with Full authority used to run as the owner, so every owner-only gate was open to it; it now has its own kind and can only switch agents on or off.

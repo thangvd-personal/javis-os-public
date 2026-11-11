@@ -81,7 +81,7 @@ def _error(error: Exception):
 def register(app, deps: ImprovementApiDeps):
     async def owner(brain: str):
         root = await asyncio.to_thread(deps.resolve_brain, brain)
-        return Principal("owner", "owner", root)
+        return Principal.of_owner(root)
 
     async def read_policy(principal):
         wrapper = await asyncio.to_thread(deps.read_store)

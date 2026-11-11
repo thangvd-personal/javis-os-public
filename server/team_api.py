@@ -354,7 +354,7 @@ class TeamApi:
         return {"kind": str(team.get("created_by") or "owner"), "you": True, "name": name}
 
     def register_agent(self, root: str, slug: str) -> dict:
-        return self.deps.resonance_store().agent_register(RS.Principal("owner", "owner", root), slug)
+        return self.deps.resonance_store().agent_register(RS.Principal.of_owner(root), slug)
 
     # ───────────── nền ─────────────
 

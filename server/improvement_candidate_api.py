@@ -166,7 +166,7 @@ def register(app, deps: CandidateApiDeps):
             root = await _settled_call(deps.resolve_brain, brain)
             if type(root) is not str or not root:
                 raise TypeError("candidate_brain_required")
-            principal = Principal("owner", "owner", root)
+            principal = Principal.of_owner(root)
             body = _validate(await read_json(request), operation) if operation is not None else None
 
             def perform():

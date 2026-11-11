@@ -85,7 +85,7 @@ def register(app, deps):
             root = await _settled_call(deps.resolve_brain, brain)
             if type(root) is not str or not root:
                 raise TypeError("concrete_experiment_brain_required")
-            principal = Principal("owner", "owner", root)
+            principal = Principal.of_owner(root)
             for identifier in identifiers:
                 _identifier(identifier)
             data = validate(await read_json(request), operation) if operation else None
