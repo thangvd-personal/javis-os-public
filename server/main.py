@@ -3045,15 +3045,30 @@ async def _resonance_tick():
     # được mục tiêu nhưng không lượt việc nền nào chạy cho tới khi tiến trình khác (không đặt biến) nhận lịch.
     if os.environ.get("JAVIS_RESONANCE_TICK_PAUSED") == "1":
         return
-    if _RESONANCE_TICK_BUSY[0] or not (Path(cfgmod.STATE_DIR) / "resonance.sqlite3").exists():
+    if _RESONANCE_TICK_BUSY[0]:
+        return
+    # Every account has its own resonance.sqlite3 (multi-user); visiting only the primary account's left a member's
+    # goals never ticking. Each pass runs as that account, so the store, brains and notices resolve to it.
+    due = []
+    for uid in (cfgmod.list_user_ids() or [""]):
+        try:
+            sd = cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)
+        except ValueError:
+            continue
+        if (sd / "resonance.sqlite3").exists():
+            due.append(uid)
+    if not due:
         return
     _RESONANCE_TICK_BUSY[0] = True
     try:
-        store = _resonance_store()
-        await resonance.tick(store, time.time(), _resonance_deps)
-        await resonance.drain_outbox(store, _resonance_notify, already=_resonance_reported)
-    except Exception as e:  # noqa: BLE001
-        print(f"[resonance tick] {type(e).__name__}: {e}", file=sys.stderr)
+        for uid in due:
+            with cfgmod.as_user(uid):
+                try:
+                    store = _resonance_store()
+                    await resonance.tick(store, time.time(), _resonance_deps)
+                    await resonance.drain_outbox(store, _resonance_notify, already=_resonance_reported)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[resonance tick] {type(e).__name__}: {e}", file=sys.stderr)
     finally:
         _RESONANCE_TICK_BUSY[0] = False
 
