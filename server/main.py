@@ -32105,7 +32105,9 @@ def _improvement_loop_runs():
 
 # -- Automatic learning from chat (0.341.0): skills, agents and workflows learn from real mistakes ------------------
 
-_AUTO_LEARNER = [None]
+# One learner per account (multi-user): its store holds that account's turns, and its host reads that account's settings,
+# engine and improvement policy. Keyed by user id; "" before setup.
+_AUTO_LEARNERS: dict = {}
 _AUTO_LEARNER_LOCK = __import__("threading").Lock()
 _AUTO_LEARNING_BUSY = [False]
 
@@ -32272,10 +32274,11 @@ def _auto_learning_workflow_run(run_id):
 
 
 def _auto_learner():
+    uid = cfgmod.current_user_id.get()
     with _AUTO_LEARNER_LOCK:
-        if _AUTO_LEARNER[0] is None:
+        if uid not in _AUTO_LEARNERS:
             import auto_learning
-            state = Path(cfgmod.STATE_DIR) / "improvement"
+            state = (cfgmod.get_user_state_dir(uid) if uid else Path(cfgmod.STATE_DIR)) / "improvement"
             host = auto_learning.Host(
                 text_call=lambda system, prompt: _improvement_text_call(
                     system, prompt, "auto-learning-" + __import__("secrets").token_hex(4), _auto_learning_spec()),
@@ -32295,10 +32298,10 @@ def _auto_learner():
                 workflow_run=_auto_learning_workflow_run,
                 backups=state / "auto-learning-backups",
                 settings=_auto_learning_settings)
-            _AUTO_LEARNER[0] = auto_learning.AutoLearner(auto_learning.Store(state / "auto_learning.sqlite3"), host)
-            auto_learning.SKILL_USE_HOOK[0] = lambda root, session_id, slug: _AUTO_LEARNER[0].note_skill_use(
+            _AUTO_LEARNERS[uid] = auto_learning.AutoLearner(auto_learning.Store(state / "auto_learning.sqlite3"), host)
+            auto_learning.SKILL_USE_HOOK[0] = lambda root, session_id, slug: _auto_learner().note_skill_use(
                 _brain_key(root), session_id, slug)
-        return _AUTO_LEARNER[0]
+        return _AUTO_LEARNERS[uid]
 
 
 def _auto_learning_note_tool(brain, conv_sid, event):
@@ -32318,9 +32321,13 @@ async def _auto_learning_tick():
         return
     _AUTO_LEARNING_BUSY[0] = True
     try:
-        await asyncio.to_thread(_auto_learner().step)
-    except Exception as _e:  # noqa: BLE001
-        print(f"[auto-learning tick] {type(_e).__name__}: {_e}", file=sys.stderr)
+        for uid in (cfgmod.list_user_ids() or [""]):
+            with cfgmod.as_user(uid):
+                try:
+                    # to_thread copies the context, so the worker runs as this account.
+                    await asyncio.to_thread(lambda: _auto_learner().step())
+                except Exception as _e:  # noqa: BLE001
+                    print(f"[auto-learning tick] {type(_e).__name__}: {_e}", file=sys.stderr)
     finally:
         _AUTO_LEARNING_BUSY[0] = False
 
