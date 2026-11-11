@@ -39,6 +39,15 @@ def _xep_hang(backlog: deque, event: dict) -> None:
     backlog.append(event)
 
 
+def _current_user() -> str:
+    """The account this code runs as, or "" when config is not loaded (this module is also used on its own)."""
+    try:
+        import config
+        return config.current_user_id.get() or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 @dataclass
 class _Client:
     writer: Writer
@@ -56,6 +65,7 @@ class ChatJob:
     text: str = ""
     runtime_task_id: str = ""
     runtime_step_id: str = ""
+    user_id: str = ""          # the account that started the turn ("" = no account, before setup)
 
 
 class ChatRuntime:
@@ -104,10 +114,14 @@ class ChatRuntime:
         return fut
 
     def register_job(self, session_id: str, task: asyncio.Task, tag: str,
-                     runtime_task_id: str = "", runtime_step_id: str = "") -> None:
+                     runtime_task_id: str = "", runtime_step_id: str = "",
+                     user_id: str | None = None) -> None:
+        if user_id is None:
+            user_id = _current_user()
         self._jobs[session_id] = ChatJob(
             task=task, tag=tag,
             runtime_task_id=runtime_task_id, runtime_step_id=runtime_step_id,
+            user_id=user_id or "",
         )
 
     def get_job(self, session_id: str) -> ChatJob | None:
@@ -143,10 +157,14 @@ class ChatRuntime:
             # Giữ entry tới finally của job để client vẫn nhận turn_done.
         return tags
 
-    def snapshot(self) -> list[dict]:
+    def snapshot(self, user_id: str | None = None) -> list[dict]:
+        """Running turns, for a page that just connected. `user_id` keeps only that account's turns (and the ones
+        started with no account); None lists every turn."""
         out = []
         for session_id in list(self._jobs):
             job = self.get_job(session_id)
+            if job and user_id is not None and job.user_id and job.user_id != user_id:
+                continue
             if job:
                 item = {"session_id": session_id, "text": job.text}
                 if job.runtime_task_id:
@@ -161,9 +179,6 @@ class ChatRuntime:
 
         An event carrying `_user` goes only to pages signed in as that account (an account's bell must not ring on
         another account's page); the key is taken off before sending. Without it every page gets the event."""
-        user_id = event.get("_user") if "_user" in event else None
-        if user_id is not None:
-            event = {k: v for k, v in event.items() if k != "_user"}
         session_id = str(event.get("session_id") or "")
         job = self.get_job(session_id) if session_id else None
         if job:
@@ -173,6 +188,13 @@ class ChatRuntime:
             elif kind == "response":
                 job.text = str(event.get("content") or job.text)
 
+        # An event for one session goes only to pages of the account that started the turn: a job's token stream
+        # must not land in another account's open tab. An explicit `_user` wins (the bell ping has no job).
+        user_id = event.get("_user") if "_user" in event else None
+        if user_id is not None:
+            event = {k: v for k, v in event.items() if k != "_user"}
+        elif session_id and job and job.user_id:
+            user_id = job.user_id
         if not self._clients:
             return
         now = asyncio.get_running_loop().time()

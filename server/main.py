@@ -18863,7 +18863,7 @@ async def _chat_socket(ws):
         "type": "hello",
         "stop_tag": conn_tag,
         "capabilities": ["adaptive_voice_v1"],
-        "running": _CHAT_RUNTIME.snapshot(),
+        "running": _CHAT_RUNTIME.snapshot(cfgmod.current_user_id.get()),
         # Lượt đang chờ gói thuê bao mở lại hạn mức, để F5 xong thẻ "tự chạy lại" còn dựng được.
         "resumes": limit_resume.REGISTRY.snapshot(),
     })

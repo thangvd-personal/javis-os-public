@@ -9,7 +9,8 @@ Law after the fix:
   2. Marking read or deleting in one account leaves the other's untouched.
   3. News read marks are per account.
   4. Push subscriptions are per account.
-  5. The bell's WebSocket ping reaches only pages signed in as that account.
+  5. The bell's WebSocket ping, and a running turn's stream, reach only pages signed in as that account. A page
+     that connects is told only about its own account's running turns.
 
 Run:
     python tests/run.py inbox_per_user
@@ -111,10 +112,22 @@ async def _ping():
     rt.add_client("x", w("x"))
     await rt.publish({"type": "inbox", "session_id": "", "_user": BOB})
     await rt.publish({"type": "stream", "session_id": "s", "content": "hi"})
+    with cfgmod.as_user(BOB):
+        t = asyncio.create_task(asyncio.sleep(1))
+        rt.register_job("bob-sess", t, "chat:bob")
+    await rt.publish({"type": "stream", "session_id": "bob-sess", "content": "bob's secret answer"})
+    got["snap_a"] = rt.snapshot(ADMIN)
+    got["snap_b"] = rt.snapshot(BOB)
+    t.cancel()
 
 
 asyncio.run(_ping())
-check("bob's bell ping reaches bob's page only", len(got["b"]) == 2 and len(got["a"]) == 1 and len(got["x"]) == 1, str(got))
+streams = lambda k: [e for e in got[k] if e.get("session_id") == "bob-sess"]  # noqa: E731
+check("a member's answer streams only to the member's pages", len(streams("b")) == 1 and not streams("a"), str(got))
+check("a page that connects sees only its account's running turns",
+      [j["session_id"] for j in got["snap_b"]] == ["bob-sess"] and got["snap_a"] == [], str(got["snap_a"]))
+check("bob's bell ping reaches bob's page only", [e["type"] for e in got["a"]].count("inbox") == 0
+      and [e["type"] for e in got["b"]].count("inbox") == 1 and [e["type"] for e in got["x"]].count("inbox") == 0, str(got))
 check("the account key is not sent to the page", "_user" not in got["b"][0], str(got["b"][:1]))
 
 print()
