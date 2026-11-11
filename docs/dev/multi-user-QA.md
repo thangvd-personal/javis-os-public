@@ -805,25 +805,86 @@ Giữ nguyên thứ tự ở Phần 9, thêm bốn việc mới. Việc **0**, *
 
 ---
 
-## Phần 13. Cập nhật triển khai multi-user và phân lập thư mục state (2026-11-09)
+## Phần 13. Triển khai multi-user trên nhánh `nguyenban` (2026-11-09)
 
-Đã hoàn thiện triển khai kiến trúc multi-user trên nền FastAPI + SQLite mà không cần nhân bản service:
+Phần này ghi cái ĐÃ LÀM và cái CHƯA LÀM. Nó thay bản Phần 13/14 viết lúc đầu. Bản đó ghi "cô lập hoàn toàn", nhưng lần rà soát chạy app thật thì thấy sáu lỗi (Phần 14.1). Cả sáu đã được sửa trên cùng nhánh, mỗi lỗi một commit.
 
-### 13.1 Tách biệt xác thực hệ thống và trạng thái người dùng
-- Toàn bộ thông tin tài khoản được tách khỏi `settings.json` sang `server/state/auth.json` (danh sách `users`, mỗi người dùng có `user_id` định dạng UUID v4, `username`, `password_hash`, `salt`, `totp`).
-- Thư mục trạng thái của từng người dùng được cô lập hoàn toàn tại `server/state/[user_id]/`.
-- Các tệp trạng thái và cơ sở dữ liệu SQLite (`settings.json`, `conversations.db`, `customer_conversations.sqlite3`, `kanban.sqlite3`, `runtime.db`, `login_vault.sqlite3`, `web_watch.sqlite3`, `github_work.db`, `resonance.sqlite3`, `packs/`, `cache/`...) đều nằm trọn vẹn trong `server/state/[user_id]/`.
+### 13.1 Mô hình đang chạy
 
-### 13.2 Session mang danh tính người dùng và ContextVar
-- `new_session(user_id, username)` lưu `user_id` cùng token trong `.sessions.json`.
-- Middleware `_auth_guard` đọc cookie phiên và gán ContextVar `current_user_id` cho từng request HTTP/WebSocket.
-- Mọi hàm truy xuất đường dẫn trạng thái `get_user_state_dir(user_id=None)` tự động nhận diện `user_id` từ ContextVar của request hiện tại hoặc fallback về user đầu tiên/mặc định khi chạy ngoài request (background jobs, CLI).
-- Dynamic Connection Pooling cho SQLite: các module lưu trữ duy trì connection pool theo đường dẫn tệp thực tế của từng tenant, loại bỏ hoàn toàn rủi ro xung đột lock giữa nhiều người dùng đồng thời.
+- **Tài khoản** nằm ở `auth.json` trong **gốc state** (`JAVIS_STATE_DIR`, mặc định `server/state/`), không còn trong `settings.json`. Mỗi tài khoản có `user_id` (UUID v4), `username`, `password_hash`, `salt`, `totp` riêng (secret TOTP mã hoá từng người) và `role`.
+- **Phiên** nằm ở `.sessions.json` cạnh `auth.json`, dạng `{token: {user_id, username, ts, last_active}}`. Phiên cũ dạng số `ts` vẫn đọc được, và được coi là của tài khoản chính. Ghi phiên có khoá và ghi nguyên tử (tmp rồi `os.replace`), tức việc số 1 của lộ trình đã xong.
+- **Tài khoản chính** là tài khoản đã chạy màn thiết lập, hoặc tài khoản được chuyển từ bản một người dùng. Nó luôn là `admin`, không xoá được, và **giữ nguyên thư mục state cũ** (chính gốc state) cùng brain cũ (`BRAINS_DIR/Brain Default`). Nhờ vậy máy nâng cấp không phải dời file nào, kể cả `.secret_key` và volume Docker.
+- **Tài khoản khác** dùng `<gốc state>/<user_id>/` cho state và `BRAINS_DIR/.users/<user_id>/` cho brain. Thư mục `.users` bắt đầu bằng dấu chấm, nên mọi vòng quét `BRAINS_DIR` có sẵn (đều bỏ thư mục chấm) không bao giờ đụng brain của người khác.
+- **Danh tính trong một lượt** là ContextVar `config.current_user_id`:
+  - HTTP: `_auth_guard` gán từ cookie phiên.
+  - WebSocket: middleware `_WebSocketUser` gán cho cả kết nối (`/ws`, `/ws/voice-live`, `/ws/terminal`).
+  - Việc nền: `config.as_user(uid)`. Bộ hẹn giờ (`_for_each_user`) và dispatcher Kanban chạy **một lượt cho mỗi tài khoản**.
+  - Không có ContextVar (CLI, script, mã cũ) thì rơi về tài khoản chính, đúng hành vi một người dùng trước đây.
+- **Store theo tài khoản:** `settings.json`, `conversations.db` (`SessionStore`), `kanban.sqlite3` (`TasksFeature.store`), `customer_conversations.sqlite3`, `runtime.db`, `login_vault.sqlite3`, `web_watch.sqlite3`, `github_work.db`, `webhook_events.sqlite3`, `resonance.sqlite3`, `brain-trash/`. Mỗi file mở theo đường dẫn của tài khoản đang chạy.
 
-### 13.3 API và Giao diện quản lý
-- Cung cấp endpoints quản trị tài khoản:
-  - `GET /auth/users`: danh sách tài khoản, trạng thái 2FA và cờ `is_current`.
-  - `POST /auth/users`: tạo tài khoản người dùng mới kèm thư mục trạng thái riêng biệt.
-  - `POST /auth/password`: đổi mật khẩu tài khoản người dùng hiện tại.
-- Tích hợp giao diện quản lý người dùng trên Dashboard (trang Cài đặt -> Tài khoản).
-- Bộ kiểm thử tự động toàn diện tại `tests/python/test_multi_user_auth.py` (68/68 kiểm tra xanh 100%).
+### 13.2 Vai trò
+
+Có hai vai trò: `admin` và `member`. Danh sách việc chỉ admin làm được nằm ở MỘT chỗ, `_ADMIN_ONLY_ANY` / `_ADMIN_ONLY_WRITE` trong `main.py`, và được kiểm một lần trong `_auth_guard`:
+
+- Mọi method: `/terminal/*` và `/ws/terminal` (route WS tự kiểm vai trò, vì middleware HTTP không thấy websocket).
+- Chỉ lệnh ghi: `/auth/users*`, `/auth/tokens*`, `/auth/disable`, `/update`, `/plugins/*`, `/mcp/*`, `/backup/*`.
+
+Ngoài các việc trên, member dùng như một chủ máy trên dữ liệu của chính mình.
+
+Về brain (`_brain_allowed`):
+- Không ai mở được brain của tài khoản khác, admin cũng vậy.
+- Member chỉ mở brain trong thư mục của mình. `path:` trỏ ra ngoài thì bị đưa về brain mặc định, và `JAVIS_FILES_ROOT` không nới trần duyệt file cho member.
+- Admin vẫn mở `path:<thư mục bất kỳ>` như bản một chủ. Đây là quyết định cho việc số 0: chính sách `path:` gắn theo vai trò.
+
+### 13.3 API
+
+| Route | Ai gọi | Làm gì |
+|---|---|---|
+| `GET /auth/users` | mọi tài khoản | Admin thấy mọi tài khoản. Member chỉ thấy chính mình. Trả `user_id`, `username`, `role`, `totp_enabled`, `is_current`, `is_primary` và cờ `can_manage`. |
+| `POST /auth/users` | admin | Tạo tài khoản (`role` = `member` mặc định, hoặc `admin`) kèm thư mục state riêng. |
+| `POST /auth/users/delete` | admin | Xoá tài khoản và đăng xuất nó ở mọi nơi. Không xoá được tài khoản chính hay chính mình. Dữ liệu trên đĩa được GIỮ. |
+| `POST /auth/password` | mọi tài khoản | Đổi mật khẩu của chính mình. Hạ mọi phiên khác của tài khoản đó, tài khoản khác không bị ảnh hưởng. |
+
+Dashboard (Cài đặt > Tài khoản) hiện vai trò từng người. Form thêm tài khoản và nút Xoá chỉ hiện với admin.
+
+### 13.4 Chưa làm (giới hạn đã biết)
+
+- **Kênh của chủ máy vẫn dùng chung:** bot Telegram/Zalo/Messenger, hub MCP (`hub_token`, file `.mcp_hub_*.json`), các file `tg_*.json`, `chat_jobs.json`. Chúng gắn với tài khoản chính. Tin nhắn qua Telegram chạy như tài khoản chính.
+- **Còn khoảng 50 chỗ `cfgmod.STATE_DIR` trong `main.py`** (và nhiều module khác). Đó là state cấp máy (cache, log cập nhật, pid, registry năng lực...) và trỏ vào thư mục của tài khoản chính. Store nào chứa dữ liệu NGƯỜI DÙNG còn sót thì phải chuyển sang `get_user_state_dir()`, mỗi lần một store kèm test.
+- **Kho đăng ký vòng lặp** (`loop_feature.scheduler_brains`) dùng chung cả máy. Hiện nó được lọc theo `_brain_allowed` ở mọi chỗ đọc, chưa tách hẳn.
+- **Sao lưu git** (`/backup/*`, chỉ admin) chụp `BRAINS_DIR` kể cả `.users/`, tức brain của mọi tài khoản đi chung một remote.
+- **Phần 8 vẫn chưa làm:** chưa có `can()`, bảng `grants`, chia sẻ brain giữa người dùng, và `Principal` vẫn là literal `"owner"` (việc 3, 5, 6 và mới-3, mới-4 của lộ trình). Vai trò ở 13.2 là RBAC tối thiểu, không thay cho Phần 8.
+- **2FA theo người** đã có trong dữ liệu và ở đăng nhập. Các route `/auth/2fa/*` và `/auth/disable` vẫn thao tác trên tài khoản chính.
+
+## Phần 14. Rà soát và sửa (2026-11-09)
+
+### 14.1 Sáu lỗi tìm thấy khi chạy app thật, và cách sửa
+
+1. **Đăng nhập bằng mật khẩu của người khác.** `admin` + mật khẩu của bob trả 200 và mở phiên admin, vì `username_matches` và `verify_password` mỗi hàm tự quét mọi user. Đã sửa: đăng nhập chỉ đi qua `verify_password_for_user`, còn hai hàm cũ kiểm đúng một tài khoản.
+2. **Đổi mật khẩu không đá phiên ở máy khác.** `clear_sessions()` bị thay bằng `drop_session(token hiện tại)`. Đã sửa bằng `drop_user_sessions(user_id)`. Kèm theo đó, `write_settings` giờ THAY các trường đăng nhập thay vì gộp, vì gộp làm sót dấu `env_applied` cũ và khiến `provision_admin_from_env` đặt lại mật khẩu lúc khởi động.
+3. **Máy nâng cấp mất tài khoản.** Không có bước chuyển `settings.json["auth"]` sang `auth.json`, nên `auth_enabled()` trả False và màn thiết lập hiện lại (trên VPS công khai, ai vào trước chiếm máy). Đã sửa: chuyển một lần lúc import, tài khoản chính giữ thư mục cũ, script start/stop/watchdog trả về gốc state, và `get_user_state_dir` từ chối `user_id` không phải UUID.
+   - Phát sinh: sau khi tách file, mất `.secret_key` làm 2FA **fail-open** (`totp_hong` đọc bản đã giải mã, còn `write_auth` ghi đè blob bằng rỗng). Đã sửa thành fail-closed như 0.35.6.
+4. **WebSocket không mang danh tính.** Chat của bob qua `/ws` ghi vào hội thoại của admin. Đã sửa bằng middleware `_WebSocketUser`.
+5. **Không có phân quyền.** Ai đăng nhập cũng tạo được tài khoản, và không có đường xoá. Đã sửa bằng vai trò ở Phần 13.2.
+6. **Brain dùng chung, và việc nền chạy dưới tên tài khoản chính.** Bob đọc được file trong brain của admin. Đã sửa bằng thư mục brain theo tài khoản, `_brain_allowed`, và chạy tick nền theo từng tài khoản (Phần 13.1).
+
+### 14.2 Test
+
+- `tests/python/test_multi_user_hardening.py` ghim cả sáu lỗi, mỗi khối một lỗi, chạy trên app thật qua `TestClient`. Khối 3 khởi động một tiến trình mới trên bố cục state cũ để kiểm đường nâng cấp.
+- `tests/python/test_multi_user_auth.py` giữ nguyên, chỉ sửa một kiểm tra theo quy ước "tài khoản chính giữ thư mục cũ".
+- `test_2fa_mat_khoa_khong_im_lang.py` đọc secret từ `auth.json`, nơi nó đang nằm.
+- Lưu ý khi chạy test trên máy dev: file `.env` ở gốc repo được `main.py` nạp. Nếu nó đặt `JAVIS_REQUIRE_LOGIN=1` thì vài test giả định không có cổng đăng nhập sẽ đỏ (ví dụ `test_core_model_card_api`, `test_ws_safari`). Chạy với `JAVIS_REQUIRE_LOGIN=0` thì xanh, giống CI.
+
+### 14.3 Commit trên nhánh `nguyenban`
+
+Triển khai ban đầu: `57f52318`, `298d1fea`, `22086b79`, `087e794b`, `37a7d21a`.
+
+Sửa sau rà soát, theo thứ tự lỗi ở 14.1:
+
+- `fix(auth): match username and password against the same account`
+- `fix(auth): password change drops the account's other sessions again`
+- `fix(state): migrate the single-user account and keep the primary state folder`
+- `fix(auth): keep 2FA fail-closed when .secret_key is lost after the auth.json split`
+- `fix(auth): bind the signed-in account to WebSocket connections`
+- `feat(auth): admin and member roles for multi-user accounts`
+- `fix(brains): give each account its own brains and run schedulers per account`

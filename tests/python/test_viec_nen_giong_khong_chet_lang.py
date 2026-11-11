@@ -54,7 +54,7 @@ check("tìm được thân _voice_bg_task", bool(body))
 check("có hạn giờ, không treo im vô hạn",
       "asyncio.wait_for(" in body and "timeout=VOICE_BG_TIMEOUT" in body)
 check("quá hạn thì nói thật bằng lời, không im",
-      "asyncio.TimeoutError" in body and "chưa xong nên em dừng lại" in body)
+      ("asyncio.TimeoutError" in body or "except TimeoutError:" in body) and "chưa xong nên em dừng lại" in body)
 check("bị HUỶ cũng báo về khung chat rồi mới ném tiếp",
       re.search(r"except asyncio\.CancelledError:[\s\S]{0,300}push_to_chat\([\s\S]{0,200}raise", body) is not None)
 check("lỗi thường vẫn đẩy câu lỗi về chat (0.64.48: câu người đọc, không in tên lớp ngoại lệ)",

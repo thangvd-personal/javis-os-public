@@ -8,6 +8,8 @@ Each block pins one bug that was reproduced against the running app:
    auth.json) and its state folder.
 4. A WebSocket (chat, voice, terminal) runs as the account of its session cookie.
 5. Roles: only an admin manages accounts and install-wide settings; the primary admin stays.
+6. Brains: each account has its own brains folder; nobody opens another account's brain.
+7. Background schedulers run once per account, as that account.
 """
 import os
 import sys
@@ -203,6 +205,72 @@ check("an admin deletes bob", r.status_code == 200 and c.get_user(user_id=bob_ui
 check("a deleted account is signed out everywhere", not c.valid_session(tok_bob5))
 check("a deleted account can no longer sign in", login(client(), "bob", "bobnewpass123").status_code == 401)
 check("the terminal WebSocket checks the admin role", "cfgmod.is_admin(cfgmod.get_session_user_id(ws.cookies" in src)
+
+# ---- 6. Each account has its own brains ----
+r = admin5.post("/auth/users", data={"username": "mia", "password": "miapass1234"})
+mia_uid = r.json().get("user_id")
+mia = client()
+login(mia, "mia", "miapass1234")
+with c.as_user(admin_uid):
+    admin_brain = main._default_brain_dir()
+(admin_brain / "secret-note.md").write_text("ADMIN PRIVATE", encoding="utf-8")
+with c.as_user(mia_uid):
+    mia_brain = main._default_brain_dir()
+check("the primary admin keeps BRAINS_DIR/Brain Default",
+      admin_brain == Path(main.BRAINS_DIR) / "Brain Default")
+check("another account's default brain lives in BRAINS_DIR/.users/<id>",
+      mia_brain == Path(main.BRAINS_DIR) / ".users" / mia_uid / "Brain Default")
+r = mia.get("/files/raw", params={"path": "secret-note.md", "brain": "brain"})
+check("a member does not read the admin's default brain", "ADMIN PRIVATE" not in r.text)
+r = mia.get("/files/raw", params={"path": "secret-note.md", "brain": "path:" + str(admin_brain)})
+check("a member cannot open the admin's brain by path:", "ADMIN PRIVATE" not in r.text)
+r = mia.get("/brains/Brain Default/secret-note.md")
+check("an old /brains/<name>/ link resolves inside the caller's brains", "ADMIN PRIVATE" not in r.text)
+r = admin5.get("/files/raw", params={"path": "secret-note.md", "brain": "brain"})
+check("the admin still reads their own brain", "ADMIN PRIVATE" in r.text)
+(mia_brain / "mia-note.md").write_text("MIA PRIVATE", encoding="utf-8")
+r = admin5.get("/files/raw", params={"path": "mia-note.md", "brain": "path:" + str(mia_brain)})
+check("an admin cannot open another account's brain either", "MIA PRIVATE" not in r.text)
+check("a member lists only their own brains",
+      [b["path"] for b in mia.get("/brains").json().get("brains", [])] == [str(mia_brain)])
+check("the admin's list does not show another account's brains",
+      str(mia_brain) not in [b["path"] for b in admin5.get("/brains").json().get("brains", [])])
+r = mia.post("/brains/new", data={"name": "Shop"})
+check("a member creates a brain inside their own folder",
+      r.status_code == 200 and Path(r.json().get("path", "")).parent == mia_brain.parent)
+outside = Path(tempfile.mkdtemp(prefix="javis-mu-outside-"))
+(outside / "x.md").write_text("OUTSIDE", encoding="utf-8")
+r = mia.get("/files/raw", params={"path": "x.md", "brain": "path:" + str(outside)})
+check("a member cannot open an arbitrary folder by path:", "OUTSIDE" not in r.text)
+r = admin5.get("/files/raw", params={"path": "x.md", "brain": "path:" + str(outside)})
+check("an admin still opens an outside folder by path: (single-owner behaviour)", "OUTSIDE" in r.text)
+os.environ["JAVIS_FILES_ROOT"] = "drive"
+with c.as_user(mia_uid):
+    check("JAVIS_FILES_ROOT does not widen a member's file ceiling",
+          main._files_ceiling("brain") == mia_brain.resolve())
+os.environ.pop("JAVIS_FILES_ROOT", None)
+
+# ---- 7. Schedulers run per account ----
+import asyncio  # noqa: E402
+
+seen_ticks = []
+
+
+async def _fake_tick():
+    seen_ticks.append((c.current_user_id.get(), str(c.get_user_state_dir()), list(main._background_brains())))
+
+asyncio.run(main._for_each_user(_fake_tick))
+uids = [t[0] for t in seen_ticks]
+check("a scheduler tick runs once per account", set(uids) == set(c.list_user_ids()) and len(uids) == len(set(uids)))
+mia_tick = next((t for t in seen_ticks if t[0] == mia_uid), None)
+check("the member's tick uses the member's state folder", mia_tick and mia_tick[1] == str(c.get_user_state_dir(mia_uid)))
+check("the member's tick only visits the member's brains",
+      mia_tick and mia_tick[2] and all(str(mia_brain.parent) in b or b == "brain" for b in mia_tick[2]))
+admin_tick = next((t for t in seen_ticks if t[0] == admin_uid), None)
+check("the admin's tick does not visit the member's brains",
+      admin_tick and not any(".users" in b for b in admin_tick[2]))
+tsrc = (SERVER / "tasks.py").read_text(encoding="utf-8")
+check("the Kanban dispatcher passes once per account", "with config.as_user(uid):" in tsrc)
 
 # ---- end ----
 print()

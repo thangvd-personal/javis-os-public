@@ -7772,12 +7772,56 @@ STAGING = cfgmod.STATE_DIR / ".staging"
 from urllib.parse import quote as urlquote  # dựng URL /upload/raw cho tên file có dấu
 
 
+def _user_brains_dir(user_id: str = "") -> Path:
+    """Parent folder of ONE account's brains (multi-user).
+
+    The primary account keeps BRAINS_DIR itself, so an upgraded install finds every brain where it
+    was. Any other account gets `BRAINS_DIR/.users/<user_id>/`: hidden, so every existing sweep of
+    BRAINS_DIR (which skips dot folders) never lists, syncs or serves another account's brain."""
+    uid = user_id or cfgmod.get_current_user_id()
+    if not uid or uid == cfgmod.primary_user_id():
+        return Path(BRAINS_DIR)
+    return Path(BRAINS_DIR) / USERS_BRAINS_SUBDIR / uid
+
+
+USERS_BRAINS_SUBDIR = ".users"
+
+
+def _strict_brain_for_user(value: str) -> str:
+    """`improvement_api.strict_brain` limited to the brains the current account may open."""
+    import improvement_api as _ia
+    root = _ia.strict_brain(value, default_root=_default_brain_dir(), brains_root=_user_brains_dir())
+    if not _brain_allowed(root):
+        raise ValueError("unknown_brain")
+    return root
+
+
+def _all_brain_parents() -> list[Path]:
+    """The brains folder of every account: for startup sweeps that must reach every brain."""
+    out = [Path(BRAINS_DIR)]
+    try:
+        out += [p for p in sorted((Path(BRAINS_DIR) / USERS_BRAINS_SUBDIR).iterdir())
+                if p.is_dir() and cfgmod.get_user(user_id=p.name)]
+    except OSError:
+        pass
+    return out
+
+
+def _brain_owner(path) -> str:
+    """user_id of the account a brain folder belongs to ("" = the primary account / outside)."""
+    try:
+        rel = Path(path).resolve().relative_to((Path(BRAINS_DIR) / USERS_BRAINS_SUBDIR).resolve())
+    except (ValueError, OSError):
+        return ""
+    return rel.parts[0] if rel.parts else ""
+
+
 def _default_brain_dir() -> Path:
-    """Brain mặc định = <BRAINS_DIR>/Brain Default. BRAINS_DIR = thư mục CHA chứa mọi brain
+    """Brain mặc định = <thư mục brain của tài khoản>/Brain Default. BRAINS_DIR = thư mục CHA chứa mọi brain
     (mỗi folder con = 1 brain). Docker = /brains (mount riêng, ghi được, git-backup được).
     Local = <project>/brains. Đây là 'bộ não khởi đầu' - user vẫn chọn brain khác trong danh
     sách hoặc folder ngoài bất kỳ qua 'path:<thư mục>'. KHÔNG hardcode vault cá nhân nào."""
-    p = Path(BRAINS_DIR) / "Brain Default"
+    p = _user_brains_dir() / "Brain Default"
     try:
         p.mkdir(parents=True, exist_ok=True)
     except Exception:
@@ -7787,11 +7831,30 @@ def _default_brain_dir() -> Path:
 brain_ident.set_default_dir(_default_brain_dir)
 
 
+def _brain_allowed(path: str) -> bool:
+    """May the current account open this brain folder?
+
+    - Another account's brain (`BRAINS_DIR/.users/<other>/...`): never, admin included.
+    - A member: only folders inside their own brains folder.
+    - An admin (the machine owner): any other folder, as before multi-user (`path:<folder>`)."""
+    uid = cfgmod.get_current_user_id()
+    owner = _brain_owner(path)
+    if owner and owner != uid:
+        return False
+    if not cfgmod.gate_active() or cfgmod.is_admin(uid):
+        return True
+    try:
+        Path(path).resolve().relative_to(_user_brains_dir(uid).resolve())
+        return True
+    except (ValueError, OSError):
+        return False
+
+
 def _brain_root(brain: str) -> str:
     if not brain or brain == "brain":
         return str(_default_brain_dir())
     b = brain.removeprefix("path:")
-    return b if os.path.isdir(b) else str(_default_brain_dir())
+    return b if os.path.isdir(b) and _brain_allowed(b) else str(_default_brain_dir())
 
 
 def _cwd_luot_chat(row, brain: str) -> str:
@@ -8072,7 +8135,7 @@ def _tim_file_upload_tam(name: str, brain: str = "") -> Path:
     ung_vien.extend(_RECENT_UPLOAD_DIRS)
     ung_vien.append(_default_brain_dir() / TEMP_DIR_NAME)
     try:
-        base = Path(BRAINS_DIR)
+        base = _user_brains_dir()
         if base.is_dir():
             for p in base.iterdir():
                 if p.is_dir() and not p.name.startswith("."):
@@ -8344,10 +8407,9 @@ def _sync_system_all_brains():
     (trừ file user đã sửa). Brain ngoài (path:) được sync ở lượt dùng đầu (build_system_prompt).
     KHÔNG scaffold cấu trúc thư mục ở đây - chỉ đụng file hệ thống, dữ liệu user để yên."""
     try:
-        base = Path(BRAINS_DIR)
-        if not base.is_dir():
-            return
-        for p in sorted(base.iterdir()):
+        brains = [p for base in _all_brain_parents() if base.is_dir()
+                  for p in sorted(base.iterdir()) if p.is_dir() and not p.name.startswith(".")]
+        for p in brains:
             if p.is_dir() and not p.name.startswith("."):
                 system_sync.ensure_synced(p)
                 try:
@@ -8364,7 +8426,7 @@ def _doi_ngon_ngu_hat_giong(ma: str):
     sang ngôn ngữ đó (brain_seed_i18n.doi_ngon_ngu). Brain mặc định được tạo lúc khởi động, trước
     khi biết người dùng đọc tiếng gì, nên đây là lúc duy nhất nó ra đúng ngôn ngữ."""
     try:
-        base = Path(BRAINS_DIR)
+        base = _user_brains_dir()     # chỉ brain của tài khoản vừa đổi ngôn ngữ
         if not base.is_dir():
             return
         for p in sorted(base.iterdir()):
@@ -8469,8 +8531,9 @@ def _list_brains_sync() -> dict:
     /viec/all (xem chỗ liệt kê brain RẺ ở dưới), nhưng /brains thì để nguyên - trong khi
     dashboard gọi nó lúc BOOT, tức chặn event loop ngay lúc app vừa dậy.
     Chạm trần thì trả đúng số trần và gắn cờ notes_capped để UI không nói dối là con số chính xác.
+    Multi-user: chỉ liệt kê thư mục brain của TÀI KHOẢN đang gọi (`_user_brains_dir`).
     """
-    base = Path(BRAINS_DIR)
+    base = _user_brains_dir()
     try:
         base.mkdir(parents=True, exist_ok=True)
     except Exception:
@@ -8630,14 +8693,14 @@ async def new_brain(name: str = Form(...)):
     safe = _safe_brain_name(name)
     if not safe:
         return JSONResponse({"ok": False, "error": localefmt.chu("Tên brain không hợp lệ", "Invalid brain name")}, status_code=400)
-    root = Path(BRAINS_DIR) / safe
+    root = _user_brains_dir() / safe
     if root.exists():
         return JSONResponse({"ok": False, "error": localefmt.chu("Brain đã tồn tại", "Brain already exists")}, status_code=400)
     try:
         _ensure_brain_scaffold(root)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    git_brain.clear_tombstone(BRAINS_DIR, safe)   # dựng lại não cùng tên -> gỡ giấy báo tử để không bị xoá oan
+    git_brain.clear_tombstone(str(_user_brains_dir()), safe)   # dựng lại não cùng tên -> gỡ giấy báo tử để không bị xoá oan
     return {"ok": True, "name": safe, "path": str(root)}
 
 
@@ -8651,11 +8714,11 @@ async def brain_set_label(brain: str = Form(...), label: str = Form("")):
     if b == "brain" or not b:
         root = _default_brain_dir()
     else:
-        raw = b[5:] if b.startswith("path:") else str(Path(BRAINS_DIR) / _safe_brain_name(b))
+        raw = b[5:] if b.startswith("path:") else str(_user_brains_dir() / _safe_brain_name(b))
         root = Path(raw)
     try:
         root = root.resolve()
-        base = Path(BRAINS_DIR).resolve()
+        base = _user_brains_dir().resolve()
     except OSError:
         return JSONResponse({"ok": False, "error": localefmt.chu("Brain không tồn tại", "Brain does not exist")}, status_code=404)
     if root == base or base not in root.parents or not root.is_dir():
@@ -8687,20 +8750,20 @@ async def delete_brain(name: str = Form(...), confirm: str = Form("")):
         return JSONResponse({"ok": False, "error": localefmt.chu("Tên brain không hợp lệ", "Invalid brain name")}, status_code=400)
     if (confirm or "").strip() != safe:
         return JSONResponse({"ok": False, "error": localefmt.chu("Xác nhận không khớp tên brain", "The confirmation does not match the brain name")}, status_code=400)
-    root = (Path(BRAINS_DIR) / safe).resolve()
-    base = Path(BRAINS_DIR).resolve()
+    root = (_user_brains_dir() / safe).resolve()
+    base = _user_brains_dir().resolve()
     if root == base or base not in root.parents:
         return JSONResponse({"ok": False, "error": localefmt.chu("Brain ngoài phạm vi quản lý", "Brain is outside the managed area")}, status_code=400)
     if root == _default_brain_dir().resolve():
         return JSONResponse({"ok": False, "error": localefmt.chu("Không thể xoá Brain mặc định", "The default Brain cannot be deleted")}, status_code=400)
     if not root.is_dir():
         return JSONResponse({"ok": False, "error": localefmt.chu("Brain không tồn tại", "Brain does not exist")}, status_code=404)
-    trash_dir = str(cfgmod.STATE_DIR / "brain-trash")
+    trash_dir = str(cfgmod.get_user_state_dir() / "brain-trash")
 
     def _trash_and_mark():
         dest = git_brain.move_to_trash(str(root), trash_dir, safe)   # có retry cho Windows
         try:
-            git_brain.write_tombstone(BRAINS_DIR, safe)              # giấy báo tử -> lan việc xoá
+            git_brain.write_tombstone(str(base), safe)               # giấy báo tử -> lan việc xoá
         except Exception:
             # Nguyên tử: ghi giấy báo tử lỗi thì ĐƯA brain trở lại - tránh trạng thái "mất mà không
             # có tombstone" (lần sync sau _restore_missing_brains sẽ hồi sinh nó).
@@ -9637,6 +9700,10 @@ def _files_ceiling(brain: str) -> Path:
     <đường dẫn tuyệt đối> = trần tuỳ ý (phải chứa brain)."""
     broot = Path(_brain_root(brain)).resolve()
     env = os.getenv("JAVIS_FILES_ROOT", "").strip()
+    # Multi-user: a member account is always locked inside its brain, whatever JAVIS_FILES_ROOT says
+    # (a wider ceiling would open the other accounts' brains and the server's own files).
+    if env and cfgmod.gate_active() and not cfgmod.is_admin(cfgmod.get_current_user_id()):
+        env = ""
     ceil = None
     if env:
         low = env.lower()
@@ -10790,7 +10857,7 @@ async def brain_file_compat(brain_name: str, path: str, dl: int = Query(0)):
     safe_name = _safe_brain_name(brain_name)
     if not safe_name or safe_name != str(brain_name or "").strip():
         return JSONResponse({"error": localefmt.chu("Tên brain không hợp lệ", "Invalid brain name")}, status_code=400)
-    base = Path(BRAINS_DIR).resolve()
+    base = _user_brains_dir().resolve()
     root = (base / safe_name).resolve()
     if root.parent != base or not root.is_dir():
         return JSONResponse({"error": localefmt.chu("Không tìm thấy brain", "Brain not found")}, status_code=404)
@@ -13964,6 +14031,18 @@ learn_feature = learn_mod.register(app, learn_mod.LearnDeps(
 import tasks as tasks_mod
 
 
+async def _for_each_user(tick):
+    """Run one scheduler tick once per account, inside that account's context (multi-user).
+
+    The scheduler has no request, so a bare tick saw only the primary account: a member's loops,
+    reminders and habits never fired, or fired with the admin's settings. Each pass sets
+    `current_user_id`, so `_background_brains`, `_brain_root` and every store resolve to that
+    account. Before setup there are no accounts and the tick runs once, as before."""
+    for uid in (cfgmod.list_user_ids() or [""]):
+        with cfgmod.as_user(uid):
+            await tick()
+
+
 def _background_brains():
     """Every brain a background scheduler must visit (Kanban dispatcher, reminders): each
     folder in BRAINS_DIR plus the outside folders registered with the loop scheduler.
@@ -13975,13 +14054,15 @@ def _background_brains():
     values = []
     try:
         values.extend(
-            str(p) for p in Path(BRAINS_DIR).iterdir()
+            str(p) for p in _user_brains_dir().iterdir()
             if p.is_dir() and not p.name.startswith(".")
         )
     except Exception:
         pass
     try:
-        values.extend(loop_feature.scheduler_brains() or [])
+        # The loop registry is shared by the whole install: keep only the brains this account may open.
+        values.extend(b for b in (loop_feature.scheduler_brains() or [])
+                      if b == "brain" or _brain_allowed(b.removeprefix("path:")))
     except Exception:
         pass
     return list(dict.fromkeys(values))
@@ -13993,7 +14074,7 @@ def _register_outside_brain(brain: str) -> None:
     written to the loop scheduler's registry."""
     try:
         root = Path(_brain_root(brain)).resolve()
-        base = Path(BRAINS_DIR).resolve()
+        base = _user_brains_dir().resolve()
         if root.parent == base and not root.name.startswith("."):
             return
         loop_feature.register_brain(str(root))
@@ -14505,7 +14586,7 @@ def _viec_all_sync():
     # CẢ cây mỗi brain (vault lớn = vài giây). Trang Việc không cần số note; đếm làm /viec/all chậm
     # tới mức reverse proxy trên VPS cắt giữa chừng (504) → dashboard báo "không tải được". Đây là
     # gốc lỗi VPS khách không hiện mà VPS nhẹ hơn vẫn hiện.
-    base = Path(BRAINS_DIR)
+    base = _user_brains_dir()    # multi-user: chỉ brain của tài khoản đang xem
     try:
         base.mkdir(parents=True, exist_ok=True)
     except Exception:
@@ -14535,7 +14616,8 @@ def _viec_all_sync():
     # brain legacy trong loop_config). Trước đây chỉ quét list_brains() nên loop tạo qua chat vào
     # brain ngoài VẪN CHẠY (scheduler quét) mà KHÔNG hiện ở tab Việc → đúng triệu chứng khách báo.
     try:
-        extra = loop_feature.scheduler_brains()
+        extra = [x for x in loop_feature.scheduler_brains()
+                 if x == "brain" or _brain_allowed(x.removeprefix("path:"))]
     except Exception:
         extra = []
     for bident in extra:
@@ -15300,7 +15382,7 @@ def _ops_index_brains() -> list:
     the index from the day it was created."""
     cands = []
     try:
-        cands += [str(p) for p in sorted(Path(BRAINS_DIR).iterdir())
+        cands += [str(p) for base in _all_brain_parents() for p in sorted(base.iterdir())
                   if p.is_dir() and not p.name.startswith(".") and (p / "Javis").is_dir()]
     except OSError:
         pass
@@ -15542,7 +15624,7 @@ async def _start_scheduler():
                 #    (quá hạn lâu nhất), chạy tuần tự qua lock toàn cục.
                 try:
                     if schedules_run_here():
-                        await loop_feature.tick()
+                        await _for_each_user(loop_feature.tick)
                 except Exception as lpe:
                     print(f"[loop tick] {type(lpe).__name__}: {lpe}", file=__import__('sys').stderr)
                 # 2) Engine tự học: debounce tick (rewire sau lượt) + curator định kỳ
@@ -15559,8 +15641,8 @@ async def _start_scheduler():
                 # 3b) Nhắc hẹn từ chat: tới giờ → bắn Telegram (mode task: chạy engine rồi báo)
                 try:
                     if schedules_run_here():
-                        await reminders_feature.tick()
-                    await my_tasks_feature.tick()   # habit reminders (0.424.0)
+                        await _for_each_user(reminders_feature.tick)
+                    await _for_each_user(my_tasks_feature.tick)   # habit reminders (0.424.0)
                     # 0.202.0: prompt-cache keep-warm (off unless switched on, see cache_keepwarm.py).
                     asyncio.create_task(_KEEPWARM.tick())
                 except Exception as rte:
@@ -31622,8 +31704,7 @@ def _improvement_read_store():
 improvement_api.register(app, improvement_api.ImprovementApiDeps(
     read_store=_improvement_read_store,
     write_store=_improvement_write_store,
-    resolve_brain=lambda value: improvement_api.strict_brain(value,
-        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    resolve_brain=_strict_brain_for_user,
     agent_key=lambda root, slug: _agent_jobs_key(root, slug, register=True),
 ))
 
@@ -32033,8 +32114,7 @@ improvement_activation_api.register(app, improvement_activation_api.ActivationAp
     export=lambda principal, ids: __import__("improvement_library").export_procedures(
         _improvement_write_store(), principal, ids, version=_read_version()),
     review_proposals=_agent_review_proposals,
-    resolve_brain=lambda value: improvement_api.strict_brain(value,
-        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    resolve_brain=_strict_brain_for_user,
 ))
 
 
@@ -32116,8 +32196,7 @@ async def _shutdown_improvement_trials():
 improvement_trial_api.register(app, improvement_trial_api.TrialApiDeps(
     read_store=_improvement_read_store,
     write_store=_improvement_write_store,
-    resolve_brain=lambda value: improvement_api.strict_brain(value,
-        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    resolve_brain=_strict_brain_for_user,
     owner_session=_doi_phien_that,
     capture_host=_improvement_trial_host,
     service=_improvement_trial_service,
@@ -32167,8 +32246,7 @@ async def _shutdown_improvement_candidates():
 improvement_candidate_api.register(app, improvement_candidate_api.CandidateApiDeps(
     read_store=_improvement_read_store,
     write_store=_improvement_write_store,
-    resolve_brain=lambda value: improvement_api.strict_brain(value,
-        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    resolve_brain=_strict_brain_for_user,
     owner_session=_doi_phien_that,
     operations=_improvement_candidate_operations,
     pack_state_dir=lambda: Path(cfgmod.STATE_DIR) / "packs-state",
@@ -32182,8 +32260,7 @@ import improvement_experiment_api
 improvement_experiment_api.register(app, improvement_experiment_api.ExperimentApiDeps(
     read_store=_improvement_read_store,
     write_store=_improvement_write_store,
-    resolve_brain=lambda value: improvement_api.strict_brain(value,
-        default_root=Path(BRAINS_DIR) / "Brain Default", brains_root=Path(BRAINS_DIR)),
+    resolve_brain=_strict_brain_for_user,
     owner_session=_doi_phien_that,
     service=_improvement_experiment_service,
     after_report=_improvement_after_report,

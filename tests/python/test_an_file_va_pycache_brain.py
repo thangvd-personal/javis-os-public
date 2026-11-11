@@ -4,6 +4,7 @@ Chạy:
     python tests/python/test_an_file_va_pycache_brain.py
 """
 import asyncio
+import inspect
 import os
 import tempfile
 from pathlib import Path
@@ -11,6 +12,12 @@ from pathlib import Path
 from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-an-file-"))
+
+
+def await_if_needed(result):
+    """Call asyncio.run only if result is a coroutine, otherwise return it as-is."""
+    return asyncio.run(result) if inspect.iscoroutine(result) else result
+
 
 import main
 
@@ -54,7 +61,7 @@ os.environ.pop("JAVIS_REQUIRE_LOGIN", None)
 
 
 def _list(path=None, all_files=False):
-    return asyncio.run(main.files_list(brain="brain", path=path, all=all_files))
+    return main.files_list(brain="brain", path=path, all=all_files)
 
 
 # ---- 1. Test /files/list tại gốc Brain ----
@@ -87,7 +94,7 @@ check("Khi all=True: thấy lại __pycache__", "__pycache__" in all_names)
 check("Khi all=True: thấy lại .javis-learn.lock", ".javis-learn.lock" in all_names)
 
 # ---- 4. Test tìm kiếm /files/search bỏ qua file ẩn ----
-hits = asyncio.run(main.files_search(brain="brain", q="learn.lock", limit=10, mode="name"))
+hits = await_if_needed(main.files_search(brain="brain", q="learn.lock", limit=10, mode="name"))
 check("files_search: không tìm thấy file ẩn .javis-learn.lock", len(hits.get("items", [])) == 0)
 
 # ---- 5. Hợp đồng Frontend: console.js có bộ lọc dotfiles và __pycache__ ----
@@ -103,18 +110,18 @@ check(
 
 # ---- 6. Đảm bảo CHỈ ẨN HIỂN THỊ, KHÔNG ẢNH HƯỞNG hoạt động đọc/ghi của brain ----
 # File ẩn vẫn phải đọc được qua API /files/read khi có đường dẫn cụ thể
-read_res = asyncio.run(main.files_read(brain="brain", path=".javis-learn.lock"))
+read_res = main.files_read(brain="brain", path=".javis-learn.lock")
 check("files_read: vẫn ĐỌC được file ẩn .javis-learn.lock bình thường",
       isinstance(read_res, dict) and read_res.get("content") == "lock")
 
 # File ẩn vẫn phải ghi được qua API /files/write
-write_res = asyncio.run(main.files_write(brain="brain", path=".test-hidden.txt", content="noi dung an"))
+write_res = await_if_needed(main.files_write(brain="brain", path=".test-hidden.txt", content="noi dung an"))
 check("files_write: vẫn GHI được file ẩn .test-hidden.txt bình thường",
       isinstance(write_res, dict) and write_res.get("ok") is True)
 check("Xác nhận file ẩn vừa ghi tồn tại trên đĩa", (BRAIN / ".test-hidden.txt").is_file())
 
 # Đọc lại file ẩn vừa ghi
-read_res2 = asyncio.run(main.files_read(brain="brain", path=".test-hidden.txt"))
+read_res2 = main.files_read(brain="brain", path=".test-hidden.txt")
 check("files_read: đọc đúng nội dung file ẩn vừa ghi",
       isinstance(read_res2, dict) and read_res2.get("content") == "noi dung an")
 

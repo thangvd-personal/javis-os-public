@@ -881,7 +881,7 @@ _TAG_VIEC_NEN_THEO_LICH = ("reminder", "loop")
 
 
 def la_viec_nen_theo_lich(tag) -> bool:
-    t = t.removesuffix("-main")
+    t = str(tag or "").removesuffix("-main")
     # A reminder's own run is tagged "reminder:<id>" since 0.422.0 (so one run can be stopped).
     return t in _TAG_VIEC_NEN_THEO_LICH or t.startswith(("dispatch:", "reminder:"))
 

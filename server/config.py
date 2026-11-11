@@ -301,6 +301,35 @@ def is_admin(user_id: str) -> bool:
     return user_role(user_id) == "admin"
 
 
+def list_user_ids() -> list[str]:
+    """Every account id, primary first. [] before setup (single local owner, no accounts yet)."""
+    out = []
+    for uid in [primary_user_id()] + [u.get("user_id", "") for u in list_users() if isinstance(u, dict)]:
+        if uid and uid not in out:
+            out.append(uid)
+    return out
+
+
+class as_user:
+    """Run a block as one account: `with as_user(uid): ...`.
+
+    Background work (schedulers, the Kanban dispatcher) has no request, so without this every
+    job ran as the primary account. Tasks and threads started inside the block copy the context
+    and keep that account for their whole life."""
+
+    def __init__(self, user_id: str):
+        self.user_id = user_id or ""
+        self._tok = None
+
+    def __enter__(self):
+        self._tok = current_user_id.set(self.user_id)
+        return self.user_id
+
+    def __exit__(self, *exc):
+        current_user_id.reset(self._tok)
+        return False
+
+
 def get_current_user_id() -> str:
     uid = current_user_id.get()
     if uid:

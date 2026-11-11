@@ -241,7 +241,13 @@ class TasksFeature:
                 if st is not None:
                     return st
                 user_state_dir = config.get_user_state_dir(uid)
-                st = TaskStore(user_state_dir / "kanban.sqlite3")
+                path = user_state_dir / "kanban.sqlite3"
+                # The primary account keeps the legacy state folder: share the default store
+                # instead of opening a second connection pool on the same file.
+                if path.resolve() == Path(self._default_store.path).resolve():
+                    st = self._default_store
+                else:
+                    st = TaskStore(path)
                 self._stores[key] = st
                 return st
         except Exception:
@@ -443,7 +449,13 @@ class TasksFeature:
     async def _dispatcher_loop(self) -> None:
         while not self._closing:
             try:
-                await self._dispatch_available()
+                # Multi-user: one pass per account, inside that account's context, so its board
+                # store, brains and settings are the ones read, and every worker spawned here (it
+                # copies the context) runs as that account. Before setup there is no account: "".
+                import config
+                for uid in (config.list_user_ids() or [""]):
+                    with config.as_user(uid):
+                        await self._dispatch_available()
             except asyncio.CancelledError:
                 break
             except Exception as exc:
