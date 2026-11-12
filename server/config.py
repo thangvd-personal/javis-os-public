@@ -86,6 +86,15 @@ _DEFAULT = {
         "live_voice": "",
         "live_proactive": True,        # Live qua API: bỏ qua tiếng không nói với Javis (TV, người bên cạnh)
         "live_turn": "normal",         # fast | normal | slow: nhịp trả lời của Live qua API
+        # Meeting STT (large-v3-turbo + pyannote diarization). hf_token mã hoá qua _SECRET_PATHS.
+        "meeting_stt": {
+            "whisper_model": "large-v3-turbo",
+            "device": "auto",          # auto | cuda | cpu
+            "language": "vi",          # vi | auto
+            "diarize": True,
+            "hf_token": "",
+            "keep_audio_days": 30,
+        },
     },
     "model": {
         # --- Mô hình MAIN MODEL theo provider (mới) ---
@@ -551,6 +560,7 @@ _SECRET_PATHS = (
     # Gemini CLI (đăng nhập Google ngay trên dashboard). Refresh token ở đây mở được cả gói
     # Code Assist của tài khoản Google, nên nó ngang hàng mọi secret khác trong danh sách.
     "telegram.token", "zalo_bot.token", "backup.token", "voice.elevenlabs_key",
+    "voice.meeting_stt.hf_token",
     "slack.bot_token", "slack.app_token", "whatsapp.access_token", "whatsapp.app_secret",
     "discord.bot_token", "lark.app_secret", "wechat.webhook_token",
     # Secret TOTP là thứ SINH RA mã đăng nhập, nên nó ngang hàng mật khẩu chứ không phải một

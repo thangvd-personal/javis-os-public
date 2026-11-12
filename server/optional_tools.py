@@ -88,9 +88,14 @@ def _mo_ta_tai_offline() -> dict:
     return local_stt.describe()
 
 
+def _mo_ta_tai_cuoc_hop() -> dict:
+    import meeting_stt
+    return meeting_stt.describe()
+
+
 # 0.435.0: the offline ear (`local_stt`) is the second optional tool. Its own module says how it is checked, installed
 # and removed; the branches below only route to it.
-CONG_CU = {"browser": _mo_ta_trinh_duyet, "local_ear": _mo_ta_tai_offline}
+CONG_CU = {"browser": _mo_ta_trinh_duyet, "local_ear": _mo_ta_tai_offline, "meeting_ear": _mo_ta_tai_cuoc_hop}
 
 
 # ─────────────────────────── dò xem đã có gì chưa ───────────────────────────
@@ -372,6 +377,9 @@ def trang_thai(cong_cu: str = "browser") -> dict:
     if cong_cu == "local_ear":
         import local_stt
         d = local_stt.status(d, viec)
+    elif cong_cu == "meeting_ear":
+        import meeting_stt
+        d = meeting_stt.tool_status(d, viec)
     else:
         d = _trang_thai_browser(d, viec)
     d.update({
@@ -408,6 +416,9 @@ def _lenh_cai(cong_cu: str) -> tuple:
     if cong_cu == "local_ear":
         import local_stt
         return local_stt.install_command()
+    if cong_cu == "meeting_ear":
+        import meeting_stt
+        return meeting_stt.install_command()
     BROWSERS_DIR.mkdir(parents=True, exist_ok=True)
     moi_truong = dict(os.environ)
     moi_truong[ENV_BROWSERS_PATH] = str(BROWSERS_DIR)
@@ -434,10 +445,10 @@ async def _chay_tai(cong_cu: str) -> None:
             *lenh, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             env=moi_truong, cwd=thu_muc, **winproc.kwargs_no_window())
     except FileNotFoundError:
-        v.update({"dang_chay": False, "loi": loi_thieu})
+        v.update({"dang_chay": False, "thanh_cong": False, "loi": loi_thieu})
         return
     except Exception as e:
-        v.update({"dang_chay": False, "loi": f"{type(e).__name__}: {e}"})
+        v.update({"dang_chay": False, "thanh_cong": False, "loi": f"{type(e).__name__}: {e}"})
         return
 
     async def _doc():
@@ -456,6 +467,7 @@ async def _chay_tai(cong_cu: str) -> None:
         except Exception:
             pass
         v.update({"dang_chay": False,
+                  "thanh_cong": False,
                   "loi": localefmt.chu(f"Chạy quá {int(tran_gio // 60)} phút chưa xong nên đã dừng. Thử lại khi mạng rảnh hơn.",
                                       f"Still not done after {int(tran_gio // 60)} minutes, so it was stopped. Try again when the network is less busy.")})
         return
@@ -464,20 +476,23 @@ async def _chay_tai(cong_cu: str) -> None:
             tt.kill()
         except Exception:
             pass
-        v.update({"dang_chay": False, "loi": localefmt.chu("Đã dừng giữa chừng.", "Stopped midway.")})
+        v.update({"dang_chay": False, "thanh_cong": False, "loi": localefmt.chu("Đã dừng giữa chừng.", "Stopped midway.")})
         raise
     except Exception as e:
-        v.update({"dang_chay": False, "loi": f"{type(e).__name__}: {e}"})
+        v.update({"dang_chay": False, "thanh_cong": False, "loi": f"{type(e).__name__}: {e}"})
         return
 
     v["dang_chay"] = False
     if ma != 0:
+        v["thanh_cong"] = False
         v["loi"] = localefmt.chu(f"Lệnh cài trả mã lỗi {ma}. Xem log bên dưới.",
                                  f"The install command returned error code {ma}. See the log below.")
     elif not _cai_xong(cong_cu):
+        v["thanh_cong"] = False
         v["loi"] = localefmt.chu("Lệnh chạy xong nhưng không thấy thứ vừa cài đâu.",
                                  "The command finished but what it installed cannot be found.")
     else:
+        v["thanh_cong"] = True
         v["tien_do"] = localefmt.chu("Xong.", "Done.")
     print(f"[cong-cu] tải {cong_cu}: mã {ma}, lỗi={v.get('loi') or 'không'}", file=sys.stderr)
 
@@ -487,6 +502,9 @@ def _cai_xong(cong_cu: str) -> bool:
     if cong_cu == "local_ear":
         import local_stt
         return local_stt.installed()
+    if cong_cu == "meeting_ear":
+        import meeting_stt
+        return meeting_stt.install_verified()
     return bool(duong_dan_chrome())
 
 
@@ -499,6 +517,13 @@ def bat_dau_cai(cong_cu: str = "browser") -> dict:
     # A manual install undoes an earlier Remove, so the automatic download may run again later.
     if cong_cu == "browser":
         REMOVED_MARKER.unlink(missing_ok=True)
+    _viec.setdefault(cong_cu, {}).update({
+        "dang_chay": True,
+        "loi": "",
+        "thanh_cong": None,
+        "tien_do": localefmt.chu("Đang chuẩn bị...", "Preparing..."),
+        "bat_dau": time.time(),
+    })
     t = asyncio.get_event_loop().create_task(_chay_tai(cong_cu))
     _TASKS.add(t)
     t.add_done_callback(_TASKS.discard)
@@ -515,6 +540,12 @@ def go(cong_cu: str = "browser") -> dict:
         import local_stt
         _viec.pop(cong_cu, None)
         return local_stt.remove()
+    if cong_cu == "meeting_ear":
+        if (_viec.get(cong_cu) or {}).get("dang_chay"):
+            return {"ok": False, "error": localefmt.chu("Đang cài, chờ xong rồi gỡ.", "Installing, wait until it finishes.")}
+        import meeting_stt
+        _viec.pop(cong_cu, None)
+        return meeting_stt.remove()
     goc = BROWSERS_DIR
     if not _da_tai():
         return {"ok": False, "error": localefmt.chu("Không có bản nào do Javis cài để gỡ.",

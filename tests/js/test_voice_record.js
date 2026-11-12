@@ -79,6 +79,82 @@ const vrJsSrc = fs.readFileSync(path.join(ROOT, "dashboard/voice-record.js"), "u
 check("no U+2014 em dash in voice-record.js or console.css",
   !vrJsSrc.includes("\u2014") && !consoleCss.includes("\u2014"));
 
+// 8. Meeting mode pure helpers, 8MB Blob.slice chunking, HH:MM:SS timer, and speaker map
+check("fmtTime >= 1h formats HH:MM:SS", VR.fmtTime(3665) === "01:01:05");
+const fakeBlob = {
+  size: 17 * 1024 * 1024,
+  slice: (a, b) => ({ start: a, end: b, size: b - a }),
+};
+const slices = VR.sliceBlobChunks(fakeBlob, VR.CHUNK_SIZE_BYTES);
+check("sliceBlobChunks splits 17MB into 3 slices (8+8+1 MB)",
+  slices.length === 3 && slices[0].size === 8 * 1024 * 1024 && slices[2].size === 1 * 1024 * 1024);
+
+check("meeting state transitions (idle / recording / paused)",
+  VR.canMeetingStart({ recState: "idle", uploading: false }) === true
+  && VR.canMeetingPause({ recState: "recording" }) === true
+  && VR.canMeetingResume({ recState: "paused" }) === true
+  && VR.canMeetingStop({ recState: "paused" }) === true
+  && VR.canMeetingStop({ recState: "idle" }) === false);
+
+const spkPayload = VR.buildSpeakerMapPayload(
+  [{ id: "SPEAKER_00" }, { id: "SPEAKER_01" }, { id: "SPEAKER_02" }],
+  { SPEAKER_00: "Anh Nam", SPEAKER_01: "SPEAKER_01", SPEAKER_02: "  " }
+);
+check("buildSpeakerMapPayload filters blank/unchanged names",
+  JSON.stringify(spkPayload) === JSON.stringify({ SPEAKER_00: "Anh Nam" }));
+
+const meetingKeys = [
+  "vr.tab.quick", "vr.tab.meeting", "vr.meeting.btn_record", "vr.meeting.btn_pause",
+  "vr.meeting.btn_resume", "vr.meeting.btn_stop", "vr.meeting.btn_upload",
+  "vr.meeting.token_missing_warn", "vr.meeting.btn_apply_speakers", "vr.meeting.btn_pin",
+  "vr.meeting.btn_redownload_model", "vr.meeting.btn_pyannote_installed", "vr.meeting.btn_model_installed",
+  "vr.meeting.install_success_all", "vr.meeting.install_success_model",
+  "vr.meeting.install_success_redownload", "vr.meeting.install_failed", "vr.meeting.install_incomplete"
+];
+check("vi.json and en.json have all meeting mode i18n keys",
+  meetingKeys.every(k => typeof viJson[k] === "string" && typeof enJson[k] === "string"));
+
+// 9. Install / Download / Redownload CTA locking & state machine
+const baseSt = {
+  ok: true,
+  installing: false,
+  lib_ready: true,
+  venv_diarize_ready: false,
+  cached_whisper_models: { "large-v3-turbo": false, medium: true, small: false },
+};
+const sUnready = VR.getInstallCtaState({ model: "large-v3-turbo", installPending: "" }, baseSt);
+check("uncached turbo + missing pyannote: installAll & installModel enabled, redownload hidden",
+  sUnready.installAll.disabled === false
+  && sUnready.installModel.disabled === false
+  && sUnready.redownloadModel.visible === false);
+
+const sCachedMed = VR.getInstallCtaState({ model: "medium", installPending: "" }, baseSt);
+check("cached medium + missing pyannote: installAll enabled, installModel lockedDone, redownload visible & enabled",
+  sCachedMed.installAll.disabled === false
+  && sCachedMed.installModel.lockedDone === true
+  && sCachedMed.installModel.disabled === true
+  && sCachedMed.redownloadModel.visible === true
+  && sCachedMed.redownloadModel.disabled === false);
+
+const sClicking = VR.getInstallCtaState({ model: "medium", installPending: "all" }, baseSt);
+check("while pending/installing: installAll, installModel, redownload all temporarily locked",
+  sClicking.busy === true
+  && sClicking.installAll.disabled === true
+  && sClicking.installModel.disabled === true
+  && sClicking.redownloadModel.disabled === true);
+
+const sDone = VR.getInstallCtaState(
+  { model: "large-v3-turbo", installPending: "" },
+  { ok: true, installing: false, lib_ready: true, venv_diarize_ready: true, cached_whisper_models: { "large-v3-turbo": true } }
+);
+check("when pyannote + model validly installed: both installAll & installModel lockedDone, redownload enabled",
+  sDone.installAll.lockedDone === true
+  && sDone.installAll.disabled === true
+  && sDone.installModel.lockedDone === true
+  && sDone.installModel.disabled === true
+  && sDone.redownloadModel.visible === true
+  && sDone.redownloadModel.disabled === false);
+
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);
   process.exit(1);

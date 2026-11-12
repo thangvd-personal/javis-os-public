@@ -486,3 +486,119 @@ async def normalize_voice_record(cfg: dict, text: str) -> dict:
             continue
         return {"text": out, "source": source, "ai": True}
     return {"text": by_rules, "source": "rules", "ai": False}
+
+
+_MEETING_LINE_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(.+)$")
+
+
+def _build_meeting_batch_prompt(lines: list[str], terms: list) -> str:
+    parts = [
+        "Quy tắc chuẩn hóa biên bản cuộc họp:\n"
+        "- Giữ NGUYÊN CHÍNH XÁC phần đầu dòng dạng `[...]` (timestamp và tên người nói) ở đầu mỗi dòng.\n"
+        "- Giữ NGUYÊN ĐÚNG SỐ LƯỢNG DÒNG và ĐÚNG THỨ TỰ, mỗi dòng đầu vào ứng với đúng một dòng đầu ra.\n"
+        "- Chỉ sửa chính tả, từ bị nghe nhầm theo âm, dấu câu và văn phạm của phần nội dung lời nói sau `[...]`.\n"
+        "- Không dịch ngôn ngữ, không gộp dòng, không tách thành nhiều dòng, không dùng em dash (U+2014)."
+    ]
+    if terms:
+        parts.append("Tên riêng và thuật ngữ hay gặp: " + ", ".join(terms))
+    joined = "\n".join(lines)
+    if not_vietnamese(joined):
+        parts.append(KEEP_LANGUAGE_NOTE)
+    parts.append("Danh sách lượt nói cần chuẩn hóa:\n<van_ban_tho>\n" + joined + "\n</van_ban_tho>")
+    return "\n\n".join(parts)
+
+
+async def normalize_meeting_segments(
+    cfg: dict,
+    segments: list[dict],
+    speaker_map: dict | None = None,
+) -> dict:
+    """Chuan hoa tung luot noi trong bien ban cuoc hop, giu nguyen 100% prefix `[HH:MM:SS - Ten]`.
+
+    Tra `{"segments": [{"idx": int, "text": str}, ...], "source": str, "ai": bool}`.
+    """
+    if not segments:
+        return {"segments": [], "source": "rules", "ai": False}
+
+    terms = _terms(cfg)
+    smap = speaker_map if isinstance(speaker_map, dict) else {}
+    has_hours = any(float(s.get("start", 0) or 0) >= 3600 for s in segments)
+
+    prepared = []
+    for idx, seg in enumerate(segments):
+        orig_txt = " ".join(str(seg.get("text") or "").split()).strip()
+        rule_txt = nghe_sua.sua(orig_txt, terms) if orig_txt else ""
+        sec = max(0, int(float(seg.get("start", 0) or 0)))
+        hh, rem = divmod(sec, 3600)
+        mm, ss = divmod(rem, 60)
+        ts = f"{hh:02d}:{mm:02d}:{ss:02d}" if (hh > 0 or has_hours) else f"{mm:02d}:{ss:02d}"
+        sid = str(seg.get("speaker_id") or seg.get("speaker") or "").strip()
+        disp = str(smap.get(sid) or "").strip() or sid
+        prefix = f"[{ts} - {disp}]" if disp else f"[{ts}]"
+        prepared.append({
+            "idx": int(seg.get("idx", idx)),
+            "prefix": prefix,
+            "orig": orig_txt,
+            "rules": rule_txt or orig_txt,
+        })
+
+    # Chunk into manageable batches (~16 turns or ~1800 chars each)
+    batches = []
+    cur = []
+    cur_chars = 0
+    for item in prepared:
+        line_len = len(item["prefix"]) + len(item["rules"]) + 2
+        if cur and (len(cur) >= 16 or cur_chars + line_len > 1800):
+            batches.append(cur)
+            cur = []
+            cur_chars = 0
+        cur.append(item)
+        cur_chars += line_len
+    if cur:
+        batches.append(cur)
+
+    used_source = "rules"
+    any_ai = False
+    out_segments = []
+
+    pick = pick_quick_api(cfg or {})
+    for batch in batches:
+        batch_lines = [f"{it['prefix']} {it['rules']}" for it in batch]
+        prompt = _build_meeting_batch_prompt(batch_lines, terms)
+        main = [("main", lambda p=prompt: asyncio.wait_for(_ASK(p), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
+        quick = [(pick[0], lambda p=prompt, j="\n".join(batch_lines): _ask_normalize_api(pick, p, j))] if pick is not None else []
+        tries = quick + main if main_is_cli(cfg or {}) else main + quick
+
+        accepted = None
+        for source, run in tries:
+            try:
+                raw_out = clean_normalize(await run())
+            except Exception as e:
+                print(f"[transcript_fix] meeting normalize via {source} failed: {type(e).__name__}", file=sys.stderr)
+                continue
+            out_lines = [ln.strip() for ln in raw_out.splitlines() if ln.strip()]
+            if len(out_lines) != len(batch):
+                continue
+            parsed_texts = []
+            valid = True
+            for it, line in zip(batch, out_lines):
+                m = _MEETING_LINE_RE.match(line)
+                if not m:
+                    valid = False
+                    break
+                fixed = m.group(2).strip()
+                if not fixed or not is_safe_normalize(it["rules"], fixed) or not keeps_language(it["rules"], fixed):
+                    valid = False
+                    break
+                parsed_texts.append(fixed)
+            if valid:
+                accepted = parsed_texts
+                used_source = source
+                any_ai = True
+                break
+
+        for i, it in enumerate(batch):
+            final_txt = accepted[i] if accepted is not None else it["rules"]
+            out_segments.append({"idx": it["idx"], "text": final_txt})
+
+    return {"segments": out_segments, "source": used_source, "ai": any_ai}

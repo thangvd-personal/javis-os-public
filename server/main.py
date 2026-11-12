@@ -170,6 +170,8 @@ import transcript_fix  # rewrites what the mic heard at the end of a dictation: 
 import turn_plan  # the engine's task plan (TodoWrite, update_plan) for the plan card in the chat
 import vision_input
 import voice_privacy
+import meeting_jobs  # chunked audio queue + 30-day audio cleanup for meeting recordings
+import meeting_stt  # isolated GPU Whisper + pyannote diarization config & status
 import voice_records  # SQLite audit store + VoiceRecord/*.md naming for the Record page
 import web_security  # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
 import webpush  # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
@@ -7192,6 +7194,10 @@ def settings_get():
     safe.setdefault("voice", {})
     safe["voice"]["elevenlabs_key"] = ("••••" + vk[-4:]) if vk else ""
     safe["voice"]["elevenlabs_key_set"] = bool(vk)
+    _mst = safe["voice"].get("meeting_stt")
+    if isinstance(_mst, dict):
+        _tok = str(_mst.pop("hf_token", "") or "").strip()
+        _mst["has_hf_token"] = bool(_tok or os.getenv("HF_TOKEN", "").strip())
     # The tunnel token never leaves the server; Settings reads /remote-access/status instead.
     safe.pop("remote_tunnel", None)
     bt = (cfg.get("backup", {}) or {}).get("token", "")
@@ -16819,8 +16825,18 @@ async def _start_scheduler():
                         print(f"[purge gc] dọn {n_rac} thư mục quá {purge.TRASH_DAYS} ngày")
                 except Exception as pe:
                     print(f"[purge gc] {type(pe).__name__}: {pe}", file=__import__('sys').stderr)
+                try:
+                    mkq = await asyncio.to_thread(meeting_jobs.cleanup_expired_audio)
+                    if mkq.get("files"):
+                        print(f"[meeting audio gc] dọn {mkq['files']} tệp âm thanh quá hạn, "
+                              f"{mkq['bytes'] // (1024 * 1024)}MB")
+                except Exception as mae:
+                    print(f"[meeting audio gc] {type(mae).__name__}: {mae}", file=__import__('sys').stderr)
             except Exception as e:
                 print(f"[scheduler] {type(e).__name__}: {e}", file=__import__('sys').stderr)
+    n_stuck = meeting_jobs.recover_stuck_jobs()
+    if n_stuck:
+        print(f"[meeting jobs] đặt lại {n_stuck} job đang dở về failed sau khi khởi động lại")
     asyncio.create_task(_scheduler_loop())
     try:
         # Gói khai `compat.app` nhưng `git pull` / `git reset --hard` không bao giờ chạy lại
@@ -18752,7 +18768,181 @@ def voice_records_list(brain: str = Query("brain"), limit: int = Query(30)):
         rows = voice_records.get_store().list_for_brain(brain=brain, brain_path=broot, limit=limit)
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-    return {"ok": True, "records": rows}
+    return {"ok": True, "records": [voice_records.public_record(r) for r in rows]}
+
+
+def _record_target_file(rec: dict) -> Path:
+    broot = Path(_brain_root(rec.get("brain") or "brain")).resolve()
+    rel = str(rec.get("file_path") or "").strip()
+    if not rel:
+        now = localefmt.now()
+        vr_dir = broot / "VoiceRecord"
+        vr_dir.mkdir(parents=True, exist_ok=True)
+        fname = voice_records.make_record_filename(now, vr_dir)
+        target = (vr_dir / fname).resolve()
+    else:
+        target = (broot / rel).resolve()
+    if not target.is_relative_to(broot):
+        raise ValueError("Invalid record file path")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+@app.get("/voice-records/meeting/status")
+def voice_meeting_status():
+    """Return Meeting STT capability, GPU info, cached models, and hf_token flag (never secret value)."""
+    return meeting_stt.status()
+
+
+@app.post("/voice-records/meeting/config")
+async def voice_meeting_config(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": localefmt.chu("JSON không hợp lệ", "Invalid JSON")}, status_code=400)
+    return meeting_stt.update_config(body or {})
+
+
+@app.post("/voice-records/meeting/install")
+async def voice_meeting_install(request: Request):
+    import optional_tools
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    mode = str(body.get("mode") or "all").strip().lower()
+    model = str(body.get("model") or "").strip()
+    force = bool(body.get("force")) or mode == "redownload"
+    if not (optional_tools._viec.get("meeting_ear") or {}).get("dang_chay"):
+        meeting_stt.set_pending_install(mode=mode, model=model, force=force)
+    res = optional_tools.bat_dau_cai("meeting_ear")
+    return {**res, "status": meeting_stt.status()}
+
+
+@app.get("/voice-records/meeting/jobs")
+def voice_meeting_jobs_list(brain: str = Query("brain"), limit: int = Query(20)):
+    broot = brain_ident.canonical(_brain_root(brain))
+    jobs = voice_records.get_store().list_jobs_for_brain(brain=brain, brain_path=broot, limit=limit)
+    return {"ok": True, "jobs": [voice_records.public_job(j) for j in jobs]}
+
+
+def _safe_int(val, default: int = 0) -> int:
+    try:
+        return int(val or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+@app.post("/voice-records/meeting/jobs")
+async def voice_meeting_jobs_create(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": localefmt.chu("JSON không hợp lệ", "Invalid JSON")}, status_code=400)
+    body = body or {}
+    brain = str(body.get("brain") or "brain").strip() or "brain"
+    broot = Path(_brain_root(brain)).resolve()
+    mc = meeting_stt.get_config()
+    model = str(body.get("model") or mc["whisper_model"]).strip()
+    if model not in meeting_stt.SUPPORTED_WHISPER_MODELS:
+        model = mc["whisper_model"]
+    device = str(body.get("device") or mc["device"]).strip().lower()
+    if device not in meeting_stt.VALID_DEVICES:
+        device = mc["device"]
+    language = str(body.get("language") or mc["language"]).strip().lower()
+    if language not in meeting_stt.VALID_LANGUAGES:
+        language = mc["language"]
+    upload_mode = str(body.get("upload_mode") or "raw_upload").strip()
+    if upload_mode not in ("raw_upload", "multi_segment"):
+        upload_mode = "raw_upload"
+    ext = meeting_jobs.sanitize_ext(str(body.get("file_ext") or body.get("filename") or ".webm"))
+    diarize = mc["diarize"] if "diarize" not in body else bool(body.get("diarize"))
+    now = localefmt.now()
+    job = voice_records.get_store().create_job(
+        brain=brain,
+        brain_path=brain_ident.canonical(str(broot)),
+        title=str(body.get("title") or "").strip()[:160],
+        upload_mode=upload_mode,
+        file_ext=ext,
+        model=model,
+        device=device,
+        language=language,
+        diarize=diarize,
+        num_speakers=max(0, _safe_int(body.get("num_speakers"))),
+        min_speakers=max(0, _safe_int(body.get("min_speakers"))),
+        max_speakers=max(0, _safe_int(body.get("max_speakers"))),
+        total_chunks=max(0, _safe_int(body.get("total_chunks"))),
+        created_at=now.timestamp(),
+        created_iso=now.isoformat(),
+    )
+    return {"ok": True, "job": voice_records.public_job(job)}
+
+
+@app.post("/voice-records/meeting/jobs/{job_id}/chunk")
+async def voice_meeting_job_chunk(
+    job_id: str,
+    file: UploadFile = File(...),
+    chunk_index: int = Form(0),
+):
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy phiên ghi âm", "Meeting job not found")}, status_code=404)
+    if job["status"] != "uploading":
+        return JSONResponse({"ok": False, "error": localefmt.chu("Phiên này đã chốt tải lên", "Job upload already finalized")}, status_code=409)
+    try:
+        received = await meeting_jobs.save_chunk_stream(job_id, chunk_index, file)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    return {"ok": True, "job_id": job_id, "chunk_index": chunk_index, "received_chunks": received}
+
+
+@app.post("/voice-records/meeting/jobs/{job_id}/finish")
+async def voice_meeting_job_finish(job_id: str, request: Request):
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy phiên ghi âm", "Meeting job not found")}, status_code=404)
+    if job["status"] not in ("uploading", "failed"):
+        return {"ok": True, "job": voice_records.public_job(job)}
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    updates = {}
+    if "total_chunks" in body:
+        updates["total_chunks"] = max(0, _safe_int(body.get("total_chunks")))
+    if body.get("upload_mode") in ("raw_upload", "multi_segment"):
+        updates["upload_mode"] = body["upload_mode"]
+    if body.get("file_ext") or body.get("filename"):
+        updates["file_ext"] = meeting_jobs.sanitize_ext(str(body.get("file_ext") or body.get("filename")))
+    if "title" in body:
+        updates["title"] = str(body.get("title") or "").strip()[:160]
+    if updates:
+        job = store.update_job(job_id, **updates) or job
+
+    queued = meeting_jobs.enqueue_job(
+        job_id,
+        brain_root_fn=_brain_root,
+        files_root_fn=_files_root,
+        files_rel_fn=_files_rel,
+    )
+    return {"ok": True, "job": voice_records.public_job(queued)}
+
+
+@app.get("/voice-records/meeting/jobs/{job_id}")
+def voice_meeting_job_status(job_id: str):
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy phiên ghi âm", "Meeting job not found")}, status_code=404)
+    rec = store.get(job["record_id"]) if job.get("record_id") else None
+    return {"ok": True, "job": voice_records.public_job(job), "record": voice_records.public_record(rec)}
 
 
 @app.post("/voice-records/normalize")
@@ -18811,14 +19001,171 @@ async def voice_records_normalize(request: Request):
             )
         )
     except Exception as e:  # noqa: BLE001
-        return JSONResponse({"ok": False, "error": str(e), "record": rec}, status_code=500)
+        return JSONResponse({"ok": False, "error": str(e), "record": voice_records.public_record(rec)}, status_code=500)
 
     return {
         "ok": True,
-        "record": updated or rec,
+        "record": voice_records.public_record(updated or rec),
         "ai": bool((res or {}).get("ai")),
         "source": str((res or {}).get("source") or ""),
     }
+
+
+@app.get("/voice-records/{record_id}")
+def voice_record_detail(record_id: str):
+    rec = voice_records.get_store().get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    return {"ok": True, "record": voice_records.public_record(rec)}
+
+
+@app.post("/voice-records/{record_id}/speakers")
+async def voice_record_map_speakers(record_id: str, request: Request):
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": localefmt.chu("JSON không hợp lệ", "Invalid JSON")}, status_code=400)
+    body = body or {}
+    smap = body.get("speaker_map")
+    if not isinstance(smap, dict):
+        return JSONResponse({"ok": False, "error": "speaker_map must be an object"}, status_code=400)
+    clean_map = {str(k).strip(): str(v).strip()[:80] for k, v in smap.items() if str(k).strip() and str(v).strip() and str(v).strip() != str(k).strip()}
+    rendered = voice_records.render_meeting_markdown(
+        created_iso=rec.get("created_iso") or "",
+        duration_sec=float(rec.get("duration_sec") or 0),
+        model_used=rec.get("model_used") or "",
+        segments=rec.get("segments") or [],
+        speaker_map=clean_map,
+        normalized_segments=rec.get("normalized_segments") or [],
+        title=str(body.get("title") or "").strip(),
+    )
+    try:
+        target = _record_target_file(rec)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    await asyncio.to_thread(_atomic_write_text, target, rendered)
+    updated = store.update_speaker_map(record_id, clean_map, rendered_text=rendered)
+    return {"ok": True, "record": voice_records.public_record(updated)}
+
+
+@app.post("/voice-records/{record_id}/normalize")
+async def voice_record_normalize_existing(record_id: str, request: Request):
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    cfg = cfgmod.read_settings()
+    try:
+        target = _record_target_file(rec)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    segments = rec.get("segments") or []
+    if rec.get("mode") == "meeting" and segments:
+        smap = rec.get("speaker_map") or {}
+        res = await transcript_fix.normalize_meeting_segments(cfg, segments, speaker_map=smap)
+        norm_segs = res.get("segments") or []
+        rendered = voice_records.render_meeting_markdown(
+            created_iso=rec.get("created_iso") or "",
+            duration_sec=float(rec.get("duration_sec") or 0),
+            model_used=rec.get("model_used") or "",
+            segments=segments,
+            speaker_map=smap,
+            normalized_segments=norm_segs,
+            title=str(body.get("title") or "").strip(),
+        )
+        await asyncio.to_thread(_atomic_write_text, target, rendered)
+        updated = store.mark_normalized(
+            record_id,
+            normalized_text=rendered,
+            source=str(res.get("source") or ""),
+            normalized_segments=norm_segs,
+        )
+        return {
+            "ok": True,
+            "record": voice_records.public_record(updated or rec),
+            "ai": bool(res.get("ai")),
+            "source": str(res.get("source") or ""),
+        }
+
+    raw_text = str(rec.get("raw_text") or "").strip()
+    res = await transcript_fix.normalize_voice_record(cfg, raw_text)
+    norm_text = str((res or {}).get("text") or raw_text).strip() or raw_text
+    await asyncio.to_thread(_atomic_write_text, target, norm_text)
+    updated = store.mark_normalized(
+        record_id,
+        normalized_text=norm_text,
+        source=str((res or {}).get("source") or ""),
+    )
+    return {
+        "ok": True,
+        "record": voice_records.public_record(updated or rec),
+        "ai": bool((res or {}).get("ai")),
+        "source": str((res or {}).get("source") or ""),
+    }
+
+
+@app.post("/voice-records/{record_id}/pin")
+async def voice_record_pin(record_id: str, request: Request):
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    new_pin = (not rec.get("pinned")) if "pinned" not in body else bool(body.get("pinned"))
+    updated = store.set_pinned(record_id, new_pin)
+    return {"ok": True, "record": voice_records.public_record(updated)}
+
+
+@app.get("/voice-records/{record_id}/audio")
+def voice_record_audio(record_id: str):
+    rec = voice_records.get_store().get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    ap = str(rec.get("audio_path") or "").strip()
+    if not ap or not Path(ap).is_file():
+        return JSONResponse({"ok": False, "error": localefmt.chu("File âm thanh gốc không còn trên máy", "Original audio file is no longer available")}, status_code=404)
+    p = Path(ap).resolve()
+    aud_root = meeting_stt.audio_dir().resolve()
+    if not p.is_relative_to(aud_root):
+        return JSONResponse({"ok": False, "error": "Invalid audio path"}, status_code=403)
+    return FileResponse(str(p), filename=p.name)
+
+
+@app.get("/voice-records/{record_id}/export")
+def voice_record_export(record_id: str, format: str = Query("txt")):
+    rec = voice_records.get_store().get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    fmt = str(format or "txt").strip().lower()
+    if fmt not in ("srt", "vtt", "txt", "json"):
+        return JSONResponse({"ok": False, "error": "Unsupported export format"}, status_code=400)
+    content, media_type, ext = voice_records.export_meeting_transcript(
+        segments=rec.get("segments") or [],
+        speaker_map=rec.get("speaker_map") or {},
+        normalized_segments=rec.get("normalized_segments") or [],
+        fmt=fmt,
+        duration_sec=float(rec.get("duration_sec") or 0),
+    )
+    stem = Path(str(rec.get("file_path") or record_id)).stem or record_id
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{stem}.{ext}"'},
+    )
 
 
 @app.get("/chat/suggest")
