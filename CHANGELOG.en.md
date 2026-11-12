@@ -8,6 +8,139 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.551.1] - 2026-11-12
+### Fixed
+- **When ChatGPT (or Claude, Grok) loses its sign-in, Javis moves to another connected model by itself.** Before, only running out of quota moved a turn on; a lost sign-in failed every turn until you signed in again.
+- **Customer bots and assistants with their own model are covered too.** A bot or an assistant set to ChatGPT answers on the main model while ChatGPT is signed out, so customers no longer hit failed turns.
+- **You are told clearly.** The chat shows "Using ... because ChatGPT lost its sign-in", the model picker tags the card "Signed out", and the bell gets one reminder to sign in again on the Models page. After signing in, the old model is used again at once.
+
+## [0.551.0] - 2026-11-12
+### Improved
+- **The Team settings tab is simpler.** What is in view is only what you decide for a team: its members, its goal, how far the coordinator decides alone, whether outside actions need approval, its name and status.
+- **Acceptance and the usage figures moved into Advanced**, next to the limit numbers and the detailed rights. Nothing was removed: open Advanced and it is all there as before.
+- **The team's goal now sits right under the member list.**
+### Added
+- **A new team runs a job to its end.** Teams created from this version on have no cap on the replies and steps of one job, so a job no longer stops halfway to wait for "Give more turns". In exchange a hard job can use more tokens. The team's daily reply cap stays, and a job still stops by itself at two identical results.
+- Teams created before keep their limits. To change them, open Advanced, Team limits, and tick "Unlimited" or type a number.
+
+## [0.550.0] - 2026-11-12
+### Added
+- **One team can run several jobs at once.** A team used to run one job at a time, so one assistant's job waited for another assistant's job to end. Now up to 3 jobs run side by side when they belong to different assistants.
+- **Jobs of the same assistant still run one after the other**, in the order of the queue. So do the jobs the coordinator plans.
+- **To make a job wait for an earlier result, say so in the request.** A job with words such as "after ... is done", "one after another" or "in sequence" waits for every job before it, and no later job starts ahead of it.
+### Improved
+- **The job strip on top of the chat shows every running job**, not only one.
+- To go back to one job at a time, set the environment variable `JAVIS_TEAM_JOBS=1`.
+
+## [0.549.1] - 2026-11-12
+### Fixed
+- **A team no longer stops taking pictures after a while.** A team holds at most 50 documents, and every picture sent in a team takes two places (the picture and the description written for the assistants). The list was full after about 25 picture messages, and from then on files were dropped without a word. Now, when the list is full, the oldest picture and its description leave the list to let the new one in. The file stays on disk and the message stays in the chat.
+- **Documents you attached yourself never leave by themselves.** A price list, a contract, a PDF and its text copy stay.
+- **A file that cannot get into the team is said.** When the list is full of documents you attached, Javis gives the reason and where to remove some, instead of dropping the file in silence.
+### Improved
+- **The first open of a long team after Javis restarts no longer makes everything else wait.** While Javis reads the history again to build the Documents list, loading messages stays as fast as usual.
+
+## [0.549.0] - 2026-11-12
+### Improved
+- **Facebook monitor (Apify) no longer ships inside Javis; it comes with its pack in the Store.** Scanning through Apify is an add-on that not everyone uses. If you use it, open the Store and update the "Facebook monitor (Apify)" pack to get the `fb_monitor` tool back; the Apify token you pasted stays as it is.
+
+## [0.548.1] - 2026-11-12
+### Fixed
+- **Background fallback runs the model you picked on the card.** That choice was ignored before: when the background model ran out and the work moved to Claude Code, it ran the CLI's own default model, usually the one that uses the plan up fastest. A card with no model picked runs as before.
+
+## [0.548.0] - 2026-11-12
+### Added
+- **Create a team with its documents from the start.** The Create team box has a new "Add documents for the team (files, links)" block: find a file already in the brain by name, upload one from the device, or paste a link. Team members can read them from the first message.
+- **No need to upload a file the brain already has.** The Info tab of each team has a box that searches the brain, and Add is one press. The file stays where it is, no copy is made.
+### Improved
+- **Finding a file by name hits more often.** Several words such as "bang gia" now find `bang-gia-dich-vu.md`: the name only has to hold all the words, whatever the dashes or the order. This applies to every search of files by name, including the Documents drawer of a chat.
+
+## [0.547.3] - 2026-11-12
+### Fixed
+- **A root install on Linux no longer breaks Claude with "exit code 1".** A fresh install creates a regular account `javis` and runs Javis under it, because Claude Code refuses Full access under root.
+- **A clone inside `/root` is moved to `/opt`**, since no other account can enter `/root`. The installer says where it went.
+- **A machine installed earlier keeps the account it has.** `./update.sh` run as root works as before.
+
+## [0.547.2] - 2026-11-12
+### Fixed
+- **The "SDK engine: ProcessError... Check stderr output for details" error now gives the reason.** When Claude Code exits before answering, the chat shows what it printed instead of a line nobody can act on.
+- **Three common cases come with the fix:** Javis running as root, a broken data source (MCP) configuration, and an outdated Claude Code on the machine.
+
+## [0.547.1] - 2026-11-12
+### Fixed
+- **The usage ring stops being red as soon as the plan works again.** Before, after you reset the plan on the provider's site the ring stayed red at 100% and Javis's own work stayed paused until the old reset time.
+- **A reset time that includes the year is read.** A notice like "try again at Nov 13th, 2026 3:32 PM" used to count as "no reset time given"; the real time now shows.
+- **Background work refused for quota turns the usage ring red too.** Only chat turns recorded it before, so background work could use up the plan while the ring stayed green.
+
+## [0.547.0] - 2026-11-12
+### Added
+- **An agent set to ChatGPT now really runs on ChatGPT in restricted background workflows.** Those steps always ran on Claude Code, whatever you picked. The step can call only its own tool list, at the job's permission level, with no shell, web or sub-agents.
+- Without Codex installed the step still runs on Claude Code as before, with no error.
+
+## [0.546.3] - 2026-11-12
+### Fixed
+- **The Messenger check now detects a webhook that cannot be reached.** Every line used to say fine while the HTTPS address was dead, so the bot stayed silent with no visible reason.
+- **When the quick tunnel gets a new address, automatic repair points the webhook at the running one**, keeps the receiver path, and saves it only after Meta verifies it.
+
+## [0.546.2] - 2026-11-12
+### Fixed
+- **Rules written on the Profile page now reach the model at token-saving levels too.** At the saving levels (the default one included) the profile was dropped together with the memory index, so a form of address or a layout preference set once for every brain only worked with saving switched off.
+
+## [0.546.1] - 2026-11-12
+### Fixed
+- **A new Claude Code chat no longer rewrites the whole prompt cache at token-saving levels.** A clock that changed every minute, and the memories picked for each question, sat inside the cached part of the prompt, so every new chat rewrote about 25 thousand tokens. They now travel with the first message of the chat, and the prompt stays the same between chats.
+
+## [0.546.0] - 2026-11-12
+### Added
+- **Zalo messages can quote the message they answer.** When you ask Javis to reply to one specific message, the message goes out with the quoted original above it, like tapping "Reply" in Zalo. Only text messages can be quoted. The Zalo connection moves to javis-zalo 1.11.0 on its next start.
+
+## [0.545.5] - 2026-11-12
+### Fixed
+- **Opening a team with hours of chat no longer slows the whole app.** Since 0.518.0, opening a team on a wide screen also opened its Info tab, and the server read every message of the team again to look for files and links. The longer the team, the slower, and meanwhile loading messages, switching teams and sending all had to wait. The server now keeps the result and reads only new messages. Measured on a team with 3,000 messages: from 1.5 seconds per open to 0.003 seconds.
+- The Documents list of a long conversation is faster too, since it reads the same way.
+### Improved
+- **The "Starting Javis…" screen hands over to the app sooner.** Once the first page has its data the screen goes almost at once.
+- **A machine that loads data slowly is no longer covered for up to 12 seconds.** When the first page is open but a list is still loading, the app shows after 4 seconds and the unfinished part keeps its own "Loading" line, as on every other page.
+
+## [0.545.4] - 2026-11-12
+### Security
+- **Facebook and Meta Ads tools no longer hand access tokens to the model.** Facebook's "next page" links and error messages carry the access token; Javis now strips it before the result reaches the model. Posts, comments and paging cursors are unchanged.
+
+## [0.545.3] - 2026-11-12
+### Fixed
+- **ChatGPT image generation no longer says "no account" while every account rests after a chat limit.** Javis still tries the first switched-on account, as it did before account rotation. Switched-off accounts stay unused.
+
+## [0.545.2] - 2026-11-12
+### Fixed
+- **ChatGPT image generation can use another signed-in account after quota exhaustion.** On a confirmed quota error, Javis retries on the next enabled account in Models order. Other errors do not trigger a retry, and disabled accounts remain unused.
+
+## [0.545.1] - 2026-11-12
+### Fixed
+- **Zalo group @mentions keep targeting the bot after a Javis restart.** Retain an account ID verified from its own outgoing group messages, restore it after restart, and fail closed on conflicting identities.
+
+## [0.545.0] - 2026-11-12
+### Added
+- **Customer profile.** After a private chat has been quiet for about 15 minutes, the background model writes down what is worth remembering about the customer: name, how to address them, contact details, what they are interested in, what was agreed, what is still open. The bot then reads this profile along with the last 30 messages, so it does not ask again, even when the customer comes back months later.
+- **The note about the customer becomes the Customer profile section** of the Info panel on the Conversations page, up to 4,000 characters. You can still edit, add to or empty it, and what you write is kept at the next update.
+### Improved
+- **Only private chats the bot has answered in get a profile.** Groups do not, nor do chats with friends and family on a personal Zalo account. Javis writes at most 5 profiles every 5 minutes, so it does not burn through your plan in one go.
+
+## [0.544.2] - 2026-11-12
+### Fixed
+- **Opt out of the standalone 07:30 My Tasks agenda per brain.** Set `agenda_enabled: false` in the brain's `Javis/my-tasks.json`. Timed tasks, appointment reminders and habit nudges remain active; all other brains retain the previous default.
+
+## [0.544.1] - 2026-11-12
+### Fixed
+- **MCP servers with OAuth metadata on another host sign in (impact.com).** The card used to say the server declares no standard MCP OAuth. Javis now reads that metadata when it is on public https, returned by the MCP URL that was entered, and names that URL.
+### Security
+- **Read-only connections stop asking for `mcp:write` style scopes.** On a discovered sign-in where the server offers a read scope (for example `mcp:read`), a connection set to read-only leaves out scopes whose name ends in `write`. The hub's tool-name check stays the main guard. Raising the level later needs a new sign-in.
+
+## [0.544.0] - 2026-11-12
+### Fixed
+- **Bots no longer forget a customer after every update.** A bot kept the history of a private chat in temporary memory only, so a restart of Javis made it meet a returning customer as a stranger. It now reads the chat back from the inbox, including what you answered by hand.
+### Improved
+- **Bots look back over the last 30 messages of a private chat instead of 20.** On every bot channel (Zalo Bot, personal Zalo, Telegram, Messenger...). In a chat with very long messages the bot drops the oldest ones. Groups still see the 30 messages before the one being asked.
+
 ## [0.543.0] - 2026-11-12
 ### Added
 - **Chatbots now answer on WeChat.** Chatbot, Add channel has a new **WeChat** entry: a dedicated bot answers the followers of your WeChat Official Account, every chat lands in the shared Inbox and you can take over as on the other channels.

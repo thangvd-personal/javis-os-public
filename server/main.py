@@ -160,6 +160,7 @@ import plugins_host  # hệ PLUGIN: thư mục Python thả vào, tự thêm too
 import purge  # xoá kết nối cho sạch: chủ sở hữu duy nhất của việc dọn dấu vết
 import sdk_update  # same daily tick: the claude-agent-sdk package moves to newer releases of its series
 import security_log  # account security log: sign-ins, account changes, outside edits (2026-11-09)
+import signin_loss  # a plan card that lost its sign-in moves the turn on, like one out of quota (2026-11-12)
 import stt  # nghe tin thoại (Whisper qua Groq) -> chữ, cho kênh Telegram/Zalo
 import terminal  # tab Code: pseudo-terminal thật trong dashboard (pty trên POSIX, ống trên Windows)
 import tool_label  # một dòng mô tả lệnh gọi công cụ (lệnh nào, file nào) cho khối tiến trình
@@ -214,6 +215,7 @@ import compaction  # nén hội thoại dài cho engine API (tóm tắt phần c
 import context_compiler  # Phase 4: capsule + quota preflight + quality gate shadow
 import context_runtime  # Phase 0-8: trace + Registry/Resolver/Compiler + canary paths
 import conversations  # Hộp thư hội thoại khách: kho khách -> hội thoại -> tin (Chatbot V2)
+import customer_profile  # what a bot remembers about one customer, written by the background model (2026-11-12)
 import deploy_info  # Javis đang đứng ở đâu (docker/native) - xem _deploy_mode
 import evidence_store  # Phase 6: encrypted provenance/artifact store
 import fast_path_runtime  # Phase 5: dashboard API canary, hard quota + single model call
@@ -548,6 +550,7 @@ for _mt, _ext in (("application/vnd.openxmlformats-officedocument.spreadsheetml.
     mimetypes.add_type(_mt, _ext)
 import tinh_gon  # noqa: E402
 import static_bundle  # noqa: E402
+import session_assets_scan  # noqa: E402
 
 # Minified scripts and styles survive a restart (tinh_gon.set_cache_dir, 2026-11-09): outside the code tree, so an update
 # never ships a stale copy, and keyed by each file's bytes, so an update re-minifies only what it changed.
@@ -1070,8 +1073,27 @@ def _javis_core_block(session_id: str) -> str:
 
 
 # Stable prompt (0.445.0, #975): the clock line points at the per-message header instead of holding the time.
-_STABLE_CLOCK_NOTE = ("Giờ hiện tại ghi ở dòng `[Giờ gửi tin này: ...]` đầu tin nhắn mới nhất của user; "
-                      "dùng đúng giờ đó cho \"bây giờ\", \"hôm nay\", \"hôm qua\".")
+# The text lives in context_compiler since #1329, so the token-saving path writes the very same line.
+_STABLE_CLOCK_NOTE = context_compiler.STABLE_CLOCK_NOTE
+
+
+def _with_turn_context(cli, plan, prompt, sysprompt):
+    """(prompt, system prompt) of a Claude Code turn, with the plan's per-turn context where the model reads it (#1329).
+
+    What the token-saving path used to append to the system prompt (conversation state, retrieved memory, the selected
+    skill) changes with every message, so it made every new chat rewrite the whole cached block. It now opens the
+    FIRST message of a thread instead. A resumed thread keeps the system prompt of its first turn, so later turns never
+    saw this context before either; leaving it out there keeps the thread from growing by it every turn.
+    A prompt that is not plain text cannot carry it: the context then stays in the system prompt for that turn, as
+    before, rather than get lost."""
+    ctx = getattr(plan, "turn_context", "") if not getattr(cli, "session_id", None) else ""
+    if not ctx:
+        return prompt, sysprompt
+    if isinstance(prompt, str):
+        return ctx + "\n\n" + prompt, sysprompt
+    sysprompt = sysprompt + "\n\n" + ctx
+    cli.system_prompt = sysprompt
+    return prompt, sysprompt
 
 
 def _turn_facts_header(brain: str, session_id: str, lang: str = "", first: bool = True) -> str:
@@ -1136,9 +1158,12 @@ def build_system_prompt(brain: str = "brain", include_memory: bool = True,
             mem = idx.read_text(encoding="utf-8")
     except Exception:
         mem = ""
-    if include_memory:
-        # 0.188.0: the person's own profile (every brain) BEFORE the brain's memory, which wins where they differ.
-        base += memory_control.profile_block()
+    # 0.188.0: the person's own profile (every brain) BEFORE the brain's memory, which wins where they differ.
+    # #1349: NOT tied to `include_memory`. The token-saving levels build this prompt without the memory index to
+    # load memories selectively, and the profile went with it, so a rule written once on the Profile page reached
+    # the model only with saving switched off. It is a behaviour contract (at most 4,000 characters), like the
+    # project instructions, not a memory to retrieve.
+    base += memory_control.profile_block()
     if include_memory and mem.strip():
         base += main_prompt_rendering.render_memory_block(mem, memory_cap=MEMORY_INDEX_MAX)
     if not memory_control.learning_enabled(_brain_memory_dir(brain)):
@@ -1309,6 +1334,9 @@ def build_adaptive_source_prompt(brain: str = "brain", include_memory: bool = Fa
         f"Agent files: {ag}/<slug>.md; workflow files: {wf}/<slug>.md; "
         f"loop files: {loops}/<slug>.md; skill files: {skills}/<slug>/SKILL.md.",
     ]
+    # #1349: the person's profile rides along on the small base too, whatever `include_memory` says (see
+    # build_system_prompt). Before the memory fallback, which wins where they differ.
+    parts.append(memory_control.profile_block().strip())
     if include_memory:
         try:
             idx = _brain_memory_dir(brain) / "MEMORY.md"
@@ -3397,7 +3425,8 @@ def _provider_key(mcfg, d):
 
 def _route_ready(mcfg, prov) -> bool:
     """Whether a card can take a chat turn right now: an API card needs a key that is not resting, a plan card must
-    not be known to be out of quota. Unknown means yes: the turn itself reports the provider's own error."""
+    not be known to be out of quota or signed out (`_SIGNED_OUT`, 2026-11-12). Unknown means yes: the turn itself
+    reports the provider's own error."""
     d = _provider_def(prov)
     if not d:
         return False
@@ -3407,7 +3436,7 @@ def _route_ready(mcfg, prov) -> bool:
         if d.get("key_field") and d["id"] not in _ROUTING_SINGLE_KEY:
             return bool(model_routing.usable_accounts(mcfg, prov, d["key_field"]))
         return bool(_provider_key(mcfg, d))
-    if _pin_limited_until(prov):
+    if _pin_limited_until(prov) or _signed_out_until(prov):
         return False
     if plan_accounts.in_use(prov) and plan_accounts.has_extra(mcfg, prov):
         return plan_accounts.pick(mcfg, prov) is not None   # every account of the plan off, resting or signed out
@@ -3532,6 +3561,8 @@ def _plan_main_signed_in(provider: str) -> None:
     except Exception as e:  # noqa: BLE001 - a sign-in must never fail on this
         print(f"[plan accounts] clear rest {provider}: {type(e).__name__}: {e}", file=sys.stderr)
     _PIN_LIMITED.pop(provider, None)
+    _SIGNED_OUT.pop(provider, None)        # 2026-11-12: a fresh sign-in lifts the signed-out mark at once
+    _SIGNED_OUT_TOLD.pop(provider, None)   # and the next loss is worth telling the owner again
 
 
 def _clear_pin_limit(provider: str) -> bool:
@@ -3550,7 +3581,96 @@ def _clear_pin_limit(provider: str) -> bool:
             model_routing.clear_rest(prov, plan_accounts.MAIN)   # one account: its rest IS the card's rest
     except Exception as e:  # noqa: BLE001 - lifting a mark must never fail the owner's click
         print(f"[routing] clear limit {prov}: {type(e).__name__}: {e}", file=sys.stderr)
-    return had
+    return _SIGNED_OUT.pop(prov, None) is not None or had
+
+
+# A plan card that lost its SIGN-IN (owner's report 12/11/2026, a customer's bot on an agent set to ChatGPT): provider ->
+# epoch until which turns skip the card, exactly as they skip a plan out of quota. Before, only a quota refusal moved
+# a turn on; a signed-out plan refused every turn while another model was signed in. Kept apart from `_PIN_LIMITED` so
+# the page never says "out of quota until 12:40" about a card that needs a sign-in. In memory only: after a restart the
+# first turn finds out again, at the cost of one quick refusal. Lifted by signing in, by choosing the card on purpose
+# (`_clear_pin_limit`), or by itself after `signin_loss.RETRY_S`, when one turn tries the card again.
+_SIGNED_OUT: dict = {}
+# provider -> time the owner was last told, so a card that stays signed out rings the bell once a day, not every window.
+_SIGNED_OUT_TOLD: dict = {}
+SIGNED_OUT_NOTICE_EVERY_S = 24 * 3600
+
+
+def _signed_out_until(provider: str, now: float = None) -> float:
+    """Epoch until which `provider` is known to be signed out, 0 when it is not (or the window ran out)."""
+    prov = str(provider or "")
+    now = time.time() if now is None else now
+    until = float(_SIGNED_OUT.get(prov, 0) or 0)
+    if until <= now:
+        _SIGNED_OUT.pop(prov, None)
+        return 0.0
+    return until
+
+
+def _signin_lost_text(provider: str, text, answer: bool = False) -> bool:
+    """Whether an engine's error (or, with `answer`, its whole answer) says the plan card `provider` lost its sign-in.
+    Only the four plan cards have a sign-in to lose; a quota sentence is never one."""
+    prov = str(provider or "")
+    if prov not in _ROUTING_PLAN_PROVIDERS or not str(text or "").strip():
+        return False
+    try:
+        if _subscription_limit_event(str(text), _NHA_SANG_ENGINE.get(prov, ""))[0]:
+            return False
+    except Exception:  # noqa: BLE001 - the detector below still decides
+        pass
+    return signin_loss.is_signin_error(text, answer=answer)
+
+
+def _signin_lost_message(provider: str, raw="") -> str:
+    """What the owner reads when a plan card lost its sign-in and no other route took the turn."""
+    name = _route_name(provider)
+    detail = " ".join(str(raw or "").split())[:200]
+    return localefmt.chu(
+        f"⚠ {name} mất đăng nhập nên lượt này chưa chạy. Vào trang Models đăng nhập lại {name}, hoặc chọn model khác."
+        + (f" (Chi tiết: {detail})" if detail else ""),
+        f"⚠ {name} lost its sign-in, so this turn did not run. Sign in to {name} again on the Models page, or pick "
+        "another model." + (f" (Details: {detail})" if detail else ""))
+
+
+def _note_signin_lost(provider: str, account: str = None, now: float = None) -> None:
+    """A turn on plan card `provider` was refused for a lost sign-in: turns skip the card for `signin_loss.RETRY_S`.
+
+    On a card with several accounts the account that was refused rests, and the card itself is only marked when no
+    other account can run (as `_note_pin_limit` does for quota). The owner is told once through the inbox. Never
+    raises: a mark must not turn one failure into two."""
+    prov = str(provider or "")
+    if prov not in _ROUTING_PLAN_PROVIDERS:
+        return
+    now = time.time() if now is None else now
+    until = now + signin_loss.RETRY_S
+    try:
+        if plan_accounts.in_use(prov):
+            m = cfgmod.read_settings().get("model") or {}
+            if plan_accounts.has_extra(m, prov):
+                aid = account or _PLAN_ACCOUNT_LAST.get(prov, plan_accounts.MAIN)
+                model_routing.mark_rest(prov, aid, until=until)
+                if plan_accounts.usable(m, prov, now):
+                    return
+    except Exception as e:  # noqa: BLE001
+        print(f"[routing] signed out {prov}: {type(e).__name__}: {e}", file=sys.stderr)
+    first = not _signed_out_until(prov, now)
+    _SIGNED_OUT[prov] = until
+    if first:
+        print(f"[routing] {prov} lost its sign-in: turns use the next card for {int(signin_loss.RETRY_S)} s",
+              file=sys.stderr)
+    if now - float(_SIGNED_OUT_TOLD.get(prov, 0) or 0) < SIGNED_OUT_NOTICE_EVERY_S:
+        return
+    _SIGNED_OUT_TOLD[prov] = now
+    try:
+        name = _route_name(prov)
+        inbox.add(localefmt.chu(
+            f"{name} mất đăng nhập. Javis đang chạy bằng model khác đã kết nối (nếu có). "
+            f"Vào trang Models đăng nhập lại {name} để dùng lại model này.",
+            f"{name} lost its sign-in. Javis is running on another connected model (if there is one). "
+            f"Sign in to {name} again on the Models page to use this model again."),
+            kind="system", dedup=f"signed-out:{prov}:{time.strftime('%Y-%m-%d', time.localtime(now))}")
+    except Exception as e:  # noqa: BLE001 - a missed notice never fails the turn
+        print(f"[routing] signed-out notice {prov}: {type(e).__name__}: {e}", file=sys.stderr)
 
 
 def _note_api_limit(mcfg, prov: str, key: str, raw: str = "", seconds: float = 0.0) -> None:
@@ -3616,8 +3736,12 @@ def _route_account_no(mcfg, prov: str, key: str = ""):
         return 0, ""
 
 
-def _chat_next_route(mcfg, failed: str, failed_key: str = "", tried=(), failed_account: str = None) -> dict:
+def _chat_next_route(mcfg, failed: str, failed_key: str = "", tried=(), failed_account: str = None,
+                     reason: str = "quota") -> dict:
     """Where a chat turn that ran out of quota goes next (0.354.0), or {} when nothing is left.
+
+    `reason="signin"` (2026-11-12): the card lost its sign-in instead (`_note_signin_lost` already marked it); the
+    route is chosen the same way and only the status line says why.
 
     The failing account is already resting (`_note_pin_limit`, `_note_api_limit`), so `_route_ready` and the
     account pickers skip it. Same card first while it still has an account that can run, then the usage order,
@@ -3654,15 +3778,17 @@ def _chat_next_route(mcfg, failed: str, failed_key: str = "", tried=(), failed_a
         old_no, old_lab = _route_account_no(mcfg, prov, failed_key if kind == "api" else
                                             (failed_account or _PLAN_ACCOUNT_LAST.get(prov, plan_accounts.MAIN)))
         new_no, new_lab = _route_account_no(mcfg, prov, ref)
+        why_vi, why_en = (("mất đăng nhập", "lost its sign-in") if reason == "signin"
+                          else ("hết lượt", "is out of quota"))
         if kind == "api":
             new_s, old_s = (new_lab or f"key {new_no}"), (old_lab or f"key {old_no}")
-            vi = f"Đang dùng {_route_name(prov)} ({new_s}) vì {old_s} hết lượt."
-            en = f"Using {_route_name(prov)} ({new_s}) because {old_s} is out of quota."
+            vi = f"Đang dùng {_route_name(prov)} ({new_s}) vì {old_s} {why_vi}."
+            en = f"Using {_route_name(prov)} ({new_s}) because {old_s} {why_en}."
         else:
             vi = (f"Đang dùng {_route_name(prov)} ({new_lab or f'tài khoản {new_no}'}) vì "
-                  f"{old_lab or f'tài khoản {old_no}'} hết lượt.")
+                  f"{old_lab or f'tài khoản {old_no}'} {why_vi}.")
             en = (f"Using {_route_name(prov)} ({new_lab or f'account {new_no}'}) because "
-                  f"{old_lab or f'account {old_no}'} is out of quota.")
+                  f"{old_lab or f'account {old_no}'} {why_en}.")
         return {"route": (prov, kind, key, model), "status": localefmt.chu(vi, en), "tried": tried}
     try:
         signed_in = set(_routing_connected_ids(cfgmod.read_settings()))
@@ -3677,8 +3803,12 @@ def _chat_next_route(mcfg, failed: str, failed_key: str = "", tried=(), failed_a
             model = _effective_main({"model": mcfg}).get("model") or model
         if cand == "openrouter":
             model = model or mcfg.get("openrouter_model")
-        vi = f"Đang dùng {_route_name(cand)} vì {_route_name(failed)} hết lượt."
-        en = f"Using {_route_name(cand)} because {_route_name(failed)} is out of quota."
+        if reason == "signin":
+            vi = f"Đang dùng {_route_name(cand)} vì {_route_name(failed)} mất đăng nhập."
+            en = f"Using {_route_name(cand)} because {_route_name(failed)} lost its sign-in."
+        else:
+            vi = f"Đang dùng {_route_name(cand)} vì {_route_name(failed)} hết lượt."
+            en = f"Using {_route_name(cand)} because {_route_name(failed)} is out of quota."
         return {"route": (cand, cd.get("kind", "cli"), _provider_key(mcfg, cd), model),
                 "status": localefmt.chu(vi, en), "tried": tried}
     return {}
@@ -3728,8 +3858,9 @@ def _chat_provider_for_session(mcfg, row):
         return _chat_provider(mcfg)
     if pprov == "antigravity-cli" and antigravity_cli.javis_off():
         return _chat_provider(mcfg)   # 05/11/2026: the owner disconnected that card; a pin to it must not keep using it
-    if _pin_limited_until(pprov):
+    if _pin_limited_until(pprov) or _signed_out_until(pprov):
         # The pinned model's plan is out of quota: run on the main chat's model until it resets (0.285.0).
+        # 2026-11-12: the same while the plan is known to be signed out (an agent or a bot pinned to ChatGPT).
         main_route = _chat_provider(mcfg)
         if main_route[0] != pprov:
             return main_route
@@ -3798,17 +3929,25 @@ def _route_view(mcfg, row, run=None, now: float = None) -> dict:
            # Effort of the card running (owner, 05/11/2026: the Effort chip follows a fallback card too). An assistant's
            # or Javis Core's chat thinks at its own level whatever the card; the composer shows that level there.
            "reasoning": _chat_reasoning(mcfg or {}, prov) if prov else "off"}
-    limited = {}
+    limited, signed_out = {}, []
     for p in _uniq_ids([sel["provider"], *model_routing.order(mcfg or {})]):
+        if _signed_out_until(p, now):
+            signed_out.append(p)     # 2026-11-12: needs a sign-in, not a wait; never shown as "out of quota until"
+            continue
         until = _route_rest_until(mcfg, p, now)
         if until and not _route_ready(mcfg, p):
             limited[p] = until
     out["limited"] = limited
+    out["signed_out"] = signed_out
     if out["fallback"]:
-        until = limited.get(sel["provider"]) or _pin_limited_until(sel["provider"], now)
-        out["reason"] = "quota" if until else "unavailable"
+        lost = sel["provider"] in signed_out
+        until = 0 if lost else (limited.get(sel["provider"]) or _pin_limited_until(sel["provider"], now))
+        out["reason"] = "signin" if lost else "quota" if until else "unavailable"
         out["until"] = float(until or 0)
-        if until:
+        if lost:
+            vi = f"{out['selected_name']} mất đăng nhập → đang dùng {out['name']}."
+            en = f"{out['selected_name']} lost its sign-in → using {out['name']}."
+        elif until:
             vi = f"{out['selected_name']} hết lượt → đang dùng {out['name']}."
             en = f"{out['selected_name']} is out of quota → using {out['name']}."
         else:
@@ -10448,6 +10587,15 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
     except (TypeError, ValueError):
         limit = 50
     SKIP_DIRS = {".git", "node_modules", "__pycache__", ".obsidian", ".trash", ".venv", ".pytest_cache"}
+    # 2026-11-12: several words match a name that holds all of them, in any order and with anything between: typing
+    # "bảng giá" finds `bang-gia-dich-vu.md`. One word, or the words as typed, match as before.
+    words = qf.split()
+
+    def _name_hit(name: str) -> bool:
+        if ql in name.lower():
+            return True
+        folded = _fold_accents(name)
+        return qf in folded or (len(words) > 1 and all(w in folded for w in words))
 
     def _walk():
         out = []
@@ -10457,7 +10605,7 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                 for dn in sorted(dirnames):
                     if len(out) >= limit:
                         return out
-                    if ql not in dn.lower() and qf not in _fold_accents(dn):
+                    if not _name_hit(dn):
                         continue
                     try:
                         rel = _files_rel(root, Path(dirpath) / dn)
@@ -10475,7 +10623,7 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                     return out
                 p = Path(dirpath) / fn
                 ext = p.suffix.lower()
-                name_hit = mode in ("name", "all") and (ql in fn.lower() or qf in _fold_accents(fn))
+                name_hit = mode in ("name", "all") and _name_hit(fn)
                 content_hit = False
                 snippet, line_no = "", 0
                 if mode in ("content", "all") and ext in _TEXT_EXTS:
@@ -12872,10 +13020,12 @@ async def _run_workflow_step(node, prompt, mk, agent_sysprompt, sink, router=Non
     reason = ""
     step_extra = tuple((node.metadata or {}).get("tools") or ())
     while True:
-        gcli = mk(sysprompt, agent_model, agent_prov, step_extra, **_step_reasoning_kw(agent_sysprompt, node.agent))
         out = ""
         loi_engine = ""
-        async for ev in gcli.query(cur_prompt):
+        # `_step_run` builds the engine itself: a plan card that lost its sign-in runs the step again elsewhere.
+        async for ev in _step_run(
+                lambda: mk(sysprompt, agent_model, agent_prov, step_extra,
+                           **_step_reasoning_kw(agent_sysprompt, node.agent)), cur_prompt):
             if ev["type"] == "text":
                 await sink({"type": "step_text", "i": index, "node": node.id,
                             "content": ev["content"]})
@@ -12997,7 +13147,8 @@ def _workflow_agent_helpers(brain, tools, mode=None):
         # An interactive step whose agent pins no model runs on the owner's MAIN model, like a chat turn
         # (owner report 2026-11-06, PR #1125): before this it always fell back to Claude, whatever brain was picked
         # on the Models page. A pinned agent keeps its pin; the gated background run (tools is not None) stays on
-        # Claude Code by design, see the comment further down.
+        # Claude Code by design, see the comment further down, with one exception since 2026-11-12: an agent set to
+        # ChatGPT runs on Codex under the step's own tool list (the branch right below).
         from_main = False
         if tools is None and not str(model or "").strip() and not str(provider or "").strip():
             main_spec = _effective_main(cfgmod.read_settings())
@@ -13005,6 +13156,43 @@ def _workflow_agent_helpers(brain, tools, mode=None):
             provider = str(main_spec.get("provider") or "")
             from_main = True
         prov = _agent_model_provider(model, provider)
+        signed_out = bool(_signed_out_until(prov))
+        if signed_out and tools is None:
+            # 2026-11-12: this step's card (the agent's own model, or MAIN) is known to have lost its sign-in. An
+            # ungated step then runs where a chat turn would run right now (`_chat_provider`: MAIN, or the next card
+            # of the usage order that can run), with that card's own model, instead of failing on every run until the
+            # owner signs in again. Nothing saved changes; the agent's model is used again once its card is back.
+            try:
+                route = _chat_provider(cfgmod.read_settings().get("model", {}) or {})
+                if route[0] and route[0] != prov:
+                    print(f"[workflow] {prov} is signed out: this step runs on {route[0]}", file=sys.stderr)
+                    model, provider, from_main = str(route[3] or ""), route[0], True
+                    prov, signed_out = _agent_model_provider(model, provider), False
+            except Exception as e:  # noqa: BLE001 - the step then reports the provider's own error, as before
+                print(f"[workflow] signed-out route {prov}: {type(e).__name__}: {e}", file=sys.stderr)
+        if prov == "openai-oauth" and tools is not None and not signed_out:
+            # Gated background step of an agent set to ChatGPT (owner decision 2026-11-12, from PR #1333): run it on
+            # Codex instead of silently on Claude Code. The safety rail moves with it: read-only sandbox, no native
+            # shell, web, sub-agent or app tools, and the Javis hub answers only the step's own tool list at the
+            # run's level (`workflow_codex`). Checked on Codex CLI 0.167.2: with these overrides the request carries
+            # no exec, web or multi-agent tool.
+            # When that environment cannot be built (no Codex CLI, no hub profile, a tool the list cannot express)
+            # the step falls back to the gated Claude Code path below, which is what every such step ran on before,
+            # so a workflow that works today keeps working. The same while ChatGPT is known to be signed out
+            # (`signed_out`, 2026-11-12).
+            try:
+                import workflow_codex
+                allowed, _ = _step_grant(extra_tools)
+                cc = workflow_codex.build(
+                    cwd=vault_root, model=_codex_safe_model(model) if model else None,
+                    instructions=sysprompt, allowed=list(tools) + allowed, mode=gated_mode,
+                    apply_hub=_apply_codex_hub, extra_servers=_codex_user_mcp_servers())
+            except ValueError as e:
+                print(f"[workflow] restricted ChatGPT step runs on Claude Code instead: {e}", file=sys.stderr)
+            else:
+                openai_oauth.write_codex_auth()
+                _apply_step_reasoning(cc, reasoning, codex=True)
+                return _step_engine(cc, "openai-oauth")   # the ChatGPT account with quota, the next one when it runs out
         if prov == "openai-oauth" and (model or from_main) and tools is None and find_codex_cli():
             openai_oauth.write_codex_auth()
             cc = CodexCLI(cwd=vault_root, tag="workflow", model=_codex_safe_model(model),
@@ -13052,6 +13240,8 @@ def _workflow_agent_helpers(brain, tools, mode=None):
         # allowed_tools + disallowed_tools của chính CLI đó, engine nhà khác lấy tool từ hub
         # nên không mang theo được rào ấy. Đây là hành vi đã hứa trong docs/07, không phải
         # bỏ sót - đổi nó là nới quyền cho việc chạy nền mà không ai yêu cầu.
+        # Since 2026-11-12 ChatGPT is the one exception (branch at the top of this function): its rail is the hub
+        # allowlist plus the read-only Codex sandbox. Every other provider still runs gated steps on Claude Code.
         if tools is None and prov not in ("anthropic-cli", "openai-oauth"):
             # Nhà khác Claude/Codex: mượn ĐÚNG bộ dựng engine của việc nền thay vì viết bản
             # thứ hai - aux_engine.swap lo cả key, khả dụng, tool qua hub và chuỗi dự phòng
@@ -13702,11 +13892,13 @@ async def _execute_workflow_raw(brain, slug, input="", tools=None, session_id=""
         reason = ""
         loi_buoc = ""      # bước này HỎNG vì sao. "" = bước chạy được.
         while True:
-            gcli = _mk(sysprompt, agent_model, agent_prov, step_extra,   # áp model agent đã chọn
-                       **_step_reasoning_kw(_agent_sysprompt, agent_slug))
             out = ""
             loi_engine = ""
-            async for ev in gcli.query(cur_prompt):
+            # áp model agent đã chọn. `_step_run` builds the engine itself: a plan card that lost its sign-in runs the
+            # step again elsewhere (2026-11-12).
+            async for ev in _step_run(
+                    lambda: _mk(sysprompt, agent_model, agent_prov, step_extra,
+                                **_step_reasoning_kw(_agent_sysprompt, agent_slug)), cur_prompt):
                 if ev["type"] == "text":
                     yield {"type": "step_text", "i": i, "content": ev["content"]}
                 elif ev["type"] == "tool_call":
@@ -15163,6 +15355,27 @@ async def _watch_summarize(prompt: str) -> str:
                                        "bằng chữ, 1-3 câu.", "web-watch-summary", cwd_name="web_watch_cwd")
     base = cli
     cli = aux_engine.strip_tools(_aux_swap(cli, mode="suggest", tag="web-watch-summary"), base)
+    if not cli.is_available():
+        raise RuntimeError("background engine not ready")
+    final = ""
+    async for ev in cli.query(prompt):
+        if ev.get("type") == "final":
+            final = ev.get("content", "") or ""
+        elif ev.get("type") == "error":
+            raise RuntimeError(str(ev.get("content") or "engine error")[:200])
+    return final
+
+
+async def _customer_profile_ask(prompt: str) -> str:
+    """One turn of the BACKGROUND model for a customer profile (`customer_profile.py`): text only, empty folder, no
+    MCP. The prompt holds a stranger's chat messages, so the engine is the judge's sandbox: whatever a message says,
+    the model has nothing to act with."""
+    if os.environ.get("JAVIS_NO_REAL_JUDGE_ENGINE") == "1":
+        raise RuntimeError("JAVIS_NO_REAL_JUDGE_ENGINE")
+    cli = _reply_policy_sandbox_engine(customer_profile.SYSTEM_PROMPT, "customer-profile",
+                                       cwd_name="customer_profile_cwd")
+    base = cli
+    cli = aux_engine.strip_tools(_aux_swap(cli, mode="suggest", tag="customer-profile"), base)
     if not cli.is_available():
         raise RuntimeError("background engine not ready")
     final = ""
@@ -16675,6 +16888,11 @@ async def _start_scheduler():
         chatbot_reply_policy.wire(ask=_reply_policy_ask)
         chatbot_reply_policy_review.wire(ask=_reply_policy_review_ask, notify=_reply_policy_notify,
                                          write_feedback=_reply_policy_write_feedback, get_bot=chatbot_store.get_bot)
+        # 2026-11-12: after a private chat goes quiet, the background model writes down what the bot should remember
+        # about that customer (the note of the Info panel), and the bot reads it on later turns.
+        customer_profile.wire(ask=_customer_profile_ask, get_bot=chatbot_store.get_bot,
+                              is_notice=chatbot_runtime.engine_notice)
+        customer_profile.start()
         kq = chatbot_runtime.sync_all()
         if kq.get("errors"):
             print(f"[chatbot] bật lỗi: {kq['errors']}", file=__import__('sys').stderr)
@@ -19692,8 +19910,9 @@ async def _chat_socket(ws):
 
         def untouched(self) -> bool:
             """Nothing the owner could lose: no tool ran and no word was written (a streamed out-of-quota sentence
-            is not a word of the answer)."""
-            return not self.acted and (not self.said.strip() or _het_luot_ap_dao(self.said))
+            is not a word of the answer, nor is a "Not logged in" line, 2026-11-12)."""
+            return not self.acted and (not self.said.strip() or _het_luot_ap_dao(self.said)
+                                       or signin_loss.is_signin_error(self.said, answer=True))
 
         async def flush(self):
             held, self._held = self._held, None
@@ -19804,6 +20023,15 @@ async def _chat_socket(ws):
                             _note_pin_limit("grok-cli", account=_turn_acc.get("grok-cli"))   # 0.353.0: that account rests
                 except Exception:  # noqa: BLE001 - a meter must never break a turn
                     pass
+                # 2026-11-12: the plan refused because its sign-in is gone. The card is marked, so this turn may run
+                # again on the next route (below, as for quota) and the next turns skip the card.
+                _lost = _LIMIT_ENGINE_PROVIDER.get(str(engine_hint or ""), "")
+                if not noi and not _limit_state.get("quota") and _signin_lost_text(_lost, raw):
+                    _limit_state["signin"] = True
+                    _note_signin_lost(_lost, account=_turn_acc.get(_lost))
+                    _CONTEXT_RUNTIME.record_runtime_event(
+                        runtime_trace, "subscription.signed_out", {"engine": engine_hint, "model": model or ""})
+                    frame["content"] = _signin_lost_message(_lost, raw)
                 return json.dumps(frame)
             # NGÔN NGỮ chốt MỘT LẦN cho cả lượt, ngay đây. Chốt sớm và chốt một chỗ là để câu
             # trả lời, giọng đọc và các cổng chặn không bao giờ hiểu khác nhau trong cùng một
@@ -19952,6 +20180,7 @@ async def _chat_socket(ws):
                         runtime_trace, user_message, _brain_root(brain), conv_sid,
                         store.get_messages(conv_sid), "dashboard", route_provider,
                         route_model, route_kind, _base,
+                        stable_system=stable,   # #1329: the compiled prompt stays the same between new chats too
                     )
                 except Exception as _exc:   # noqa: BLE001 - không được phá lượt chat
                     _CONTEXT_RUNTIME.record_runtime_event(
@@ -20827,6 +21056,7 @@ async def _chat_socket(ws):
                 if _stable_sp:
                     _cli_prompt = _cli_do_sau(cli, reasoning, user_message)
                     _hdr = _turn_facts_header(brain, conv_sid or "", _lang_qd.lang, first=not cli.session_id)
+                    _cli_prompt, sysprompt = _with_turn_context(cli, _sub_plan, _cli_prompt, sysprompt)   # #1329
                     if _hdr and isinstance(_cli_prompt, str):
                         _cli_prompt = _hdr + "\n" + _cli_prompt
                 else:
@@ -20972,6 +21202,12 @@ async def _chat_socket(ws):
                     await ws.send_text(_limit_frame(final_text, "claude-code",
                                                     cli.model or mcfg.get("claude_model") or ""))
                     final_text = ""      # khối _limit_state bên dưới lưu câu báo + hẹn chạy lại
+                elif final_text and not ws.acted and _signin_lost_text("anthropic-cli", final_text, answer=True):
+                    # 2026-11-12: Claude Code prints "Not logged in · Please run /login" as the ANSWER too. It is
+                    # not one: the card is marked signed out and the turn may run on the next route.
+                    await ws.send_text(_limit_frame(final_text, "claude-code",
+                                                    cli.model or mcfg.get("claude_model") or ""))
+                    final_text = ""
                 # Link file → dạng khung chat mở được, ưu tiên file vừa ghi trong lượt này.
                 try:
                     final_text = _chuan_hoa_link_file(
@@ -20998,10 +21234,12 @@ async def _chat_socket(ws):
 
             # 0.354.0 (spec 6.4): out of quota before a single word or tool call -> run_turn reruns this turn at once on
             # the next route (next account of the card, then the next card). Nothing of this run is kept or shown.
-            if (_limit_state.get("quota") and _hops_left > 0 and ws.untouched()
+            # 2026-11-12: the same when the plan refused because its sign-in is gone (`_limit_frame` marked the card).
+            if ((_limit_state.get("quota") or _limit_state.get("signin")) and _hops_left > 0 and ws.untouched()
                     and (not final_text or (kind == "api" and not ws.said.strip()))):
                 _nxt = _chat_next_route(mcfg, prov, api_key if kind == "api" else "", _tried,
-                                        failed_account=_turn_acc.get(prov))
+                                        failed_account=_turn_acc.get(prov),
+                                        reason="quota" if _limit_state.get("quota") else "signin")
                 if _nxt:
                     ws.drop()
                     _CONTEXT_RUNTIME.record_runtime_event(runtime_trace, "routing.reroute",
@@ -22587,55 +22825,45 @@ def sessions_assets(session_id: str, brain: str = Query("")):
     broot = Path(_brain_root(b)).resolve()
     ceil = _files_root(b)
 
-    files, links = {}, {}
-    for m in store.get_messages(session_id):
-        noi_dung = m.get("content") or ""
-        if not noi_dung:
-            continue
-        ts = m.get("ts") or 0
-        for tg in channel_context.markdown_targets(noi_dung):
-            raw = tg["raw"]
-            if "://" in raw or raw.startswith(("#", "mailto:", "data:", "tel:")):
-                continue
-            cand = channel_context._vault_markdown_candidate(raw, str(broot))
-            rp = _ts_trong_brain(broot, cand) if cand else None
-            if not rp:
-                continue
-            files.setdefault(os.path.normcase(str(rp)),
-                             {"p": rp, "nhan": tg["nhan"], "hinh": tg["hinh"], "ts": ts})["ts"] = ts
-        for raw in channel_context.extract_paths(noi_dung):
-            rp = _ts_trong_brain(broot, Path(raw))
-            if not rp or not rp.is_file():
-                continue
-            files.setdefault(os.path.normcase(str(rp)),
-                             {"p": rp, "nhan": "", "hinh": False, "ts": ts})["ts"] = ts
-        for u in channel_context.extract_urls(noi_dung):
-            links.setdefault(u, {"url": u, "ts": ts, "vai": m.get("role") or ""})
+    # What the messages mention is kept between calls and only new messages are read (session_assets_scan.py,
+    # 2026-11-12): the Info tab of a team asks this on every open, and reading a long team again each time took
+    # seconds of pure Python that slowed every other request. Whether a file exists is still asked here, every call.
+    seen = session_assets_scan.mentions(store, session_id, broot, _ts_trong_brain)
 
     ra_file = []
-    for v in files.values():
-        rp = v["p"]
+    for k in set(seen.linked) | set(seen.bare):
+        lk, br = seen.linked.get(k), seen.bare.get(k)
+        rp = (lk or br)["p"]
         co = rp.is_file()
+        if not co:
+            br = None             # a bare path counts only while its file exists
+        if not lk and not br:
+            continue
         try:
             st = rp.stat() if co else None
         except OSError:
             co, st = False, None
+        # The label is the one of the FIRST mention, as when the messages were read in order: a bare path named
+        # before the link leaves the row without a label.
+        first_is_link = bool(lk) and (not br or lk["first"] < br["first"])
         ra_file.append({
             "path": _files_rel(ceil, rp),                 # theo TRẦN: đúng khuôn JavisOpenNoteAt nhận
             "brain_path": _files_rel(broot, rp),          # theo GỐC BRAIN: để hiện cho người đọc
             "name": rp.name,
-            "label": v["nhan"],
-            "image": v["hinh"],
+            "label": lk["label"] if first_is_link else "",
+            "image": lk["image"] if first_is_link else False,
             "exists": co,
             "size": st.st_size if st else 0,
-            "ts": v["ts"],
+            "ts": max(x["last"] for x in (lk, br) if x)[0],
             "manual": False,
             "_that": str(rp),
+            "_first": min(x["first"] for x in (lk, br) if x),
         })
-    ra_file.sort(key=lambda x: x["ts"], reverse=True)
-    ra_link = sorted(links.values(), key=lambda x: x["ts"], reverse=True)
-    for l in ra_link:
-        l["manual"] = False
+    ra_file.sort(key=lambda x: (-(x["ts"] or 0), x["_first"]))
+    for f in ra_file:
+        f.pop("_first", None)
+    ra_link = [{"url": l["url"], "ts": l["ts"], "vai": l["role"], "manual": False}
+               for l in sorted(seen.links.values(), key=lambda x: (-(x["ts"] or 0), x["first"]))]
 
     # ── Phần NGƯỜI DÙNG tự gắn ────────────────────────────────────────────────
     # Trộn lúc ĐỌC chứ không ghi đè: máy vẫn đoán như cũ, người vẫn thêm được thứ máy không
@@ -25128,9 +25356,10 @@ def _tg_conv_sid(store, sess, brain, engine_label, model, channel="telegram"):
     return sess["sid"]
 
 
-# Số TIN (không phải lượt) mồi lại tối đa khi dựng lịch sử từ transcript. Bằng
-# BOT_LICH_SU_MAX bên dưới cho dễ nhớ: ~10 lượt hỏi-đáp, đủ để "cái đó", "như lần trước" còn
-# nghĩa, mà không thổi phồng lượt đầu sau mỗi lần restart.
+# Số TIN (không phải lượt) mồi lại tối đa khi dựng lịch sử từ transcript: ~10 lượt hỏi-đáp, đủ
+# để "cái đó", "như lần trước" còn nghĩa, mà không thổi phồng lượt đầu sau mỗi lần restart. Phần
+# cũ hơn đi theo bản tóm tắt nén của phiên. (Bot chuyên trách không có bản tóm tắt nên có trần
+# riêng, rộng hơn: BOT_HISTORY_MAX_MESSAGES bên dưới.)
 _TG_MOI_LAI_MAX = 20
 
 
@@ -25182,6 +25411,15 @@ def _tg_quota_out(out: str, prov: str, kind: str, api_key: str, mcfg, account: s
     elif hint:
         _note_pin_limit(getattr(lim, "engine", "") or hint, float(getattr(lim, "reset_epoch", 0) or 0),
                         account=account)
+    return True
+
+
+def _tg_signin_out(out: str, prov: str, account: str = None) -> bool:
+    """Whether a channel turn's error string says its plan card lost its sign-in (2026-11-12). When it does, the card
+    is marked signed out, so the next route and the next turns skip it (`_note_signin_lost`)."""
+    if not _signin_lost_text(prov, out):
+        return False
+    _note_signin_lost(prov, account=account)
     return True
 
 
@@ -25332,12 +25570,21 @@ async def _tg_answer(text, meta=None, progress=None, channel="telegram", bot=Non
             mcfg=mcfg, prov=prov, kind=kind, api_key=api_key, api_model=api_model,
             store=store, conv_sid=conv_sid, channel=channel, bot=bot, agent=agent)
         # 0.354.0 (spec 6.4): out of quota before any tool ran -> the same message again on the next route, with
-        # one progress line saying why. Customer bots keep their own model and never hop.
+        # one progress line saying why. Customer bots keep their own model and never hop on quota.
+        # 2026-11-12: a plan that lost its SIGN-IN hops too, and here a customer bot hops as well: its agent's model
+        # cannot answer anyone until the owner signs in again, and `_chat_provider_bot` sends the bot's next turns to
+        # the main route anyway once the card is marked. The customer never sees the routing line.
         _tried = []
-        while (isinstance(out, str) and not bot and not _hop_acted[0] and len(_tried) < REROUTE_MAX_HOPS
-               and _tg_quota_out(out, prov, kind, api_key, mcfg, account=_tg_turn_account(sess, prov))):
+        while isinstance(out, str) and not _hop_acted[0] and len(_tried) < REROUTE_MAX_HOPS:
+            _acc = _tg_turn_account(sess, prov)
+            if not bot and _tg_quota_out(out, prov, kind, api_key, mcfg, account=_acc):
+                _why = "quota"
+            elif _tg_signin_out(out, prov, account=_acc):
+                _why = "signin"
+            else:
+                break
             _nxt = _chat_next_route(mcfg, prov, api_key if kind == "api" else "", _tried,
-                                    failed_account=_tg_turn_account(sess, prov))
+                                    failed_account=_acc, reason=_why)
             if not _nxt:
                 break
             _tried = _nxt["tried"]
@@ -25345,7 +25592,7 @@ async def _tg_answer(text, meta=None, progress=None, channel="telegram", bot=Non
             _tg_ngat_mach(sess, tru=("codex" if prov == "openai-oauth" else prov if prov in ("grok-cli", "antigravity-cli")
                                      else prov if ((kind == "api" and api_key) or kind == "oauth") else "cli"))
             _CONTEXT_RUNTIME.set_route(runtime_trace, prov, api_model or mcfg.get("claude_model") or "mặc định")
-            if progress:
+            if progress and not bot:
                 try:
                     await progress("↻ " + _nxt["status"])
                 except Exception:  # noqa: BLE001
@@ -25448,6 +25695,11 @@ def _manual_session_undo(key: str, keep: int) -> None:
     lich = s.get("bot")
     if isinstance(lich, list) and len(lich) > keep:
         del lich[keep:]
+    if not keep:
+        # Nothing was in RAM before the draft, so the draft turn itself read the history back from the inbox
+        # (`chatbot_runtime.private_history`). Back to "not loaded": the next real turn reads it again, instead of
+        # starting from the empty list this cut would leave.
+        s["bot"] = None
     _tg_ngat_mach(s)
 
 
@@ -25472,10 +25724,17 @@ def _tg_ket(clean_out, files, canh_bao="", loi=(), khach=False):
     return {"text": txt, "files": files or []}
 
 
-# Số lượt hội thoại (user+assistant) giữ lại cho một người nói chuyện với bot. Cắt cứng thay
-# vì nén như đường chat của chủ: nén là thêm một lượt gọi model nữa, mà bot trả lời người lạ
-# thì cần nhanh và rẻ hơn là cần nhớ dai.
-BOT_LICH_SU_MAX = 20
+# How many MESSAGES (customer and bot counted separately) a bot keeps of its chat with one person. A hard cut, not
+# a summary as on the owner's chat: a summary is one more model call, and a bot answering strangers has to stay
+# fast and cheap.
+#
+# 20 until 2026-11-12. The owner then found the bot answering customers on too little and settled on 30, the same
+# number a group gets (`chatbot_runtime.NGU_CANH_TIN`). Not more on purpose: older messages are mostly small talk,
+# and what is worth keeping from them belongs in a per-customer profile, not in a longer transcript.
+# BOT_HISTORY_MAX_CHARS is the ceiling for the chat that is not short (pasted documents, 8,000-character messages),
+# where even 30 messages could outgrow a model's context and every turn would fail.
+BOT_HISTORY_MAX_MESSAGES = 30
+BOT_HISTORY_MAX_CHARS = 60_000
 
 # Danh sách tool cho phép của bot khi phải chạy qua CLI: một chuỗi KHÔNG khớp tool nào.
 #
@@ -25493,15 +25752,22 @@ BOT_KHONG_TOOL = ["__javis_bot_khong_tool__"]
 # ghim đường đo, đọc stream, tính usage, cắt lịch sử) phải giống hệt nhau, nên chúng nằm ở đây
 # chứ không chép hai bản. Chép hai bản là cách chắc chắn để một hôm nào đó `usage_store.record`
 # có ở đường này mà thiếu ở đường kia - hoá đơn thiếu, và không ai nhìn ra được từ bên ngoài.
-def _bot_lich_su(sess):
+def _bot_history(sess):
     if sess.get("bot") is None:
         sess["bot"] = []
     return sess["bot"]
 
 
-def _bot_cat_lich_su(lich_su):
-    if len(lich_su) > BOT_LICH_SU_MAX:
-        del lich_su[:len(lich_su) - BOT_LICH_SU_MAX]
+def _trim_bot_history(history):
+    """Cut `history` in place to both ceilings, oldest first. The newest message always stays, and the list never
+    opens with an assistant message (some providers refuse a conversation that does)."""
+    if len(history) > BOT_HISTORY_MAX_MESSAGES:
+        del history[:len(history) - BOT_HISTORY_MAX_MESSAGES]
+    total = sum(len(str(m.get("content") or "")) for m in history)
+    while len(history) > 1 and total > BOT_HISTORY_MAX_CHARS:
+        total -= len(str(history.pop(0).get("content") or ""))
+    while len(history) > 1 and history[0].get("role") == "assistant":
+        history.pop(0)
 
 
 def _bot_ghim_duong(runtime_trace, prov, api_model, messages, tools=()):
@@ -25553,7 +25819,7 @@ async def _bot_doc_stream(stream, *, progress, runtime_trace, prov, api_model):
 def _bot_ket(out, lich_su):
     """Đóng gói câu trả lời của một lượt bot đã chạy được."""
     lich_su.append({"role": "assistant", "content": out})
-    _bot_cat_lich_su(lich_su)   # cắt SAU khi thêm, không thì trần bị vượt đúng một lượt mỗi vòng
+    _trim_bot_history(lich_su)   # cắt SAU khi thêm, không thì trần bị vượt đúng một lượt mỗi vòng
     return {"text": channel_context.strip_control_blocks(out), "files": []}
 
 
@@ -25706,9 +25972,9 @@ async def _bot_tra_loi(text, *, sess, sysprompt, prov, api_key, api_model, reaso
     `_bot_tra_loi_co_tool`. Hai đường tách hẳn nhau CÓ CHỦ Ý: đường này phải soi được bằng mắt
     là không có tool nào, và một test canh đúng thân hàm này (test_chatbot_cach_ly.py mục B2).
     """
-    lich_su = _bot_lich_su(sess)
+    lich_su = _bot_history(sess)
     lich_su.append({"role": "user", "content": _bot_lich_su_chu(text, images)})
-    _bot_cat_lich_su(lich_su)
+    _trim_bot_history(lich_su)
 
     # System dựng LẠI mỗi lượt: tài liệu tra được đổi theo từng câu hỏi. Giữ system cũ là bot
     # trả lời câu này bằng tài liệu của câu trước.
@@ -25871,9 +26137,9 @@ async def _bot_tra_loi_co_tool(text, *, sess, sysprompt, prov, api_key, api_mode
     rò tài liệu: hỏi một câu vu vơ đúng lúc có file khác vừa sinh ra là nhận được nó. Bot muốn
     đưa file cho khách thì nói đường dẫn trong câu trả lời.
     """
-    lich_su = _bot_lich_su(sess)
+    lich_su = _bot_history(sess)
     lich_su.append({"role": "user", "content": _bot_lich_su_chu(text, images)})
-    _bot_cat_lich_su(lich_su)
+    _trim_bot_history(lich_su)
     messages = [{"role": "system", "content": sysprompt}] + lich_su
     gui, co_anh = _bot_gan_anh(messages, prov, text, images)
     canh_bao_anh = ""
@@ -26065,6 +26331,11 @@ async def _tg_answer_engine(text, meta, progress, *, chat_id, sess, brain, mcfg,
         # gốc, MCP hub, kết nối của tài khoản Claude/ChatGPT, kỹ năng), chỉ khác hai chỗ: prompt mang
         # VAI của Agent, và brain là brain của bot. Đường tắt, nguồn chọn lọc và gateway huỷ lịch của
         # chủ bị bỏ qua vì chúng thay prompt bằng giọng Javis.
+        if _muc != "full" and sess.get("bot") is None:
+            # First turn of this chat since the server started: the history lived in RAM only, so read a private
+            # chat back from the inbox instead of meeting a returning customer as a stranger. Full-access bots
+            # take the owner's engine branches below, which rebuild their own history from the session store.
+            sess["bot"] = chatbot_runtime.private_history(bot, meta, BOT_HISTORY_MAX_MESSAGES)
         if _muc == "full":
             _bot_full = True
             _sys_bot_full = _sys_bot
@@ -30421,10 +30692,28 @@ def _step_quota_next(provider: str, eng, text: str) -> dict:
         return {}
 
 
+def _agent_spec_available(spec: dict, settings: dict = None) -> tuple:
+    """`aux_engine.availability` for an assistant's own model, plus the signed-out mark (2026-11-12): a plan card known
+    to have lost its sign-in is not usable, so `team_engine.choose_spec` runs the turn on the main model and says so
+    on the message, as it already does for a card with no key or no CLI. The reason is part of that Vietnamese note."""
+    prov = str((spec or {}).get("provider") or "")
+    if _signed_out_until(prov):
+        return False, f"{_route_name(prov)} mất đăng nhập, cần đăng nhập lại ở trang Models"
+    return aux_engine.availability(spec, settings)
+
+
 def _team_quota_next(provider: str, eng, error) -> dict:
     """`_step_quota_next` for a failed team turn: only an error the ENGINE reported counts, never a tool call the
-    text-only contract refused or an empty answer."""
+    text-only contract refused or an empty answer.
+
+    2026-11-12: an error that says the plan lost its sign-in marks the card (`_note_signin_lost`). The turn itself is
+    not moved here (a team turn has no fallback chain); run again, by the runner's own retry or by the owner, it is
+    built on the main model while the mark stands (`_agent_spec_available`)."""
     if not isinstance(error, team_runner.EngineOutcomeError) or error.kind not in ("final_error", "error_event"):
+        return {}
+    if _signin_lost_text(provider, error.detail):
+        acc = getattr(eng, "account_id", None)
+        _note_signin_lost(provider, account=acc if isinstance(acc, str) and acc else None)
         return {}
     return _step_quota_next(provider, eng, error.detail)
 
@@ -30503,6 +30792,76 @@ class _PlanRotation:
                   file=sys.stderr)
 
 
+# Events of a step's engine that say nothing yet about whether it could run.
+_STEP_RUN_QUIET = ("session", "retry")
+
+
+async def _step_run(build, prompt):
+    """Events of ONE workflow step, whose engine `build()` returns (`_mk` of `_workflow_agent_helpers`).
+
+    2026-11-12 (owner's report: an agent set to ChatGPT failed every run after ChatGPT lost its sign-in). When the
+    engine's plan card refuses because the sign-in is gone, before the step wrote or called anything, the card is marked
+    (`_note_signin_lost`) and the step runs once more on the engine `build()` returns now: `_mk` sends an ungated step
+    to the route a chat turn would use, a gated ChatGPT step back to gated Claude Code, and a card with several
+    accounts to its next account. A step that already called a tool or wrote real text is never run twice (spec 2.7).
+    No other route: the refusal comes out as before. An engine that is not a plan card passes through untouched."""
+    eng = build()
+    prov = getattr(eng, "account_provider", None)
+    if not (isinstance(prov, str) and prov in _ROUTING_PLAN_PROVIDERS):
+        async for ev in eng.query(prompt):
+            yield ev
+        return
+    held, written, live, lost = [], "", False, False
+    stream = eng.query(prompt)
+    async for ev in stream:
+        if live:
+            yield ev
+            continue
+        t = (ev or {}).get("type")
+        raw = str((ev or {}).get("content") or "")
+        held.append(ev)
+        if ((t == "error" and not ev.get("resume_failed") and _signin_lost_text(prov, raw))
+                or (t == "final" and _signin_lost_text(prov, raw, answer=True))):
+            lost = True
+            break
+        if t == "text":
+            written += raw
+            if len(written.strip()) < PLAN_ROTATION_HOLD_CHARS:
+                continue
+        elif t in _STEP_RUN_QUIET:
+            continue
+        live = True
+        for h in held:
+            yield h
+        held = []
+    nxt = None
+    if lost:
+        try:
+            await stream.aclose()
+        except Exception:  # noqa: BLE001 - the refused run is over either way
+            pass
+        acc = getattr(eng, "account_id", None)
+        acc = acc if isinstance(acc, str) and acc else None
+        await asyncio.to_thread(_note_signin_lost, prov, acc)
+        try:
+            nxt = build()
+            nxt_acc = getattr(nxt, "account_id", None)
+            if getattr(nxt, "account_provider", None) == prov and (nxt_acc if isinstance(nxt_acc, str) else None) == acc:
+                nxt = None      # nowhere else to go: the same card on the same account
+        except Exception as e:  # noqa: BLE001 - then the refusal stands
+            print(f"[workflow] step after sign-in loss on {prov}: {type(e).__name__}: {e}", file=sys.stderr)
+            nxt = None
+    if nxt is None:
+        for h in held:      # the engine stopped with no answer (or has no other route): what it said is still shown
+            yield h
+        return
+    print(f"[workflow] step: {prov} lost its sign-in, running again on "
+          f"{getattr(nxt, 'account_provider', None) or getattr(nxt, 'provider', None) or type(nxt).__name__}",
+          file=sys.stderr)
+    async for ev in nxt.query(prompt):
+        yield ev
+
+
 def _step_engine(eng, provider: str):
     """A workflow step's plan engine, started on the account that should run now. On a card with several accounts it
     comes back wrapped (`_PlanRotation`); a card with one account, or Claude Code on an API key, gets the engine itself,
@@ -30535,10 +30894,10 @@ def _team_engine_for(team, agent_key, role):
     settings = cfgmod.read_settings() or {}
     spec = team_engine.choose_spec(
         info.get("model") or "", info.get("model_provider") or "", _effective_main(settings),
-        _agent_model_provider, lambda sp: aux_engine.availability(sp, settings))
+        _agent_model_provider, lambda sp: _agent_spec_available(sp, settings))
     tool_spec = team_engine.choose_spec(
         info.get("model") or "", info.get("model_provider") or "", _effective_main(settings),
-        _agent_model_provider, lambda sp: aux_engine.availability(sp, settings), tools=True)
+        _agent_model_provider, lambda sp: _agent_spec_available(sp, settings), tools=True)
 
     def _build_tools(system, tag, gate_id=""):
         # 0.194.0: a Work/Help step of a job runs like a private chat with this member: cwd is the team's working folder
@@ -31192,6 +31551,25 @@ def _unhide_agent(brain, slug):
         return False
 
 
+def _team_doc_adder(store, sid, team_dir_rel):
+    """`add(rel, name)` for a team's documents that makes room when the list is full (team_docs.rows_to_drop): the
+    oldest picture or picture description of the team leaves the list, then the new document goes in. Returns None
+    only when nothing may leave (the list is full of documents the owner attached)."""
+    import team_docs
+
+    def add(rel, name):
+        fid = store.add_session_file(sid, rel, name)
+        if fid:
+            return fid
+        gone = team_docs.rows_to_drop(store.list_session_files(sid), team_dir_rel, 1)
+        if not gone:
+            return None
+        for rid in gone:
+            store.remove_session_file(sid, rid)
+        return store.add_session_file(sid, rel, name)
+    return add
+
+
 def _team_attach(team, attachments):
     """Files attached in a team chat (composer or the team info panel) become the team's documents (0.191.0)."""
     import doc_text
@@ -31202,10 +31580,22 @@ def _team_attach(team, attachments):
     store, sid = get_store(), team.get("session_id") or ""
     if not sid:
         return []
+    # 2026-11-12: a file picked from the brain (the create-team box, the Info tab's search) comes as `brain_path`, the
+    # path /files/search returns. It is resolved here, inside the brain's own fence; a path that escapes it is dropped.
+    picked = []
+    for a in list(attachments or []):
+        if isinstance(a, dict) and a.get("brain_path") and not a.get("path"):
+            try:
+                a = dict(a, path=str(_safe_path(brain, str(a.get("brain_path") or ""))))
+            except ValueError:
+                continue
+        picked.append(a)
+    attachments = picked
+    dest_dir = broot / "attachments" / "teams" / str(team.get("team_id") or "team")
     return team_docs.save(attachments, staging=STAGING, brain_root=broot,
-                          dest_dir=broot / "attachments" / "teams" / str(team.get("team_id") or "team"),
+                          dest_dir=dest_dir,
                           to_rel=lambda p: _files_rel(root, Path(p)),
-                          add=lambda rel, name: store.add_session_file(sid, rel, name),
+                          add=_team_doc_adder(store, sid, _files_rel(root, dest_dir)),
                           pin=lambda fid: store.set_session_file_pinned(sid, fid, True),
                           readable=PROJECT_GHIM_DUOI, extract=doc_text.extract, extract_suffixes=doc_text.SUFFIXES)
 
@@ -31232,11 +31622,12 @@ async def _team_describe(team, pics, caption):
     broot = Path(_brain_root(brain)).resolve()
     root = _files_root(brain)
     store = get_store()
+    dest_dir = broot / "attachments" / "teams" / str(team.get("team_id") or "team")
     await asyncio.to_thread(
         team_docs.save_description, [f.get("name") or "" for f in pics], mo_ta, who,
-        dest_dir=broot / "attachments" / "teams" / str(team.get("team_id") or "team"),
+        dest_dir=dest_dir,
         to_rel=lambda p: _files_rel(root, Path(p)),
-        add=lambda rel, name: store.add_session_file(sid, rel, name),
+        add=_team_doc_adder(store, sid, _files_rel(root, dest_dir)),
         pin=lambda fid: store.set_session_file_pinned(sid, fid, True))
 
 

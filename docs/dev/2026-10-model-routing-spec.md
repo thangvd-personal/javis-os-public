@@ -64,8 +64,11 @@ Việc nền có model riêng, cố định, không chạy theo MAIN. Trang Mode
    của nhà cung cấp** (nhà đầu tiên đã đăng nhập): model mặc định và Effort mặc định của model đó.
    Sau đó **giữ cố định**, đổi MAIN không kéo theo.
 3. Thứ tự chạy của việc nền: **Model nền → Dự phòng 1 → Dự phòng 2 → ... → MAIN sau cùng**.
-   Mỗi bước sau bước đầu chạy **cấu hình mặc định lúc mới đăng nhập của nhà đó** (không phải model
-   người dùng chọn cho chat). Bỏ bước trùng (cùng nhà, cùng model). Nhà chạy bằng gói (Claude Code,
+   Mỗi bước dự phòng chạy **model và Effort đang chọn trên thẻ của nhà đó**; thẻ chưa chọn model thì
+   mới dùng cấu hình mặc định lúc mới đăng nhập. MAIN sau cùng vẫn chạy cấu hình mặc định của nó.
+   (Chủ repo đổi ngày 12/11/2026, issue #1334: trước đó bước dự phòng luôn chạy cấu hình mặc định, mà
+   từ 0.350.0 cấu hình đó là model rỗng với mọi thẻ gói, nên Claude Code tự chạy model mặc định của
+   CLI, thường là model tốn hạn mức nhất, dù thẻ đã chọn model nhẹ.) Bỏ bước trùng (cùng nhà, cùng model). Nhà chạy bằng gói (Claude Code,
    ChatGPT, Grok Build, Antigravity) chỉ xuất hiện **một lần**: hạn mức của gói tính theo tài khoản chứ
    không theo model, thử lại cùng gói bằng model khác chỉ tốn thêm một lượt gọi hỏng.
 4. Trang **không** hiện chuỗi thứ tự này. Chỉ khi model nền hết lượt mới hiện một dòng:
@@ -199,13 +202,31 @@ Mỗi bản là một PR, CI xanh thì merge, mỗi bản một số phiên bả
    lại `_tg_answer_engine` khi lõi trả câu hết lượt và chưa có dòng "⚙" nào; bot chuyên trách không
    đổi đường. Test: `tests/python/test_chat_doi_duong.py`.
 
+5. **Mất đăng nhập cũng chuyển đường (12/11/2026).** Chủ repo báo kèm ảnh của khách: bot dùng trợ lý
+   đặt model ChatGPT, ChatGPT mất đăng nhập lúc 11:13 là mọi lượt sau đó đều hỏng dù máy còn model
+   khác đã đăng nhập. Trước bản này chỉ lỗi hết lượt mới chuyển đường.
+   Cách làm: `server/signin_loss.py` nhận ra câu báo mất đăng nhập của bốn thẻ gói (không nhận nhầm
+   lỗi 401 của một máy chủ MCP hay một câu trả lời dài có trích mấy chữ đó). `_note_signin_lost`
+   đánh dấu thẻ trong `_SIGNED_OUT` (thẻ nhiều tài khoản thì tài khoản đó nghỉ trước, hết tài khoản
+   mới đánh dấu thẻ), tách khỏi `_PIN_LIMITED` để giao diện không nói "hết lượt tới 12:40" cho một
+   thẻ cần đăng nhập. Dấu tự hết sau `signin_loss.RETRY_S` (10 phút, một lượt thử lại thẻ đó; còn
+   mất đăng nhập thì nó từ chối trước khi viết chữ nào và lượt chuyển đường ngay), và gỡ ngay khi
+   chủ đăng nhập lại hoặc chủ động chọn thẻ. Trong lúc dấu còn: `_route_ready` trả sai, phiên ghim
+   (model riêng của trợ lý, của bot) chạy đường chính, bước workflow không rào chạy đường mà chat
+   đang chạy, bước có rào của ChatGPT về lại Claude Code có rào, lượt nhóm theo model chính.
+   Lượt đang chạy: chat web và kênh (Telegram, Zalo, CLI) chạy lại ngay bằng đường kế nếu chưa có
+   chữ hay công cụ nào, kèm dòng "Đang dùng ... vì ChatGPT mất đăng nhập". **Bot chuyên trách cũng
+   đổi đường ở ca này** (khác ca hết lượt): model của trợ lý không trả lời được ai cho tới khi chủ
+   đăng nhập lại, và khách không thấy dòng báo đổi đường. Bước workflow chạy lại qua `_step_run`.
+   Chủ được báo một lần qua hòm thư. Test: `tests/python/test_signin_loss_route.py`.
+
 ## 7. Tiêu chí nghiệm thu
 
 - Nâng cấp từ bản cũ: chat, Telegram, việc nền chạy đúng model như trước; chạy chuyển đổi hai lần
   không nhân đôi tài khoản hay đổi thứ tự.
 - Đổi model ở chip khung chat: thẻ nhà đó lên đầu, `model.main` và trang Models khớp nhau.
 - Tài khoản 1 đang nghỉ: chat và việc nền dùng tài khoản 2 cùng nhà trước khi sang nhà kế.
-- Việc nền: model nền hết lượt thì chạy dự phòng bằng cấu hình mặc định của nhà đó, MAIN sau cùng.
+- Việc nền: model nền hết lượt thì chạy dự phòng bằng model chọn trên thẻ của nhà đó, MAIN sau cùng.
 - Engine việc nền đã gọi công cụ rồi mới hỏng: không chạy lại bằng engine khác.
 - Telegram: `/model x` trong chat A không đổi chat B, không đổi web. Web đổi MAIN thì chat chưa ghim
   đổi theo.

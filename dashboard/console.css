@@ -2189,7 +2189,7 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 /* Start-up screen (2026-11-09, boot-splash.js): covers the app from the first paint until the first page has its data. */
 .boot-splash { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 14px; padding: 24px; text-align: center; background: var(--bg, #f7f5f2); color: var(--text2);
-  transition: opacity .25s ease; }
+  transition: opacity .15s ease; }
 .boot-splash.boot-out { opacity: 0; pointer-events: none; }
 .boot-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: contain; }
 .boot-spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--border, rgba(140,140,160,.35));
@@ -3347,6 +3347,8 @@ body.on-teams .cview-head { display: none; }
 /* Nhãn việc dài: cắt bằng dấu ba chấm ở phần chữ (inline-flex không tự cắt). */
 .tm-tag-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tm-levels { border: none; margin: 0; padding: 0; min-width: 0; }
+/* 2026-11-12: the goal block now sits right above this one; a legend takes no top margin, so the space is given here. */
+.tm-md + .tm-sec > .tm-levels { margin-top: 14px; }
 .tm-levels > legend { padding: 0; }
 .tm-tag-new { cursor: default; border: none; padding: 0; }
 .tm-text { overflow-wrap: anywhere; font-size: 14px; color: var(--text); line-height: 1.45; }
@@ -3700,6 +3702,33 @@ body.kb-open .tm-composer { padding-bottom: 8px; }
 .tmp-desc > summary::-webkit-details-marker { display: none; }
 .tmp-desc input { font: inherit; font-size: 16px; min-height: 44px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--field-bg); color: var(--text); width: 100%; box-sizing: border-box; }
+/* Documents in the create-team box (2026-11-12, team-picker.js docsHtml). */
+.tmp-docs > summary { gap: 8px; }
+.tmp-docs > summary .tmp-chip-n { min-width: 26px; padding: 0 7px; border-radius: 13px; background: var(--accent); color: #fff; font-size: 16px;
+  line-height: 26px; opacity: 1; text-align: center; }
+.tmp-docs-help { margin: 0 0 8px; color: var(--text3); font-size: 16px; line-height: 1.45; }
+.tmp-docs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tmp-docs-chips:not(:empty) { margin-bottom: 8px; }
+.tmp-doc { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 36px; padding: 2px 4px 2px 10px; border-radius: 18px;
+  border: 1px solid var(--border); background: var(--bg2); font-size: 16px; }
+.tmp-doc.is-err { border-color: var(--warn-line); background: var(--warn-wash); color: var(--warn-ink); }
+.tmp-doc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.tmp-doc-state { color: var(--text3); font-size: 16px; white-space: nowrap; }
+.tmp-docs-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.tmp-docs-row input { flex: 1; min-width: 0; }
+.tmp-docs-row .ws-btn { min-height: 44px; white-space: nowrap; flex: 0 0 auto; }
+.tmp-doc-results:not(:empty) { margin-bottom: 8px; max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+.tmp-doc-res { display: flex; align-items: center; gap: 8px; padding: 6px 10px; min-height: 48px; }
+.tmp-doc-res + .tmp-doc-res { border-top: 1px solid var(--border); }
+.tmp-doc-res-text { flex: 1; min-width: 0; display: grid; }
+.tmp-doc-res-text b { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tmp-doc-res-text i { font-style: normal; color: var(--text3); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tmp-doc-note { padding: 10px 12px; color: var(--text3); font-size: 16px; }
+.tmp-doc-warn { color: var(--warn-ink); padding: 0 0 8px; }
+.tm-info-fsearch { flex: 1; min-width: 0; }
+.tm-info-found li { justify-content: space-between; gap: 8px; }
+.tm-info-found li > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .tmp-docs-row { flex-wrap: wrap; } .tmp-docs-row input { flex: 1 1 100%; } .tmp-doc-name { max-width: 180px; } }
 .tmp-lead { min-height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--accent-line); background: var(--bg2);
   color: var(--accent); font: inherit; font-size: 16px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; }
 .tmp-lead.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }

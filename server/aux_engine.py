@@ -718,6 +718,33 @@ def _cool_key(e) -> str:
     return (f"{kind}:{getattr(e, 'model', '') or ''}" + (f":{acc}" if acc else "")) if kind else ""
 
 
+# Plan CLI link classes -> their provider id, for a link not pointed at one account (no `account_provider`).
+_PLAN_CLASS_PROVIDER = {"ClaudeSDK": CLAUDE, "CodexCLI": CODEX, "GrokCLI": GROK_CLI, "AntigravityCLI": ANTIGRAVITY}
+
+
+def _note_plan_limit(e, error) -> None:
+    """A plan link was refused for running out of plan quota: the usage ring turns red and Javis's own work waits,
+    exactly as after a refused chat turn (the chat path does this in main._limit_frame). Before, only chat recorded
+    it, so background work could run a plan dry while the ring stayed green. Same detector as chat: the plan's own
+    sentence, or plain quota words for Grok and Antigravity, which print no fixed sentence. Never raises."""
+    try:
+        prov = getattr(e, "account_provider", None)
+        if not (isinstance(prov, str) and prov):
+            prov = _PLAN_CLASS_PROVIDER.get(type(e).__name__, "")
+        import limit_learner
+        hint = limit_learner.ENGINE_HINT_BY_PROVIDER.get(prov, "")
+        if not hint:
+            return                      # an API key has no plan to run out of
+        import plan_limits
+        hit = limit_learner.parse_subscription_limit(str(error or ""), engine_hint=hint)
+        if hit is not None:
+            plan_limits.ghi_het(hint, float(hit.reset_epoch or 0))
+        elif hint in ("grok-cli", "antigravity-cli") and plan_limits.la_het_han_muc(error):
+            plan_limits.ghi_het(hint)
+    except Exception as exc:  # noqa: BLE001 - a meter must never break the routing
+        print(f"[aux router] plan limit: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+
 def _resting(e, now: float) -> float:
     """Monotonic time a resting link wakes, 0 when it is not resting."""
     key = _cool_key(e)
@@ -784,6 +811,7 @@ class _FallbackChain:
 
     @staticmethod
     def _rest(e, error) -> None:
+        _note_plan_limit(e, error)
         key, secs = _cool_key(e), cooldown_for(error)
         if key and secs:
             _COOLDOWN[key] = time.monotonic() + secs
@@ -1250,7 +1278,7 @@ def swap(cli, mode: str = None, tag: str = None, spec: dict = None,
     """Engine Claude đã dựng -> ROUTER việc nền (0.350.0, docs/dev/2026-10-model-routing-spec.md part 2.4).
 
     Order: the background model (or `spec`, e.g. an assistant's own model) -> fallback 1, 2, ... of the Models page
-    usage order, each on its provider's starting config -> MAIN last, on its starting config. An API card contributes
+    usage order, each on the model picked on its card -> MAIN last, on its starting config. An API card contributes
     one link per usable key. The chain is the same at every permission level: a link that already called a tool and
     then broke stops the chain (_FallbackChain), so nothing is sent twice. Before 0.350.0 the chain was fixed
     (Claude, the main brain, OpenRouter free) and `full` jobs had none.

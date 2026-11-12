@@ -169,12 +169,13 @@ zalo = find_zalo(cat)
 # 0.414.0: v1.9.0 (zalo_send_typing for "đang soạn tin", styles on zalo_send_message).
 # v1.9.1: replayed messages reach the live feed after a short drop; one bad message no longer drops its frame.
 # v1.10.0: live push, javis-zalo wakes Javis when a message arrives (zalo_push.py), no read on a timer.
+# v1.11.0: zalo_send_message takes replyToMsgId (quote-reply to one earlier text message).
 cur_ver = "/v1.8.0"
-for _v in ("/v1.10.0", "/v1.9.1", "/v1.9.0", "/v1.8.0"):
+for _v in ("/v1.11.0", "/v1.10.0", "/v1.9.1", "/v1.9.0", "/v1.8.0"):
     if Z.CLI_PACKAGE.endswith(_v):
         cur_ver = _v
         break
-_all_old = ("v1.3.0", "v1.4.0", "v1.5.0", "v1.6.0", "v1.6.1", "v1.7.0", "v1.8.0", "v1.9.0", "v1.9.1")
+_all_old = ("v1.3.0", "v1.4.0", "v1.5.0", "v1.6.0", "v1.6.1", "v1.7.0", "v1.8.0", "v1.9.0", "v1.9.1", "v1.10.0")
 old_vers = _all_old[:_all_old.index(cur_ver.lstrip("/"))] if cur_ver.lstrip("/") in _all_old else _all_old[:6]
 check("CANARY: the three javis-zalo pins agree and are v1.4.0 or later (the first with zalo_send_file)",
       Z.CLI_PACKAGE == zalo_login._CLI_PACKAGE and Z.CLI_PACKAGE in zalo["args"] and Z.CLI_PACKAGE.endswith(cur_ver),
