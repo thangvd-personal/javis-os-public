@@ -242,8 +242,14 @@ function makeEl(tag) {
     "memory/notes/index.md": "Doc [khao sat](facts/img-uu-tien.md) chi tiet.",
     "memory/facts/img-uu-tien.md": "# Ban moi\nNoi dung chinh trong thu muc memory.",
     "archive/facts/img-uu-tien.md": "# Ban cu\nNoi dung luu tru trong archive.",
+    "wiki/Guide.md": "# Guide\nNoi dung guide o goc brain.",
+    "memory/same.md": "# Memory same",
+    "same.md": "# Root same",
   };
+  let diskDirs = new Set(["memory", "memory/facts", "memory/notes", "archive", "archive/facts", "wiki"]);
   let openedCalls = [];
+  let vaultOpenedCalls = [];
+  let filesAtCalls = [];
   let revealedCalls = [];
   let toasts = [];
 
@@ -295,12 +301,28 @@ function makeEl(tag) {
     ],
     _neViTri: 1,
     _neDangDiLichSu: false,
+    _nePendingLink: null,
+    _goFileUri: (p) => String(p == null ? "" : p).replace(/^file:(?:\/\/[^/\\]*)?(?=[/\\])/i, "").replace(/^\/+/, ""),
+    openVaultPath: (p) => vaultOpenedCalls.push(p),
+    openFilesAt: (p) => filesAtCalls.push(p),
     toast: (msg, isErr) => toasts.push({ msg, isErr: !!isErr }),
     openNote: (p, it) => openedCalls.push({ p, it }),
     _vtRevealInTree: (p) => revealedCalls.push(p),
     _neSyncFull: () => {},
     closeNote: () => {},
     fetch: async (url, init) => {
+      if (url.startsWith("/files/resolve")) {
+        const m = /[?&]path=([^&]+)/.exec(url);
+        const p = decodeURIComponent(m[1]);
+        if (diskFiles[p] != null) return { ok: true, status: 200, json: async () => ({ ok: true, path: p }) };
+        return { ok: false, status: 400, json: async () => ({ ok: false, error: "not_found" }) };
+      }
+      if (url.startsWith("/files/list")) {
+        const m = /[?&]path=([^&]+)/.exec(url);
+        const p = decodeURIComponent(m[1]).replace(/\/+$/, "");
+        if (diskDirs.has(p)) return { ok: true, status: 200, json: async () => ({ items: [], focus: "", missing: "" }) };
+        return { ok: true, status: 200, json: async () => ({ items: [], focus: "", missing: p }) };
+      }
       if (url.startsWith("/files/search")) {
         return {
           ok: true,
@@ -394,6 +416,93 @@ function makeEl(tag) {
     !!dlgNoOrigin && !dlgNoOrigin._sub[".ne-prev-dlg-confirm"]);
   dlgNoOrigin._sub[".ne-prev-dlg-x"].onclick();
   check("nut X dong duoc popup", !fakeDoc.getElementById("nePreviewDlg"));
+
+  // ============================================================
+  // 4. Giai duong dan tuong doi theo thu muc cha cua _neOpenRel trong #noteEditor
+  // ============================================================
+  check("_neGhepDuong thu gon . va .. dung chuan",
+    sandbox._neGhepDuong("memory/notes", "./a.md") === "memory/notes/a.md" &&
+    sandbox._neGhepDuong("memory/notes", "../facts/a.md") === "memory/facts/a.md" &&
+    sandbox._neGhepDuong("memory", "../../ngoai.md") === null);
+
+  check("_neUngVienDuongDan uu tien thu muc cha cua _neOpenRel truoc goc brain",
+    JSON.stringify(sandbox._neUngVienDuongDan("facts/img-uu-tien.md", "memory/MEMORY.md")) ===
+      JSON.stringify(["memory/facts/img-uu-tien.md", "facts/img-uu-tien.md"]) &&
+    JSON.stringify(sandbox._neUngVienDuongDan("../wiki/Guide.md", "memory/MEMORY.md")) ===
+      JSON.stringify(["wiki/Guide.md"]));
+
+  // 4a. memory/MEMORY.md bam link facts/img-uu-tien.md -> tim thay o memory/facts/img-uu-tien.md
+  vaultOpenedCalls.length = 0;
+  await sandbox._neMoLinkTuEditor("facts/img-uu-tien.md", "memory/MEMORY.md", {
+    sourceRel: "memory/MEMORY.md",
+    rawTarget: "facts/img-uu-tien.md",
+    isCode: false,
+    isWiki: false,
+    time: Date.now(),
+  });
+  check("bam link facts/... trong memory/MEMORY.md mo dung memory/facts/...",
+    vaultOpenedCalls.length === 1 && vaultOpenedCalls[0] === "memory/facts/img-uu-tien.md");
+
+  // 4b. memory/MEMORY.md bam link wiki/Guide.md (chi ton tai o goc brain) -> lui ve goc brain
+  vaultOpenedCalls.length = 0;
+  await sandbox._neMoLinkTuEditor("wiki/Guide.md", "memory/MEMORY.md", {
+    sourceRel: "memory/MEMORY.md",
+    rawTarget: "wiki/Guide.md",
+    isCode: false,
+    isWiki: false,
+    time: Date.now(),
+  });
+  check("bam link goc brain (wiki/Guide.md) trong memory/MEMORY.md van mo dung goc brain",
+    vaultOpenedCalls.length === 1 && vaultOpenedCalls[0] === "wiki/Guide.md");
+
+  // 4c. memory/MEMORY.md bam link memory/facts/img-uu-tien.md -> khong bi ghep dup memory/memory/
+  vaultOpenedCalls.length = 0;
+  await sandbox._neMoLinkTuEditor("memory/facts/img-uu-tien.md", "memory/MEMORY.md", {
+    sourceRel: "memory/MEMORY.md",
+    rawTarget: "memory/facts/img-uu-tien.md",
+    isCode: false,
+    isWiki: false,
+    time: Date.now(),
+  });
+  check("link da co tien to memory/facts/... trong memory/MEMORY.md van mo dung",
+    vaultOpenedCalls.length === 1 && vaultOpenedCalls[0] === "memory/facts/img-uu-tien.md");
+
+  // 4d. Khi ca thu muc cha va goc brain deu co file trung ten -> uu tien thu muc chua file dang mo
+  vaultOpenedCalls.length = 0;
+  await sandbox._neMoLinkTuEditor("same.md", "memory/MEMORY.md", {
+    sourceRel: "memory/MEMORY.md",
+    rawTarget: "same.md",
+    isCode: false,
+    isWiki: false,
+    time: Date.now(),
+  });
+  check("trung ten o ca thu muc cha va goc brain -> uu tien file cung thu muc cha",
+    vaultOpenedCalls.length === 1 && vaultOpenedCalls[0] === "memory/same.md");
+
+  // 4e. Link tro toi thu muc tuong doi facts/ trong memory/MEMORY.md -> mo memory/facts/
+  filesAtCalls.length = 0;
+  await sandbox._neMoLinkTuEditor("facts/", "memory/MEMORY.md", null);
+  check("link thu muc tuong doi facts/ trong memory/MEMORY.md mo memory/facts/",
+    filesAtCalls.length === 1 && filesAtCalls[0] === "memory/facts/");
+
+  // 4f. Link khong ton tai o ca hai noi -> tra ve ung vien goc de man 404 + goi y + CTA Xac nhan chay tiep
+  vaultOpenedCalls.length = 0;
+  const missPending = {
+    sourceRel: "memory/MEMORY.md",
+    rawTarget: "facts/khong-co.md",
+    isCode: false,
+    isWiki: false,
+    time: Date.now(),
+  };
+  await sandbox._neMoLinkTuEditor("facts/khong-co.md", "memory/MEMORY.md", missPending);
+  check("link that su bi thieu van di qua openVaultPath va giu resolvedTargets cho CTA Xac nhan",
+    vaultOpenedCalls.length === 1 &&
+    vaultOpenedCalls[0] === "facts/khong-co.md" &&
+    Array.isArray(sandbox._nePendingLink.resolvedTargets) &&
+    sandbox._nePendingLink.resolvedTargets.includes("memory/facts/khong-co.md"));
+
+  check("console.js noi su kien click a.jv-floc trong #noteEditor qua _neMoLinkTuEditor",
+    CONSOLE.includes("_neMoLinkTuEditor(vp, _neOpenRel, pending)"));
 
   console.log("");
   if (fails.length) {

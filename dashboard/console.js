@@ -10755,6 +10755,92 @@
     });
   }
 
+  // Ghép thư mục cha với đường dẫn tương đối và thu gọn ".", ".." ngay tại client (trả null nếu vượt ra ngoài gốc brain).
+  function _neGhepDuong(thuMuc, rel) {
+    const manh = String(thuMuc || "").split("/").concat(String(rel || "").split("/"));
+    const ra = [];
+    for (let i = 0; i < manh.length; i++) {
+      const m = manh[i];
+      if (!m || m === ".") continue;
+      if (m === "..") {
+        if (!ra.length) return null;
+        ra.pop();
+        continue;
+      }
+      ra.push(m);
+    }
+    return ra.length ? ra.join("/") : null;
+  }
+
+  // Sinh danh sách đường dẫn ứng viên (tương đối gốc brain) khi bấm link bên trong file đang mở ở #noteEditor:
+  // ưu tiên giải tương đối theo thư mục cha của _neOpenRel (chuẩn Markdown / memory/MEMORY.md -> facts/...),
+  // nếu không tồn tại sẽ lùi về gốc brain (giữ tương thích link ghi từ gốc vault).
+  function _neUngVienDuongDan(rawTarget, sourceCeilRel) {
+    let raw = String(_goFileUri(rawTarget) || "").trim().replace(/\\/g, "/");
+    raw = raw.split(/[?#]/)[0].replace(/\/+$/, "");
+    if (!raw) return [];
+    const srcBrain = _vtChuanHoaRel(sourceCeilRel || "").replace(/\\/g, "/");
+    const srcDir = srcBrain.includes("/") ? srcBrain.slice(0, srcBrain.lastIndexOf("/")) : "";
+    const fromDir = srcDir ? _neGhepDuong(srcDir, raw) : null;
+    const fromRoot = _neGhepDuong("", raw);
+    const out = [];
+    if (fromDir && !out.includes(fromDir)) out.push(fromDir);
+    if (fromRoot && !out.includes(fromRoot)) out.push(fromRoot);
+    return out;
+  }
+
+  async function _neKiemTraTonTaiVault(brainRel, isDir) {
+    if (!brainRel) return false;
+    const ceil = _vtHome ? (_vtHome + "/" + brainRel) : brainRel;
+    const br = fbrain();
+    try {
+      if (isDir) {
+        const r = await fetch(`/files/list?brain=${encodeURIComponent(br)}&path=${encodeURIComponent(ceil)}`, { cache: "no-store" });
+        const d = r.ok ? await r.json().catch(() => null) : null;
+        return !!(r.ok && d && !d.error && !d.missing && !d.focus);
+      }
+      const r = await fetch(`/files/resolve?brain=${encodeURIComponent(br)}&path=${encodeURIComponent(ceil)}`, { cache: "no-store" });
+      const d = r.ok ? await r.json().catch(() => null) : null;
+      return !!(r.ok && d && d.ok);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function _neMoLinkTuEditor(vp, sourceCeilRel, pendingLink) {
+    const cleanUri = String(_goFileUri(vp) || "").trim().replace(/\\/g, "/");
+    const pathOnly = cleanUri.split(/[?#]/)[0];
+    const trimmed = pathOnly.replace(/\/+$/, "");
+    const base = trimmed.split("/").pop();
+    const isDir = /\/$/.test(pathOnly) || base === "" || base.indexOf(".") < 0;
+    const ungVien = _neUngVienDuongDan(vp, sourceCeilRel);
+    if (!ungVien.length) {
+      if (isDir) openFilesAt(vp);
+      else openVaultPath(trimmed || vp);
+      return;
+    }
+    let chosen = ungVien[ungVien.length - 1];
+    if (ungVien.length === 1) {
+      chosen = ungVien[0];
+    } else {
+      let found = null;
+      for (let i = 0; i < ungVien.length; i++) {
+        if (await _neKiemTraTonTaiVault(ungVien[i], isDir)) {
+          found = ungVien[i];
+          break;
+        }
+      }
+      chosen = found || ungVien[ungVien.length - 1];
+    }
+    if (pendingLink) {
+      pendingLink.time = Date.now();
+      pendingLink.resolvedTargets = ungVien;
+      _nePendingLink = pendingLink;
+    }
+    if (isDir) openFilesAt(chosen + "/");
+    else openVaultPath(chosen);
+  }
+
   // Nạp turndown (HTML→markdown) LAZY, chỉ khi cần lưu bản WYSIWYG. + plugin GFM (bảng).
   let _tdPromise = null, _td = null;
   function _ensureTurndown() {
@@ -10997,8 +11083,11 @@
       _nePendingLink = null;
       const cleanRel = _vtChuanHoaRel(rel || "");
       const cleanRaw = _vtChuanHoaRel(_goFileUri(pl.rawTarget || "").replace(/^\.?\//, ""));
+      const resolvedMatch = Array.isArray(pl.resolvedTargets) && pl.resolvedTargets.some(t =>
+        _vtNoAccent(cleanRel) === _vtNoAccent(t) || cleanRel === t
+      );
       if (Date.now() - pl.time < 2000 && pl.sourceRel && pl.sourceRel !== (rel || "") &&
-          (_vtNoAccent(cleanRel) === _vtNoAccent(cleanRaw) || cleanRel === cleanRaw ||
+          (resolvedMatch || _vtNoAccent(cleanRel) === _vtNoAccent(cleanRaw) || cleanRel === cleanRaw ||
            cleanRaw.endsWith("/" + cleanRel) || cleanRel.endsWith("/" + cleanRaw))) {
         linkOrigin = pl;
       }
@@ -11387,7 +11476,7 @@
         if (a.querySelector && a.querySelector("img")) return;
         const vp = a.getAttribute("data-vault-path") || "";
         if (!vp || !_neOpenRel) return;
-        _nePendingLink = {
+        const pending = {
           sourceRel: _neOpenRel,
           rawTarget: vp.replace(/\/+$/, ""),
           isCode: a.classList.contains("jv-fcode"),
@@ -11395,6 +11484,16 @@
           linkText: (a.textContent || "").trim(),
           time: Date.now(),
         };
+        _nePendingLink = pending;
+        if (a.classList.contains("jv-floc")) {
+          const ungVien = _neUngVienDuongDan(vp, _neOpenRel);
+          const cleanDirect = String(_goFileUri(vp) || "").trim().replace(/\\/g, "/").split(/[?#]/)[0].replace(/^\.\//, "").replace(/\/+$/, "");
+          if (ungVien.length > 1 || (ungVien.length === 1 && ungVien[0] !== cleanDirect)) {
+            e.preventDefault();
+            e.stopPropagation();
+            _neMoLinkTuEditor(vp, _neOpenRel, pending);
+          }
+        }
       }, true);
     }
 
