@@ -263,7 +263,7 @@ def ghi_nhom(tag: str, pid: int) -> None:
 # The engine itself, its MCP servers and anything else still owned by a live engine process are
 # not orphans and are left alone.
 ENV_MARK = "JAVIS_BG_MARK"
-_MARKS_BY_TAG: Dict[str, List[str]] = {}
+_MARKS_BY_TAG: dict[str, list[str]] = {}
 _CLAUDE_SHELL = re.compile(r"shell-snapshots/snapshot-|pwd -P >\| \S*claude-[0-9a-f]+-cwd")
 _EVAL_INNER = re.compile(r"\beval '(.*?)'(?: < /dev/null)?(?: && pwd -P|$)", re.DOTALL)
 
@@ -321,7 +321,7 @@ def note_mark(tag: str, mark) -> None:
             _MARKS_BY_TAG.pop(next(iter(_MARKS_BY_TAG)))
 
 
-def _proc_entry(d: Path) -> Optional[dict]:
+def _proc_entry(d: Path) -> dict | None:
     try:
         stat = (d / "stat").read_text()
         rest = stat[stat.rindex(")") + 2:].split()
@@ -338,10 +338,10 @@ def _proc_entry(d: Path) -> Optional[dict]:
         return None
 
 
-def _marked(mark: str) -> List[dict]:
+def _marked(mark: str) -> list[dict]:
     """Live processes whose environment carries ENV_MARK=mark. /proc on Linux, `ps -E` on macOS."""
     needle = f"{ENV_MARK}={mark}"
-    out: List[dict] = []
+    out: list[dict] = []
     proc = Path("/proc")
     if proc.is_dir():
         want = needle.encode("utf-8")
@@ -373,7 +373,7 @@ def _marked(mark: str) -> List[dict]:
     return out
 
 
-def groups_left_by_mark(mark) -> List[int]:
+def groups_left_by_mark(mark) -> list[int]:
     """Process groups the engine marked `mark` left running (see ENV_MARK). Groups Javis already
     tracks, the server's own group and groups holding an engine the server started are skipped."""
     m = _clean_mark(mark)
@@ -391,7 +391,7 @@ def groups_left_by_mark(mark) -> List[int]:
     with _KHOA:
         taken = {int(v.get("pgid") or 0) for v in _VIEC.values()
                  if v.get("trang_thai") in ("run", "bo_theo_doi")}
-    groups: Dict[int, List[dict]] = {}
+    groups: dict[int, list[dict]] = {}
     for p in procs:
         groups.setdefault(int(p["pgid"]), []).append(p)
     out = []

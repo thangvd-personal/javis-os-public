@@ -189,7 +189,7 @@ STYLE_MAX = 300
 AGENTS_DIR: Callable[[Any], Path] = lambda root: Path(str(root)) / "agents"
 
 
-def core_path(root: Any) -> Optional[Path]:
+def core_path(root: Any) -> Path | None:
     return Path(AGENTS_DIR(root)) / f"{SLUG}.md" if str(root or "").strip() else None
 
 
@@ -213,7 +213,7 @@ def _read_file(path: Path):
     return (meta if isinstance(meta, dict) else {}), parts[1].strip()
 
 
-def _write_file(path: Path, meta: Dict[str, Any], body: str) -> None:
+def _write_file(path: Path, meta: dict[str, Any], body: str) -> None:
     import yaml
     path.parent.mkdir(parents=True, exist_ok=True)
     fm = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip()
@@ -232,7 +232,7 @@ def _legacy_name(root: Any) -> str:
     return clean_name((data or {}).get("name")) if isinstance(data, dict) else ""
 
 
-def ensure_file(root: Any) -> Optional[Path]:
+def ensure_file(root: Any) -> Path | None:
     """The brain's `agents/javis-core.md`, made from the platform definition when missing. A body still equal to the
     seeded one follows an updated definition. `system: true` is always set. None without a brain."""
     path = core_path(root)
@@ -270,14 +270,14 @@ def read_core(root: Any):
     return meta, body or definition()["body"]
 
 
-def role_text(meta: Dict[str, Any], lang_pick: Callable[[str, str], str]) -> str:
+def role_text(meta: dict[str, Any], lang_pick: Callable[[str, str], str]) -> str:
     """The role line to show: the definition's own text in the screen language while untouched, else the owner's."""
     d = definition()
     role = str((meta or {}).get("role") or "")
     return lang_pick(d["role"], d["role_en"]) if (not role or role == d["role"]) else role
 
 
-def _identity_path(root: Any) -> Optional[Path]:
+def _identity_path(root: Any) -> Path | None:
     return Path(str(root)) / IDENTITY_REL if str(root or "").strip() else None
 
 
@@ -293,7 +293,7 @@ def clean_style(raw: Any) -> str:
     return " ".join(s.split())[:STYLE_MAX].strip()
 
 
-def _read_extra(root: Any) -> Dict[str, Any]:
+def _read_extra(root: Any) -> dict[str, Any]:
     path = _identity_path(root)
     try:
         data = json.loads(path.read_text(encoding="utf-8")) if path else {}
@@ -302,9 +302,9 @@ def _read_extra(root: Any) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def identity(root: Any) -> Dict[str, Any]:
+def identity(root: Any) -> dict[str, Any]:
     """{'name', 'style', 'asked'} of Javis Core in the brain at `root`. Empty name = still called Javis Core."""
-    out: Dict[str, Any] = {"name": "", "style": "", "asked": False}
+    out: dict[str, Any] = {"name": "", "style": "", "asked": False}
     if not str(root or "").strip():
         return out
     meta, _ = read_core(root)
@@ -316,7 +316,7 @@ def identity(root: Any) -> Dict[str, Any]:
     return out
 
 
-def set_identity(root: Any, *, name: Any = None, style: Any = None, asked: Optional[bool] = None) -> Dict[str, Any]:
+def set_identity(root: Any, *, name: Any = None, style: Any = None, asked: bool | None = None) -> dict[str, Any]:
     """Change only the fields given. A name given (even "") counts as asked: the person has answered. The name is
     written into the agent file, the same field the agent editor saves."""
     path = _identity_path(root)

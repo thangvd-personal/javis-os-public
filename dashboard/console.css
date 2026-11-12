@@ -121,9 +121,6 @@ body.in-console .hud-actions { display: none; }
 /* Icon bộ não đứng trước dropdown chọn brain - đi theo khối .navbar-brain kể cả
    khi mobile-chat.js dời cả khối vào rail, nên không cần rule riêng cho mobile. */
 .navbar-brain .brain-select-ico { color: var(--accent); font-size: 17px; }
-@media (max-width: 860px) {
-  .hud-top .navbar-brain .graph-stats { display: none; }   /* mobile: ẩn stats cho gọn */
-}
 
 /* Form trong card (Channels / Account / provider key) */
 .js-lbl { display: block; font-size: 13px; color: var(--text2); margin: 12px 0 5px; font-family: var(--font); }
@@ -695,9 +692,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .settings-page { width: min(100%, 960px); margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
 .cview-body:has(> .settings-tabs-page) { padding-top: 0; }
 .settings-tabs-page { width: 100%; margin: 0; min-width: 0; }
-.vt-create-menu { position: fixed; margin: 0; padding: 5px; width: 204px; max-width: calc(100vw - 16px); border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--shadow-1); }
+.vt-create-menu { position: fixed; margin: 0; padding: 5px; width: max-content; min-width: 204px; max-width: min(300px, calc(100vw - 16px)); border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--shadow-1); }
 .vt-create-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .vt-create-menu button:hover, .vt-create-menu button:focus-visible { background: var(--surface-2); }
+.vt-create-menu button.danger { color: var(--red); }
+.vt-create-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--border); }
 .ne-location-side { display: flex; flex-direction: column; flex: 0 0 280px; min-height: 0; max-width: 75vw; border-right: 1px solid var(--border); padding-right: 10px; }
 .ne-location-side > button { align-self: flex-end; }
 @media (max-width: 700px) { .fm-edit > .ne-location-side { position: absolute; inset: 0 auto 0 0; z-index: 5; width: 280px; background: var(--bg); } }
@@ -1001,20 +1000,20 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
     --topbar-h: calc(46px + env(safe-area-inset-top, 0px));
   }   /* header thấp hơn trên mobile nhưng vẫn chừa tai thỏ khi chạy full-screen */
 
-  /* Header mobile: chỉ nút menu, chip model, nút thêm. Ẩn phần rườm rà. */
+  /* Phone header: menu, bell and the + button only (the model chip stays in the composer since 2026-11-09). */
   .nav-toggle-btn, .new-chat-btn { display: inline-flex; }
-  /* Header CỐ ĐỊNH trên cùng: luôn thấy nút menu, chip model, nút thêm ở mọi trang, không bị cuộn trôi mất. */
+  /* Header CỐ ĐỊNH trên cùng: luôn thấy nút menu, chuông, nút thêm ở mọi trang, không bị cuộn trôi mất. */
   .hud-top { position: fixed; top: 0; left: 0; right: 0; height: 46px; z-index: 55;
     background: var(--bg2); border-bottom: 1px solid var(--border);
     display: flex; align-items: center; gap: 6px; padding: 0 8px; }
-  .hud-top-left, .hud-top-right { display: none; }    /* rỗng ở mobile: nút menu, chip model, nút thêm là con trực tiếp header */
+  .hud-top-left, .hud-top-right { display: none; }    /* rỗng ở mobile: nút menu, chuông, nút thêm là con trực tiếp header */
   .hud-top .brand, .hud-top .navbar-brain,
   .hud-top #themeToggle, .hud-top #soundToggle, .hud-top #studioOpenBtn,
   .hud-top #settingsBtn, .hud-top #ttsToggle, .hud-top #resetBtn { display: none; }
-  .hud-center-title { display: none; }                /* mobile: ẩn tên workspace + ngày; chip model làm giữa header */
-  /* 0.182.0 (owner: putting the chip in the composer on a phone "là sai lầm"): back to the top bar, centred, as before 0.180.0.
-     It keeps the short model name and the pin icon from 0.180.0, so it stays narrow. */
-  .hud-top #mbOpen { display: inline-flex; margin-left: auto; margin-right: auto; max-width: 56vw; }  /* chip model căn giữa, đẩy ＋ sang phải */
+  .hud-center-title { display: none; }                /* mobile: ẩn tên workspace + ngày */
+  /* 2026-11-09 (owner): the model chip left the header for the composer, next to the Effort chip as on a computer. The
+     header centre is empty now, so the + button pushes itself to the right edge. */
+  .hud-top .new-chat-btn { margin-left: auto; }
   .hud-top .notification-trigger {
     flex: 0 0 34px; width: 34px; min-width: 34px; height: 34px; padding: 0;
   }
@@ -1031,8 +1030,6 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   .notification-shade { background: var(--scrim); backdrop-filter: blur(2px); }
   .noti-head { padding: 14px 13px 12px; }
   .noti-list { padding: 7px; }
-  .hud-top #mbPop { position: fixed; top: calc(50px + env(safe-area-inset-top, 0px)); bottom: auto; left: 50%; transform: translateX(-50%);
-    width: min(340px, 92vw); z-index: 200; max-height: 70vh; }
   .model-bar { display: none; }                       /* hàng model gốc ẩn; chip bên trong dời đi (JS) */
 
   /* Rail: từ thanh đáy → ngăn kéo trượt từ trái */
@@ -1195,6 +1192,10 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
      Xếp lại tường minh, mỗi nút một hàng. */
   .graph-timelapse-btn { top: 46px; }
   .brain-max-btn { top: 85px; }
+  /* Node / Link counter: a small pill in the top-left corner. The nearest folder label is centred at 19% of a 210px
+     view (its top edge at 32px), so the pill ends at 26px to leave a gap. */
+  .graph-stats { top: 6px; left: 7px; height: 20px; line-height: 18px; padding: 0 7px; border-radius: 7px;
+    font-size: 10.5px; letter-spacing: .2px; max-width: calc(100% - 56px); }
 
   /* Agents / Skills / Workflows thành một thanh mỏng thay vì một card lớn che neuron.
      Số và nhãn nằm CÙNG MỘT DÒNG: xếp chồng như desktop thì dải cao ~56px, tức một phần tư
@@ -2108,6 +2109,11 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ws-tag-note.loi { background: var(--warn-wash, rgba(255, 122, 60, .12)); color: var(--text); }
 .ws-tag-note-x { flex: none; margin-left: auto; background: none; border: 0; color: inherit; cursor: pointer; padding: 0; }
 .ws-tag-note-x svg { width: 13px; height: 13px; }
+/* 2026-11-11: assistants of one Store pack waiting for "same assistant?": the count, then one button for all of them. */
+.ws-pack-confirm { flex-wrap: wrap; align-items: center; background: var(--warn-wash, rgba(255, 122, 60, .12)); color: var(--text); }
+.ws-pack-confirm-text { flex: 1 1 160px; min-width: 0; }
+.ws-pack-confirm-btn { flex: none; min-height: 32px; }
+@media (max-width: 600px) { .ws-pack-confirm-btn { min-height: 44px; flex: 1 1 100%; justify-content: center; } }
 .ws-tag-new { display: flex; gap: 6px; padding: 4px 6px 6px; }
 .ws-tag-new .ws-tag-in { flex: 1 1 auto; min-width: 0; padding: 6px 8px; border-radius: 7px;
   border: 1px solid var(--line, var(--surface-2)); background: var(--surface-1); color: var(--text); font: inherit; font-size: 13px; }
@@ -2165,6 +2171,33 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
   color: var(--text3); margin: 12px 0 6px; }
 .ws-rtitle:first-child { margin-top: 0; }
 .ws-empty { font-size: 12.5px; color: var(--text3); padding: 8px 2px; }
+/* 2026-11-09 (owner): a small "Loading..." line where a list or a chat has not arrived yet (Partners, Teams), so an
+   empty column does not read as a frozen page. The spinner reuses the Teams page's keyframes. */
+.pg-loading { padding: 12px 6px; font-size: 14px; line-height: 1.4; color: var(--text3); }
+/* An inline-block spinner, so the line works on its own and when the class is added to an existing empty-state
+   element (2026-11-09: every "Loading..." spot of the dashboard), whatever that element's display or alignment. */
+.pg-loading::before { content: ""; display: inline-block; vertical-align: -2px; margin-right: 8px; width: 13px; height: 13px;
+  border-radius: 50%; border: 2px solid var(--border, rgba(140,140,160,.35)); border-top-color: var(--accent);
+  animation: tm-spin .8s linear infinite; }
+.tm-msgs > .pg-loading, .ws-id > .pg-loading { text-align: center; }
+/* A whole page waiting for its data: a bigger spinner in the middle of the view. */
+.pg-loading.pg-page { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  min-height: 40vh; padding: 24px; font-size: 15px; text-align: center; }
+.pg-loading.pg-page::before { width: 28px; height: 28px; border-width: 3px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .pg-loading::before { animation: none; } }
+@media (max-width: 760px) { .pg-loading { font-size: 16px; } }
+/* Start-up screen (2026-11-09, boot-splash.js): covers the app from the first paint until the first page has its data. */
+.boot-splash { position: fixed; inset: 0; z-index: 100000; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px; padding: 24px; text-align: center; background: var(--bg, #f7f5f2); color: var(--text2);
+  transition: opacity .25s ease; }
+.boot-splash.boot-out { opacity: 0; pointer-events: none; }
+.boot-logo { width: 64px; height: 64px; border-radius: 16px; object-fit: contain; }
+.boot-spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--border, rgba(140,140,160,.35));
+  border-top-color: var(--accent); animation: tm-spin .8s linear infinite; }
+.boot-text { font-size: 16px; font-weight: 600; color: var(--text); min-height: 1.4em; }
+.boot-sub { font-size: 14px; max-width: 320px; line-height: 1.5; }
+@media (max-width: 760px) { .boot-text { font-size: 17px; } .boot-sub { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .boot-spin { animation: none; } .boot-splash { transition: none; } }
 .ws-form label { display: block; font-size: 12px; color: var(--text3); margin: 8px 0 3px; }
 .ws-form input, .ws-form select, .ws-form textarea { width: 100%; box-sizing: border-box; }
 .ws-form h3 { display: none; }   /* tiêu đề "Sửa Agent" thừa: cột phải đã có nhãn riêng */
@@ -3032,6 +3065,34 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .ach-dot.st-err { background: var(--red); opacity: 1; }
 .ach-dot.st-start { background: var(--warn-ink); opacity: 1; }
 .ach-panel { min-width: 0; }
+
+/* ---- Account > Security tab (2026-11-09). Rows read on a phone: label left, value right, wrapping under. ---- */
+.ac-page { max-width: 760px; }
+/* The Account page has no page header (owner, 2026-11-09): its Account | Security tabs take that place, flush at the top. */
+.cview.cview-tk .cview-head { display: none; }
+.cview.cview-tk .cview-body { padding-top: 0; }
+.cview.cview-tk .ach-tabs.tabs-top { padding-top: 12px; }
+.tk-intro { margin: 0 0 10px; }
+.sec-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 0; border-bottom: 1px solid var(--glass-brd); font-size: 15px; line-height: 1.45; }
+.sec-row:last-of-type { border-bottom: 0; }
+.sec-ico { flex: none; display: inline-flex; }
+.sec-lbl { flex: 1 1 180px; color: var(--text2); }
+.sec-val { flex: 0 1 auto; color: var(--text); text-align: right; overflow-wrap: anywhere; }
+.sec-bad .sec-lbl, .sec-bad .sec-val { color: var(--red); font-weight: 600; }
+.sec-warn .sec-val { color: var(--warn-ink); }
+.sec-list { display: flex; flex-direction: column; }
+.sec-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--glass-brd); }
+.sec-item:last-child { border-bottom: 0; }
+.sec-item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: 15px; }
+.sec-meta { color: var(--text2); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.sec-tag { align-self: flex-start; display: inline-block; font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: var(--accent-ink); background: var(--accent-wash-2); }
+.sec-lv-warn .sec-item-main b { color: var(--warn-ink); }
+.sec-lv-alert .sec-item-main b { color: var(--red); }
+.sec-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.sec-chip { border: 1px solid var(--glass-brd); background: transparent; color: var(--text2); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 15px; cursor: pointer; min-height: 36px; }
+.sec-chip[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent-wash-2); border-color: var(--accent-line); }
+@media (max-width: 700px) { .sec-val { text-align: left; } .sec-item { align-items: flex-start; } }
+.sec-item .gcard-btn { margin-top: 0; width: auto; padding: 6px 12px; font-size: 14px; flex: none; }
 .ach-panel:focus-visible { outline: none; }
 .ach-card {
   border: 1px solid var(--glass-brd); border-radius: 14px; background: var(--surface-1);
@@ -3212,6 +3273,14 @@ body.on-teams .cview-head { display: none; }
 .tm-title-btn:hover strong { text-decoration: underline dotted; text-underline-offset: 3px; }
 .tm-sub { font-size: 12px; color: var(--text3); }
 .tm-icon { flex: none; justify-content: center; min-width: 36px; padding: 0 8px; }
+/* 2026-11-09 (owner: the search, settings and close buttons "look ugly next to the other tabs"): with no vertical
+   padding they were as tall as the icon, so the 8px corners drew a squashed oval. Now square, borderless icon buttons
+   in the same soft wash as the panel tabs, the selected state included. */
+.ws-btn.tm-icon { width: 36px; height: 36px; min-width: 36px; padding: 0; border-radius: 10px; border-color: transparent;
+  color: var(--text2); background: none; }
+.ws-btn.tm-icon:hover, .ws-btn.tm-icon:focus-visible { background: var(--accent-wash); color: var(--text); border-color: transparent; }
+.ws-btn.tm-icon[aria-expanded="true"] { background: var(--accent-wash); color: var(--accent-ink); }
+.ws-btn.tm-icon svg { width: 18px; height: 18px; }
 .tm-jobs-chip { display: inline-flex; align-items: center; gap: 4px; flex: none; border: 1px solid var(--border); border-radius: 999px;
   padding: 4px 10px; background: var(--surface-1); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .tm-jobs-chip[hidden] { display: none; }
@@ -3259,7 +3328,7 @@ body.on-teams .cview-head { display: none; }
 .tm-msg[hidden] { display: none; }
 .tm-msg-owner { justify-content: flex-end; }
 .tm-bubble { min-width: 0; flex: 0 1 auto; padding: 8px 12px; border-radius: 16px; background: var(--surface-1); border: 1px solid var(--border); }
-.tm-msg-agent .tm-bubble { border-bottom-left-radius: 6px; max-width: min(680px, calc(100% - 86px)); }
+.tm-msg-agent .tm-bubble { border-bottom-left-radius: 6px; max-width: min(100ch, calc(100% - 86px)); }
 .tm-msg-owner .tm-bubble { background: var(--accent-wash); border-color: var(--accent-line); border-bottom-right-radius: 6px;
   max-width: min(680px, 85%); }
 .tm-msg-late .tm-bubble { opacity: .8; border-style: dashed; }
@@ -3328,7 +3397,7 @@ body.on-teams .cview-head { display: none; }
 /* 0.194.1 (owner, 17/10/2026): the bubble and its action row (time, Reply, Copy, Pin) stack in one column, the row right
    under the bubble on its own side, like the main chat (.msg-acts). Beside the bubble it looked cluttered. */
 .tm-col { display: flex; flex-direction: column; min-width: 0; flex: 0 1 auto; }
-.tm-msg-agent .tm-col { align-items: flex-start; max-width: min(680px, calc(100% - 40px)); }
+.tm-msg-agent .tm-col { align-items: flex-start; max-width: min(100ch, calc(100% - 40px)); }
 .tm-msg-owner .tm-col { align-items: flex-end; max-width: min(680px, 85%); }
 .tm-msg .tm-col > .tm-bubble { max-width: 100%; }
 .tm-hacts { display: flex; align-items: center; gap: 2px; height: 26px; margin-top: 2px; opacity: 0; transition: opacity .12s; }
@@ -4435,6 +4504,8 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   /* Header: one slim row of plain icon buttons, no boxed borders. */
   .tm-chat-head { min-height: 48px; padding: 2px 4px; gap: 2px; }
   .tm-chat-head .ws-btn.tm-icon, .tm-chat-head .tm-back { border-color: transparent; background: none; box-shadow: none; }
+  /* Square icon buttons (2026-11-09) keep the 44px touch target on a phone. */
+  .ws-btn.tm-icon { width: 44px; height: 44px; min-width: 44px; }
   .tm-chat-head .tm-ava, .tm-chat-head .tm-gava { flex: none; }
   /* Messages: no outline around an assistant's message, tighter spacing, more room for the text. */
   .tm-msgs { padding: 8px 8px 12px; gap: 4px; }
@@ -4494,3 +4565,4 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   .ro-hint { font-size: 17px; }
   .cside-reorder { width: 34px; height: 30px; }
 }
+

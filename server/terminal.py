@@ -147,7 +147,7 @@ def _env(extra: dict | None = None) -> dict:
         ung_vien = [home / ".local" / "bin", home / ".antigravity" / "bin"]
         if IS_WINDOWS:
             ung_vien.append(Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "antigravity")
-        parts = [p for p in (e.get("PATH", "") or "").split(os.pathsep) if p]
+        parts = list(dict.fromkeys(p for p in (e.get("PATH", "") or "").split(os.pathsep) if p))
         for d in ung_vien:
             ds = str(d)
             if d.is_dir() and ds not in parts:

@@ -1,14 +1,17 @@
 """Concrete service composition uses actual initialized scratch application sources."""
+from _paths import ROOT, SERVER  # noqa: F401
+
 import hashlib
+import importlib.metadata
 import importlib.util
 import os
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import test_improvement_trial_dashboard as fixtures
-from _paths import ROOT, SERVER  # noqa: F401
 from cryptography.fernet import Fernet
 from improvement_assets import capture_source
 from improvement_blobs import RevisionBlobs
@@ -43,12 +46,17 @@ class DashboardServiceTests(unittest.TestCase):
         self.input = self.f.write(self.f.brain, "reports/input.json", '{"input":"private fixture"}\r\n')
         self.selections = [{"source_ref": self.ref, "timezone": "UTC", "data_period": "synthetic",
             "cutoff": "2026-10-23T00:00:00+00:00", "schema": "application/json"}]
+        import claude_cli
+        import claude_sdk_engine
         import improvement_claude
         self.binary = self.f.root / "inert-cli.exe"
         self.binary.write_bytes(b"Never execute this synthetic binary")
         self.stack.enter_context(patch.dict(os.environ, {"JAVIS_CLAUDE_CLI": str(self.binary)}))
         self.stack.enter_context(patch.object(improvement_claude, "VERIFIED_NATIVE_RUNTIMES", {
-            (sys.platform, "synthetic", hashlib.sha256(self.binary.read_bytes()).hexdigest(), "0.2.116")}))
+            # The SDK version of this environment, not a fixed number: requirements.txt carries a range since
+            # 2026-11-10 (the SDK updates itself inside its series), and `create_pin` matches the installed version.
+            (sys.platform, "synthetic", hashlib.sha256(self.binary.read_bytes()).hexdigest(),
+             importlib.metadata.version("claude-agent-sdk"))}))
         self.stack.enter_context(patch("subprocess.run", side_effect=AssertionError("No native/auth/model call")))
         self.stack.enter_context(patch("subprocess.Popen", side_effect=AssertionError("No native/auth/model call")))
 

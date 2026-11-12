@@ -1110,6 +1110,9 @@ async function _checkLoginAfterRefusal() {
   const err = document.getElementById("authErr");
   if (err && authOverlay && authOverlay.classList.contains("open")) err.textContent = window.t("app.ws_login_lost");
 }
+// The same check when an HTTP call gets 401 while the socket is still open (fetch-gop.js raises the event): the
+// session expired mid-use, so chat still answered but images and lists failed silently (2026-11-10).
+window.addEventListener("javis:unauthorized", () => { _checkLoginAfterRefusal(); });
 function _baoDutVeMayChu() {
   if (!_wsDut.length) return;
   const body = { ua: navigator.userAgent, down_s: _wsDutTu ? (Date.now() - _wsDutTu) / 1000 : 0, drops: _wsDut };
@@ -2593,11 +2596,17 @@ function _vanTayPhien(sess) {
     `${m.id}:${m.content_sha || (m.content || "").length}:${m.reaction ? JSON.stringify(m.reaction) : ""}:${m.pinned ? 1 : 0}`)).join("|");
 }
 function _taiPhien(id) {
-  if (_phienDangTai.has(id)) return _phienDangTai.get(id);
+  // #1213: a load still in flight after STALE_MS is not handed out again. Retry on the Partners page used to join the
+  // very read that was hanging, so it hung too; now it asks the server afresh (the old read, if it ever answers, still
+  // fills the cache).
+  const STALE_MS = 10 * 1000;
+  const cur = _phienDangTai.get(id);
+  if (cur && Date.now() - (cur.at || 0) < STALE_MS) return cur;
   const p = fetch(_urlPhien(id)).then(r => r.json()).then(sess => {
     if (sess && !sess.error) _ghiCachePhien(id, sess);
     return sess;
-  }).finally(() => { _phienDangTai.delete(id); });
+  }).finally(() => { if (_phienDangTai.get(id) === p) _phienDangTai.delete(id); });
+  p.at = Date.now();
   _phienDangTai.set(id, p);
   return p;
 }
@@ -3287,12 +3296,45 @@ function scrollBottom(force) { chatScroll.toBottom(force); }
 // phần dựng chuỗi đã 1,6 giây CPU, cộng trình duyệt vẽ lại thì máy yếu đứng hình (khách báo 03/11/2026 "đơ cả máy").
 // Giờ vẽ ngay mẩu đầu, sau đó gom: tối đa một lần mỗi 60-300 ms tuỳ độ dài bài. Chữ vẫn chảy đều, máy nhẹ hơn hàng trăm lần.
 const _VE_STREAM_MS = (n) => (n < 2000 ? 60 : n < 8000 ? 150 : 300);
+// 2026-11-10: and only the part still being written. Blocks that are finished (JavisStreamCut in chat-render.js) are
+// rendered ONCE and stay in the bubble; each flush replaces just the nodes after a marker comment. Before, every flush
+// parsed the whole answer and rebuilt the whole bubble, so the browser laid out 20,000 characters again each time
+// (throttled phone: 43 long tasks for one long answer, none with this). The final `response` render still replaces
+// the bubble with one full render, so what stays on screen is exactly what it was before.
+function _streamFragment(html) {
+  const r = document.createRange();
+  r.selectNodeContents(document.body);
+  return r.createContextualFragment(html);
+}
 function _veStreamNgay(t) {
   t._veLuc = Date.now();
   if (!t.bubble) return;
   const b = t.bubble.querySelector(".bubble");
   if (!b) return;
-  b.innerHTML = markdownToHtml(t.text, undefined, t.bubble.dataset.anhV);
+  const text = t.text || "", anhV = t.bubble.dataset.anhV;
+  const cutOf = typeof window !== "undefined" ? window.JavisStreamCut : null;
+  if (typeof cutOf !== "function") {     // chat-render.js not loaded: the old whole-bubble render
+    b.innerHTML = markdownToHtml(text, undefined, anhV);
+    if (t.bubble.isConnected) scrollBottom();
+    return;
+  }
+  let st = b._jvStream;
+  // Start over when the bubble was redrawn by someone else (the marker is gone) or the text is not the settled text
+  // plus more (a new turn reusing the bubble, a rewrite).
+  if (!st || st.mark.parentNode !== b || text.length < st.len || text.slice(0, st.len) !== st.src) {
+    b.textContent = "";
+    st = b._jvStream = { len: 0, src: "", mark: document.createComment("jv-stream-tail") };
+    b.appendChild(st.mark);
+  }
+  const cut = cutOf(text, st.len);
+  if (cut > st.len) {
+    b.insertBefore(_streamFragment(markdownToHtml(text.slice(st.len, cut), undefined, anhV)), st.mark);
+    st.len = cut;
+    st.src = text.slice(0, cut);
+  }
+  while (st.mark.nextSibling) b.removeChild(st.mark.nextSibling);
+  const tail = text.slice(st.len);
+  if (tail.trim()) b.appendChild(_streamFragment(markdownToHtml(tail, undefined, anhV)));
   if (t.bubble.isConnected) scrollBottom();
 }
 function henVeStream(t) {
@@ -3506,9 +3548,10 @@ function compactToolLabel(toolName) {
 // Knowledge graph (2D canvas)
 // ============================================
 const graphStats = document.getElementById("graphStats");
-// Số note/liên kết hiện ở thanh trên. Nhớ số cuối cùng để vẽ lại khi từ điển i18n về sau: số liệu
-// đồ thị thường về TRƯỚC từ điển trên máy vừa cập nhật, và t() khi đó trả về chính cái khoá
-// (`app.graph_stats`) rồi kẹt mãi ở đó. Lỗi (models.err) là chuỗi đã ghép nên không nhớ.
+// Node / Link counts, shown in the graph's top-left corner (moved out of the top bar 2026-11-09). The last numbers
+// are kept so the text can be redrawn when the i18n dictionary arrives: on a freshly updated machine the graph often
+// loads BEFORE the dictionary, t() then returns the bare key (`app.graph_stats`) and it would stay stuck there.
+// An error (models.err) is an already joined string, so it is not kept.
 let _graphStatsCuoi = null;
 function veGraphStats(n, l) {
   _graphStatsCuoi = { n: n, l: l };
@@ -3526,7 +3569,9 @@ function _ensure2DLib() {               // force-graph + d3-force, self-hosted v
   if (_lib2dPromise) return _lib2dPromise;
   _lib2dPromise = new Promise((resolve) => {
     const s = document.createElement("script");
-    s.src = "/static/vendor/force-graph-1.51.4.min.js";   // self-host: unpkg đo được ~0.7s trên đường boot
+    // self-host: unpkg đo được ~0.7s trên đường boot. `?v=` (2026-11-10): the release is in the file name, so the
+    // browser may keep it for good; without the key every start asked the server again before drawing the graph.
+    s.src = "/static/vendor/force-graph-1.51.4.min.js?v=1.51.4";
     s.onload = resolve; s.onerror = resolve;
     document.head.appendChild(s);
   });
@@ -3666,9 +3711,8 @@ function _oManChinh() {
 function capNhatManChinh() {
   if (!_oManChinh()) {
     _cockpitCho = true;
-    // Ô đếm note nằm ngay cạnh ô chọn brain nên NHÌN THẤY ĐƯỢC cả ở trang quản lý: để nguyên
-    // con số của brain cũ là nói dối. Về gạch ngang cho tới lúc đếm thật (số note của từng
-    // brain vẫn có sẵn trong chính tên từng dòng của ô chọn).
+    // The counter now sits inside the graph, hidden on this page, but the old brain's numbers must never show for
+    // the new one when the user comes back: reset to a dash until the real count arrives.
     graphStats.textContent = "-";
     return;
   }
@@ -4001,7 +4045,12 @@ window.addEventListener("resize", () => { if (javisGraph) javisGraph.resize(); }
 
 let _stopBtnTick = 0;
 function pumpAudioLevel() {
-  if (javisGraph) javisGraph.setLevel(voice.getLevel());
+  // Only while there is a level to show or the last one is still fading out: with silence on both sides the graph
+  // has nothing to redraw, and this runs on every frame.
+  if (javisGraph) {
+    const _lvl = voice.getLevel();
+    if (_lvl > 0 || (javisGraph.level || 0) > 0.001) javisGraph.setLevel(_lvl);
+  }
   // Cập nhật hiển thị nút stop ~6 lần/giây (theo dõi cả lúc Javis đang đọc)
   if (_theoLoi && (_stopBtnTick % 3) === 0) nhipTheoLoi();   // V3: chữ theo lời ~20 lần/giây
   if ((_stopBtnTick++ % 10) === 0) {
@@ -4056,6 +4105,9 @@ function initStarfield() {
   let stars = [];
   let sky = SKY_DARK;
   let cssW = 0, cssH = 0, dpr = 1, lastDraw = 0;
+  const STAR_IDLE_MS = 250;
+  let watchingSize = false;  // a ResizeObserver tells us when the panel changes size
+  let sizeDirty = true;      // the panel's size may have changed: measure once at the next draw
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
   function paintStars() {
@@ -4090,6 +4142,9 @@ function initStarfield() {
   }
   resize();
   window.addEventListener("resize", resize);
+  if (typeof ResizeObserver === "function") {
+    try { new ResizeObserver(() => { sizeDirty = true; }).observe(cv.parentElement); watchingSize = true; } catch (e) { /* measured each draw */ }
+  }
   // Nghe thẳng sự kiện thay vì javisTheme.on(): hàm này có thể chạy trước khi theme.js
   // kịp dựng window.javisTheme, khi đó đăng ký sẽ hụt im lặng và nền kẹt ở bảng tối.
   function syncSky(light) { sky = light ? SKY_LIGHT : SKY_DARK; paintStars(); }
@@ -4105,14 +4160,26 @@ function initStarfield() {
     // Nền 2D từng tự dựng gradient + grid ở 60 FPS dù não đứng yên. 15 FPS lúc nghỉ vẫn
     // đủ cho sao nhấp nháy chậm; khi có giọng/đang nghĩ nâng lên 30 FPS.
     const lvl = voice.getLevel();
-    const interval = (lvl > 0.01 || _thinkingActive) ? 33 : 66;
+    const active = lvl > 0.01 || _thinkingActive;
+    // 2026-11-10: at rest the only thing that moves is the twinkle, and one twinkle takes 9 to 69 seconds. Drawing it 15
+    // times a second cost about half of the home screen's idle main-thread time on a throttled phone (measured: 228 ms
+    // busy per second, 77 with this canvas off). Four frames a second look the same; the twinkle below advances by
+    // elapsed time, so its tempo does not change with the frame rate. Voice or thinking still gets 30 frames.
+    const interval = active ? 33 : STAR_IDLE_MS;
     if (now && now - lastDraw < interval) return;
+    const dt = (now && lastDraw) ? Math.min(now - lastDraw, 1000) : (active ? 33 : 66);
     lastDraw = now || 0;
-    // Tự đo lại kích thước (sửa lỗi nền dồn 1 góc khi layout chưa xong lúc boot)
-    const rect = cv.parentElement.getBoundingClientRect();
-    const pw = Math.round(rect.width), ph = Math.round(rect.height);
-    if (pw > 0 && (cssW !== pw || cssH !== ph)) resize();
+    // Tự đo lại kích thước (sửa lỗi nền dồn 1 góc khi layout chưa xong lúc boot). The size comes from a
+    // ResizeObserver where there is one; measuring here forced a layout on every draw.
+    if (sizeDirty) {
+      sizeDirty = !watchingSize;
+      const rect = cv.parentElement.getBoundingClientRect();
+      const pw = Math.round(rect.width), ph = Math.round(rect.height);
+      if (pw > 0 && (cssW !== pw || cssH !== ph)) resize();
+    }
     if (!cssW) return;
+    // The twinkle used to advance one step per draw: one step per 66 ms at rest, per 33 ms with voice or thinking.
+    const twStep = dt / (active ? 33 : 66);
     ctx.clearRect(0, 0, cssW, cssH);
 
     // Quầng ở TRUNG TÂM - phồng nhẹ theo giọng
@@ -4165,7 +4232,7 @@ function initStarfield() {
     // Sao mờ rải đều (tông sáng: hạt bụi giấy)
     ctx.globalCompositeOperation = sky.starOp;
     stars.forEach(s => {
-      s.tw += s.sp;
+      s.tw += s.sp * twStep;
       const tw = (Math.sin(s.tw) * 0.35 + 0.45) * (1 + lvl * 0.6);
       ctx.globalAlpha = Math.min(sky.starMax, tw);
       ctx.fillStyle = s.c;
@@ -5170,6 +5237,8 @@ async function initAuthGate() {
       swap(wz.querySelector('[data-i18n="wz.pass_note"]'), "data-i18n", "app.wz_mandatory");
       const pass = document.getElementById("wzPass");
       if (pass) { pass.required = true; swap(pass, "data-i18n-ph", "wz.pass_ph_req"); }
+      const pass2 = document.getElementById("wzPass2");
+      if (pass2) pass2.required = true;
     }
     wz.classList.add("open");
     kiemTraCongCuBrowser();
@@ -5216,6 +5285,25 @@ document.getElementById("authSubmit").addEventListener("click", async () => {
     inp.type = show ? "text" : "password";
     eye.setAttribute("aria-pressed", show ? "true" : "false");
   });
+})();
+// Welcome wizard: one eye state for the two password boxes, so both can be read side by side to compare.
+(() => {
+  const boxes = ["wzPass", "wzPass2"].map((id) => document.getElementById(id)).filter(Boolean);
+  const eyes = Array.from(document.querySelectorAll("#setupWizard .wz-pw-eye"));
+  if (!boxes.length || !eyes.length) return;
+  eyes.forEach((eye) => {
+    eye.addEventListener("mousedown", (e) => e.preventDefault());
+    eye.addEventListener("click", () => {
+      const show = boxes[0].type === "password";
+      boxes.forEach((b) => { b.type = show ? "text" : "password"; });
+      eyes.forEach((b) => b.setAttribute("aria-pressed", show ? "true" : "false"));
+    });
+  });
+  // Typing again clears the "do not match" line, so it never sits there after the fix.
+  boxes.forEach((b) => b.addEventListener("input", () => {
+    const err = document.getElementById("wzErr");
+    if (err && err.textContent === window.t("app.pw_mismatch")) err.textContent = "";
+  }));
 })();
 ["authPass", "authCode"].forEach((id) => {
   const el = document.getElementById(id);
@@ -5371,6 +5459,9 @@ if (document.getElementById("settingsBtn")) {
   document.getElementById("savePassword").addEventListener("click", async (e) => {
     const user = document.getElementById("setAuthUser").value.trim();
     const pass = document.getElementById("setAuthPass").value;
+    // Owner 2026-11-09: the new password is typed twice, so one typo cannot lock the owner out.
+    const pass2El = document.getElementById("setAuthPass2");
+    const pass2 = pass2El ? pass2El.value : pass;
     const curEl = document.getElementById("setAuthCur");
     const btn = e.target; const old = btn.textContent;
     const bao = (ok, msg) => {
@@ -5387,11 +5478,12 @@ if (document.getElementById("settingsBtn")) {
     if (!hasPw) {
       // Lần đầu đặt mật khẩu → /auth/setup (cấp cookie luôn)
       if (!pass || pass.length < 8) { bao(false, window.t("app.pw_min8")); return; }
+      if (pass !== pass2) { bao(false, window.t("app.pw_mismatch")); return; }
       const fd = new FormData(); fd.append("username", user || "admin"); fd.append("password", pass);
       try {
         const d = await (await fetch("/auth/setup", { method: "POST", body: fd })).json();
         bao(!!d.ok, d.ok ? window.t("app.pw_set_ok") : (d.error || window.t("app.err_low")));
-        if (d.ok) { document.getElementById("setAuthPass").value = ""; openSettings(); }
+        if (d.ok) { document.getElementById("setAuthPass").value = ""; if (pass2El) pass2El.value = ""; openSettings(); }
       } catch (err) { bao(false, window.t("app.err_net_low")); }
       return;
     }
@@ -5400,6 +5492,7 @@ if (document.getElementById("settingsBtn")) {
     const cur = curEl ? curEl.value : "";
     if (!cur) { bao(false, window.t("app.pw_need_cur")); return; }
     if (pass && pass.length < 8) { bao(false, window.t("app.pw_new_min8")); return; }
+    if (pass !== pass2) { bao(false, window.t("app.pw_mismatch")); return; }
     if (!pass && !user) { bao(false, window.t("app.nothing_changed")); return; }
     const fd = new FormData();
     fd.append("current_password", cur); fd.append("username", user);
@@ -5409,6 +5502,7 @@ if (document.getElementById("settingsBtn")) {
       bao(!!d.ok, d.ok ? (pass ? window.t("app.pw_changed") : window.t("app.user_changed")) : (d.error || window.t("app.err_low")));
       if (d.ok) {
         document.getElementById("setAuthPass").value = "";
+        if (pass2El) pass2El.value = "";
         if (curEl) curEl.value = "";
         refreshAuthRow();
       }
@@ -5509,6 +5603,12 @@ if (document.getElementById("wzFinish")) {
     if (_wizardMandatory && !pass) {
       return _soiOTrong(document.getElementById("wzPass"),
                         window.t("app.wz_pw_required"));
+    }
+    // 2026-11-11 (owner): the password is typed twice. Checked before anything is sent, so a typo never becomes the
+    // password of a fresh install. A password left empty on purpose (personal machine) needs both boxes empty.
+    const pass2El = document.getElementById("wzPass2");
+    if (pass2El && pass !== pass2El.value) {
+      return _soiOTrong(pass ? pass2El : document.getElementById("wzPass"), window.t("app.pw_mismatch"));
     }
     try {
       if (pass) {

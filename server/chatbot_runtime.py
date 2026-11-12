@@ -1140,17 +1140,21 @@ def _rp_collect(cfg: dict) -> tuple:
     """(nguyên văn Agent, mục lục tài liệu) của bot. Đọc đĩa nên chạy trong thread, không trên vòng sự kiện.
     Tiện thể nhớ brain của bot có tài liệu để tra không: bot không có tài liệu nào thì lời tự nói dựa vào vai."""
     root = _deps["brain_root"](cfg["brain"])
+    files = bot_doc_files(cfg)
     linked = []
     try:
         linked = _linked_docs(cfg)["docs"]
     except Exception as e:      # noqa: BLE001
         print(f"[reply_policy] đọc link Google của Agent lỗi: {type(e).__name__}", file=sys.stderr)
     try:
-        _RP_HAS_DOCS[str(cfg.get("id") or "")] = (bool(linked) or bool(chatbot_grounding.chi_muc(root).get("manh"))
-                                                   or chatbot_grounding.has_scoped_docs(root))
+        _RP_HAS_DOCS[str(cfg.get("id") or "")] = (bool(linked)
+                                                   or bool(chatbot_grounding.chi_muc(root, None, files).get("manh"))
+                                                   or chatbot_grounding.has_scoped_docs(root, files))
     except Exception as e:      # noqa: BLE001 - chưa biết thì giữ luật chặt (phải có căn cứ)
         print(f"[reply_policy] đếm tài liệu lỗi: {type(e).__name__}", file=sys.stderr)
-    return _rp_agent_text(cfg), [d["title"] for d in linked] + chatbot_reply_policy.list_doc_titles(root)
+    # The titles come from the bot's own documents (its Agent's Documents section), not from the whole brain.
+    titles = [Path(rel).stem for rel in chatbot_grounding.ds_tai_lieu(root, None, files)][:40]
+    return _rp_agent_text(cfg), [d["title"] for d in linked] + titles
 
 
 async def _rp_profile_job(cfg: dict, ask) -> None:
@@ -1617,23 +1621,31 @@ def _bao_hop_thu(bot_id: str, cfg: dict, meta: dict, loi: str) -> None:
         print(f"[chatbot {bot_id}] báo chuông lỗi: {type(e).__name__}: {e}", file=sys.stderr)
 
 
-def ghi_tin_bot(cfg: dict, meta: dict, text: str, loi: str = "", files=None) -> None:
-    """Câu BOT trả lời (hoặc câu xin lỗi khi lượt gãy - vẫn là thứ khách nhìn thấy)."""
+def ghi_tin_bot(cfg: dict, meta: dict, text: str, loi: str = "", files=None,
+                zalo_sending: bool = False) -> int:
+    """Record a bot answer in the inbox; return its unique message row id.
+
+    For Zalo, the answer has NOT necessarily left the machine at this point.
+    Mark it pending until the transport has returned a channel send outcome.
+    """
     try:
         if not str(text or "").strip() and not files:
-            return
+            return 0
         md = {}
         if loi:
             md["loi"] = str(loi)[:300]
         if files:
             md["files"] = [str((f.get("path") if isinstance(f, dict) else f) or "")[:300]
                            for f in list(files)[:10]]
-        conversations.ghi_su_kien(_su_kien_bot(
+        if zalo_sending:
+            md["zalo_delivery"] = {"state": "sending"}
+        result = conversations.ghi_su_kien(_su_kien_bot(
             cfg, meta, sender_type="ai", sender_name=cfg.get("name") or "",
             message_type="text", text=text, metadata=md))
+        return int((result or {}).get("message_id") or 0)
     except Exception as e:
         print(f"[chatbot conversations] {type(e).__name__}: {e}", file=sys.stderr)
-
+        return 0
 
 async def _tra_tai_lieu(bot_id: str, cfg: dict, text: str, chat_id: str = "") -> dict:
     """Tra brain của bot cho MỘT câu hỏi. Quét đĩa + chấm điểm là việc CHẶN, đẩy sang thread để
@@ -1645,13 +1657,56 @@ async def _tra_tai_lieu(bot_id: str, cfg: dict, text: str, chat_id: str = "") ->
     try:
         root = _deps["brain_root"](cfg["brain"])
         linked = await asyncio.to_thread(_linked_docs, cfg)
-        tl = await asyncio.to_thread(chatbot_grounding.thu_thap, root, text, 4, linked["docs"], chat_id)
+        files = await asyncio.to_thread(bot_doc_files, cfg)
+        tl = await asyncio.to_thread(chatbot_grounding.thu_thap, root, text, 4, linked["docs"], chat_id, files)
         if linked["warnings"]:
             # The answer still goes out; the owner sees why a linked file was left out on the bot card.
             tl = dict(tl, canh_bao_link=" · ".join(linked["warnings"])[:500])
     except Exception as e:
         print(f"[chatbot {bot_id}] tra tài liệu lỗi: {e}", file=sys.stderr)
     return tl
+
+
+def bot_doc_files(cfg: dict) -> tuple:
+    """The bot's documents (owner, 2026-11-09): the files listed in the Documents section of the bot's Agent, as paths
+    relative to the bot's brain. A bot reads these (plus its linked Google files and the chat-scoped folder) and never
+    the rest of the brain, which holds the owner's private notes. No Agent, or an Agent with no file: no document.
+
+    Blocking (reads the Agent file): call from a thread."""
+    a = (cfg or {}).get("agent") or {}
+    reader = _deps.get("read_agent")
+    if not reader or not a.get("slug") or not cfg.get("brain"):
+        return ()
+    agent_brain = a.get("brain") or cfg.get("brain") or "brain"
+    try:
+        meta, _body = reader(agent_brain, a.get("slug"))
+        root = Path(_deps["brain_root"](cfg["brain"])).resolve()
+        agent_root = Path(_deps["brain_root"](agent_brain)).resolve()
+    except Exception as e:      # noqa: BLE001 - a missing Agent is reported elsewhere (prompt, bot card)
+        print(f"[chatbot docs] đọc Agent lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+        return ()
+    import agent_assets
+    out = []
+    for f in agent_assets.doc(meta or {}).get("files") or []:
+        try:
+            rel = (agent_root / str(f.get("path") or "")).resolve().relative_to(root).as_posix()
+        except (OSError, ValueError):
+            continue        # outside the bot's brain (an Agent kept in another brain): not readable by this bot
+        if rel and rel != ".":
+            out.append(rel)
+    return tuple(out)
+
+
+def bot_doc_files_by_id(bot_id: str) -> tuple:
+    """`bot_doc_files` for the bot of a turn (turn_context `bot_id`). Unknown bot: no document."""
+    if not bot_id:
+        return ()
+    try:
+        import chatbot_store
+        cfg = next((b for b in chatbot_store._load().get("bots") or [] if str(b.get("id")) == str(bot_id)), None)
+    except Exception:   # noqa: BLE001
+        cfg = None
+    return bot_doc_files(cfg) if cfg else ()
 
 
 def _linked_docs(cfg: dict) -> dict:
@@ -1681,7 +1736,9 @@ async def _tra_cho_phan_xu(bot_id: str, cfg: dict, text: str, chat_id: str = "")
         return tl
     try:
         root = _deps["brain_root"](cfg["brain"])
-        ml = await asyncio.to_thread(chatbot_doc_tools.table_of_contents, root, chatbot_doc_tools.INDEX_MAX, chat_id)
+        files = await asyncio.to_thread(bot_doc_files, cfg)
+        ml = await asyncio.to_thread(chatbot_doc_tools.table_of_contents, root, chatbot_doc_tools.INDEX_MAX, chat_id,
+                                     files)
     except Exception as e:
         print(f"[chatbot {bot_id}] dựng mục lục lỗi: {e}", file=sys.stderr)
         ml = ""
@@ -1756,8 +1813,23 @@ def _luot_cu(meta) -> bool:
         return False
 
 
+def _compose_started(on_compose) -> None:
+    """Tell the channel the turn WILL be answered (09/11/2026): personal Zalo starts "đang soạn tin" in a group only
+    now, after the judge said reply and the chat is not taken over. A failing hook never costs the turn."""
+    if not callable(on_compose):
+        return
+    try:
+        on_compose()
+    except Exception as e:      # noqa: BLE001
+        print(f"[chatbot] báo bắt đầu soạn lỗi: {type(e).__name__}: {e}", file=sys.stderr)
+
+
 def _make_answer_fn(bot_id: str):
     async def _answer(text, meta=None, progress=None):
+        # The channel's "compose started" hook rides in meta (`_on_compose`, personal Zalo groups). Taken out first:
+        # a callable must never reach the engine, the inbox or a log.
+        meta = dict(meta or {})
+        on_compose = meta.pop("_on_compose", None)
         cfg = chatbot_store.get_bot(bot_id)
         if not cfg:
             return {"text": "", "files": [], "im_lang": True}
@@ -1838,6 +1910,7 @@ def _make_answer_fn(bot_id: str):
         if conversations.che_do(kenh_luot, aid_luot, chat_id) == "human":
             _rp_retract(rp_dec, "taken_over")
             return {"text": "", "files": [], "im_lang": True}
+        _compose_started(on_compose)
 
         # Tra tài liệu TRƯỚC rồi nhét vào prompt, thay vì trông vào việc model tự chịu mở file.
         # Lượt Tự đánh giá đã tra ở trên rồi, dùng lại kết quả đó chứ không quét đĩa lần hai.
@@ -2057,7 +2130,9 @@ def _make_answer_fn(bot_id: str):
                 conversations.save_draft(cid_draft, dap_ghi, conversations.last_customer_message_id(cid_draft))
             return {"text": "", "files": [], "im_lang": True, "draft": True}
         # Câu bot nói vào Hộp thư hội thoại, cạnh tin khách. Lượt gãy thì `dap` rỗng nên không ghi gì: khách không nhận tin nào.
-        ghi_tin_bot(cfg, meta or {}, dap_ghi, loi=loi_ky_thuat, files=(out or {}).get("files"))
+        receipt_row = ghi_tin_bot(
+            cfg, meta or {}, dap_ghi, loi=loi_ky_thuat, files=(out or {}).get("files"),
+            zalo_sending=(kenh_luot == "zalo_personal" and not loi_ky_thuat))
         if goi_nguoi:
             _BI_LIEN_TIEP[khoa] = 0     # đã gọi người rồi thì đếm lại, đừng gọi mỗi lượt sau đó
             _goi_chu(cfg, str((meta or {}).get("user_name") or chat_id),
@@ -2067,6 +2142,11 @@ def _make_answer_fn(bot_id: str):
         if loi_ky_thuat:
             # `failed`: a transport that answers a caller (internal API) must tell a failed turn from a silent one.
             return {"text": "", "files": [], "im_lang": True, "failed": True}
+        if receipt_row and kenh_luot == "zalo_personal":
+            # Private transport metadata: the channel settles precisely this
+            # inbox message after it attempts the send, not an earlier reply.
+            out = dict(out or {})
+            out["_zalo_delivery_row_id"] = receipt_row
         if reaction:
             out = dict(out or {})
             out["reaction"] = reaction

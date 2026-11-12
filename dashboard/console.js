@@ -517,7 +517,7 @@
     // nhát này thì mở xong vẫn không biết file nằm đâu, lần sau lại phải đi tìm lại từ đầu.
     // Đặt ở wrapper chứ không trong openNote: openNote còn được chính cây gọi khi bấm node,
     // ở đó cây đã đúng chỗ rồi, dựng lại là thừa.
-    try { _vtRevealInTree(ceilingRel); } catch (e) { }
+    try { _vtRevealInTree(ceilingRel); } catch (e) {}
   };
   // Mở lại một file bằng đường dẫn THEO TRẦN DUYỆT (đã có sẵn tiền tố nhà brain). Người gọi:
   // chip "file đang mở" dưới khung chat (app.js) - ghim giữ đúng dạng path mà openNote nhận,
@@ -619,13 +619,18 @@
     if (cv) cv.classList.toggle("cview-hoi-thoai", id === "conversations" || id === "chatbots");
     // 0.422.0: the Tasks page carries its own title at the top of its left column (owner's design), no page header.
     if (cv) cv.classList.toggle("cview-nv", id === "tasks");
+    // 2026-11-09 (owner): the Account page's own Account | Security tabs sit at the very top, no page header above them.
+    // The Webhook page does the same with its Webhook | Token API tabs.
+    if (cv) cv.classList.toggle("cview-tk", id === "account" || id === "webhooks");
     _renderGen++;   // đổi trang → vô hiệu mọi render async đang dở (guard bổ sung cho renderer đã có)
     // 0.417.0: code của trang này có thể chưa nạp (nap-cham.js). Chờ ĐỦ nhóm rồi mới vẽ; trong lúc chờ mà người dùng đã
     // sang trang khác thì dừng hẳn, đừng vẽ (renderWorkspace mượn khung chat: vẽ vào trang đã tháo là mất khung chat).
     const nhomCan = NHOM_TRANG[id];
     if (nhomCan && window.JavisNapCham) {
       const gen = _renderGen;
-      el.innerHTML = placeholder(id, window.t("common.loading"));
+      // 2026-11-09: the page's code is still on its way: the shared "Loading..." look, not the placeholder that read
+      // "<page> - in development".
+      el.innerHTML = `<div class="pg-loading pg-page">${esc(window.t("common.loading"))}</div>`;
       await window.JavisNapCham.cho(nhomCan);
       if (gen !== _renderGen) return;
       el.innerHTML = "";
@@ -634,7 +639,7 @@
       }
       _tabHoiThoaiCho = "";
     }
-    if (id === "chat") return renderChat(el);
+    if (id === "chat")     return renderChat(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
     if (id === "settings") return renderSettingsPage(el);
@@ -1548,7 +1553,7 @@
       </div>
       <div id="fmFix"></div>
       <div id="fmMiss"></div>
-      <div id="fmList" class="fm-list">${window.t("common.loading")}</div>
+      <div id="fmList" class="fm-list"><div class="pg-loading">${esc(window.t("common.loading"))}</div></div>
       </div>
       <div class="fm-edit" id="fmEdit"></div>
     </div>`;
@@ -1577,7 +1582,7 @@
       // path === undefined → điểm vào mặc định (brain); "" = trần (ổ đĩa); chuỗi = tương đối trần
       resetSearchUi();
       missEl.innerHTML = "";
-      listEl.innerHTML = window.t("common.loading");
+      listEl.innerHTML = `<div class="pg-loading">${esc(window.t("common.loading"))}</div>`;
       const qp = (path === undefined || path === null) ? "" : `&path=${encodeURIComponent(path)}`;
       let resp, d;
       try { resp = await fetch(`/files/list?brain=${encodeURIComponent(fbrain())}${qp}`); d = await resp.json().catch(() => ({})); }
@@ -2107,7 +2112,7 @@
     _injectExtraCss();
     _injectPluginCss();
     const myGen = _renderGen;   // chống race: đổi trang → load dở tự bỏ
-    el.innerHTML = `<div class="cview-section"><div class="empty">${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="cview-section"><div class="empty pg-loading">${esc(t("common.loading"))}</div></div>`;
 
     const SRC = { bundled: [window.t("cs.pl_src_bundled"), "var(--green)"], pack: [window.t("cs.pl_src_pack"), "var(--accent, #7c5cff)"], user: [window.t("cs.pl_src_user"), "var(--link-ink)"], vault: [window.t("cs.pl_src_vault"), "var(--warn-ink)"] };
     const MM = { readonly: window.t("cs.pl_mm_readonly"), safe: window.t("cs.pl_mm_safe"), full: window.t("cs.pl_mm_full") };
@@ -2350,6 +2355,7 @@
   // (form, thanh toán), không phải việc chạy theo giờ, nên đứng thành một mục riêng trong nhóm Việc.
   // Phần ruột vẫn là dashboard/webhooks.js (0.198.0).
   // ============================================
+  const WH_TAB_KEY = "javis.webhooks.tab";
   async function renderWebhooks(el) {
     _injectExtraCss();
     const myGen = _renderGen;
@@ -2357,7 +2363,32 @@
       el.innerHTML = placeholder("webhooks", window.t("cs.mod_not_ready", { ten: "webhooks.js" }));
       return;
     }
-    el.innerHTML = `<div class="cview-section"><div id="whSection"></div></div>`;
+    // 2026-11-09 (owner): one page for every door another app uses to call Javis: Webhook | Token API.
+    let whTab = "hooks";
+    try { if (localStorage.getItem(WH_TAB_KEY) === "tokens") whTab = "tokens"; } catch (e) {}
+    el.innerHTML = `
+      <div class="wh-tabs-page">
+        <div class="ach-tabs tabs-top" role="tablist" aria-label="${esc(t("page.webhooks.label"))}">
+          <button type="button" role="tab" data-wh-tab="hooks" aria-controls="whPanelHooks" aria-selected="${whTab === "hooks"}" tabindex="${whTab === "hooks" ? 0 : -1}">${ic("webhook")}<span>Webhook</span></button>
+          <button type="button" role="tab" data-wh-tab="tokens" aria-controls="whPanelTokens" aria-selected="${whTab === "tokens"}" tabindex="${whTab === "tokens" ? 0 : -1}">${ic("key-round")}<span>${esc(t("cs.ac_tk_head"))}</span></button>
+        </div>
+        <div id="whPanelHooks" role="tabpanel" ${whTab === "hooks" ? "" : "hidden"}><div class="cview-section"><div id="whSection"></div></div></div>
+        <div id="whPanelTokens" role="tabpanel" ${whTab === "tokens" ? "" : "hidden"}></div>
+      </div>`;
+    let tokensDrawn = false;
+    const showWhTab = (key) => {
+      try { localStorage.setItem(WH_TAB_KEY, key); } catch (e) {}
+      el.querySelectorAll("[data-wh-tab]").forEach(b => {
+        const on = b.dataset.whTab === key;
+        b.setAttribute("aria-selected", String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      el.querySelector("#whPanelHooks").hidden = key !== "hooks";
+      el.querySelector("#whPanelTokens").hidden = key !== "tokens";
+      if (key === "tokens" && !tokensDrawn) { tokensDrawn = true; renderTokenPanel(el.querySelector("#whPanelTokens")); }
+    };
+    el.querySelectorAll("[data-wh-tab]").forEach(b => { b.onclick = () => showWhTab(b.dataset.whTab); });
+    showWhTab(whTab);
     let brains = [];
     try {
       const d = await (await fetch("/brains")).json();
@@ -2374,7 +2405,7 @@
   // ============================================
   async function renderLearn(el) {
     _injectExtraCss();
-    el.innerHTML = `<div class="cview-section"><div class="empty">${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="cview-section"><div class="empty pg-loading">${esc(t("common.loading"))}</div></div>`;
     let cfg = {};
     try { cfg = await (await fetch("/learn/config")).json(); } catch (e) { }
     const caps = cfg.capabilities || {};
@@ -2444,9 +2475,9 @@
         </div>
       </div>
 
-      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("improve.auto_title"))}${infoBtn()}</h3>${infoBody(esc(window.t("cs.ln_chat_note")))}<div id="lnChat">${esc(window.t("common.loading"))}</div></div>
-      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("cs.ln_review_head"))}</h3><div id="lnReview">${esc(window.t("common.loading"))}</div></div>
-      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("cs.ln_log_head"))}</h3><div id="lnLog">${esc(window.t("common.loading"))}</div></div>
+      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("improve.auto_title"))}${infoBtn()}</h3>${infoBody(esc(window.t("cs.ln_chat_note")))}<div id="lnChat"><div class="pg-loading">${esc(window.t("common.loading"))}</div></div></div>
+      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("cs.ln_review_head"))}</h3><div id="lnReview"><div class="pg-loading">${esc(window.t("common.loading"))}</div></div></div>
+      <div class="si-log"><h3 style="font-size:15px;color:var(--text)">${esc(window.t("cs.ln_log_head"))}</h3><div id="lnLog"><div class="pg-loading">${esc(window.t("common.loading"))}</div></div></div>
     </div>`;
 
     let cur = {
@@ -2683,7 +2714,7 @@
 
   // ---- Trang Tổng quan ----
   async function renderOverview(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const s = await freshSettings();
     const m = s.model || {};
     // Đọc từ model.main + model.providers (nguồn thật của trang Models), KHÔNG từ m.engine -
@@ -3042,7 +3073,7 @@
   function olGb(n) { return (Math.round((n || 0) * 10) / 10) + " GB"; }
 
   async function renderModelsLocalTab(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     let st = {};
     try { st = await (await fetch("/ollama-local/status")).json(); } catch (e) { st = {}; }
     if (!st.reachable) return olVeChuaNoi(el, st);
@@ -3395,7 +3426,7 @@
   const isGw = (pid) => GW_CARDS.indexOf(pid) >= 0;
 
   async function renderModelsCloudTab(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const s = await freshSettings();
     const m = s.model || {};
     const providers = m.providers || [];
@@ -3449,6 +3480,7 @@
     const accts = m.accounts || {};
     ACCT_NAMES = {};
     ACCT_ITEMS = {};
+    ACCT_KEYED = { "anthropic-cli": claudeP.auth_mode === "api_key" };
     PLAN_CLI.forEach(pid => {
       const l = accts[pid] || [];
       ACCT_ITEMS[pid] = l;
@@ -3672,7 +3704,7 @@
       };
       if (p.kind === "oauth") {
         const st = on
-          ? t("models.st_connected") + esc(acctNameTag(p.id)) + (p.plan ? " · " + esc(p.plan) : "") + " · " + p.models.length + " model"
+          ? t("models.st_connected") + esc(acctLine(p.id, [p.plan])) + " · " + p.models.length + " model"
           : t("models.st_not_connected") + " · " + p.models.length + " model";
         return `${cardOpen(p, ord)}
           ${provHead(p, on, "Device code", st, false, ord)}
@@ -3695,8 +3727,7 @@
         // 0.30-0.32.1 từng thử (và tắc trên Windows vì không có pseudo-terminal).
         const dn = p.dang_nhap || {};
         const st = on
-          ? t("models.st_logged_in") + esc(acctNameTag(p.id)) + (p.account ? " · " + esc(p.account) : "")
-          + (p.plan ? " · " + esc(p.plan) : "") + " · " + p.models.length + " model"
+          ? t("models.st_logged_in") + esc(acctLine(p.id, [p.account, p.plan])) + " · " + p.models.length + " model"
           : (p.cli_found ? t("models.st_cli_no_login") : t("models.st_no_cli", { ten: "Grok Build CLI" }));
         return `${cardOpen(p, ord)}
           ${provHead(p, on, "MCP/skill", st, true, ord)}
@@ -3861,6 +3892,10 @@
 
     const swapRow = (i) => `<div class="ord-swap-row"><button type="button" class="ord-swap" data-swap="${i}" aria-label="${esc(t("models.ord_swap_aria", { a: connList[i - 1].label, b: connList[i].label }))}">${ORD_SWAP} ${esc(t("models.ord_swap"))}</button></div>`;
     const bgName = bgCfg.model || defName(bgCfg.provider);
+    // Automatic (10/11/2026): Javis picks two models of MAIN's provider, one for its own work, one for handed-over jobs.
+    const bgAuto = !!bgCfg.auto;
+    const bgAutoSub = bgAuto ? t("models.bg_auto_sub", { nha: bgP.label || bgCfg.provider,
+      nhe: bgCfg.light || defName(bgCfg.provider), giua: bgName }) : "";
     const useP = bgUse ? (pById(bgUse.provider) || {}) : {};
     const bgLine = !bgUse ? `<div class="aux-note warn">${WARN_ICON} ${esc(t("models.bg_none"))}</div>`
       : bgUse.step !== "background" ? `<div class="aux-note">${esc(t("models.bg_using", {
@@ -3892,8 +3927,8 @@
           <div class="aux-now">
             <span class="prov-logo ic-tile aux-ic">${ic("cpu")}</span>
             <div class="aux-now-txt">
-              <div class="aux-now-model">${esc(bgName)}</div>
-              <div class="aux-now-prov">${esc(bgP.label || bgCfg.provider)}</div>
+              <div class="aux-now-model">${esc(bgAuto ? t("models.bg_auto") : bgName)}</div>
+              <div class="aux-now-prov">${esc(bgAuto ? bgAutoSub : (bgP.label || bgCfg.provider))}</div>
             </div>
             <div class="aux-now-act ord-chips" data-p="__bg">
               ${effChip("__bg", bgCfg.reasoning)}
@@ -4216,6 +4251,7 @@
   // card keeps it as account 1's label (plan_accounts), an API card as its first key's label. Filled on every draw.
   let ACCT_NAMES = {};      // plan card id -> account 1's label
   let ACCT_ITEMS = {};      // plan card id -> its account list, so saving a name keeps order and on/off
+  let ACCT_KEYED = {};      // plan card id -> true while it runs on an API key (no plan account is in use)
   const acctNameField = (pid) => `<input class="js-input prov-acname" data-acname="${esc(pid)}" maxlength="60" autocomplete="off"
     spellcheck="false" placeholder="${esc(t("models.acname_ph"))}" value="${esc(ACCT_NAMES[pid] || "")}">`;
   // The typed name, "" when the card has no name box, or null after pointing at the empty box: the sign-in waits.
@@ -4241,6 +4277,22 @@
   }
   // " · name" for a plan card's status line, "" when account 1 has none yet.
   const acctNameTag = (pid) => ACCT_NAMES[pid] ? " · " + ACCT_NAMES[pid] : "";
+  // The EXTRA account a plan card runs on now (the first one switched on, signed in and not resting), or null while
+  // account 1 runs. The status line then names that account, its e-mail and its plan: it used to keep showing account
+  // 1's, so a card running on a Max account still read "Pro" (owner's video, 10/11/2026).
+  const acctInUse = (pid) => {
+    const nowS = Date.now() / 1000;
+    const l = ACCT_KEYED[pid] ? [] : (ACCT_ITEMS[pid] || []);
+    const cur = l.length > 1 ? l.find(a => a.enabled && a.signed_in && !(a.resting_until > nowS)) : null;
+    return cur && !(cur.main || cur.id === "main") ? cur : null;
+  };
+  // " · name · e-mail · plan" of the account in use. `own` is what the card's own login (account 1) reports.
+  const acctLine = (pid, own) => {
+    const cur = acctInUse(pid);
+    if (!cur) return acctNameTag(pid) + (own || []).filter(Boolean).map(x => " · " + x).join("");
+    const no = (ACCT_ITEMS[pid] || []).indexOf(cur) + 1;
+    return [cur.label || t("models.pacct_n", { n: no }), cur.email, cur.plan].filter(Boolean).map(x => " · " + x).join("");
+  };
   // A subscription CLI with nothing set picks its own model by plan, which Javis cannot read: say so instead of "default".
   const PLAN_CLI = ["anthropic-cli", "openai-oauth", "grok-cli", "antigravity-cli"];
   const defName = (pid) => MODEL_DEFAULTS[pid] ? t("models.mp_default_is", { m: MODEL_DEFAULTS[pid] })
@@ -4301,12 +4353,16 @@
       return { pop: pop, body: pop.querySelector(".ord-sheet-body"), sheet: true, back: back };
     };
     el._ordClose = closePop;
-    if (!el._ordDocBound) {
-      el._ordDocBound = true;
+    // One pair of document listeners for every visit of the page (2026-11-10): `el` is a new element each time, and
+    // a pair bound per element stayed on the document with its old page for good. They act on the page drawn last.
+    MO._closeOwner = el;
+    if (!MO._closeBound) {
+      MO._closeBound = true;
       document.addEventListener("pointerdown", (e) => {
-        if (el._ordClose && !(e.target.closest && e.target.closest(".ord-chips, .ord-pop"))) el._ordClose();
+        const o = MO._closeOwner;
+        if (o && o._ordClose && !(e.target.closest && e.target.closest(".ord-chips, .ord-pop"))) o._ordClose();
       }, true);
-      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && el._ordClose) el._ordClose(); });
+      document.addEventListener("keydown", (e) => { const o = MO._closeOwner; if (e.key === "Escape" && o && o._ordClose) o._ordClose(); });
     }
     const opened = (btn, sh, slider, onClose) => {
       openPop = { el: sh.pop, btn: btn || null, slider: slider || null, back: sh.back || null, onClose: onClose || null };
@@ -4706,13 +4762,12 @@
         if (!a.main) rows.push({ ic: "log-in", label: t("models.pacct_relogin"), run: () => planSheet(btn, pid, id, a.label || "") });
         if (i0 > 0) rows.push({ ic: "arrow-up", label: t("models.move_up"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() - 1)) });
         if (i0 < n - 1) rows.push({ ic: "arrow-down", label: t("models.move_down"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() + 1)) });
-        menuSheet(btn, name, [rows, a.main ? [] : [{
-          ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
-            confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
-              const l = items(pid), i = idx();
-              const gone = l.splice(i, 1)[0];
-              saveAcc(pid, l, [gone.id]);
-            })
+        menuSheet(btn, name, [rows, a.main ? [] : [{ ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
+          confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
+            const l = items(pid), i = idx();
+            const gone = l.splice(i, 1)[0];
+            saveAcc(pid, l, [gone.id]);
+          })
         }]], cardOf(pid).label);
       };
     });
@@ -4755,14 +4810,12 @@
           : { supported: false, note: "fast.none" };
         const slider = S.mount(sh.body, {
           value: cur.reasoning, locked: locked, lockedValue: locked ? S.lockedLevel(cur.model) : "",
-          fast: {
-            supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
-              c.fast = on;
-              el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
-              await saveSetting("model", { fast: on });
-              window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
-            }
-          },
+          fast: { supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
+            c.fast = on;
+            el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
+            await saveSetting("model", { fast: on });
+            window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
+          } },
           onChange: (v) => {
             cur.reasoning = v;
             btn.querySelector(".ord-etxt").textContent = c.effName(v);
@@ -4791,7 +4844,7 @@
       };
       const draw = () => {
         const box = sh.body.querySelector(".ord-mlist");
-        if (ids == null) { box.innerHTML = `<div class="mb-empty">${esc(t("mpick.loading"))}</div>`; return; }
+        if (ids == null) { box.innerHTML = `<div class="mb-empty pg-loading">${esc(t("mpick.loading"))}</div>`; return; }
         const f = q.trim().toLowerCase();
         const hit = (id) => !f || (id || defName(pid)).toLowerCase().includes(f);
         const now = cur.model || "";
@@ -4843,14 +4896,16 @@
       opened(auxChg, sh);
       const st = { expanded: c.bgCfg.provider, filter: "" };
       const draw = async () => {
-        const o = {
-          providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
-          selected: { provider: c.bgCfg.provider, model: c.bgCfg.model }, searchId: "ordBgSearch"
-        };
+        const o = { providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
+                    selected: c.bgCfg.auto ? { provider: "", model: "" } : { provider: c.bgCfg.provider, model: c.bgCfg.model },
+                    searchId: "ordBgSearch" };
         const html = await window.JavisModelList.render(o);
         if (!openPop || openPop.el !== pop) return;
         const typing = document.activeElement && document.activeElement.id === "ordBgSearch";
-        sh.body.innerHTML = html;
+        // First row: back to Automatic. Picking any model below is a choice by hand, which Javis then never replaces.
+        const autoRow = `<div class="mb-item ${c.bgCfg.auto ? "cur" : ""}" data-bgauto="1" role="option"><span class="tick">`
+          + `${c.bgCfg.auto ? ic("check", { cls: "ic-ok" }) : ""}</span><span>${esc(t("models.bg_auto_pick"))}</span></div>`;
+        sh.body.innerHTML = autoRow + html;
         const inp = sh.body.querySelector("#ordBgSearch");
         if (inp) {
           inp.oninput = () => { st.filter = inp.value; draw(); };
@@ -4859,6 +4914,7 @@
         if (o.cho.length) Promise.all(o.cho).then(() => { if (openPop && openPop.el === pop) draw(); });
       };
       sh.body.onclick = (e) => {
+        if (e.target.closest("[data-bgauto]")) { closePop(); save({ auxiliary: { auto: true } }); return; }
         const it = e.target.closest(".mb-item[data-model]");
         if (it) { closePop(); save({ auxiliary: { provider: it.dataset.prov, model: it.dataset.model } }); return; }
         const h = e.target.closest(".mb-prov[data-prov]");
@@ -5002,7 +5058,7 @@
     }
     if (d.connected) {
       st.className = "prov-status on";
-      st.textContent = t("models.st_connected") + acctNameTag("anthropic-cli") + (d.email ? " · " + d.email : "") + (d.plan ? " · " + d.plan : "")
+      st.textContent = t("models.st_connected") + acctLine("anthropic-cli", [d.email, d.plan])
         + (d.stale ? " · " + t("models.st_stale") : "");
       // A card in the usage order has Disconnect in its own button row (and its ⋯ sheet), so none here.
       if (act.closest && act.closest(".ord-card")) { act.innerHTML = ""; return; }
@@ -5051,7 +5107,13 @@
     const parts = [];
     if (cn.sau) parts.push(t("models.cc_upd_ver", { v: cn.sau }));
     if (cn.ts) parts.push(t("models.cc_upd_last", { luc: new Date(cn.ts * 1000).toLocaleString(LOC(), { dateStyle: "short", timeStyle: "short" }) }));
-    box.innerHTML = `${parts.length ? `<div>${esc(parts.join(" · "))}</div>` : ""}
+    // The Claude Agent SDK package follows the same switch (server/sdk_update.py). The running server keeps the
+    // version it started with, so a newer one on disk is announced as waiting for a restart.
+    const sdk = d.sdk || {};
+    const sdkRun = sdk.loaded || sdk.installed;
+    if (sdkRun) parts.push(t("models.cc_sdk_ver", { v: sdkRun }));
+    const sdkWait = sdk.restart_needed && sdk.installed ? `<div>${esc(t("models.cc_sdk_restart", { v: sdk.installed }))}</div>` : "";
+    box.innerHTML = `${parts.length ? `<div>${esc(parts.join(" · "))}</div>` : ""}${sdkWait}
       <div class="cc-auto-row" style="display:flex;align-items:center;gap:10px;margin-top:8px;font-size:16px">
         <label for="cliAutoUpd" style="flex:1;cursor:pointer">${esc(t("models.cc_auto_label"))}${infoBtn()}</label>
         <label class="toggle"><input type="checkbox" id="cliAutoUpd"${autoOn ? " checked" : ""}${envOff ? " disabled" : ""}><span></span></label>
@@ -5083,11 +5145,15 @@
       try { r = await (await fetch("/claude/update", { method: "POST" })).json(); }
       catch (e) { btn.disabled = false; msg.textContent = t("common.net_err"); return; }
       btn.disabled = false;
-      if (!r.ok) { msg.innerHTML = Icons.warn(t("models.cc_upd_fail") + " " + (r.error || "")); return; }
-      if (!r.doi) { msg.textContent = t("models.cc_upd_same", { v: r.sau || "" }); return; }
+      // The same press also looked for a newer Agent SDK: say so after the Claude Code result, whatever that was.
+      const sk = r.sdk || {};
+      const sdkNote = sk.changed ? " " + t("models.cc_sdk_done", { truoc: sk.from || "?", sau: sk.to || "" })
+        : (sk.ok === false && !sk.docker && sk.error ? " " + t("models.cc_sdk_fail") + " " + sk.error : "");
+      if (!r.ok) { msg.innerHTML = Icons.warn(t("models.cc_upd_fail") + " " + (r.error || "") + sdkNote); return; }
+      if (!r.doi) { msg.textContent = t("models.cc_upd_same", { v: r.sau || "" }) + sdkNote; return; }
       const moi = (r.model_moi || []).join(", ");
       msg.innerHTML = CHECK_ICON + " " + esc(t("models.cc_upd_done", { truoc: r.truoc || "?", sau: r.sau })
-        + (moi ? " " + t("models.cc_upd_new", { ds: moi }) : ""));
+        + (moi ? " " + t("models.cc_upd_new", { ds: moi }) : "") + sdkNote);
     };
   }
 
@@ -5983,8 +6049,8 @@
   function openAccountMenu(el, c, con) {
     const m = connModal(mHead(esc(c.label || window.t("cs.cn_account_fallback")))
       + '<div class="conn-menu">'
-      + ((c.connector_id || "custom") === "custom" && c.auth !== "oauth"
-        ? '<button class="conn-menu-btn" data-m="edit">' + ic("settings") + ' ' + esc(window.t("cs.mf_menu_edit")) + '</button>' : "")
+      + ((c.connector_id || "custom") === "custom"
+          ? '<button class="conn-menu-btn" data-m="edit">' + ic("settings") + ' ' + esc(window.t("cs.mf_menu_edit")) + '</button>' : "")
       + '<button class="conn-menu-btn" data-m="test">' + ic("rotate-cw") + ' ' + esc(window.t("cs.cn_menu_test")) + '</button>'
       + '<button class="conn-menu-btn" data-m="rekey">' + ic("repeat") + ' ' + esc(window.t("cs.cn_menu_rekey")) + '</button>'
       + '<button class="conn-menu-btn" data-m="default"' + (c.is_default ? " disabled" : "") + '>' + ic("star") + ' ' + esc(window.t("cs.cn_menu_default")) + '</button>'
@@ -6234,7 +6300,7 @@
   let _mcpTab = "danoi";
 
   async function renderConnect(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     let d;
     try { d = await (await fetch("/connect/catalog")).json(); } catch (e) { el.innerHTML = placeholder("mcp", window.t("cs.cn_load_err")); return; }
     const cat = d.catalog || [];
@@ -6548,6 +6614,7 @@
   function openMcpForm(el, server) {
     const P = window.JavisMcpParse;
     let editId = server ? server.id : "";
+    let savedEndpointUrl = server ? (server.url || "") : "";
     // Kết nối đã chuyển sang OAuth thì Lưu phải GIỮ chế độ đó: gửi auth=header là token thôi
     // được gắn, máy chủ trả 401 và người dùng bị đẩy đi đăng nhập lại vô cớ.
     let dangOauth = !!(server && server.auth === "oauth");
@@ -6710,6 +6777,9 @@
       err.textContent = ""; $("#mfKq").innerHTML = "";
       const name = $("#mfTen").value.trim();
       if (!name) { err.textContent = window.t("cs.cn_mcp_need_name"); $("#mfTen").focus(); return; }
+      if (dangOauth && kieu !== "url") {
+        err.textContent = window.t("cs.mf_oauth_origin_locked"); return;
+      }
       const body = { name: name, transport: kieu === "url" ? $("#mfGiao").value : "stdio" };
       const dong = docDong().filter(x => x.k);
       const bang = {};
@@ -6720,6 +6790,20 @@
       if (kieu === "url") {
         body.url = $("#mfUrl").value.trim();
         if (!/^https?:\/\//i.test(body.url)) { err.textContent = window.t("cs.mf_need_url"); $("#mfUrl").focus(); return; }
+        // Existing OAuth credentials must stay on their original server origin.
+        if (dangOauth) {
+          let sameOrigin = false;
+          try {
+            const currentEndpoint = new URL(savedEndpointUrl);
+            const updatedEndpoint = new URL(body.url);
+            sameOrigin = currentEndpoint.origin === updatedEndpoint.origin
+              && !updatedEndpoint.username && !updatedEndpoint.password;
+          } catch (_) { /* Invalid endpoints are rejected before any update. */ }
+          if (!sameOrigin) {
+            err.textContent = window.t("cs.mf_oauth_origin_locked");
+            $("#mfUrl").focus(); return;
+          }
+        }
         body.auth = dangOauth ? "oauth" : "header"; body.headers = bang;
         if (editId) body.env = {};
       } else {
@@ -6745,6 +6829,7 @@
         luu.disabled = false; luu.textContent = window.t("cs.mf_save_test");
         err.textContent = (r && r.error) || window.t("app.err_cap"); return;
       }
+      savedEndpointUrl = body.url || "";
       luu.textContent = window.t("cs.cn_testing");
       let t;
       try { t = await postJson("/connect/test", { id: editId }); } catch (e) { t = { ok: false, error: String(e) }; }
@@ -6918,7 +7003,7 @@
   }
 
   async function renderChannels(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const [s, ...stats] = await Promise.all([freshSettings(), ...ADMIN_CH.map(achFetch)]);
     const state = {};
     ADMIN_CH.forEach((def, i) => { state[def.key] = achState(def, stats[i]); });
@@ -7189,10 +7274,19 @@
 
   // ---- Trang Tài khoản: workspace + đăng nhập ----
   async function renderAccount(el) {
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const s = await freshSettings();
     const auth = s.auth || {};
+    // 2026-11-09 (owner): Security has its own tab: account state, 2FA, devices signed in, sign-in history.
+    let acTab = "account";
+    try { if (localStorage.getItem(AC_TAB_KEY) === "security") acTab = "security"; } catch (e) {}
     el.innerHTML = `
+      <div class="ach ac-page">
+      <div class="ach-tabs tabs-top" role="tablist" aria-label="${esc(t("page.account.label"))}">
+        <button type="button" role="tab" data-ac-tab="account" aria-controls="acPanelAccount" aria-selected="${acTab === "account"}" tabindex="${acTab === "account" ? 0 : -1}">${ic("user")}<span>${esc(t("sec.tab_account"))}</span></button>
+        <button type="button" role="tab" data-ac-tab="security" aria-controls="acPanelSecurity" aria-selected="${acTab === "security"}" tabindex="${acTab === "security" ? 0 : -1}">${ic("shield")}<span>${esc(t("sec.tab_security"))}</span><i class="ach-dot" id="secTabDot" aria-hidden="true"></i></button>
+      </div>
+      <div id="acPanelAccount" role="tabpanel" ${acTab === "account" ? "" : "hidden"}>
       <div class="cview-section">
         <h3>Workspace</h3>
         <div class="gcard" style="max-width:560px">
@@ -7209,6 +7303,7 @@
           <label class="js-lbl">${esc(window.t("common.account"))}</label><input class="js-input" id="acUser" value="${esc(auth.username || "")}" placeholder="${esc(window.t("cs.ac_user_ph"))}">
           ${auth.has_password ? '<label class="js-lbl">' + esc(window.t("cs.ac_cur_pw")) + '</label><input class="js-input" id="acCur" type="password" placeholder="' + esc(window.t("cs.ac_cur_pw_ph")) + '" autocomplete="current-password">' : ""}
           <label class="js-lbl">${esc(window.t(auth.has_password ? "cs.ac_new_pw" : "cs.ac_pw"))}</label><input class="js-input" id="acPass" type="password" autocomplete="new-password" placeholder="${esc(window.t(auth.has_password ? "cs.ac_new_pw_ph" : "cs.ac_pw_ph"))}">
+          <label class="js-lbl">${esc(window.t(auth.has_password ? "cs.ac_new_pw2" : "cs.ac_pw2"))}</label><input class="js-input" id="acPass2" type="password" autocomplete="new-password" placeholder="${esc(window.t("cs.ac_pw2_ph"))}">
           <div class="js-actions">
             <button class="gcard-btn" id="acSave">${esc(window.t(auth.has_password ? "cs.ac_change_pw" : "cs.ac_set_pw"))}</button>
             ${auth.has_password ? '<button class="gcard-btn ghost" id="acLogout">' + esc(window.t("cs.ac_logout")) + '</button><button class="gcard-btn ghost" id="acDisable">' + esc(window.t("cs.ac_disable")) + '</button>' : ""}
@@ -7216,70 +7311,56 @@
           <div class="gcard-meta" id="acStatus"></div>
         </div>
       </div>
-      ${auth.has_password ? `
-      <div class="cview-section">
-        <h3>${esc(window.t("cs.ac_2fa_head"))} <span style="opacity:.5">${esc(window.t("cs.ac_2fa_sub"))}</span></h3>
-        <div class="gcard tfa-card" style="max-width:560px" id="tfaCard">
-          <div class="gcard-meta" id="tfaHead">${esc(window.t("settings.checking"))}</div>
-          <div id="tfaBody"></div>
-          <div class="gcard-meta" id="tfaStatus"></div>
+      </div>
+      <div id="acPanelSecurity" role="tabpanel" ${acTab === "security" ? "" : "hidden"}>
+        <div class="cview-section">
+          <div class="gcard sec-card" style="max-width:560px" id="secOverview"><div class="gcard-meta pg-loading">${esc(t("common.loading"))}</div></div>
         </div>
-      </div>` : ""}
-      <div class="cview-section">
-        <h3>${esc(window.t("cs.ac_tk_head"))}${infoBtn()}</h3>
-        ${infoBody(`${esc(window.t("cs.ac_tk_intro_a"))} <b>Javis CLI</b> ${esc(window.t("cs.ac_tk_intro_b"))}`)}
-        <div class="gcard" style="max-width:560px">
-          <label class="js-lbl">${esc(window.t("cs.ac_tk_name"))}</label>
-          <input class="js-input" id="tkName" placeholder="${esc(window.t("cs.ac_tk_name_ph"))}">
-          <label class="js-lbl">${esc(window.t("cs.ac_tk_scope"))}</label>
-          <select class="js-input" id="tkScope">
-            <option value="chat">${esc(window.t("cs.ac_tk_scope_chat"))}</option>
-            <option value="full">${esc(window.t("cs.ac_tk_scope_full"))}</option>
-          </select>
-          <div class="js-actions"><button class="gcard-btn" id="tkCreate">${esc(window.t("cs.ac_tk_create"))}</button></div>
-          <div class="gcard-meta" id="tkStatus"></div>
-          <div id="tkNew"></div>
-          <div id="tkList" class="tk-list"></div>
-          <div class="tk-docs">
-            <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/24-cli-terminal.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_doc_cli"))} ↗</a>
-            <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/14-bao-mat-tai-khoan.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_doc_sec"))} ↗</a>
+        ${auth.has_password ? `
+        <div class="cview-section">
+          <h3>${esc(window.t("cs.ac_2fa_head"))} <span style="opacity:.5">${esc(window.t("cs.ac_2fa_sub"))}</span></h3>
+          <div class="gcard tfa-card" style="max-width:560px" id="tfaCard">
+            <div class="gcard-meta" id="tfaHead">${esc(window.t("settings.checking"))}</div>
+            <div id="tfaBody"></div>
+            <div class="gcard-meta" id="tfaStatus"></div>
+          </div>
+        </div>` : ""}
+        <div class="cview-section">
+          <h3 id="secDevHead">${esc(t("sec.devices_head"))}${infoBtn()}</h3>
+          ${infoBody(esc(t("sec.devices_info")))}
+          <div class="gcard" style="max-width:560px">
+            <div id="secSessions" class="sec-list"></div>
+            <div class="js-actions"><button class="gcard-btn ghost" id="secRevokeOthers">${esc(t("sec.revoke_others"))}</button></div>
+            <div class="gcard-meta" id="secSessStatus"></div>
           </div>
         </div>
+        <div class="cview-section">
+          <h3>${esc(t("sec.log_head"))}${infoBtn()}</h3>
+          ${infoBody(esc(t("sec.log_info")))}
+          <div class="gcard" style="max-width:560px">
+            <div class="sec-filters" role="group" aria-label="${esc(t("sec.log_head"))}">
+              ${[["all", t("sec.filter_all")], ["login", t("sec.filter_login")], ["change", t("sec.filter_change")], ["warn", t("sec.filter_warn")]].map(([f, label]) => `<button type="button" class="sec-chip" data-sec-filter="${f}" aria-pressed="${f === "all"}">${esc(label)}</button>`).join("")}
+            </div>
+            <div id="secLog" class="sec-list"></div>
+          </div>
+        </div>
+      </div>
       </div>`;
-    renderTokens();
-    document.getElementById("tkCreate").onclick = async () => {
-      const st = document.getElementById("tkStatus");
-      st.textContent = window.t("cs.ac_creating");
-      const fd = new FormData();
-      fd.append("name", document.getElementById("tkName").value.trim());
-      fd.append("scope", document.getElementById("tkScope").value);
-      let r;
-      try { r = await (await fetch("/auth/tokens", { method: "POST", body: fd })).json(); }
-      catch (e) { st.innerHTML = WARN_ICON + " " + esc(window.t("cs.ch_net_err")); return; }
-      if (!r.ok) { st.innerHTML = Icons.warn(r.error || window.t("cs.ac_tk_fail")); return; }
-      st.textContent = "";
-      document.getElementById("tkName").value = "";
-      // Bản thô hiện ĐÚNG một lần. Trên đĩa chỉ còn bản băm nên không có đường nào xem lại,
-      // và nói thẳng điều đó ra ngay tại đây thay vì để người dùng phát hiện lúc F5.
-      document.getElementById("tkNew").innerHTML = `
-        <div class="tk-new">
-          <div class="tk-new-hd">${OK_ICON} ${esc(window.t("cs.ac_tk_new_hd"))}</div>
-          <code class="tk-code" id="tkRaw">${esc(r.token || "")}</code>
-          <div class="js-actions">
-            <button class="gcard-btn" id="tkCopy">Copy</button>
-            <button class="gcard-btn ghost" id="tkHide">${esc(window.t("cs.ac_tk_hide"))}</button>
-          </div>
-          <div class="gcard-meta">${esc(window.t("cs.ac_tk_paste"))} <code>javis login ${esc(location.origin)} --token &lt;token&gt;</code></div>
-          <div class="gcard-meta">${esc(window.t("cs.ac_tk_nocli"))} <code>pip install javis-cli</code> · <a class="tk-doclink" href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/24-cli-terminal.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_tk_seedoc"))} ↗</a></div>
-        </div>`;
-      document.getElementById("tkCopy").onclick = () => {
-        const c = document.getElementById("tkCopy");
-        try { navigator.clipboard.writeText(r.token || ""); c.textContent = window.t("cs.ac_copied"); }
-        catch (e) { c.textContent = window.t("cs.ac_copy_manual"); }
+    el.querySelectorAll("[data-ac-tab]").forEach(b => {
+      b.onclick = () => {
+        const key = b.dataset.acTab;
+        try { localStorage.setItem(AC_TAB_KEY, key); } catch (e) {}
+        el.querySelectorAll("[data-ac-tab]").forEach(x => {
+          const on = x.dataset.acTab === key;
+          x.setAttribute("aria-selected", String(on));
+          x.tabIndex = on ? 0 : -1;
+        });
+        document.getElementById("acPanelAccount").hidden = key !== "account";
+        document.getElementById("acPanelSecurity").hidden = key !== "security";
+        if (key === "security") renderSecurity();
       };
-      document.getElementById("tkHide").onclick = () => { document.getElementById("tkNew").innerHTML = ""; };
-      renderTokens();
-    };
+    });
+    renderSecurity();
     const wsStatus = document.getElementById("acWsStatus");
     document.getElementById("acWsSave").onclick = async () => {
       wsStatus.textContent = window.t("settings.saving");
@@ -7294,11 +7375,14 @@
     document.getElementById("acSave").onclick = async () => {
       const user = document.getElementById("acUser").value.trim() || "admin";
       const pass = document.getElementById("acPass").value;
+      // Owner 2026-11-09: the new password is typed twice, so one typo cannot lock the owner out.
+      const pass2 = document.getElementById("acPass2").value;
       const curEl = document.getElementById("acCur");
       if (auth.has_password) {
         const cur = curEl ? curEl.value : "";
         if (!cur) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_need_cur")); return; }
         if (pass && pass.length < 8) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_pw_min_new")); return; }
+        if (pass !== pass2) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_pw_mismatch")); return; }
         if (!pass && user === (auth.username || "")) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_nochange")); return; }
         acStatus.textContent = window.t("settings.saving");
         const fd = new FormData();
@@ -7312,6 +7396,7 @@
           auth.username = r.username || user;
           if (curEl) curEl.value = "";
           document.getElementById("acPass").value = "";
+          document.getElementById("acPass2").value = "";
           document.getElementById("acUser").value = auth.username;
           const meta = document.getElementById("acAuthMeta");
           if (meta) meta.innerHTML = ic("lock") + " " + esc(window.t("cs.ac_pw_set")) + " <b>" + esc(auth.username) + "</b>";
@@ -7320,6 +7405,7 @@
         return;
       }
       if (!pass || pass.length < 8) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_pw_min")); return; }
+      if (pass !== pass2) { acStatus.innerHTML = WARN_ICON + " " + esc(window.t("cs.ac_pw_mismatch")); return; }
       acStatus.textContent = window.t("settings.saving");
       // /auth/setup cấp cookie ngay → tránh tự khoá khi bật auth lần đầu
       const fd = new FormData(); fd.append("username", user); fd.append("password", pass);
@@ -7347,6 +7433,133 @@
       };
     }
     renderTfa(el);
+  }
+
+  // ---- Security tab (2026-11-09, owner incident) ----
+  // Account state at a glance, the devices signed in (sign out one or all others) and the security log: every sign-in,
+  // failed attempt and account change, with IP and device. Data: GET /auth/security (browser session only).
+  const AC_TAB_KEY = "javis.account.tab";
+  const SEC_EVENT_GROUP = {
+    login_ok: "login", login_new_network: "login", login_fail: "login", login_2fa_fail: "login",
+    login_recovery_code: "login", login_locked: "login", logout: "login", sessions_revoked: "login",
+    setup: "change", username_changed: "change", password_changed: "change", "2fa_enabled": "change",
+    "2fa_disabled": "change", "2fa_recovery_regenerated": "change", token_created: "change", token_revoked: "change",
+    login_disabled: "change", env_account_created: "change", env_account_reset: "change", env_2fa_reset: "change",
+    auth_changed_outside: "change", agent_secret_blocked: "change",
+  };
+  let _secFilter = "all";
+
+  function secDevice(ua) {
+    ua = String(ua || "");
+    if (!ua) return t("sec.dev_unknown");
+    const has = (k) => ua.toLowerCase().includes(k.toLowerCase());
+    const br = [["Edg/", "Edge"], ["OPR/", "Opera"], ["Zalo", "Zalo"], ["Chrome/", "Chrome"], ["Firefox/", "Firefox"],
+      ["Safari/", "Safari"], ["curl/", "curl"], ["python", "Python"]].find(([k]) => has(k));
+    const os = [["iPhone", "iPhone"], ["iPad", "iPad"], ["Android", "Android"], ["Windows", "Windows"],
+      ["Mac OS", "macOS"], ["Linux", "Linux"]].find(([k]) => ua.includes(k));
+    return [br && br[1], os && os[1]].filter(Boolean).join(" · ") || ua.slice(0, 40);
+  }
+  const secWhen = (ts) => {
+    if (!(Number(ts) > 0)) return "";
+    const d = new Date(Number(ts) * 1000);
+    const other = d.getFullYear() !== new Date().getFullYear();
+    if (String(LOC()).startsWith("vi")) {
+      const p2 = (n) => String(n).padStart(2, "0");
+      return `${p2(d.getHours())}:${p2(d.getMinutes())} ${p2(d.getDate())}/${p2(d.getMonth() + 1)}${other ? "/" + d.getFullYear() : ""}`;
+    }
+    const o = { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" };
+    if (other) o.year = "numeric";
+    return d.toLocaleString(LOC(), o);
+  };
+  // Details the server writes as short English codes (security_log is read by people of any language).
+  const SEC_DETAIL = {
+    "unknown username": "sec.d_unknown_user", "wrong password": "sec.d_wrong_pw", "password": "sec.d_pw",
+    "password+2fa": "sec.d_pw_2fa", "setup": "sec.d_setup",
+  };
+  const secDetail = (v) => (SEC_DETAIL[v] ? t(SEC_DETAIL[v]) : (v || ""));
+
+  async function renderSecurity() {
+    const box = document.getElementById("secOverview");
+    if (!box) return;
+    let d;
+    try { d = await (await fetch("/auth/security")).json(); }
+    catch (e) { box.innerHTML = `<div class="gcard-meta">${WARN_ICON} ${esc(t("cs.ch_net_err"))}</div>`; return; }
+    if (!d || !d.ok) { box.innerHTML = `<div class="gcard-meta">${WARN_ICON} ${esc((d && d.error) || t("sec.read_err"))}</div>`; return; }
+    const rows = [];
+    const row = (ok, label, value) => rows.push(`<div class="sec-row ${ok === false ? "sec-bad" : ok === null ? "sec-warn" : ""}">
+      <span class="sec-ico">${ok === false ? WARN_ICON : ok === null ? ic("triangle-alert") : OK_ICON}</span>
+      <span class="sec-lbl">${esc(label)}</span><span class="sec-val">${value}</span></div>`);
+    if (d.outside_change) row(false, t("sec.ov_outside"), esc(secWhen(d.outside_change.ts)));
+    if (!d.has_password) row(false, t("sec.ov_password"), esc(t("sec.ov_password_none")));
+    row(d.totp_broken ? false : d.totp_enabled ? true : (d.public ? false : null), t("sec.ov_2fa"),
+      esc(t(d.totp_broken ? "sec.ov_2fa_broken" : d.totp_enabled ? "sec.ov_on" : "sec.ov_off")));
+    const ss = d.sessions || [];
+    row(true, t("sec.ov_devices"), `<b>${ss.length}</b>`);
+    const last = d.last_login;
+    row(true, t("sec.ov_last"), last ? esc([secWhen(last.ts), last.ip, secDevice(last.ua)].filter(Boolean).join(" · ")) : esc(t("sec.none")));
+    row(d.fails_7d > 0 ? null : true, t("sec.ov_fails"), `<b>${Number(d.fails_7d || 0)}</b>`);
+    row(true, t("sec.ov_tokens"), `<b>${Number(d.tokens || 0)}</b>`);
+    if (d.env_password_set) row(null, t("sec.ov_env_pw"), esc(t("sec.ov_env_pw_v")));
+    if (d.reset_2fa_env_set) row(null, t("sec.ov_env_reset"), esc(t("sec.ov_env_reset_v")));
+    box.innerHTML = rows.join("") + `<div class="gcard-meta">${infoPair(esc(t("sec.ov_info")))}</div>`;
+    const dot = document.getElementById("secTabDot");
+    const bad = !!d.outside_change || d.totp_broken || (d.public && !d.totp_enabled);
+    if (dot) dot.className = "ach-dot " + (bad ? "st-err" : d.totp_enabled ? "st-run" : "st-start");
+
+    // Devices
+    const sb = document.getElementById("secSessions");
+    if (sb) {
+      sb.innerHTML = ss.length ? ss.map(x => `<div class="sec-item">
+          <div class="sec-item-main"><b>${esc(secDevice(x.ua))}</b>${x.current ? ` <span class="sec-tag">${esc(t("sec.this_device"))}</span>` : ""}
+            <span class="sec-meta">${esc([x.last_ip || x.ip, t("sec.last_active") + " " + secWhen(x.last), t("sec.signed_in") + " " + secWhen(x.created)].filter(Boolean).join(" · "))}</span></div>
+          ${x.current ? "" : `<button class="gcard-btn ghost sec-end" data-id="${esc(x.id)}">${esc(t("sec.end_one"))}</button>`}
+        </div>`).join("") : `<div class="gcard-meta">${esc(t("sec.no_devices"))}</div>`;
+      sb.querySelectorAll(".sec-end").forEach(b => {
+        b.onclick = async () => {
+          const fd = new FormData(); fd.append("id", b.dataset.id || "");
+          try { await fetch("/auth/sessions/revoke", { method: "POST", body: fd }); } catch (e) {}
+          renderSecurity();
+        };
+      });
+    }
+    const ro = document.getElementById("secRevokeOthers");
+    if (ro) {
+      ro.disabled = ss.filter(x => !x.current).length === 0;
+      ro.onclick = async () => {
+        if (!confirm(t("sec.revoke_others_confirm"))) return;
+        const st = document.getElementById("secSessStatus");
+        const fd = new FormData(); fd.append("others", "1");
+        try {
+          const r = await (await fetch("/auth/sessions/revoke", { method: "POST", body: fd })).json();
+          if (st) st.innerHTML = r.ok ? OK_ICON + " " + esc(t("sec.revoked_n", { n: Number(r.ended || 0) })) : Icons.warn(r.error || t("cs.ac_err_dot"));
+        } catch (e) { if (st) st.innerHTML = WARN_ICON + " " + esc(t("cs.ch_net_err")); }
+        renderSecurity();
+      };
+    }
+
+    // Log
+    const paintLog = () => {
+      const lb = document.getElementById("secLog");
+      if (!lb) return;
+      const evs = (d.events || []).filter(e => _secFilter === "all"
+        || (_secFilter === "warn" ? e.level !== "info" : SEC_EVENT_GROUP[e.event] === _secFilter));
+      lb.innerHTML = evs.length ? evs.slice(0, 100).map(e => {
+        const key = "sec.ev." + e.event;
+        const name = t(key) === key ? e.event : t(key);
+        const meta = [secWhen(e.ts), e.ip, e.ua ? secDevice(e.ua) : "", e.user, secDetail(e.detail)].filter(Boolean).join(" · ");
+        return `<div class="sec-item sec-lv-${esc(e.level || "info")}">
+          <div class="sec-item-main"><b>${e.level === "info" ? "" : WARN_ICON + " "}${esc(name)}</b><span class="sec-meta">${esc(meta)}</span></div></div>`;
+      }).join("") : `<div class="gcard-meta">${esc(t("sec.log_empty"))}</div>`;
+    };
+    document.querySelectorAll("[data-sec-filter]").forEach(b => {
+      b.setAttribute("aria-pressed", String(b.dataset.secFilter === _secFilter));
+      b.onclick = () => {
+        _secFilter = b.dataset.secFilter;
+        document.querySelectorAll("[data-sec-filter]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+        paintLog();
+      };
+    });
+    paintLog();
   }
 
   // ---- Xác thực 2 lớp (TOTP) ----
@@ -7479,6 +7692,69 @@
     document.getElementById("tfaDone").onclick = () => location.reload();
   }
 
+  // ---- Token API (CLI, scripts) ----
+  // 2026-11-09 (owner): moved from the Account page to the Integrations page ("Tích hợp"), tab Token API. A token is a door for
+  // another program (the `javis` CLI, a script, cron) to call Javis, like a webhook, not part of the owner's own sign-in.
+  function renderTokenPanel(box) {
+    if (!box) return;
+    box.innerHTML = `
+      <div class="cview-section">
+        <div class="gcard-meta tk-intro">${infoPair(`${esc(window.t("cs.ac_tk_intro_a"))} <b>Javis CLI</b> ${esc(window.t("cs.ac_tk_intro_b"))}`)}</div>
+        <div class="gcard" style="max-width:560px">
+          <label class="js-lbl">${esc(window.t("cs.ac_tk_name"))}</label>
+          <input class="js-input" id="tkName" placeholder="${esc(window.t("cs.ac_tk_name_ph"))}">
+          <label class="js-lbl">${esc(window.t("cs.ac_tk_scope"))}</label>
+          <select class="js-input" id="tkScope">
+            <option value="chat">${esc(window.t("cs.ac_tk_scope_chat"))}</option>
+            <option value="full">${esc(window.t("cs.ac_tk_scope_full"))}</option>
+          </select>
+          <div class="js-actions"><button class="gcard-btn" id="tkCreate">${esc(window.t("cs.ac_tk_create"))}</button></div>
+          <div class="gcard-meta" id="tkStatus"></div>
+          <div id="tkNew"></div>
+          <div id="tkList" class="tk-list"></div>
+          <div class="tk-docs">
+            <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/24-cli-terminal.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_doc_cli"))} ↗</a>
+            <a href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/14-bao-mat-tai-khoan.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_doc_sec"))} ↗</a>
+          </div>
+        </div>
+      </div>
+`;
+    renderTokens();
+    document.getElementById("tkCreate").onclick = async () => {
+      const st = document.getElementById("tkStatus");
+      st.textContent = window.t("cs.ac_creating");
+      const fd = new FormData();
+      fd.append("name", document.getElementById("tkName").value.trim());
+      fd.append("scope", document.getElementById("tkScope").value);
+      let r;
+      try { r = await (await fetch("/auth/tokens", { method: "POST", body: fd })).json(); }
+      catch (e) { st.innerHTML = WARN_ICON + " " + esc(window.t("cs.ch_net_err")); return; }
+      if (!r.ok) { st.innerHTML = Icons.warn(r.error || window.t("cs.ac_tk_fail")); return; }
+      st.textContent = "";
+      document.getElementById("tkName").value = "";
+      // Bản thô hiện ĐÚNG một lần. Trên đĩa chỉ còn bản băm nên không có đường nào xem lại,
+      // và nói thẳng điều đó ra ngay tại đây thay vì để người dùng phát hiện lúc F5.
+      document.getElementById("tkNew").innerHTML = `
+        <div class="tk-new">
+          <div class="tk-new-hd">${OK_ICON} ${esc(window.t("cs.ac_tk_new_hd"))}</div>
+          <code class="tk-code" id="tkRaw">${esc(r.token || "")}</code>
+          <div class="js-actions">
+            <button class="gcard-btn" id="tkCopy">Copy</button>
+            <button class="gcard-btn ghost" id="tkHide">${esc(window.t("cs.ac_tk_hide"))}</button>
+          </div>
+          <div class="gcard-meta">${esc(window.t("cs.ac_tk_paste"))} <code>javis login ${esc(location.origin)} --token &lt;token&gt;</code></div>
+          <div class="gcard-meta">${esc(window.t("cs.ac_tk_nocli"))} <code>pip install javis-cli</code> · <a class="tk-doclink" href="https://github.com/thangvd-personal/javis-os-public/blob/main/docs/24-cli-terminal.md" target="_blank" rel="noopener">${esc(window.t("cs.ac_tk_seedoc"))} ↗</a></div>
+        </div>`;
+      document.getElementById("tkCopy").onclick = () => {
+        const c = document.getElementById("tkCopy");
+        try { navigator.clipboard.writeText(r.token || ""); c.textContent = window.t("cs.ac_copied"); }
+        catch (e) { c.textContent = window.t("cs.ac_copy_manual"); }
+      };
+      document.getElementById("tkHide").onclick = () => { document.getElementById("tkNew").innerHTML = ""; };
+      renderTokens();
+    };
+  }
+
   // Danh sách token. Chỉ có tiền tố + tên: máy chủ không giữ bản thô nên UI cũng không có gì
   // để hiện lại, và đó là điểm mạnh chứ không phải thiếu sót.
   async function renderTokens() {
@@ -7594,16 +7870,16 @@
     // 2FA, trong khi thật ra cổng đang đòi mã khôi phục (vụ 16/08).
     row.innerHTML = a.totp_broken
       ? `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-low">${esc(window.t("cs.tfa_row_broken"))}</b>`
-      + ` ${esc(window.t("cs.tfa_row_broken_b"))}`
-      + ` <button class="s-btn" data-settings-go="account">${esc(window.t("cs.tfa_row_fix"))}</button>`
+        + ` ${esc(window.t("cs.tfa_row_broken_b"))}`
+        + ` <button class="s-btn" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_fix"))}</button>`
       : a.totp_enabled
         ? `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-on">${esc(window.t("cs.tfa_row_on"))}</b>`
         + ` · ${esc(window.t("cs.tfa_row_left", { so: con }))}`
         + (con <= 2 ? ` <b class="tfa-low">${esc(window.t("cs.tfa_row_low"))}</b>` : "")
-        + ` <button class="s-btn-ghost" data-settings-go="account">${esc(window.t("cs.tfa_row_manage"))}</button>`
-        : `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-off">${esc(window.t("cs.tfa_row_off"))}</b>`
+        + ` <button class="s-btn-ghost" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_manage"))}</button>`
+      : `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-off">${esc(window.t("cs.tfa_row_off"))}</b>`
         + ` ${esc(window.t("cs.tfa_off_note2"))}`
-        + ` <button class="s-btn" data-settings-go="account">${esc(window.t("cs.tfa_row_enable"))}</button>`;
+        + ` <button class="s-btn" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_enable"))}</button>`;
   }
 
   // ---- Thẻ GIỌNG NÓI (0.65.19, docs/dev/2026-10-voice-call-spec.md mục 5) ----
@@ -7948,7 +8224,7 @@
       if (["all", "file", "chat", "unseen"].indexOf(saved.filter) >= 0) state.filter = saved.filter;
       if (["new", "views", "recent"].indexOf(saved.sort) >= 0) state.sort = saved.sort;
     } catch (e) {}
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     let links = [];
     try {
       const r = await fetch("/share/list");
@@ -8249,7 +8525,7 @@
   async function renderPetPage(el) {
     const gen = _renderGen;
     parkQuickSet();
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const s = await freshSettings();
     if (gen !== _renderGen) return;
     // MỘT CỘT, không phải lưới hai ô. Chủ dự án chốt 15/09: kiểu hai hàng hai ô trên điện
@@ -8448,7 +8724,7 @@
   async function renderSettings(el, tab = "general") {
     const gen = _renderGen;               // chốt token: nếu user đổi trang trong lúc await → bỏ render này
     parkQuickSet();                       // giữ #quickSet an toàn TRƯỚC khi ghi đè cviewBody
-    el.innerHTML = `<div class="cview-placeholder"><div class="ph-ico">${ic("loader", { cls: "ic-xl ic-spin" })}</div><div>${esc(t("common.loading"))}</div></div>`;
+    el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     const s = await freshSettings();
     if (gen !== _renderGen) return;       // đã sang trang khác → KHÔNG ghi đè trang mới bằng nội dung cũ
     const model = s.model || {};
@@ -8615,7 +8891,11 @@
     if (tab === "voice") renderVoiceCard();
 
     el.querySelectorAll("[data-settings-go]").forEach(btn => {
-      btn.onclick = () => navigateTo(btn.dataset.settingsGo);
+      btn.onclick = () => {
+        // 2FA now lives in Account > Security: open that tab, not the one visited last.
+        if (btn.dataset.acOpen) { try { localStorage.setItem(AC_TAB_KEY, btn.dataset.acOpen); } catch (e) {} }
+        navigateTo(btn.dataset.settingsGo);
+      };
     });
     const refreshSettings = () => { if (gen !== _renderGen) return; _settings = null; renderPage("settings"); };
     const graphToggle = document.getElementById("setGraphToggle");
@@ -9264,6 +9544,17 @@
   let _neOpenRel = "";         // file đang mở trong trình sửa (đường dẫn theo TRẦN DUYỆT)
   let _neLayNoiDung = null;    // () -> nội dung ĐANG soạn (markdown nếu là .md ở chế độ Sửa)
   let _neGocText = null;       // nội dung lúc VỪA MỞ, để biết có sửa gì chưa (xem _neCoSuaChua)
+  // Autosave and the dictation mic of the open text file (editor-autosave.js, editor-dictate.js, 2026-11-09).
+  let _neAuto = null;
+  let _neMic = null;
+  // Detach both from the file being left. The mic first, so words still being heard land in the text that close()
+  // writes. `discard` (the file was deleted) writes nothing.
+  function _neDropAssist(discard) {
+    const auto = _neAuto, mic = _neMic;
+    _neAuto = null; _neMic = null;
+    if (mic) { try { mic.destroy(); } catch (e) {} }
+    return auto ? auto.close(discard) : Promise.resolve(true);
+  }
   // Vệt đường đi giữa các note, y hệt lịch sử trình duyệt: bấm [[wikilink]] là đi tới, Lùi là
   // quay lại chỗ vừa đọc. Một mảng + một con trỏ, không phải hai ngăn xếp - dễ đọc hơn và
   // đúng ngữ nghĩa "đi tới giữa chừng thì cắt nhánh tiến".
@@ -9362,10 +9653,12 @@
 
   // Dựng lại cây nhưng GIỮ NGUYÊN các thư mục đang mở (thêm/sửa/xoá không làm sập cây).
   // revealDir (tuỳ chọn) = thư mục/tệp hoặc mảng các đường dẫn cần mở thêm để thấy file vừa tạo.
+  // keepCache (2026-11-11): redraw from the listings already loaded. Pinning a folder moves rows around but changes
+  // nothing on disk, so it must not cost one /files/list per open folder on a VPS.
   let _vtRebuilding = false;
   let _vtPendingReExpandDirs = null;
 
-  async function _vtRebuildReExpand(revealDir) {
+  async function _vtRebuildReExpand(revealDir, keepCache) {
     const tree = document.getElementById("vaultTree"); if (!tree) return;
     const searchInp = document.getElementById("vaultSearch");
     if (searchInp && searchInp.value && searchInp.value.trim() !== "") return;
@@ -9377,46 +9670,39 @@
     }
     _vtRebuilding = true;
     try {
-      const escSel = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"');
-      // 1. Ghi lại các thư mục đang mở (từ DOM hiện tại).
-      const wanted = new Set();
+      // 1. Ghi lại các thư mục đang mở (childBox không ẩn). A pinned folder can show twice (its row at the top and
+      // its usual place), so each one is remembered with the zone it was open in.
+      const wanted = new Map();
+      const want = (rel, pin) => { const key = (pin == null ? "" : pin ? "p:" : "t:") + rel; if (!wanted.has(key)) wanted.set(key, { rel, pin }); };
       tree.querySelectorAll(".vt-branch > .vt-children:not(.vt-hidden)").forEach(box => {
         const node = box.previousElementSibling;
-        if (node && node.dataset && node.dataset.rel) wanted.add(node.dataset.rel);
+        if (node && node.dataset && node.dataset.rel) want(node.dataset.rel, !!node.closest(".vt-pins"));
       });
-
-      // 1b. Khôi phục các thư mục đã mở từ localStorage của brain này
-      const savedOpen = _vtDocCacThuMucMo();
-      if (Array.isArray(savedOpen)) {
-        savedOpen.forEach(d => { if (d) wanted.add(d); });
-      }
-
-      // 1c. Khôi phục thư mục đã chọn từ localStorage của brain này
+      const fresh = !tree.querySelector(".vt-node");   // never drawn yet: the folders open by default still apply
       const savedSel = _vtDocThuMucDaChon();
-      if (savedSel) {
-        _themChuoiThuMucCha(savedSel, wanted);
-      }
-
-      // 2. Thêm chuỗi thư mục cha của revealDir (để thấy file mới dù thư mục đó đang đóng).
-      const rList = Array.isArray(revealDir) ? revealDir : (revealDir != null && revealDir !== "" ? [revealDir] : []);
-      for (const r of rList) {
-        _themChuoiThuMucCha(r, wanted);
-      }
-
-      // 3. Dựng lại gốc rồi mở lại từ NÔNG tới SÂU (cha trước con).
-      _vtCache.clear(); _vtIndex = null;
-      await _renderVaultTreeRoot();
-      const list = [...wanted].sort((a, b) => a.split("/").length - b.split("/").length);
-      for (const rel of list) {
-        const node = tree.querySelector(`.vt-node[data-rel="${escSel(rel)}"]`);
-        if (!node) continue;
-        const box = node.parentElement && node.parentElement.querySelector(":scope > .vt-children");
-        if (box && box.classList.contains("vt-hidden")) {
-          node.click();
-          for (let i = 0; i < 25 && (box.classList.contains("vt-hidden") || !box.children.length); i++) await new Promise(r => setTimeout(r, 30));
+      if (fresh) {
+        _vtDocCacThuMucMo().forEach(d => { if (d) want(d, null); });
+        if (savedSel) {
+          const tmp = new Set();
+          _themChuoiThuMucCha(savedSel, tmp);
+          tmp.forEach(d => want(d, null));
         }
       }
-
+      // 2. Thêm chuỗi thư mục cha của revealDir (để thấy file mới dù thư mục đó đang đóng).
+      const rList = Array.isArray(revealDir) ? revealDir : (revealDir != null && revealDir !== "" ? [revealDir] : []);
+      const pins = window.JavisVaultPins;
+      for (const rDir of rList) {
+        let inner;
+        if (_vtHome && rDir.indexOf(_vtHome + "/") === 0) inner = rDir.slice(_vtHome.length + 1);
+        else if (!_vtHome) inner = rDir;
+        else inner = (rDir === _vtHome ? "" : rDir);
+        // The chain starts at the nearest pinned folder on the way (its row at the top), else at the brain root.
+        pins.chain(inner, pins.current(fbrain()), _vtHome || "").forEach(rel => want(rel, null));
+      }
+      // 3. Dựng lại (tươi) rồi mở lại từ NÔNG tới SÂU (cha trước con).
+      if (!keepCache) { _vtCache.clear(); _vtIndex = null; }
+      await renderVaultTree({ keepState: !fresh });
+      await _vtOpenPaths([...wanted.values()].sort((a, b) => a.rel.split("/").length - b.rel.split("/").length));
       // 4. Khôi phục vị trí tô sáng thư mục hoặc file đã chọn
       const activeRel = _vtActivePath || savedSel;
       if (activeRel) _vtMarkActive(activeRel);
@@ -9431,21 +9717,98 @@
     }
   }
 
+  // Unfold these folders, in the order given (parents first). An entry is a tree path, or { rel, pin } to ask for
+  // the copy in the pinned zone (pin true) or in the tree below it (false); the other copy is the fallback, so a
+  // folder that was just pinned or unpinned stays open.
+  async function _vtOpenPaths(list) {
+    const tree = document.getElementById("vaultTree"); if (!tree) return;
+    const escSel = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"');
+    for (const entry of list) {
+      const rel = typeof entry === "string" ? entry : entry.rel;
+      const pin = typeof entry === "string" ? null : entry.pin;
+      const nodes = [...tree.querySelectorAll(`.vt-node[data-rel="${escSel(rel)}"]`)];
+      const node = (pin == null ? null : nodes.find(n => !!n.closest(".vt-pins") === pin)) || nodes[0];
+      if (!node) continue;
+      const box = node.parentElement && node.parentElement.querySelector(":scope > .vt-children");
+      if (box && box.classList.contains("vt-hidden")) {
+        node.click();
+        for (let i = 0; i < 25 && (box.classList.contains("vt-hidden") || !box.children.length); i++) await new Promise(r => setTimeout(r, 30));
+      }
+    }
+  }
+
   function _vtCreateMenu(button, rel, isDir) {
+    _vtMenu(button, [
+      { icon: "file-text", label: window.t("cs.vt_create_file"), run: () => _vtAddFile(rel, isDir) },
+      { icon: "folder", label: window.t("cs.vt_create_dir"), run: () => _vtAddFolder(rel, isDir) },
+    ]);
+  }
+
+  // Everything one row can do, in ONE menu behind its "..." button (owner, 2026-11-11: "there are getting to be many
+  // functions and the row is hard to read; gather them into a three-dot button that opens a pop-up"). Five buttons
+  // per row left the name half its width on a phone; now a row is its name and one button, and a new action is one
+  // more line here, not one more icon on every row.
+  function _vtRowMenu(button, rel, it, isDir) {
+    _vtMenu(button, [
+      { icon: "file-text", label: window.t(isDir ? "cs.vt_create_file" : "cs.vt_create_file_here"), run: () => _vtAddFile(rel, isDir) },
+      { icon: "folder-plus", label: window.t(isDir ? "cs.vt_create_dir" : "cs.vt_create_dir_here"), run: () => _vtAddFolder(rel, isDir) },
+      ...(!isDir ? [{ icon: "paperclip", label: window.t("cs.vt_attach_chat"), run: () => _vtAttachFile(rel, it.name) }] : []),
+      ..._vtPinItems(rel, isDir),
+      { sep: true },
+      { icon: "download", label: window.t(isDir ? "cs.fm_zip_btn" : "common.download"), run: () => { if (isDir) _dlFolder(rel, it.name); else _dlFile(rel); } },
+      { icon: "pencil", label: window.t("cs.fm_rename"), run: () => _vtRename(rel, it.name) },
+      { icon: "trash-2", label: window.t("common.delete"), danger: true, run: () => _vtDelete(rel, it.name, isDir) },
+    ]);
+  }
+
+  // Pin a folder to the top of the tree, or have it open when the tree loads (2026-11-11). Both are saved per brain
+  // on the server (vault-pins.js), so every device shows the same tree. Only a folder of the brain gets them.
+  function _vtPinItems(rel, isDir) {
+    const pins = window.JavisVaultPins;
+    const path = isDir ? pins.toBrain(rel, _vtHome || "") : null; if (!path) return [];
+    const prefs = pins.current(fbrain());
+    const pinned = pins.has(prefs.pinned, path), keptOpen = pins.has(prefs.open, path);
+    return [
+      { sep: true },
+      { icon: pinned ? "pin-off" : "pin", label: window.t(pinned ? "cs.vt_unpin" : "cs.vt_pin"), run: () => _vtTogglePref(rel, path, "pinned") },
+      { icon: keptOpen ? "folder" : "folder-open", label: window.t(keptOpen ? "cs.vt_open_off" : "cs.vt_open_on"), run: () => _vtTogglePref(rel, path, "open") },
+    ];
+  }
+
+  async function _vtTogglePref(rel, path, field) {
+    const pins = window.JavisVaultPins, brain = fbrain();
+    const next = pins.toggled(pins.current(brain), field, path);
+    const turnedOn = pins.has(next[field], path);
+    const saving = pins.save(brain, next);   // the tree redraws from the new lists right away, the request follows
+    await _vtRebuildReExpand(field === "open" && turnedOn ? rel : null, true);
+    const tree = document.getElementById("vaultTree");
+    if (tree && field === "pinned" && turnedOn) tree.scrollTop = 0;   // show where the folder went
+    if (!(await saving)) {
+      alert(window.t("app.err_net"));
+      await _vtRebuildReExpand(null, true);   // the lists went back to what the server has
+    }
+  }
+
+  // The small pop-up of the Vault tree. An item is { icon, label, run, danger } or { sep: true } (a thin line between
+  // groups). It opens under the button, or above it when there is no room below, and never leaves the screen.
+  function _vtMenu(button, items) {
     document.getElementById("vtCreateMenu")?.remove();
     const menu = document.createElement("div");
     menu.id = "vtCreateMenu"; menu.className = "vt-create-menu";
     menu.setAttribute("popover", "auto");
-    menu.innerHTML = `<button type="button">${ic("file-text")} ${esc(window.t("cs.vt_create_file"))}</button>`
-      + `<button type="button">${ic("folder")} ${esc(window.t("cs.vt_create_dir"))}</button>`;
-    menu.querySelectorAll("button").forEach((item, index) => {
-      item.onclick = () => { menu.remove(); if (index) _vtAddFolder(rel, isDir); else _vtAddFile(rel, isDir); };
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = items.map((item, index) => item.sep ? '<hr>'
+      : `<button type="button" role="menuitem" data-i="${index}"${item.danger ? ' class="danger"' : ""}>${ic(item.icon)} ${esc(item.label)}</button>`).join("");
+    menu.querySelectorAll("button").forEach(item => {
+      item.onclick = () => { menu.remove(); items[Number(item.dataset.i)].run(); };
     });
     document.body.appendChild(menu);
-    const rect = button.getBoundingClientRect();
-    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 220)) + "px";
-    menu.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 110)) + "px";
     menu.showPopover();
+    const rect = button.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+    const below = rect.bottom + 4;
+    const top = below + h <= window.innerHeight - 8 ? below : rect.top - h - 4;
+    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8)) + "px";
+    menu.style.top = Math.max(8, Math.min(top, window.innerHeight - h - 8)) + "px";
     menu.querySelector("button").focus();
     menu.addEventListener("toggle", () => { if (!menu.matches(":popover-open")) menu.remove(); });
   }
@@ -9481,15 +9844,24 @@
     const nn = prompt(window.t("cs.fm_new_name"), oldname);
     if (!nn || nn === oldname) return;
     const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel); fd.append("newname", nn);
-    try { await fetch("/files/rename", { method: "POST", body: fd }); } catch (e) { }
+    try { await fetch("/files/rename", { method: "POST", body: fd }); } catch (e) {}
+    await _vtReloadPins();
     await _vtRebuildReExpand(null);   // giữ nguyên các thư mục đang mở
   }
   async function _vtDelete(rel, name, isDir) {
     if (!confirm(window.t(isDir ? "cs.vt_del_dir" : "cs.vt_del_file", { ten: name }))) return;
+    if (_vtActivePath === rel || (_neOpenRel && (_neOpenRel === rel || _neOpenRel.startsWith(rel + "/")))) await _neDropAssist(true);
     const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel);
     try { await fetch("/files/delete", { method: "POST", body: fd }); } catch (e) { }
     if (_vtActivePath === rel) closeNote();
+    await _vtReloadPins();
     await _vtRebuildReExpand(null);   // giữ nguyên các thư mục đang mở
+  }
+  // A rename or a delete moves or drops the pinned / open-by-default entries on the server (vault_tree_prefs.moved):
+  // read them again, but only when this brain has any.
+  async function _vtReloadPins() {
+    const pins = window.JavisVaultPins, prefs = pins.current(fbrain());
+    if (prefs.pinned.length || prefs.open.length) await pins.load(fbrain(), true);
   }
 
   async function _vtAttachFile(rel, name) {
@@ -9534,37 +9906,27 @@
     }
   }
 
-  function _vtRowEl(it, parentPath, depth) {
+  // `pinnedFrom` (2026-11-11): this row is a pinned folder drawn at the top of the tree; the value is the brain path
+  // of the folder holding it ("" at the brain root), shown dimmed so two pinned folders of the same name tell apart.
+  function _vtRowEl(it, parentPath, depth, pinnedFrom) {
     const rel = parentPath ? parentPath + "/" + it.name : it.name;
     const isDir = it.type === "dir";
+    const pins = window.JavisVaultPins;
+    const brainPath = isDir ? pins.toBrain(rel, _vtHome || "") : null;   // null: not a folder of this brain
+    const pinned = !!brainPath && pins.has(pins.current(fbrain()).pinned, brainPath);
     const wrap = document.createElement("div"); wrap.className = "vt-branch";
     const node = document.createElement("div");
     node.className = "vt-node"; node.dataset.rel = rel; node.dataset.name = it.name;
     node.style.paddingLeft = (6 + depth * 13) + "px";
     node.innerHTML = `<span class="vt-chev ${isDir ? "" : "leaf"}">▸</span>`
       + `<span class="vt-ico">${isDir ? ic("folder") : _fileIcon(it.ext)}</span>`
-      + `<span class="vt-name">${esc(it.name)}</span>`
-      + `<span class="vt-act"><button data-a="add" title="${esc(window.t(isDir ? "cs.vt_add_in" : "cs.vt_add_same"))}">＋</button>`
-      + (!isDir ? `<button data-a="attach" title="${esc(window.t("cs.vt_attach_chat"))}">${ic("paperclip")}</button>` : "")
-      + `<button data-a="dl" title="${esc(window.t(isDir ? "cs.fm_zipfolder_title" : "cs.fm_dl_title"))}">⤓</button>`
-      + `<button data-a="ren" title="${esc(window.t("cs.fm_rename"))}">${ic("pencil")}</button><button data-a="del" title="${esc(window.t("common.delete"))}">${ic("trash-2")}</button></span>`;
+      + `<span class="vt-name">${esc(it.name)}${pinnedFrom ? ` <span class="vt-from">${esc(pinnedFrom)}</span>` : ""}</span>`
+      + (pinned ? `<span class="vt-pinmark" title="${esc(window.t("cs.vt_pinned"))}">${ic("pin")}</span>` : "")
+      + `<span class="vt-act"><button type="button" data-a="more" aria-haspopup="menu" title="${esc(window.t("cs.vt_more"))}" aria-label="${esc(window.t("cs.vt_more"))}">${ic("ellipsis")}</button></span>`;
     const selDir = _vtDocThuMucDaChon();
-    if (rel === _vtActivePath || (isDir && selDir && rel === selDir)) node.classList.add("active");
-    node.querySelectorAll(".vt-act button").forEach(b => b.onclick = (e) => {
-      e.stopPropagation();
-      const a = b.dataset.a;
-      if (a === "add") _vtCreateMenu(b, rel, isDir);
-      else if (a === "attach") {
-        _vtAttachFile(rel, it.name);
-        const old = b.innerHTML;
-        b.innerHTML = ic("check");
-        b.style.color = "var(--green, #10b981)";
-        setTimeout(() => { b.innerHTML = old; b.style.color = ""; }, 1000);
-      }
-      else if (a === "dl") { if (isDir) _dlFolder(rel, it.name); else _dlFile(rel); }
-      else if (a === "ren") _vtRename(rel, it.name);
-      else _vtDelete(rel, it.name, isDir);
-    });
+    if ((!isDir && rel === _vtActivePath) || (isDir && selDir && rel === selDir)) node.classList.add("active");
+    const more = node.querySelector('.vt-act button[data-a="more"]');
+    more.onclick = (e) => { e.stopPropagation(); _vtRowMenu(more, rel, it, isDir); };
     wrap.appendChild(node);
     if (isDir) {
       const childBox = document.createElement("div"); childBox.className = "vt-children vt-hidden";
@@ -9863,20 +10225,36 @@
     if (ve) ve.onclick = () => datVaultThu(false);
   }
 
-  async function _renderVaultTreeRoot() {
+  // Pinned folders come first, in a zone of their own (.vt-pins), then the brain root as it is on disk. The folders
+  // marked "open by default" unfold on a fresh draw; `keepState` (a redraw after an edit) leaves that to the caller,
+  // which reopens exactly what was open, so a folder the user just closed does not spring back.
+  // A fresh draw (page load, Refresh, another brain, a change made on the Files page) also asks the server for the
+  // two lists again, so a pin made on another device or a folder renamed elsewhere shows without reloading the page.
+  async function renderVaultTree(opts) {
     const tree = document.getElementById("vaultTree"); if (!tree) return;
     _vtWire();
     tree.hidden = false;
     const results = document.getElementById("vaultResults"); if (results) results.hidden = true;
-    tree.innerHTML = `<div class="vt-info">${esc(window.t("common.loading"))}</div>`;
-    const items = await _vtList(null);
+    tree.innerHTML = `<div class="vt-info pg-loading">${esc(window.t("common.loading"))}</div>`;
+    const pins = window.JavisVaultPins, fresh = !(opts && opts.keepState);
+    const [items, prefs] = await Promise.all([_vtList(null), pins.load(fbrain(), fresh)]);
     tree.innerHTML = "";
     if (!items.length) { tree.innerHTML = `<div class="vt-info">${esc(window.t("cs.vt_vault_empty"))}</div>`; return; }
-    items.forEach(it => tree.appendChild(_vtRowEl(it, _vtHome || "", 0)));
-  }
-
-  async function renderVaultTree() {
-    await _vtRebuildReExpand(null);
+    const home = _vtHome || "";
+    const parts = pins.splitRoot(items, prefs, home);
+    if (parts.pinned.length) {
+      const zone = document.createElement("div"); zone.className = "vt-pins";
+      parts.pinned.forEach(p => zone.appendChild(_vtRowEl(p.item, p.parent, 0, pins.toBrain(p.parent, home) || "")));
+      tree.appendChild(zone);
+    }
+    parts.rest.forEach(it => tree.appendChild(_vtRowEl(it, home, 0)));
+    if (fresh) await _vtOpenPaths(pins.openPlan(prefs, home));
+    if (fresh) {
+      const savedOpen = _vtDocCacThuMucMo();
+      if (savedOpen.length) await _vtOpenPaths(savedOpen);
+      const activeRel = _vtActivePath || _vtDocThuMucDaChon();
+      if (activeRel) _vtMarkActive(activeRel);
+    }
   }
 
   function _vtMarkActive(rel) {
@@ -9885,7 +10263,7 @@
     tree.querySelectorAll(".vt-node.active").forEach(n => n.classList.remove("active"));
     if (rel) {
       const sel = (window.CSS && CSS.escape) ? CSS.escape(rel) : rel.replace(/"/g, '\\"');
-      const n = tree.querySelector(`.vt-node[data-rel="${sel}"]`); if (n) n.classList.add("active");
+      tree.querySelectorAll(`.vt-node[data-rel="${sel}"]`).forEach(n => n.classList.add("active"));
     }
   }
 
@@ -9949,6 +10327,7 @@
     // Đóng trình sửa ở trang Trò chuyện = trả chỗ lại cho khung chat. Không trả thì khung chat
     // vẫn bị ẩn và người dùng nhìn vào một trang trống, tưởng chat hỏng.
     _returnNoteEditor();
+    _neDropAssist();   // closing writes what is still unsaved (2026-11-09), read before the editor is emptied
     document.getElementById("neBody").innerHTML = ""; document.getElementById("neActions").innerHTML = "";
     // Thanh link chia se cua file VUA DONG khong duoc dinh sang file mo ke tiep.
     const _neSh = document.getElementById("neShare");
@@ -9985,6 +10364,7 @@
   async function _neDeleteCur(rel, it) {
     const name = (it && it.name) || rel.split("/").pop();
     if (!confirm(window.t("cs.vt_del_file", { ten: name }))) return;
+    await _neDropAssist(true);   // a pending autosave must not recreate the file after it is deleted
     const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel);
     try { await fetch("/files/delete", { method: "POST", body: fd }); } catch (e) { }
     // Ghim trỏ tới file vừa xoá thì bỏ, đừng để Javis đi mở một đường dẫn không còn tồn tại.
@@ -10364,6 +10744,8 @@
     if (_neOpenRel && _neOpenRel !== (rel || "") && _neCoSuaChua()) {
       if ((await _neSaveFn()) === false) return;   // lưu hỏng thì ở lại, lỗi hiện trên nút Lưu
     }
+    // Write what the old file still has pending (also when this same file is opened again, before it is read back).
+    await _neDropAssist();
     const laLichSu = _neDangDiLichSu;
     _neDangDiLichSu = false;
     if (!laLichSu) _neDayLichSu(rel, it);
@@ -10436,6 +10818,10 @@
         : `<div class="ne-src"><textarea id="neText" spellcheck="false"></textarea></div>`;
       const ta = document.getElementById("neText"); ta.value = d.content || "";
       let mdGetter = null;
+      let auto = null;                                 // this file's autosave, created below
+      const pokeAuto = () => { if (auto) auto.poke(); };
+      let applyText = (txt) => { ta.value = txt; };    // puts a restored draft into the editor
+      let micTarget = () => ({ kind: "ta", el: ta });
       if (isMd) {
         const wys = document.getElementById("neWys");
         // Thu muc chua CHINH file nay: de ![](anh.jpg) trong note nam o thu muc con tim anh
@@ -10449,11 +10835,11 @@
         wys.addEventListener("jv-task-toggle", () => { if (_neSaveFn) _neSaveFn(); });
         const wysToSrc = () => { const md = _mdFromHtml(wys.innerHTML); if (md != null) ta.value = md; };
         const srcToWys = () => { wys.innerHTML = window.mdToHtml ? window.mdToHtml(ta.value, null, { trinhSua: true, thuMuc: neThuMuc }) : esc(ta.value); };
+        applyText = (txt) => { ta.value = txt; srcToWys(); if (demLai) demLai(); };
+        micTarget = () => (curMode === "wys" ? { kind: "wys", el: wys } : { kind: "ta", el: ta });
         let demLai = null;
-        _neBuildToolbar(body.querySelector(".ne-fmt"), {
-          mode: () => curMode, ta, wys,
-          onChange: () => { if (demLai) demLai(); }
-        });   // thanh công cụ chạy cả 2 chế độ
+        _neBuildToolbar(body.querySelector(".ne-fmt"), { mode: () => curMode, ta, wys,
+          onChange: () => { if (demLai) demLai(); pokeAuto(); } });   // thanh công cụ chạy cả 2 chế độ
         // Đếm chữ HIỆN RA: chế độ Sửa lấy chữ của bản render, chế độ Mã nguồn bỏ cú pháp markdown.
         demLai = _neGanDemTu(body.querySelector(".ne-fmt"),
           () => (curMode === "wys" ? { text: wys.innerText, md: false } : { text: ta.value, md: true }), [ta, wys]);
@@ -10489,27 +10875,61 @@
       const saveBtn = document.createElement("button"); saveBtn.innerHTML = SAVE_ICON + " " + esc(window.t("common.save")); saveBtn.title = window.t("cs.ne_save_title");
       // Mốc so sánh "đã sửa gì chưa": lấy SAU khi dựng xong khung soạn, tức là bản đã vòng
       // qua markdown một lượt - xem chú thích ở `_neCoSuaChua`.
-      _neLayNoiDung = () => (mdGetter ? mdGetter() : ta.value);
+      const getter = () => (mdGetter ? mdGetter() : ta.value);
+      _neLayNoiDung = getter;
       try { _neGocText = _neLayNoiDung(); } catch (e) { _neGocText = null; }
-      // Trả true/false chứ không nuốt kết quả: chỗ gọi tự động (rời file, bấm Lùi) phải biết
-      // lưu có ăn không để quyết định có đi tiếp hay ở lại.
-      _neSaveFn = async () => {
-        const content = _neLayNoiDung();
+      // One write of the file. Autosave, Save, Ctrl+S and every "save before leaving" path go through it. Returns
+      // true/false: the automatic callers (leaving the file, Back) decide from it whether to go on or stay.
+      const write = async (content, o) => {
         const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel); fd.append("content", content);
         try {
-          const r = await (await fetch("/files/write", { method: "POST", body: fd })).json();
+          const r = await (await fetch("/files/write", { method: "POST", body: fd, keepalive: !!(o && o.keepalive) })).json();
           if (r.ok) {
-            saveBtn.innerHTML = CHECK_ICON + " " + esc(window.t("cs.ne_saved")); saveBtn.classList.add("ne-saved");
-            setTimeout(() => { saveBtn.innerHTML = SAVE_ICON + " " + esc(window.t("common.save")); saveBtn.classList.remove("ne-saved"); }, 1400);
-            _neGocText = content;   // vừa lưu = mốc mới, không thì rời file lại lưu lần nữa
+            if (_neLayNoiDung === getter) _neGocText = content;   // vừa lưu = mốc mới, không thì rời file lại lưu lần nữa
             return true;
           }
-          saveBtn.innerHTML = WARN_ICON + " " + esc(window.t("app.err_cap"));
-        } catch (e) { saveBtn.innerHTML = WARN_ICON + " " + esc(window.t("app.err_cap")); }
+        } catch (e) { /* the autosave keeps the words and tries again */ }
         return false;
       };
-      saveBtn.onclick = _neSaveFn;
+      // The button shows the autosave state, like Google Docs: Save, Saving..., Saved, or the error.
+      const paintSave = (st) => {
+        saveBtn.classList.toggle("ne-saved", st === "saved");
+        saveBtn.classList.toggle("ne-save-err", st === "error");
+        saveBtn.innerHTML = st === "saved" ? CHECK_ICON + " " + esc(window.t("cs.ne_saved"))
+          : st === "saving" ? SAVE_ICON + " " + esc(window.t("cs.ne_saving"))
+          : st === "error" ? WARN_ICON + " " + esc(window.t("cs.ne_save_err"))
+          : SAVE_ICON + " " + esc(window.t("common.save"));
+        saveBtn.title = window.t(st === "error" ? "cs.ne_save_err_title" : "cs.ne_save_title");
+      };
+      if (window.JavisAutosave) {
+        auto = window.JavisAutosave.attach({
+          key: fbrain() + "::" + rel,
+          original: d.content || "",
+          get: getter,
+          baseline: _neGocText,
+          save: write,
+          sources: [ta, document.getElementById("neWys")],
+          apply: applyText,
+          onStatus: paintSave,
+          onRestored: () => { try { toast(window.t("cs.ne_draft_restored")); } catch (e) {} },
+        });
+        _neAuto = auto;
+        _neSaveFn = () => auto.flush();
+      } else {
+        _neSaveFn = async () => { const ok = await write(getter()); paintSave(ok ? "saved" : "error"); return ok; };
+      }
+      saveBtn.onclick = () => _neSaveFn();
       actions.appendChild(saveBtn);
+      // Mic: speak and the words land at the cursor (editor-dictate.js), same recorder as the chat box. Prose files
+      // only (.md, .txt): dictating into JSON or code is not something anyone asked for.
+      if (window.JavisEditorDictate && (isMd || ext === ".txt")) {
+        _neMic = window.JavisEditorDictate.attach({
+          host: body.querySelector(".ne-fmt") || actions,
+          target: micTarget,
+          onChange: pokeAuto,
+        });
+        if (!body.querySelector(".ne-fmt")) actions.insertBefore(_neMic.button, saveBtn);
+      }
       _neCommonBtns(actions, rel, it);
       _vtMarkActive(isMd ? rel : null);
       if (!body.classList.contains("mode-preview")) ta.focus();   // a preview needs no keyboard (phones)
@@ -10688,6 +11108,8 @@
     // Trang đầu của thiết bị là Trò chuyện; các lần sau quay lại đúng khung đang dùng.
     // Khôi phục ngay, trước các lời gọi mạng ở freshSettings, để tránh nháy màn Javis.
     khoiPhucTrang();
+    // 2026-11-09: the start-up screen waits from here for the first page's own "Loading..." lines to go (boot-splash.js).
+    try { if (window.JavisBoot) window.JavisBoot.pageStarted(); } catch (e) {}
 
     freshSettings().then(async s => {
       // Máy này CHƯA chọn ngôn ngữ (i18n đang đoán theo trình duyệt): ngôn ngữ đã lưu trên

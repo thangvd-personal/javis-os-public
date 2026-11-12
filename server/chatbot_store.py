@@ -55,7 +55,8 @@ _SLUG_CAM = re.compile(r"[/\\\x00-\x1f\x7f]")           # tách đường dẫn 
 # là chữ số nên đã khớp nhánh đầu.
 # Zalo Bot group ids carry a "zgr-" prefix (e.g. "zgr-72749471121efb40a20f", #875, 0.379.0).
 # Without it here "Allow this group" returned OK while the id was silently dropped.
-_CHAT_ID_RE = re.compile(r"^(-?\d{1,20}|(?:zgr-)?[0-9a-fA-F]{8,40}|[CGDUW][A-Z0-9]{6,20})$")
+# A WeChat follower is an OpenID: "o" then 27 letters, digits, "-" or "_" (e.g. "o6_bmjrPTlm6_2sgVt7hMZOPfL2M").
+_CHAT_ID_RE = re.compile(r"^(-?\d{1,20}|(?:zgr-)?[0-9a-fA-F]{8,40}|[CGDUW][A-Z0-9]{6,20}|o[0-9A-Za-z_-]{20,40})$")
 
 # Kênh nhắn tin của bot. Trường này có từ 0.20.0 nhưng ghim cứng "telegram"; 0.26.5 cho nó
 # thành lựa chọn thật; 0.61.0 đọc từ SỔ ĐĂNG KÝ KÊNH (`channels`) thay vì chép ở đây: kênh nào
@@ -501,6 +502,13 @@ def clean_bat(v: Any) -> bool:
     return v is True or str(v if v is not None else "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def group_typing_on(cfg: dict) -> bool:
+    """Personal Zalo: show "đang soạn tin" in groups once the bot has decided to answer (09/11/2026). On when the
+    owner never set it, so existing bots get it without a visit to the form."""
+    v = (cfg or {}).get("group_typing")
+    return True if v is None or str(v).strip() == "" else clean_bat(v)
+
+
 SKIP_LABELS_MAX = 30
 SKIP_LABEL_LEN = 60
 
@@ -808,14 +816,14 @@ def _clean_account_ids(v: Any, exclude_bot: str = "") -> tuple[list[str], str]:
     return out, ""
 
 
-def account_limit_error(ids: List[str]) -> str:
+def account_limit_error(ids: list[str]) -> str:
     """Error text when `ids` holds more accounts of one channel than one bot may serve, else "".
 
     The cap is per channel (`channels.max_accounts_per_bot`): 100 Facebook Pages (Instagram rides on the Page), 20 for
     a channel that polls or holds a session per account. Before this the list was cut to its first 20 without a word,
     so ticking 26 Pages saved 20 and the other 6 were left with no bot while the form said "saved" (owner
     2026-11-04). Refusing the whole list keeps the bot as it was and tells the owner which channel is over."""
-    dem: Dict[str, int] = {}
+    dem: dict[str, int] = {}
     for x in ids or []:
         kenh = str((channel_accounts.get_account(x) or {}).get("channel") or "")
         dem[kenh] = dem.get(kenh, 0) + 1
@@ -975,6 +983,8 @@ def create_bot(data: dict) -> tuple[str | None, str]:
             # Tự nhận lời mời kết bạn và đọc lời giới thiệu (0.172.0, chỉ Zalo cá nhân). Mặc định TẮT: nhận kết bạn
             # là hành động ra ngoài dưới tên chủ, chỉ bật khi chủ chọn.
             "nhan_ket_ban": clean_bat(data.get("nhan_ket_ban")),
+            # "Đang soạn tin" in groups once the bot decided to answer (personal Zalo, 09/11/2026). Default ON.
+            "group_typing": group_typing_on(data),
             # Zalo chat labels the bot stays out of (0.281.0, personal Zalo only), e.g. family and friends.
             "skip_labels": clean_skip_labels(data.get("skip_labels")),
             "handoff_to": str(data.get("handoff_to") or "").strip(),
@@ -1018,7 +1028,8 @@ def _nhan_brain_cho_tk(bot: dict) -> None:
 _PATCHABLE = ("name", "icon", "groups", "people", "audience", "reply_when", "handoff_to",
               "agent_slug", "agent_brain", "brain", "bot_username", "token", "enabled",
               "nguon_tra_loi", "muc_quyen", "ngon_ngu", "account_ids", "reply_policy", "gio_truc",
-              "nhuong_tay_phut", "ngoai_le", "nhan_ket_ban", "skip_labels", "blocked")
+              "nhuong_tay_phut", "ngoai_le", "nhan_ket_ban", "skip_labels", "blocked",
+              "group_typing")
 # `channel` CỐ Ý đứng ngoài danh sách trắng. Đổi kênh của một bot đã tạo là đổi sang một CON
 # BOT KHÁC: token khác, danh tính khác, khách khác, và cả đống id nhóm đang lưu lập tức vô
 # nghĩa. Cho sửa tại chỗ thì bản ghi còn nguyên tên và lịch sử của con cũ trong khi nó đã là
@@ -1123,6 +1134,8 @@ def update_bot(bot_id: str, patch: dict) -> tuple[bool, str]:
                     b["ngoai_le"] = ngoai_le_moi     # checked at the top, risk gate included
                 elif k == "nhan_ket_ban":
                     b["nhan_ket_ban"] = clean_bat(v)
+                elif k == "group_typing":
+                    b["group_typing"] = group_typing_on({"group_typing": v})
                 elif k == "skip_labels":
                     b["skip_labels"] = clean_skip_labels(v)
 

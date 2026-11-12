@@ -995,8 +995,10 @@ class QualificationQueryBoundaryTests(unittest.TestCase):
         # never the host's unrelated installed RECORD inventory or Win32 runtime.
         # The production inventory/RECORD validator still reads every fixture.
         fixture=NativeReleaseTests('runTest');fixture.setUp();self.addCleanup(fixture.doCleanups)
-        local={path.stem for path in SERVER.rglob('*.py')}
+        state_root=SERVER/'state'
+        local={path.stem for path in SERVER.rglob('*.py') if not path.is_relative_to(state_root)}
         external={name.split('.')[0] for path in SERVER.rglob('*.py')
+            if not path.is_relative_to(state_root)
             for name in release._imports(path.read_bytes(),path.relative_to(SERVER).as_posix())
             if name.split('.')[0] not in local | set(sys.stdlib_module_names) | set(sys.builtin_module_names)}
         _,modules=release._catalog(fixture.packages)

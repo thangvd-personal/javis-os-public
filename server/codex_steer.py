@@ -321,7 +321,7 @@ def _instr_path() -> Path:
     return Path(STATE_DIR) / _INSTR_FILE
 
 
-def _instr_threads() -> List[str]:
+def _instr_threads() -> list[str]:
     try:
         data = json.loads(_instr_path().read_text(encoding="utf-8"))
         return [str(x) for x in data] if isinstance(data, list) else []
@@ -371,7 +371,7 @@ def _codex_account(home: str) -> str:
         return "-"
 
 
-def _fingerprint(cli, args: List[str]) -> str:
+def _fingerprint(cli, args: list[str]) -> str:
     """What the warm process was opened with. The thread id is part of it: a rotated or reset thread runs cold."""
     import hashlib
     try:
@@ -390,13 +390,13 @@ def _fingerprint(cli, args: List[str]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _args(cli, turn_key: Optional[str]) -> List[str]:
+def _args(cli, turn_key: str | None) -> list[str]:
     """argv of app-server. `turn_key` is the `-c` carrying the hub turn key (a lane's fixed key on a warm process)."""
     import claude_cli as cc
     _acct_home = getattr(cli, "codex_home", None)   # extra ChatGPT account (plan_accounts, 0.353.0)
     overrides = profile_overrides(cli.profile, Path(_acct_home) if _acct_home else cc._codex_home())
     args = [cli.cli_path]
-    for c in overrides + list(cli.extra_config or []):
+    for c in overrides + list(cli.extra_config or []) + cc.codex_windows_sandbox_config(cli.sandbox, _acct_home):
         args += ["-c", c]
     if turn_key:
         args += ["-c", turn_key]
@@ -407,7 +407,7 @@ def _args(cli, turn_key: Optional[str]) -> List[str]:
     return args
 
 
-def _turn_key(cli, lane) -> Optional[str]:
+def _turn_key(cli, lane) -> str | None:
     if not cli.hub_turn:
         return None
     try:
@@ -419,7 +419,7 @@ def _turn_key(cli, lane) -> Optional[str]:
         return None
 
 
-def _spawn(args: List[str], cwd: str, acct_home, tag: str = ""):
+def _spawn(args: list[str], cwd: str, acct_home, tag: str = ""):
     import claude_cli as cc
     env = cc.codex_env(acct_home)
     if tag:
@@ -759,14 +759,17 @@ async def run(cli, prompt: str) -> AsyncIterator[dict]:
                 lane.close()
 
 
-def _recipe(cli, args: List[str], acct_home, thread_id: str):
+def _recipe(cli, args: list[str], acct_home, thread_id: str):
     """How to reopen this process for a prewarm: same argv, same thread, resumed. The instructions live on the thread."""
     cwd, params = cli.cwd, {**_thread_params(cli), "threadId": thread_id, "excludeTurns": True}
     tag = str(getattr(cli, "tag", "") or "")
-    lane_arg = next((a for a in args if a.startswith("mcp_servers.javis.http_headers.")), None)
+    import turn_context
+    # Match the turn header ONLY. The flattened hub profile also puts `...http_headers.Authorization=` (and
+    # `X-Javis-Mode`, `X-Javis-Vault`) in args, ahead of the turn key: matching the bare `http_headers.` prefix swapped
+    # the hub Bearer for the lane key, so every prewarmed process got 401 from /hub/mcp and ran without Javis tools (#1220).
+    lane_arg = next((a for a in args if a.startswith(turn_context.CODEX_HEADER_KEY + "=")), None)
 
     async def _open() -> CodexHandle:
-        import turn_context
         lane = turn_lane.Lane() if lane_arg else None
         argv = [(f'{turn_context.CODEX_HEADER_KEY}="{lane.key}"' if (lane and a == lane_arg) else a) for a in args]
         proc = _spawn(argv, cwd, acct_home, tag)

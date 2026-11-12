@@ -47,6 +47,34 @@ def test_classify_auth_thang_net_khi_ca_hai_khop():
     assert kind == "auth"
 
 
+def test_status_code_inside_a_path_is_not_a_status():
+    # 2026-11-10: a missing binary under a folder whose name held "401" (a CI temp folder named after the runner's
+    # pid) was shown as "sign-in expired". A code counts only when it stands alone.
+    for err in ("FileNotFoundError: [Errno 2] No such file or directory: '/tmp/jt-24013-ab/no-such-binary'",
+                "FileNotFoundError: [Errno 2] No such file or directory: '/home/u401/bin/server'",
+                "[WinError 2] The system cannot find the file specified: 'C:\\Users\\a\\app-401\\srv.exe' (ENOENT)",
+                "process exited with code 1 (cwd /srv/401/javis)"):
+        kind, _ = connect_health.classify_error(err)
+        assert kind == "spawn", (kind, err)
+    # A path that holds 503 and nothing else recognisable is unknown, not "the service is not answering".
+    kind, _ = connect_health.classify_error("ValueError: bad manifest at /opt/packs/v503/pack.yaml")
+    assert kind == "unknown", kind
+
+
+def test_real_status_codes_still_classify():
+    for err in ("HTTP 401", "401 Unauthorized", "(401)", "status_code=401", "error: 401, please sign in",
+                "Client error '401 ' for url 'https://api.example.com/mcp'"):
+        kind, _ = connect_health.classify_error(err)
+        assert kind == "auth", (kind, err)
+    for err in ("HTTP 502 Bad Gateway", "upstream returned 503", "status=504"):
+        kind, _ = connect_health.classify_error(err)
+        assert kind == "net", (kind, err)
+    kind, msg = connect_health.classify_error("HTTP 401 from Composio", {"connector_id": "composio"})
+    assert kind == "auth" and "Composio" in msg
+    kind, msg = connect_health.classify_error("No such file: /tmp/jt-24013/x", {"connector_id": "composio"})
+    assert kind == "spawn", kind
+
+
 # ---- check_one / sweep với pool giả ----
 
 class _FakePool:
@@ -55,7 +83,7 @@ class _FakePool:
         self.raise_error = raise_error
         self.calls = 0
 
-    async def list_tools(self, spec):
+    async def list_tools(self, spec, fresh=False):
         self.calls += 1
         if self.raise_error:
             raise self.raise_error
@@ -112,7 +140,7 @@ def test_sweep_mot_conn_loi_khong_giet_ca_vong(monkeypatch):
         return [_conn("ok1"), _conn("die1"), _conn("ok2")]
 
     class _PickyPool(_FakePool):
-        async def list_tools(self, spec):
+        async def list_tools(self, spec, fresh=False):
             self.calls += 1
             if spec["key"] == "die1":
                 raise RuntimeError("timed out")

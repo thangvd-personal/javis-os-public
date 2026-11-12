@@ -258,9 +258,11 @@ check("không kêu oan biến cục bộ bình thường",
 # 2. Quét mã thật
 # ============================================================
 _file_ma = []
+_STATE_DIR = SERVER / "state"
 for goc in CAY_MA:
     if goc.is_dir():
-        _file_ma += sorted(p for p in goc.rglob("*.py") if "__pycache__" not in p.parts)
+        _file_ma += sorted(p for p in goc.rglob("*.py")
+                           if "__pycache__" not in p.parts and not p.is_relative_to(_STATE_DIR))
 check("tìm thấy cây mã nguồn để quét", len(_file_ma) > 20)
 
 _loi_nonlocal, _loi_ten, _loi_cu_phap = [], [], []

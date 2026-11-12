@@ -21,16 +21,16 @@ function check(name, cond) {
 check("vi.json có khóa cs.vt_attach_chat", !!viJson["cs.vt_attach_chat"]);
 check("en.json có khóa cs.vt_attach_chat", !!enJson["cs.vt_attach_chat"]);
 
-// 2. Kiểm tra _vtRowEl render nút attach cho file
-check("console.js có nút attach data-a=\"attach\" trong vt-act", conSrc.indexOf('data-a="attach"') !== -1);
-check("nút attach dùng icon paperclip", /data-a="attach"[^>]*>\$\{ic\("paperclip"\)\}/.test(conSrc));
-check("nút attach dùng i18n cs.vt_attach_chat", conSrc.indexOf('cs.vt_attach_chat') !== -1);
-check("chỉ hiện nút attach cho file (!isDir)", /!isDir\s*\?\s*`<button data-a="attach"/.test(conSrc));
+// 2. Kiểm tra _vtRowMenu có hành động đính kèm cho file
+check("console.js có mục paperclip đính kèm trong _vtRowMenu",
+  conSrc.indexOf('icon: "paperclip", label: window.t("cs.vt_attach_chat")') !== -1);
+check("chỉ hiện mục attach cho file (!isDir)",
+  /!isDir\s*\?\s*\[\{\s*icon:\s*"paperclip",\s*label:\s*window\.t\("cs\.vt_attach_chat"\)/.test(conSrc));
 
-// 3. Kiểm tra xử lý click attach và animation feedback
-check("xử lý click data-a === \"attach\"", conSrc.indexOf('else if (a === "attach")') !== -1);
-check("gọi _vtAttachFile khi click", /_vtAttachFile\(rel,\s*it\.name\)/.test(conSrc));
-check("chuyển icon sang check khi click thành công", /b\.innerHTML = ic\("check"\)/.test(conSrc));
+// 3. Kiểm tra _vtRowMenu gọi _vtAttachFile khi chọn mục đính kèm
+check("gọi _vtAttachFile khi chọn Đính kèm trong menu", /run:\s*\(\)\s*=>\s*_vtAttachFile\(rel,\s*it\.name\)/.test(conSrc));
+check("gọi _vtAttachFile khi click nút vr-attach", /_vtAttachFile\(it\.path,\s*it\.name\)/.test(conSrc));
+check("chuyển icon vr-attach sang check khi click thành công", /attBtn\.innerHTML = ic\("check"\)/.test(conSrc));
 
 // 4. Kiểm tra hàm _vtAttachFile
 check("có hàm _vtAttachFile", /async function _vtAttachFile\(/.test(conSrc));

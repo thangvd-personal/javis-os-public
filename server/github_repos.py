@@ -35,7 +35,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import brain_ident
 import coding_store
+import git_setup
 import localefmt
 import winproc
 from config import STATE_DIR
@@ -244,7 +246,8 @@ def status() -> dict[str, Any]:
         # Never for an app sign-in: it has no scopes, and a stale flag stored by 0.430.0 to 0.432.1 is dropped here.
         "missing": [] if conn.get("source") == "app" else list(conn.get("missing") or []),
         "backup_token": bool(backup_token()),
-        "has_git": shutil.which("git") is not None,
+        # git_setup also finds a git installed after this server started (PATH of a running process never updates).
+        "has_git": git_setup.available(),
         # "Sign in with GitHub": where to pick repos, and how many accounts the app is on (-1 unknown).
         "install_url": _oauth_install_url(),
         "installs": _installs(tok) if (tok and conn.get("source") == "app") else -1,
@@ -379,14 +382,27 @@ def clone_path(brain_root: str, full_name: str) -> Path:
     return REPOS_DIR / _brain_slug(brain_root) / owner / name
 
 
+def _same_brain(stored: Any, brain: str) -> bool:
+    """A record belongs to `brain` whichever spelling either side uses (#1109). A chat turn passes the alias "brain"
+    for the default brain while the dashboard saved the record with its folder ("/brains/Brain Default"); comparing
+    the strings hid the record, so the gate ran CI's commands instead of the saved ones and the GitHub card listed
+    nothing. brain_ident never folds an unknown folder into the default brain."""
+    return stored == brain or brain_ident.same_brain(stored, brain)
+
+
 def list_local(brain: str = "") -> list[dict[str, Any]]:
-    return [dict(r) for r in _load()["repos"] if not brain or r.get("brain") == brain]
+    return [dict(r) for r in _load()["repos"] if not brain or _same_brain(r.get("brain"), brain)]
 
 
 def find(brain: str, full_name: str) -> dict[str, Any] | None:
     fn = norm_full_name(full_name).lower()
-    for r in _load()["repos"]:
-        if r.get("brain") == brain and str(r.get("full_name") or "").lower() == fn:
+    same_name = [r for r in _load()["repos"] if str(r.get("full_name") or "").lower() == fn]
+    # The exact spelling first: an older install may hold one record per spelling of the same brain.
+    for r in same_name:
+        if r.get("brain") == brain:
+            return dict(r)
+    for r in same_name:
+        if _same_brain(r.get("brain"), brain):
             return dict(r)
     return None
 
@@ -924,14 +940,14 @@ def set_auto_merge(brain: str, full_name: str, on: bool) -> dict[str, Any]:
     return {"full_name": rec["full_name"], "auto_merge": bool(on)}
 
 
-def review_settings(rec: Dict[str, Any]) -> Dict[str, Any]:
+def review_settings(rec: dict[str, Any]) -> dict[str, Any]:
     """Cross review of one repo (owner, 08/11/2026: "the person decides, not Javis"). Off by default; when on, Javis
     reviews each green commit before merging, on `provider` when one is pinned, else on the background model."""
     r = rec.get("review") if isinstance(rec.get("review"), dict) else {}
     return {"on": r.get("on") is True, "provider": str(r.get("provider") or "")}
 
 
-def set_review(brain: str, full_name: str, on: bool, provider: str = "") -> Dict[str, Any]:
+def set_review(brain: str, full_name: str, on: bool, provider: str = "") -> dict[str, Any]:
     rec = find(brain, full_name)
     if not rec:
         raise RepoError(_c(f"Brain này không có repo {full_name}.", f"This brain has no repo {full_name}."))

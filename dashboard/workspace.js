@@ -156,6 +156,9 @@
   // Auto is on right now. Same leading-space trick as TAG_NONE, so it never clashes with a real tag.
   var TAG_AUTO = " auto";
   function autoBat(rs, slug) { var r = rs && rs[slug]; return !!(r && r.enabled && r.status === "active"); }
+  // An assistant whose file went away (`missing`) or that was retired can never be "on", yet its Auto block is the only
+  // place holding the two confirm buttons ("same assistant" / "new assistant") and its old goals. So it counts as shown.
+  function autoBlocked(rs, slug) { var r = rs && rs[slug]; return !!(r && (r.status === "missing" || r.status === "retired")); }
   // Javis Core's Auto is always on (owner, 05/11/2026): its row shows the switch on even before the server's list is in.
   function coreAutoRow(x) {
     var r = S.rs[x.slug] || {};
@@ -317,7 +320,7 @@
   var S = { loai: "agent", q: "", nhom: "", thu: docThu(), agents: [], workflows: [], chon: { agent: null, workflow: null },
             el: null, tienDo: {}, sessionCuaPhien: {}, tabPhai: "lichsu",
             // T0 nhóm chat team: trạng thái Cộng hưởng theo slug, và các dòng đang chờ server trả lời.
-            rs: {}, rsSaving: {},
+            rs: {}, rsSaving: {}, packSaving: {},
             // Huy hiệu việc theo slug (Đang làm, Cần bạn), tách khỏi công tắc Auto: Auto tắt vẫn có thể có việc Đang làm.
             jc: {},
             // 0.205.0: unread count, newest message time and mute per partner (GET /agents/unread).
@@ -507,6 +510,12 @@
     S.tagNote = result && result.ok ? null
       : { loi: true, msg: t("resonance.t0_failed", { error: (result && result.error) || "" }) };
   }
+  // The Auto state of the brain just arrived: the cards, and the line under the filter bar that asks about a whole
+  // pack (it appears and goes with that state, so it is redrawn with the cards).
+  function drawAutoState() {
+    if (S.el) veThanhNhom(S.el);
+    veDanhSach();
+  }
   async function taiDanhSach() {
     var lan = lanDung, b0 = brain();
     var b = encodeURIComponent(b0);
@@ -521,13 +530,18 @@
     }
     // T0 nhóm chat team: trạng thái Cộng hưởng của MỌI trợ lý trong một request riêng (không gọi theo từng dòng), đọc
     // SAU khi danh sách đã có: tới đâu vẽ lại tới đó. Chưa về hay lỗi thì dòng không có công tắc (không đoán).
-    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") { veDanhSach(); veAuto(dangChon()); } });
+    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") { drawAutoState(); veAuto(dangChon()); } });
     loadJobCounts().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
     loadUnread().then(function (ok) { if (ok && active && S.loai === "agent") veDanhSach(); });
     S.agents = sapXep(r[0].agents, "last_chat_at");
     S.workflows = sapXep(r[1].workflows.filter(function (w) { return w.status === "active"; }), "last_run_at");
     daTai = true;
     return true;
+  }
+
+  // A small "Loading..." line with a spinner (.pg-loading in console.css), shared look with the Teams page.
+  function dangTaiHtml(key) {
+    return '<div class="pg-loading" role="status" aria-live="polite">' + esc(t(key)) + '</div>';
   }
 
   // ---------- dựng khung ----------
@@ -572,7 +586,9 @@
             // thì Esc ở đây đóng mất file đang mở thay vì xoá chữ đang gõ.
             '<input class="ws-search" id="wsSearch" data-esc' + (S.q ? "" : " hidden") + ' value="' + esc(S.q) + '" placeholder="' + esc(t("ws.search_ph")) + '">' +
           '</div>' +
-          '<div class="ws-list" id="wsList"></div>' +
+          // 2026-11-09 (owner): "Đang tải" while the list is on its way, instead of an empty column people took for
+          // a frozen page. veDanhSach replaces it with the list (or the empty-state text once loaded).
+          '<div class="ws-list" id="wsList">' + dangTaiHtml("ws.loading_list") + '</div>' +
           '<div class="ws-resize ws-resize-left" data-resize="left" role="separator" aria-orientation="vertical" tabindex="0" ' +
             'aria-label="' + esc(t("ws.resize_list")) + '" title="' + esc(t("ws.resize_hint")) + '"></div>' +
           '<div class="ws-left-foot"><button type="button" class="ws-btn" id="wsNew">' + ic("plus") + ' ' + esc(t("ws.new_item")) + '</button>' +
@@ -588,7 +604,7 @@
             // phải chạy gen_icons tải mạng - lật gương panel-left bằng CSS rẻ hơn mà cùng nghĩa.
             '<button type="button" class="ws-ico lat" id="wsRightBtn" title="' + esc(t("ws.toggle_panel")) + '">' + ic("panel-left") + '</button>' +
           '</div>' +
-          '<div class="ws-id" id="wsIdentity"></div>' +
+          '<div class="ws-id" id="wsIdentity">' + dangTaiHtml("ws.loading_chat") + '</div>' +
           // Màn khởi đầu: danh sách rỗng thì không có phiên nào để mở, ô nhập bị khoá, nên
           // chỗ khung chat là hai nút tạo. Nằm TRƯỚC #wsSlot trong DOM cho thuận mắt, còn
           // khung chat thì ẩn đi bằng lớp .onboard-on (xem console.css).
@@ -913,10 +929,36 @@
       // Kết quả thao tác tag (gộp tag, lỗi một phần) nằm ngay dưới thanh, sống tới lần thao tác kế.
       (S.tagNote ? '<div class="ws-tag-note' + (S.tagNote.loi ? " loi" : "") + '" role="status">' +
         esc(S.tagNote.msg) + '<button type="button" class="ws-tag-note-x" title="' + esc(t("common.close")) + '">' +
-        ic("x") + '</button></div>' : '');
+        ic("x") + '</button></div>' : '') +
+      // 2026-11-11: assistants of one Store pack that wait for "same assistant?" are answered with one button here,
+      // not card by card (resonance-agent.js draws the line; nothing waits, nothing is drawn).
+      packConfirmHtml();
     var cur = bar.querySelector(".cs-proj-cur"); if (cur) cur.onclick = function (e) { moBangTag(e.currentTarget); };
     var x = bar.querySelector(".cs-proj-x"); if (x) x.onclick = function () { chonNhom(""); };
     var nx = bar.querySelector(".ws-tag-note-x"); if (nx) nx.onclick = function () { S.tagNote = null; veThanhTag(bar); };
+    bar.querySelectorAll("[data-pack-confirm]").forEach(function (b) {
+      b.onclick = function () { confirmPackAuto(b.getAttribute("data-pack-confirm"), bar); };
+    });
+  }
+  function packConfirmHtml() {
+    var RA = window.JavisResonanceAgent;
+    if (!RA || !RA.packConfirmHtml) return "";
+    var rows = Object.keys(S.rs || {}).map(function (k) { return S.rs[k]; });
+    return RA.packConfirmHtml(RA.missingByPack(rows), S.packSaving);
+  }
+  // One click answers "same assistant" for the whole pack. Locked while the request is out; a failure says why under
+  // the bar. The reload of the real state comes from the event confirmPack always fires.
+  function confirmPackAuto(packId, bar) {
+    var RA = window.JavisResonanceAgent;
+    if (!RA || !RA.confirmPack || !packId || S.packSaving[packId]) return false;
+    S.packSaving[packId] = true; veThanhTag(bar);
+    RA.confirmPack(packId).then(function (result) {
+      delete S.packSaving[packId];
+      S.tagNote = result && result.ok ? null
+        : { loi: true, msg: t("resonance.pack_confirm_failed", { error: (result && result.error) || "" }) };
+      if (active && S.el) veThanhNhom(S.el);
+    });
+    return true;
   }
   function moBangTag(neo) {
     var cs = window.JavisChatSide; if (!cs || !cs.menu) return;
@@ -1049,6 +1091,8 @@
     var ds = loc(danhSach(), S.q, S.nhom, laTag, S.rs), chon = S.chon[S.loai];
     var host = el.querySelector("#wsList");
     var trong = (S.q || S.nhom || laTag) ? [] : docNhomTrong();
+    // Not loaded yet (a tab switch or a toggle before the first list arrived): still loading, not "nothing here".
+    if (!daTai && !ds.length) { host.innerHTML = dangTaiHtml("ws.loading_list"); return; }
     if (!ds.length && !trong.length) {
       var nhomTrong = !laTag && !!(S.nhom && !S.q && docNhomTrong().indexOf(S.nhom) >= 0);
       host.innerHTML = '<div class="ws-empty">' + esc(t(nhomTrong ? "ws.group_empty_hint" : "ws.empty")) + '</div>';
@@ -1675,7 +1719,15 @@
     // 2026-11-08 (customer report: "chỉ bấm vào chat là không được"): the chat box stays locked until this open ends,
     // so an open that hangs (a read that never answers) left a locked box with no word on screen. Past OPEN_WAIT_MS the
     // error and its Retry show; the box still unlocks by itself if the open finishes after all.
-    var slow = setTimeout(function () { if (still() && !ready) veLoi(t("ws.err_session_slow")); }, OPEN_WAIT_MS);
+    // #1213: while fetch-gop.js is trying reads again its reconnect band is on screen, so the error waits for the
+    // retries to end instead of firing in the middle of them (they alone can take about 10 s).
+    var slow;
+    var slowCheck = function () {
+      if (!still() || ready) return;
+      if (reconnecting()) { slow = setTimeout(slowCheck, OPEN_RECHECK_MS); return; }
+      veLoi(t("ws.err_session_slow"));
+    };
+    slow = setTimeout(slowCheck, OPEN_WAIT_MS);
     try {
       // Performance (2026-11-05): the right column (settings form, Auto block, history list) belongs to the PARTNER, not
       // to one chat. New conversation and a history click keep the same partner, so it is not rebuilt: rebuilding it
@@ -1686,7 +1738,8 @@
       var b = encodeURIComponent(brain()), ch = kenh(item), id = sidChiDinh || null;
       if (!id && !moiHan && item.system) {
         // Javis Core: open the brain's default chat, the one reports land in (the server makes it when missing).
-        var c = await api("/javis-core/session", { method: "POST", body: fd({ brain: brain() }) });
+        var c = await api("/javis-core/session", { method: "POST", body: fd({ brain: brain() }),
+                                                   signal: abortAfter(CORE_SESSION_WAIT_MS) });
         if (!still()) return false;
         id = c && c.id;
       }
@@ -1735,7 +1788,23 @@
       clearTimeout(slow);
     }
   }
-  var OPEN_WAIT_MS = 12000;
+  // 16 s: a batched read may wait ANSWER_WAIT_MS (4 s) before going to the server on its own, and the open makes a few
+  // reads in a row. 12 s showed the error on opens that were only slow, never stuck (#1213).
+  var OPEN_WAIT_MS = 16000;
+  var OPEN_RECHECK_MS = 2000;
+  // The Javis Core POST is never retried by fetch-gop.js and had no limit: a connection that hung kept the open waiting
+  // for good (#1213). Past this it is cut and the error with its Retry shows.
+  var CORE_SESSION_WAIT_MS = 15000;
+  function reconnecting() {
+    try { return !!(window.JavisFetchGop && window.JavisFetchGop.retrying && window.JavisFetchGop.retrying()); }
+    catch (e) { return false; }
+  }
+  function abortAfter(ms) {
+    if (typeof AbortController !== "function") return undefined;
+    var c = new AbortController();
+    setTimeout(function () { try { c.abort(); } catch (e) {} }, ms);
+    return c.signal;
+  }
   function clearOpenError() {
     var el = S.el && S.el.querySelector("#wsIdentity"); if (!el) return;
     el.querySelectorAll(".ws-err, #wsRetry").forEach(function (n) { n.remove(); });
@@ -2054,12 +2123,14 @@
   }
   // Khối Cộng hưởng của trợ lý (resonance-agent.js). Biết phiên đang mở để server nói được phiên này dùng được mã
   // hiện tại không; "Mở cuộc trò chuyện mới" đi đúng đường mở phiên của trang (moPhien), không tự chuyển phiên cũ.
-  // The Auto block of one assistant: goals and pulse, only while its Auto switch (left row) is on. Off means nothing to
-  // show, so the column stays the plain settings form.
+  // The Auto block of one assistant: goals and pulse, while its Auto switch (left row) is on. Off means nothing to
+  // show, so the column stays the plain settings form. A `missing` or `retired` assistant shows it too: the row's
+  // "Auto: needs confirming" button opens this column, and the confirm buttons live in this block (0.521.0 hid them).
   function veAuto(item) {
     var box = S.el && S.el.querySelector("#wsAuto");
     if (!box || !item) return;
-    if (!window.JavisResonanceAgent || !(item.system || autoBat(S.rs, item.slug))) { box.innerHTML = ""; return; }
+    var show = item.system || autoBat(S.rs, item.slug) || autoBlocked(S.rs, item.slug);
+    if (!window.JavisResonanceAgent || !show) { box.innerHTML = ""; return; }
     if (box.querySelector("#wsResonance")) return;
     box.innerHTML = '<div class="rsa-panel" id="wsResonance"></div><div class="rsa-panel pulse-panel" id="wsPulse"></div>';
     ganCongHuong(item);
@@ -2282,7 +2353,7 @@
   window.JavisWorkspace = { gioNgan: gioNgan, render: render, roi: roi, openCommand: openCommand, openTab: openTab, onTurnDone: onTurnDone, canSend: function () { return !active || ready; }, dungKhiChuaCoTuDien: function () { return dungKhiChuaCoTuDien; }, onChatState: onChatState, chayQuyTrinh: chayQuyTrinh, onWfEvent: onWfEvent, sapXep: sapXep, loc: loc, tienDoMoi: tienDoMoi, apDung: apDung, phanTram: phanTram,
     dangChay: dangChay, tabPhai: chonTabPhai, gomNhom: gomNhom, nhomHtml: nhomHtml, chonNhom: chonNhom, state: function () { return S; },
     tagsCua: tagsCua, tagCap: tagCap, laKhoa: laKhoa, demTag: demTag, coTag: coTag, khoaTag: khoaTag,
-    dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE, TAG_AUTO: TAG_AUTO, TAG_HIDDEN: TAG_HIDDEN, laLocGia: laLocGia, autoBat: autoBat,
+    dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE, TAG_AUTO: TAG_AUTO, TAG_HIDDEN: TAG_HIDDEN, laLocGia: laLocGia, autoBat: autoBat, autoBlocked: autoBlocked,
     resonanceMap: resonanceMap, afterToggle: afterToggle, tinHtml: tinHtml, tatDen: tatDen, xuatMuc: xuatMuc };
   // Sidebar lịch sử mở phiên trực tiếp qua JavisSessions.open, ngoài đường moPhien ở trên.
   // Ghi lại sau khi nó mở xong để lần dựng trang sau vẫn ở đúng cuộc đã chọn.
@@ -2295,7 +2366,7 @@
   window.addEventListener("javis:order-changed", function () { if (active && ready) veDanhSach(); });
   window.addEventListener("javis:resonance-agents-changed", function () {
     if (!active) return;
-    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") { veDanhSach(); veAuto(dangChon()); } });
+    loadResonance().then(function (ok) { if (ok && active && S.loai === "agent") { drawAutoState(); veAuto(dangChon()); } });
     henDemViec();
   });
   // Huy hiệu việc trên thẻ trợ lý theo cùng các sự kiện với tab Công việc (gộp nhịp 800ms).

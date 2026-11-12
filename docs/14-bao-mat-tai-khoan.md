@@ -8,7 +8,7 @@ Trang này giải thích cách Javis OS tự bảo vệ khi bạn đưa nó lên
 
 Javis chạy bộ não AI với **toàn quyền trên máy/VPS** của bạn: nó đọc được tệp, chạy lệnh, gọi công cụ. Vì thế nếu để dashboard hở ra Internet mà không có mật khẩu thì bất kỳ ai biết địa chỉ cũng điều khiển được máy của bạn.
 
-Javis xử lý việc này theo 6 lớp:
+Javis xử lý việc này theo 7 lớp:
 
 1. **Tự bắt buộc đăng nhập khi chạy public.** Khi server nghe ra ngoài (không phải chỉ máy này), Javis chặn mọi chức năng cho tới khi bạn đăng nhập. Chạy trên máy cá nhân (localhost) thì không ép, dùng thẳng như cũ.
 2. **Đặt admin sớm, rồi bật xác thực 2 lớp.** Màn chạy lần đầu chỉ hỏi tên đăng nhập và mật khẩu, nên trên server public **ai mở link trước khi có admin sẽ tạo được admin**. Đặt sẵn admin qua biến môi trường (hoặc tạo tài khoản ngay sau khi deploy), rồi bật 2FA (TOTP) ở trang **Tài khoản**.
@@ -16,16 +16,25 @@ Javis xử lý việc này theo 6 lớp:
 4. **Chặn trang web lạ sai khiến Javis (CSRF) và chặn tên miền lạ trỏ về máy bạn (DNS-rebinding).** Xem mục riêng bên dưới.
 5. **Mã hoá khoá bí mật lưu trong `settings.json`.** API key, token Telegram, token GitHub... không nằm dạng chữ thô trên đĩa.
 6. **Token API cho CLI và script, mặc định KHÔNG có cái nào.** Cookie đăng nhập chỉ hợp với trình duyệt; muốn gọi Javis từ terminal thì phải tự tay tạo token, chọn phạm vi, và thu hồi được bất cứ lúc nào. Xem mục riêng bên dưới.
+7. **Chặn công cụ tìm kiếm và bot AI.** Lỡ lộ link quản trị ra ngoài thì Google không đưa lên kết quả tìm kiếm, bot AI không đọc được gì, kể cả màn hình đăng nhập. Xem mục riêng bên dưới.
 
 ## Mở ở đâu trong Javis
 
-Mọi thao tác tài khoản nằm ở mục **Tài khoản** trong nhóm **Hệ thống** trên thanh nav bên trái (phụ đề "Đăng nhập, workspace, token API"). Trang **Cài đặt** có một khối rút gọn làm được ba việc hay dùng nhất (đổi mật khẩu, đăng xuất, tắt đăng nhập) cùng một dòng trạng thái xác thực 2 lớp; những thứ còn lại như bật 2 lớp hay token API chỉ có ở trang **Tài khoản**.
+Mọi thao tác tài khoản nằm ở mục **Tài khoản** trong nhóm **Hệ thống** trên thanh nav bên trái. Trang **Cài đặt** có một khối rút gọn làm được ba việc hay dùng nhất (đổi mật khẩu, đăng xuất, tắt đăng nhập) cùng một dòng trạng thái xác thực 2 lớp; bật 2 lớp và xem lịch sử đăng nhập ở tab **Bảo mật** của trang **Tài khoản**. Token API cho CLI và script nằm ở trang **Tích hợp** (nhóm **Việc**), tab **Token API**.
 
-Trang **Tài khoản** có 3 khối:
+Trang **Tài khoản** có 2 tab.
+
+Tab **Tài khoản**:
 
 - **Workspace**: đổi tên workspace hiển thị.
 - **Tài khoản đăng nhập**: đặt mật khẩu, đăng xuất, tắt đăng nhập.
-- **Token API (cho CLI)**: tạo và thu hồi token để [Javis CLI](24-cli-terminal.md) hay script gọi được Javis. Nằm cùng trang vì token cũng là một cách đăng nhập, chỉ khác là dành cho máy chứ không cho trình duyệt.
+
+Tab **Bảo mật** (từ bản sau sự cố 09/11/2026):
+
+- **Tổng quan**: 2FA bật hay chưa, số thiết bị đang đăng nhập, lần đăng nhập gần nhất (giờ, IP, thiết bị), số lần đăng nhập sai trong 7 ngày, số token API. Dòng đỏ khi file cài đặt từng bị sửa từ ngoài Javis, dòng vàng khi `JAVIS_ADMIN_PASSWORD` hay `JAVIS_RESET_2FA` còn nằm trong biến môi trường.
+- **Xác thực 2 lớp**: bật, tắt, tạo lại mã khôi phục.
+- **Thiết bị đang đăng nhập**: mỗi trình duyệt một dòng (thiết bị, IP, lần hoạt động cuối). Đăng xuất từng cái, hoặc bấm **Đăng xuất mọi thiết bị khác** mà không cần đổi mật khẩu.
+- **Lịch sử đăng nhập và bảo mật**: mọi lần đăng nhập đúng và sai, đăng xuất, đổi tên hay mật khẩu, bật tắt 2FA, tạo token, đặt lại qua biến môi trường, file cài đặt bị sửa từ ngoài, lần trợ lý AI bị chặn khi định đụng file bí mật. Lọc theo Đăng nhập, Thay đổi, Cảnh báo.
 
 ## Khi nào Javis bắt buộc đăng nhập
 
@@ -126,6 +135,45 @@ Lưu ý: nếu server vẫn đang chạy public (hoặc bạn đặt `JAVIS_REQU
 2. Ở khối **Workspace**, sửa **Tên workspace**.
 3. Bấm **Lưu**. Tên mới hiển thị ngay trên đầu dashboard.
 
+## Nhật ký bảo mật và báo động
+
+Javis ghi mỗi sự kiện bảo mật thành một dòng trong `security_log.jsonl` ở thư mục state (Docker: `/data/state`), nên nhật ký **còn nguyên sau khi cập nhật hay Redeploy**, khác với log của container. Mỗi dòng có giờ, IP, trình duyệt, tên đăng nhập đã gõ và chi tiết. Không bao giờ ghi mật khẩu, mã 2FA hay token. Đằng sau Caddy hoặc Traefik, IP là địa chỉ thật của người truy cập chứ không phải của proxy.
+
+Các sự kiện sau được **báo ngay cho chủ** (chuông, thông báo đẩy, Telegram của chủ):
+
+- Đăng nhập từ một mạng chưa từng thấy (cùng dải /24 thì không tính là mới, để điện thoại đổi trạm không báo liên tục).
+- Đăng nhập bằng mã khôi phục 2FA.
+- Đổi tên đăng nhập, đổi mật khẩu, bật hay tắt 2FA, tạo lại mã khôi phục, tạo token API, tắt đăng nhập.
+- Tài khoản được tạo hoặc đặt lại từ biến môi trường, 2FA bị gỡ bằng `JAVIS_RESET_2FA`.
+- **File cài đặt bị sửa từ bên ngoài Javis** (xem dưới).
+
+### Phát hiện file cài đặt bị sửa từ ngoài
+
+Mỗi lần Javis tự ghi tài khoản (đổi mật khẩu, bật 2FA...), nó lưu một dấu vân tay của khối tài khoản vào `.auth_stamp.json`. Nếu tên đăng nhập, mật khẩu hay 2FA trong `settings.json` đổi mà KHÔNG qua Javis (ai đó vào terminal của máy chủ rồi sửa file), Javis thấy dấu vân tay lệch trong vòng vài giây, **đăng xuất mọi thiết bị**, ghi sự kiện và báo cho chủ. Trước đây sửa file kiểu này không đăng xuất ai, nên chủ máy có thể không hay biết.
+
+Đây là lớp phát hiện, không phải lớp chặn: người đã có quyền ghi file trên máy chủ vẫn sửa được. Nó cho bạn biết NGAY để xử lý theo mục "Khi nghi bị chiếm quyền" bên dưới. Chính bạn sửa file qua SSH (ví dụ gỡ 2FA bằng tay) thì cũng bị đăng xuất một lần, đăng nhập lại là xong.
+
+### Trợ lý AI không được đụng file bí mật
+
+Trợ lý chạy lệnh được bên trong máy chủ và đọc tin nhắn từ bên ngoài (Zalo, Telegram, webhook). Một tin nhắn cài bẫy có thể xúi nó sửa file cài đặt. Vì vậy ở **mọi mức quyền**, Javis từ chối lệnh shell hay lời gọi công cụ chạm vào: `settings.json` trong thư mục state, `.secret_key`, các file phiên đăng nhập và token, nhật ký bảo mật, `~/.claude/.credentials.json`, `~/.codex/auth.json`, `authorized_keys`. Áp dụng cho Claude Code (chặn trước khi công cụ chạy) và terminal của các engine API. Mỗi lần chặn được ghi vào nhật ký. Codex, Grok Build và Antigravity chạy trong sandbox riêng của chúng nên chưa có lớp này.
+
+Lớp này chặn yêu cầu thẳng, không phải bức tường: mã chạy cùng quyền hệ điều hành vẫn có thể ghép đường dẫn từng mảnh. Cần đọc hay sửa các file đó thì dùng trang Tài khoản hoặc terminal thật của máy chủ (SSH, hPanel).
+
+## Khi nghi bị chiếm quyền
+
+Dấu hiệu: tên đăng nhập lạ, mật khẩu đúng mà báo sai, mã 2FA của bạn không còn đúng, báo động "file cài đặt bị sửa từ ngoài", hoặc thiết bị lạ trong tab Bảo mật. Làm theo thứ tự:
+
+1. **Lấy lại tài khoản.** Trên Hostinger: thêm `JAVIS_ADMIN_USER` và `JAVIS_ADMIN_PASSWORD` (mật khẩu MỚI) vào ô Environment rồi Redeploy. Javis đặt lại tài khoản, giữ 2FA và đăng xuất mọi phiên cũ.
+2. **2FA không phải của bạn?** Thêm `JAVIS_RESET_2FA=1` cùng lúc ở bước 1. Javis gỡ 2FA đúng một lần khi khởi động. Biến chỉ có tác dụng một lần cho mỗi giá trị; lần sau cần lại thì đặt giá trị khác, ví dụ ngày hôm đó (`JAVIS_RESET_2FA=2026-11-09`).
+3. **Đăng nhập, mở Tài khoản > Bảo mật.** Xem lịch sử đăng nhập (IP, thiết bị, giờ) và bấm **Đăng xuất mọi thiết bị khác**.
+4. **Bật lại 2FA** bằng điện thoại của bạn, cất 8 mã khôi phục vào nơi an toàn.
+5. **Xoá `JAVIS_ADMIN_PASSWORD` và `JAVIS_RESET_2FA` khỏi ô Environment** rồi Redeploy. Tài khoản không bị ảnh hưởng. Mật khẩu nằm ở ô đó dạng chữ thường nên đừng để lâu.
+6. **Tìm đường vào của kẻ lạ.** Người sửa được file cài đặt đã vào được máy chủ: kiểm tra SSH key lạ (`cat /root/.ssh/authorized_keys`), đổi mật khẩu root (`passwd`), đổi mật khẩu và bật 2FA cho tài khoản Hostinger, chặn cổng 7777 ở tường lửa nếu đã có tên miền HTTPS.
+7. **Đổi các khoá kết nối** lưu trong Javis (POS, Cloudflare, Gmail, Zalo, API key), ưu tiên cái chạm tới tiền và dữ liệu khách: người vào được máy chủ có thể đã đọc chúng.
+8. **Rà xem có để lại gì không**: việc định kỳ, nhắc hẹn, agent, plugin, MCP lạ; trên máy chủ chạy `crontab -l`.
+
+Từ bản này, compose Hostinger tự đóng cổng 7777 ra Internet khi đã đặt `DOMAIN_NAME` (chỉ còn HTTPS qua tên miền). Chưa đặt tên miền thì cổng vẫn mở như cũ vì đó là đường vào duy nhất.
+
 ## Chặn CSRF và DNS-rebinding
 
 Đây là lớp bảo vệ chạy ngầm, bạn không phải bật gì, nhưng nên biết nó tồn tại vì đôi khi nó là thủ phạm của lỗi 403 khó hiểu.
@@ -146,9 +194,33 @@ Allowlist gồm: `localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, cộng tên miền 
 
 Khi nào bạn cần đụng tới: chạy Javis sau một reverse proxy với tên miền chưa khai trong app, mà lại **chưa** đặt mật khẩu. Lúc đó Javis coi tên miền đó là lạ và trả 403. Cách sửa: đặt mật khẩu (bật cổng đăng nhập là bước kiểm Host tự bỏ qua), hoặc thêm tên miền vào `JAVIS_ALLOWED_HOSTS`.
 
+## Chặn công cụ tìm kiếm và bot AI
+
+Lớp này cũng chạy ngầm, không cần bật. Nó dành cho lúc đường link quản trị lộ ra ngoài: dán nhầm vào nhóm chat, nằm trong nhật ký chứng chỉ SSL công khai, hay bị máy quét Internet tìm thấy. Khi đó Google không đưa trang lên kết quả tìm kiếm, và bot AI không đọc được gì, kể cả màn hình đăng nhập.
+
+| Lớp | Làm gì |
+|---|---|
+| Header `X-Robots-Tag: noindex` | Gắn vào MỌI câu trả lời của Javis (trang đăng nhập, link chia sẻ, trang lỗi), nên trang nào lỡ bị công cụ tìm kiếm ghé cũng bị loại khỏi kết quả. |
+| `/robots.txt` | Cấm bot AI (GPTBot, ClaudeBot, PerplexityBot, CCBot...), công cụ SEO và mọi bot lạ đọc bất cứ thứ gì. |
+| Trả 403 | Request tự xưng là bot AI, máy tìm kiếm, công cụ SEO, máy quét (Shodan, Censys) hoặc ký tên bot (`Signature-Agent`) nhận 403, không thấy chữ nào của trang. |
+
+Không bị chặn: trình duyệt của người thật (kể cả trình duyệt trong Zalo, Facebook, Cốc Cốc), khung xem trước khi dán link vào Zalo, Telegram, Facebook, Slack, Discord, webhook và cửa OAuth của dịch vụ bên ngoài, Javis Gate (ChatGPT và Claude gọi vào Javis), CLI, `curl` và các công cụ chạy ngay trên máy này.
+
+Vì sao `robots.txt` không cấm Google: Google chỉ gỡ được trang mà nó đọc được. Bị cấm trong `robots.txt` thì Google không đọc, không thấy `noindex`, và vẫn có thể hiện link trần trong kết quả nếu chỗ khác trỏ tới. Cho Google ghé rồi trả 403 kèm `noindex` mới gỡ hẳn link khỏi kết quả.
+
+Kiểm tra nhanh trên máy chủ của bạn (đổi tên miền):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -A GPTBot https://ten-mien-cua-ban/
+```
+
+Phải ra `403`. Mở bằng trình duyệt thì vẫn vào bình thường.
+
+Lớp này chỉ bắt bot TỰ KHAI tên. Bot giả làm Chrome thì vẫn chỉ thấy màn hình đăng nhập, nên mật khẩu và 2FA vẫn là lớp bảo vệ chính. Một dịch vụ bạn dùng bị chặn nhầm vì tên trùng danh sách thì đặt `JAVIS_BLOCK_BOTS=0` rồi khởi động lại: chỉ lớp 403 tắt, header `noindex` và `robots.txt` vẫn giữ.
+
 ## Token API - cửa cho CLI và script
 
-Cookie đăng nhập chỉ hợp với trình duyệt. Khi bạn muốn [Javis CLI](24-cli-terminal.md) hay một script gọi được Javis, cần một credential khác: **token API**, tạo ở **Tài khoản > Token API (cho CLI)** (nhóm Hệ thống, cùng trang với mật khẩu đăng nhập).
+Cookie đăng nhập chỉ hợp với trình duyệt. Khi bạn muốn [Javis CLI](24-cli-terminal.md) hay một script gọi được Javis, cần một credential khác: **token API**, tạo ở **Tích hợp > Token API (cho CLI)** (nhóm Việc, cùng trang với webhook: cả hai đều là cửa để chương trình khác gọi vào Javis).
 
 Điểm quan trọng nhất: **không có token nào sẵn**. Chưa tự tay bấm tạo thì không token nào tồn tại, và không cửa nào vào ngoài trình duyệt. Mở thêm một cổng ra Internet phải là một hành động có ý thức.
 
@@ -204,6 +276,7 @@ Hệ quả vận hành phải nhớ:
 | Cookie an toàn khi HTTPS | Khi bạn truy cập qua **tên miền riêng** đã bật HTTPS (Caddy On-Demand TLS), cookie được đánh dấu `secure` (chỉ gửi qua HTTPS). |
 | CORS | Chỉ mở cho `localhost` / `127.0.0.1` / `::1` (tiện lúc dev). Trang web khác không đọc được API qua trình duyệt. |
 | Cổng gác CSRF | Chặn request ghi từ nguồn gốc chéo, và chặn Host lạ khi chưa bật đăng nhập (xem mục riêng ở trên). |
+| Chặn bot | `noindex` trên mọi câu trả lời, `/robots.txt`, và 403 cho bot AI, máy tìm kiếm, công cụ SEO, máy quét tự khai tên (xem mục riêng ở trên). |
 | Secret trên đĩa | API key và token trong `settings.json` mã hoá Fernet bằng `.secret_key` trong thư mục state. |
 
 Về cookie `secure`: mặc định Javis **không** ép cookie `secure` để chạy được cả HTTP lẫn HTTPS (tránh kẹt vòng đăng nhập sau proxy HTTP như đường dẫn dạng `http://host/PORT/`). Nếu bạn chắc chắn chạy HTTPS đầu-cuối, bật `JAVIS_SECURE_COOKIE=1` trong biến môi trường (xem [Cấu hình .env](16-cau-hinh-env.md)). Truy cập qua đúng tên miền riêng thì Javis tự bật `secure` mà không cần đặt biến này (dựa vào Host khớp tên miền, không suy từ `X-Forwarded-Proto`).

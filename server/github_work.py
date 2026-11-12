@@ -595,8 +595,8 @@ async def _after_turn_repo(sid: str, brain: str, repo: dict[str, Any], user_mess
     return await _ship_and_say(sid, brain, repo, report, owed)
 
 
-async def _ship_and_say(sid: str, brain: str, repo: Dict[str, Any], report: Dict[str, Any],
-                        owed: bool) -> Dict[str, Any]:
+async def _ship_and_say(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any],
+                        owed: bool) -> dict[str, Any]:
     """Gate green: push and open the PR, say it in the chat. A failure is remembered and retried, not dropped."""
     fn = repo["full_name"]
     try:
@@ -1354,17 +1354,17 @@ async def cross_review(row: dict[str, Any], provider: str = "", manual: bool = F
     return st().get(sid, fn) or row
 
 
-def _finding_lines(findings: List[Dict[str, Any]]) -> List[str]:
+def _finding_lines(findings: list[dict[str, Any]]) -> list[str]:
     return [f"- `{f['file']}:{f['line']}` {f['problem']}" + (f" (khi: {f['scenario']})" if f.get("scenario") else "")
             for f in findings]
 
 
 # Reviews a person started, keyed by chat and repo: each runs as its own task so the request (or the chat turn) that
 # asked returns at once, and closing the panel does not stop it.
-_PERSON_REVIEWS: Dict[str, "asyncio.Task[Dict[str, Any]]"] = {}
+_PERSON_REVIEWS: dict[str, "asyncio.Task[dict[str, Any]]"] = {}
 
 
-def _review_row(sid: str, full_name: str) -> Dict[str, Any]:
+def _review_row(sid: str, full_name: str) -> dict[str, Any]:
     row = st().get(sid, full_name)
     if not row or not row.get("pr_number"):
         raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repo đó.", "This chat has no PR for that repo."))
@@ -1373,7 +1373,7 @@ def _review_row(sid: str, full_name: str) -> Dict[str, Any]:
     return row
 
 
-def _review_done(key: str, task: "asyncio.Task[Dict[str, Any]]") -> None:
+def _review_done(key: str, task: "asyncio.Task[dict[str, Any]]") -> None:
     if _PERSON_REVIEWS.get(key) is task:
         _PERSON_REVIEWS.pop(key, None)
     if task.cancelled():
@@ -1383,7 +1383,7 @@ def _review_done(key: str, task: "asyncio.Task[Dict[str, Any]]") -> None:
         print(f"[github review] {key.split(chr(10))[-1]}: {type(err).__name__}: {err}")
 
 
-async def _guarded_review(row: Dict[str, Any], provider: str) -> Dict[str, Any]:
+async def _guarded_review(row: dict[str, Any], provider: str) -> dict[str, Any]:
     try:
         return await cross_review(row, provider, manual=True)
     finally:
@@ -1399,7 +1399,7 @@ def reviewing(sid: str, full_name: str) -> bool:
     return bool(t is not None and not t.done())
 
 
-def review_now(sid: str, full_name: str, provider: str = "") -> Dict[str, Any]:
+def review_now(sid: str, full_name: str, provider: str = "") -> dict[str, Any]:
     """A person asked for a review (the Review now button, or the chat). Starts it and returns at once; the findings
     reach the chat. Must be called on the event loop."""
     row = _review_row(sid, full_name)
@@ -1420,7 +1420,7 @@ def review_now(sid: str, full_name: str, provider: str = "") -> Dict[str, Any]:
     return {"started": True, "reviewer": _label(cands[0]["provider"], cands[0]["model"])}
 
 
-async def review_fix(sid: str, full_name: str) -> Dict[str, Any]:
+async def review_fix(sid: str, full_name: str) -> dict[str, Any]:
     """"Fix them": the open findings go to the engine that wrote the code, as one fix round."""
     row = _review_row(sid, full_name)
     found = open_findings(row)
@@ -1438,7 +1438,7 @@ async def review_fix(sid: str, full_name: str) -> Dict[str, Any]:
     return {"row": _row_view(st().get(sid, full_name) or row)}
 
 
-async def review_skip(sid: str, full_name: str, merge: bool = True) -> Dict[str, Any]:
+async def review_skip(sid: str, full_name: str, merge: bool = True) -> dict[str, Any]:
     """"Skip and merge": the findings stop holding the PR, and it merges now when CI is green."""
     row = _review_row(sid, full_name)
     gate = dict(row.get("gate") or {})

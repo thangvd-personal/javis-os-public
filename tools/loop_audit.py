@@ -59,8 +59,9 @@ def blocking_calls(fn: ast.AsyncFunctionDef) -> list:
 def audit(server_dir: Path = SERVER) -> dict:
     """{module file name: [(line, function, call), ...]} for every module with at least one."""
     found = {}
+    state_dir = server_dir / "state"
     for f in sorted(server_dir.rglob("*.py")):
-        if "__pycache__" in f.parts:
+        if "__pycache__" in f.parts or f.is_relative_to(state_dir):
             continue
         try:
             tree = ast.parse(f.read_text(encoding="utf-8"))

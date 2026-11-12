@@ -80,7 +80,7 @@ def _stack_of(thread_id: int | None) -> list:
     return [ln.rstrip() for ln in lines[-STACK_LINES:]]
 
 
-def _where(thread_id: Optional[int]) -> tuple:
+def _where(thread_id: int | None) -> tuple:
     """(place, stack) of the loop thread now: place = the three innermost Javis frames, innermost first."""
     frame = sys._current_frames().get(thread_id) if thread_id else None
     if frame is None:

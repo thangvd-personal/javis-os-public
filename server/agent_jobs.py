@@ -387,7 +387,7 @@ def _step_state(step: dict) -> str:
 
 
 def _workflow_jobs(agent_key: str, slug: str, root: str, runs, window: int = GOAL_LIMIT,
-                   flags: Optional[dict] = None, steps_of=None, now: Optional[float] = None) -> list:
+                   flags: dict | None = None, steps_of=None, now: float | None = None) -> list:
     """One card per workflow run the assistant took part in. Bucket from the run: running, waiting (for review: Needs
     you), done, error (Done, marked failed). `steps_of(workflow_slug)`: the workflow's step count, for "2/4 steps"."""
     out = []

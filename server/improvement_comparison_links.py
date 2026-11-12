@@ -1,6 +1,6 @@
 """SQL-only comparison format selection; no grant, source or native readiness."""
-import improvement_store as IM
 from improvement_experiment_protocol import _id
+import improvement_store as IM
 
 
 def _installed(connection, table):

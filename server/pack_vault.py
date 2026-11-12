@@ -405,13 +405,101 @@ def cai(pack_id: str, thu_muc_goi: Path, brain_root: str) -> dict:
     return bao
 
 
-def con_lai(pack_id: str) -> dict:
+def _same_path(a: str, b: str) -> bool:
+    if not a or not b:
+        return False
+    try:
+        return Path(a).resolve() == Path(b).resolve()
+    except OSError:
+        return _norm_brain(a) == _norm_brain(b)
+
+
+def con_lai(pack_id: str, brain_root: str = "") -> dict:
     """How many brain items this pack placed, and how many are still there.
 
     The Store uses it: a pack that only brings agents/workflows/skills, whose items the user deleted from the
     app, is not "installed" any more, and must offer Install again instead of Uninstall."""
+    brains = _doc_so_brains(pack_id)
+    if brains:
+        if brain_root:
+            items_list = [(b_info or {}).get("items") or {} for b_path, b_info in brains.items()
+                          if _same_path(b_path, brain_root)]
+        else:
+            items_list = [(b_info or {}).get("items") or {} for b_info in brains.values()]
+        placed = sum(len(items) for items in items_list)
+        present = sum(1 for items in items_list for m in items.values() if _where(m) is not None)
+        return {"placed": placed, "present": present}
     items = doc_so(pack_id).get("items") or {}
     return {"placed": len(items), "present": sum(1 for m in items.values() if _where(m) is not None)}
+
+
+def brain_of(pack_id: str, open_root: str = "") -> dict:
+    """Which brain holds the items this pack placed (#1308).
+
+    A pack's ledger keeps ONE brain (or per-brain entries under `brains`), while the pack itself (connector, plugin,
+    the "Installed" mark) is for the whole machine. Seen from another brain the Store said "Installed" although none
+    of the pack's assistants or skills were there, and Uninstall removed them from a brain the user was not looking
+    at. `{"brain", "name", "present", "other"}`: `other` is True when items are still there AND `open_root` is a
+    different brain."""
+    so = doc_so(pack_id)
+    brains = _doc_so_brains(pack_id)
+    if not brains:
+        brain = str(so.get("brain") or "")
+        present = con_lai(pack_id)["present"]
+        other = bool(brain and present and open_root and not _same_path(brain, open_root))
+        return {"brain": brain, "name": Path(brain).name if brain else "", "present": present, "other": other}
+    if open_root:
+        for b_path, b_info in brains.items():
+            if _same_path(b_path, open_root):
+                items = (b_info or {}).get("items") or {}
+                present = sum(1 for m in items.values() if _where(m) is not None)
+                if present or len(brains) == 1:
+                    return {"brain": str(b_path), "name": Path(b_path).name, "present": present, "other": False}
+    for b_path, b_info in brains.items():
+        items = (b_info or {}).get("items") or {}
+        present = sum(1 for m in items.values() if _where(m) is not None)
+        if present:
+            other = bool(open_root and not _same_path(b_path, open_root))
+            return {"brain": str(b_path), "name": Path(b_path).name, "present": present, "other": other}
+    brain = str(so.get("brain") or next(iter(brains), ""))
+    return {"brain": brain, "name": Path(brain).name if brain else "", "present": 0, "other": False}
+
+
+def agent_packs(brain_root: str) -> dict:
+    """{agent slug: pack id} for the agent files of this brain that a pack placed and nobody changed since.
+
+    The Auto registry asks this to tell "the pack put its own agent back" from "some file showed up under an old
+    name" (owner report 2026-11-11). Only an untouched file counts: one the user edited, or wrote by hand over the
+    pack's, is the user's and says nothing about where the agent came from. Never raises."""
+    out = {}
+    try:
+        root = Path(brain_root).resolve()
+        ledgers = sorted(HIEU_UNG_DIR.glob("*.json")) if HIEU_UNG_DIR.is_dir() else []
+    except OSError:
+        return out
+    for f in ledgers:
+        try:
+            so = json.loads(f.read_text(encoding="utf-8"))
+            if not isinstance(so, dict):
+                continue
+            items_sets = []
+            brains = so.get("brains")
+            if isinstance(brains, dict):
+                for b_path, b_info in brains.items():
+                    if b_path and Path(b_path).resolve() == root:
+                        items_sets.append((b_info or {}).get("items") or {})
+            elif so.get("brain") and Path(so["brain"]).resolve() == root:
+                items_sets.append(so.get("items") or {})
+            for items in items_sets:
+                for m in items.values():
+                    if not isinstance(m, dict) or m.get("loai") != "agents":
+                        continue
+                    p = _where(m)
+                    if p is not None and p.is_file() and m.get("hash") and _hash(p) == m.get("hash"):
+                        out.setdefault(p.stem, f.stem)
+        except (OSError, ValueError):
+            continue
+    return out
 
 
 def ke_hoach_go(pack_id: str, brain_root: str = "") -> dict:
@@ -479,7 +567,7 @@ def go(pack_id: str, brain_root: str = "") -> dict:
             elif p.is_file():
                 p.unlink()
             if m.get("loai") == "skills":
-                _drop_mirror(ke.get("brain", ""), p.name)
+                _drop_mirror(b_p or ke.get("brain", ""), p.name)
             bao["da_xoa"].append(m["khoa"])
         except OSError as e:
             bao["loi"].append(f"{m['khoa']}: {e}")

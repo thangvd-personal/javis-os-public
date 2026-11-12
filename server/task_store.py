@@ -401,7 +401,7 @@ class TaskStore:
                 self._db.rollback()
                 raise
 
-    def _task_from_row(self, row: sqlite3.Row, deps: Optional[list] = None) -> dict:
+    def _task_from_row(self, row: sqlite3.Row, deps: list | None = None) -> dict:
         task = dict(row)
         task["needs_approval"] = bool(task.get("needs_approval"))
         task["metadata"] = _loads(task.pop("metadata_json", "{}"), {})
@@ -1240,7 +1240,7 @@ class TaskStore:
     # through `answer`). Finished jobs included: "make paragraph 2 shorter" on a done job is the common case.
     FOLLOWUP_STATUS = ("blocked", "review", "done", "cancelled", "triage", "todo", "ready")
 
-    def followup(self, task_id: str, text: str, by: str = "owner") -> tuple[Optional[dict], str]:
+    def followup(self, task_id: str, text: str, by: str = "owner") -> tuple[dict | None, str]:
         """The owner's extra instruction for a job, then back to the queue (0.411.0).
 
         Before this the only way to change a stopped or finished job was Retry, which ran it again unchanged. The
@@ -1300,9 +1300,9 @@ class TaskStore:
 
     def acceptance_failed(
         self, task_id: str, worker_id: str, why: str, result: str = "",
-        metadata: Optional[dict] = None, artifacts: Optional[list] = None, needs_approval: bool = False,
+        metadata: dict | None = None, artifacts: list | None = None, needs_approval: bool = False,
         auto_fix: bool = True,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """A run finished but the acceptance check did not pass. The first `ACCEPTANCE_AUTO_FIXES` times the job goes
         back to its worker with the checker's reason (a `acceptance_fix` entry in the Q&A log, read by the next run);
         after that it waits for the owner as `acceptance_failed`. Never a question to the owner: the worker missed a
@@ -1331,7 +1331,7 @@ class TaskStore:
             block_reason=reason, metadata=meta, artifacts=artifacts, event_type="acceptance_failed",
         )
 
-    def resolve_acceptance(self, task_id: str, decision: str, by: str = "owner") -> tuple[Optional[dict], str]:
+    def resolve_acceptance(self, task_id: str, decision: str, by: str = "owner") -> tuple[dict | None, str]:
         """The owner's pick on an `acceptance_failed` job: "fix" sends it back to the worker with the checker's
         reason and fresh attempts, "accept" closes it as done (or back to review when it was waiting for approval)
         with `acceptance_check: accepted`. Returns (task, "") or (None, "bad_decision" | "not_found" |
@@ -1382,7 +1382,7 @@ class TaskStore:
                 raise
         return self.get_task(task_id), ""
 
-    def set_acceptance(self, task_id: str, state: str, why: str = "") -> Optional[dict]:
+    def set_acceptance(self, task_id: str, state: str, why: str = "") -> dict | None:
         """Record a re-check of a finished job (0.411.0). `state`: "checking" while it runs, "ai" when it passed,
         "failed" when it did not, "unverified" when the checker could not run again. Only a done or review job is
         touched. A failed re-check goes straight to the owner as `acceptance_failed` (fix and run again, or accept

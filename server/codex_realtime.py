@@ -63,7 +63,7 @@ def _codex_env(codex_home: str | None = None) -> dict | None:
 
 
 class AppServer:
-    def __init__(self, cli: str, popen_factory=subprocess.Popen, codex_home: Optional[str] = None):
+    def __init__(self, cli: str, popen_factory=subprocess.Popen, codex_home: str | None = None):
         self.cli = cli
         self.codex_home = codex_home or None
         self._popen = popen_factory
@@ -297,7 +297,7 @@ def _find_cli() -> str | None:
     return best[0] if best else None
 
 
-async def get_app_server(codex_home: Optional[str] = None) -> AppServer:
+async def get_app_server(codex_home: str | None = None) -> AppServer:
     """App-server đang sống, hoặc dựng mới khi chưa có / đã chết. `codex_home`: tài khoản ChatGPT phụ."""
     global _SERVER
     home = str(codex_home or "")

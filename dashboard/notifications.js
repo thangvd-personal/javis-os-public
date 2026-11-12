@@ -441,7 +441,7 @@
     var p = state.policy;
     var head = dauMuc("noti.filter_title");
     var info = window.JavisInfo ? window.JavisInfo.pair(esc(window.t("noti.filter_info")), window.t("noti.filter_info_l")) : "";
-    if (!p) { list.innerHTML = head + '<div class="noti-loading">' + esc(window.t("noti.loading")) + "</div>"; taiBoLoc(); noiDanhSach(list); return; }
+    if (!p) { list.innerHTML = head + '<div class="noti-loading pg-loading">' + esc(window.t("noti.loading")) + "</div>"; taiBoLoc(); noiDanhSach(list); return; }
     if (!p.ok) { list.innerHTML = head + '<div class="noti-empty">' + esc(window.t("noti.load_fail")) + "</div>"; noiDanhSach(list); return; }
     var byG = {};
     (p.groups || []).forEach(function (g) { byG[g.group] = g; });
@@ -600,7 +600,7 @@
     if (state.loading || (!force && Date.now() - state.loadedAt < 300000)) return;
     state.loading = true;
     var list = byId("notificationList");
-    if (!state.items.length && list && state.tab === "news") list.innerHTML = '<div class="noti-loading">' + esc(window.t("noti.loading")) + "</div>";
+    if (!state.items.length && list && state.tab === "news") list.innerHTML = '<div class="noti-loading pg-loading">' + esc(window.t("noti.loading")) + "</div>";
     try {
       var response = await fetch("/notifications", { cache: "no-store" });
       if (!response.ok) throw new Error("HTTP " + response.status);
@@ -655,7 +655,7 @@
       anRow.hidden = !on;
       if (!an.dataset.wired) {
         an.dataset.wired = "1";
-        try { var st = await (await fetch("/settings", { cache: "no-store" })).json(); an.checked = !!(st.push && st.push.preview === "hidden"); } catch (e) {}
+        try { var st = await (await fetch("/settings")).json();   /* shares the start-up read (fetch-gop.js); a save clears it */ an.checked = !!(st.push && st.push.preview === "hidden"); } catch (e) {}
         an.addEventListener("change", function () {
           var f = new FormData(); f.append("section", "push"); f.append("data", JSON.stringify({ preview: an.checked ? "hidden" : "full" }));
           fetch("/settings", { method: "POST", body: f }).catch(function () {});

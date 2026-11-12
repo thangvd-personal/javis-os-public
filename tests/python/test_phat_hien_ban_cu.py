@@ -29,6 +29,7 @@ Bốn nhánh của lớp này đã được chạy thử bằng Chromium thật 
 im lặng; một file bị giữ bản cũ -> gọi đúng tên file; tải lại rồi vẫn cũ -> đổi sang câu chỉ
 thẳng cách làm; máy chủ đổi phiên bản -> mời tải lại.
 """
+import re
 import zlib
 
 from _paths import DASHBOARD, ROOT, SERVER  # noqa: F401

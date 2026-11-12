@@ -18,6 +18,7 @@ import math
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from contextlib import closing
 from dataclasses import dataclass
@@ -469,6 +470,29 @@ def _j(v) -> str:
     return json.dumps(v, ensure_ascii=False)
 
 
+_SHARED: dict = {}
+_SHARED_LOCK = threading.Lock()
+
+
+def shared(path: Path | None = None) -> GoalStore:
+    """One opened store per file, for code that would otherwise build a new `GoalStore()` on every call (2026-11-09).
+
+    Opening a store is heavy on purpose (backups, schema, migrations and reconcile passes, several write transactions)
+    and is meant to happen once. The javis-goal plugin opened one on every visibility check, i.e. every time a system
+    prompt was built (auto learning, reminders, webhooks), and those write transactions held up the Partners page.
+    A store whose file was removed (a reset, a test) is opened again."""
+    p = Path(path) if path else Path(STATE_DIR) / "resonance.sqlite3"
+    key = str(p)
+    st = _SHARED.get(key)
+    if st is not None and p.is_file():
+        return st
+    with _SHARED_LOCK:
+        st = _SHARED.get(key)
+        if st is None or not p.is_file():
+            st = _SHARED[key] = GoalStore(p)
+        return st
+
+
 class GoalStore:
     def __init__(self, path: Path | None = None):
         self.path = Path(path) if path else Path(STATE_DIR) / "resonance.sqlite3"
@@ -637,7 +661,11 @@ class GoalStore:
     def _conn(self) -> sqlite3.Connection:
         c = sqlite3.connect(str(self.path), timeout=10, isolation_level=None)
         c.row_factory = sqlite3.Row
-        c.execute("PRAGMA journal_mode=WAL")
+        # WAL is stored in the file, so it is set only when the file is not in WAL yet (2026-11-09). Setting it on every
+        # connection waited for the lock whenever another connection was writing: on the owner's VPS that wait, on the
+        # event loop under /resonance/agents, froze the whole server for 2 to 8 s at a time.
+        if str(c.execute("PRAGMA journal_mode").fetchone()[0]).lower() != "wal":
+            c.execute("PRAGMA journal_mode=WAL")
         c.execute("PRAGMA foreign_keys=ON")
         return c
 
@@ -719,6 +747,22 @@ class GoalStore:
             r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=? AND brain_id=?",
                           (str(agent_key or ""), brain_id)).fetchone()
             return self._agent(r) if r else None
+
+    def agents_by_keys(self, brain_id: str, agent_keys) -> dict:
+        """`agent_by_key` for many keys in ONE connection: {agent_key: row}, keys of another brain left out (2026-11-09).
+        The Teams list asked for every member of every team one by one, a new connection each: 225 for 15 teams, 80%
+        of the list's time."""
+        keys = sorted({str(k or "") for k in (agent_keys or ()) if k})
+        if not keys:
+            return {}
+        out = {}
+        with closing(self._conn()) as c:
+            for i in range(0, len(keys), 500):
+                part = keys[i:i + 500]
+                for r in c.execute("SELECT * FROM resonance_agents WHERE brain_id=? AND agent_key IN (%s)"
+                                   % ",".join("?" * len(part)), (brain_id, *part)).fetchall():
+                    out[r["agent_key"]] = self._agent(r)
+        return out
 
     def agent_any(self, agent_key: str) -> dict | None:
         """Dòng sổ đăng ký theo mã, không lọc brain (host dùng khi chỉ có mã do chính host ghi, vd. reaction chat riêng)."""
@@ -840,6 +884,78 @@ class GoalStore:
             self._bump_agent(c, r, "retired", p.by, now, {"reason": "replaced"}, status="retired", enabled=0)
             new = self._insert_agent(c, p.brain_id, r["slug"], False, p.by, now, {"replaces": r["agent_key"]})
             return self._agent(new)
+
+    # ───────────── origin of an agent file, and restoring without asking (2026-11-11) ─────────────
+    # Owner report: 17 agents of one Store pack all asked "same assistant?" after the pack was uninstalled and installed
+    # again, one card at a time, every time. The host asks because a file that comes back under an old name may be a
+    # different agent that would inherit a running Auto. Two cases have nothing to decide, so the host settles them:
+    # the same Store pack put its own file back (`origin`), or Auto is off and no goal is open (nothing can start).
+
+    @staticmethod
+    def _origin_of(c, agent_key: str) -> str:
+        r = c.execute("SELECT payload_json FROM resonance_agent_events WHERE agent_key=? AND kind='origin' "
+                      "ORDER BY id DESC LIMIT 1", (str(agent_key or ""),)).fetchone()
+        try:
+            return str((json.loads(r["payload_json"] or "{}") if r else {}).get("origin") or "")
+        except (TypeError, ValueError):
+            return ""
+
+    def agent_origins(self, brain_id: str) -> dict:
+        """{agent_key: origin} for the brain's agents that have one, in one connection. An origin is what the host saw
+        the agent's file to be while the key was `active`, for example `pack:javis.ecc-engineering-team`."""
+        out = {}
+        with closing(self._conn()) as c:
+            for r in c.execute("SELECT agent_key, payload_json FROM resonance_agent_events WHERE brain_id=? AND "
+                               "kind='origin' ORDER BY id", (brain_id,)).fetchall():
+                try:
+                    v = str((json.loads(r["payload_json"] or "{}")).get("origin") or "")
+                except (TypeError, ValueError):
+                    v = ""
+                if v:
+                    out[r["agent_key"]] = v
+                else:
+                    out.pop(r["agent_key"], None)
+        return out
+
+    def agent_set_origin(self, brain_id: str, agent_key: str, origin: str, by: str = "host") -> bool:
+        """Host records where the file of an `active` agent comes from ("" = the user's own file). Kept as an event,
+        written only when it changes; `config_version` is untouched, so no gate of this key moves. A key that is not
+        `active` is left alone: its origin is what it was when the host last saw its file."""
+        origin = str(origin or "")
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=? AND brain_id=?",
+                          (str(agent_key or ""), brain_id)).fetchone()
+            if r is None or r["status"] != "active" or self._origin_of(c, r["agent_key"]) == origin:
+                return False
+            self._agent_event(c, r, "origin", by, int(r["config_version"]), {"origin": origin})
+            return True
+
+    def agent_restore(self, brain_id: str, agent_key: str, origin: str = "", by: str = "host") -> dict | None:
+        """Host puts a `missing` agent back to `active` under the SAME key without asking the owner, in the only two
+        cases with nothing to decide. Returns the row when restored, None when the owner still has to answer.
+
+        - `origin` is given and equals the origin recorded while the key was active: the same Store pack put its own
+          file back under the same name. Switch, goals and conversations carry on as after "same assistant".
+        - Auto is off and the agent has no open goal: nothing starts on its own whichever answer is given, and turning
+          Auto on later is the owner's own decision about the file that is there.
+        The caller checks the file is really back, as for `agent_confirm`."""
+        now = time.time()
+        with self._Tx(self) as c:
+            r = c.execute("SELECT * FROM resonance_agents WHERE agent_key=? AND brain_id=?",
+                          (str(agent_key or ""), brain_id)).fetchone()
+            if r is None or r["status"] != "missing":
+                return None
+            if origin and self._origin_of(c, r["agent_key"]) == str(origin):
+                why = {"reason": "same_origin", "origin": str(origin)}
+            elif not r["enabled"] and not c.execute(
+                    "SELECT 1 FROM goals g JOIN goal_agents a ON a.goal_id=g.id WHERE a.agent_key=? AND g.brain_id=? "
+                    "AND g.status='active' LIMIT 1", (r["agent_key"], brain_id)).fetchone():
+                why = {"reason": "nothing_open"}
+            else:
+                return None
+            if r["enabled"]:
+                self._mark_resumed(c, r["agent_key"], now)
+            return self._bump_agent(c, r, "restored", by, now, why, status="active")
 
     def session_agent(self, brain_id: str, session_id: str, slug: str, session_created_at: float,
                       pin: bool = True) -> dict | None:

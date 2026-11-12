@@ -183,9 +183,8 @@ IMMUTABLE = ('improvement_effective_views', 'improvement_effective_view_assets',
 def assert_installed(connection):
     """Refuse changed draft guards before authority, without repairing history."""
     import re
-
-    from improvement_operation_schema import assert_installed as assert_operations
     from improvement_store import ConflictError
+    from improvement_operation_schema import assert_installed as assert_operations
 
     assert_operations(connection)
     statements = list(SCHEMA)

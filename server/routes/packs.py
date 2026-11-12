@@ -21,16 +21,19 @@ gì được nạp) rồi trả về đúng cái sắp xảy ra kèm `sha256`. `
 người gọi đưa lại đúng sha256 đó - ràng buộc này làm cái đã hiện ra trên màn hình phải chính là
 cái được cài.
 """
+import asyncio
+import inspect
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import localefmt
 import pack_install
 import packs
 import packs_fetch
 import packs_store
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 # Chỉ ảnh, và KHÔNG SVG: một SVG phục vụ cùng origin thì trơ trong thẻ <img> nhưng chạy script
@@ -47,6 +50,9 @@ class PacksDeps:
     co_phien: Callable[[Request], bool]
     lam_moi_hub: Callable[[], None]
     brain_root: Callable[[str], str]
+    # 2026-11-11: a pack just placed or removed assistant files in this brain root. main brings the Auto registry in
+    # step (agent_presence.sync) and tells the open tabs. May be async. Default: nothing (tests, tools).
+    agents_changed: Callable[[str], Any] = lambda root: None
 
 
 _DEPS: PacksDeps = None
@@ -139,6 +145,37 @@ def _gone_from_brain(pid: str, hang: dict, g: dict) -> bool:
         return False
 
 
+def _items_brain(pid: str, brain: str) -> dict:
+    """pack_vault.brain_of for the brain the dashboard has open (`brain` as the dashboard sends it). Never raises:
+    a Store page must not fail over a label."""
+    try:
+        import pack_vault
+        return pack_vault.brain_of(pid, _DEPS.brain_root(str(brain or "brain")) if brain else "")
+    except Exception:       # noqa: BLE001
+        return {"brain": "", "name": "", "present": 0, "other": False}
+
+
+async def _agents_changed(root: str) -> None:
+    """Tell main that the assistant files of brain `root` changed. Never fails the install or uninstall it follows."""
+    if not root:
+        return
+    try:
+        res = _DEPS.agents_changed(root)
+        if inspect.isawaitable(res):
+            await res
+    except Exception as e:  # noqa: BLE001
+        print(f"[packs] agents_changed: {type(e).__name__}: {e}", file=sys.stderr)
+
+
+def _pack_brain(pid: str) -> str:
+    """The brain root that holds the items pack `pid` placed, "" when it placed none."""
+    try:
+        import pack_vault
+        return str(pack_vault.doc_so(pid).get("brain") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _tu_choi():
     return JSONResponse({"ok": False, "error": localefmt.chu("Cần đăng nhập vào Javis để quản lý gói.",
                                                          "Sign in to Javis to manage packs.")},
@@ -188,13 +225,25 @@ def _make_router() -> APIRouter:
         if ng:
             ng = {"kind": str(ng.get("kind") or "")[:16], "url": str(ng.get("url") or "")[:500]}
         # Brain ĐANG MỞ lúc bấm Cài (hoặc tất cả brain nếu apply_all).
+        root = _DEPS.brain_root(str(d.get("brain") or "brain"))
+        apply_all = bool(d.get("apply_all"))
         r = pack_install.cai(str(d.get("staging_id") or ""),
                              str(d.get("consent_sha256") or ""),
                              enable=bool(d.get("enable")), nguon=ng,
-                             brain_root=_DEPS.brain_root(str(d.get("brain") or "brain")),
-                             apply_all=bool(d.get("apply_all")))
+                             brain_root=root,
+                             apply_all=apply_all)
         if r.get("ok"):
             _DEPS.lam_moi_hub()
+            # The pack's assistants are back in the brain: the Auto registry takes its own back at once, so nobody
+            # has to open the Partners page (or confirm 17 cards) before a team or a goal can use them again.
+            await _agents_changed(root)
+            if apply_all:
+                import pack_vault
+                base = pack_vault._brains_dir()
+                if base.is_dir():
+                    for b_p in await asyncio.to_thread(lambda: sorted(base.iterdir())):
+                        if b_p.is_dir() and not b_p.name.startswith(".") and not pack_vault._same_path(str(b_p), root):
+                            await _agents_changed(str(b_p))
         return r if r.get("ok") else JSONResponse(r, status_code=400)
 
     @router.post("/packs/apply-brain")
@@ -237,15 +286,19 @@ def _make_router() -> APIRouter:
             d = {}
         pid = str(d.get("id") or "").strip()
         import pack_vault
-        if pid:
-            res = pack_vault.sync_pack_all_brains(pid)
-        else:
+
+        def _sync_all():
+            if pid:
+                return pack_vault.sync_pack_all_brains(pid)
             base = pack_vault._brains_dir()
-            res = {"ok": True, "brains": {}}
+            out = {"ok": True, "brains": {}}
             if base.is_dir():
                 for p in sorted(base.iterdir()):
                     if p.is_dir() and not p.name.startswith("."):
-                        res["brains"][p.name] = pack_vault.sync_brain_packs(str(p))
+                        out["brains"][p.name] = pack_vault.sync_brain_packs(str(p))
+            return out
+
+        res = await asyncio.to_thread(_sync_all)
         _DEPS.lam_moi_hub()
         return res
 
@@ -260,21 +313,33 @@ def _make_router() -> APIRouter:
         return r if r.get("ok") else JSONResponse(r, status_code=400)
 
     @router.get("/packs/uninstall-plan")
-    async def packs_uninstall_plan(request: Request, id: str = ""):
+    async def packs_uninstall_plan(request: Request, id: str = "", brain: str = ""):
         if not _DEPS.co_phien(request):
             return _tu_choi()
-        return pack_install.ke_hoach_go(id.strip())
+        plan = pack_install.ke_hoach_go(id.strip())
+        # #1308: the items sit in the brain that was open at install time. Name it, and say when that is not the
+        # brain open now, so nobody removes assistants from a brain they are not looking at without being told.
+        if isinstance(plan, dict) and plan.get("ok") and isinstance(plan.get("vault"), dict):
+            w = _items_brain(id.strip(), brain)
+            plan["vault"]["brain_name"] = w["name"]
+            plan["vault"]["other_brain"] = w["other"]
+        return plan
 
     @router.post("/packs/uninstall")
     async def packs_uninstall(request: Request):
         if not _DEPS.co_phien(request):
             return _tu_choi()
         d = await request.json()
+        # BEFORE the files go: the registry records that these assistants are this pack's own (their origin), which
+        # is what lets it take them back without asking when the pack is installed again. AFTER: it sees them gone.
+        root = _pack_brain(str(d.get("id") or "").strip())
+        await _agents_changed(root)
         r = await pack_install.go(str(d.get("id") or ""),
                                   purge_data=bool(d.get("purge_data")),
                                   purge_audit=bool(d.get("purge_audit")))
         if r.get("ok"):
             _DEPS.lam_moi_hub()
+            await _agents_changed(root)
         return r if r.get("ok") else JSONResponse(r, status_code=409)
 
     @router.get("/packs/store")
@@ -322,6 +387,12 @@ def _make_router() -> APIRouter:
             if hang and _gone_from_brain(g.get("replaces_installed") or g["id"], hang, g):
                 g["installed"] = False
                 g["removed_from_brain"] = True
+            elif hang:
+                # #1308: installed for the machine, but its assistants and skills are in another brain than the
+                # one open now. The card says which, instead of a bare "Installed".
+                w = _items_brain(g.get("replaces_installed") or g["id"], brain)
+                if w["other"]:
+                    g["items_brain"] = w["name"]
             # Thẻ cần biết gói đang bật hay tắt để vẽ đúng nút. Gói thả tay vào thư mục (không
             # có hàng trong sổ) mặc định là BẬT - người vận hành đã tự đặt nó vào rồi.
             g["enabled"] = bool(hang.get("enabled", True)) if hang else True
@@ -341,8 +412,6 @@ def _make_router() -> APIRouter:
                     g["installed_in_brain"] = True
             else:
                 g["installed_in_brain"] = False
-            g["nguon"] = "kho"
-            g["nhom"] = _nhom(g)
         # Connector đi kèm app cũng hiện TRONG kho, đánh dấu sẵn là đã cài. Người dùng không
         # phân biệt "thứ ship theo app" với "thứ tải từ kho" - họ chỉ muốn một chỗ để nhìn xem
         # Javis nối được với cái gì. Trộn vào đây thì lưới Kết nối của kho có đủ mặt hàng ngay

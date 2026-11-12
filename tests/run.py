@@ -158,10 +158,17 @@ def ban_sao_repo(so: int) -> list:
     """
     goc = tempfile.mkdtemp(prefix=f"jt-{os.getpid()}-w")
     ds = []
+    server_dir = str(ROOT / "server")
+
+    def _bo_qua(src, names):
+        bo = {n for n in names if n in (".venv", "__pycache__")}
+        if src == server_dir and "state" in names:
+            bo.add("state")
+        return bo
+
     for k in range(so):
         dich = Path(goc) / str(k)
-        shutil.copytree(ROOT, dich, symlinks=True,
-                        ignore=shutil.ignore_patterns(".venv", "__pycache__"))
+        shutil.copytree(ROOT, dich, symlinks=True, ignore=_bo_qua)
         ds.append(dich)
     return ds
 

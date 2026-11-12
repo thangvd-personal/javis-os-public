@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from config import STATE_DIR
+import sqlite_tune
 
 DB_PATH = STATE_DIR / "customer_conversations.sqlite3"
 
@@ -177,6 +178,7 @@ def _conn() -> sqlite3.Connection:
         db = sqlite3.connect(str(path), timeout=10, check_same_thread=False)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA journal_mode=WAL")
+        sqlite_tune.normal_if_wal(db)   # 2026-11-10: no fsync per commit, see sqlite_tune.py
         db.execute("PRAGMA busy_timeout=5000")
         db.executescript(_SCHEMA)
         _nang_cap(db)
@@ -338,7 +340,7 @@ def _tai_khoan_id(kenh: str, account_id: str) -> str:
     return f"{kenh}:{account_id}"
 
 
-def ghi_su_kien(ev: dict, dem_chua_doc: bool = True, late: bool = False, seq: Optional[float] = None) -> dict:
+def ghi_su_kien(ev: dict, dem_chua_doc: bool = True, late: bool = False, seq: float | None = None) -> dict:
     """Đổ MỘT sự kiện chuẩn vào kho: tìm/tạo tài khoản kênh, khách, hội thoại rồi thêm tin.
 
     Trả về {"ok": True, "conversation_id", "message_id", "customer_id", "trung": bool}.
@@ -481,7 +483,7 @@ def co_tin(kenh: str, account_id: str, external_chat_id: str) -> bool:
     return bool(r)
 
 
-def first_order(kenh: str, account_id: str, external_chat_id: str) -> Optional[dict]:
+def first_order(kenh: str, account_id: str, external_chat_id: str) -> dict | None:
     """The first message of this chat in display order: `{"key": its ORDER_KEY, "at": the oldest created_at}`, None when
     the chat has no message. For `zalo_personal_channel.nhap_lich_su`, which puts older messages above it."""
     with _lock:
@@ -644,7 +646,7 @@ def own_messages_without_id(channel: str, account_id: str, external_chat_id: str
         return []
 
 
-def known_message_ids(channel: str, account_id: str, external_chat_id: str, ids) -> Optional[set]:
+def known_message_ids(channel: str, account_id: str, external_chat_id: str, ids) -> set | None:
     """The ids among `ids` already stored in this chat. None when the chat has no conversation yet. Never raises
     (a read error answers "all known", so nothing is written twice on a bad read)."""
     wanted = [str(i) for i in (ids or []) if str(i or "")]
@@ -668,7 +670,7 @@ def known_message_ids(channel: str, account_id: str, external_chat_id: str, ids)
         return set(wanted)
 
 
-def first_message_at(channel: str, account_id: str, external_chat_id: str) -> Optional[float]:
+def first_message_at(channel: str, account_id: str, external_chat_id: str) -> float | None:
     """Time of the oldest message stored in this chat, None when there is none. Never raises (None on a read error)."""
     try:
         with _lock:
@@ -721,6 +723,72 @@ def set_message_id(row_id: int, external_message_id: str) -> bool:
         return True
     except Exception as ex:      # noqa: BLE001
         print(f"[conversations] gắn mã tin lỗi: {type(ex).__name__}: {ex}", file=sys.stderr)
+        return False
+
+
+
+# Why a reply is not shown as sent, as a short code the inbox translates (never a sentence: the screen has two
+# languages). `stale` is never stored: `_zalo_delivery_view` gives it to a reply left on "sending" for too long.
+ZALO_DELIVERY_REASONS = ("superseded", "silent", "image_unconfirmed", "bot_stopped", "interrupted")
+# A send takes seconds. A reply still "sending" after this long was never settled (the server stopped mid-send, or
+# the transport never ran): the inbox then says the outcome is unknown instead of "sending" for ever.
+ZALO_SENDING_STALE = 300.0
+
+
+def _zalo_delivery_view(md, created_at, now: float):
+    """The receipt as the inbox should show it: a "sending" older than ZALO_SENDING_STALE reads as unknown. The
+    stored row is left alone, so a transport that does settle late still wins on the next read."""
+    dl = md.get("zalo_delivery") if isinstance(md, dict) else None
+    if not isinstance(dl, dict) or dl.get("state") != "sending":
+        return
+    try:
+        old = float(now) - float(created_at or 0) > ZALO_SENDING_STALE
+    except (TypeError, ValueError):
+        old = False
+    if old:
+        md["zalo_delivery"] = {"state": "unknown", "error": "", "reason": "stale"}
+
+
+def set_zalo_delivery(message_id: int, state: str, error: str = "", reason: str = "") -> bool:
+    """Set the send outcome for exactly one pending Zalo AI reply.
+
+    The inbox initially records a bot answer BEFORE transport runs. That is
+    *not* a delivered message. Only the transport may advance it from
+    'sending' to 'accepted', 'failed' or 'unknown' (e.g. CLI timeout).
+    'accepted' means the channel reported success, NOT that a recipient read it.
+    Idempotent: no later call can overwrite a settled receipt.
+
+    `error` is what the gateway said, word for word. `reason` is one of ZALO_DELIVERY_REASONS, for an outcome Javis
+    itself decided; anything else is dropped.
+    """
+    if state not in ("accepted", "failed", "unknown", "cancelled"):
+        return False
+    try:
+        with _lock:
+            db = _conn()
+            row = db.execute(
+                "SELECT m.metadata_json FROM messages m "
+                "JOIN conversations c ON c.id=m.conversation_id "
+                "WHERE m.id=? AND m.sender_type='ai' "
+                "AND c.channel_account_id LIKE 'zalo_personal:%'",
+                (int(message_id),)).fetchone()
+            if not row:
+                return False
+            md = _loads(row["metadata_json"], {})
+            delivery = md.get("zalo_delivery") if isinstance(md, dict) else None
+            if not isinstance(delivery, dict) or delivery.get("state") != "sending":
+                return False
+            md["zalo_delivery"] = {
+                "state": state,
+                "error": str(error or "")[:300] if state != "accepted" else "",
+                "reason": reason if state != "accepted" and reason in ZALO_DELIVERY_REASONS else "",
+            }
+            db.execute("UPDATE messages SET metadata_json=? WHERE id=?",
+                       (_json(md), int(message_id)))
+            db.commit()
+        return True
+    except Exception as ex:  # noqa: BLE001 - failed receipt never interrupts sending
+        print(f"[conversations] set_zalo_delivery failed: {type(ex).__name__}: {ex}", file=sys.stderr)
         return False
 
 
@@ -809,7 +877,7 @@ def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str 
               hesitant=None, tag: int = 0, has_contact: bool = False, sort: str = "",
               hidden: str = "", account_ids=None, ids=None, tags_any=None, tags_none=None,
               since: float = 0, until: float = 0, last_by: str = "", pinned: bool = False,
-              _light: bool = False) -> list[dict]:
+              _light: bool = False, exclude_account_ids=None) -> list[dict]:
     """Danh sách hội thoại, ĐÃ GHIM rồi tới MỚI NHẤT TRƯỚC, kèm tên khách và kênh.
 
     `q` tìm theo tên khách, tiêu đề, id chat, tin cuối (LIKE, không phân biệt hoa thường).
@@ -831,7 +899,8 @@ def danh_sach(channel: str = "", bot_id: str = "", account_id: str = "", q: str 
     """
     n = max(1, min(int(limit or 50), MAX_STATE_ROWS if _light else MAX_DANH_SACH))
     o = max(0, int(offset or 0))
-    where, args = _base_where(account_ids, ids, tags_any, tags_none, since, until, last_by, pinned)
+    where, args = _base_where(account_ids, ids, tags_any, tags_none, since, until, last_by, pinned,
+                              exclude_account_ids)
     if channel:
         where.append("a.channel=?"); args.append(str(channel))
     if bot_id == BOT_KHONG_CO:
@@ -904,7 +973,7 @@ _SORT_WAITING = (f"CASE WHEN {_KHACH_CHUA_DAP} THEN 0 ELSE 1 END,"
                  " COALESCE(c.last_message_at, c.updated_at) DESC, c.id DESC")
 
 
-def dem_bo_loc(hesitant=None) -> dict:
+def dem_bo_loc(hesitant=None, exclude_account_ids=None) -> dict:
     """Số hội thoại cho từng lựa chọn của bộ lọc hòm thư, tính trên TOÀN hòm thư và không phụ thuộc bộ lọc đang
     chọn: con số ở dropdown không nhảy mỗi lần lọc, và biết bot nào còn việc mà không phải mở ra xem.
 
@@ -916,6 +985,8 @@ def dem_bo_loc(hesitant=None) -> dict:
     `status.hidden`, for the "Hidden" filter option.
     """
     sql_nr, args_nr = _sql_can_tra_loi(hesitant)
+    where_x, args_x = _exclude_accounts_sql(exclude_account_ids)
+    and_x = "".join(" AND " + w for w in where_x)
     with _lock:
         rows = _conn().execute(
             "SELECT c.bot_id AS bot_id, COUNT(*) AS tong,"
@@ -924,8 +995,8 @@ def dem_bo_loc(hesitant=None) -> dict:
             " SUM(CASE WHEN c.mode='human' THEN 1 ELSE 0 END) AS human,"
             " SUM(CASE WHEN c.chat_type='group' THEN 1 ELSE 0 END) AS grp,"
             " SUM(CASE WHEN c.contact!='' THEN 1 ELSE 0 END) AS contact"
-            " FROM conversations c WHERE c.hidden=0 GROUP BY c.bot_id", args_nr).fetchall()
-        n_hidden = _conn().execute("SELECT COUNT(*) FROM conversations WHERE hidden=1").fetchone()[0]
+            " FROM conversations c WHERE c.hidden=0" + and_x + " GROUP BY c.bot_id", args_nr + args_x).fetchall()
+        n_hidden = _conn().execute("SELECT COUNT(*) FROM conversations c WHERE c.hidden=1" + and_x, args_x).fetchone()[0]
     out = {"tong": 0, "bots": {}, "status": {"unread": 0, "need_reply": 0, "human": 0, "hidden": int(n_hidden or 0)},
            "type": {"group": 0, "private": 0}, "has_contact": 0}
     for r in rows:
@@ -945,8 +1016,16 @@ def dem_bo_loc(hesitant=None) -> dict:
 LAST_BY = ("customer", "ai", "human")
 
 
+def _exclude_accounts_sql(exclude_account_ids) -> tuple:
+    """WHERE part leaving out conversations of these account keys (#1243, the accounts of other brains)."""
+    keys = [str(a) for a in (exclude_account_ids or []) if str(a).strip()][:500]
+    if not keys:
+        return [], []
+    return ["c.channel_account_id NOT IN (" + ",".join("?" * len(keys)) + ")"], keys
+
+
 def _base_where(account_ids=None, ids=None, tags_any=None, tags_none=None, since: float = 0, until: float = 0,
-                last_by: str = "", pinned: bool = False) -> tuple:
+                last_by: str = "", pinned: bool = False, exclude_account_ids=None) -> tuple:
     """WHERE parts shared by `danh_sach` and `state_rows` for the Chatbot v5 filters: picked accounts, ids, tags
     any/none, the last message between `since` and `until` (timestamps, 0 = open), who sent the last message
     (customer | ai | human, anything else ignored) and pinned chats only."""
@@ -962,6 +1041,9 @@ def _base_where(account_ids=None, ids=None, tags_any=None, tags_none=None, since
     accs = [str(a) for a in (account_ids or []) if str(a).strip()][:200]
     if accs:
         where.append("c.channel_account_id IN (" + ",".join("?" * len(accs)) + ")"); args += accs
+    where_x, args_x = _exclude_accounts_sql(exclude_account_ids)
+    where += where_x
+    args += args_x
     if ids is not None:
         keep = [int(i) for i in ids][:MAX_STATE_ROWS]
         if not keep:
@@ -985,14 +1067,14 @@ MAX_STATE_ROWS = 5000     # most conversations the "who is handling it" filter l
 def state_rows(channel: str = "", bot_id: str = "", q: str = "", status: str = "", chat_type: str = "",
                hesitant=None, tag: int = 0, has_contact: bool = False, hidden: str = "", account_ids=None,
                tags_any=None, tags_none=None, sort: str = "", since: float = 0, until: float = 0, last_by: str = "",
-               pinned: bool = False) -> list[dict]:
+               pinned: bool = False, exclude_account_ids=None) -> list[dict]:
     """Every conversation matching the inbox filters (newest first, at most MAX_STATE_ROWS), with only the columns the
     "who is handling it" state needs: id, bot_id, chat_type, external_chat_id, channel_account_id, channel, mode,
     last_sender_type, unread_count, last_message, metadata. Same filters as `danh_sach`, no paging."""
     rows = danh_sach(channel=channel, bot_id=bot_id, q=q, status=status, chat_type=chat_type, hesitant=hesitant,
                      tag=tag, has_contact=has_contact, hidden=hidden, account_ids=account_ids, tags_any=tags_any,
                      tags_none=tags_none, sort=sort, since=since, until=until, last_by=last_by, pinned=pinned,
-                     limit=MAX_STATE_ROWS, _light=True)
+                     limit=MAX_STATE_ROWS, _light=True, exclude_account_ids=exclude_account_ids)
     return rows
 
 
@@ -1070,9 +1152,11 @@ def tin_nhan(conversation_id: int, limit: int = 100, before_id: int = 0, after_i
     with _lock:
         rows = _conn().execute(sql, args).fetchall()
     out = []
+    now = time.time()
     for r in (rows if moi else reversed(rows)):
         d = _row(r)
         d["metadata"] = _loads(d.pop("metadata_json", "{}"), {})
+        _zalo_delivery_view(d["metadata"], d.get("created_at"), now)
         out.append(d)
     return out
 
@@ -1384,7 +1468,7 @@ def set_note(conversation_id: int, note: str) -> bool:
     return _set_meta_key(conversation_id, "note", text or None)
 
 
-def draft_of(conv: dict) -> Optional[dict]:
+def draft_of(conv: dict) -> dict | None:
     """The waiting draft of a conversation row (`metadata.draft`), or None."""
     d = ((conv or {}).get("metadata") or {}).get("draft")
     return d if isinstance(d, dict) and str(d.get("text") or "").strip() else None
@@ -1412,7 +1496,7 @@ def _dau_ngay() -> float:
                             seconds=now.second, microseconds=now.microsecond)).timestamp()
 
 
-def thong_ke(bot_id: str = "", channel: str = "", account_id: str = "") -> dict:
+def thong_ke(bot_id: str = "", channel: str = "", account_id: str = "", exclude_account_ids=None) -> dict:
     """Vài con số cho thẻ bot và đầu trang Hộp thư: tổng, hôm nay, chưa đọc, cần người.
 
     `chua_doc` (the inbox tab badge) and `theo_kenh` (channel filter counts) leave hidden conversations out, like the
@@ -1424,6 +1508,9 @@ def thong_ke(bot_id: str = "", channel: str = "", account_id: str = "") -> dict:
         where.append("a.channel=?"); args.append(str(channel))
     if account_id:
         where.append("c.channel_account_id=?"); args.append(str(account_id))
+    where_x, args_x = _exclude_accounts_sql(exclude_account_ids)
+    where += where_x
+    args += args_x
     w = " AND ".join(where)
     dau = _dau_ngay()
     with _lock:
@@ -1559,7 +1646,7 @@ def no_bot_accounts() -> set:
 NGHI_TU, NGHI_DEN = 21, 7
 
 
-def _trung_vi(xs: list) -> Optional[float]:
+def _trung_vi(xs: list) -> float | None:
     if not xs:
         return None
     v = sorted(xs)
@@ -1663,10 +1750,10 @@ def insights(since: float, until: float, account: str = "") -> dict:
 INSIGHTS_KEEP_CLOSED = 600
 INSIGHTS_KEEP_OPEN = 20
 INSIGHTS_CACHE_MAX = 32
-_insights_cache: Dict[tuple, tuple] = {}
+_insights_cache: dict[tuple, tuple] = {}
 
 
-def insights_cached(since: float, until: float, account: str = "", now: Optional[float] = None) -> dict:
+def insights_cached(since: float, until: float, account: str = "", now: float | None = None) -> dict:
     """`insights` through a short-lived cache. A period ending at `now` (or later) is the running one: its key leaves
     the end out, since the end moves on every call."""
     now = time.time() if now is None else float(now)
@@ -1683,7 +1770,7 @@ def insights_cached(since: float, until: float, account: str = "", now: Optional
     return copy.deepcopy(out)
 
 
-def stats_accounts() -> List[dict]:
+def stats_accounts() -> list[dict]:
     """Every channel account the inbox knows, for the Stats tab's account picker: `[{id, channel, name}]` by name."""
     with _lock:
         rows = _conn().execute("SELECT id, channel, display_name FROM channel_accounts ORDER BY display_name, id").fetchall()

@@ -986,7 +986,7 @@ def _off_status() -> dict:
                                    "Disconnected from Javis. Tap Connect again to use it.")}
 
 
-def logout_argv() -> Optional[list]:
+def logout_argv() -> list | None:
     """The sign-out command of the `agy` on this machine, or None when its `--help` lists none.
 
     Measured, not guessed (see the top of this file): a subcommand the binary does not list is never run."""

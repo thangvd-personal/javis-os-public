@@ -1,4 +1,6 @@
 """Standalone host read envelopes; no native delivery or error-flag inference."""
+from _paths import ROOT, SERVER  # noqa: F401
+
 import copy
 import hashlib
 import importlib.util
@@ -10,7 +12,7 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 import improvement_sandbox as SB
-from _paths import ROOT, SERVER  # noqa: F401
+import mcp_client
 
 if importlib.util.find_spec("improvement_read_outcome_broker"):
     from improvement_read_outcome_broker import PinnedReadOutcomeBroker

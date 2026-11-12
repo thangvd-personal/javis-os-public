@@ -52,8 +52,10 @@ def check(ten, dieu_kien, chi_tiet=""):
 
 def _quet(thu_muc: str, duoi: tuple) -> list:
     ra = []
+    state_dir = GOC / "server" / "state"
     for p in sorted((GOC / thu_muc).rglob("*")):
-        if p.suffix not in duoi or "__pycache__" in p.parts or "node_modules" in p.parts:
+        if (p.suffix not in duoi or "__pycache__" in p.parts or "node_modules" in p.parts
+                or p.is_relative_to(state_dir)):
             continue
         rel = p.relative_to(GOC).as_posix()
         if rel in MIEN_TRU:

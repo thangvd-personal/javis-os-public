@@ -6,10 +6,9 @@ Runtime versions below come from the verified hash allowlist, not a CLI invocati
 """
 from __future__ import annotations
 
-import ast
 import hashlib
+import ast
 import importlib.metadata
-import inspect
 import json
 import math
 import os
@@ -17,8 +16,9 @@ import re
 import shutil
 import stat
 import sys
-import threading
 import types
+import threading
+import inspect
 from functools import wraps
 from pathlib import Path
 
@@ -36,7 +36,7 @@ _DISCOVERY_CODE = {
     "_duong_dan_tim_binary": "4b54e92c6b5b078adcf123159c37341bf99d304eb8195dae82431b71622d3ba2",
     "_thu_muc_bin_windows": "84ec5dc0a1c0ec7c977e6b80383f57497509b6cd5ef6547b7b5f1a0da618254c",
     "_home_dir": "5c70cc1085f020104f4b72bc08a323bda413aa69bdd83ed32d8dd8caa6b97781",
-    "_state_dir": "e97b40c8983e0795acb59b2c8a1ef726ff4e44acb07c9c6699dbf442c2e2fbd8",
+    "_state_dir": "3b261d848450461936fb9f2c9c9a99356785fbab7d6734f63a0b055da50ffa0d",
     "_doc_bin_nho": "df04b8ed0929d15f74cbce87f7a9c803c071a1f7447d53f542874e1dbbb24979",
     "_binary_da_nho": "0a70eeed3ebe4623019425b374f3ce20acec9d539f36c882dbd8d38e50b9dcbc",
     "ClaudeSDK._options": "278718fd845cc87cd8c1c7a10285349fbb5fad1fbefea770f3be910f678c380a",
@@ -103,7 +103,15 @@ def _discovery_guard(cli, sdk, state_root):
             or cli._RX_BIEN_WIN.flags != re.compile(ast.literal_eval(expression.args[0])).flags):
         raise ValueError(error)
     configured = (os.getenv("JAVIS_STATE_DIR", "") or "").strip()
-    expected = Path(configured) if configured else Path(cli.__file__).resolve().parent
+    server_dir = Path(cli.__file__).resolve().parent
+    if configured:
+        expected = Path(configured)
+        if not expected.is_absolute():
+            expected = (server_dir.parent / expected).resolve()
+        if expected.resolve() == server_dir:
+            expected = expected / "state"
+    else:
+        expected = server_dir / "state"
     if not state_root.is_absolute() or expected != state_root:
         raise ValueError("trial_selection_discovery_state_unavailable")
 

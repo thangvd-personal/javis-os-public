@@ -21,15 +21,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import sys
 import threading
 import time
 import unicodedata
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import fastyaml
 import main_prompt_rendering
+import yaml
 
 _LOCK = threading.RLock()
 FORGOTTEN = "forgotten.json"
@@ -50,20 +54,79 @@ def fingerprint(text: str) -> str:
     return hashlib.sha256(n.encode("utf-8")).hexdigest()[:20] if n else ""
 
 
-def _split(text: str):
-    parts = fastyaml.split_frontmatter(text)
-    if parts:
+_FLAT_LINE = re.compile(r"^([A-Za-z_][\w-]*):(?:[ \t]+(.*))?$")
+
+
+def _salvage(header: str) -> dict | None:
+    """Read a header that is not valid YAML but is one `key: value` per line. That is exactly what `_join` wrote before
+    it quoted anything (#1165): `description: Note: example` breaks YAML yet every key is still there. Each value is
+    read as YAML on its own when it can be (`['tag']` back to a list, a date back to a date), else kept as text.
+    Anything else (an indented line, a line with no key) returns None: guessing there could lose data."""
+    meta: dict[str, Any] = {}
+    for raw in str(header or "").splitlines():
+        line = raw.rstrip()
+        if not line.strip():
+            continue
+        m = _FLAT_LINE.match(line)
+        if not m:
+            return None
+        raw_value = (m.group(2) or "").strip()
+        value: Any = raw_value
         try:
-            meta = fastyaml.safe_load(parts[0]) or {}
-        except Exception:  # noqa: BLE001
-            meta = {}
-        return (meta if isinstance(meta, dict) else {}), parts[1].strip()
-    return {}, str(text or "").strip()
+            parsed = fastyaml.safe_load(raw_value) if raw_value else ""
+            # `Note: example` reads as a one-key mapping; the old writer only ever wrote a mapping as `{...}`.
+            if not (isinstance(parsed, dict) and not raw_value.startswith("{")):
+                value = parsed
+        except Exception:  # noqa: BLE001 - not YAML on its own: keep the text as written
+            pass
+        meta[m.group(1)] = value
+    return meta or None
+
+
+def _read(text: str):
+    """(meta, body, state). state: "none" (no frontmatter), "ok" (valid YAML mapping), "salvaged" (see `_salvage`),
+    "broken" (a frontmatter block that cannot be read; meta is then {} and must not be written back)."""
+    parts = fastyaml.split_frontmatter(text)
+    if not parts:
+        return {}, str(text or "").strip(), "none"
+    try:
+        meta = fastyaml.safe_load(parts[0]) or {}
+    except Exception:  # noqa: BLE001
+        meta = None
+    if isinstance(meta, dict):
+        return meta, parts[1].strip(), "ok"
+    rescued = _salvage(parts[0])
+    if rescued is not None:
+        return rescued, parts[1].strip(), "salvaged"
+    return {}, parts[1].strip(), "broken"
+
+
+def _split(text: str):
+    meta, body, _state = _read(text)
+    return meta, body
+
+
+def _dump(meta: dict) -> str:
+    """Frontmatter lines for `meta`. safe_dump quotes whatever YAML needs quoted (a colon, `#`, quotes, a leading
+    `[`), so the file reads back to the same values (#1165). Same settings as learn.dump_fm."""
+    keep = {k: v for k, v in meta.items() if v is not None and str(v) != ""}
+    if not keep:
+        return ""
+    return yaml.safe_dump(keep, allow_unicode=True, sort_keys=False, default_flow_style=False, width=1000)
 
 
 def _join(meta: dict, body: str) -> str:
-    lines = [f"{k}: {v}" for k, v in meta.items() if v is not None and str(v) != ""]
-    return "---\n" + "\n".join(lines) + "\n---\n" + body.strip() + "\n"
+    return "---\n" + _dump(meta) + "---\n" + body.strip() + "\n"
+
+
+def _insert_keys(text: str, extra: dict) -> str | None:
+    """Add keys to the frontmatter of `text` without rewriting the ones already there (their quoting, order, comments
+    and list style stay byte for byte). None when `text` has no frontmatter block."""
+    parts = fastyaml.split_frontmatter(text)
+    if not parts:
+        return None
+    close = len(text) - len(parts[1]) - 3   # where the closing `---` line starts (always right after a newline)
+    return text[:close] + _dump(extra) + text[close:]
 
 
 def valid_slug(slug: str) -> bool:
@@ -196,7 +259,10 @@ def edit_memory(mem_dir: Path, slug: str, body: str, type_: str | None = None) -
     with _LOCK:
         if not p.is_file():
             raise FileNotFoundError(slug)
-        meta, _old = _split(p.read_text(encoding="utf-8"))
+        meta, _old, state = _read(p.read_text(encoding="utf-8"))
+        if state == "broken":
+            # Writing {} back would drop every key the file has (#1165). The owner fixes the file by hand first.
+            raise ValueError("frontmatter unreadable")
         if type_:
             meta["type"] = str(type_)[:20]
         meta["origin"] = "owner-edited"
@@ -204,6 +270,11 @@ def edit_memory(mem_dir: Path, slug: str, body: str, type_: str | None = None) -
         meta["updated"] = time.strftime("%Y-%m-%d")
         p.write_text(_join(meta, body), encoding="utf-8")
     return {"slug": slug, "updated": meta["updated"]}
+
+
+# Set by main.py: called with (memory dir, {slug, title, learned}) after a memory was forgotten. A memory Javis
+# had learned on its own and the owner then removed is the clearest sign there is that the learner got it wrong.
+on_forget = None
 
 
 def forget_memory(mem_dir: Path, slug: str) -> dict:
@@ -229,7 +300,14 @@ def forget_memory(mem_dir: Path, slug: str) -> dict:
                 idx.write_text("".join(keep), encoding="utf-8")
         except OSError:
             pass
-    return {"slug": slug, "title": title, "index_line_removed": removed_line}
+    out = {"slug": slug, "title": title, "index_line_removed": removed_line}
+    if on_forget is not None:
+        try:
+            # `learned`: the self-learning loop wrote this memory (origin: javis-learned), not the owner or a chat.
+            on_forget(mem_dir, {**out, "learned": str(meta.get("origin") or "") == "javis-learned"})
+        except Exception as e:   # noqa: BLE001 - a listener must not undo the forgetting
+            print(f"[memory forget] listener: {type(e).__name__}: {e}", file=sys.stderr)
+    return out
 
 
 # ── person profile shared by every brain ──────────────────────────────────────
@@ -286,6 +364,51 @@ def claude_deny_rules(vault_root) -> list[str]:
     return out
 
 
+# Background work that may write files, per brain: [brain key, start, end (0.0 while running)] (#1165). A chat turn
+# stamps the memories changed while it ran with its own source; a memory a Kanban job, reminder or loop wrote at the
+# same moment used to get that chat's source too. While such work runs in the same brain, a memory changed in the
+# overlap is left without a source: none is better than a wrong one.
+_WRITER_SPANS: list[list] = []
+WRITER_SPAN_KEEP_S = 3600
+_WRITER_SLACK_S = 1.0     # mtime resolution and the instant between a write and the span's own clock reading
+
+
+def _brain_key(root) -> str:
+    try:
+        return os.path.normcase(str(Path(root).expanduser().resolve()))
+    except Exception:  # noqa: BLE001
+        return os.path.normcase(str(root))
+
+
+@contextmanager
+def background_writer(root, mode: str = "full"):
+    """Mark background work in brain `root` that may write files (`auto` and `full`; `suggest` only reads)."""
+    if not root or str(mode or "full").strip().lower() not in ("auto", "full"):
+        yield
+        return
+    span = [_brain_key(root), time.time(), 0.0]
+    with _LOCK:
+        cutoff = time.time() - WRITER_SPAN_KEEP_S
+        _WRITER_SPANS[:] = [s for s in _WRITER_SPANS if not s[2] or s[2] >= cutoff]
+        _WRITER_SPANS.append(span)
+    try:
+        yield
+    finally:
+        span[2] = time.time()
+
+
+def _writer_spans(mem_dir, since: float) -> list[tuple]:
+    """(start, end) of background writers in the brain holding `mem_dir` that overlap `since`..now."""
+    mem = _brain_key(mem_dir)
+    now = time.time()
+    out = []
+    with _LOCK:
+        for key, start, end in _WRITER_SPANS:
+            if (mem == key or mem.startswith(key.rstrip(os.sep) + os.sep)) and (end or now) >= since:
+                out.append((start, end or now))
+    return out
+
+
 def stamp_new_facts(mem_dir, *, source: str, since: float) -> list[str]:
     """Give a source to memories written during a turn that did not record one (spec 12.3): the chat and the date.
     The model is asked to, but the server makes sure. Returns the slugs it stamped."""
@@ -293,23 +416,32 @@ def stamp_new_facts(mem_dir, *, source: str, since: float) -> list[str]:
     if not facts.is_dir() or not source:
         return []
     done = []
+    others = _writer_spans(mem_dir, since)
     for f in facts.glob("*.md"):
         try:
-            if f.stat().st_mtime < since:
+            mtime = f.stat().st_mtime
+            if mtime < since:
                 continue
+            if any(start - _WRITER_SLACK_S <= mtime <= end + _WRITER_SLACK_S for start, end in others):
+                continue   # background work in this brain was writing at that moment: whose memory it is, is unknown
             text = f.read_text(encoding="utf-8")
         except OSError:
             continue
-        meta, body = _split(text)
+        meta, body, state = _read(text)
+        if state in ("broken", "salvaged"):
+            # Not valid YAML: rewriting it from what could be read loses keys or quoting (#1165). Leave it alone.
+            print(f"[memory stamp] {f.name}: frontmatter is not valid YAML, left as is", file=sys.stderr)
+            continue
         if meta.get("source") or not body:
             continue
-        meta["source"] = source[:120]
-        meta.setdefault("status", "confirmed" if meta.get("origin") == "owner-edited" else "")
-        if not meta.get("status"):
-            meta.pop("status", None)
+        extra = {"source": source[:120]}
+        if not meta.get("status") and meta.get("origin") == "owner-edited":
+            extra["status"] = "confirmed"
+        # Add the new keys only: rebuilding the whole frontmatter is what dropped the quotes of the other ones.
+        new = _insert_keys(text, extra) if state == "ok" else _join(extra, body)
         with _LOCK:
             try:
-                f.write_text(_join(meta, body), encoding="utf-8")
+                f.write_text(new, encoding="utf-8")
                 done.append(f.stem)
             except OSError:
                 pass
