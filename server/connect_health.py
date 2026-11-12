@@ -10,7 +10,9 @@ Bài học vụ 0.9.189: thông điệp lỗi mù mờ làm cả agent lẫn ng�
 nói thẳng nguyên nhân là một tính năng, không phải trang trí.
 """
 import asyncio
+from collections.abc import Mapping
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -414,35 +416,100 @@ def _mac_keychain_creds() -> tuple[dict | None, bool]:
         return None, False
 
 
+# Env vars (or Claude settings.json -> `env`) through which Claude Code CLI authenticates
+# directly without creating `~/.claude/.credentials.json` (`CLAUDE_CODE_OAUTH_TOKEN`,
+# `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, or Vertex/Bedrock/Foundry flags).
+_CLAUDE_AUTH_ENV_KEYS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+_CLAUDE_CLOUD_ENV_KEYS = ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY")
+
+
+def _claude_config_dir() -> Path:
+    d = os.environ.get("CLAUDE_CONFIG_DIR", "").strip()
+    return Path(d).expanduser() if d else Path.home() / ".claude"
+
+
+def _claude_env_has_auth(env) -> bool:
+    if not isinstance(env, Mapping):
+        return False
+    for k in _CLAUDE_AUTH_ENV_KEYS:
+        if str(env.get(k) or "").strip():
+            return True
+    for k in _CLAUDE_CLOUD_ENV_KEYS:
+        if str(env.get(k) or "").strip().lower() in ("1", "true", "yes"):
+            return True
+    return False
+
+
+def _claude_settings_has_auth(conf_dir: Path) -> bool:
+    for name in ("settings.json", "settings.local.json"):
+        try:
+            data = json.loads((conf_dir / name).read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if str(data.get("apiKeyHelper") or "").strip():
+            return True
+        if _claude_env_has_auth(data.get("env")):
+            return True
+    return False
+
+
+def _claude_cli_cache_connected() -> bool:
+    cli_mod = sys.modules.get("claude_cli")
+    if cli_mod is None:
+        return False
+    cache = getattr(cli_mod, "_AUTH_CACHE", None) or {}
+    val = cache.get("val")
+    if not (isinstance(val, dict) and val.get("connected")):
+        return False
+    ttl = getattr(cli_mod, "_AUTH_TTL", 90.0)
+    try:
+        return (time.time() - float(cache.get("ts") or 0.0)) < float(ttl)
+    except Exception:
+        return False
+
+
 def probe_claude_credentials(path=None) -> tuple[bool, str]:
-    """Đọc hạn token Claude CLI (~/.claude/.credentials.json; macOS rơi về Keychain).
+    """Đọc hạn token Claude CLI (~/.claude/.credentials.json hoặc CLAUDE_CONFIG_DIR; macOS rơi về Keychain).
     CHỈ ĐỌC - tuyệt đối không tự refresh (tự refresh làm user bị đăng xuất, xem bài học cũ).
-    Có refreshToken → CLI tự làm mới được, coi là sống dù access token đã quá hạn."""
-    from pathlib import Path
-    p = Path(path) if path else Path.home() / ".claude" / ".credentials.json"
+    Có refreshToken → CLI tự làm mới được, coi là sống dù access token đã quá hạn.
+    Khi không truyền `path`, nhận thêm token cấu hình qua env / settings.json của Claude CLI
+    hoặc trạng thái đã xác thực còn hạn trong cache của `claude_cli`."""
+    explicit = path is not None
+    conf_dir = None if explicit else _claude_config_dir()
+    if not explicit and (_claude_env_has_auth(os.environ) or _claude_settings_has_auth(conf_dir)):
+        return True, ""
+    p = Path(path) if explicit else conf_dir / ".credentials.json"
     data = None
     try:
-        import json as _json
-        data = _json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        if sys.platform == "darwin":
+        if sys.platform == "darwin" and (explicit or not os.environ.get("CLAUDE_CONFIG_DIR", "").strip()):
             creds, known = _mac_keychain_creds()
             if not known:
                 return True, ""   # không xác định được → coi là sống; đèn do lượt chạy thật lo
-            if not creds:
-                return False, "Chưa đăng nhập Claude Code trên máy này."
-            data = creds
-        else:
+            if creds:
+                data = creds
+        if data is None:
+            if not explicit and _claude_cli_cache_connected():
+                return True, ""
             return False, "Chưa đăng nhập Claude Code trên máy này."
     except Exception:
+        if not explicit and _claude_cli_cache_connected():
+            return True, ""
         return False, "Không đọc được thông tin đăng nhập Claude Code."
     oa = (data or {}).get("claudeAiOauth") or {}
     if not oa:
+        if not explicit and _claude_cli_cache_connected():
+            return True, ""
         return False, "Chưa đăng nhập Claude Code trên máy này."
     if oa.get("refreshToken"):
         return True, ""
     exp = oa.get("expiresAt") or 0
     if exp / 1000 > time.time():
+        return True, ""
+    if not explicit and _claude_cli_cache_connected():
         return True, ""
     return False, "Phiên đăng nhập Claude Code đã hết hạn và không tự làm mới được."
 
@@ -544,11 +611,33 @@ def engines_snapshot() -> dict:
     return {n: _hien(r) for n, r in _engines.items() if n in live}
 
 
+async def _warm_claude_auth_if_needed() -> None:
+    """When Claude is the Main Model and fast disk/env probes report disconnected, ask
+    `claude auth status --json` once in a worker thread before raising a red banner."""
+    if "claude" not in engines_in_use():
+        return
+    try:
+        import claude_auth
+        if claude_auth.che_do() == claude_auth.API_KEY and claude_auth.api_key():
+            return
+    except Exception:
+        pass
+    if probe_claude_credentials()[0]:
+        return
+    try:
+        import claude_cli
+        if claude_cli.find_claude_cli():
+            await asyncio.to_thread(claude_cli.auth_status)
+    except Exception:
+        pass
+
+
 async def _loop():
     await asyncio.sleep(_STARTUP_DELAY)
     first = True
     while True:
         try:
+            await _warm_claude_auth_if_needed()
             probe_engines()
             # The first round after a restart or an update is the smoke test (it pings every
             # source like a sweep, then retries and reports); the next ones are plain sweeps.

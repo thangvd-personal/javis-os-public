@@ -12,6 +12,7 @@ Format: each release is a `## [x.y.z] - date` block, with changes grouped under 
 ### Fixed
 - **Zalo's "Import old messages" button actually imports.** Any chat with even one message in the Inbox used to be skipped, so on an account already recording conversations the import added almost nothing. A chat that has messages now gets the ones older than its first message, placed above it in time order.
 - Imported old messages do not land at the bottom of an open chat, the bot does not take them for new messages, and groups still keep only their latest messages.
+- **The "No AI model connected" banner no longer flags a false error when Claude Code signs in outside `.credentials.json`.** Previously it only checked `~/.claude/.credentials.json` (and the macOS Keychain), so machines authenticating Claude CLI through environment variables (`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), `settings.json` / `apiKeyHelper`, or `CLAUDE_CONFIG_DIR` still showed the disconnected warning banner even though the Models card showed connected.
 
 ## [0.510.0] - 2026-11-08
 ### Added

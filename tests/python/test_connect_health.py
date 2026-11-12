@@ -357,6 +357,124 @@ def test_probe_mac_doc_keychain_khong_bao_do_oan(tmp_path, monkeypatch):
     assert ok is False and "hết hạn" in msg
 
 
+def _clean_claude_env(tmp_path, monkeypatch):
+    """Isolate HOME, CLAUDE_CONFIG_DIR, Claude env vars, and cached auth status."""
+    monkeypatch.setattr(connect_health.sys, "platform", "linux")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    for key in (*connect_health._CLAUDE_AUTH_ENV_KEYS, *connect_health._CLAUDE_CLOUD_ENV_KEYS):
+        monkeypatch.delenv(key, raising=False)
+    import claude_cli
+    monkeypatch.setitem(claude_cli._AUTH_CACHE, "ts", 0.0)
+    monkeypatch.setitem(claude_cli._AUTH_CACHE, "val", None)
+    return tmp_path / ".claude"
+
+
+def test_probe_claude_nhan_env_token_va_settings(tmp_path, monkeypatch):
+    """Claude Code đăng nhập bằng env token (`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`),
+    `settings.json` / `apiKeyHelper`, hoặc `CLAUDE_CONFIG_DIR` không tạo `~/.claude/.credentials.json` -
+    banner 'Chưa kết nối Model AI' không được báo đỏ oan."""
+    import json as _json
+    import config as _cfg
+
+    claude_dir = _clean_claude_env(tmp_path, monkeypatch)
+    # Không có file, không có env/settings -> thật sự chưa đăng nhập
+    ok, msg = connect_health.probe_claude_credentials()
+    assert ok is False and "Chưa đăng nhập" in msg
+
+    # Khoảng trắng rỗng hoặc cờ "0" không được tính là đã đăng nhập
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "   ")
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "0")
+    assert connect_health.probe_claude_credentials()[0] is False
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_USE_BEDROCK", raising=False)
+
+    # Env token (kể cả khi còn file .credentials.json hết hạn từ phiên cũ) -> sống
+    claude_dir.mkdir(parents=True)
+    (claude_dir / ".credentials.json").write_text(
+        _json.dumps({"claudeAiOauth": {"expiresAt": 1000}}), encoding="utf-8")
+    for env_key, env_val in (
+        ("ANTHROPIC_AUTH_TOKEN", "tok-gateway"),
+        ("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-test"),
+        ("ANTHROPIC_API_KEY", "sk-ant-api-test"),
+        ("CLAUDE_CODE_USE_BEDROCK", "1"),
+    ):
+        monkeypatch.setenv(env_key, env_val)
+        assert connect_health.probe_claude_credentials()[0] is True, env_key
+        monkeypatch.delenv(env_key, raising=False)
+
+    # settings.json (env) và settings.local.json (apiKeyHelper) trong ~/.claude -> sống
+    (claude_dir / ".credentials.json").unlink()
+    (claude_dir / "settings.json").write_text(
+        _json.dumps({"env": {"ANTHROPIC_AUTH_TOKEN": "tok-settings"}}), encoding="utf-8")
+    assert connect_health.probe_claude_credentials()[0] is True
+    (claude_dir / "settings.json").unlink()
+
+    (claude_dir / "settings.local.json").write_text(
+        _json.dumps({"apiKeyHelper": "echo tok"}), encoding="utf-8")
+    assert connect_health.probe_claude_credentials()[0] is True
+    (claude_dir / "settings.local.json").unlink()
+
+    # probe_engines() với subscription + ANTHROPIC_AUTH_TOKEN cho đèn xanh
+    _reset_engines()
+    monkeypatch.setattr(_cfg, "read_settings", lambda: {"model": {
+        "main": {"provider": "anthropic-cli", "model": ""}, "claude_auth": "subscription"}})
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-gateway")
+    connect_health.probe_engines()
+    assert connect_health.engines_snapshot()["claude"]["ok"] is True
+    _reset_engines()
+
+
+def test_probe_claude_theo_claude_config_dir_va_cache_cli(tmp_path, monkeypatch):
+    """`CLAUDE_CONFIG_DIR` đổi nơi đọc `.credentials.json` / `settings.json`, và cache còn hạn
+    của `claude_cli` được tôn trọng khi không có file token cục bộ."""
+    import json as _json
+    import time as _time
+    import config as _cfg
+    import claude_cli
+
+    _clean_claude_env(tmp_path, monkeypatch)
+    custom = tmp_path / "custom-claude"
+    custom.mkdir()
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom))
+    assert connect_health.probe_claude_credentials()[0] is False
+
+    (custom / ".credentials.json").write_text(
+        _json.dumps({"claudeAiOauth": {"refreshToken": "rt-custom"}}), encoding="utf-8")
+    assert connect_health.probe_claude_credentials()[0] is True
+    (custom / ".credentials.json").unlink()
+
+    # Cache claude_cli còn hạn nói connected=True -> không báo đỏ oan
+    monkeypatch.setitem(claude_cli._AUTH_CACHE, "ts", _time.time())
+    monkeypatch.setitem(claude_cli._AUTH_CACHE, "val", {"connected": True, "plan": "oauth_token"})
+    assert connect_health.probe_claude_credentials()[0] is True
+
+    # Cache quá hạn -> không coi là sống
+    monkeypatch.setitem(claude_cli._AUTH_CACHE, "ts", _time.time() - claude_cli._AUTH_TTL - 5.0)
+    assert connect_health.probe_claude_credentials()[0] is False
+
+    # _warm_claude_auth_if_needed chỉ hỏi CLI khi probe đĩa/env/cache nói chưa đăng nhập
+    calls = []
+    monkeypatch.setattr(_cfg, "read_settings",
+                        lambda: {"model": {"main": {"provider": "anthropic-cli"}}})
+    monkeypatch.setattr(claude_cli, "find_claude_cli", lambda: "/fake/claude")
+
+    def fake_auth_status():
+        calls.append(1)
+        claude_cli._AUTH_CACHE.update(ts=_time.time(), val={"connected": True})
+        return {"connected": True}
+
+    monkeypatch.setattr(claude_cli, "auth_status", fake_auth_status)
+    asyncio.run(connect_health._warm_claude_auth_if_needed())
+    assert len(calls) == 1
+    assert connect_health.probe_claude_credentials()[0] is True
+
+    # Lần kế đã ấm cache / env thì không spawn CLI nữa
+    asyncio.run(connect_health._warm_claude_auth_if_needed())
+    assert len(calls) == 1
+
+
 if __name__ == "__main__":
     # CI chạy TỪNG FILE như script (`python tests/python/test_x.py`), không gọi pytest.
     # Thiếu block này thì file chỉ định nghĩa hàm rồi thoát 0 - test "xanh" mà chưa từng

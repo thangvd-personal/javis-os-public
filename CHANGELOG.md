@@ -10,6 +10,7 @@ Lịch sử phiên bản Javis OS. Bản mới nhất ở trên cùng. Xem ngay 
 ### Sửa lỗi
 - **Nút "Nhập tin cũ" của Zalo nhập được thật.** Trước đây cuộc chat nào đã có dù chỉ một tin trong Hộp thư đều bị bỏ qua, nên tài khoản đã bật Ghi hội thoại bấm nhập gần như không được gì. Giờ cuộc chat đã có tin nhận thêm các tin cũ hơn tin đầu tiên của nó, xếp lên trên đúng thứ tự thời gian.
 - Tin cũ vừa nhập không nhảy xuống cuối khung chat đang mở, không làm bot hiểu nhầm là tin mới, và nhóm vẫn chỉ giữ các tin gần nhất như cũ.
+- **Dải báo "Chưa kết nối Model AI" không còn báo đỏ oan khi Claude Code xác thực ngoài file `.credentials.json`.** Trước đây chỉ tìm `~/.claude/.credentials.json` (và Keychain trên macOS), nên máy đăng nhập Claude CLI qua biến môi trường (`ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), `settings.json` / `apiKeyHelper` hoặc `CLAUDE_CONFIG_DIR` vẫn hiện banner chưa kết nối ở góc trên dù thẻ Models báo đã kết nối.
 
 ## [0.510.0] - 2026-11-08
 ### Thêm mới
