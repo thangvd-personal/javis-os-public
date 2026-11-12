@@ -9561,6 +9561,7 @@
   let _neLichSu = [];          // [{rel, name, ext}] theo thứ tự đi
   let _neViTri = -1;           // vị trí đang đứng trong _neLichSu
   let _neDangDiLichSu = false; // cờ: lần openNote này là do bấm Lùi/Tiến, đừng ghi thêm vệt
+  let _nePendingLink = null;   // thông tin liên kết vừa bấm trong #noteEditor (file nguồn + đích hụt)
   const NE_LICH_SU_MAX = 50;   // vệt là để quay lại chỗ vừa đọc, không phải nhật ký cả phiên
   const _vtRaw = (rel, dl) => `/files/raw?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}${dl ? "&dl=1" : ""}`;
   const _vtNoAccent = (s) => (s || "").toString().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
@@ -10280,6 +10281,7 @@
     // nhường thì ô tìm cột trái trang Cộng sự và ô lọc cây Vault không bao giờ nhận được Esc,
     // và người dùng bấm Esc để xoá chữ lại bị đóng mất file đang mở.
     else if (e.key === "Escape") {
+      if (document.getElementById("nePreviewDlg")) { e.preventDefault(); e.stopPropagation(); _neClosePreview(); return; }
       if (_neOTextNgoai(e.target)) return;
       e.preventDefault(); e.stopPropagation(); closeNote();
     }
@@ -10320,6 +10322,7 @@
   }
 
   function closeNote() {
+    _neClosePreview();
     _neHideLocationSide();
     const ed = document.getElementById("noteEditor"); if (!ed) return;
     _neDropPz();
@@ -10475,7 +10478,7 @@
   // hãy tải về". Câu đó sai sự thật khi link trỏ trượt, lại còn mời tải một thứ không có, nên
   // người dùng đi nghi ngờ loại file thay vì nghi ngờ cái link. Nói thẳng đường dẫn đã thử là
   // biến một cú bấm chết thành một báo lỗi sửa được.
-  function _neRenderMissing(body, actions, rel, it, loi) {
+  function _neRenderMissing(body, actions, rel, it, loi, linkOrigin) {
     body.className = "ne-body";
     body.innerHTML = `<div class="ne-dl"><div class="ne-dl-ico">${_fileIcon(it.ext)}</div>`
       + `<div><b>${esc(loi || window.t("cs.ne_notfound"))}</b><br>`
@@ -10489,12 +10492,221 @@
     actions.appendChild(b);
     if (ed) ed.classList.remove("ne-full");
     _neSyncFull();
-    _neTimFileGan(String(rel).split("/").pop(), body.querySelector("#neMissHits"));
+    _neTimFileGan(String(rel).split("/").pop(), body.querySelector("#neMissHits"), linkOrigin);
+  }
+  // Cập nhật liên kết hụt trong nội dung markdown gốc sang đường dẫn mới đã xác nhận.
+  // Bỏ qua khối code fence ```...``` và ảnh ![...](...), giữ nguyên nhãn liên kết (trừ khi
+  // nhãn trùng hệt đường dẫn cũ) và giữ title / ngoặc nhọn nếu có.
+  function _neReplaceLinkInMarkdown(content, linkInfo, newBrainRel) {
+    if (!content || !linkInfo || !linkInfo.rawTarget || !newBrainRel) return content;
+    const want = String(linkInfo.rawTarget).trim().replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/, "");
+    if (!want) return content;
+    const decodeSafe = (s) => {
+      s = String(s == null ? "" : s);
+      if (!/%[0-9a-f]{2}/i.test(s)) return s;
+      try { return decodeURIComponent(s); } catch (e) { return s; }
+    };
+    const normHref = (raw) => {
+      let s = String(raw || "").trim();
+      if (/^<.*>$/.test(s)) s = s.slice(1, -1).trim();
+      if (typeof window !== "undefined" && typeof window.JavisFileRef === "function") {
+        const fr = window.JavisFileRef(s);
+        if (fr && fr.path) return String(fr.path).replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/, "");
+      }
+      if (/^file:(?:\/\/[^/\\]*)?(?=[/\\])/i.test(s)) {
+        s = decodeSafe(s.replace(/^file:(?:\/\/[^/\\]*)?(?=[/\\])/i, "")).replace(/\\/g, "/");
+        if (/^\/[A-Za-z]:\//.test(s)) s = s.slice(1);
+      } else {
+        s = decodeSafe(s).replace(/\\/g, "/");
+      }
+      return s.replace(/^\.?\//, "").replace(/\/+$/, "");
+    };
+    const matchesTarget = (raw) => {
+      const n = normHref(raw);
+      if (!n) return false;
+      if (n === want) return true;
+      if (/^(?:~\/|\/|[A-Za-z]:\/)/.test(n) && n.endsWith("/" + want)) return true;
+      return false;
+    };
+
+    const fences = [];
+    const FENCE_TOKEN = "\u0000JVFENCE";
+    let work = String(content).replace(
+      /(^|\r?\n)([ \t]*(?:```|~~~)[^\n]*(?:\r?\n[\s\S]*?)?\r?\n[ \t]*(?:```|~~~)[ \t]*)(?=\r?\n|$)/g,
+      (m, lead, blk) => { const idx = fences.length; fences.push(blk); return lead + FENCE_TOKEN + idx + "\u0000"; }
+    );
+
+    let changed = false;
+    if (linkInfo.isWiki) {
+      work = work.replace(/\[\[([^\[\]\n|]+?)(\|[^\[\]\n]*)?\]\]/g, (m, tgt, rest) => {
+        if (!matchesTarget(tgt)) return m;
+        changed = true;
+        return "[[" + newBrainRel + (rest || "") + "]]";
+      });
+    } else if (linkInfo.isCode) {
+      work = work.replace(/`([^`\n]+)`/g, (m, inner) => {
+        if (!matchesTarget(inner)) return m;
+        changed = true;
+        return "`" + newBrainRel + "`";
+      });
+    } else {
+      work = work.replace(/(!?)\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (m, bang, label, inner) => {
+        if (bang === "!") return m;
+        let href = inner;
+        let titleSuffix = "";
+        const tm = /(\s+(["']).*\2\s*)$/.exec(href);
+        if (tm) {
+          titleSuffix = tm[1];
+          href = href.slice(0, href.length - titleSuffix.length);
+        }
+        const trimmedHref = href.trim();
+        const hasAngles = /^<.*>$/.test(trimmedHref);
+        if (!matchesTarget(trimmedHref)) return m;
+        changed = true;
+        const newHref = hasAngles ? "<" + newBrainRel + ">" : newBrainRel;
+        const newLabel = label.trim() === want ? newBrainRel : label;
+        return "[" + newLabel + "](" + newHref + titleSuffix + ")";
+      });
+    }
+
+    if (!changed) return content;
+    return work.replace(/\u0000JVFENCE(\d+)\u0000/g, (_m, i) => fences[Number(i)]);
+  }
+  function _neClosePreview() {
+    try {
+      const dlg = document.getElementById("nePreviewDlg");
+      if (dlg) dlg.remove();
+    } catch (e) { }
+  }
+  async function _neOpenPreviewDialog(host, linkOrigin, hit, nhan) {
+    if (!hit || !hit.path) return;
+    _neClosePreview();
+    const wrap = document.createElement("div");
+    wrap.id = "nePreviewDlg";
+    wrap.className = "ne-prev-dlg-wrap";
+    const canConfirm = !!(linkOrigin && linkOrigin.sourceRel);
+    const srcNhan = canConfirm ? (_vtChuanHoaRel(linkOrigin.sourceRel) || linkOrigin.sourceRel) : "";
+    wrap.innerHTML = `<div class="ne-prev-dlg-scrim"></div>`
+      + `<div class="ne-prev-dlg" role="dialog" aria-modal="true" aria-labelledby="nePreviewTitle">`
+      + `<div class="ne-prev-dlg-head">`
+      + `<div class="ne-prev-dlg-title" id="nePreviewTitle">${_fileIcon(hit.ext || "")}<span>${esc(nhan)}</span></div>`
+      + `<button type="button" class="ne-prev-dlg-x" aria-label="${esc(window.t("common.close"))}" title="${esc(window.t("common.close"))}">${X_ICON}</button>`
+      + `</div>`
+      + `<div class="ne-prev-dlg-body"><div class="ne-prev-dlg-msg">${esc(window.t("cs.ne_opening"))}</div></div>`
+      + `<div class="ne-prev-dlg-foot">`
+      + `<button type="button" class="ne-prev-dlg-open">${esc(window.t("cs.ne_miss_preview_open"))}</button>`
+      + (canConfirm ? `<button type="button" class="ne-prev-dlg-confirm" title="${esc(window.t("cs.ne_miss_confirm_title", { path: nhan, src: srcNhan }))}">${CHECK_ICON} ${esc(window.t("cs.ne_miss_confirm"))}</button>` : "")
+      + `<button type="button" class="ne-prev-dlg-close">${esc(window.t("common.close"))}</button>`
+      + `</div></div>`;
+    document.body.appendChild(wrap);
+
+    const scrim = wrap.querySelector(".ne-prev-dlg-scrim");
+    const xBtn = wrap.querySelector(".ne-prev-dlg-x");
+    const closeBtn = wrap.querySelector(".ne-prev-dlg-close");
+    const openBtn = wrap.querySelector(".ne-prev-dlg-open");
+    const confirmDlgBtn = wrap.querySelector(".ne-prev-dlg-confirm");
+    const dlgBody = wrap.querySelector(".ne-prev-dlg-body");
+
+    if (scrim) scrim.onclick = _neClosePreview;
+    if (xBtn) xBtn.onclick = _neClosePreview;
+    if (closeBtn) closeBtn.onclick = _neClosePreview;
+    if (openBtn) openBtn.onclick = () => {
+      _neClosePreview();
+      openNote(hit.path, { name: hit.name, ext: hit.ext || "", type: "file" });
+      try { _vtRevealInTree(hit.path); } catch (e) { }
+    };
+    if (confirmDlgBtn) confirmDlgBtn.onclick = () => _neConfirmHit(host, confirmDlgBtn, linkOrigin, hit, nhan);
+    if (dlgBody && dlgBody.addEventListener) {
+      dlgBody.addEventListener("click", (e) => {
+        const a = e.target && e.target.closest ? e.target.closest("a.jv-floc, a.jv-wikilink, a.jv-cs, a.jv-nav-link") : null;
+        if (a) { e.preventDefault(); e.stopPropagation(); }
+      }, true);
+    }
+
+    const ext = (hit.ext || "").toLowerCase();
+    if (VT_IMG_EXTS.includes(ext)) {
+      dlgBody.innerHTML = `<div class="ne-prev-dlg-img"><img src="${_vtRaw(hit.path)}" alt="${esc(hit.name || nhan)}"></div>`;
+      return;
+    }
+    if (VT_FRAME_EXTS.includes(ext)) {
+      dlgBody.innerHTML = `<iframe class="ne-prev-dlg-frame" src="${_vtRaw(hit.path)}"></iframe>`;
+      return;
+    }
+    if (!VT_TEXT_EXTS.includes(ext)) {
+      dlgBody.innerHTML = `<div class="ne-prev-dlg-msg">${esc(window.t("cs.ne_miss_preview_binary"))}</div>`;
+      return;
+    }
+    try {
+      const r = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(hit.path)}`, { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (!wrap.isConnected) return;
+      if (!r.ok || d.error || d.content == null) {
+        dlgBody.innerHTML = `<div class="ne-prev-dlg-msg ne-prev-dlg-err">${esc((d && d.error) || window.t("cs.ne_miss_preview_err"))}</div>`;
+        return;
+      }
+      if (!String(d.content).trim()) {
+        dlgBody.innerHTML = `<div class="ne-prev-dlg-msg">${esc(window.t("cs.ne_miss_preview_empty"))}</div>`;
+        return;
+      }
+      if (ext === ".md" && window.mdToHtml) {
+        const thuMuc = nhan.includes("/") ? nhan.slice(0, nhan.lastIndexOf("/")) : "";
+        dlgBody.innerHTML = `<div class="ne-prev ne-prev-dlg-md">${window.mdToHtml(d.content, fbrain(), { thuMuc })}</div>`;
+      } else {
+        dlgBody.innerHTML = `<pre class="ne-prev-dlg-pre">${esc(d.content)}</pre>`;
+      }
+    } catch (e) {
+      if (wrap.isConnected) {
+        dlgBody.innerHTML = `<div class="ne-prev-dlg-msg ne-prev-dlg-err">${esc(window.t("cs.ne_miss_preview_err"))}</div>`;
+      }
+    }
+  }
+  async function _neConfirmHit(host, btn, linkOrigin, hit, newBrainRel) {
+    if (!linkOrigin || !linkOrigin.sourceRel || !hit || !hit.path) return;
+    const allConfirm = [
+      ...host.querySelectorAll("button.ne-hit-confirm"),
+      ...((typeof document !== "undefined" && document.querySelectorAll) ? document.querySelectorAll("#nePreviewDlg button.ne-prev-dlg-confirm") : []),
+    ];
+    const origHtml = btn.innerHTML;
+    allConfirm.forEach(x => { x.disabled = true; });
+    btn.textContent = window.t("cs.ne_miss_updating");
+    try {
+      const br = fbrain();
+      const r = await fetch(`/files/read?brain=${encodeURIComponent(br)}&path=${encodeURIComponent(linkOrigin.sourceRel)}`, { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.error || d.content == null) throw new Error(d.error || window.t("app.err_net"));
+      const next = _neReplaceLinkInMarkdown(d.content, linkOrigin, newBrainRel);
+      if (next === d.content) {
+        allConfirm.forEach(x => { x.disabled = false; });
+        btn.innerHTML = origHtml;
+        toast(window.t("cs.ne_miss_update_notfound"), true);
+        return;
+      }
+      const fd = new FormData();
+      fd.append("brain", br);
+      fd.append("path", linkOrigin.sourceRel);
+      fd.append("content", next);
+      const wr = await fetch("/files/write", { method: "POST", body: fd });
+      const wd = await wr.json().catch(() => ({}));
+      if (!wr.ok || !wd.ok) throw new Error(wd.error || window.t("app.err_net"));
+      // Thay bước 404 hiện tại trong lịch sử bằng đúng file đã xác nhận để bấm Lùi về thẳng file nguồn đã sửa.
+      if (_neViTri >= 0 && _neLichSu[_neViTri]) {
+        _neLichSu[_neViTri] = { rel: hit.path, name: hit.name, ext: hit.ext || "" };
+        _neDangDiLichSu = true;
+      }
+      _neClosePreview();
+      toast(window.t("cs.ne_miss_updated", { path: newBrainRel }));
+      openNote(hit.path, { name: hit.name, ext: hit.ext || "", type: "file" });
+      try { _vtRevealInTree(hit.path); } catch (e) { }
+    } catch (e) {
+      allConfirm.forEach(x => { x.disabled = false; });
+      btn.innerHTML = origHtml;
+      toast((e && e.message) || window.t("app.err_net"), true);
+    }
   }
   // Link hụt thường KHÔNG phải file đã mất - chỉ là tên trong chat lệch tên trên đĩa (hay gặp
   // nhất: chat ghi có dấu tiếng Việt còn file lưu không dấu). /files/search?mode=name khớp cả hai
   // chiều dấu, nên đi tìm hộ rồi bày ra cho bấm một phát là mở, thay vì bỏ người dùng ở ngõ cụt.
-  async function _neTimFileGan(ten, host) {
+  async function _neTimFileGan(ten, host, linkOrigin) {
     if (!host || !ten) return;
     let items = [];
     try {
@@ -10504,19 +10716,42 @@
     if (!host.isConnected) return;
     if (!items.length) { host.innerHTML = `<span class="dim">${esc(window.t("cs.ne_miss_none"))}</span>`; return; }
     host.innerHTML = `<span class="dim">${esc(window.t(items.length === 1 ? "cs.fm_miss_one" : "cs.fm_miss_many"))}</span>`;
+    const canConfirm = !!(linkOrigin && linkOrigin.sourceRel);
+    const srcNhan = canConfirm ? (_vtChuanHoaRel(linkOrigin.sourceRel) || linkOrigin.sourceRel) : "";
     items.forEach(hit => {
+      const row = document.createElement("div");
+      row.className = "ne-hit-row";
       const b = document.createElement("button");
       b.type = "button";
+      b.className = "ne-hit-open";
       // Cắt tiền tố nhà brain cho dễ đọc: người dùng nghĩ theo "06 - Sources/x.md", không phải
       // theo đường dẫn đầy đủ trên đĩa.
       const nhan = (_vtHome && String(hit.path || "").indexOf(_vtHome + "/") === 0)
         ? hit.path.slice(_vtHome.length + 1) : (hit.path || hit.name);
-      b.innerHTML = `${_fileIcon(hit.ext || "")} ${esc(nhan)}`;
+      b.title = nhan;
+      b.innerHTML = `${_fileIcon(hit.ext || "")} <span class="ne-hit-name">${esc(nhan)}</span>`;
       b.onclick = () => {
         openNote(hit.path, { name: hit.name, ext: hit.ext || "", type: "file" });
         try { _vtRevealInTree(hit.path); } catch (e) { }
       };
-      host.appendChild(b);
+      row.appendChild(b);
+      const previewBtn = document.createElement("button");
+      previewBtn.type = "button";
+      previewBtn.className = "ne-hit-preview";
+      previewBtn.innerHTML = `${ic("eye")} ${esc(window.t("cs.ne_miss_preview"))}`;
+      previewBtn.title = window.t("cs.ne_miss_preview_title", { path: nhan });
+      previewBtn.onclick = () => _neOpenPreviewDialog(host, linkOrigin, hit, nhan);
+      row.appendChild(previewBtn);
+      if (canConfirm) {
+        const confirmBtn = document.createElement("button");
+        confirmBtn.type = "button";
+        confirmBtn.className = "ne-hit-confirm";
+        confirmBtn.innerHTML = `${CHECK_ICON} ${esc(window.t("cs.ne_miss_confirm"))}`;
+        confirmBtn.title = window.t("cs.ne_miss_confirm_title", { path: nhan, src: srcNhan });
+        confirmBtn.onclick = () => _neConfirmHit(host, confirmBtn, linkOrigin, hit, nhan);
+        row.appendChild(confirmBtn);
+      }
+      host.appendChild(row);
     });
   }
 
@@ -10664,6 +10899,7 @@
       mdFromHtml: _mdFromHtml,
       buildToolbar: _neBuildToolbar,
       ganDemTu: _neGanDemTu,   // bộ đếm từ + ký tự (0.65.32), khung sửa trong chat dùng chung
+      replaceLink: _neReplaceLinkInMarkdown,
     };
   }
 
@@ -10699,10 +10935,11 @@
     return { lichSu: ra, viTri: ra.length - 1 };
   }
 
-  function _neDayLichSu(rel, it) {
+  function _neDayLichSu(rel, it, linkOrigin) {
     const nut = {
       rel: rel || "", name: (it && it.name) || String(rel || "").split("/").pop(),
-      ext: (it && it.ext) || ""
+      ext: (it && it.ext) || "",
+      ...(linkOrigin ? { linkOrigin } : {}),
     };
     const kq = _neVetMoi(_neLichSu, _neViTri, nut, NE_LICH_SU_MAX);
     _neLichSu = kq.lichSu; _neViTri = kq.viTri;
@@ -10745,13 +10982,29 @@
     if (_neCoSuaChua() && (await _neSaveFn()) === false) return;
     _neViTri += buoc;
     _neDangDiLichSu = true;
-    openNote(dich.rel, { name: dich.name, ext: dich.ext, type: "file" });
+    openNote(dich.rel, { name: dich.name, ext: dich.ext, type: "file" }, { linkOrigin: dich.linkOrigin || null });
     try { _vtRevealInTree(dich.rel); } catch (e) { }
   }
 
   async function openNote(rel, it, opts) {
+    _neClosePreview();
     const ed = document.getElementById("noteEditor"); if (!ed) return;
     it = it || {}; const ext = (it.ext || "").toLowerCase();
+    const laLichSu = _neDangDiLichSu;
+    let linkOrigin = (opts && opts.linkOrigin) || null;
+    if (!linkOrigin && !laLichSu && _nePendingLink) {
+      const pl = _nePendingLink;
+      _nePendingLink = null;
+      const cleanRel = _vtChuanHoaRel(rel || "");
+      const cleanRaw = _vtChuanHoaRel(_goFileUri(pl.rawTarget || "").replace(/^\.?\//, ""));
+      if (Date.now() - pl.time < 2000 && pl.sourceRel && pl.sourceRel !== (rel || "") &&
+          (_vtNoAccent(cleanRel) === _vtNoAccent(cleanRaw) || cleanRel === cleanRaw ||
+           cleanRaw.endsWith("/" + cleanRel) || cleanRel.endsWith("/" + cleanRaw))) {
+        linkOrigin = pl;
+      }
+    } else {
+      _nePendingLink = null;
+    }
     // Rời một file đang sửa dở (bấm [[wikilink]], bấm file khác trong cây) thì lưu lại trước.
     // Trước bản này chữ vừa gõ bay sạch, im lặng - và nút Lùi/Tiến làm chuyện rời file xảy ra
     // thường xuyên hơn hẳn nên không vá thì đây thành cái bẫy.
@@ -10760,9 +11013,8 @@
     }
     // Write what the old file still has pending (also when this same file is opened again, before it is read back).
     await _neDropAssist(!!(opts && opts.reload));
-    const laLichSu = _neDangDiLichSu;
     _neDangDiLichSu = false;
-    if (!laLichSu) _neDayLichSu(rel, it);
+    if (!laLichSu) _neDayLichSu(rel, it, linkOrigin);
     _neVeNutLui();
     // 0.432.1: a file opens RIGHT IN the current frame (the middle column of the main screen, the
     // chat's place on the Chat page, the file list on the Files page), never full screen by itself.
@@ -10819,7 +11071,7 @@
       if (ed.hidden || _neOpenRel !== (rel || "")) return;
       // 404 = không có file ở đường dẫn đó (server trả rõ như vậy). Mọi lỗi còn lại - nhị phân,
       // quá to - vẫn là file CÓ THẬT nên đường tải về mới có nghĩa.
-      if (resp.status === 404) { _neRenderMissing(body, actions, rel, it, d.error); return; }
+      if (resp.status === 404) { _neRenderMissing(body, actions, rel, it, d.error, linkOrigin); return; }
       if (!resp.ok || d.error || d.content == null) { _neRenderDownload(body, actions, rel, it); return; }
       // Mở file để sửa = GHIM nó vào khung chat làm file đầu vào. Mở file khác thì thay chỗ,
       // nên chỉ cần gọi set() ở đây, không phải dọn ghim cũ. Đóng trình sửa KHÔNG bỏ ghim:
@@ -11123,6 +11375,28 @@
       // Vệt đường đi cũng thuộc brain cũ: mọi bước trong đó trỏ vào file của brain kia.
       _neLichSu = []; _neViTri = -1; _neVeNutLui();
     });
+
+    // Ghi nhận liên kết vừa bấm bên trong một file đang mở ở trình sửa, để nếu link trỏ hụt và
+    // người dùng xác nhận gợi ý thì cập nhật lại đúng đường dẫn mới trong file nguồn đó.
+    const neEl = document.getElementById("noteEditor");
+    if (neEl) {
+      neEl.addEventListener("click", (e) => {
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button > 0) return;
+        const a = e.target && e.target.closest ? e.target.closest("a.jv-floc, a.jv-wikilink") : null;
+        if (!a || !a.closest("#neWys") || a.closest(".jv-dataview")) return;
+        if (a.querySelector && a.querySelector("img")) return;
+        const vp = a.getAttribute("data-vault-path") || "";
+        if (!vp || !_neOpenRel) return;
+        _nePendingLink = {
+          sourceRel: _neOpenRel,
+          rawTarget: vp.replace(/\/+$/, ""),
+          isCode: a.classList.contains("jv-fcode"),
+          isWiki: a.classList.contains("jv-wikilink"),
+          linkText: (a.textContent || "").trim(),
+          time: Date.now(),
+        };
+      }, true);
+    }
 
     // Cột trái = Vault explorer (luôn có trong DOM ở màn home) → nạp cây ngay khi khởi động
     renderVaultTree();
