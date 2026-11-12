@@ -68,6 +68,11 @@
   function rawUrl(b, ceilRel, dl) {
     return "/files/raw?brain=" + encodeURIComponent(b) + "&path=" + encodeURIComponent(ceilRel) + (dl ? "&dl=1" : "");
   }
+  function bustUrl(url, bust) {
+    if (!bust) return url;
+    var clean = String(url || "").replace(/([?&])_r=\d+(&|$)/, function (m, p1, p2) { return p2 ? p1 : ""; }).replace(/[?&]$/, "");
+    return clean + (clean.indexOf("?") >= 0 ? "&" : "?") + "_r=" + bust;
+  }
 
   // ---------------------------------------------------------------- CSS (chen 1 lan)
   function injectCss() {
@@ -172,6 +177,7 @@
 
   // ---------------------------------------------------------------- modal (dung 1 lan, tai su dung)
   var modal = null, card = null, elTitle = null, elActions = null, elBody = null, curSave = null;
+  var curTarget = null, pendingMode = "", curOpenSeq = 0;
   var daDayLichSu = false;   // da chen mot buoc lich su cho nut Back chua
   // Autosave and dictation mic of the open text file (editor-autosave.js, editor-dictate.js, 2026-11-09).
   var curAuto = null, curMic = null;
@@ -227,6 +233,7 @@
     if (!modal) return;
     // Closing (X, Esc, the backdrop, a Back swipe) writes the words typed since the last autosave first.
     dropAssist();
+    curTarget = null; pendingMode = ""; curOpenSeq++;
     modal.classList.remove("open");
     elBody.innerHTML = ""; elActions.innerHTML = ""; curSave = null;   // don iframe/textarea
     if (elShareModal) { elShareModal.innerHTML = ""; elShareModal.hidden = true; }
@@ -243,12 +250,29 @@
     b.className = "jvfe-btn icon"; b.innerHTML = ic("x"); b.title = tw("fedit.close_esc");
     b.onclick = close; return b;
   }
+  function reloadBtn(fn) {
+    var b = document.createElement("button");
+    b.className = "jvfe-btn icon"; b.type = "button"; b.innerHTML = ic("rotate-cw");
+    b.title = tw("fedit.reload"); b.setAttribute("aria-label", tw("fedit.reload"));
+    b.onclick = fn; return b;
+  }
+  function reloadCurrent() {
+    if (!curTarget) return;
+    if (curTarget.kind === "pdf") { openPdf(curTarget.url, curTarget.ten, { reload: true }); return; }
+    if (curAuto && curAuto.dirty() && !confirm(tw("cs.ne_reload_discard"))) return;
+    if (curMic) { try { curMic.destroy(); } catch (e) {} curMic = null; }
+    if (curAuto) { try { curAuto.close(true); } catch (e) {} curAuto = null; }
+    var mode = "";
+    if (elBody.querySelector(".jvfe-html.mode-code") || elBody.querySelector("#jvfeNe.mode-source")) mode = "source";
+    open(curTarget.rel, { reload: true, mode: mode });
+  }
 
   // ---------------------------------------------------------------- mo file
   // Bung modal voi mot tieu de, than "dang mo", va chen MOT buoc lich su de nut Back (va cu
   // vuot canh man hinh) dong modal thay vi thoat app. Dung chung cho open() va openPdf().
   function moModal(tieuDe) {
     build();
+    curOpenSeq++;
     elTitle.innerHTML = esc(tieuDe);
     dropAssist();
     elActions.innerHTML = ""; elBody.innerHTML = '<div class="jvfe-note">' + esc(tw("fedit.opening")) + "</div>";
@@ -260,33 +284,38 @@
       try { history.pushState({ jvfe: 1 }, ""); daDayLichSu = true; } catch (e) {}
     }
   }
-  function open(brainRel) {
+  function open(brainRel, opts) {
     if (!brainRel) return;
     var b = brain();
     moModal(baseOf(brainRel));
+    var seq = curOpenSeq;
+    curTarget = { kind: "file", rel: brainRel };
+    pendingMode = (opts && opts.mode) || "";
+    var bust = opts && opts.reload ? Date.now() : 0;
 
     var ext = extOf(brainRel);
     getHome(b).then(function (home) {
+      if (!isOpen() || seq !== curOpenSeq) return;
       var ceil = ceilPath(home, brainRel);
       // Anh / PDF: xem truoc thang qua /files/raw (khong doc dang text).
-      if (IMG.indexOf(ext) >= 0) { renderImage(b, ceil, brainRel); return; }
-      if (ext === ".pdf") { renderPdf(rawUrl(b, ceil), baseOf(brainRel)); return; }
+      if (IMG.indexOf(ext) >= 0) { renderImage(b, ceil, brainRel, bust); return; }
+      if (ext === ".pdf") { renderPdf(bustUrl(rawUrl(b, ceil), bust), baseOf(brainRel)); return; }
       // Con lai: doc noi dung.
-      fetch("/files/read?brain=" + encodeURIComponent(b) + "&path=" + encodeURIComponent(ceil))
+      fetch("/files/read?brain=" + encodeURIComponent(b) + "&path=" + encodeURIComponent(ceil), { cache: "no-store" })
         .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
         .then(function (res) {
-          if (!isOpen()) return;
+          if (!isOpen() || seq !== curOpenSeq) return;
           if (!res.ok || res.d.error) { renderError(b, ceil, brainRel, res.d && res.d.error); return; }
           if (res.d.editable) renderEditor(b, ceil, brainRel, res.d);
           else renderReadonly(b, ceil, brainRel, res.d);
         })
-        .catch(function () { if (isOpen()) renderError(b, ceil, brainRel, null); });
+        .catch(function () { if (isOpen() && seq === curOpenSeq) renderError(b, ceil, brainRel, null); });
     });
   }
 
-  function renderImage(b, ceil, brainRel) {
-    elActions.appendChild(shareBtn(b, ceil)); elActions.appendChild(openLink(b, ceil)); elActions.appendChild(dlLink(b, ceil)); elActions.appendChild(closeBtn());
-    elBody.innerHTML = '<div class="jvfe-img"><img src="' + esc(rawUrl(b, ceil)) + '" alt="' + esc(baseOf(brainRel)) + '"></div>';
+  function renderImage(b, ceil, brainRel, bust) {
+    elActions.appendChild(shareBtn(b, ceil)); elActions.appendChild(openLink(b, ceil)); elActions.appendChild(reloadBtn(reloadCurrent)); elActions.appendChild(dlLink(b, ceil)); elActions.appendChild(closeBtn());
+    elBody.innerHTML = '<div class="jvfe-img"><img src="' + esc(bustUrl(rawUrl(b, ceil), bust)) + '" alt="' + esc(baseOf(brainRel)) + '"></div>';
   }
   // 0.332.0: same as the pinned editor (console.js): the PDF scrolls in its own box, and a phone gets a
   // floating close button, because Safari on an iPhone grows a PDF iframe to the whole document.
@@ -298,7 +327,7 @@
   function renderPdf(url, ten) {
     if (laIOS()) elActions.appendChild(taiVeIOS(url, ten));
     else {
-      elActions.appendChild(openLinkUrl(url)); elActions.appendChild(dlLinkUrl(url, ten));
+      elActions.appendChild(openLinkUrl(url)); elActions.appendChild(reloadBtn(reloadCurrent)); elActions.appendChild(dlLinkUrl(url, ten));
     }
     elActions.appendChild(closeBtn());
     elBody.innerHTML = '<div class="jvfe-pdf"><iframe class="jvfe-frame" src="' + esc(url) + '"></iframe></div>';
@@ -308,7 +337,7 @@
     elBody.appendChild(x);
   }
   function renderReadonly(b, ceil, brainRel, d) {
-    elActions.appendChild(openLink(b, ceil)); elActions.appendChild(dlLink(b, ceil)); elActions.appendChild(closeBtn());
+    elActions.appendChild(openLink(b, ceil)); elActions.appendChild(reloadBtn(reloadCurrent)); elActions.appendChild(dlLink(b, ceil)); elActions.appendChild(closeBtn());
     elBody.innerHTML = '<div class="jvfe-prev"><pre style="white-space:pre-wrap;margin:0">' + esc(d.content || "") + "</pre></div>";
   }
   function renderError(b, ceil, brainRel, msg) {
@@ -558,6 +587,7 @@
     }
     elActions.appendChild(shareBtn(b, ceil));
     elActions.appendChild(openLink(b, ceil));
+    elActions.appendChild(reloadBtn(reloadCurrent));
     elActions.appendChild(dlLink(b, ceil));
     elActions.appendChild(closeBtn());
     if (!o.deferAuto) startAuto();
@@ -570,6 +600,7 @@
     if (isMd && typeof window.mdToHtml === "function" && window.JavisNoteEditor) renderMdEditor(b, ceil, d);
     else if (window.JavisHtmlPreview && window.JavisHtmlPreview.isHtmlPath(ceil)) renderHtmlEditor(b, ceil, d);
     else renderPlainEditor(b, ceil, d);
+    pendingMode = "";
   }
 
   // .html (0.430.2): opens on the PREVIEW, like an artifact, with a Code tab holding the usual
@@ -608,7 +639,11 @@
     elActions.appendChild(seg);
     appendSaveAndClose(b, ceil, function () { return ta.value; },
       { original: d.content || "", sources: [ta], apply: function (t) { ta.value = t; } });
-    draw();
+    if (pendingMode === "source") {
+      pendingMode = "";
+      var codeBtn = seg.querySelector('button[data-mode="code"]');
+      if (codeBtn) codeBtn.click();
+    } else draw();
   }
 
   // File text thuong (khong phai .md): textarea nguon, co to mau cu phap neu la file code.
@@ -702,7 +737,10 @@
 
     // Vao che do Sua (WYSIWYG) khi Turndown san sang; offline khong nap duoc thi o lai Nguon (van sua tot).
     // Autosave starts once the mode is settled (see appendSaveAndClose), also when Turndown cannot load.
-    if (window.TurndownService) { setMode("wys"); focusNeuDuocPhep(wys); startAuto(); }
+    var staySource = pendingMode === "source";
+    pendingMode = "";
+    if (staySource) { focusNeuDuocPhep(ta); startAuto(); }
+    else if (window.TurndownService) { setMode("wys"); focusNeuDuocPhep(wys); startAuto(); }
     else NE.ensureTurndown().then(function () {
       if (!neBody.isConnected) return;
       if (isOpen() && window.TurndownService) { setMode("wys"); focusNeuDuocPhep(wys); }
@@ -712,11 +750,13 @@
 
   // Xem mot PDF tu URL (link trong chat tren iPhone/iPad, chat-render.js goi). Cung khung voi
   // PDF mo tu duong dan brain: nut Dong, nut Back cua may dong duoc, nut Tai ve.
-  function openPdf(url, ten) {
+  function openPdf(url, ten, opts) {
     if (!url) return;
     ten = String(ten || "").split("?")[0] || baseOf(String(url).split("?")[0]) || "file.pdf";
     moModal(ten);
-    renderPdf(url, ten);
+    curTarget = { kind: "pdf", url: url, ten: ten };
+    var bust = opts && opts.reload ? Date.now() : 0;
+    renderPdf(bustUrl(url, bust), ten);
   }
 
   if (typeof window !== "undefined") {

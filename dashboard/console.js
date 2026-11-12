@@ -10445,9 +10445,23 @@
       actions.appendChild(window.JavisShareBtn(fbrain(), rel, hop, ""));
     }
     actions.appendChild(mk("↗", window.t("cs.ne_open_tab"), () => window.open(_vtRaw(rel), "_blank")));
+    const reloadBtn = mk(ic("rotate-cw"), window.t("cs.ne_reload"), () => _neReloadCur(rel, it));
+    reloadBtn.type = "button";
+    reloadBtn.setAttribute("aria-label", window.t("cs.ne_reload"));
+    actions.appendChild(reloadBtn);
     actions.appendChild(mk("⤓ " + esc(window.t("cs.fm_dl")), window.t("cs.fm_dl_title"), () => _dlFile(rel)));
     actions.appendChild(mk(ic("maximize"), window.t("cs.ne_zoom"), () => { ed.classList.toggle("ne-full"); _neSyncFull(); }));
     actions.appendChild(mk(X_ICON, window.t("cs.ne_close"), closeNote));
+  }
+  async function _neReloadCur(rel, it) {
+    if (!rel) return;
+    if (((_neAuto && _neAuto.dirty()) || _neCoSuaChua()) && !confirm(window.t("cs.ne_reload_discard"))) return;
+    await _neDropAssist(true);
+    const body = document.getElementById("neBody");
+    const keepMode = body && body.classList.contains("mode-source") ? "source"
+      : (body && body.classList.contains("mode-preview") ? "preview"
+        : (body && body.classList.contains("mode-wys") ? "wys" : ""));
+    await openNote(rel, it, { reload: true, mode: keepMode });
   }
   function _neRenderDownload(body, actions, rel, it) {
     body.className = "ne-body";
@@ -10745,7 +10759,7 @@
       if ((await _neSaveFn()) === false) return;   // lưu hỏng thì ở lại, lỗi hiện trên nút Lưu
     }
     // Write what the old file still has pending (also when this same file is opened again, before it is read back).
-    await _neDropAssist();
+    await _neDropAssist(!!(opts && opts.reload));
     const laLichSu = _neDangDiLichSu;
     _neDangDiLichSu = false;
     if (!laLichSu) _neDayLichSu(rel, it);
@@ -10775,8 +10789,9 @@
     _neDropPz();
     actions.innerHTML = ""; body.innerHTML = ""; body.className = "ne-body"; _neSaveFn = null;
 
+    const rawView = (r) => _vtRaw(r) + (opts && opts.reload ? "&_r=" + Date.now() : "");
     if (VT_IMG_EXTS.includes(ext)) {
-      body.innerHTML = `<div class="ne-img"><img src="${_vtRaw(rel)}" alt="${esc(it.name || "")}" draggable="false"></div>`;
+      body.innerHTML = `<div class="ne-img"><img src="${rawView(rel)}" alt="${esc(it.name || "")}" draggable="false"></div>`;
       // 0.405.0: zoom and pan (pan-zoom.js) once the picture knows its size; the page itself cannot pinch-zoom.
       const pic = body.querySelector(".ne-img img");
       pic.onload = () => {
@@ -10791,7 +10806,7 @@
     // through it carried the toolbar (and its close button) off the top with no way back. The PDF now
     // scrolls inside its own box, and on a phone a round close button floats over it (.pdf-float-close).
     if (VT_FRAME_EXTS.includes(ext)) {
-      body.innerHTML = `<div class="ne-pdf"><iframe class="ne-frame" src="${_vtRaw(rel)}"></iframe></div>` +
+      body.innerHTML = `<div class="ne-pdf"><iframe class="ne-frame" src="${rawView(rel)}"></iframe></div>` +
         `<button type="button" class="pdf-float-close" title="${esc(window.t("cs.ne_close"))}" aria-label="${esc(window.t("cs.ne_close"))}">${X_ICON}</button>`;
       body.querySelector(".pdf-float-close").onclick = closeNote;
       _neCommonBtns(actions, rel, it); _vtMarkActive(null); return;
@@ -10799,8 +10814,9 @@
     if (VT_TEXT_EXTS.includes(ext)) {
       body.innerHTML = `<div class="vt-info" style="padding:16px">${esc(window.t("cs.ne_opening"))}</div>`;
       let resp, d = {};
-      try { resp = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}`); d = await resp.json().catch(() => ({})); }
-      catch (e) { _neRenderDownload(body, actions, rel, it); return; }
+      try { resp = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}`, { cache: "no-store" }); d = await resp.json().catch(() => ({})); }
+      catch (e) { if (!ed.hidden && _neOpenRel === (rel || "")) _neRenderDownload(body, actions, rel, it); return; }
+      if (ed.hidden || _neOpenRel !== (rel || "")) return;
       // 404 = không có file ở đường dẫn đó (server trả rõ như vậy). Mọi lỗi còn lại - nhị phân,
       // quá to - vẫn là file CÓ THẬT nên đường tải về mới có nghĩa.
       if (resp.status === 404) { _neRenderMissing(body, actions, rel, it, d.error); return; }
@@ -10811,8 +10827,10 @@
       try { if (window.JavisPin && d.abs) window.JavisPin.set({ name: d.name || it.name || rel, rel, abs: d.abs }); } catch (e) { }
       const isMd = ext === ".md";
       if (isMd) { try { await _ensureTurndown(); } catch (e) { } }   // để lưu bản render (WYSIWYG) → markdown
+      if (ed.hidden || _neOpenRel !== (rel || "")) return;
       const wysOk = isMd && !!window.TurndownService;
-      body.className = "ne-body" + (isMd ? (wysOk ? " ne-md mode-wys" : " ne-md mode-source") : " mode-source");
+      const wantSrc = !wysOk || (opts && opts.mode === "source");
+      body.className = "ne-body" + (isMd ? (wantSrc ? " ne-md mode-source" : " ne-md mode-wys") : " mode-source");
       body.innerHTML = isMd
         ? `<div class="ne-fmt"></div><div class="ne-panes"><div class="ne-prev ne-wys" id="neWys" contenteditable="true" spellcheck="false"></div><div class="ne-src"><textarea id="neText" spellcheck="false"></textarea></div></div>`
         : `<div class="ne-src"><textarea id="neText" spellcheck="false"></textarea></div>`;
@@ -10830,7 +10848,7 @@
         // {trinhSua:true}: khối code dài giữ nguyên hình khối code thay vì thu thành thẻ
         // artifact - trong trình sửa, nội dung phải nhìn thấy và sửa được tại chỗ.
         wys.innerHTML = window.mdToHtml ? window.mdToHtml(ta.value, null, { trinhSua: true, thuMuc: neThuMuc }) : esc(ta.value);
-        let curMode = wysOk ? "wys" : "source";
+        let curMode = wantSrc ? "source" : "wys";
         // Tick checkbox task trong bản render -> tự lưu ngay (như Obsidian), khỏi bấm nút Lưu
         wys.addEventListener("jv-task-toggle", () => { if (_neSaveFn) _neSaveFn(); });
         const wysToSrc = () => { const md = _mdFromHtml(wys.innerHTML); if (md != null) ta.value = md; };
@@ -10871,6 +10889,10 @@
         _neGanDemTu(actions, () => ({ text: ta.value, md: false }), [ta]);
         // .html (0.430.2): opens on the PREVIEW, like an artifact, with a Code tab (html-preview.js).
         if (window.JavisHtmlPreview && window.JavisHtmlPreview.isHtmlPath(rel)) _neHtmlTabs(body, actions, ta, rel);
+        if (opts && opts.mode === "source") {
+          const seg = actions.querySelector(".ne-seg");
+          if (seg && seg.children[1]) seg.children[1].click();
+        }
       }
       const saveBtn = document.createElement("button"); saveBtn.innerHTML = SAVE_ICON + " " + esc(window.t("common.save")); saveBtn.title = window.t("cs.ne_save_title");
       // Mốc so sánh "đã sửa gì chưa": lấy SAU khi dựng xong khung soạn, tức là bản đã vòng
