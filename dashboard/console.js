@@ -517,7 +517,7 @@
     // nhát này thì mở xong vẫn không biết file nằm đâu, lần sau lại phải đi tìm lại từ đầu.
     // Đặt ở wrapper chứ không trong openNote: openNote còn được chính cây gọi khi bấm node,
     // ở đó cây đã đúng chỗ rồi, dựng lại là thừa.
-    try { _vtRevealInTree(ceilingRel); } catch (e) {}
+    try { _vtRevealInTree(ceilingRel); } catch (e) { }
   };
   // Mở lại một file bằng đường dẫn THEO TRẦN DUYỆT (đã có sẵn tiền tố nhà brain). Người gọi:
   // chip "file đang mở" dưới khung chat (app.js) - ghim giữ đúng dạng path mà openNote nhận,
@@ -591,8 +591,8 @@
       if (cv && focused && cv.contains(focused) && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)) return;
       const top = body() ? body().scrollTop : 0;
       const leave = _pageLeave; _pageLeave = null;
-      if (leave) { try { leave(); } catch (err) {} }
-      Promise.resolve(renderPage(id)).then(() => { const b = body(); if (b && top) b.scrollTop = top; }).catch(() => {});
+      if (leave) { try { leave(); } catch (err) { } }
+      Promise.resolve(renderPage(id)).then(() => { const b = body(); if (b && top) b.scrollTop = top; }).catch(() => { });
     }, 120);
   });
 
@@ -600,7 +600,7 @@
     let el = body();
     if (!el) return;
     // This visit's first read of each page key may come from the last visit's copy (fetch-gop.js, 2026-11-08).
-    try { if (window.JavisFetchGop && window.JavisFetchGop.pageStart) window.JavisFetchGop.pageStart(id); } catch (e) {}
+    try { if (window.JavisFetchGop && window.JavisFetchGop.pageStart) window.JavisFetchGop.pageStart(id); } catch (e) { }
     _pageTouched = false;
     // Cả đổi TAB trong Cài đặt cũng thay cviewBody. Trả node tĩnh về trước khi tháo nó.
     parkQuickSet();
@@ -639,7 +639,7 @@
       }
       _tabHoiThoaiCho = "";
     }
-    if (id === "chat")     return renderChat(el);
+    if (id === "chat") return renderChat(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
     if (id === "settings") return renderSettingsPage(el);
@@ -2365,7 +2365,7 @@
     }
     // 2026-11-09 (owner): one page for every door another app uses to call Javis: Webhook | Token API.
     let whTab = "hooks";
-    try { if (localStorage.getItem(WH_TAB_KEY) === "tokens") whTab = "tokens"; } catch (e) {}
+    try { if (localStorage.getItem(WH_TAB_KEY) === "tokens") whTab = "tokens"; } catch (e) { }
     el.innerHTML = `
       <div class="wh-tabs-page">
         <div class="ach-tabs tabs-top" role="tablist" aria-label="${esc(t("page.webhooks.label"))}">
@@ -2377,7 +2377,7 @@
       </div>`;
     let tokensDrawn = false;
     const showWhTab = (key) => {
-      try { localStorage.setItem(WH_TAB_KEY, key); } catch (e) {}
+      try { localStorage.setItem(WH_TAB_KEY, key); } catch (e) { }
       el.querySelectorAll("[data-wh-tab]").forEach(b => {
         const on = b.dataset.whTab === key;
         b.setAttribute("aria-selected", String(on));
@@ -3894,8 +3894,10 @@
     const bgName = bgCfg.model || defName(bgCfg.provider);
     // Automatic (10/11/2026): Javis picks two models of MAIN's provider, one for its own work, one for handed-over jobs.
     const bgAuto = !!bgCfg.auto;
-    const bgAutoSub = bgAuto ? t("models.bg_auto_sub", { nha: bgP.label || bgCfg.provider,
-      nhe: bgCfg.light || defName(bgCfg.provider), giua: bgName }) : "";
+    const bgAutoSub = bgAuto ? t("models.bg_auto_sub", {
+      nha: bgP.label || bgCfg.provider,
+      nhe: bgCfg.light || defName(bgCfg.provider), giua: bgName
+    }) : "";
     const useP = bgUse ? (pById(bgUse.provider) || {}) : {};
     const bgLine = !bgUse ? `<div class="aux-note warn">${WARN_ICON} ${esc(t("models.bg_none"))}</div>`
       : bgUse.step !== "background" ? `<div class="aux-note">${esc(t("models.bg_using", {
@@ -4032,7 +4034,7 @@
     const named = (pid, go) => async () => {
       const name = takeAcctName(el, pid);
       if (name === null) return;
-      try { await savePlanName(pid, name); } catch (e) {}
+      try { await savePlanName(pid, name); } catch (e) { }
       go();
     };
     if (ol) ol.onclick = named("openai-oauth", () => startOauthLogin(el));
@@ -4044,7 +4046,7 @@
       // Antigravity signs in from a terminal, so its name is saved when the owner checks the card afterwards.
       const name = takeAcctName(el, "antigravity-cli");
       if (name === null) return;
-      try { await savePlanName("antigravity-cli", name); } catch (e) {}
+      try { await savePlanName("antigravity-cli", name); } catch (e) { }
       agk.disabled = true; const cu2 = agk.textContent; agk.textContent = t("models.trying");
       if (msg) msg.textContent = t("models.testing");
       let r = null;
@@ -4092,7 +4094,7 @@
       const msg = el.querySelector("#grokMsg"), box = el.querySelector("#grokBox");
       const name = takeAcctName(el, "grok-cli");
       if (name === null) return;
-      try { await savePlanName("grok-cli", name); } catch (e) {}
+      try { await savePlanName("grok-cli", name); } catch (e) { }
       gkl.disabled = true; const cu = gkl.textContent; gkl.textContent = t("models.opening");
       if (msg) msg.textContent = t("models.grok_ask");
       let r = null;
@@ -4762,12 +4764,13 @@
         if (!a.main) rows.push({ ic: "log-in", label: t("models.pacct_relogin"), run: () => planSheet(btn, pid, id, a.label || "") });
         if (i0 > 0) rows.push({ ic: "arrow-up", label: t("models.move_up"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() - 1)) });
         if (i0 < n - 1) rows.push({ ic: "arrow-down", label: t("models.move_down"), run: () => saveAcc(pid, MO.move(items(pid), idx(), idx() + 1)) });
-        menuSheet(btn, name, [rows, a.main ? [] : [{ ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
-          confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
-            const l = items(pid), i = idx();
-            const gone = l.splice(i, 1)[0];
-            saveAcc(pid, l, [gone.id]);
-          })
+        menuSheet(btn, name, [rows, a.main ? [] : [{
+          ic: "trash-2", label: t("models.acct_rm"), danger: true, run: () =>
+            confirmSheet(btn, t("models.rm_t", { ten: name }), t("models.pacct_rm_q", { ten: name }), t("models.acct_rm"), "trash-2", () => {
+              const l = items(pid), i = idx();
+              const gone = l.splice(i, 1)[0];
+              saveAcc(pid, l, [gone.id]);
+            })
         }]], cardOf(pid).label);
       };
     });
@@ -4810,12 +4813,14 @@
           : { supported: false, note: "fast.none" };
         const slider = S.mount(sh.body, {
           value: cur.reasoning, locked: locked, lockedValue: locked ? S.lockedLevel(cur.model) : "",
-          fast: { supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
-            c.fast = on;
-            el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
-            await saveSetting("model", { fast: on });
-            window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
-          } },
+          fast: {
+            supported: fn.supported, on: c.fast, title: () => "Fast mode\n" + t(fn.note), onToggle: async (on) => {
+              c.fast = on;
+              el.querySelectorAll(".ord-echip .ord-fast").forEach(x => { x.hidden = !(on && x.dataset.ok === "1"); });
+              await saveSetting("model", { fast: on });
+              window.dispatchEvent(new CustomEvent("javis:fast-changed", { detail: { on: on } }));
+            }
+          },
           onChange: (v) => {
             cur.reasoning = v;
             btn.querySelector(".ord-etxt").textContent = c.effName(v);
@@ -4896,9 +4901,11 @@
       opened(auxChg, sh);
       const st = { expanded: c.bgCfg.provider, filter: "" };
       const draw = async () => {
-        const o = { providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
-                    selected: c.bgCfg.auto ? { provider: "", model: "" } : { provider: c.bgCfg.provider, model: c.bgCfg.model },
-                    searchId: "ordBgSearch" };
+        const o = {
+          providers: c.connList, connectedOnly: true, expanded: st.expanded, filter: st.filter, noWait: true,
+          selected: c.bgCfg.auto ? { provider: "", model: "" } : { provider: c.bgCfg.provider, model: c.bgCfg.model },
+          searchId: "ordBgSearch"
+        };
         const html = await window.JavisModelList.render(o);
         if (!openPop || openPop.el !== pop) return;
         const typing = document.activeElement && document.activeElement.id === "ordBgSearch";
@@ -4971,8 +4978,10 @@
         q("[data-addacc]") && { ic: "user-plus", label: t("models.pacct_add"), sub: t("models.pacct_add_d"), run: () => planSheet(b, pid) },
         // A plan card with one account has no list to rename it from: its name is edited here.
         PLAN_CLI.indexOf(pid) >= 0 && (c.accts[pid] || []).length < 2 && !(pid === "anthropic-cli" && p.auth_mode === "api_key")
-          && { ic: "pencil", label: t("models.acname_edit"), sub: ACCT_NAMES[pid] || t("models.acname_none"),
-               run: () => renamePlan(b, pid, "main", p.label, ACCT_NAMES[pid]) },
+        && {
+          ic: "pencil", label: t("models.acname_edit"), sub: ACCT_NAMES[pid] || t("models.acname_none"),
+          run: () => renamePlan(b, pid, "main", p.label, ACCT_NAMES[pid])
+        },
         pid === "anthropic-cli" ? { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => refreshClaudeCard(el, true) }
           : check && { ic: "refresh-cw", label: t("qs.recheck"), sub: t("models.check_d"), run: () => check.click() }],
         // Claude Code on an API key: the key is chosen with the card's own switch, there is no plan login to drop.
@@ -5160,7 +5169,7 @@
   async function startClaudeLogin(el) {
     const name = takeAcctName(el, "anthropic-cli");
     if (name === null) return;
-    try { await savePlanName("anthropic-cli", name); } catch (e) {}
+    try { await savePlanName("anthropic-cli", name); } catch (e) { }
     const act = el.querySelector("#cliAction");
     const msg = el.querySelector("#cliMsg");
     if (msg) msg.textContent = t("models.getting_link");
@@ -5627,7 +5636,7 @@
     cat.forEach(c => { if (c.group) (byGroup[c.group] = byGroup[c.group] || []).push(c); });
     return Object.keys(byGroup).map(g => {
       const meta = Object.assign({ name: g, icon: ic("plug"), category: byGroup[g][0].category || "Khác", desc: "" },
-                                 GROUP_META[g] || {});
+        GROUP_META[g] || {});
       const ids = byGroup[g].map(c => c.id);
       const nConn = (conns || []).filter(x => ids.includes(x.connector_id)).length;
       const gDesc = meta.desc_key ? window.t(meta.desc_key) : (meta.desc || "");
@@ -6050,7 +6059,7 @@
     const m = connModal(mHead(esc(c.label || window.t("cs.cn_account_fallback")))
       + '<div class="conn-menu">'
       + ((c.connector_id || "custom") === "custom"
-          ? '<button class="conn-menu-btn" data-m="edit">' + ic("settings") + ' ' + esc(window.t("cs.mf_menu_edit")) + '</button>' : "")
+        ? '<button class="conn-menu-btn" data-m="edit">' + ic("settings") + ' ' + esc(window.t("cs.mf_menu_edit")) + '</button>' : "")
       + '<button class="conn-menu-btn" data-m="test">' + ic("rotate-cw") + ' ' + esc(window.t("cs.cn_menu_test")) + '</button>'
       + '<button class="conn-menu-btn" data-m="rekey">' + ic("repeat") + ' ' + esc(window.t("cs.cn_menu_rekey")) + '</button>'
       + '<button class="conn-menu-btn" data-m="default"' + (c.is_default ? " disabled" : "") + '>' + ic("star") + ' ' + esc(window.t("cs.cn_menu_default")) + '</button>'
@@ -7279,7 +7288,7 @@
     const auth = s.auth || {};
     // 2026-11-09 (owner): Security has its own tab: account state, 2FA, devices signed in, sign-in history.
     let acTab = "account";
-    try { if (localStorage.getItem(AC_TAB_KEY) === "security") acTab = "security"; } catch (e) {}
+    try { if (localStorage.getItem(AC_TAB_KEY) === "security") acTab = "security"; } catch (e) { }
     el.innerHTML = `
       <div class="ach ac-page">
       <div class="ach-tabs tabs-top" role="tablist" aria-label="${esc(t("page.account.label"))}">
@@ -7349,7 +7358,7 @@
     el.querySelectorAll("[data-ac-tab]").forEach(b => {
       b.onclick = () => {
         const key = b.dataset.acTab;
-        try { localStorage.setItem(AC_TAB_KEY, key); } catch (e) {}
+        try { localStorage.setItem(AC_TAB_KEY, key); } catch (e) { }
         el.querySelectorAll("[data-ac-tab]").forEach(x => {
           const on = x.dataset.acTab === key;
           x.setAttribute("aria-selected", String(on));
@@ -7416,7 +7425,7 @@
     if (lo) lo.onclick = async () => {
       await fetch("/auth/logout", { method: "POST" });
       // 2026-11-08: chats kept in this browser for a quick first paint (chat-cache.js) leave with the session.
-      try { if (window.JavisChatCache) await window.JavisChatCache.clear(); } catch (e) {}
+      try { if (window.JavisChatCache) await window.JavisChatCache.clear(); } catch (e) { }
       location.reload();
     };
     const dis = document.getElementById("acDisable");
@@ -7454,9 +7463,9 @@
     if (!ua) return t("sec.dev_unknown");
     const has = (k) => ua.toLowerCase().includes(k.toLowerCase());
     const br = [["Edg/", "Edge"], ["OPR/", "Opera"], ["Zalo", "Zalo"], ["Chrome/", "Chrome"], ["Firefox/", "Firefox"],
-      ["Safari/", "Safari"], ["curl/", "curl"], ["python", "Python"]].find(([k]) => has(k));
+    ["Safari/", "Safari"], ["curl/", "curl"], ["python", "Python"]].find(([k]) => has(k));
     const os = [["iPhone", "iPhone"], ["iPad", "iPad"], ["Android", "Android"], ["Windows", "Windows"],
-      ["Mac OS", "macOS"], ["Linux", "Linux"]].find(([k]) => ua.includes(k));
+    ["Mac OS", "macOS"], ["Linux", "Linux"]].find(([k]) => ua.includes(k));
     return [br && br[1], os && os[1]].filter(Boolean).join(" · ") || ua.slice(0, 40);
   }
   const secWhen = (ts) => {
@@ -7517,7 +7526,7 @@
       sb.querySelectorAll(".sec-end").forEach(b => {
         b.onclick = async () => {
           const fd = new FormData(); fd.append("id", b.dataset.id || "");
-          try { await fetch("/auth/sessions/revoke", { method: "POST", body: fd }); } catch (e) {}
+          try { await fetch("/auth/sessions/revoke", { method: "POST", body: fd }); } catch (e) { }
           renderSecurity();
         };
       });
@@ -7870,14 +7879,14 @@
     // 2FA, trong khi thật ra cổng đang đòi mã khôi phục (vụ 16/08).
     row.innerHTML = a.totp_broken
       ? `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-low">${esc(window.t("cs.tfa_row_broken"))}</b>`
-        + ` ${esc(window.t("cs.tfa_row_broken_b"))}`
-        + ` <button class="s-btn" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_fix"))}</button>`
+      + ` ${esc(window.t("cs.tfa_row_broken_b"))}`
+      + ` <button class="s-btn" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_fix"))}</button>`
       : a.totp_enabled
         ? `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-on">${esc(window.t("cs.tfa_row_on"))}</b>`
         + ` · ${esc(window.t("cs.tfa_row_left", { so: con }))}`
         + (con <= 2 ? ` <b class="tfa-low">${esc(window.t("cs.tfa_row_low"))}</b>` : "")
         + ` <button class="s-btn-ghost" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_manage"))}</button>`
-      : `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-off">${esc(window.t("cs.tfa_row_off"))}</b>`
+        : `${ic("shield")} ${esc(window.t("cs.ac_2fa_head"))}: <b class="tfa-off">${esc(window.t("cs.tfa_row_off"))}</b>`
         + ` ${esc(window.t("cs.tfa_off_note2"))}`
         + ` <button class="s-btn" data-settings-go="account" data-ac-open="security">${esc(window.t("cs.tfa_row_enable"))}</button>`;
   }
@@ -8223,7 +8232,7 @@
       const saved = JSON.parse(localStorage.getItem("javis.share.view") || "{}");
       if (["all", "file", "chat", "unseen"].indexOf(saved.filter) >= 0) state.filter = saved.filter;
       if (["new", "views", "recent"].indexOf(saved.sort) >= 0) state.sort = saved.sort;
-    } catch (e) {}
+    } catch (e) { }
     el.innerHTML = `<div class="pg-loading pg-page">${esc(t("common.loading"))}</div>`;
     let links = [];
     try {
@@ -8240,7 +8249,7 @@
     draw();
 
     function remember() {
-      try { localStorage.setItem("javis.share.view", JSON.stringify({ filter: state.filter, sort: state.sort })); } catch (e) {}
+      try { localStorage.setItem("javis.share.view", JSON.stringify({ filter: state.filter, sort: state.sort })); } catch (e) { }
     }
     // Strip marks so "ghi chu" finds "ghi-chú". Declared here, not borrowed: tests run this function on its own.
     function plain(x) {
@@ -8364,9 +8373,9 @@
       const where = chat ? ic("messages-square") + " " + esc(t("share.chat_label")) : esc(m.path || "");
       const seen = st.views
         ? `<span class="share-views">${ic("eye")}<b>${num(st.views)}</b></span>`
-          + `<span>${esc(t("share.visitors", { n: num(st.visitors) }))}</span>`
-          + `<span>${esc(t("share.week", { n: num(st.week) }))}</span>`
-          + (st.last ? `<span>${esc(t("share.last_seen", { t: ago(st.last) }))}</span>` : "")
+        + `<span>${esc(t("share.visitors", { n: num(st.visitors) }))}</span>`
+        + `<span>${esc(t("share.week", { n: num(st.week) }))}</span>`
+        + (st.last ? `<span>${esc(t("share.last_seen", { t: ago(st.last) }))}</span>` : "")
         : `<span class="share-views none">${ic("eye-off")}${esc(t("share.never"))}</span>`;
       const b = (attr, val, icon, key, cls) => `<button type="button" class="share-ib${cls ? " " + cls : ""}" ${attr}="${esc(val)}" aria-label="${esc(t(key) + ": " + name)}" title="${esc(t(key))}">${ic(icon)}</button>`;
       return `<div class="share-row" data-token="${esc(m.token)}">
@@ -8407,11 +8416,11 @@
     function writeClipboard(url, done) {
       // execCommand fallback: navigator.clipboard does not exist over plain HTTP on a LAN.
       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(url).then(done).catch(() => {});
+        navigator.clipboard.writeText(url).then(done).catch(() => { });
       } else {
         const o = document.createElement("textarea");
         o.value = url; document.body.appendChild(o); o.select();
-        try { document.execCommand("copy"); done(); } catch (e) {}
+        try { document.execCommand("copy"); done(); } catch (e) { }
         o.remove();
       }
     }
@@ -8893,7 +8902,7 @@
     el.querySelectorAll("[data-settings-go]").forEach(btn => {
       btn.onclick = () => {
         // 2FA now lives in Account > Security: open that tab, not the one visited last.
-        if (btn.dataset.acOpen) { try { localStorage.setItem(AC_TAB_KEY, btn.dataset.acOpen); } catch (e) {} }
+        if (btn.dataset.acOpen) { try { localStorage.setItem(AC_TAB_KEY, btn.dataset.acOpen); } catch (e) { } }
         navigateTo(btn.dataset.settingsGo);
       };
     });
@@ -9552,7 +9561,7 @@
   function _neDropAssist(discard) {
     const auto = _neAuto, mic = _neMic;
     _neAuto = null; _neMic = null;
-    if (mic) { try { mic.destroy(); } catch (e) {} }
+    if (mic) { try { mic.destroy(); } catch (e) { } }
     return auto ? auto.close(discard) : Promise.resolve(true);
   }
   // Vệt đường đi giữa các note, y hệt lịch sử trình duyệt: bấm [[wikilink]] là đi tới, Lùi là
@@ -9845,7 +9854,7 @@
     const nn = prompt(window.t("cs.fm_new_name"), oldname);
     if (!nn || nn === oldname) return;
     const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel); fd.append("newname", nn);
-    try { await fetch("/files/rename", { method: "POST", body: fd }); } catch (e) {}
+    try { await fetch("/files/rename", { method: "POST", body: fd }); } catch (e) { }
     await _vtReloadPins();
     await _vtRebuildReExpand(null);   // giữ nguyên các thư mục đang mở
   }
@@ -11087,8 +11096,8 @@
         _vtNoAccent(cleanRel) === _vtNoAccent(t) || cleanRel === t
       );
       if (Date.now() - pl.time < 2000 && pl.sourceRel && pl.sourceRel !== (rel || "") &&
-          (resolvedMatch || _vtNoAccent(cleanRel) === _vtNoAccent(cleanRaw) || cleanRel === cleanRaw ||
-           cleanRaw.endsWith("/" + cleanRel) || cleanRel.endsWith("/" + cleanRaw))) {
+        (resolvedMatch || _vtNoAccent(cleanRel) === _vtNoAccent(cleanRaw) || cleanRel === cleanRaw ||
+          cleanRaw.endsWith("/" + cleanRel) || cleanRel.endsWith("/" + cleanRaw))) {
         linkOrigin = pl;
       }
     } else {
@@ -11197,8 +11206,10 @@
         applyText = (txt) => { ta.value = txt; srcToWys(); if (demLai) demLai(); };
         micTarget = () => (curMode === "wys" ? { kind: "wys", el: wys } : { kind: "ta", el: ta });
         let demLai = null;
-        _neBuildToolbar(body.querySelector(".ne-fmt"), { mode: () => curMode, ta, wys,
-          onChange: () => { if (demLai) demLai(); pokeAuto(); } });   // thanh công cụ chạy cả 2 chế độ
+        _neBuildToolbar(body.querySelector(".ne-fmt"), {
+          mode: () => curMode, ta, wys,
+          onChange: () => { if (demLai) demLai(); pokeAuto(); }
+        });   // thanh công cụ chạy cả 2 chế độ
         // Đếm chữ HIỆN RA: chế độ Sửa lấy chữ của bản render, chế độ Mã nguồn bỏ cú pháp markdown.
         demLai = _neGanDemTu(body.querySelector(".ne-fmt"),
           () => (curMode === "wys" ? { text: wys.innerText, md: false } : { text: ta.value, md: true }), [ta, wys]);
@@ -11260,8 +11271,8 @@
         saveBtn.classList.toggle("ne-save-err", st === "error");
         saveBtn.innerHTML = st === "saved" ? CHECK_ICON + " " + esc(window.t("cs.ne_saved"))
           : st === "saving" ? SAVE_ICON + " " + esc(window.t("cs.ne_saving"))
-          : st === "error" ? WARN_ICON + " " + esc(window.t("cs.ne_save_err"))
-          : SAVE_ICON + " " + esc(window.t("common.save"));
+            : st === "error" ? WARN_ICON + " " + esc(window.t("cs.ne_save_err"))
+              : SAVE_ICON + " " + esc(window.t("common.save"));
         saveBtn.title = window.t(st === "error" ? "cs.ne_save_err_title" : "cs.ne_save_title");
       };
       if (window.JavisAutosave) {
@@ -11274,7 +11285,7 @@
           sources: [ta, document.getElementById("neWys")],
           apply: applyText,
           onStatus: paintSave,
-          onRestored: () => { try { toast(window.t("cs.ne_draft_restored")); } catch (e) {} },
+          onRestored: () => { try { toast(window.t("cs.ne_draft_restored")); } catch (e) { } },
         });
         _neAuto = auto;
         _neSaveFn = () => auto.flush();
@@ -11504,7 +11515,7 @@
     // Khôi phục ngay, trước các lời gọi mạng ở freshSettings, để tránh nháy màn Javis.
     khoiPhucTrang();
     // 2026-11-09: the start-up screen waits from here for the first page's own "Loading..." lines to go (boot-splash.js).
-    try { if (window.JavisBoot) window.JavisBoot.pageStarted(); } catch (e) {}
+    try { if (window.JavisBoot) window.JavisBoot.pageStarted(); } catch (e) { }
 
     freshSettings().then(async s => {
       // Máy này CHƯA chọn ngôn ngữ (i18n đang đoán theo trình duyệt): ngôn ngữ đã lưu trên
