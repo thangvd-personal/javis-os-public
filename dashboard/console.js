@@ -30,6 +30,7 @@
     // (RIENG in icons.js, the owner picked it over Lucide's brain-circuit and network).
     home: "neural-net",
     chat: "message-circle",
+    record: "mic",
     settings: "settings",
     workspace: "bot",
     // Nhóm chat team (0.140.0): nhiều trợ lý cùng một khung chat, cạnh trang Cộng sự.
@@ -109,7 +110,7 @@
   // Nhãn rail lấy từ TỪ ĐIỂN (thư mục dashboard/i18n) chứ không viết cứng. `t()` suy biến về
   // tiếng Việt khi thiếu key, nên một bản dịch làm dở không bao giờ để lại key trần trên rail.
   const RAIL_ITEMS = [
-    "home", "chat", "settings", "workspace", "teams", "skills", "chatbots", "conversations", "files",
+    "home", "chat", "record", "settings", "workspace", "teams", "skills", "chatbots", "conversations", "files",
     "terminal", "coding", "tasks", "webhooks", "learn", "models", "channels", "mcp", "plugins",
     "packs", "logs", "account", "usage", "logins", "pet", "share",
   ].map(id => ({ id, icon: ICON[id], get label() { return t(`page.${id}.label`); } }));
@@ -139,7 +140,7 @@
   // Rows that stand ALONE at the very top of the rail, outside every group: no header, never folded, always on screen.
   // 2026-11-05 (owner): "phần trò chuyện tách luôn ra làm mục đầu tiên". Not a group, so voice commands that open a
   // group (ui_targets.GROUPS) never see it; opening the page itself works as before.
-  const RAIL_TOP = ["chat"];
+  const RAIL_TOP = ["chat", "record"];
 
   // Trang CÓ THẬT nhưng KHÔNG hiện trên thanh bên. Bỏ hẳn khỏi `RAIL_ITEMS` thì không dùng
   // được, vì đó mới là nguồn icon và nhãn; nên chỗ ẩn nằm ở đây.
@@ -196,7 +197,7 @@
   //
   // `page.<id>.title` cho phép tiêu đề trang KHÁC nhãn trên rail khi cần (rail chật nên
   // "Việc", trang rộng nên "Việc (Kanban)"); thiếu key đó thì tự rơi về `page.<id>.label`.
-  const VIEW_META = Object.fromEntries(["home", "chat", "settings", "workspace", "teams", "skills", "files", "terminal", "coding", "tasks", "webhooks", "chatbots", "conversations", "learn", "models", "channels", "mcp", "plugins", "packs", "logs", "account", "usage", "pet", "share", "logins"].map(id => [id, {
+  const VIEW_META = Object.fromEntries(["home", "chat", "record", "settings", "workspace", "teams", "skills", "files", "terminal", "coding", "tasks", "webhooks", "chatbots", "conversations", "learn", "models", "channels", "mcp", "plugins", "packs", "logs", "account", "usage", "pet", "share", "logins"].map(id => [id, {
     icon: VIEW_ICON[id],
     get label() {
       const rieng = t(`page.${id}.title`);
@@ -597,6 +598,7 @@
   });
 
   async function renderPage(id) {
+    if (_pageLeave) { const leave = _pageLeave; _pageLeave = null; try { leave(); } catch (e) { } }
     let el = body();
     if (!el) return;
     // This visit's first read of each page key may come from the last visit's copy (fetch-gop.js, 2026-11-08).
@@ -640,6 +642,7 @@
       _tabHoiThoaiCho = "";
     }
     if (id === "chat") return renderChat(el);
+    if (id === "record") return renderRecord(el);
     if (id === "workspace") return renderWorkspace(el);
     if (STUDIO_PAGES.includes(id)) return renderStudioPage(el, id);
     if (id === "settings") return renderSettingsPage(el);
@@ -1509,6 +1512,23 @@
 
   // Rời trang Tệp tin: TRẢ trình sửa về khoang não trước khi #cviewBody bị ghi đè, y như trang
   // Trò chuyện vẫn làm. Không trả là mất luôn node #noteEditor, và lần sau mở file ra trắng trơn.
+  function _vrRoiTrang() {
+    document.body.classList.remove("on-record");
+    _neSlotOnClose = null;
+    try { if (window.JavisVoiceRecord && typeof window.JavisVoiceRecord.unmount === "function") window.JavisVoiceRecord.unmount(); } catch (e) { }
+    _returnNoteEditor();
+  }
+
+  function renderRecord(el) {
+    if (!window.JavisVoiceRecord) {
+      el.innerHTML = placeholder("record", window.t("cs.mod_not_ready", { ten: "voice-record.js" }));
+      return;
+    }
+    document.body.classList.add("on-record");
+    _pageLeave = _vrRoiTrang;
+    window.JavisVoiceRecord.mount(el);
+  }
+
   function _fmRoiTrang() {
     _neHideLocationSide();
     document.body.classList.remove("on-files");
@@ -9205,6 +9225,7 @@
   // Từ 0.33.4 trang Tệp tin cũng mượn chính node này (#fmEdit) thay vì bật popup riêng - một
   // trình sửa duy nhất cho cả app, không có bản nghèo hơn ở góc nào nữa.
   let _neSlot = null;
+  let _neSlotOnClose = null;
   // ============================================================
   // Cột trái của .chatpage: MỘT bản luật cho mọi trang dùng khung này
   // ============================================================
@@ -10354,6 +10375,7 @@
     // Trang Tệp tin vừa mượn trình sửa: đóng ra thì danh sách file phải khớp lại - ngay trong
     // trình sửa có nút đổi tên và xoá, quay về mà vẫn thấy tên cũ là nhìn vào một danh sách sai.
     if (typeof _fmSauKhiDong === "function") { const f = _fmSauKhiDong; _fmSauKhiDong = null; try { f(); } catch (e) { } }
+    if (typeof _neSlotOnClose === "function") { const f = _neSlotOnClose; _neSlotOnClose = null; try { f(); } catch (e) { } }
     try { recomputeGraph(); } catch (e) { }   // chạy lại não (đã gate active===home + không lite + studio đóng)
   }
   // Đổi tên file đang mở: lưu nội dung hiện tại trước (giữ chữ đã gõ), đổi tên, rồi mở lại ở tên mới.
@@ -10995,6 +11017,17 @@
       buildToolbar: _neBuildToolbar,
       ganDemTu: _neGanDemTu,   // bộ đếm từ + ký tự (0.65.32), khung sửa trong chat dùng chung
       replaceLink: _neReplaceLinkInMarkdown,
+      openInSlot: function (slot, rel, it, opts) {
+        _neSlotOnClose = (opts && typeof opts.onClose === "function") ? opts.onClose : null;
+        if (slot) _borrowNoteEditor(slot);
+        return openNote(rel, it, opts);
+      },
+      closeInSlot: function () {
+        _neSlotOnClose = null;
+        const ed = document.getElementById("noteEditor");
+        if (ed && !ed.hidden) return closeNote();
+        _returnNoteEditor();
+      },
     };
   }
 
@@ -11131,6 +11164,7 @@
     // (thứ không hề hiện ở trang này). Trang Tệp tin cũng vậy: chiếm chỗ danh sách file.
     if (document.body.classList.contains("on-chat")) _borrowNoteEditor();
     else if (document.body.classList.contains("on-files")) _borrowNoteEditor(document.getElementById("fmEdit"));
+    else if (document.body.classList.contains("on-record")) _borrowNoteEditor(document.getElementById("vrEdit"));
     document.removeEventListener("keydown", _neKeyHandler, true);
     document.addEventListener("keydown", _neKeyHandler, true);
     try { if (window.__javisGraph && window.__javisGraph.pause) window.__javisGraph.pause(); } catch (e) { }

@@ -170,6 +170,7 @@ import transcript_fix  # rewrites what the mic heard at the end of a dictation: 
 import turn_plan  # the engine's task plan (TodoWrite, update_plan) for the plan card in the chat
 import vision_input
 import voice_privacy
+import voice_records  # SQLite audit store + VoiceRecord/*.md naming for the Record page
 import web_security  # chống CSRF-to-localhost + DNS-rebinding cho web API cục bộ
 import webpush  # thông báo đẩy trình duyệt (Web Push, tự mã hoá - không thêm thư viện)
 import winproc  # chạy lệnh con câm lặng trên Windows (không nháy console đen)
@@ -18741,6 +18742,83 @@ async def stt_fix_route(request: Request):
         ctx = [str(c)[:300] for c in ctx[-6:]] if isinstance(ctx, list) else []
         return {"ok": True, **await transcript_fix.rewrite_transcript(cfg, text, ctx)}
     return {"ok": True, **await transcript_fix.fix_transcript(cfg, text)}
+
+
+@app.get("/voice-records")
+def voice_records_list(brain: str = Query("brain"), limit: int = Query(30)):
+    """List raw-text audit & normalized file records for a brain."""
+    broot = brain_ident.canonical(_brain_root(brain))
+    try:
+        rows = voice_records.get_store().list_for_brain(brain=brain, brain_path=broot, limit=limit)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    return {"ok": True, "records": rows}
+
+
+@app.post("/voice-records/normalize")
+async def voice_records_normalize(request: Request):
+    """Save raw voice transcript to SQLite audit first, normalize grammar, write VoiceRecord/YYYY.MM.DD-HH.MM.SS.md."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": localefmt.chu("JSON không hợp lệ", "Invalid JSON")}, status_code=400)
+    body = body or {}
+    brain = str(body.get("brain") or "brain").strip() or "brain"
+    raw_text = str(body.get("raw_text") or "").strip()
+    if not raw_text:
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Chưa có văn bản thô để chuẩn hóa", "No raw text to normalize")},
+            status_code=400,
+        )
+
+    broot = Path(_brain_root(brain)).resolve()
+    vr_dir = broot / "VoiceRecord"
+    vr_dir.mkdir(parents=True, exist_ok=True)
+    now = localefmt.now()
+    filename = voice_records.make_record_filename(now, vr_dir)
+    target_file = vr_dir / filename
+    brain_rel = f"VoiceRecord/{filename}"
+    try:
+        ceil_rel = _files_rel(_files_root(brain), target_file)
+    except ValueError:
+        ceil_rel = brain_rel
+
+    store = voice_records.get_store()
+    rec = await asyncio.to_thread(
+        lambda: store.create_raw(
+            brain=brain,
+            brain_path=brain_ident.canonical(str(broot)),
+            raw_text=raw_text,
+            file_path=brain_rel,
+            ceil_path=ceil_rel,
+            created_at=now.timestamp(),
+            created_iso=now.isoformat(),
+        )
+    )
+
+    cfg = cfgmod.read_settings()
+    try:
+        res = await transcript_fix.normalize_voice_record(cfg, raw_text)
+        norm_text = str((res or {}).get("text") or raw_text).strip() or raw_text
+        await asyncio.to_thread(_atomic_write_text, target_file, norm_text)
+        updated = await asyncio.to_thread(
+            lambda: store.mark_normalized(
+                rec["id"],
+                normalized_text=norm_text,
+                source=str((res or {}).get("source") or ""),
+                file_path=brain_rel,
+                ceil_path=ceil_rel,
+            )
+        )
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": str(e), "record": rec}, status_code=500)
+
+    return {
+        "ok": True,
+        "record": updated or rec,
+        "ai": bool((res or {}).get("ai")),
+        "source": str((res or {}).get("source") or ""),
+    }
 
 
 @app.get("/chat/suggest")
