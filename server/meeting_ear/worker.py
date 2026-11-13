@@ -20,7 +20,7 @@ from typing import Any
 
 
 WHISPER_REPOS = {
-    "large-v3-turbo": "Systran/faster-whisper-large-v3-turbo",
+    "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
     "medium": "Systran/faster-whisper-medium",
     "small": "Systran/faster-whisper-small",
 }
@@ -564,10 +564,35 @@ def run_job(job_path: str) -> int:
         return 0
 
 
+def _clean_venv_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    env["PYTHONNOUSERSITE"] = "1"
+    return env
+
+
 def _pip_install(py_bin: str, args: list[str], label: str) -> int:
     print(label, flush=True)
-    cmd = [py_bin, "-m", "pip", "install", "--no-cache-dir", "--disable-pip-version-check", *args]
-    return subprocess.call(cmd)
+    cmd = [py_bin, "-I", "-m", "pip", "install", "--no-cache-dir", "--disable-pip-version-check", *args]
+    return subprocess.call(cmd, env=_clean_venv_env())
+
+
+def _venv_health_ok(py_bin: str) -> bool:
+    if not Path(py_bin).is_file():
+        return False
+    check_code = (
+        "import torch, torchaudio, pyannote.audio, faster_whisper; "
+        "assert torch.__version__.startswith('2.5.')"
+    )
+    return (
+        subprocess.call(
+            [py_bin, "-I", "-c", check_code],
+            env=_clean_venv_env(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
 
 
 def _wipe_model_cache(model_dir: str, model_name: str) -> None:
@@ -647,9 +672,12 @@ def run_install(mode: str, venv_dir: str, model_dir: str, hf_home: str, model_na
     if mode in ("all", "diarize"):
         vpath = Path(venv_dir)
         py_bin = str(vpath / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
+        if vpath.exists() and not _venv_health_ok(py_bin):
+            print(f"Removing incomplete/outdated meeting-ear venv at {vpath} ...", flush=True)
+            shutil.rmtree(vpath, ignore_errors=True)
         if not Path(py_bin).is_file():
             print(f"Creating isolated venv at {vpath} ...", flush=True)
-            code = subprocess.call([sys.executable, "-m", "venv", str(vpath)])
+            code = subprocess.call([sys.executable, "-m", "venv", str(vpath)], env=_clean_venv_env())
             if code != 0:
                 emit({"type": "result", "ok": False, "error": f"venv creation failed with code {code}"})
                 return 1
@@ -672,46 +700,73 @@ def run_install(mode: str, venv_dir: str, model_dir: str, hf_home: str, model_na
             emit({"type": "result", "ok": False, "error": f"PyTorch install exited with {code}"})
             return 1
 
-        code = _pip_install(
-            py_bin,
-            [
-                "pyannote-audio==3.1.*",
-                "faster-whisper>=1.1,<2",
-                "numpy<2.1",
-                "huggingface_hub<1.0",
-            ],
-            "Installing pinned pyannote-audio==3.1.* and faster-whisper ...",
-        )
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as ctf:
+            ctf.write("torch==2.5.1\ntorchaudio==2.5.1\nnumpy<2\nscipy<1.14\nhuggingface_hub<1.0\n")
+            constraints_path = ctf.name
+        try:
+            code = _pip_install(
+                py_bin,
+                [
+                    "-c",
+                    constraints_path,
+                    "--extra-index-url",
+                    torch_index,
+                    "pyannote-audio==3.1.*",
+                    "faster-whisper>=1.1,<2",
+                    "numpy<2",
+                    "scipy<1.14",
+                    "huggingface_hub<1.0",
+                    "typing_extensions",
+                ],
+                "Installing pinned pyannote-audio==3.1.* and faster-whisper ...",
+            )
+        finally:
+            try:
+                os.unlink(constraints_path)
+            except OSError:
+                pass
         if code != 0:
             emit({"type": "result", "ok": False, "error": f"pyannote/faster-whisper install exited with {code}"})
+            return 1
+
+        if not _venv_health_ok(py_bin):
+            emit({"type": "result", "ok": False, "error": "meeting-ear venv failed post-install import verification"})
             return 1
 
     if mode in ("all", "model", "whisper", "redownload"):
         if force or mode == "redownload":
             print(f"Removing cached files for Whisper model {model_name} before re-download ...", flush=True)
             _wipe_model_cache(model_dir, model_name)
-        print(f"Downloading / verifying Whisper model {model_name} in {model_dir} ...", flush=True)
-        venv_py = str(Path(venv_dir) / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
-        py_exec = sys.executable
-        if Path(venv_py).is_file():
-            has_fw = subprocess.call(
-                [venv_py, "-c", "import faster_whisper"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+        if not force and mode != "redownload" and _verify_model_files(model_dir, model_name):
+            print(f"Whisper model {model_name} already cached and verified in {model_dir}.", flush=True)
+        else:
+            print(f"Downloading / verifying Whisper model {model_name} in {model_dir} ...", flush=True)
+            venv_py = str(Path(venv_dir) / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))
+            dl_cmd = [sys.executable]
+            dl_env = dict(os.environ)
+            if Path(venv_py).is_file():
+                has_fw = subprocess.call(
+                    [venv_py, "-I", "-c", "import faster_whisper"],
+                    env=_clean_venv_env(),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if has_fw == 0:
+                    dl_cmd = [venv_py, "-I"]
+                    dl_env = _clean_venv_env()
+                    dl_env["HF_HOME"] = hf_home
+                    dl_env["HF_HUB_DISABLE_TELEMETRY"] = "1"
+            dl_code = (
+                "from faster_whisper import WhisperModel; "
+                f"WhisperModel({model_name!r}, device='cpu', compute_type='int8', download_root={model_dir!r}, local_files_only=False)"
             )
-            if has_fw == 0:
-                py_exec = venv_py
-        dl_code = (
-            "from faster_whisper import WhisperModel; "
-            f"WhisperModel({model_name!r}, device='cpu', compute_type='int8', download_root={model_dir!r}, local_files_only=False)"
-        )
-        code = subprocess.call([py_exec, "-c", dl_code], env=dict(os.environ))
-        if code != 0:
-            emit({"type": "result", "ok": False, "error": f"Whisper model download exited with {code}"})
-            return 1
-        if not _verify_model_files(model_dir, model_name):
-            emit({"type": "result", "ok": False, "error": f"Whisper model {model_name} files incomplete after download"})
-            return 1
+            code = subprocess.call([*dl_cmd, "-c", dl_code], env=dl_env)
+            if code != 0:
+                emit({"type": "result", "ok": False, "error": f"Whisper model download exited with {code}"})
+                return 1
+            if not _verify_model_files(model_dir, model_name):
+                emit({"type": "result", "ok": False, "error": f"Whisper model {model_name} files incomplete after download"})
+                return 1
 
     tok = os.getenv("HF_TOKEN", "").strip()
     if mode in ("all", "diarize") and tok:
@@ -722,7 +777,10 @@ def run_install(mode: str, venv_dir: str, model_dir: str, hf_home: str, model_na
                 "import os; from pyannote.audio import Pipeline; "
                 "Pipeline.from_pretrained('pyannote/speaker-diarization-3.1', use_auth_token=os.environ['HF_TOKEN'])"
             )
-            wcode = subprocess.call([py_exec, "-c", warm_code], env=dict(os.environ))
+            wenv = _clean_venv_env()
+            wenv["HF_HOME"] = hf_home
+            wenv["HF_TOKEN"] = tok
+            wcode = subprocess.call([py_exec, "-I", "-c", warm_code], env=wenv)
             if wcode != 0:
                 print(
                     "Warning: pyannote warm-up failed (check HF_TOKEN and Hugging Face license acceptance).",

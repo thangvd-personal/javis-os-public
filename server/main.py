@@ -19130,6 +19130,102 @@ async def voice_record_pin(record_id: str, request: Request):
     return {"ok": True, "record": voice_records.public_record(updated)}
 
 
+@app.post("/voice-records/{record_id}/rediarize")
+async def voice_record_rediarize(record_id: str, request: Request):
+    """Re-run speaker diarization (pyannote) on an existing meeting record using its saved audio."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    if rec.get("mode") != "meeting":
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Chỉ hỗ trợ tách người nói cho bản ghi cuộc họp", "Speaker diarization is only supported for meeting records")},
+            status_code=400,
+        )
+    audio_path = str(rec.get("audio_path") or "").strip()
+    if not audio_path or not Path(audio_path).is_file():
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("File âm thanh gốc không còn trên máy", "Original audio file is no longer available")},
+            status_code=404,
+        )
+
+    cfg = cfgmod.read_settings()
+    tok, _ = meeting_stt.resolve_hf_token(cfg)
+    if not tok:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    "Chưa có HF_TOKEN để chạy pyannote. Vui lòng dán token Hugging Face và bấm Lưu token trước.",
+                    "Missing HF_TOKEN to run pyannote. Please paste and save your Hugging Face token first.",
+                ),
+            },
+            status_code=400,
+        )
+
+    py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=True)
+    if not py_exe:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    "Môi trường pyannote chưa sẵn sàng. Hãy bấm Cài đặt ở trang Ghi âm trước.",
+                    "pyannote environment is not ready. Please click Install on the Record page first.",
+                ),
+            },
+            status_code=400,
+        )
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+
+    mc = meeting_stt.get_config(cfg)
+    model = str(body.get("model") or rec.get("model_used") or mc["whisper_model"]).strip()
+    if model not in meeting_stt.SUPPORTED_WHISPER_MODELS:
+        model = mc["whisper_model"]
+    device = str(body.get("device") or rec.get("device_used") or mc["device"]).strip().lower()
+    if device not in meeting_stt.VALID_DEVICES:
+        device = mc["device"]
+    language = str(body.get("language") or mc["language"]).strip().lower()
+    if language not in meeting_stt.VALID_LANGUAGES:
+        language = mc["language"]
+
+    brain = str(rec.get("brain") or "brain")
+    broot = Path(_brain_root(brain)).resolve()
+    now = localefmt.now()
+    job = store.create_job(
+        brain=brain,
+        brain_path=brain_ident.canonical(str(broot)),
+        title=str(body.get("title") or "").strip()[:160],
+        upload_mode="raw_upload",
+        file_ext=Path(audio_path).suffix or ".webm",
+        model=model,
+        device=device,
+        language=language,
+        diarize=True,
+        num_speakers=max(0, _safe_int(body.get("num_speakers"))),
+        min_speakers=max(0, _safe_int(body.get("min_speakers"))),
+        max_speakers=max(0, _safe_int(body.get("max_speakers"))),
+        total_chunks=0,
+        audio_path=audio_path,
+        record_id=record_id,
+        status="queued",
+        pinned=bool(rec.get("pinned")),
+        created_at=now.timestamp(),
+        created_iso=now.isoformat(),
+    )
+    queued = meeting_jobs.enqueue_job(
+        job["id"],
+        brain_root_fn=_brain_root,
+        files_root_fn=_files_root,
+        files_rel_fn=_files_rel,
+    )
+    return {"ok": True, "job": voice_records.public_job(queued), "record": voice_records.public_record(rec)}
+
+
 @app.get("/voice-records/{record_id}/audio")
 def voice_record_audio(record_id: str):
     rec = voice_records.get_store().get(record_id)

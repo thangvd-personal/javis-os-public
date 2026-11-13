@@ -105,7 +105,27 @@ check("status detects cached medium model & rejects incomplete small model",
       r_st.get("ok") is True
       and r_st["cached_whisper_models"].get("medium") is True
       and r_st["cached_whisper_models"].get("small") is False
-      and r_st.get("whisper_ready") is True)
+      and r_st.get("whisper_ready") is True
+      and meeting_stt.SUPPORTED_WHISPER_MODELS["large-v3-turbo"]["repo"] == "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+      and mt_worker.WHISPER_REPOS["large-v3-turbo"] == "mobiuslabsgmbh/faster-whisper-large-v3-turbo")
+
+# Incomplete venv missing faster_whisper / typing_extensions must report venv_diarize_ready=False
+broken_sp = _STATE / "meeting-ear" / "venv" / "lib" / "python3.12" / "site-packages"
+(broken_sp / "pyannote" / "audio").mkdir(parents=True, exist_ok=True)
+(broken_sp / "torch").mkdir(parents=True, exist_ok=True)
+if os.name == "nt":
+    (_STATE / "meeting-ear" / "venv" / "Scripts").mkdir(parents=True, exist_ok=True)
+    (_STATE / "meeting-ear" / "venv" / "Scripts" / "python.exe").write_text("", encoding="utf-8")
+else:
+    (_STATE / "meeting-ear" / "venv" / "bin").mkdir(parents=True, exist_ok=True)
+    (_STATE / "meeting-ear" / "venv" / "bin" / "python").write_text("", encoding="utf-8")
+check("venv_diarize_ready rejects venv missing faster_whisper and typing_extensions",
+      meeting_stt.venv_diarize_ready() is False)
+(broken_sp / "faster_whisper").mkdir(parents=True, exist_ok=True)
+(broken_sp / "typing_extensions.py").write_text("", encoding="utf-8")
+check("venv_diarize_ready accepts complete venv stack",
+      meeting_stt.venv_diarize_ready() is True)
+shutil.rmtree(_STATE / "meeting-ear", ignore_errors=True)
 
 secret_tok = "hf_super_secret_test_token_987654"
 r_cfg = client.post("/voice-records/meeting/config", json={"hf_token": secret_tok, "whisper_model": "medium"})
@@ -305,6 +325,51 @@ check("export SRT/VTT/TXT/JSON succeed with mapped speaker names",
       and r_vtt.status_code == 200 and r_vtt.text.startswith("WEBVTT") and "<v Sếp Tuấn>" in r_vtt.text
       and r_txt.status_code == 200 and "[00:02 - Sếp Tuấn]" in r_txt.text
       and r_jsn.status_code == 200 and r_jsn.json()["segments"][0]["speaker"] == "Sếp Tuấn")
+
+# Rediarize existing meeting record
+_orig_resolve_tok = meeting_stt.resolve_hf_token
+_orig_resolve_py = meeting_stt.resolve_worker_python
+
+meeting_stt.resolve_hf_token = lambda cfg=None: ("", False)
+r_redia_no_tok = client.post(f"/voice-records/{rid}/rediarize")
+check("POST /voice-records/{id}/rediarize rejects when HF_TOKEN is absent",
+      r_redia_no_tok.status_code == 400 and "HF_TOKEN" in r_redia_no_tok.json().get("error", ""))
+
+meeting_stt.resolve_hf_token = lambda cfg=None: ("hf_mock_token_123", True)
+meeting_stt.resolve_worker_python = lambda need_diarize=False: (sys.executable, "")
+
+r_redia_ok = client.post(f"/voice-records/{rid}/rediarize", json={"title": "Hop Q4 Rediarize"})
+d_redia = r_redia_ok.json()
+check("POST /voice-records/{id}/rediarize creates job linked to existing record_id",
+      r_redia_ok.status_code == 200
+      and d_redia.get("ok") is True
+      and d_redia["job"]["record_id"] == rid
+      and d_redia["job"]["diarize"] == 1
+      and d_redia["job"]["has_audio"] is True)
+
+new_diarized_segs = [
+    {"start": 2.0, "end": 6.5, "speaker": "SPEAKER_00", "text": "Hôm nay chúng ta chốt kế hoạch quý 4."},
+    {"start": 7.0, "end": 12.0, "speaker": "SPEAKER_01", "text": "Em đã chuẩn bị báo cáo doanh thu tháng này."},
+]
+up_rec = store.update_diarization(
+    rid,
+    segments=new_diarized_segs,
+    raw_text="raw text with diarization",
+    warnings=[],
+    rendered_text="[00:02 - SPEAKER_00] Hôm nay chúng ta chốt kế hoạch quý 4.\n\n[00:07 - SPEAKER_01] Em đã chuẩn bị báo cáo doanh thu tháng này.",
+    duration_sec=12.2,
+    model_used="large-v3-turbo",
+    device_used="cuda",
+)
+check("update_diarization updates segments, raw_text, clears warnings, and recalculates speakers",
+      up_rec is not None
+      and up_rec["warnings"] == []
+      and len(up_rec["speakers"]) == 2
+      and up_rec["speakers"][0]["id"] == "SPEAKER_00"
+      and up_rec["model_used"] == "large-v3-turbo")
+
+meeting_stt.resolve_hf_token = _orig_resolve_tok
+meeting_stt.resolve_worker_python = _orig_resolve_py
 
 # Audio playback + Pin prevents 30-day cleanup + Unpin allows 30-day cleanup
 r_aud = client.get(f"/voice-records/{rid}/audio")

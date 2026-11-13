@@ -357,6 +357,69 @@ async def _execute_job(
             broot = Path(brain_root_fn(job["brain"])).resolve()
             vr_dir = broot / "VoiceRecord"
             vr_dir.mkdir(parents=True, exist_ok=True)
+
+            existing_rec = None
+            if job.get("record_id"):
+                existing_rec = store.get(job["record_id"])
+
+            if existing_rec:
+                brain_rel = str(existing_rec.get("file_path") or "").strip()
+                if brain_rel:
+                    target_file = (broot / brain_rel).resolve()
+                else:
+                    fname = voice_records.make_record_filename(now_dt, vr_dir)
+                    target_file = vr_dir / fname
+                    brain_rel = f"VoiceRecord/{fname}"
+                try:
+                    ceil_rel = files_rel_fn(files_root_fn(job["brain"]), target_file)
+                except Exception:
+                    ceil_rel = brain_rel
+
+                title = job.get("title") or ""
+                if not title and target_file.is_file():
+                    try:
+                        for line in target_file.read_text(encoding="utf-8").splitlines():
+                            line = line.strip()
+                            if line.startswith("# "):
+                                title = line[2:].strip()
+                                break
+                    except Exception:
+                        pass
+
+                md_text = voice_records.render_meeting_markdown(
+                    created_iso=existing_rec.get("created_iso") or now_dt.isoformat(),
+                    duration_sec=duration_sec or float(existing_rec.get("duration_sec") or 0.0),
+                    model_used=model_used or str(existing_rec.get("model_used") or ""),
+                    segments=segments,
+                    speaker_map=existing_rec.get("speaker_map") or {},
+                    normalized_segments=existing_rec.get("normalized_segments") or [],
+                    title=title,
+                )
+                await asyncio.to_thread(_atomic_write_text, target_file, md_text)
+
+                store.update_diarization(
+                    existing_rec["id"],
+                    segments=segments,
+                    raw_text=raw_text or md_text,
+                    warnings=warnings,
+                    rendered_text=md_text,
+                    duration_sec=duration_sec or float(existing_rec.get("duration_sec") or 0.0),
+                    model_used=model_used or str(existing_rec.get("model_used") or ""),
+                    device_used=device_used or str(existing_rec.get("device_used") or ""),
+                )
+                store.update_job(
+                    job_id,
+                    status="done",
+                    progress=100,
+                    stage_detail="Completed",
+                    audio_path=final_audio_path if Path(final_audio_path).is_file() else "",
+                    duration_sec=duration_sec or float(existing_rec.get("duration_sec") or 0.0),
+                    record_id=existing_rec["id"],
+                    warnings=warnings,
+                    error="",
+                )
+                return
+
             fname = voice_records.make_record_filename(now_dt, vr_dir)
             target_file = vr_dir / fname
             brain_rel = f"VoiceRecord/{fname}"

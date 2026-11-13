@@ -560,6 +560,38 @@ class VoiceRecordStore:
             updated = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
         return _row_to_dict(updated)
 
+    def update_diarization(
+        self,
+        record_id: str,
+        *,
+        segments: list[dict[str, Any]],
+        raw_text: str,
+        warnings: list[str] | None = None,
+        rendered_text: str | None = None,
+        duration_sec: float | None = None,
+        model_used: str = "",
+        device_used: str = "",
+    ) -> dict[str, Any] | None:
+        now_ts = time.time()
+        with self._lock:
+            row = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
+            if not row:
+                return None
+            seg_json = json.dumps(segments or [], ensure_ascii=False)
+            warn_json = json.dumps(warnings or [], ensure_ascii=False)
+            norm_text = str(rendered_text if rendered_text is not None else row["normalized_text"] or "")
+            dur = float(duration_sec if duration_sec is not None else row["duration_sec"] or 0.0)
+            mu = str(model_used or row["model_used"] or "")
+            du = str(device_used or row["device_used"] or "")
+            self._db.execute(
+                "UPDATE voice_records SET segments_json=?, raw_text=?, warnings_json=?, "
+                "normalized_text=?, duration_sec=?, model_used=?, device_used=?, updated_at=? WHERE id=?",
+                (seg_json, str(raw_text or ""), warn_json, norm_text, dur, mu, du, now_ts, record_id),
+            )
+            self._db.commit()
+            updated = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
+        return _row_to_dict(updated)
+
     def set_pinned(self, record_id: str, pinned: bool) -> dict[str, Any] | None:
         now_ts = time.time()
         val = 1 if pinned else 0
@@ -654,6 +686,10 @@ class VoiceRecordStore:
         min_speakers: int = 0,
         max_speakers: int = 0,
         total_chunks: int = 0,
+        audio_path: str = "",
+        record_id: str = "",
+        status: str = "uploading",
+        pinned: bool = False,
         created_at: float | None = None,
         created_iso: str = "",
     ) -> dict[str, Any]:
@@ -664,8 +700,8 @@ class VoiceRecordStore:
                 "INSERT INTO meeting_jobs "
                 "(id, created_at, created_iso, updated_at, brain, brain_path, title, status, progress, "
                 "stage_detail, upload_mode, file_ext, model, device, language, diarize, "
-                "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 'uploading', 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks, audio_path, record_id, pinned) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
                 (
                     jid,
                     now_ts,
@@ -674,6 +710,7 @@ class VoiceRecordStore:
                     str(brain or ""),
                     str(brain_path or ""),
                     str(title or ""),
+                    str(status or "uploading"),
                     str(upload_mode or "raw_upload"),
                     str(file_ext or ".webm"),
                     str(model or "large-v3-turbo"),
@@ -684,6 +721,9 @@ class VoiceRecordStore:
                     int(min_speakers or 0),
                     int(max_speakers or 0),
                     int(total_chunks or 0),
+                    str(audio_path or ""),
+                    str(record_id or ""),
+                    1 if pinned else 0,
                 ),
             )
             self._db.commit()

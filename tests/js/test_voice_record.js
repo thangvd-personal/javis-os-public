@@ -104,15 +104,58 @@ check("buildSpeakerMapPayload filters blank/unchanged names",
   JSON.stringify(spkPayload) === JSON.stringify({ SPEAKER_00: "Anh Nam" }));
 
 const meetingKeys = [
-  "vr.tab.quick", "vr.tab.meeting", "vr.meeting.btn_record", "vr.meeting.btn_pause",
+  "vr.tab.quick", "vr.tab.meeting", "vr.tab.settings", "vr.meeting.btn_record", "vr.meeting.btn_pause",
   "vr.meeting.btn_resume", "vr.meeting.btn_stop", "vr.meeting.btn_upload",
   "vr.meeting.token_missing_warn", "vr.meeting.btn_apply_speakers", "vr.meeting.btn_pin",
+  "vr.meeting.btn_rediarize", "vr.meeting.btn_rediarizing",
   "vr.meeting.btn_redownload_model", "vr.meeting.btn_pyannote_installed", "vr.meeting.btn_model_installed",
   "vr.meeting.install_success_all", "vr.meeting.install_success_model",
-  "vr.meeting.install_success_redownload", "vr.meeting.install_failed", "vr.meeting.install_incomplete"
+  "vr.meeting.install_success_redownload", "vr.meeting.install_failed", "vr.meeting.install_incomplete",
+  "vr.meeting.setup_hint_prefix", "vr.meeting.setup_hint_and", "vr.meeting.setup_hint_suffix",
+  "vr.meeting.hint_diarize_title", "vr.meeting.hint_seg_title"
 ];
 check("vi.json and en.json have all meeting mode i18n keys",
   meetingKeys.every(k => typeof viJson[k] === "string" && typeof enJson[k] === "string"));
+
+const hintHtml = VR.renderSetupHintHtml();
+check("renderSetupHintHtml includes links with href, title, target, and class for both models",
+  typeof hintHtml === "string"
+  && hintHtml.includes('href="https://huggingface.co/pyannote/speaker-diarization-3.1"')
+  && hintHtml.includes('href="https://huggingface.co/pyannote/segmentation-3.0"')
+  && hintHtml.includes('title="vr.meeting.hint_diarize_title"')
+  && hintHtml.includes('title="vr.meeting.hint_seg_title"')
+  && hintHtml.includes('target="_blank"')
+  && hintHtml.includes('rel="noopener noreferrer"')
+  && hintHtml.includes('class="vr-link"')
+  && consoleCss.includes(".vr-link"));
+
+check("voice-record.js contains 3 tabs including settings tab",
+  vrJsSrc.includes("vrTabSettings") && vrJsSrc.includes("vrPaneSettings") && vrJsSrc.includes("vrStPills"));
+
+check("model dropdown moved from meeting pane to settings pane and vrMtPills removed",
+  !vrJsSrc.includes('id="vrMtPills"')
+  && vrJsSrc.includes('id="vrStPills"')
+  && !vrJsSrc.match(/id="vrPaneMeeting"[\s\S]*?id="vrMtModel"[\s\S]*?id="vrPaneSettings"/)
+  && vrJsSrc.match(/id="vrPaneSettings"[\s\S]*?id="vrMtModel"/));
+
+check("settings pane arranges model dropdown and CTAs on single row, vrStPills single-line, and compact token row",
+  vrJsSrc.includes("vr-mt-model-row")
+  && consoleCss.includes(".vr-mt-model-row")
+  && consoleCss.includes("#vrStPills { display: inline-flex; flex-wrap: nowrap")
+  && consoleCss.includes(".vr-settings-card .gcard-btn")
+  && consoleCss.includes(".vr-btn-ghost")
+  && vrJsSrc.includes("btn_pyannote_installed"));
+
+check("voice-record.js contains rediarize buttons and handler",
+  vrJsSrc.includes("vrMtBtnRediarizeRec") && vrJsSrc.includes("vrMtBtnRediarizeBanner") && vrJsSrc.includes("rediarizeMeetingRecord"));
+
+check("voice-record.js and console.css wire 4-column CTA bar with TXT primary button group",
+  vrJsSrc.includes("vrMtExpGroup") &&
+  vrJsSrc.includes("vr-btn-group") &&
+  vrJsSrc.includes("vrMtExp_txt") &&
+  consoleCss.includes("vr-mt-actions-bar") &&
+  consoleCss.includes("grid-template-columns: repeat(4, minmax(0, 1fr))") &&
+  consoleCss.includes("vr-btn-group-item.is-primary"));
 
 // 9. Install / Download / Redownload CTA locking & state machine
 const baseSt = {
@@ -147,9 +190,11 @@ const sDone = VR.getInstallCtaState(
   { model: "large-v3-turbo", installPending: "" },
   { ok: true, installing: false, lib_ready: true, venv_diarize_ready: true, cached_whisper_models: { "large-v3-turbo": true } }
 );
-check("when pyannote + model validly installed: both installAll & installModel lockedDone, redownload enabled",
+check("when pyannote + model validly installed: both installAll & installModel lockedDone, redownload enabled, installAll button hidden",
   sDone.installAll.lockedDone === true
   && sDone.installAll.disabled === true
+  && sDone.installAll.visible === false
+  && sUnready.installAll.visible === true
   && sDone.installModel.lockedDone === true
   && sDone.installModel.disabled === true
   && sDone.redownloadModel.visible === true

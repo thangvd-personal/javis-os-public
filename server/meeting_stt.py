@@ -24,7 +24,7 @@ import localefmt
 
 SUPPORTED_WHISPER_MODELS = {
     "large-v3-turbo": {
-        "repo": "Systran/faster-whisper-large-v3-turbo",
+        "repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "size_hint": "~1.6 GB",
         "label_vi": "large-v3-turbo (Chính xác cao)",
         "label_en": "large-v3-turbo (High accuracy)",
@@ -325,6 +325,15 @@ def venv_python_ready() -> bool:
     return meeting_venv_python().is_file()
 
 
+def _site_has_diarize_stack(sp: Path) -> bool:
+    return (
+        (sp / "pyannote" / "audio").is_dir()
+        and (sp / "torch").is_dir()
+        and (sp / "faster_whisper").is_dir()
+        and (sp / "typing_extensions.py").is_file()
+    )
+
+
 def venv_diarize_ready() -> bool:
     py = meeting_venv_python()
     if not py.is_file():
@@ -336,11 +345,11 @@ def venv_diarize_ready() -> bool:
     for cand in site_candidates:
         if not cand.exists():
             continue
-        if (cand / "pyannote" / "audio").is_dir() and (cand / "torch").is_dir():
+        if _site_has_diarize_stack(cand):
             return True
         try:
             for sp in cand.glob("python*/site-packages"):
-                if (sp / "pyannote" / "audio").is_dir() and (sp / "torch").is_dir():
+                if _site_has_diarize_stack(sp):
                     return True
         except OSError:
             pass
@@ -542,7 +551,8 @@ def install_command(mode: str | None = None, model: str | None = None, force: bo
     _LAST_INSTALL["mode"] = eff_mode
     _LAST_INSTALL["model"] = eff_model
     _LAST_INSTALL["force"] = eff_force
-    env = worker_env(cfg, extra_pythonpath=str(local_ear_lib()) if local_lib_ready() else "")
+    need_local_lib = eff_mode in ("model", "whisper", "redownload") and local_lib_ready() and not venv_diarize_ready()
+    env = worker_env(cfg, extra_pythonpath=str(local_ear_lib()) if need_local_lib else "")
     argv = [
         sys.executable,
         "-u",

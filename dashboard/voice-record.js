@@ -129,6 +129,7 @@
       modelCached: modelCached,
       libReady: libReady,
       installAll: {
+        visible: !pyannoteReady || (busy && activeAction === "all"),
         disabled: !statusLoaded || busy || pyannoteReady,
         lockedDone: !busy && pyannoteReady,
         labelKey: (busy && activeAction === "all")
@@ -212,6 +213,16 @@
     }
   }
 
+  function renderSetupHintHtml() {
+    var dUrl = "https://huggingface.co/pyannote/speaker-diarization-3.1";
+    var sUrl = "https://huggingface.co/pyannote/segmentation-3.0";
+    var dTitle = tw("vr.meeting.hint_diarize_title");
+    var sTitle = tw("vr.meeting.hint_seg_title");
+    var dLink = '<a href="' + dUrl + '" target="_blank" rel="noopener noreferrer" class="vr-link" title="' + esc(dTitle) + '">pyannote/speaker-diarization-3.1 ↗</a>';
+    var sLink = '<a href="' + sUrl + '" target="_blank" rel="noopener noreferrer" class="vr-link" title="' + esc(sTitle) + '">pyannote/segmentation-3.0 ↗</a>';
+    return esc(tw("vr.meeting.setup_hint_prefix")) + " " + dLink + " " + esc(tw("vr.meeting.setup_hint_and")) + " " + sLink + " " + esc(tw("vr.meeting.setup_hint_suffix"));
+  }
+
   var pure = {
     CHUNK_SIZE_BYTES: CHUNK_SIZE_BYTES,
     fmtTime: fmtTime,
@@ -230,6 +241,7 @@
     buildSpeakerMapPayload: buildSpeakerMapPayload,
     levelOf: levelOf,
     basename: basename,
+    renderSetupHintHtml: renderSetupHintHtml,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = pure;
@@ -275,6 +287,7 @@
       recState: "idle", // idle | recording | paused
       uploading: false,
       normalizing: false,
+      rediarizing: false,
       uploadDone: 0,
       uploadTotal: 0,
       title: "",
@@ -459,12 +472,16 @@
     if (!S.host || !S.mounted) return;
     var tq = $("vrTabQuick");
     var tm = $("vrTabMeeting");
+    var ts = $("vrTabSettings");
     var pq = $("vrPaneQuick");
     var pm = $("vrPaneMeeting");
+    var ps = $("vrPaneSettings");
     if (tq) tq.classList.toggle("active", S.tab === "quick");
     if (tm) tm.classList.toggle("active", S.tab === "meeting");
+    if (ts) ts.classList.toggle("active", S.tab === "settings");
     if (pq) pq.hidden = S.tab !== "quick";
     if (pm) pm.hidden = S.tab !== "meeting";
+    if (ps) ps.hidden = S.tab !== "settings";
   }
 
   function syncQuickUi() {
@@ -530,8 +547,8 @@
     var mt = S.mt;
     var st = mt.statusData || {};
 
-    var pillsEl = $("vrMtPills");
-    if (pillsEl) {
+    var stPillsEl = $("vrStPills");
+    if (stPillsEl) {
       var html = "";
       if (st.has_gpu) {
         html += '<span class="vr-pill is-ok">' + ico("cpu") + " <span>" + esc(tw("vr.meeting.hw_gpu", { name: st.gpu_name || "CUDA", vram: st.vram_mb || 0 })) + "</span></span>";
@@ -541,10 +558,10 @@
       if (!st.has_ffmpeg && st.ok) {
         html += '<span class="vr-pill is-warn">' + ico("triangle-alert") + " <span>" + esc(tw("vr.meeting.hw_no_ffmpeg")) + "</span></span>";
       }
-      if (st.has_hf_token) {
-        html += '<span class="vr-pill is-ok">' + ico("key") + " <span>HF_TOKEN</span></span>";
+      if (st.venv_diarize_ready) {
+        html += '<span class="vr-pill is-ok">' + ico("circle-check") + " <span>" + esc(tw("vr.meeting.btn_pyannote_installed")) + "</span></span>";
       }
-      pillsEl.innerHTML = html;
+      stPillsEl.innerHTML = html;
     }
 
     var ctaState = getInstallCtaState(mt, st);
@@ -592,6 +609,7 @@
     var activeModel = mt.installPendingModel || (st.installing ? st.install_model : "") || mt.model || "large-v3-turbo";
     var instAllBtn = $("vrMtBtnInstallAll");
     if (instAllBtn) {
+      instAllBtn.hidden = !ctaState.installAll.visible;
       instAllBtn.disabled = ctaState.installAll.disabled;
       instAllBtn.classList.toggle("is-done", ctaState.installAll.lockedDone);
       instAllBtn.innerHTML = ico(ctaState.installAll.lockedDone ? "circle-check" : "download") +
@@ -626,10 +644,12 @@
     }
     var instLog = $("vrMtInstallLog");
     if (instLog) {
-      var showLog = !!(st.installing || st.install_error || (mt.installNotice && mt.installNotice.type === "err" && st.install_log));
+      var logTxt = st.install_log || st.install_progress || st.install_error || "";
+      var showLog = Boolean(logTxt && (st.installing || st.install_error || (mt.installNotice && mt.installNotice.type === "err")));
       instLog.hidden = !showLog;
       if (showLog) {
-        instLog.textContent = st.install_error || st.install_progress || st.install_log || "";
+        instLog.textContent = logTxt;
+        instLog.scrollTop = instLog.scrollHeight;
       }
     }
 
@@ -646,10 +666,10 @@
         warnEl.innerHTML =
           '<span class="vr-warn-txt">' + ico("triangle-alert", { cls: "ic-warn" }) + " <span>" + esc(wtext) + "</span></span>" +
           (!st.has_hf_token || !st.venv_diarize_ready
-            ? '<button type="button" class="gcard-btn" id="vrMtBtnOpenSetup">' + ico("sliders-horizontal") + " <span>" + esc(tw("vr.meeting.btn_config")) + "</span></button>"
+            ? '<button type="button" class="gcard-btn" id="vrMtBtnOpenSetup">' + ico("sliders-horizontal") + " <span>" + esc(tw("vr.tab.settings")) + "</span></button>"
             : "");
         var openSetup = $("vrMtBtnOpenSetup");
-        if (openSetup) openSetup.onclick = function () { S.mt.drawerOpen = true; syncMeetingUi(); };
+        if (openSetup) openSetup.onclick = function () { S.tab = "settings"; syncUi(); };
       } else {
         warnEl.innerHTML = "";
       }
@@ -736,18 +756,41 @@
 
     var rec = S.activeRecord;
     if (!edCard) return;
-    edCard.hidden = !rec;
-    if (!rec) return;
+    edCard.hidden = !rec || S.tab === "settings";
+    if (edCard.hidden) return;
 
     if (edFile) edFile.textContent = rec.file_path || "";
     if (edTime) edTime.textContent = fmtDateLabel(rec.created_iso);
+
+    var isMeeting = rec.mode === "meeting";
+    var canRediarize = isMeeting && !!rec.has_audio;
+
     if (edNote) {
       var warnTxt = S.infoNote || warningTextForCodes(rec.warnings);
       edNote.hidden = !warnTxt;
-      edNote.textContent = warnTxt || "";
+      if (!edNote.hidden) {
+        var isPyannoteWarn = Array.isArray(rec.warnings) && (
+          rec.warnings.indexOf("pyannote_auth_warn") !== -1 ||
+          rec.warnings.indexOf("missing_hf_token") !== -1 ||
+          rec.warnings.indexOf("pyannote_not_installed") !== -1
+        );
+        if (canRediarize && isPyannoteWarn) {
+          edNote.innerHTML = '<div class="vr-fallback-row">' +
+            '<span>' + esc(warnTxt) + '</span>' +
+            '<button type="button" class="gcard-btn vr-btn-rediarize-banner" id="vrMtBtnRediarizeBanner">' +
+            ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
+            ' <span>' + esc(S.mt.rediarizing ? tw("vr.meeting.btn_rediarizing") : tw("vr.meeting.btn_rediarize")) + '</span></button>' +
+            '</div>';
+          var btnBanner = $("vrMtBtnRediarizeBanner");
+          if (btnBanner) {
+            btnBanner.disabled = !!S.mt.rediarizing;
+            btnBanner.onclick = function () { rediarizeMeetingRecord(rec); };
+          }
+        } else {
+          edNote.textContent = warnTxt || "";
+        }
+      }
     }
-
-    var isMeeting = rec.mode === "meeting";
     var audioWrap = $("vrMtAudioWrap");
     if (audioWrap) {
       audioWrap.hidden = !(isMeeting && rec.has_audio);
@@ -764,10 +807,10 @@
           pinBtn.classList.toggle("is-pinned", pinned);
           pinBtn.innerHTML = ico(pinned ? "pin-off" : "pin") + " <span>" + esc(pinned ? tw("vr.meeting.btn_pinned") : tw("vr.meeting.btn_pin")) + "</span>";
         }
-        var retTxt = $("vrMtRetention");
+        var retTxt = $("vrMtBtnPin");
         if (retTxt) {
           var keepDays = (S.mt.statusData && S.mt.statusData.config && S.mt.statusData.config.keep_audio_days) || 30;
-          retTxt.textContent = rec.pinned ? tw("vr.meeting.audio_pinned_note") : tw("vr.meeting.audio_retention", { days: keepDays });
+          retTxt.title = rec.pinned ? tw("vr.meeting.audio_pinned_note") : tw("vr.meeting.audio_retention", { days: keepDays });
         }
       }
     }
@@ -800,10 +843,20 @@
     var actBar = $("vrMtActionsBar");
     if (actBar) {
       actBar.hidden = !isMeeting;
+      actBar.classList.toggle("has-3-cols", !canRediarize);
       var normBtn = $("vrMtBtnNormalizeRec");
       if (normBtn) {
         normBtn.disabled = !!S.mt.normalizing;
         normBtn.innerHTML = ico("sparkles") + " <span>" + esc(S.mt.normalizing ? tw("vr.btn.normalizing") : tw("vr.btn.normalize")) + "</span>";
+      }
+      var rediarizeBtn = $("vrMtBtnRediarizeRec");
+      if (rediarizeBtn) {
+        rediarizeBtn.hidden = !canRediarize;
+        if (canRediarize) {
+          rediarizeBtn.disabled = !!S.mt.rediarizing;
+          rediarizeBtn.innerHTML = ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
+            " <span>" + esc(S.mt.rediarizing ? tw("vr.meeting.btn_rediarizing") : tw("vr.meeting.btn_rediarize")) + "</span>";
+        }
       }
       var exts = ["srt", "vtt", "txt", "json"];
       exts.forEach(function (ext) {
@@ -1381,6 +1434,7 @@
           S.mt.activeJob = d.job;
           var st = d.job.status;
           if (st === "done") {
+            S.mt.rediarizing = false;
             S.mt.warnMsg = warningTextForCodes(d.job.warnings);
             if (d.record) {
               S.history = [d.record].concat(S.history.filter(function (x) { return x.id !== d.record.id; }));
@@ -1390,6 +1444,7 @@
             return;
           }
           if (st === "failed") {
+            S.mt.rediarizing = false;
             S.mt.errorMsg = d.job.error || tw("vr.meeting.status_failed");
             syncMeetingUi();
             return;
@@ -1636,6 +1691,48 @@
     }
   }
 
+  async function rediarizeMeetingRecord(targetRec) {
+    var rec = targetRec || S.activeRecord;
+    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.rediarizing) return;
+    S.mt.rediarizing = true;
+    S.mt.errorMsg = "";
+    S.mt.warnMsg = "";
+    S.infoNote = "";
+    syncUi();
+    try {
+      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/rediarize", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: S.mt.model || (rec.model_used || "large-v3-turbo"),
+          language: S.mt.language || "vi",
+          num_speakers: Number(S.mt.numSpeakers || 0),
+          title: S.mt.title || "",
+        }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!S.mounted) return;
+      if (r.ok && d && d.ok && d.job) {
+        S.mt.activeJob = d.job;
+        startJobPolling(d.job.id);
+        syncMeetingUi();
+        var progBox = $("vrMtProgress");
+        if (progBox) progBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        S.mt.rediarizing = false;
+        S.mt.errorMsg = (d && d.error) || ("HTTP " + r.status);
+        syncUi();
+      }
+    } catch (e) {
+      if (S.mounted) {
+        S.mt.rediarizing = false;
+        S.mt.errorMsg = (e && e.message) || "Network error";
+        syncUi();
+      }
+    }
+  }
+
   async function toggleRecordPin() {
     var rec = S.activeRecord;
     if (!rec) return;
@@ -1744,6 +1841,7 @@
       '<div class="vr-tabs" role="tablist">' +
       '<button type="button" class="vr-tab active" id="vrTabQuick" role="tab">' + ico("mic") + " <span>" + esc(tw("vr.tab.quick")) + "</span></button>" +
       '<button type="button" class="vr-tab" id="vrTabMeeting" role="tab">' + ico("users") + " <span>" + esc(tw("vr.tab.meeting")) + "</span></button>" +
+      '<button type="button" class="vr-tab" id="vrTabSettings" role="tab">' + ico("sliders-horizontal") + " <span>" + esc(tw("vr.tab.settings")) + "</span></button>" +
       "</div>" +
       '<div class="vr-grid">' +
       '<div class="vr-main">' +
@@ -1791,20 +1889,10 @@
       // Long Meeting Pane
       '<div class="vr-pane" id="vrPaneMeeting" hidden>' +
       '<div class="gcard vr-controls-card">' +
-      '<div class="vr-mt-hw-row">' +
-      '<div class="vr-mt-pills" id="vrMtPills"></div>' +
-      '<button type="button" class="gcard-btn ghost" id="vrMtBtnConfig">' +
-      ico("sliders-horizontal") + " <span>" + esc(tw("vr.meeting.btn_config")) + "</span>" +
-      "</button>" +
-      "</div>" +
       '<div class="vr-mt-form">' +
       '<div class="vr-field">' +
       "<label>" + esc(tw("vr.tab.meeting")) + "</label>" +
       '<input type="text" class="vr-input" id="vrMtTitle" placeholder="' + esc(tw("vr.meeting.title_placeholder")) + '">' +
-      "</div>" +
-      '<div class="vr-field">' +
-      "<label>" + esc(tw("vr.meeting.model_label")) + "</label>" +
-      '<select class="vr-select" id="vrMtModel"></select>' +
       "</div>" +
       '<div class="vr-field">' +
       "<label>" + esc(tw("vr.meeting.lang_label")) + "</label>" +
@@ -1855,22 +1943,6 @@
       "</div>" +
       "</div>" +
       '<div class="vr-warn-banner" id="vrMtWarnBanner" hidden></div>' +
-      '<div class="vr-mt-drawer" id="vrMtDrawer" hidden>' +
-      '<div class="vr-audit-sub" style="margin:0">' + esc(tw("vr.meeting.setup_hint")) + "</div>" +
-      '<div class="vr-mt-token-row">' +
-      '<input type="password" class="vr-input" id="vrMtTokenInput" autocomplete="off" placeholder="' + esc(tw("vr.meeting.token_placeholder")) + '">' +
-      '<button type="button" class="vr-btn vr-btn-norm" id="vrMtBtnSaveTok">' + ico("key") + " <span>" + esc(tw("vr.meeting.btn_save_token")) + "</span></button>" +
-      '<button type="button" class="gcard-btn ghost" id="vrMtBtnClearTok" hidden>' + ico("trash-2") + " <span>" + esc(tw("vr.meeting.btn_clear_token")) + "</span></button>" +
-      '<span class="vr-pill is-ok" id="vrMtTokStatus" hidden></span>' +
-      "</div>" +
-      '<div class="vr-mt-install-row">' +
-      '<button type="button" class="vr-btn" id="vrMtBtnInstallAll"></button>' +
-      '<button type="button" class="gcard-btn" id="vrMtBtnInstallModel"></button>' +
-      '<button type="button" class="gcard-btn ghost" id="vrMtBtnRedownload" hidden></button>' +
-      "</div>" +
-      '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
-      '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
-      "</div>" +
       '<div class="vr-mt-progress" id="vrMtProgress" hidden>' +
       '<div class="vr-mt-prog-top">' +
       '<span id="vrMtProgLabel"></span>' +
@@ -1879,6 +1951,45 @@
       '<div class="vr-mt-prog-track"><div class="vr-mt-prog-fill" id="vrMtProgFill" style="width:0%"></div></div>' +
       "</div>" +
       '<div class="vr-error" id="vrMtError" hidden></div>' +
+      "</div>" +
+      "</div>" +
+      // Settings Pane
+      '<div class="vr-pane" id="vrPaneSettings" hidden>' +
+      '<div class="gcard vr-settings-card">' +
+      '<div class="vr-card-head">' +
+      '<div class="vr-card-title">' + ico("sliders-horizontal") + " <span>" + esc(tw("vr.tab.settings")) + "</span></div>" +
+      '<div class="vr-mt-pills" id="vrStPills"></div>' +
+      "</div>" +
+      '<div class="vr-settings-body">' +
+      '<div class="vr-settings-sec">' +
+      '<div class="vr-settings-sec-head">' +
+      '<div class="vr-settings-sec-title">' + ico("key") + " <span>" + esc(tw("vr.meeting.token_section_title")) + "</span></div>" +
+      '<span class="vr-pill is-ok" id="vrMtTokStatus" hidden></span>' +
+      "</div>" +
+      '<div class="vr-audit-sub" style="margin:4px 0 10px 0">' + renderSetupHintHtml() + "</div>" +
+      '<div class="vr-mt-token-row">' +
+      '<input type="password" class="vr-input" id="vrMtTokenInput" autocomplete="off" placeholder="' + esc(tw("vr.meeting.token_placeholder")) + '">' +
+      '<button type="button" class="vr-btn vr-btn-norm" id="vrMtBtnSaveTok">' + ico("key") + " <span>" + esc(tw("vr.meeting.btn_save_token")) + "</span></button>" +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrMtBtnClearTok" hidden>' + ico("trash-2") + " <span>" + esc(tw("vr.meeting.btn_clear_token")) + "</span></button>" +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
+      '<div class="vr-settings-sec-head" style="margin-bottom:12px">' +
+      '<div class="vr-settings-sec-title">' + ico("cpu") + " <span>" + esc(tw("vr.meeting.model_section_title")) + "</span></div>" +
+      "</div>" +
+      '<div class="vr-mt-model-row">' +
+      '<div class="vr-field vr-field-model">' +
+      "<label>" + esc(tw("vr.meeting.model_label")) + "</label>" +
+      '<select class="vr-select" id="vrMtModel"></select>' +
+      "</div>" +
+      '<button type="button" class="vr-btn" id="vrMtBtnInstallAll" hidden></button>' +
+      '<button type="button" class="gcard-btn" id="vrMtBtnInstallModel"></button>' +
+      '<button type="button" class="gcard-btn ghost" id="vrMtBtnRedownload" hidden></button>' +
+      "</div>" +
+      '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
+      '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
+      "</div>" +
+      "</div>" +
       "</div>" +
       "</div>" +
       // Shared Editor + Meeting Post-Processing Card
@@ -1907,16 +2018,14 @@
       '<div class="vr-mt-spk-grid" id="vrMtSpeakersGrid"></div>' +
       "</div>" +
       '<div class="vr-mt-actions-bar" id="vrMtActionsBar" hidden>' +
-      '<div class="vr-ctas">' +
-      '<button type="button" class="vr-btn vr-btn-norm" id="vrMtBtnNormalizeRec"></button>' +
-      '<button type="button" class="gcard-btn" id="vrMtBtnNewRec">' + ico("plus") + " <span>" + esc(tw("vr.btn.new")) + "</span></button>" +
-      "</div>" +
-      '<div class="vr-mt-exports">' +
-      "<span>" + esc(tw("vr.meeting.export_label")) + "</span>" +
-      '<a class="gcard-btn" id="vrMtExp_srt" download>' + ico("download") + " SRT</a>" +
-      '<a class="gcard-btn" id="vrMtExp_vtt" download>' + ico("download") + " VTT</a>" +
-      '<a class="gcard-btn" id="vrMtExp_txt" download>' + ico("download") + " TXT</a>" +
-      '<a class="gcard-btn" id="vrMtExp_json" download>' + ico("download") + " JSON</a>" +
+      '<button type="button" class="vr-btn vr-btn-norm vr-act-btn" id="vrMtBtnNormalizeRec"></button>' +
+      '<button type="button" class="vr-btn vr-act-btn vr-btn-rediarize" id="vrMtBtnRediarizeRec" hidden></button>' +
+      '<button type="button" class="vr-btn vr-act-btn" id="vrMtBtnNewRec">' + ico("plus") + " <span>" + esc(tw("vr.btn.new")) + "</span></button>" +
+      '<div class="vr-btn-group" id="vrMtExpGroup" role="group" aria-label="' + esc(tw("vr.meeting.export_label")) + '">' +
+      '<a class="vr-btn-group-item is-primary" id="vrMtExp_txt" download title="' + esc(tw("vr.meeting.export_label")) + ' TXT">' + ico("download") + " TXT</a>" +
+      '<a class="vr-btn-group-item" id="vrMtExp_srt" download title="' + esc(tw("vr.meeting.export_label")) + ' SRT">SRT</a>' +
+      '<a class="vr-btn-group-item" id="vrMtExp_vtt" download title="' + esc(tw("vr.meeting.export_label")) + ' VTT">VTT</a>' +
+      '<a class="vr-btn-group-item" id="vrMtExp_json" download title="' + esc(tw("vr.meeting.export_label")) + ' JSON">JSON</a>' +
       "</div>" +
       "</div>" +
       '<div class="vr-closed-notice" id="vrClosedNotice" hidden>' +
@@ -1939,8 +2048,10 @@
     // Tab switch handlers
     var tabQ = $("vrTabQuick");
     var tabM = $("vrTabMeeting");
-    if (tabQ) tabQ.onclick = function () { S.tab = "quick"; syncTabs(); };
-    if (tabM) tabM.onclick = function () { S.tab = "meeting"; syncTabs(); };
+    var tabS = $("vrTabSettings");
+    if (tabQ) tabQ.onclick = function () { S.tab = "quick"; syncUi(); };
+    if (tabM) tabM.onclick = function () { S.tab = "meeting"; syncUi(); };
+    if (tabS) tabS.onclick = function () { S.tab = "settings"; syncUi(); };
 
     // Quick Note handlers
     var recBtn = $("vrBtnRecord");
@@ -1990,10 +2101,12 @@
     var mtRedlMod = $("vrMtBtnRedownload");
     var mtApplySpk = $("vrMtBtnApplySpk");
     var mtNormRec = $("vrMtBtnNormalizeRec");
+    var mtRediarizeRec = $("vrMtBtnRediarizeRec");
     var mtNewRec = $("vrMtBtnNewRec");
     var mtPin = $("vrMtBtnPin");
 
-    if (mtCfgBtn) mtCfgBtn.onclick = function () { S.mt.drawerOpen = !S.mt.drawerOpen; syncMeetingUi(); };
+    var mtGoSettings = $("vrMtBtnGoSettings") || $("vrMtBtnConfig");
+    if (mtGoSettings) mtGoSettings.onclick = function () { S.tab = "settings"; syncUi(); };
     if (mtTitle) mtTitle.addEventListener("input", function () { S.mt.title = mtTitle.value; });
     if (mtModel) mtModel.onchange = function () { S.mt.model = mtModel.value; S.mt.installNotice = null; saveMeetingConfig({ whisper_model: S.mt.model }); syncMeetingUi(); };
     if (mtLang) mtLang.onchange = function () { S.mt.language = mtLang.value; saveMeetingConfig({ language: S.mt.language }); };
@@ -2029,6 +2142,7 @@
 
     if (mtApplySpk) mtApplySpk.onclick = applySpeakerMap;
     if (mtNormRec) mtNormRec.onclick = normalizeMeetingRecord;
+    if (mtRediarizeRec) mtRediarizeRec.onclick = function () { rediarizeMeetingRecord(); };
     if (mtNewRec) mtNewRec.onclick = resetNewRecording;
     if (mtPin) mtPin.onclick = toggleRecordPin;
 
