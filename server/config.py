@@ -94,6 +94,11 @@ _DEFAULT = {
             "diarize": True,
             "hf_token": "",
             "keep_audio_days": 30,
+            "remote_mode": "off",      # off | server | client
+            "server_base_uri": "",     # URI may chu (IP/domain + port + path)
+            "server_api_key": "",      # speaker-diarization-key cap phat cho may khac
+            "client_base_uri": "",     # URI may chu can ket noi toi
+            "client_api_key": "",      # speaker-diarization-key dung de ket noi
         },
     },
     "model": {
@@ -560,7 +565,7 @@ _SECRET_PATHS = (
     # Gemini CLI (đăng nhập Google ngay trên dashboard). Refresh token ở đây mở được cả gói
     # Code Assist của tài khoản Google, nên nó ngang hàng mọi secret khác trong danh sách.
     "telegram.token", "zalo_bot.token", "backup.token", "voice.elevenlabs_key",
-    "voice.meeting_stt.hf_token",
+    "voice.meeting_stt.hf_token", "voice.meeting_stt.server_api_key", "voice.meeting_stt.client_api_key",
     "slack.bot_token", "slack.app_token", "whatsapp.access_token", "whatsapp.app_secret",
     "discord.bot_token", "lark.app_secret", "wechat.webhook_token",
     # Secret TOTP là thứ SINH RA mã đăng nhập, nên nó ngang hàng mật khẩu chứ không phải một

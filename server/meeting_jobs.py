@@ -244,7 +244,13 @@ async def _execute_job(
             mc = meeting_stt.get_config(cfg)
             tok, _ = meeting_stt.resolve_hf_token(cfg)
             diarize_req = bool(job.get("diarize"))
-            py_exe, py_path = meeting_stt.resolve_worker_python(need_diarize=diarize_req and bool(tok))
+            is_remote_diarize = (
+                mc.get("remote_mode") == "client"
+                and bool(mc.get("client_base_uri"))
+                and bool(mc.get("client_api_key"))
+            )
+            need_local_diarize = diarize_req and bool(tok) and not is_remote_diarize
+            py_exe, py_path = meeting_stt.resolve_worker_python(need_diarize=need_local_diarize)
             if not py_exe:
                 raise RuntimeError(
                     localefmt.chu(
@@ -266,6 +272,11 @@ async def _execute_job(
                 "device": job.get("device") or mc["device"],
                 "language": job.get("language") or mc["language"],
                 "diarize": diarize_req,
+                "remote_diarize": {
+                    "enabled": is_remote_diarize,
+                    "base_uri": mc.get("client_base_uri") or "",
+                    "api_key": mc.get("client_api_key") or "",
+                },
                 "num_speakers": int(job.get("num_speakers") or 0) or None,
                 "min_speakers": int(job.get("min_speakers") or 0) or None,
                 "max_speakers": int(job.get("max_speakers") or 0) or None,

@@ -112,7 +112,9 @@ const meetingKeys = [
   "vr.meeting.install_success_all", "vr.meeting.install_success_model",
   "vr.meeting.install_success_redownload", "vr.meeting.install_failed", "vr.meeting.install_incomplete",
   "vr.meeting.setup_hint_prefix", "vr.meeting.setup_hint_and", "vr.meeting.setup_hint_suffix",
-  "vr.meeting.hint_diarize_title", "vr.meeting.hint_seg_title"
+  "vr.meeting.hint_diarize_title", "vr.meeting.hint_seg_title",
+  "vr.meeting.remote_section_title", "vr.meeting.mode_server", "vr.meeting.mode_client",
+  "vr.meeting.btn_test_conn", "vr.meeting.pill_remote_client", "vr.meeting.pill_remote_server"
 ];
 check("vi.json and en.json have all meeting mode i18n keys",
   meetingKeys.every(k => typeof viJson[k] === "string" && typeof enJson[k] === "string"));
@@ -206,6 +208,16 @@ check("when pyannote + model validly installed: both installAll & installModel l
   && sDone.installModel.disabled === true
   && sDone.redownloadModel.visible === true
   && sDone.redownloadModel.disabled === false);
+
+// 10. Remote Speaker Diarization UI elements
+check("voice-record.js contains remote diarization mode buttons and key fields",
+  vrJsSrc.includes("vrModeBtnServer")
+  && vrJsSrc.includes("vrModeBtnClient")
+  && vrJsSrc.includes("vrServerApiKey")
+  && vrJsSrc.includes("vrClientApiKey")
+  && vrJsSrc.includes("vrBtnPingRemote")
+  && vrJsSrc.includes("vrBtnGenServerKey"));
+
 
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);

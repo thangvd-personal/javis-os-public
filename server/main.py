@@ -405,7 +405,9 @@ _AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/health", "/auth/status", "/auth/log
                       # /chatbot-api/v1/turn (0.459.0): a server of the owner asks one Chatbot. No cookie; the route
                       # checks the source address and the key of an internal API channel account itself
                       # (channels/api.py). That key opens this path only, and an API token does not open it.
-                      "/chatbot-api/v1/turn")
+                      "/chatbot-api/v1/turn",
+                      # Remote speaker diarization (pyannote): client calls with X-Speaker-Diarization-Key header
+                      "/voice-records/remote-diarize", "/voice-records/remote-diarize/ping")
 # Endpoint CHỈ-LOCALHOST: agent (Claude CLI chạy cùng máy/container) curl được mà không cần
 # cookie đăng nhập; request từ ngoài (qua Traefik/Caddy/LAN) đến từ IP khác loopback → vẫn bị chặn.
 # /reminders/cancel đi cùng nhóm với /reminders (TẠO nhắc): huỷ là thao tác YẾU HƠN tạo, nên
@@ -455,6 +457,8 @@ async def _csrf_guard(request: Request, call_next):
     # lõi GỠ cookie khỏi request trước khi giao cho plugin ở những đường này - không có gì để
     # mượn. Chặn nhầm thì máy chủ bên ngoài (OpenAI đổi token, webhook) không gọi vào được.
     _dr = duong_dan_router(request)
+    if _dr in ("/voice-records/remote-diarize", "/voice-records/remote-diarize/ping"):
+        return await call_next(request)
     if ((_dr.startswith("/ext/") or _dr.startswith("/.well-known/"))
             and plugins_host.http_khong_cookie(_dr, request.method)):
         return await call_next(request)
@@ -18837,6 +18841,265 @@ async def voice_meeting_model_delete(request: Request):
     return {**res, "status": meeting_stt.status()}
 
 
+@app.post("/voice-records/meeting/generate-diarize-key")
+def voice_meeting_generate_diarize_key():
+    """Generate a cryptographically secure random key for speaker diarization service."""
+    return {"ok": True, "key": meeting_stt.generate_diarize_key()}
+
+
+@app.get("/voice-records/meeting/remote-server-key")
+def voice_meeting_get_server_key():
+    """Return the plaintext server speaker-diarization-key for authenticated dashboard admin."""
+    cfg = cfgmod.read_settings()
+    key = meeting_stt.resolve_server_key(cfg)
+    return {"ok": True, "key": key}
+
+
+@app.post("/voice-records/meeting/remote-ping")
+async def voice_meeting_remote_ping(request: Request):
+    """Test connection to remote speaker diarization server."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": localefmt.chu("JSON không hợp lệ", "Invalid JSON")}, status_code=400)
+    body = body or {}
+    base_uri = str(body.get("base_uri") or "").strip().rstrip("/")
+    if not base_uri:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Chưa nhập Base URI của máy chủ", "Server Base URI is required")}, status_code=400)
+    api_key = str(body.get("api_key") or "").strip()
+    if not api_key:
+        cfg = cfgmod.read_settings()
+        api_key = meeting_stt.resolve_client_key(cfg)
+    if not api_key:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Chưa nhập speaker-diarization-key", "speaker-diarization-key is required")}, status_code=400)
+
+    url = f"{base_uri}/voice-records/remote-diarize/ping"
+    headers = {
+        "X-Speaker-Diarization-Key": api_key,
+        "Authorization": f"Bearer {api_key}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(url, headers=headers)
+            try:
+                data = resp.json()
+            except Exception:
+                data = {"raw": resp.text[:300]}
+            if resp.status_code == 200 and data.get("ok"):
+                return {"ok": True, "ping": data}
+            err_msg = data.get("error") if isinstance(data, dict) else f"HTTP {resp.status_code}"
+            return JSONResponse({"ok": False, "error": err_msg or f"HTTP {resp.status_code}", "status_code": resp.status_code}, status_code=400)
+    except httpx.ConnectError:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không thể kết nối tới máy chủ (kiểm tra lại địa chỉ IP/domain và cổng)", "Could not connect to server (check IP/domain and port)")}, status_code=400)
+    except httpx.TimeoutException:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Kết nối tới máy chủ quá thời gian (Timeout)", "Connection to server timed out")}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}, status_code=400)
+
+
+@app.get("/voice-records/remote-diarize/ping")
+def voice_remote_diarize_ping(
+    request: Request,
+    x_speaker_diarization_key: str = Header("", alias="X-Speaker-Diarization-Key"),
+    authorization: str = Header("", alias="Authorization"),
+):
+    """Health check / ping endpoint for remote speaker diarization service."""
+    import hmac
+    cfg = cfgmod.read_settings()
+    mc = meeting_stt.get_config(cfg)
+    if mc.get("remote_mode") != "server":
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Dịch vụ phân tách giọng nói từ xa chưa được bật trên máy chủ này.", "Remote speaker diarization service is not enabled on this server.")},
+            status_code=403,
+        )
+
+    srv_key = meeting_stt.resolve_server_key(cfg)
+    if not srv_key:
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Máy chủ chưa thiết lập speaker-diarization-key.", "Server has not configured a speaker-diarization-key.")},
+            status_code=403,
+        )
+
+    provided_key = (x_speaker_diarization_key or "").strip()
+    if not provided_key and authorization:
+        parts = authorization.strip().split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            provided_key = parts[1].strip()
+        elif len(parts) == 1:
+            provided_key = parts[0].strip()
+
+    if not provided_key or not hmac.compare_digest(provided_key, srv_key):
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("speaker-diarization-key không chính xác.", "Invalid speaker-diarization-key.")},
+            status_code=401,
+        )
+
+    tok, _ = meeting_stt.resolve_hf_token(cfg)
+    venv_ok = meeting_stt.venv_diarize_ready()
+    gpu = meeting_stt.gpu_info()
+    return {
+        "ok": True,
+        "service": "speaker-diarization",
+        "status": "ready" if (venv_ok and tok) else "incomplete",
+        "ready": bool(venv_ok and tok),
+        "has_gpu": gpu["has_gpu"],
+        "gpu_name": gpu["gpu_name"],
+        "vram_mb": gpu["vram_mb"],
+        "venv_diarize_ready": venv_ok,
+        "has_hf_token": bool(tok),
+    }
+
+
+@app.post("/voice-records/remote-diarize")
+async def voice_remote_diarize(
+    request: Request,
+    file: UploadFile = File(...),
+    num_speakers: int | None = Form(None),
+    min_speakers: int | None = Form(None),
+    max_speakers: int | None = Form(None),
+    device: str | None = Form(None),
+    x_speaker_diarization_key: str = Header("", alias="X-Speaker-Diarization-Key"),
+    authorization: str = Header("", alias="Authorization"),
+):
+    """Execute pyannote speaker diarization for remote client."""
+    import hmac
+    cfg = cfgmod.read_settings()
+    mc = meeting_stt.get_config(cfg)
+    if mc.get("remote_mode") != "server":
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Dịch vụ phân tách giọng nói từ xa chưa được bật trên máy chủ này.", "Remote speaker diarization service is not enabled on this server.")},
+            status_code=403,
+        )
+
+    srv_key = meeting_stt.resolve_server_key(cfg)
+    if not srv_key:
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Máy chủ chưa thiết lập speaker-diarization-key.", "Server has not configured a speaker-diarization-key.")},
+            status_code=403,
+        )
+
+    provided_key = (x_speaker_diarization_key or "").strip()
+    if not provided_key and authorization:
+        parts = authorization.strip().split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            provided_key = parts[1].strip()
+        elif len(parts) == 1:
+            provided_key = parts[0].strip()
+
+    if not provided_key or not hmac.compare_digest(provided_key, srv_key):
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("speaker-diarization-key không chính xác.", "Invalid speaker-diarization-key.")},
+            status_code=401,
+        )
+
+    tok, _ = meeting_stt.resolve_hf_token(cfg)
+    if not tok:
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Máy chủ chưa cấu hình HF_TOKEN cho pyannote.", "Server is missing HF_TOKEN for pyannote.")},
+            status_code=503,
+        )
+    if not meeting_stt.venv_diarize_ready():
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Môi trường pyannote trên máy chủ chưa sẵn sàng.", "pyannote environment is not ready on server.")},
+            status_code=503,
+        )
+
+    py_exe, py_path = meeting_stt.resolve_worker_python(need_diarize=True)
+    if not py_exe:
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Không tìm thấy Python worker cho pyannote trên máy chủ.", "Python worker for pyannote not found on server.")},
+            status_code=503,
+        )
+
+    with tempfile.TemporaryDirectory(prefix="javis-remote-diarize-") as tmpdir:
+        tmp_dir_path = Path(tmpdir)
+        raw_in = tmp_dir_path / f"input{Path(file.filename or 'audio.wav').suffix or '.wav'}"
+        content = await file.read()
+        raw_in.write_bytes(content)
+
+        wav_16k = tmp_dir_path / "audio_16k.wav"
+        ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+        cmd = [ffmpeg, "-y", "-i", str(raw_in), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav_16k)]
+        try:
+            conv = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, **winproc.kwargs_no_window()
+            )
+            await conv.wait()
+        except Exception:
+            pass
+        target_wav = wav_16k if wav_16k.is_file() and wav_16k.stat().st_size > 44 else raw_in
+
+        job_json = tmp_dir_path / "diarize_job.json"
+        out_json = tmp_dir_path / "diarize_out.json"
+        worker_payload = {
+            "wav_path": str(target_wav),
+            "hf_token": tok,
+            "device": str(device or mc["device"] or "auto").strip().lower(),
+            "num_speakers": num_speakers,
+            "min_speakers": min_speakers,
+            "max_speakers": max_speakers,
+            "output_json": str(out_json),
+        }
+        job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
+
+        env = meeting_stt.worker_env(cfg, extra_pythonpath=py_path)
+        proc = await asyncio.create_subprocess_exec(
+            py_exe,
+            "-u",
+            str(meeting_stt.worker_script()),
+            "--diarize-only",
+            "--job",
+            str(job_json),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env=env,
+            cwd=str(meeting_stt.meeting_ear_root() if meeting_stt.meeting_ear_root().exists() else tmp_dir_path),
+            **winproc.kwargs_no_window(),
+        )
+
+        stdout_lines = []
+        try:
+            assert proc.stdout is not None
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                decoded = line.decode("utf-8", "replace").strip()
+                if decoded:
+                    stdout_lines.append(decoded)
+            await asyncio.wait_for(proc.wait(), timeout=600.0)
+        except TimeoutError:
+            await _terminate_proc(proc)
+            return JSONResponse({"ok": False, "error": "Remote diarization timed out after 10 minutes."}, status_code=504)
+
+        result_data: dict[str, Any] = {}
+        if out_json.is_file():
+            try:
+                result_data = json.loads(out_json.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        if not result_data and stdout_lines:
+            for line in reversed(stdout_lines):
+                try:
+                    parsed = json.loads(line)
+                    if isinstance(parsed, dict) and "turns" in parsed:
+                        result_data = parsed
+                        break
+                except Exception:
+                    pass
+
+        if proc.returncode != 0 or not result_data.get("ok"):
+            err = result_data.get("error") or (stdout_lines[-1] if stdout_lines else f"Diarize worker failed with code {proc.returncode}")
+            return JSONResponse({"ok": False, "error": str(err)[:400]}, status_code=500)
+
+        return {
+            "ok": True,
+            "turns": result_data.get("turns") or [],
+            "warnings": result_data.get("warnings") or [],
+        }
+
+
 @app.get("/voice-records/meeting/jobs")
 def voice_meeting_jobs_list(brain: str = Query("brain"), limit: int = Query(20)):
     broot = brain_ident.canonical(_brain_root(brain))
@@ -19166,31 +19429,51 @@ async def voice_record_rediarize(record_id: str, request: Request):
         )
 
     cfg = cfgmod.read_settings()
-    tok, _ = meeting_stt.resolve_hf_token(cfg)
-    if not tok:
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": localefmt.chu(
-                    "Chưa có HF_TOKEN để chạy pyannote. Vui lòng dán token Hugging Face và bấm Lưu token trước.",
-                    "Missing HF_TOKEN to run pyannote. Please paste and save your Hugging Face token first.",
-                ),
-            },
-            status_code=400,
-        )
+    mc = meeting_stt.get_config(cfg)
+    is_remote_diarize = (
+        mc.get("remote_mode") == "client"
+        and bool(mc.get("client_base_uri"))
+        and bool(mc.get("client_api_key"))
+    )
+    if not is_remote_diarize:
+        tok, _ = meeting_stt.resolve_hf_token(cfg)
+        if not tok:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": localefmt.chu(
+                        "Chưa có HF_TOKEN để chạy pyannote. Vui lòng dán token Hugging Face và bấm Lưu token trước.",
+                        "Missing HF_TOKEN to run pyannote. Please paste and save your Hugging Face token first.",
+                    ),
+                },
+                status_code=400,
+            )
 
-    py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=True)
-    if not py_exe:
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": localefmt.chu(
-                    "Môi trường pyannote chưa sẵn sàng. Hãy bấm Cài đặt ở trang Ghi âm trước.",
-                    "pyannote environment is not ready. Please click Install on the Record page first.",
-                ),
-            },
-            status_code=400,
-        )
+        py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=True)
+        if not py_exe:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": localefmt.chu(
+                        "Môi trường pyannote chưa sẵn sàng. Hãy bấm Cài đặt ở trang Ghi âm trước.",
+                        "pyannote environment is not ready. Please click Install on the Record page first.",
+                    ),
+                },
+                status_code=400,
+            )
+    else:
+        py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=False)
+        if not py_exe:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": localefmt.chu(
+                        "Chưa cài thư viện Whisper trên máy. Hãy bấm Cài đặt ở trang Ghi âm trước.",
+                        "Whisper libraries are not installed yet. Please click Install on the Record page first.",
+                    ),
+                },
+                status_code=400,
+            )
 
     try:
         body = await request.json()

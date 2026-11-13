@@ -417,6 +417,112 @@ def _run_pyannote_diarization(
     return turns, ""
 
 
+def _run_remote_diarization(
+    wav_path: str,
+    *,
+    base_uri: str,
+    api_key: str,
+    num_speakers: int | None = None,
+    min_speakers: int | None = None,
+    max_speakers: int | None = None,
+    timeout: float = 600.0,
+) -> tuple[list[dict[str, Any]], str]:
+    import urllib.request
+    import urllib.error
+    import uuid
+
+    url = base_uri.rstrip("/") + "/voice-records/remote-diarize"
+    boundary = f"----WebKitFormBoundary{uuid.uuid4().hex}"
+    body = bytearray()
+
+    fields: dict[str, str] = {}
+    if num_speakers and int(num_speakers) > 0:
+        fields["num_speakers"] = str(int(num_speakers))
+    if min_speakers and int(min_speakers) > 0:
+        fields["min_speakers"] = str(int(min_speakers))
+    if max_speakers and int(max_speakers) > 0:
+        fields["max_speakers"] = str(int(max_speakers))
+
+    for k, v in fields.items():
+        body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode("utf-8"))
+
+    filename = Path(wav_path).name
+    body.extend(f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\nContent-Type: audio/wav\r\n\r\n".encode("utf-8"))
+    with open(wav_path, "rb") as f:
+        body.extend(f.read())
+    body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
+
+    req = urllib.request.Request(url, data=bytes(body), method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Content-Length", str(len(body)))
+    if api_key:
+        req.add_header("X-Speaker-Diarization-Key", api_key)
+        req.add_header("Authorization", f"Bearer {api_key}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(data, dict):
+                return [], "remote_diarize_error: Invalid response from server"
+            if not data.get("ok"):
+                return [], f"remote_diarize_error: {data.get('error') or 'Unknown server error'}"
+            turns = data.get("turns") or []
+            return turns, ""
+    except urllib.error.HTTPError as e:
+        err_msg = ""
+        try:
+            err_data = json.loads(e.read().decode("utf-8"))
+            err_msg = err_data.get("error") or ""
+        except Exception:
+            pass
+        return [], f"remote_diarize_http_{e.code}: {err_msg or e.reason}"
+    except Exception as e:
+        return [], f"remote_diarize_connection_error: {type(e).__name__}: {str(e)[:200]}"
+
+
+def run_diarize_only(job_path: str) -> int:
+    try:
+        os.nice(10)
+    except (AttributeError, OSError):
+        pass
+
+    job = json.loads(Path(job_path).read_text(encoding="utf-8"))
+    wav_path = str(job.get("wav_path") or "").strip()
+    hf_token = str(job.get("hf_token") or os.getenv("HF_TOKEN") or "").strip()
+    device = str(job.get("device") or "auto").strip().lower()
+    if device == "auto":
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+
+    turns, derr = _run_pyannote_diarization(
+        wav_path,
+        hf_token=hf_token,
+        device=device,
+        num_speakers=job.get("num_speakers"),
+        min_speakers=job.get("min_speakers"),
+        max_speakers=job.get("max_speakers"),
+    )
+
+    out_json = str(job.get("output_json") or "").strip()
+    result = {
+        "type": "result",
+        "ok": not derr,
+        "turns": turns,
+        "error": derr if derr else "",
+        "warnings": [derr] if derr else [],
+    }
+    if out_json:
+        try:
+            Path(out_json).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            result["warnings"].append(f"write_output_failed: {e}")
+    emit(result)
+    return 0 if not derr else 1
+
+
 def run_job(job_path: str) -> int:
     try:
         os.nice(10)
@@ -508,7 +614,23 @@ def run_job(job_path: str) -> int:
         diarized = False
 
         if want_diarize:
-            if not hf_token:
+            remote_cfg = job.get("remote_diarize") or {}
+            if remote_cfg.get("enabled") and remote_cfg.get("base_uri"):
+                emit_progress("diarizing", 70, "Sending audio to remote speaker diarization server")
+                turns, derr = _run_remote_diarization(
+                    wav_path,
+                    base_uri=remote_cfg["base_uri"],
+                    api_key=remote_cfg.get("api_key", ""),
+                    num_speakers=job.get("num_speakers"),
+                    min_speakers=job.get("min_speakers"),
+                    max_speakers=job.get("max_speakers"),
+                )
+                if derr:
+                    warnings.append(derr)
+                else:
+                    speaker_turns = turns
+                    diarized = bool(turns)
+            elif not hf_token:
                 warnings.append("missing_hf_token")
             else:
                 emit_progress("diarizing", 70, "Running pyannote/speaker-diarization-3.1")
@@ -801,6 +923,7 @@ def main(argv=None) -> int:
     p.add_argument("--hf-home", default="")
     p.add_argument("--model", default="large-v3-turbo")
     p.add_argument("--run", action="store_true")
+    p.add_argument("--diarize-only", action="store_true")
     p.add_argument("--job", default="")
     a = p.parse_args(argv)
     try:
@@ -811,6 +934,11 @@ def main(argv=None) -> int:
                 emit({"type": "result", "ok": False, "error": "--job is required with --run"})
                 return 1
             return run_job(a.job)
+        if a.diarize_only:
+            if not a.job:
+                emit({"type": "result", "ok": False, "error": "--job is required with --diarize-only"})
+                return 1
+            return run_diarize_only(a.job)
         p.print_help()
         return 0
     except Exception as e:

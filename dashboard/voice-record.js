@@ -565,7 +565,12 @@
       if (!st.has_ffmpeg && st.ok) {
         html += '<span class="vr-pill is-warn">' + ico("triangle-alert") + " <span>" + esc(tw("vr.meeting.hw_no_ffmpeg")) + "</span></span>";
       }
-      if (st.venv_diarize_ready) {
+      var remPillData = st.remote_diarize || {};
+      if (remPillData.mode === "client" && remPillData.client_ready) {
+        html += '<span class="vr-pill is-ok">' + ico("globe") + " <span>" + esc(tw("vr.meeting.pill_remote_client")) + "</span></span>";
+      } else if (remPillData.mode === "server") {
+        html += '<span class="vr-pill is-ok">' + ico("database") + " <span>" + esc(tw("vr.meeting.pill_remote_server")) + "</span></span>";
+      } else if (st.venv_diarize_ready) {
         html += '<span class="vr-pill is-ok">' + ico("circle-check") + " <span>" + esc(tw("vr.meeting.btn_pyannote_installed")) + "</span></span>";
       }
       stPillsEl.innerHTML = html;
@@ -667,13 +672,101 @@
       }
     }
 
+    // Remote Diarization Section Sync
+    var rem = st.remote_diarize || {};
+    var curMode = (S.mt.remoteDraft && S.mt.remoteDraft.mode) || rem.mode || "off";
+
+    var btnOff = $("vrModeBtnOff");
+    var btnSrv = $("vrModeBtnServer");
+    var btnCli = $("vrModeBtnClient");
+    if (btnOff) btnOff.classList.toggle("active", curMode === "off");
+    if (btnSrv) btnSrv.classList.toggle("active", curMode === "server");
+    if (btnCli) btnCli.classList.toggle("active", curMode === "client");
+
+    var pSrv = $("vrRemoteServerPanel");
+    var pCli = $("vrRemoteClientPanel");
+    if (pSrv) pSrv.hidden = curMode !== "server";
+    if (pCli) pCli.hidden = curMode !== "client";
+
+    var remPill = $("vrRemoteStatusPill");
+    if (remPill) {
+      if (curMode === "client") {
+        remPill.hidden = false;
+        remPill.textContent = rem.client_ready ? tw("vr.meeting.pill_remote_client") : tw("vr.meeting.mode_client");
+      } else if (curMode === "server") {
+        remPill.hidden = false;
+        remPill.textContent = rem.server_ready ? tw("vr.meeting.server_ready") : tw("vr.meeting.mode_server");
+      } else {
+        remPill.hidden = true;
+      }
+    }
+
+    var srvUriIn = $("vrServerBaseUri");
+    if (srvUriIn && !srvUriIn.matches(":focus")) {
+      var defaultUri = (typeof window !== "undefined" && window.location && window.location.origin) ? window.location.origin : "";
+      srvUriIn.value = rem.server_base_uri || defaultUri;
+    }
+    var srvKeyStat = $("vrServerKeyStatus");
+    if (srvKeyStat) {
+      srvKeyStat.hidden = !rem.has_server_key;
+      srvKeyStat.textContent = rem.has_server_key ? tw("vr.meeting.server_key_saved") : "";
+    }
+    var clrSrvBtn = $("vrBtnClearServerKey");
+    if (clrSrvBtn) clrSrvBtn.hidden = !rem.has_server_key;
+
+    var srvNotice = $("vrServerNotice");
+    if (srvNotice) {
+      if (curMode === "server") {
+        if (!st.has_hf_token || !st.venv_diarize_ready) {
+          srvNotice.hidden = false;
+          srvNotice.className = "vr-mt-install-notice is-err";
+          srvNotice.textContent = tw("vr.meeting.server_need_setup");
+        } else if (rem.has_server_key) {
+          srvNotice.hidden = false;
+          srvNotice.className = "vr-mt-install-notice is-ok";
+          srvNotice.textContent = tw("vr.meeting.server_ready");
+        } else {
+          srvNotice.hidden = true;
+        }
+      } else {
+        srvNotice.hidden = true;
+      }
+    }
+
+    var cliUriIn = $("vrClientBaseUri");
+    if (cliUriIn && !cliUriIn.matches(":focus")) {
+      cliUriIn.value = rem.client_base_uri || "";
+    }
+    var cliKeyStat = $("vrClientKeyStatus");
+    if (cliKeyStat) {
+      cliKeyStat.hidden = !rem.has_client_key;
+      cliKeyStat.textContent = rem.has_client_key ? tw("vr.meeting.client_key_saved") : "";
+    }
+    var clrCliBtn = $("vrBtnClearClientConfig");
+    if (clrCliBtn) clrCliBtn.hidden = !rem.has_client_key && !rem.client_base_uri;
+
+    var cliNotice = $("vrClientNotice");
+    if (cliNotice) {
+      var pStat = S.mt.remotePingStatus;
+      if (curMode === "client" && pStat) {
+        cliNotice.hidden = false;
+        cliNotice.className = "vr-mt-install-notice " + (pStat.ok ? "is-ok" : "is-err");
+        cliNotice.textContent = pStat.text;
+      } else {
+        cliNotice.hidden = true;
+      }
+    }
+
     // Yellow non-blocking warning banner when HF_TOKEN missing or diarize library not installed
     var warnEl = $("vrMtWarnBanner");
     if (warnEl) {
       var wtext = mt.warnMsg || "";
       if (!wtext && st.ok && mt.diarize) {
-        if (!st.venv_diarize_ready) wtext = tw("vr.meeting.diarize_not_installed_warn");
-        else if (!st.has_hf_token) wtext = tw("vr.meeting.token_missing_warn");
+        var isRemoteClient = Boolean(st.remote_diarize && st.remote_diarize.mode === "client" && st.remote_diarize.client_ready);
+        if (!isRemoteClient) {
+          if (!st.venv_diarize_ready) wtext = tw("vr.meeting.diarize_not_installed_warn");
+          else if (!st.has_hf_token) wtext = tw("vr.meeting.token_missing_warn");
+        }
       }
       warnEl.hidden = !wtext;
       if (wtext) {
@@ -1865,6 +1958,22 @@
     }
   }
 
+  function copyToClip(text) {
+    if (!text) return;
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).catch(function () {});
+    } else if (typeof document !== "undefined") {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  }
+
   function mount(el) {
     unmount();
     S.host = el;
@@ -2046,6 +2155,75 @@
       '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
       '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
       "</div>" +
+      // Remote Diarization Section
+      '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
+      '<div class="vr-settings-sec-head" style="margin-bottom:12px">' +
+      '<div class="vr-settings-sec-title">' + ico("share-2") + " <span>" + esc(tw("vr.meeting.remote_section_title")) + "</span></div>" +
+      '<span class="vr-pill is-ok" id="vrRemoteStatusPill" hidden></span>' +
+      "</div>" +
+      '<div class="vr-audit-sub" style="margin:4px 0 12px 0">' + esc(tw("vr.meeting.remote_desc")) + "</div>" +
+      '<div class="vr-tabs vr-remote-tabs" role="tablist">' +
+      '<button type="button" class="vr-tab active" id="vrModeBtnOff" role="tab">' + ico("cpu") + " <span>" + esc(tw("vr.meeting.mode_local")) + "</span></button>" +
+      '<button type="button" class="vr-tab" id="vrModeBtnServer" role="tab">' + ico("database") + " <span>" + esc(tw("vr.meeting.mode_server")) + "</span></button>" +
+      '<button type="button" class="vr-tab" id="vrModeBtnClient" role="tab">' + ico("globe") + " <span>" + esc(tw("vr.meeting.mode_client")) + "</span></button>" +
+      "</div>" +
+      // Server Panel
+      '<div class="vr-remote-subpanel" id="vrRemoteServerPanel" hidden>' +
+      '<div class="vr-audit-sub" style="margin:4px 0 10px 0; color:var(--text)">' + esc(tw("vr.meeting.server_sub")) + "</div>" +
+      '<div class="vr-field-row" style="margin-bottom:12px">' +
+      '<div class="vr-field" style="flex:1">' +
+      "<label>" + esc(tw("vr.meeting.server_uri_label")) + "</label>" +
+      '<div class="vr-remote-input-row">' +
+      '<input type="text" class="vr-input" id="vrServerBaseUri" placeholder="http://192.168.1.100:8000">' +
+      '<button type="button" class="gcard-btn" id="vrBtnCopyServerUri" title="' + esc(tw("vr.meeting.btn_copy")) + '">' + ico("copy") + " <span>" + esc(tw("vr.meeting.btn_copy")) + "</span></button>" +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-field-row" style="margin-bottom:12px">' +
+      '<div class="vr-field" style="flex:1">' +
+      "<label>" + esc(tw("vr.meeting.server_key_label")) + "</label>" +
+      '<div class="vr-remote-input-row">' +
+      '<input type="password" class="vr-input" id="vrServerApiKey" placeholder="' + esc(tw("vr.meeting.server_key_placeholder")) + '" autocomplete="off">' +
+      '<button type="button" class="gcard-btn" id="vrBtnToggleServerKey" title="Hiện/Ẩn khóa">' + ico("eye") + "</button>" +
+      '<button type="button" class="gcard-btn" id="vrBtnGenServerKey" title="' + esc(tw("vr.meeting.btn_gen_key")) + '">' + ico("sparkles") + " <span>" + esc(tw("vr.meeting.btn_gen_key")) + "</span></button>" +
+      '<button type="button" class="gcard-btn" id="vrBtnCopyServerKey" title="' + esc(tw("vr.meeting.btn_copy")) + '">' + ico("copy") + " <span>" + esc(tw("vr.meeting.btn_copy")) + "</span></button>" +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-remote-actions">' +
+      '<button type="button" class="vr-btn vr-btn-norm" id="vrBtnSaveServerConfig">' + ico("circle-check") + " <span>" + esc(tw("vr.meeting.btn_save_server")) + "</span></button>" +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrBtnClearServerKey" hidden>' + ico("trash-2") + " <span>" + esc(tw("vr.meeting.btn_clear_server_key")) + "</span></button>" +
+      '<span class="vr-pill is-ok" id="vrServerKeyStatus" hidden></span>' +
+      "</div>" +
+      '<div class="vr-mt-install-notice" id="vrServerNotice" hidden style="margin-top:10px"></div>' +
+      "</div>" +
+      // Client Panel
+      '<div class="vr-remote-subpanel" id="vrRemoteClientPanel" hidden>' +
+      '<div class="vr-audit-sub" style="margin:4px 0 10px 0; color:var(--text)">' + esc(tw("vr.meeting.client_sub")) + "</div>" +
+      '<div class="vr-field-row" style="margin-bottom:12px">' +
+      '<div class="vr-field" style="flex:1">' +
+      "<label>" + esc(tw("vr.meeting.client_uri_label")) + "</label>" +
+      '<input type="text" class="vr-input" id="vrClientBaseUri" placeholder="' + esc(tw("vr.meeting.client_uri_placeholder")) + '">' +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-field-row" style="margin-bottom:12px">' +
+      '<div class="vr-field" style="flex:1">' +
+      "<label>" + esc(tw("vr.meeting.client_key_label")) + "</label>" +
+      '<div class="vr-remote-input-row">' +
+      '<input type="password" class="vr-input" id="vrClientApiKey" placeholder="' + esc(tw("vr.meeting.client_key_placeholder")) + '" autocomplete="off">' +
+      '<button type="button" class="gcard-btn" id="vrBtnToggleClientKey" title="Hiện/Ẩn khóa">' + ico("eye") + "</button>" +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-remote-actions">' +
+      '<button type="button" class="gcard-btn" id="vrBtnPingRemote">' + ico("zap") + " <span>" + esc(tw("vr.meeting.btn_test_conn")) + "</span></button>" +
+      '<button type="button" class="vr-btn vr-btn-norm" id="vrBtnSaveClientConfig">' + ico("circle-check") + " <span>" + esc(tw("vr.meeting.btn_save_client")) + "</span></button>" +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrBtnClearClientConfig" hidden>' + ico("trash-2") + " <span>" + esc(tw("vr.meeting.btn_clear_client")) + "</span></button>" +
+      '<span class="vr-pill is-ok" id="vrClientKeyStatus" hidden></span>' +
+      "</div>" +
+      '<div class="vr-mt-install-notice" id="vrClientNotice" hidden style="margin-top:10px"></div>' +
+      "</div>" +
+      "</div>" +
       "</div>" +
       "</div>" +
       "</div>" +
@@ -2204,6 +2382,161 @@
     if (mtRediarizeRec) mtRediarizeRec.onclick = function () { rediarizeMeetingRecord(); };
     if (mtNewRec) mtNewRec.onclick = resetNewRecording;
     if (mtPin) mtPin.onclick = toggleRecordPin;
+
+    // Remote Diarization Mode Switches
+    var modeOff = $("vrModeBtnOff");
+    var modeSrv = $("vrModeBtnServer");
+    var modeCli = $("vrModeBtnClient");
+    if (modeOff) modeOff.onclick = function () {
+      if (!S.mt.remoteDraft) S.mt.remoteDraft = {};
+      S.mt.remoteDraft.mode = "off";
+      syncMeetingUi();
+      saveMeetingConfig({ remote_mode: "off" });
+    };
+    if (modeSrv) modeSrv.onclick = function () {
+      if (!S.mt.remoteDraft) S.mt.remoteDraft = {};
+      S.mt.remoteDraft.mode = "server";
+      syncMeetingUi();
+      saveMeetingConfig({ remote_mode: "server" });
+    };
+    if (modeCli) modeCli.onclick = function () {
+      if (!S.mt.remoteDraft) S.mt.remoteDraft = {};
+      S.mt.remoteDraft.mode = "client";
+      syncMeetingUi();
+      saveMeetingConfig({ remote_mode: "client" });
+    };
+
+    // Server actions
+    var btnCopyUri = $("vrBtnCopyServerUri");
+    if (btnCopyUri) btnCopyUri.onclick = function () {
+      var el = $("vrServerBaseUri");
+      if (el && el.value) {
+        copyToClip(el.value);
+        var orig = btnCopyUri.innerHTML;
+        btnCopyUri.innerHTML = ico("check") + " <span>" + esc(tw("vr.meeting.btn_copy")) + "</span>";
+        setTimeout(function () { if (btnCopyUri) btnCopyUri.innerHTML = orig; }, 1500);
+      }
+    };
+    var btnTogSrvKey = $("vrBtnToggleServerKey");
+    if (btnTogSrvKey) btnTogSrvKey.onclick = function () {
+      var inp = $("vrServerApiKey");
+      if (!inp) return;
+      inp.type = inp.type === "password" ? "text" : "password";
+      btnTogSrvKey.innerHTML = ico(inp.type === "password" ? "eye" : "eye-off");
+    };
+    var btnGenKey = $("vrBtnGenServerKey");
+    if (btnGenKey) btnGenKey.onclick = async function () {
+      try {
+        var r = await fetch("/voice-records/meeting/generate-diarize-key", { method: "POST" });
+        var d = await r.json().catch(function () { return {}; });
+        if (d && d.ok && d.key) {
+          var inp = $("vrServerApiKey");
+          if (inp) {
+            inp.value = d.key;
+            inp.type = "text";
+            if (btnTogSrvKey) btnTogSrvKey.innerHTML = ico("eye-off");
+          }
+        }
+      } catch (e) {}
+    };
+    var btnCopySrvKey = $("vrBtnCopyServerKey");
+    if (btnCopySrvKey) btnCopySrvKey.onclick = async function () {
+      var inp = $("vrServerApiKey");
+      var val = inp ? inp.value.trim() : "";
+      if (!val) {
+        try {
+          var r = await fetch("/voice-records/meeting/remote-server-key");
+          var d = await r.json().catch(function () { return {}; });
+          if (d && d.ok && d.key) val = d.key;
+        } catch (e) {}
+      }
+      if (val) {
+        copyToClip(val);
+        var orig = btnCopySrvKey.innerHTML;
+        btnCopySrvKey.innerHTML = ico("check") + " <span>" + esc(tw("vr.meeting.btn_copy")) + "</span>";
+        setTimeout(function () { if (btnCopySrvKey) btnCopySrvKey.innerHTML = orig; }, 1500);
+      }
+    };
+    var btnSaveSrv = $("vrBtnSaveServerConfig");
+    if (btnSaveSrv) btnSaveSrv.onclick = function () {
+      var uriEl = $("vrServerBaseUri");
+      var keyEl = $("vrServerApiKey");
+      var patch = { remote_mode: "server" };
+      if (uriEl) patch.server_base_uri = uriEl.value.trim();
+      if (keyEl && keyEl.value.trim()) patch.server_api_key = keyEl.value.trim();
+      saveMeetingConfig(patch);
+    };
+    var btnClearSrvKey = $("vrBtnClearServerKey");
+    if (btnClearSrvKey) btnClearSrvKey.onclick = function () {
+      var keyEl = $("vrServerApiKey");
+      if (keyEl) keyEl.value = "";
+      saveMeetingConfig({ clear_server_api_key: true });
+    };
+
+    // Client actions
+    var btnTogCliKey = $("vrBtnToggleClientKey");
+    if (btnTogCliKey) btnTogCliKey.onclick = function () {
+      var inp = $("vrClientApiKey");
+      if (!inp) return;
+      inp.type = inp.type === "password" ? "text" : "password";
+      btnTogCliKey.innerHTML = ico(inp.type === "password" ? "eye" : "eye-off");
+    };
+    var btnPing = $("vrBtnPingRemote");
+    if (btnPing) btnPing.onclick = async function () {
+      var uriEl = $("vrClientBaseUri");
+      var keyEl = $("vrClientApiKey");
+      var uri = uriEl ? uriEl.value.trim() : "";
+      var key = keyEl ? keyEl.value.trim() : "";
+      btnPing.disabled = true;
+      btnPing.innerHTML = ico("loader-circle") + " <span>" + esc(tw("vr.meeting.btn_testing_conn")) + "</span>";
+      try {
+        var r = await fetch("/voice-records/meeting/remote-ping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ base_uri: uri, api_key: key }),
+        });
+        var d = await r.json().catch(function () { return {}; });
+        if (r.ok && d && d.ok && d.ping) {
+          var p = d.ping;
+          var gpuText = p.gpu_name ? p.gpu_name + " (" + (p.vram_mb || 0) + " MB)" : (p.has_gpu ? "GPU" : "CPU");
+          S.mt.remotePingStatus = {
+            ok: true,
+            text: tw("vr.meeting.client_conn_ok", { gpu: gpuText }),
+          };
+        } else {
+          S.mt.remotePingStatus = {
+            ok: false,
+            text: tw("vr.meeting.client_conn_failed", { err: (d && d.error) || ("HTTP " + r.status) }),
+          };
+        }
+      } catch (e) {
+        S.mt.remotePingStatus = {
+          ok: false,
+          text: tw("vr.meeting.client_conn_failed", { err: e.message || "Network error" }),
+        };
+      }
+      btnPing.disabled = false;
+      btnPing.innerHTML = ico("zap") + " <span>" + esc(tw("vr.meeting.btn_test_conn")) + "</span>";
+      syncMeetingUi();
+    };
+    var btnSaveCli = $("vrBtnSaveClientConfig");
+    if (btnSaveCli) btnSaveCli.onclick = function () {
+      var uriEl = $("vrClientBaseUri");
+      var keyEl = $("vrClientApiKey");
+      var patch = { remote_mode: "client" };
+      if (uriEl) patch.client_base_uri = uriEl.value.trim();
+      if (keyEl && keyEl.value.trim()) patch.client_api_key = keyEl.value.trim();
+      saveMeetingConfig(patch);
+    };
+    var btnClearCli = $("vrBtnClearClientConfig");
+    if (btnClearCli) btnClearCli.onclick = function () {
+      var uriEl = $("vrClientBaseUri");
+      var keyEl = $("vrClientApiKey");
+      if (uriEl) uriEl.value = "";
+      if (keyEl) keyEl.value = "";
+      S.mt.remotePingStatus = null;
+      saveMeetingConfig({ remote_mode: "off", client_base_uri: "", clear_client_api_key: true });
+    };
 
     window.addEventListener("beforeunload", onBeforeUnload);
 

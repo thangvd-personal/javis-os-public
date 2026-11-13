@@ -4865,4 +4865,20 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   .vr-mt-token-row { flex-wrap: wrap; }
 }
 
+/* Remote Speaker Diarization additions */
+.vr-remote-tabs { margin-bottom: 12px; }
+.vr-remote-subpanel {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  margin-top: 10px;
+}
+.vr-remote-subpanel[hidden] { display: none !important; }
+.vr-remote-subpanel .vr-field label { margin-bottom: 4px; }
+.vr-remote-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.vr-remote-input-row { display: flex; align-items: center; gap: 8px; }
+.vr-remote-input-row .vr-input { flex: 1 1 auto; height: 38px; min-height: 38px; box-sizing: border-box; }
+
+
 

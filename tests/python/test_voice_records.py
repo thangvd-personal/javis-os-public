@@ -142,6 +142,52 @@ check("GET /voice-records filters by active brain only",
       lst_default["ok"] and len(lst_default["records"]) == 2
       and len(lst_other["records"]) == 1 and lst_other["records"][0]["raw_text"] == "dữ liệu brain khác")
 
+# 5. Remote Speaker Diarization tests
+r_gen = client.post("/voice-records/meeting/generate-diarize-key")
+d_gen = r_gen.json()
+check("generate-diarize-key returns random key with sdk_live_ prefix",
+      r_gen.status_code == 200 and d_gen.get("ok") and str(d_gen.get("key", "")).startswith("sdk_live_"))
+
+test_srv_key = d_gen["key"]
+# Update config with server mode
+_curr_settings = {
+    "model": {"openai_api_key": "sk-test", "order": ["openai"]},
+    "voice": {
+        "meeting_stt": {
+            "remote_mode": "server",
+            "server_api_key": test_srv_key,
+            "server_base_uri": "http://192.168.1.50:8000",
+        }
+    }
+}
+main.cfgmod.read_settings = lambda: _curr_settings
+
+# Ping when server mode enabled but missing key -> 401
+r_ping_nokey = client.get("/voice-records/remote-diarize/ping")
+check("remote-diarize/ping rejects request without key with 401", r_ping_nokey.status_code == 401)
+
+# Ping with invalid key -> 401
+r_ping_badkey = client.get("/voice-records/remote-diarize/ping", headers={"X-Speaker-Diarization-Key": "wrong-key"})
+check("remote-diarize/ping rejects wrong key with 401", r_ping_badkey.status_code == 401)
+
+# Ping with valid key via X-Speaker-Diarization-Key -> 200
+r_ping_ok = client.get("/voice-records/remote-diarize/ping", headers={"X-Speaker-Diarization-Key": test_srv_key})
+check("remote-diarize/ping accepts valid X-Speaker-Diarization-Key", r_ping_ok.status_code == 200 and r_ping_ok.json().get("ok") is True)
+
+# Ping with valid key via Authorization Bearer -> 200
+r_ping_bearer = client.get("/voice-records/remote-diarize/ping", headers={"Authorization": f"Bearer {test_srv_key}"})
+check("remote-diarize/ping accepts valid Authorization Bearer token", r_ping_bearer.status_code == 200 and r_ping_bearer.json().get("ok") is True)
+
+# GET /voice-records/meeting/remote-server-key returns plaintext key
+r_get_key = client.get("/voice-records/meeting/remote-server-key")
+check("GET /voice-records/meeting/remote-server-key returns server key for admin",
+      r_get_key.status_code == 200 and r_get_key.json().get("key") == test_srv_key)
+
+# When server mode is off -> ping returns 403
+_curr_settings["voice"]["meeting_stt"]["remote_mode"] = "off"
+r_ping_off = client.get("/voice-records/remote-diarize/ping", headers={"X-Speaker-Diarization-Key": test_srv_key})
+check("remote-diarize/ping returns 403 when remote_mode is not server", r_ping_off.status_code == 403)
+
 # Restore
 main.cfgmod.gate_active = _orig_gate
 main._brain_root = _orig_brain_root

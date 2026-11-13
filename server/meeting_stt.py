@@ -141,6 +141,13 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         keep_days = 30
     keep_days = max(1, min(3650, keep_days))
     tok = str(raw.get("hf_token") or "").strip()
+    remote_mode = str(raw.get("remote_mode") or "off").strip().lower()
+    if remote_mode not in ("off", "server", "client"):
+        remote_mode = "off"
+    server_base_uri = str(raw.get("server_base_uri") or "").strip()
+    server_api_key = str(raw.get("server_api_key") or "").strip()
+    client_base_uri = str(raw.get("client_base_uri") or "").strip()
+    client_api_key = str(raw.get("client_api_key") or "").strip()
     return {
         "whisper_model": model,
         "device": dev,
@@ -148,7 +155,29 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "diarize": diarize,
         "keep_audio_days": keep_days,
         "hf_token": tok,
+        "remote_mode": remote_mode,
+        "server_base_uri": server_base_uri,
+        "server_api_key": server_api_key,
+        "client_base_uri": client_base_uri,
+        "client_api_key": client_api_key,
     }
+
+
+def generate_diarize_key() -> str:
+    import secrets
+    return "sdk_live_" + secrets.token_hex(16)
+
+
+def resolve_server_key(cfg: dict[str, Any] | None = None) -> str:
+    mc = get_config(cfg)
+    if mc.get("server_api_key"):
+        return mc["server_api_key"]
+    return os.getenv("SPEAKER_DIARIZATION_KEY", "").strip()
+
+
+def resolve_client_key(cfg: dict[str, Any] | None = None) -> str:
+    mc = get_config(cfg)
+    return mc.get("client_api_key") or ""
 
 
 def resolve_hf_token(cfg: dict[str, Any] | None = None) -> tuple[str, str]:
@@ -191,6 +220,26 @@ def update_config(patch: dict[str, Any]) -> dict[str, Any]:
         tok = str(patch["hf_token"] or "").strip()
         if tok and not tok.startswith("••••"):
             clean["hf_token"] = tok
+    if "remote_mode" in patch:
+        rm = str(patch["remote_mode"] or "off").strip().lower()
+        if rm in ("off", "server", "client"):
+            clean["remote_mode"] = rm
+    if "server_base_uri" in patch:
+        clean["server_base_uri"] = str(patch["server_base_uri"] or "").strip().rstrip("/")
+    if "client_base_uri" in patch:
+        clean["client_base_uri"] = str(patch["client_base_uri"] or "").strip().rstrip("/")
+    if patch.get("clear_server_api_key"):
+        clean["server_api_key"] = ""
+    elif "server_api_key" in patch:
+        sk = str(patch["server_api_key"] or "").strip()
+        if sk and not sk.startswith("••••"):
+            clean["server_api_key"] = sk
+    if patch.get("clear_client_api_key"):
+        clean["client_api_key"] = ""
+    elif "client_api_key" in patch:
+        ck = str(patch["client_api_key"] or "").strip()
+        if ck and not ck.startswith("••••"):
+            clean["client_api_key"] = ck
 
     if clean:
         new_cfg = cfgmod.update_settings({"voice": {"meeting_stt": clean}})
@@ -460,12 +509,24 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
         "install_progress": str((install_job or {}).get("tien_do") or ""),
         "install_log": str((install_job or {}).get("log") or ""),
         "install_error": str((install_job or {}).get("loi") or ""),
+        "remote_diarize": {
+            "mode": mc["remote_mode"],
+            "server_base_uri": mc["server_base_uri"],
+            "has_server_key": bool(resolve_server_key(cfg)),
+            "server_ready": bool(resolve_server_key(cfg) and diarize_ready),
+            "client_base_uri": mc["client_base_uri"],
+            "has_client_key": bool(resolve_client_key(cfg)),
+            "client_ready": bool(mc["client_base_uri"] and resolve_client_key(cfg)),
+        },
         "config": {
             "whisper_model": mc["whisper_model"],
             "device": mc["device"],
             "language": mc["language"],
             "diarize": mc["diarize"],
             "keep_audio_days": mc["keep_audio_days"],
+            "remote_mode": mc["remote_mode"],
+            "server_base_uri": mc["server_base_uri"],
+            "client_base_uri": mc["client_base_uri"],
         },
     }
 
