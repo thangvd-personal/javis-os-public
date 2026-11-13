@@ -102,6 +102,10 @@ _VR_EXTRA_COLS = (
     ("device_used", "TEXT NOT NULL DEFAULT ''"),
 )
 
+_MJ_EXTRA_COLS = (
+    ("log_tail", "TEXT NOT NULL DEFAULT ''"),
+)
+
 
 def _db_path() -> Path:
     return Path(cfgmod.STATE_DIR) / "voice_records.sqlite3"
@@ -380,6 +384,7 @@ def public_job(job: dict[str, Any] | None) -> dict[str, Any] | None:
 def _job_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
+    keys = set(row.keys())
     return {
         "id": row["id"],
         "created_at": float(row["created_at"]),
@@ -408,6 +413,7 @@ def _job_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "record_id": row["record_id"],
         "error": row["error"],
         "warnings": _loads(row["warnings_json"], []),
+        "log_tail": row["log_tail"] if "log_tail" in keys else "",
     }
 
 
@@ -425,13 +431,20 @@ class VoiceRecordStore:
             self._ensure_columns()
 
     def _ensure_columns(self) -> None:
-        existing = {
+        existing_vr = {
             str(r["name"])
             for r in self._db.execute("PRAGMA table_info(voice_records)").fetchall()
         }
         for col, ddl in _VR_EXTRA_COLS:
-            if col not in existing:
+            if col not in existing_vr:
                 self._db.execute(f"ALTER TABLE voice_records ADD COLUMN {col} {ddl}")
+        existing_mj = {
+            str(r["name"])
+            for r in self._db.execute("PRAGMA table_info(meeting_jobs)").fetchall()
+        }
+        for col, ddl in _MJ_EXTRA_COLS:
+            if col not in existing_mj:
+                self._db.execute(f"ALTER TABLE meeting_jobs ADD COLUMN {col} {ddl}")
         self._db.commit()
 
     def close(self) -> None:
@@ -739,7 +752,7 @@ class VoiceRecordStore:
         allowed = {
             "status", "progress", "stage_detail", "upload_mode", "file_ext",
             "total_chunks", "received_chunks", "audio_path", "duration_sec",
-            "pinned", "record_id", "error", "warnings_json",
+            "pinned", "record_id", "error", "warnings_json", "log_tail",
         }
         sets: list[str] = ["updated_at=?"]
         vals: list[Any] = [time.time()]

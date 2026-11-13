@@ -22,9 +22,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -37,9 +39,11 @@ import transcript_fix
 import voice_records
 import winproc
 
+_LOGGER = logging.getLogger("meeting_jobs")
+
 MAX_CHUNK_BYTES = 32 * 1024 * 1024  # 32 MB ceiling per HTTP chunk
 MIN_WORKER_TIMEOUT_SEC = 1800.0     # 30 minutes floor
-MAX_WORKER_TIMEOUT_SEC = 10800.0    # 3 hours ceiling
+MAX_WORKER_TIMEOUT_SEC = 14400.0    # 4 hours ceiling
 UPLOAD_STAGING_TTL_SEC = 3 * 86400  # clean abandoned partial upload dirs after 3 days
 
 _ALLOWED_EXTS = {".webm", ".mp3", ".wav", ".m4a", ".ogg", ".opus", ".mp4", ".aac", ".flac"}
@@ -179,16 +183,156 @@ def assemble_uploaded_audio(job: dict[str, Any]) -> tuple[list[str], str]:
     return [str(dest)], str(dest)
 
 
+def probe_audio_duration_sec(path: Path | str) -> float | None:
+    p = Path(path)
+    if not p.is_file():
+        return None
+    ffprobe_bin = shutil.which("ffprobe")
+    if not ffprobe_bin:
+        return None
+    try:
+        res = subprocess.run(
+            [
+                ffprobe_bin,
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(p),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            val = float(res.stdout.strip())
+            if val > 0:
+                return val
+    except Exception:
+        pass
+    return None
+
+
 def _estimate_worker_timeout(input_paths: list[str]) -> float:
     total_bytes = 0
+    total_dur = 0.0
     for p in input_paths:
         try:
             total_bytes += Path(p).stat().st_size
         except OSError:
             pass
+        d = probe_audio_duration_sec(p)
+        if d:
+            total_dur += d
     mb = total_bytes / (1024 * 1024)
-    est = MIN_WORKER_TIMEOUT_SEC + mb * 6.0
+    # If duration probed, allow 2.0x audio duration + 15 mins base headroom
+    dur_est = (total_dur * 2.0 + 900.0) if total_dur > 0 else 0.0
+    # For compressed audio, 1MB is approx 1 minute, so 30s/MB gives a much safer floor
+    size_est = MIN_WORKER_TIMEOUT_SEC + mb * 30.0
+    est = max(MIN_WORKER_TIMEOUT_SEC, dur_est, size_est)
     return max(MIN_WORKER_TIMEOUT_SEC, min(MAX_WORKER_TIMEOUT_SEC, est))
+
+
+def _ensure_failed_record(
+    job_id: str,
+    error_msg: str,
+    warnings: list[str],
+    *,
+    brain_root_fn: Callable[[str], Path | str] | None = None,
+    files_root_fn: Callable[[str], Path | str] | None = None,
+    files_rel_fn: Callable[[Path | str, Path | str], str] | None = None,
+) -> dict[str, Any] | None:
+    """Ensure a failed or interrupted job with existing audio has an entry in VoiceRecord history."""
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return None
+    aud_path = str(job.get("audio_path") or "").strip()
+    if not aud_path or not Path(aud_path).is_file():
+        return None
+
+    if job.get("record_id"):
+        rec = store.get(job["record_id"])
+        if rec:
+            existing_warns = list(rec.get("warnings") or [])
+            for w in warnings:
+                if w not in existing_warns:
+                    existing_warns.append(w)
+            store.update_diarization(
+                rec["id"],
+                segments=rec.get("segments") or [],
+                raw_text=rec.get("raw_text") or "",
+                warnings=existing_warns,
+            )
+            return rec
+
+    now_dt = localefmt.now()
+    if brain_root_fn:
+        broot = Path(brain_root_fn(job["brain"])).resolve()
+    else:
+        broot = Path(cfgmod.STATE_DIR).parent / "brains" / job["brain"]
+    vr_dir = broot / "VoiceRecord"
+    vr_dir.mkdir(parents=True, exist_ok=True)
+    fname = voice_records.make_record_filename(now_dt, vr_dir)
+    target_file = vr_dir / fname
+    brain_rel = f"VoiceRecord/{fname}"
+    ceil_rel = brain_rel
+    if files_rel_fn and files_root_fn:
+        try:
+            ceil_rel = files_rel_fn(files_root_fn(job["brain"]), target_file)
+        except Exception:
+            ceil_rel = brain_rel
+
+    title = str(job.get("title") or "").strip() or "Cuộc họp (chưa hoàn tất)"
+    dur = float(job.get("duration_sec") or 0.0)
+    if dur <= 0:
+        dur = probe_audio_duration_sec(aud_path) or 0.0
+
+    clean_err = error_msg.replace("\n", " ").strip()
+    md_text = (
+        "---\n"
+        "type: voice-record\n"
+        "mode: meeting\n"
+        f"created_at: {json.dumps(job.get('created_iso') or now_dt.isoformat())}\n"
+        f"duration_sec: {round(float(dur or 0), 2)}\n"
+        f"model: {json.dumps(str(job.get('model') or ''))}\n"
+        "diarized: false\n"
+        "---\n\n"
+        f"# {title}\n\n"
+        f"> [!WARNING]\n"
+        f"> Tiến trình xử lý âm thanh chưa hoàn tất: {clean_err}\n\n"
+        "Bấm **Tiếp tục xử lý** hoặc **Tách lại người nói** để chạy lại quá trình phân tách giọng nói.\n"
+    )
+    _atomic_write_text(target_file, md_text)
+
+    rec = store.create_raw(
+        brain=job["brain"],
+        brain_path=job.get("brain_path") or brain_ident.canonical(str(broot)),
+        raw_text=f"[{title}] Chưa hoàn tất xử lý: {clean_err}",
+        file_path=brain_rel,
+        ceil_path=ceil_rel,
+        created_at=float(job.get("created_at") or now_dt.timestamp()),
+        created_iso=str(job.get("created_iso") or now_dt.isoformat()),
+        mode="meeting",
+        job_id=job_id,
+        duration_sec=dur,
+        audio_path=aud_path,
+        pinned=bool(job.get("pinned")),
+        segments=[],
+        warnings=warnings,
+        model_used=str(job.get("model") or ""),
+        device_used=str(job.get("device") or ""),
+    )
+    store.mark_normalized(
+        rec["id"],
+        normalized_text=md_text,
+        source="meeting_stt",
+        file_path=brain_rel,
+        ceil_path=ceil_rel,
+        status="raw_saved",
+    )
+    store.update_job(job_id, record_id=rec["id"], duration_sec=dur)
+    return rec
 
 
 async def _terminate_proc(proc: asyncio.subprocess.Process) -> None:
@@ -236,6 +380,7 @@ async def _execute_job(
         job = store.get_job(job_id)
         if not job or job["status"] in ("done", "failed"):
             return
+        tail_lines: list[str] = []
         try:
             input_paths, final_audio_path = await asyncio.to_thread(assemble_uploaded_audio, job)
             store.update_job(job_id, status="converting", progress=3, audio_path=final_audio_path, stage_detail="Preparing audio")
@@ -301,51 +446,62 @@ async def _execute_job(
             )
 
             last_result: dict[str, Any] | None = None
-            tail_lines: list[str] = []
+            log_dir = meeting_stt.audio_dir()
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / f"{job_id}.log"
 
             async def _read_stream() -> None:
                 nonlocal last_result
                 assert proc.stdout is not None
-                while True:
-                    raw_line = await proc.stdout.readline()
-                    if not raw_line:
-                        break
-                    line = raw_line.decode("utf-8", "replace").strip()
-                    if not line:
-                        continue
-                    tail_lines.append(line)
-                    if len(tail_lines) > 25:
-                        tail_lines.pop(0)
-                    try:
-                        evt = json.loads(line)
-                    except Exception:
-                        continue
-                    if not isinstance(evt, dict):
-                        continue
-                    etype = evt.get("type")
-                    if etype == "progress":
-                        st = str(evt.get("stage") or "transcribing")
-                        if st not in ("converting", "transcribing", "diarizing", "merging", "done"):
-                            st = "transcribing"
-                        store.update_job(
-                            job_id,
-                            status=st if st != "done" else "merging",
-                            progress=int(evt.get("progress") or 0),
-                            stage_detail=str(evt.get("detail") or "")[:160],
-                        )
-                    elif etype == "result":
-                        last_result = evt
+                try:
+                    with open(log_file, "a", encoding="utf-8") as lf:
+                        while True:
+                            raw_line = await proc.stdout.readline()
+                            if not raw_line:
+                                break
+                            line = raw_line.decode("utf-8", "replace").strip()
+                            if not line:
+                                continue
+                            lf.write(f"[{localefmt.now().isoformat()}] {line}\n")
+                            lf.flush()
+                            tail_lines.append(line)
+                            if len(tail_lines) > 50:
+                                tail_lines.pop(0)
+                            try:
+                                evt = json.loads(line)
+                            except Exception:
+                                continue
+                            if not isinstance(evt, dict):
+                                continue
+                            etype = evt.get("type")
+                            if etype == "progress":
+                                st = str(evt.get("stage") or "transcribing")
+                                if st not in ("converting", "transcribing", "diarizing", "merging", "done"):
+                                    st = "transcribing"
+                                store.update_job(
+                                    job_id,
+                                    status=st if st != "done" else "merging",
+                                    progress=int(evt.get("progress") or 0),
+                                    stage_detail=str(evt.get("detail") or "")[:160],
+                                    log_tail="\n".join(tail_lines[-15:]),
+                                )
+                            elif etype == "result":
+                                last_result = evt
+                except Exception:
+                    pass
 
             try:
                 await asyncio.wait_for(asyncio.gather(_read_stream(), proc.wait()), timeout=timeout_sec)
             except TimeoutError:
                 await _terminate_proc(proc)
-                raise RuntimeError(
-                    localefmt.chu(
-                        f"Tiến trình xử lý âm thanh vượt quá giới hạn ({int(timeout_sec // 60)} phút) nên đã dừng.",
-                        f"Meeting audio worker exceeded timeout ({int(timeout_sec // 60)} minutes) and was stopped.",
-                    )
+                recent_logs = "\n".join(tail_lines[-5:]) if tail_lines else ""
+                timeout_msg = localefmt.chu(
+                    f"Tiến trình xử lý âm thanh vượt quá giới hạn ({int(timeout_sec // 60)} phút) nên đã dừng."
+                    + (f" Dòng log cuối:\n{recent_logs}" if recent_logs else ""),
+                    f"Meeting audio worker exceeded timeout ({int(timeout_sec // 60)} minutes) and was stopped."
+                    + (f" Recent log:\n{recent_logs}" if recent_logs else ""),
                 )
+                raise RuntimeError(timeout_msg)
 
             if last_result is None and out_json.is_file():
                 try:
@@ -492,10 +648,40 @@ async def _execute_job(
                 error="",
             )
         except asyncio.CancelledError:
-            store.update_job(job_id, status="failed", error="Cancelled")
+            tail_str = "\n".join(tail_lines[-20:]) if tail_lines else ""
+            store.update_job(job_id, status="failed", error="Cancelled", log_tail=tail_str)
+            try:
+                await asyncio.to_thread(
+                    _ensure_failed_record,
+                    job_id,
+                    "Cancelled",
+                    ["cancelled"],
+                    brain_root_fn=brain_root_fn,
+                    files_root_fn=files_root_fn,
+                    files_rel_fn=files_rel_fn,
+                )
+            except Exception as rec_err:
+                _LOGGER.warning("Could not persist failed record for cancelled job %s: %s", job_id, rec_err)
             raise
         except Exception as e:
-            store.update_job(job_id, status="failed", error=f"{type(e).__name__}: {e}"[:500])
+            tail_str = "\n".join(tail_lines[-20:]) if tail_lines else ""
+            err_text = f"{type(e).__name__}: {e}"
+            _LOGGER.error("Meeting job %s failed: %s\nRecent log:\n%s", job_id, err_text, tail_str)
+            is_timeout = isinstance(e, RuntimeError) and "vượt quá giới hạn" in str(e)
+            warns = ["worker_timeout"] if is_timeout else ["process_failed"]
+            store.update_job(job_id, status="failed", error=err_text[:500], log_tail=tail_str)
+            try:
+                await asyncio.to_thread(
+                    _ensure_failed_record,
+                    job_id,
+                    err_text[:300],
+                    warns,
+                    brain_root_fn=brain_root_fn,
+                    files_root_fn=files_root_fn,
+                    files_rel_fn=files_rel_fn,
+                )
+            except Exception as rec_err:
+                _LOGGER.warning("Could not persist failed record for failed job %s: %s", job_id, rec_err)
         finally:
             try:
                 shutil.rmtree(job_upload_dir(job_id), ignore_errors=True)

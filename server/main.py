@@ -20933,7 +20933,7 @@ async def _chat_socket(ws):
 
             await ws.send_text(json.dumps({
                 "type": "status",
-                "content": localefmt.chu("Javis đang suy nghĩ...", "Javis is thinking...")
+                "content": localefmt.chu("đang suy nghĩ...", "is thinking...")
             }))
 
             if _persona and _persona[0] == "agent":

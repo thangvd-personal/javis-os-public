@@ -468,6 +468,8 @@
     codes.forEach(function (c) {
       var s = String(c || "");
       if (s === "missing_hf_token") msgs.push(tw("vr.meeting.token_missing_warn"));
+      else if (s === "worker_timeout" || s === "diarize_timeout") msgs.push(tw("vr.meeting.worker_timeout_warn"));
+      else if (s === "diarize_interrupted" || s === "process_failed") msgs.push(tw("vr.meeting.diarize_interrupted_warn"));
       else if (s.indexOf("pyannote_not_installed") === 0) msgs.push(tw("vr.meeting.diarize_not_installed_warn"));
       else if (s.indexOf("pyannote_auth_error") === 0) msgs.push(tw("vr.meeting.pyannote_auth_warn"));
       else if (s) msgs.push(s);
@@ -873,20 +875,33 @@
     var canRediarize = isMeeting && !!rec.has_audio;
 
     if (edNote) {
+      var isResumeMode = isMeeting && canRediarize && (!rec.segments || !rec.segments.length);
       var warnTxt = S.infoNote || warningTextForCodes(rec.warnings);
+      if (!warnTxt && isResumeMode) {
+        warnTxt = tw("vr.meeting.diarize_interrupted_warn");
+      }
       edNote.hidden = !warnTxt;
       if (!edNote.hidden) {
-        var isPyannoteWarn = Array.isArray(rec.warnings) && (
-          rec.warnings.indexOf("pyannote_auth_warn") !== -1 ||
-          rec.warnings.indexOf("missing_hf_token") !== -1 ||
-          rec.warnings.indexOf("pyannote_not_installed") !== -1
+        var isRetryable = canRediarize && (
+          isResumeMode ||
+          (Array.isArray(rec.warnings) && (
+            rec.warnings.indexOf("pyannote_auth_warn") !== -1 ||
+            rec.warnings.indexOf("missing_hf_token") !== -1 ||
+            rec.warnings.indexOf("pyannote_not_installed") !== -1 ||
+            rec.warnings.indexOf("worker_timeout") !== -1 ||
+            rec.warnings.indexOf("diarize_timeout") !== -1 ||
+            rec.warnings.indexOf("diarize_interrupted") !== -1 ||
+            rec.warnings.indexOf("process_failed") !== -1
+          ))
         );
-        if (canRediarize && isPyannoteWarn) {
+        if (canRediarize && isRetryable) {
+          var bLabel = isResumeMode ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_rediarize");
+          var bSpin = isResumeMode ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
           edNote.innerHTML = '<div class="vr-fallback-row">' +
             '<span>' + esc(warnTxt) + '</span>' +
             '<button type="button" class="gcard-btn vr-btn-rediarize-banner" id="vrMtBtnRediarizeBanner">' +
             ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
-            ' <span>' + esc(S.mt.rediarizing ? tw("vr.meeting.btn_rediarizing") : tw("vr.meeting.btn_rediarize")) + '</span></button>' +
+            ' <span>' + esc(S.mt.rediarizing ? bSpin : bLabel) + '</span></button>' +
             '</div>';
           var btnBanner = $("vrMtBtnRediarizeBanner");
           if (btnBanner) {
@@ -960,9 +975,12 @@
       if (rediarizeBtn) {
         rediarizeBtn.hidden = !canRediarize;
         if (canRediarize) {
+          var isResume = !rec.segments || !rec.segments.length;
+          var btnLabel = isResume ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_rediarize");
+          var btnSpin = isResume ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
           rediarizeBtn.disabled = !!S.mt.rediarizing;
           rediarizeBtn.innerHTML = ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
-            " <span>" + esc(S.mt.rediarizing ? tw("vr.meeting.btn_rediarizing") : tw("vr.meeting.btn_rediarize")) + "</span>";
+            " <span>" + esc(S.mt.rediarizing ? btnSpin : btnLabel) + "</span>";
         }
       }
       var exts = ["srt", "vtt", "txt", "json"];

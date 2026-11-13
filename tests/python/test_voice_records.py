@@ -188,6 +188,58 @@ _curr_settings["voice"]["meeting_stt"]["remote_mode"] = "off"
 r_ping_off = client.get("/voice-records/remote-diarize/ping", headers={"X-Speaker-Diarization-Key": test_srv_key})
 check("remote-diarize/ping returns 403 when remote_mode is not server", r_ping_off.status_code == 403)
 
+# 6. Test timeout estimation, worker logging, and failed record recovery
+import meeting_jobs
+
+# Mock audio duration probe
+_orig_probe = meeting_jobs.probe_audio_duration_sec
+meeting_jobs.probe_audio_duration_sec = lambda p: 4800.0  # 80 mins
+to_est = meeting_jobs._estimate_worker_timeout(["/dummy/meeting.m4a"])
+check("estimate_worker_timeout factors in duration (80 mins -> >160 mins timeout)",
+      to_est >= 4800.0 * 2.0)
+meeting_jobs.probe_audio_duration_sec = _orig_probe
+
+# Test _ensure_failed_record creates voice record and .md file with audio intact
+dummy_aud = _STATE / "test_failed_meeting.m4a"
+dummy_aud.write_bytes(b"dummy audio content")
+dummy_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Buổi họp thử nghiệm lỗi",
+    upload_mode="raw_upload",
+    audio_path=str(dummy_aud),
+    status="failed",
+    created_at=datetime(2026, 11, 13, 15, 30, 0).timestamp(),
+    created_iso="2026-11-13T15:30:00+07:00",
+)
+store.update_job(
+    dummy_job["id"],
+    error="RuntimeError: Tiến trình xử lý âm thanh vượt quá giới hạn (37 phút) nên đã dừng.",
+    log_tail="line 1\nline 2\nline 3",
+)
+check("meeting_jobs stores log_tail",
+      store.get_job(dummy_job["id"]).get("log_tail") == "line 1\nline 2\nline 3")
+
+failed_rec = meeting_jobs._ensure_failed_record(
+    dummy_job["id"],
+    "Tiến trình xử lý âm thanh vượt quá giới hạn (37 phút) nên đã dừng.",
+    ["worker_timeout"],
+    brain_root_fn=lambda b: str(_BRAIN),
+    files_root_fn=lambda b: _BRAIN.resolve(),
+    files_rel_fn=lambda r, t: f"VoiceRecord/{t.name}",
+)
+check("_ensure_failed_record creates voice record", failed_rec is not None and bool(failed_rec.get("id")))
+check("failed record has_audio is True", failed_rec.get("has_audio") is True)
+check("failed record contains worker_timeout warning", "worker_timeout" in (failed_rec.get("warnings") or []))
+check("failed job is linked to record_id",
+      store.get_job(dummy_job["id"]).get("record_id") == failed_rec["id"])
+target_md = _BRAIN / failed_rec["file_path"]
+check("failed record created markdown file in VoiceRecord/", target_md.is_file())
+if target_md.is_file():
+    md_content = target_md.read_text(encoding="utf-8")
+    check("markdown file contains warning block and guidance",
+          "[!WARNING]" in md_content and "Tách lại người nói" in md_content)
+
 # Restore
 main.cfgmod.gate_active = _orig_gate
 main._brain_root = _orig_brain_root
