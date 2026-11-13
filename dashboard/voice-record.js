@@ -117,7 +117,7 @@
     var model = mt.model || "large-v3-turbo";
     var statusLoaded = Boolean(st.ok);
     var activeAction = mt.installPending || (st.installing ? (st.install_mode || "all") : "");
-    var busy = Boolean(mt.installPending || st.installing);
+    var busy = Boolean(mt.installPending || st.installing || mt.deletingModel);
     var pyannoteReady = Boolean(st.venv_diarize_ready);
     var cachedMap = st.cached_whisper_models || {};
     var modelCached = Boolean(cachedMap[model]);
@@ -150,6 +150,13 @@
         labelKey: (busy && activeAction === "redownload")
           ? "vr.meeting.btn_redownloading"
           : "vr.meeting.btn_redownload_model",
+      },
+      deleteModel: {
+        visible: modelCached,
+        disabled: !statusLoaded || busy,
+        labelKey: mt.deletingModel
+          ? "vr.meeting.btn_deleting_model"
+          : "vr.meeting.btn_delete_model",
       },
     };
   }
@@ -629,6 +636,13 @@
       redlBtn.disabled = ctaState.redownloadModel.disabled;
       redlBtn.innerHTML = ico("refresh-cw") +
         " <span>" + esc(tw(ctaState.redownloadModel.labelKey, { model: mt.model || activeModel })) + "</span>";
+    }
+    var delModBtn = $("vrMtBtnDeleteModel");
+    if (delModBtn) {
+      delModBtn.hidden = !ctaState.deleteModel.visible;
+      delModBtn.disabled = ctaState.deleteModel.disabled;
+      delModBtn.innerHTML = ico("trash-2") +
+        " <span>" + esc(tw(ctaState.deleteModel.labelKey, { model: mt.model || activeModel })) + "</span>";
     }
     var instNotice = $("vrMtInstallNotice");
     if (instNotice) {
@@ -1626,6 +1640,48 @@
     }
   }
 
+  async function deleteSelectedModel() {
+    if (S.mt.installPending || S.mt.deletingModel || (S.mt.statusData && S.mt.statusData.installing)) return;
+    var targetModel = S.mt.model || "large-v3-turbo";
+    if (typeof window !== "undefined" && window.confirm) {
+      var msg = tw("vr.meeting.confirm_delete_model", { model: targetModel });
+      if (!window.confirm(msg)) return;
+    }
+    S.mt.errorMsg = "";
+    S.mt.installNotice = null;
+    S.mt.deletingModel = true;
+    syncMeetingUi();
+    try {
+      var r = await fetch("/voice-records/meeting/models/delete", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: targetModel }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!S.mounted) return;
+      S.mt.deletingModel = false;
+      if (d && d.status) S.mt.statusData = d.status;
+      if (!r.ok || !d || d.ok === false) {
+        var msg = (d && d.error) || ("HTTP " + r.status);
+        S.mt.installNotice = { type: "err", text: tw("vr.meeting.delete_model_failed", { err: msg }) };
+        S.mt.errorMsg = msg;
+        syncMeetingUi();
+        return;
+      }
+      S.mt.installNotice = { type: "ok", text: tw("vr.meeting.delete_model_success", { model: targetModel }) };
+      syncMeetingUi();
+    } catch (e) {
+      if (S.mounted) {
+        var em = (e && e.message) || "Network error";
+        S.mt.deletingModel = false;
+        S.mt.installNotice = { type: "err", text: tw("vr.meeting.delete_model_failed", { err: em }) };
+        S.mt.errorMsg = em;
+        syncMeetingUi();
+      }
+    }
+  }
+
   async function applySpeakerMap() {
     var rec = S.activeRecord;
     if (!rec || !rec.speakers || !rec.speakers.length) return;
@@ -1859,13 +1915,13 @@
       '<button type="button" class="vr-btn vr-btn-rec" id="vrBtnRecord">' +
       ico("mic") + " <span>" + esc(tw("vr.btn.record")) + "</span>" +
       "</button>" +
-      '<button type="button" class="gcard-btn ghost" id="vrBtnCancelTake" hidden>' +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrBtnCancelTake" hidden>' +
       ico("x") + " <span>" + esc(tw("vr.btn.cancel_take")) + "</span>" +
       "</button>" +
       '<button type="button" class="vr-btn vr-btn-norm" id="vrBtnNormalize" disabled>' +
       ico("sparkles") + " <span>" + esc(tw("vr.btn.normalize")) + "</span>" +
       "</button>" +
-      '<button type="button" class="gcard-btn" id="vrBtnNew">' +
+      '<button type="button" class="vr-btn gcard-btn" id="vrBtnNew">' +
       ico("plus") + " <span>" + esc(tw("vr.btn.new")) + "</span>" +
       "</button>" +
       "</div>" +
@@ -1933,7 +1989,7 @@
       '<button type="button" class="vr-btn vr-btn-norm" id="vrMtBtnStop" hidden>' +
       ico("square") + " <span>" + esc(tw("vr.meeting.btn_stop")) + "</span>" +
       "</button>" +
-      '<button type="button" class="gcard-btn ghost" id="vrMtBtnCancel" hidden>' +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrMtBtnCancel" hidden>' +
       ico("x") + " <span>" + esc(tw("vr.meeting.btn_cancel")) + "</span>" +
       "</button>" +
       '<button type="button" class="vr-btn" id="vrMtBtnUpload">' +
@@ -1985,6 +2041,7 @@
       '<button type="button" class="vr-btn" id="vrMtBtnInstallAll" hidden></button>' +
       '<button type="button" class="gcard-btn" id="vrMtBtnInstallModel"></button>' +
       '<button type="button" class="gcard-btn ghost" id="vrMtBtnRedownload" hidden></button>' +
+      '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrMtBtnDeleteModel" hidden></button>' +
       "</div>" +
       '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
       '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
@@ -2139,6 +2196,8 @@
     if (mtInstAll) mtInstAll.onclick = function () { triggerInstall("all"); };
     if (mtInstMod) mtInstMod.onclick = function () { triggerInstall("model"); };
     if (mtRedlMod) mtRedlMod.onclick = function () { triggerInstall("redownload"); };
+    var mtDelMod = $("vrMtBtnDeleteModel");
+    if (mtDelMod) mtDelMod.onclick = function () { deleteSelectedModel(); };
 
     if (mtApplySpk) mtApplySpk.onclick = applySpeakerMap;
     if (mtNormRec) mtNormRec.onclick = normalizeMeetingRecord;

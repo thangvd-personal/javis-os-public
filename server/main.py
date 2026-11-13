@@ -18821,6 +18821,22 @@ async def voice_meeting_install(request: Request):
     return {**res, "status": meeting_stt.status()}
 
 
+@app.post("/voice-records/meeting/models/delete")
+@app.post("/voice-records/meeting/delete-model")
+async def voice_meeting_model_delete(request: Request):
+    """Delete a cached Whisper model to free disk space."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    model = str(body.get("model") or "").strip()
+    if not model:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Thiếu tên mô hình", "Missing model name")}, status_code=400)
+    res = meeting_stt.delete_cached_whisper_model(model)
+    return {**res, "status": meeting_stt.status()}
+
+
 @app.get("/voice-records/meeting/jobs")
 def voice_meeting_jobs_list(brain: str = Query("brain"), limit: int = Query(20)):
     broot = brain_ident.canonical(_brain_root(brain))

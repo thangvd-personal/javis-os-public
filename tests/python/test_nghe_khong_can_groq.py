@@ -219,7 +219,7 @@ check("the temporary audio file is deleted", not list(local_stt.TMP_DIR.glob("*"
 r = run(local_stt.transcribe(b"audio-bytes", "voice.m4a", "vi"))
 check("a broken model is 'loi', never a crash", r.get("ly_do") == "loi" and not r.get("ok"), r)
 r = ot.go("local_ear")
-check("Remove deletes everything Javis downloaded for it", r.get("ok") and not local_stt.ROOT.exists(), r)
+check("Remove deletes the library and preserves models", r.get("ok") and not local_stt.LIB_DIR.exists() and local_stt.MODEL_DIR.exists() and not local_stt.installed(), r)
 
 # ============================================================
 # 4. main wires the chain for every voice message and video

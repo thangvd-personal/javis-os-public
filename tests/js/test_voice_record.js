@@ -108,7 +108,7 @@ const meetingKeys = [
   "vr.meeting.btn_resume", "vr.meeting.btn_stop", "vr.meeting.btn_upload",
   "vr.meeting.token_missing_warn", "vr.meeting.btn_apply_speakers", "vr.meeting.btn_pin",
   "vr.meeting.btn_rediarize", "vr.meeting.btn_rediarizing",
-  "vr.meeting.btn_redownload_model", "vr.meeting.btn_pyannote_installed", "vr.meeting.btn_model_installed",
+  "vr.meeting.btn_redownload_model", "vr.meeting.btn_delete_model", "vr.meeting.btn_pyannote_installed", "vr.meeting.btn_model_installed",
   "vr.meeting.install_success_all", "vr.meeting.install_success_model",
   "vr.meeting.install_success_redownload", "vr.meeting.install_failed", "vr.meeting.install_incomplete",
   "vr.meeting.setup_hint_prefix", "vr.meeting.setup_hint_and", "vr.meeting.setup_hint_suffix",
@@ -140,6 +140,7 @@ check("model dropdown moved from meeting pane to settings pane and vrMtPills rem
 
 check("settings pane arranges model dropdown and CTAs on single row, vrStPills single-line, and compact token row",
   vrJsSrc.includes("vr-mt-model-row")
+  && vrJsSrc.includes("vrMtBtnDeleteModel")
   && consoleCss.includes(".vr-mt-model-row")
   && consoleCss.includes("#vrStPills { display: inline-flex; flex-wrap: nowrap")
   && consoleCss.includes(".vr-settings-card .gcard-btn")
@@ -177,14 +178,20 @@ check("cached medium + missing pyannote: installAll enabled, installModel locked
   && sCachedMed.installModel.lockedDone === true
   && sCachedMed.installModel.disabled === true
   && sCachedMed.redownloadModel.visible === true
-  && sCachedMed.redownloadModel.disabled === false);
+  && sCachedMed.redownloadModel.disabled === false
+  && sCachedMed.deleteModel.visible === true
+  && sCachedMed.deleteModel.disabled === false);
+
+check("uncached turbo: deleteModel hidden",
+  sUnready.deleteModel.visible === false);
 
 const sClicking = VR.getInstallCtaState({ model: "medium", installPending: "all" }, baseSt);
 check("while pending/installing: installAll, installModel, redownload all temporarily locked",
   sClicking.busy === true
   && sClicking.installAll.disabled === true
   && sClicking.installModel.disabled === true
-  && sClicking.redownloadModel.disabled === true);
+  && sClicking.redownloadModel.disabled === true
+  && sClicking.deleteModel.disabled === true);
 
 const sDone = VR.getInstallCtaState(
   { model: "large-v3-turbo", installPending: "" },

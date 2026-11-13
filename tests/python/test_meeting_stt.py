@@ -203,6 +203,23 @@ fake_snap.mkdir(parents=True, exist_ok=True)
 (fake_snap / "model.bin").write_bytes(b"1234")
 (fake_snap / "config.json").write_text('{"model": "medium"}', encoding="utf-8")
 
+# 2c. POST /voice-records/meeting/models/delete removes model safely and returns updated status
+r_del_empty = client.post("/voice-records/meeting/models/delete", json={})
+check("POST /voice-records/meeting/models/delete rejects empty model", r_del_empty.status_code == 400)
+
+del_test_snap = _STATE / "local-ear" / "models" / "models--mobiuslabsgmbh--faster-whisper-large-v3-turbo" / "snapshots" / "del_test"
+del_test_snap.mkdir(parents=True, exist_ok=True)
+(del_test_snap / "model.bin").write_bytes(b"9999")
+(del_test_snap / "config.json").write_text('{"model": "large-v3-turbo"}', encoding="utf-8")
+check("large-v3-turbo cached before delete", meeting_stt.is_whisper_model_cached("large-v3-turbo") is True)
+
+r_del = client.post("/voice-records/meeting/models/delete", json={"model": "large-v3-turbo"})
+check("POST /voice-records/meeting/models/delete removes cached model and returns updated status",
+      r_del.status_code == 200
+      and r_del.json().get("ok") is True
+      and r_del.json()["status"]["cached_whisper_models"].get("large-v3-turbo") is False
+      and meeting_stt.is_whisper_model_cached("large-v3-turbo") is False)
+
 # 3. Chunked upload, retry overwrite idempotency, assembly, and stuck job recovery
 called_jobs = []
 meeting_jobs.enqueue_job = lambda jid, **kw: (called_jobs.append(jid) or store.update_job(jid, status="queued", progress=1))

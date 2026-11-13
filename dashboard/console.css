@@ -4610,7 +4610,23 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 .vr-timer { font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text2); }
 .vr-timer[hidden], .vr-meter[hidden] { display: none; }
 .vr-meter { color: var(--accent); display: block; }
-.vr-ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.vr-ctas { display: inline-flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.vr-ctas .vr-btn,
+.vr-ctas .gcard-btn {
+  width: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  box-sizing: border-box;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+}
 .vr-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s, opacity .15s; }
 .vr-btn:hover:not(:disabled) { border-color: var(--accent-line, var(--accent)); background: var(--accent-wash); }
 .vr-btn:disabled { opacity: .45; cursor: not-allowed; }
