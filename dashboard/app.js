@@ -1338,6 +1338,24 @@ function handleMessage(data) {
     return;
   }
   if (data.type === "chat_ack") { _onChatAck(data); return; }
+  if (data.type === "message_deleted") {
+    if (data.session_id === savedSessionId && data.message_id) {
+      const el = chatArea.querySelector(`[data-mid="${data.message_id}"]`);
+      if (el) {
+        if (el.previousElementSibling && el.previousElementSibling.classList.contains("msg-steps")) {
+          el.previousElementSibling.remove();
+        }
+        el.remove();
+        const idx = convo.findIndex(x => x && String(x.mid) === String(data.message_id));
+        if (idx !== -1) convo.splice(idx, 1);
+        persistSession();
+        try { chatArea.dispatchEvent(new CustomEvent("jv-pins")); } catch (e) {}
+        notifySessions();
+        syncActiveUI();
+      }
+    }
+    return;
+  }
   if (data.type === "ui_action") {
     // Tool javis_ui (server) bảo dashboard mở trang / file / việc. ui-actions.js kiểm rồi làm
     // và tự trả ui_result về server để tool trả lời model ngay trong lượt.
@@ -1921,6 +1939,15 @@ function _resendUnacked() {
 }
 function _onChatAck(d) {
   _dropUnacked(d.client_msg_id);
+  if (d.client_msg_id && d.message_id) {
+    const el = chatArea.querySelector(`.msg-user[data-cmid="${d.client_msg_id}"]`);
+    if (el) {
+      el.dataset.mid = String(d.message_id);
+      if (d.session_id) el.dataset.sid = d.session_id;
+    }
+    const it = convo.find(x => x && x.cmid === d.client_msg_id);
+    if (it) it.mid = d.message_id;
+  }
   if (!d.dup || d.running) return;
   // The server already had this message and its turn ended while the socket was down: close the turn here and load
   // the stored answer.
@@ -2177,6 +2204,10 @@ function sendMessage(text, opts) {
   let _held = null;
   if (!adaptiveMeta) {
     payload.client_msg_id = newSid();
+    if (userElement && userElement.dataset) userElement.dataset.cmid = payload.client_msg_id;
+    if (convo.length && convo[convo.length - 1].role === "user") {
+      convo[convo.length - 1].cmid = payload.client_msg_id;
+    }
     _trackUnacked(sid, msg, atts.map(a => ({ name: a.name, kind: a.kind, url: a.url || "" })), payload);
     _held = _unacked[_unacked.length - 1];
   }
@@ -2368,13 +2399,16 @@ function restoreSession() {
     // t.ts vắng mặt ở tin lưu từ trước bản này -> truyền 0 để ẩn giờ thay vì hiện giờ F5.
     if (t.role === "user") {
       if (t.goalRound && window.JavisLenh && window.JavisLenh.vongHtml) { appendGoalRound(t.goalRound, false); return; }
-      appendUserMessage(t.text, t.atts || [], t.ts || 0); return;
+      const el = appendUserMessage(t.text, t.atts || [], t.ts || 0);
+      if (el && t.mid != null) { el.dataset.mid = String(t.mid); el.dataset.sid = savedSessionId; }
+      return;
     }
     // t.brain vắng ở tin lưu từ trước bản này -> rơi về brain của cả phiên, rồi mới tới
     // brain đang chọn. Không có thì hành vi y như cũ, không hỏng thêm gì.
     if (t.buoc && window.JavisSteps && window.JavisSteps.tomTat(t.buoc).hien)
       chatAppend(window.JavisSteps.ve(null, t.buoc, false));
     const el = appendJavisMessage(t.text, t.ts || 0, t.brain || s.brain);
+    if (el && t.mid != null) { el.dataset.mid = String(t.mid); el.dataset.sid = savedSessionId; }
     _traLoi.push({ el, entry: t });
     // T2: tin đã có mã (lịch sử hay gói turn_saved) mang lại hàng reaction; tin lưu trước bản này không có mã thì không có nút.
     try {
@@ -2424,8 +2458,9 @@ function veTinDaLuu(m, brainCua, sidCua) {
     const _atts = docDinhKem(m.content || "");
     // 0.440.0: the Javis Gate sender ("from ChatGPT") is read from the stored text, which still has its block.
     const el = appendUserMessage(_sach, _atts, ts, nguonGate(m.content || ""));
+    if (el && m.id != null) { el.dataset.mid = String(m.id); el.dataset.sid = sidCua; }
     if(m.voice_metadata && m.voice_metadata.response_policy==='ack_only' && !m.voice_metadata.answer_requested) renderVoiceReceipt(el,{...m.voice_metadata,session_id:savedSessionId});
-    return { role: "user", text: _sach, atts: _atts, ts, voice_metadata:m.voice_metadata };
+    return { role: "user", text: _sach, atts: _atts, ts, mid: m.id, voice_metadata:m.voice_metadata };
   }
   // brainCua: server LƯU SẴN brain của phiên (cột brain trong bảng sessions). Trước đây
   // vứt đi nên ảnh trong hội thoại cũ luôn ghép với brain đang chọn - mở hội thoại của
@@ -2959,6 +2994,7 @@ function appendUserMessage(text, attachments, ts, via) {
   if (nguon) div.classList.add("msg-gate");
   vaAnhHong(div);
   chatAppend(div); scrollBottom(true);
+  return div;
 }
 // 0.206.0: send more while Javis is working. The message is stored and shown at once; its small status line follows
 // what the server reports: read by the running turn, or waiting to run right after it.
@@ -3393,6 +3429,7 @@ function runMsgAct(btn) {
   }
   if (act === "pin") { doiGhim(msgEl, btn); return; }
   if (act === "speak") { docThanhTieng(msgEl, btn); return; }
+  if (act === "del") { xoaTinNhan(msgEl, btn); return; }
   // Chi tin NGUOI DUNG mang nut tua lai, nen chu goc luon nam ngay tren chinh no.
   // Truoc day con mot nhanh nguoc len tim tin nguoi dung gan nhat - do la duong cua nut "tra
   // loi lai cau hoi phia tren" o tin Javis, da bo o 0.52.13.
@@ -3496,6 +3533,85 @@ async function tuaLai(msgEl, text) {
   }
   if (savedSessionId === sid) await openStoredSession(sid);
   datVaoONhap(text);
+}
+// Xoa mot tin nhan khoi cuoc tro chuyen (nut thung rac duoi tin).
+// Neu phien da duoc luu len server, gui yeu cau xoa tin toi server; sau do go khoi DOM va convo.
+async function xoaTinNhan(msgEl, btn) {
+  if (isProcessing) { alert(window.t("cact.del_busy")); return; }
+  if (!confirm(window.t("cact.del_confirm"))) return;
+
+  if (_docTin && _docTin.el === msgEl) {
+    voice.stopSpeaking();
+    clearInterval(_docTin.hen);
+    veNutDoc(_docTin.btn, false);
+    _docTin = null;
+  }
+  if (msgEl.dataset.pinned === "1") {
+    datGhim(msgEl, false);
+  }
+
+  let mid = msgEl.dataset.mid;
+  const sid = msgEl.dataset.sid || savedSessionId;
+
+  if (sid) {
+    btn.disabled = true;
+    if (!mid) {
+      try {
+        const r = await fetch(`/sessions/${encodeURIComponent(sid)}/messages?limit=100`);
+        const d = await r.json().catch(() => ({}));
+        if (d && Array.isArray(d.messages)) {
+          const isUser = msgEl.classList.contains("msg-user");
+          const wantRole = isUser ? "user" : "assistant";
+          const wantText = isUser ? (msgEl.dataset.text || "").trim() : (msgEl.dataset.md || "").trim();
+          const matched = [...d.messages].reverse().find(m => m.role === wantRole && ((m.content || "").trim() === wantText || (m.content || "").includes(wantText)));
+          if (matched && matched.id) mid = String(matched.id);
+        }
+      } catch (e) {}
+    }
+
+    if (mid) {
+      let ok = false, loi = "";
+      try {
+        const r = await fetch(`/sessions/${encodeURIComponent(sid)}/messages/${encodeURIComponent(mid)}/delete`, {
+          method: "POST"
+        });
+        const d = await r.json().catch(() => ({}));
+        ok = r.ok && d.ok;
+        loi = d.error || "";
+      } catch (e) {
+        loi = String(e && e.message || e);
+      }
+      btn.disabled = false;
+      if (!ok) {
+        alert(window.t("cact.del_fail") + loi);
+        return;
+      }
+    } else {
+      btn.disabled = false;
+    }
+  }
+
+  if (msgEl.previousElementSibling && msgEl.previousElementSibling.classList.contains("msg-steps")) {
+    msgEl.previousElementSibling.remove();
+  }
+  msgEl.remove();
+
+  if (mid) {
+    const idx = convo.findIndex(x => x && String(x.mid) === String(mid));
+    if (idx !== -1) convo.splice(idx, 1);
+  } else {
+    const isUser = msgEl.classList.contains("msg-user");
+    const wantRole = isUser ? "user" : "javis";
+    const wantText = isUser ? (msgEl.dataset.text || "") : (msgEl.dataset.md || "");
+    const idx = [...convo].reverse().findIndex(x => x && x.role === wantRole && (x.text || "") === wantText);
+    if (idx !== -1) {
+      convo.splice(convo.length - 1 - idx, 1);
+    }
+  }
+  persistSession();
+  try { chatArea.dispatchEvent(new CustomEvent("jv-pins")); } catch (e) {}
+  notifySessions();
+  syncActiveUI();
 }
 chatArea.addEventListener("click", (e) => {
   const t = e.target;

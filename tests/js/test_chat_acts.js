@@ -28,7 +28,7 @@ check("ts hỏng: giờ rỗng", A.fmtTime("khong-phai-so") === "");
 check("không có ts: hàng nút không có ô giờ", !has(A.actsHtml("user", 0), "msg-time"));
 check("không có ts: vẫn còn các nút", has(A.actsHtml("user", 0), 'data-act="rewind"'));
 
-// ---- 3. Tin của người dùng: giờ + tua lại + trích dẫn + copy ----
+// ---- 3. Tin của người dùng: giờ + tua lại + trích dẫn + copy + xóa ----
 // 0.349.0: "Gửi lại" và "Sửa lại" gộp thành một nút Tua lại (chủ repo 27/10/2026).
 let h = A.actsHtml("user", TS);
 check("tin user: có ô giờ", has(h, '<span class="msg-time"') && has(h, ">06:38</span>"));
@@ -38,7 +38,8 @@ check("tin user: KHÔNG còn nút gửi lại riêng", !has(h, 'data-act="retry"
 check("tin user: KHÔNG còn nút sửa lại riêng", !has(h, 'data-act="edit"'));
 check("tin user: có nút copy", has(h, 'data-act="copy"'));
 check("tin user: có nút trích dẫn", has(h, 'data-act="quote"'));
-check("tin user: nút không submit form", (h.match(/type="button"/g) || []).length === 3);
+check("tin user: có nút xóa", has(h, 'data-act="del"'));
+check("tin user: nút không submit form", (h.match(/type="button"/g) || []).length === 4);
 
 // ---- 4. Tin Javis: CHỈ giờ + copy ----
 // Nút "Trả lời lại câu hỏi phía trên" bỏ ở 0.52.13 (chủ repo yêu cầu): nó nằm ngay cạnh nút
@@ -56,7 +57,8 @@ check("tin javis: có nút trích dẫn", has(h, 'data-act="quote"'));
 // (ghim bấm lại là bỏ, loa bấm lại là dừng), không chạy lại lượt nào.
 check("tin javis: có nút ghim vào mục lục", has(h, 'data-act="pin"'));
 check("tin javis: có nút đọc thành tiếng", has(h, 'data-act="speak"'));
-check("tin javis: đúng 4 nút (trích dẫn, copy, ghim, loa)", (h.match(/class="msg-act"/g) || []).length === 4);
+check("tin javis: có nút xóa", has(h, 'data-act="del"'));
+check("tin javis: đúng 5 nút (trích dẫn, copy, ghim, loa, xóa)", (h.match(/class="msg-act"/g) || []).length === 5);
 check("tin người dùng: không có ghim hay loa",
   !has(A.actsHtml("user", TS), 'data-act="pin"') && !has(A.actsHtml("user", TS), 'data-act="speak"'));
 // Đường hỏi lại KHÔNG mất: nó nằm trên chính bong bóng câu hỏi của người dùng.
@@ -66,6 +68,7 @@ check("tua lại vẫn còn ở tin người dùng", has(A.actsHtml("user", TS),
 h = A.actsHtml("user", TS);
 check("nhãn có dấu: Tua lại", has(h, "Tua lại từ câu này"));
 check("nhãn có dấu: Sao chép", has(h, "Sao chép nội dung"));
+check("nhãn có dấu: Xóa", has(h, "Xóa tin nhắn này"));
 
 // ---- 6. Tìm ngược lên tin người dùng gần nhất (nút trả lời lại ở tin Javis) ----
 function node(cls, text) {
@@ -95,9 +98,10 @@ check("nhận diện: node rỗng không nổ", A.isUserMsg(null) === false);
 h = A.actsHtml("user", TS, false);
 check("chỉ có ảnh: bỏ nút tua lại", !has(h, 'data-act="rewind"'));
 check("chỉ có ảnh: vẫn còn nút copy", has(h, 'data-act="copy"'));
+check("chỉ có ảnh: vẫn còn nút xóa", has(h, 'data-act="del"'));
 check("chỉ có ảnh: vẫn còn giờ", has(h, "msg-time"));
 check("chỉ có ảnh: KHÔNG có nút trích dẫn (không có chữ để trích)", !has(h, 'data-act="quote"'));
-check("chỉ có ảnh: chỉ còn đúng 1 nút", (h.match(/class="msg-act"/g) || []).length === 1);
+check("chỉ có ảnh: chỉ còn đúng 2 nút", (h.match(/class="msg-act"/g) || []).length === 2);
 
 h = A.actsHtml("javis", TS, false);
 check("javis không có câu hỏi chữ: bỏ nút tua lại", !has(h, 'data-act="rewind"'));
@@ -106,8 +110,8 @@ check("javis không có câu hỏi chữ: vẫn còn copy", has(h, 'data-act="co
 // Bỏ trống tham số thì giữ nguyên hành vi cũ (các chỗ gọi cũ không đổi)
 h = A.actsHtml("user", TS);
 // 0.171.0: thêm nút Trích dẫn nên tin người dùng có chữ là 4 nút (gửi lại, sửa, trích dẫn, copy).
-check("không truyền canResend: vẫn đủ 3 nút", (h.match(/class="msg-act"/g) || []).length === 3);
-check("canResend=true: vẫn đủ 3 nút", (A.actsHtml("user", TS, true).match(/class="msg-act"/g) || []).length === 3);
+check("không truyền canResend: vẫn đủ 4 nút", (h.match(/class="msg-act"/g) || []).length === 4);
+check("canResend=true: vẫn đủ 4 nút", (A.actsHtml("user", TS, true).match(/class="msg-act"/g) || []).length === 4);
 
 // ---- 8. Escape: nhãn/giờ nhét vào HTML không được mở thẻ ----
 check("hàng nút không chứa thẻ lạ", !has(A.actsHtml("user", TS), "<script"));

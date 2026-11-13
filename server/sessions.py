@@ -1056,6 +1056,22 @@ class SessionStore:
             return int(n or 0)
         return int(self._write(_do) or 0)
 
+    def delete_message(self, session_id: str, message_id: int) -> bool:
+        """Delete one message of a chat by its ID. Updates msg_count and updated_at.
+        Returns True if deleted, False if message not found in this chat."""
+        def _do(conn):
+            row = conn.execute("SELECT id FROM messages WHERE id = ? AND session_id = ?",
+                               (int(message_id), session_id)).fetchone()
+            if not row:
+                return False
+            conn.execute("DELETE FROM messages WHERE id = ? AND session_id = ?", (int(message_id), session_id))
+            conn.execute("DELETE FROM message_pins WHERE session_id = ? AND message_id = ?", (session_id, int(message_id)))
+            conn.execute("DELETE FROM dm_reactions WHERE session_id = ? AND message_id = ?", (session_id, int(message_id)))
+            conn.execute("UPDATE sessions SET msg_count = (SELECT COUNT(*) FROM messages WHERE session_id = ?), "
+                         "updated_at = ? WHERE id = ?", (session_id, time.time(), session_id))
+            return True
+        return bool(self._write(_do))
+
     @staticmethod
     def _tin(r: sqlite3.Row) -> dict[str, Any]:
         """Một dòng bảng messages -> dict trả ra ngoài (mở gói tool_calls_json). T2: kèm `content_sha` của nội dung đã

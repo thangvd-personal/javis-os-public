@@ -22821,13 +22821,15 @@ async def _chat_socket(ws):
                     if _cmid and store.message_by_client_id(conv_sid, _cmid):
                         # The same message came in on another socket while this one was getting ready (no await between
                         # this check and the insert below, so only one copy can pass).
+                        _old_m = store.message_by_client_id(conv_sid, _cmid)
                         await send_client({"type": "chat_ack", "session_id": conv_sid, "client_msg_id": _cmid,
-                                           "dup": True, "running": bool(_CHAT_RUNTIME.get_job(conv_sid))})
+                                           "dup": True, "running": bool(_CHAT_RUNTIME.get_job(conv_sid)),
+                                           "message_id": int(_old_m["id"]) if _old_m else None})
                         continue
                     _user_mid = store.append_message(conv_sid, "user", user_message, client_msg_id=_cmid or None)
                     if _cmid:
                         await send_client({"type": "chat_ack", "session_id": conv_sid, "client_msg_id": _cmid,
-                                           "dup": False})
+                                           "dup": False, "message_id": int(_user_mid)})
                 # Bong bóng đang hiện chữ thô của máy nghe: báo câu đã sửa tên để người dùng thấy
                 # Javis hiểu câu nào, chữ thô hiện nhỏ bên dưới.
                 if _nghe_tho:
@@ -23306,6 +23308,43 @@ async def sessions_message_pin(session_id: str, message_id: int, request: Reques
     if code != 200:
         return JSONResponse({"ok": False, "error": err}, status_code=code)
     return {"ok": True, "pinned": body["pinned"]}
+
+
+@app.post("/sessions/{session_id}/messages/{message_id}/delete")
+@app.delete("/sessions/{session_id}/messages/{message_id}")
+async def sessions_message_delete(session_id: str, message_id: int):
+    """Delete a single message from the session. Refused while answering."""
+    st = get_store()
+    if not st.get_session(session_id):
+        return JSONResponse({"ok": False, "error": localefmt.chu("phiên không tồn tại", "session does not exist")},
+                            status_code=404)
+    if _CHAT_RUNTIME.get_job(session_id):
+        return JSONResponse({"ok": False, "error": localefmt.chu("phiên đang trả lời", "session is still answering"),
+                             "ly_do": "dang_chay"}, status_code=409)
+    msg = st.message_row(session_id, int(message_id))
+    if msg is None:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không có tin này trong cuộc trò chuyện",
+                                                                 "No such message in this chat")},
+                            status_code=404)
+    da_xoa = st.delete_message(session_id, int(message_id))
+    if not da_xoa:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không xoá được tin này", "Could not delete this message")},
+                            status_code=500)
+    con = [m for m in st.get_messages(session_id)
+           if m.get("role") in ("user", "assistant") and (m.get("content") or "").strip()]
+    sess = st.get_session(session_id) or {}
+    if int(sess.get("compact_count") or 0) > len(con):
+        st.set_compact(session_id, "", 0)
+    mach = st.clear_native_threads(session_id)
+    st.mark_thread_rotated(session_id)
+    st.set_last_input_tokens(session_id, 0)
+    try:
+        await _CHAT_RUNTIME.publish({"type": "message_deleted", "session_id": session_id,
+                                     "message_id": int(message_id)})
+    except Exception as _e:  # noqa: BLE001
+        print(f"[message_deleted] {type(_e).__name__}: {_e}", file=sys.stderr)
+    return {"ok": True, "deleted": True, "message_id": int(message_id),
+            "remaining": st.count_messages(session_id), "threads": mach}
 
 
 # ============================================================

@@ -1,7 +1,7 @@
 /* chat-acts.js - hang nut duoi moi tin nhan trong khung chat Javis.
 
    Moi bong bong co mot hang nho ben duoi. Tin cua NGUOI DUNG: gio gui, tua lai,
-   trich dan, sao chep. Tin cua JAVIS: gio gui, trich dan, sao chep, ghim vao muc luc, doc thanh tieng. Hang nay AN san (opacity 0), chi hien khi
+   trich dan, sao chep, xoa. Tin cua JAVIS: gio gui, trich dan, sao chep, ghim vao muc luc, doc thanh tieng, xoa. Hang nay AN san (opacity 0), chi hien khi
    hover tren may tinh hoac khi cham vao tin tren dien thoai (.acts-on).
 
    File nay chi giu phan THUAN (khong dung tai lieu DOM that) de test bang node:
@@ -92,9 +92,10 @@
       ? '<button class="msg-act" type="button" data-act="pin" title="' + esc(tw("cact.pin")) + '">' + ic("pin") + '</button>' +
         '<button class="msg-act" type="button" data-act="speak" title="' + esc(tw("cact.speak")) + '">' + ic("volume-2") + '</button>'
       : "";
+    var del = '<button class="msg-act" type="button" data-act="del" title="' + esc(tw("cact.del")) + '">' + ic("trash-2") + '</button>';
     return '<div class="msg-acts">' + time + send + quote +
       '<button class="msg-act" type="button" data-act="copy" title="' + esc(tw("cact.copy")) + '">⧉</button>' +
-      them + "</div>";
+      them + del + "</div>";
   }
 
   function isUserMsg(el) {

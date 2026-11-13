@@ -1215,8 +1215,10 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .msg-act { background: none; border: 1px solid transparent; color: var(--text3);
   border-radius: 6px; cursor: pointer; font-size: 13px; line-height: 1; padding: 3px 6px; }
 .msg-act:hover { color: var(--text-hi); border-color: var(--border); }
-/* Đang chạy một lượt thì không cho bấm gửi lại (app.js gắn .busy vào #chatArea) */
-.transcript.busy .msg-act[data-act="rewind"] { opacity: 0.35; pointer-events: none; }
+/* Đang chạy một lượt thì không cho bấm gửi lại hoặc xóa (app.js gắn .busy vào #chatArea) */
+.transcript.busy .msg-act[data-act="rewind"],
+.transcript.busy .msg-act[data-act="del"] { opacity: 0.35; pointer-events: none; }
+.msg-act[data-act="del"]:hover { color: var(--red); border-color: var(--border); }
 
 /* 0.177.0 reactions on answers (chat-reactions.js + reactions.js), like Zalo (owner, 2026-10-16). A zero-height anchor
    right after the bubble, as wide as the bubble (same max-width, same font so `ch` matches), holds the corner on the
@@ -1463,8 +1465,9 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cm-muc.cm-ghim .cm-so { display: inline-flex; vertical-align: -2px; color: var(--accent); }
 .cm-muc.cm-ghim .cm-so svg { width: 13px; height: 13px; }
 .msg-javis.cm-vua-nhay .bubble { animation: cmNhay 1.2s ease; }
-/* The pin button appears once the answer is saved (it has a message id); while it streams there is nothing to pin. */
-.msg-javis:not([data-mid]) .msg-act[data-act="pin"] { display: none; }
+/* The pin and delete buttons appear once the answer is saved (it has a message id); while it streams there is nothing to pin or delete. */
+.msg-javis:not([data-mid]) .msg-act[data-act="pin"],
+.msg-javis:not([data-mid]) .msg-act[data-act="del"] { display: none; }
 .msg-act svg { width: 14px; height: 14px; vertical-align: -2px; }
 .msg-act.on { color: var(--accent); }
 /* A pinned answer keeps its button row visible, so the filled pin says it is in the contents. */
