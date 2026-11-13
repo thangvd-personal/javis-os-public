@@ -213,7 +213,7 @@
         return '<div class="ts-kv"><span><i class="ts-dot" style="background:' + KIND_COLOR[k] + '"></i>' + esc(tw(KIND_KEYS[k])) + "</span><b>" + ai.by_kind[k].n + '</b><span class="ts-note">' + esc(fmtHours(ai.by_kind[k].minutes)) + "</span></div>";
       }).join("") + "</div></div>" : '<p class="ts-note">' + esc(tw("nv.sta.nothing_yet")) + "</p>"));
     h += card("", h3(tw("nv.sta.agents"), '<span class="ts-note">' + esc(tw("nv.sta.agents_sub")) + "</span>") + (ai.agents.length ? ai.agents.map(function (a) {
-      var name = a.key === "core" ? "Javis Core" : (a.name || a.key), all = a.ok + a.fail;
+      var name = a.key === "core" ? "My Assistant" : (a.name || a.key), all = a.ok + a.fail;
       return '<div class="ts-agent">' + (a.key === "core" ? LOGO : ctx.avatar(a.key, 30)) + '<span class="ts-rt">' + esc(name) + "</span><b>" + a.n + '</b><span class="ok">' + (all ? Math.round(a.ok * 100 / all) + "%" : "-") + '</span><span class="ts-note">' + esc(fmtHours(a.minutes)) + "</span></div>";
     }).join("") : '<p class="ts-note">' + esc(tw("nv.sta.nothing_yet")) + "</p>")) + "</div>";
     // When, how reliably.

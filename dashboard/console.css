@@ -79,7 +79,7 @@ body.in-console .hud-actions { display: none; }
 .rail-group.solo > .rail-grp-lbl { display: none !important; }
 .rail-group.solo > .rail-grp-items { max-height: none; opacity: 1; overflow: visible; padding: 0 0 4px; }
 .rail-brand {
-  height: 42px; display: flex; align-items: center; justify-content: center; gap: 9px;
+  height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px;
   color: var(--accent); font-size: 22px;
 }
 /* Quầng sáng cam ở trên ô DẤU ẤN, không ở cả khối. filter của cha ăn xuống toàn bộ cây con,
@@ -92,7 +92,7 @@ body.in-console .hud-actions { display: none; }
 /* Chữ hiệu: cùng kiểu với .brand-text trên thanh trên (đậm, giãn chữ) để hai chỗ là một
    thương hiệu chứ không phải hai. "OS" nhạt hơn, đúng như thanh trên vẫn vẽ. */
 .rail-brand-text {
-  font-family: var(--font); font-size: 14px; font-weight: 700; letter-spacing: 2.5px;
+  font-family: var(--font); font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
   color: var(--text); white-space: nowrap; filter: none;
 }
 .rail-brand-text i { font-style: normal; font-weight: 400; color: var(--text3); }

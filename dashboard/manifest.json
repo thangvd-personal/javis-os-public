@@ -1,7 +1,7 @@
 {
-  "name": "Javis OS",
-  "short_name": "Javis",
-  "description": "Javis - trợ lý AI cá nhân báo cáo kinh doanh và cuộc sống",
+  "name": "Private Assistant",
+  "short_name": "Assistant",
+  "description": "Private Assistant - trợ lý AI cá nhân báo cáo kinh doanh và cuộc sống",
   "id": "/",
   "start_url": "/",
   "scope": "/",

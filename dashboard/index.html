@@ -9,7 +9,7 @@
        chặn thêm bằng touch-action trong style.css làm lớp thứ hai. -->
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-  <title>Javis OS</title>
+  <title>Private Assistant</title>
   <!-- Private dashboard: keep it out of search results and AI even if the link leaks. The server also sends
        X-Robots-Tag on every answer and /robots.txt (server/bot_shield.py); this tag covers a saved copy. -->
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
@@ -30,7 +30,7 @@
        Screen: an icon added before this change keeps the blur until it is removed and added again. The CSS still
        pads with env(safe-area-inset-*), which is 0 at the top now and still covers the notch in landscape. -->
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Javis OS">
+  <meta name="apple-mobile-web-app-title" content="Private Assistant">
   <meta name="theme-color" content="#ffffff">
   <!-- manifest.json khai icon PNG vuông 192/512 có sizes rõ ràng: đó là điều kiện để
        Chrome/Edge DESKTOP coi trang là cài được (icon "any" trên PNG bị coi là không hợp lệ
@@ -77,7 +77,7 @@
       <div class="hud-top-left">
         <div class="brand"><span class="brand-icon"><img src="/brand-logo" alt=""
               style="width:22px;height:22px;border-radius:5px;vertical-align:middle;object-fit:cover"></span> <span
-            class="brand-text">JAVIS OS</span></div>
+            class="brand-text">PRIVATE ASSISTANT</span></div>
         <!-- Select Brain: dời từ góc graph lên navbar -->
         <div class="orb-graph-ctl navbar-brain">
           <i data-ic="brain" class="brain-select-ico" data-ic-title="Bộ não đang chọn"
@@ -832,7 +832,7 @@
       <!-- Dấu ấn và CHỮ tách làm hai ô: pet.js thay ruột của .brand-mark bằng khuôn mặt linh
            vật (xem veDauAn), nên chữ phải nằm ngoài ô đó, không thì mỗi lần đổi hình dáng hay
            bảng màu là chữ bị xoá theo. .brand .brand-icon trên thanh trên cũng cùng vai trò. -->
-      <div class="rail-brand"><span class="brand-mark"><img src="/brand-logo" alt="Javis" style="width:30px;height:30px;border-radius:8px;display:block;object-fit:cover"></span><span class="rail-brand-text">JAVIS <i>OS</i></span></div>
+      <div class="rail-brand"><span class="brand-mark"><img src="/brand-logo" alt="Private Assistant" style="width:30px;height:30px;border-radius:8px;display:block;object-fit:cover"></span><span class="rail-brand-text">PRIVATE <i>ASSISTANT</i></span></div>
     </div>
     <!-- GIỮA cuộn được - gom theo nhóm; nhóm foot (Hệ thống) tự ghim xuống đáy -->
     <div class="rail-nav">
