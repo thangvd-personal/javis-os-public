@@ -233,6 +233,18 @@ def _estimate_worker_timeout(input_paths: list[str]) -> float:
     return max(MIN_WORKER_TIMEOUT_SEC, min(MAX_WORKER_TIMEOUT_SEC, est))
 
 
+def estimate_processing_time_sec(duration_sec: float, job_type: str = "meeting", device: str = "auto") -> float:
+    dur = max(0.0, float(duration_sec or 0.0))
+    if dur <= 0:
+        return 0.0
+    if job_type == "remote_diarize":
+        est = dur * 1.0 + 300.0
+        return round(max(60.0, min(MAX_WORKER_TIMEOUT_SEC, est)), 1)
+    # Meeting STT + Pyannote diarization: duration * 2.0 + 900s
+    est = dur * 2.0 + 900.0
+    return round(max(900.0, min(MAX_WORKER_TIMEOUT_SEC, est)), 1)
+
+
 def _ensure_failed_record(
     job_id: str,
     error_msg: str,
@@ -381,9 +393,39 @@ async def _execute_job(
         if not job or job["status"] in ("done", "failed"):
             return
         tail_lines: list[str] = []
+        now_ts = time.time()
+        now_dt = localefmt.now()
+        log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"{job_id}.log"
+        store.update_job(
+            job_id,
+            started_at=now_ts,
+            started_iso=now_dt.isoformat(),
+            log_path=str(log_file),
+        )
+        try:
+            with open(log_file, "a", encoding="utf-8") as lf:
+                lf.write(f"[{now_dt.isoformat()}] [JOB_START] id={job_id} title={job.get('title')}\n")
+                lf.flush()
+        except Exception:
+            pass
+
         try:
             input_paths, final_audio_path = await asyncio.to_thread(assemble_uploaded_audio, job)
-            store.update_job(job_id, status="converting", progress=3, audio_path=final_audio_path, stage_detail="Preparing audio")
+            dur = float(job.get("duration_sec") or 0.0)
+            if dur <= 0:
+                dur = probe_audio_duration_sec(final_audio_path) or 0.0
+            est_time = estimate_processing_time_sec(dur, job_type="meeting", device=job.get("device") or "auto")
+            store.update_job(
+                job_id,
+                status="converting",
+                progress=3,
+                audio_path=final_audio_path,
+                duration_sec=dur,
+                estimated_sec=est_time,
+                stage_detail="Preparing audio",
+            )
 
             cfg = cfgmod.read_settings()
             mc = meeting_stt.get_config(cfg)
@@ -574,6 +616,11 @@ async def _execute_job(
                     model_used=model_used or str(existing_rec.get("model_used") or ""),
                     device_used=device_used or str(existing_rec.get("device_used") or ""),
                 )
+                fin_ts = time.time()
+                fin_dt = localefmt.now()
+                st_at = float(job.get("started_at") or now_ts)
+                elapsed = max(0.0, round(fin_ts - st_at, 1))
+
                 store.update_job(
                     job_id,
                     status="done",
@@ -584,7 +631,15 @@ async def _execute_job(
                     record_id=existing_rec["id"],
                     warnings=warnings,
                     error="",
+                    finished_at=fin_ts,
+                    finished_iso=fin_dt.isoformat(),
+                    elapsed_sec=elapsed,
                 )
+                try:
+                    log_file.unlink(missing_ok=True)
+                    store.update_job(job_id, log_path="")
+                except Exception:
+                    pass
                 return
 
             fname = voice_records.make_record_filename(now_dt, vr_dir)
@@ -636,6 +691,11 @@ async def _execute_job(
                 status="raw_saved",
             )
 
+            fin_ts = time.time()
+            fin_dt = localefmt.now()
+            st_at = float(job.get("started_at") or now_ts)
+            elapsed = max(0.0, round(fin_ts - st_at, 1))
+
             store.update_job(
                 job_id,
                 status="done",
@@ -646,10 +706,38 @@ async def _execute_job(
                 record_id=rec["id"],
                 warnings=warnings,
                 error="",
+                finished_at=fin_ts,
+                finished_iso=fin_dt.isoformat(),
+                elapsed_sec=elapsed,
             )
+            # Log file is removed on success to free disk space
+            try:
+                log_file.unlink(missing_ok=True)
+                store.update_job(job_id, log_path="")
+            except Exception:
+                pass
         except asyncio.CancelledError:
+            fin_ts = time.time()
+            fin_dt = localefmt.now()
+            st_at = float(job.get("started_at") or now_ts)
+            elapsed = max(0.0, round(fin_ts - st_at, 1))
             tail_str = "\n".join(tail_lines[-20:]) if tail_lines else ""
-            store.update_job(job_id, status="failed", error="Cancelled", log_tail=tail_str)
+            try:
+                with open(log_file, "a", encoding="utf-8") as lf:
+                    lf.write(f"[{fin_dt.isoformat()}] [JOB_CANCELLED]\n")
+                    lf.flush()
+            except Exception:
+                pass
+            store.update_job(
+                job_id,
+                status="failed",
+                error="Cancelled",
+                log_tail=tail_str,
+                finished_at=fin_ts,
+                finished_iso=fin_dt.isoformat(),
+                elapsed_sec=elapsed,
+                log_path=str(log_file) if log_file.is_file() else "",
+            )
             try:
                 await asyncio.to_thread(
                     _ensure_failed_record,
@@ -664,12 +752,31 @@ async def _execute_job(
                 _LOGGER.warning("Could not persist failed record for cancelled job %s: %s", job_id, rec_err)
             raise
         except Exception as e:
+            fin_ts = time.time()
+            fin_dt = localefmt.now()
+            st_at = float(job.get("started_at") or now_ts)
+            elapsed = max(0.0, round(fin_ts - st_at, 1))
             tail_str = "\n".join(tail_lines[-20:]) if tail_lines else ""
             err_text = f"{type(e).__name__}: {e}"
+            try:
+                with open(log_file, "a", encoding="utf-8") as lf:
+                    lf.write(f"[{fin_dt.isoformat()}] [JOB_FAILED] {err_text}\n")
+                    lf.flush()
+            except Exception:
+                pass
             _LOGGER.error("Meeting job %s failed: %s\nRecent log:\n%s", job_id, err_text, tail_str)
             is_timeout = isinstance(e, RuntimeError) and "vượt quá giới hạn" in str(e)
             warns = ["worker_timeout"] if is_timeout else ["process_failed"]
-            store.update_job(job_id, status="failed", error=err_text[:500], log_tail=tail_str)
+            store.update_job(
+                job_id,
+                status="failed",
+                error=err_text[:500],
+                log_tail=tail_str,
+                finished_at=fin_ts,
+                finished_iso=fin_dt.isoformat(),
+                elapsed_sec=elapsed,
+                log_path=str(log_file) if log_file.is_file() else "",
+            )
             try:
                 await asyncio.to_thread(
                     _ensure_failed_record,
@@ -687,6 +794,217 @@ async def _execute_job(
                 shutil.rmtree(job_upload_dir(job_id), ignore_errors=True)
             except Exception:
                 pass
+
+
+async def _execute_remote_diarize_job(job_id: str) -> None:
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return
+
+    async with _get_lock():
+        job = store.get_job(job_id)
+        if not job or job["status"] in ("done", "failed"):
+            return
+        tail_lines: list[str] = []
+        now_ts = time.time()
+        now_dt = localefmt.now()
+        log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = log_dir / f"{job_id}.log"
+        store.update_job(
+            job_id,
+            started_at=now_ts,
+            started_iso=now_dt.isoformat(),
+            log_path=str(log_file),
+        )
+        try:
+            with open(log_file, "a", encoding="utf-8") as lf:
+                lf.write(f"[{now_dt.isoformat()}] [JOB_START] remote_diarize id={job_id}\n")
+                lf.flush()
+        except Exception:
+            pass
+        try:
+            audio_path = str(job.get("audio_path") or "").strip()
+            if not audio_path or not Path(audio_path).is_file():
+                raise ValueError("Missing audio file for remote diarization")
+
+            dur = float(job.get("duration_sec") or 0.0)
+            if dur <= 0:
+                dur = probe_audio_duration_sec(audio_path) or 0.0
+
+            est_time = estimate_processing_time_sec(dur, job_type="remote_diarize", device=job.get("device") or "auto")
+            store.update_job(
+                job_id,
+                status="diarizing",
+                progress=10,
+                stage_detail="Loading pyannote pipeline",
+                duration_sec=dur,
+                estimated_sec=est_time,
+            )
+
+            cfg = cfgmod.read_settings()
+            tok, _ = meeting_stt.resolve_hf_token(cfg)
+            py_exe, py_path = meeting_stt.resolve_worker_python(need_diarize=True)
+            if not py_exe or not tok:
+                raise RuntimeError("Server pyannote environment or HF_TOKEN is not ready")
+
+            up_dir = job_upload_dir(job_id)
+            up_dir.mkdir(parents=True, exist_ok=True)
+            job_json = up_dir / "worker_job.json"
+            out_json = up_dir / "worker_out.json"
+
+            worker_payload = {
+                "wav_path": str(audio_path),
+                "hf_token": tok,
+                "device": str(job.get("device") or "auto").strip().lower(),
+                "num_speakers": int(job.get("num_speakers") or 0) or None,
+                "min_speakers": int(job.get("min_speakers") or 0) or None,
+                "max_speakers": int(job.get("max_speakers") or 0) or None,
+                "output_json": str(out_json),
+            }
+            job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
+
+            env = meeting_stt.worker_env(cfg, extra_pythonpath=py_path)
+            timeout_sec = _estimate_worker_timeout([audio_path])
+            proc = await asyncio.create_subprocess_exec(
+                py_exe,
+                "-u",
+                str(meeting_stt.worker_script()),
+                "--diarize-only",
+                "--job",
+                str(job_json),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env=env,
+                cwd=str(meeting_stt.meeting_ear_root() if meeting_stt.meeting_ear_root().exists() else up_dir),
+                **winproc.kwargs_no_window(),
+            )
+
+            last_result: dict[str, Any] | None = None
+
+            async def _read_remote_stream() -> None:
+                nonlocal last_result
+                assert proc.stdout is not None
+                try:
+                    with open(log_file, "a", encoding="utf-8") as lf:
+                        while True:
+                            raw_line = await proc.stdout.readline()
+                            if not raw_line:
+                                break
+                            line = raw_line.decode("utf-8", "replace").strip()
+                            if not line:
+                                continue
+                            lf.write(f"[{localefmt.now().isoformat()}] {line}\n")
+                            lf.flush()
+                            tail_lines.append(line)
+                            if len(tail_lines) > 50:
+                                tail_lines.pop(0)
+                            try:
+                                evt = json.loads(line)
+                            except Exception:
+                                continue
+                            if not isinstance(evt, dict):
+                                continue
+                            etype = evt.get("type")
+                            if etype == "progress":
+                                store.update_job(
+                                    job_id,
+                                    status="diarizing",
+                                    progress=int(evt.get("progress") or 0),
+                                    stage_detail=str(evt.get("detail") or "")[:160],
+                                    log_tail="\n".join(tail_lines[-15:]),
+                                )
+                            elif etype == "result":
+                                last_result = evt
+                except Exception:
+                    pass
+
+            try:
+                await asyncio.wait_for(asyncio.gather(_read_remote_stream(), proc.wait()), timeout=timeout_sec)
+            except TimeoutError:
+                await _terminate_proc(proc)
+                raise RuntimeError(f"Remote diarize worker exceeded timeout ({int(timeout_sec // 60)} minutes)")
+
+            if last_result is None and out_json.is_file():
+                try:
+                    last_result = json.loads(out_json.read_text(encoding="utf-8"))
+                except Exception:
+                    last_result = None
+
+            if proc.returncode != 0 or not last_result or not last_result.get("ok"):
+                err = (last_result or {}).get("error") or (tail_lines[-1] if tail_lines else f"Diarize worker exited with code {proc.returncode}")
+                raise RuntimeError(str(err)[:500])
+
+            turns = last_result.get("turns") or []
+            warnings = [str(w) for w in (last_result.get("warnings") or []) if w]
+            res_dict = {
+                "turns": turns,
+                "warnings": warnings,
+            }
+            fin_ts = time.time()
+            fin_dt = localefmt.now()
+            st_at = float(job.get("started_at") or now_ts)
+            elapsed = max(0.0, round(fin_ts - st_at, 1))
+            store.update_job(
+                job_id,
+                status="done",
+                progress=100,
+                stage_detail="Completed",
+                result_json=json.dumps(res_dict, ensure_ascii=False),
+                warnings=warnings,
+                error="",
+                log_tail="\n".join(tail_lines[-15:]),
+                finished_at=fin_ts,
+                finished_iso=fin_dt.isoformat(),
+                elapsed_sec=elapsed,
+            )
+            try:
+                log_file.unlink(missing_ok=True)
+                store.update_job(job_id, log_path="")
+            except Exception:
+                pass
+        except Exception as e:
+            fin_ts = time.time()
+            fin_dt = localefmt.now()
+            st_at = float(job.get("started_at") or now_ts)
+            elapsed = max(0.0, round(fin_ts - st_at, 1))
+            tail_str = "\n".join(tail_lines[-20:]) if tail_lines else ""
+            err_text = f"{type(e).__name__}: {e}"
+            try:
+                with open(log_file, "a", encoding="utf-8") as lf:
+                    lf.write(f"[{fin_dt.isoformat()}] [JOB_FAILED] {err_text}\n")
+                    lf.flush()
+            except Exception:
+                pass
+            _LOGGER.error("Remote diarize job %s failed: %s\nRecent log:\n%s", job_id, err_text, tail_str)
+            store.update_job(
+                job_id,
+                status="failed",
+                error=str(e)[:500],
+                log_tail=tail_str,
+                finished_at=fin_ts,
+                finished_iso=fin_dt.isoformat(),
+                elapsed_sec=elapsed,
+                log_path=str(log_file) if log_file.is_file() else "",
+            )
+        finally:
+            try:
+                shutil.rmtree(job_upload_dir(job_id), ignore_errors=True)
+            except Exception:
+                pass
+
+
+def enqueue_remote_diarize_job(job_id: str) -> dict[str, Any] | None:
+    store = voice_records.get_store()
+    job = store.update_job(job_id, status="queued", progress=1, stage_detail="Queued", error="")
+    if not job:
+        return None
+    if job_id not in _ACTIVE_TASKS:
+        task = asyncio.create_task(_execute_remote_diarize_job(job_id))
+        _ACTIVE_TASKS[job_id] = task
+        task.add_done_callback(lambda _t, jid=job_id: _ACTIVE_TASKS.pop(jid, None))
+    return job
 
 
 def enqueue_job(

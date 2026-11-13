@@ -56,6 +56,25 @@
     return String(m).padStart(2, "0") + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  function fmtEstimatedTime(sec) {
+    var s = Math.round(Number(sec) || 0);
+    if (s <= 0) return "--";
+    var secUnit = tw("vr.queue.sec_unit");
+    var minUnit = tw("vr.queue.min_unit");
+    var hourUnit = tw("vr.queue.hour_unit");
+    if (secUnit === "vr.queue.sec_unit") secUnit = "giây";
+    if (minUnit === "vr.queue.min_unit") minUnit = "phút";
+    if (hourUnit === "vr.queue.hour_unit") hourUnit = "giờ";
+    if (s < 60) return "~" + s + " " + secUnit;
+    if (s < 3600) {
+      var m = Math.round(s / 60);
+      return "~" + m + " " + minUnit;
+    }
+    var h = Math.floor(s / 3600);
+    var rm = Math.round((s % 3600) / 60);
+    return "~" + h + hourUnit + (rm > 0 ? " " + rm + minUnit : "");
+  }
+
   function joinRawText(base, spoken) {
     base = String(base == null ? "" : base);
     spoken = String(spoken == null ? "" : spoken).trim();
@@ -67,6 +86,37 @@
   function isBusy(st) {
     var s = (st && st.state) || "idle";
     return s === "starting" || s === "finishing" || s === "normalizing";
+  }
+
+  function isMeetingBusy(mt) {
+    mt = mt || {};
+    if (mt.recState === "recording" || mt.recState === "paused") return true;
+    if (Boolean(mt.uploading)) return true;
+    if (Boolean(mt.normalizing)) return true;
+    if (Boolean(mt.rediarizing)) return true;
+    var job = mt.activeJob;
+    if (job && ["uploading", "queued", "converting", "transcribing", "diarizing", "merging"].indexOf(job.status) >= 0) {
+      return true;
+    }
+    return false;
+  }
+
+  function canNormalizeMeeting(mt) {
+    return !isMeetingBusy(mt);
+  }
+
+  function canRediarizeMeeting(mt, rec) {
+    rec = rec || {};
+    if (rec.mode !== "meeting" || !rec.has_audio) return false;
+    return !isMeetingBusy(mt);
+  }
+
+  function canExportMeeting(mt) {
+    return !isMeetingBusy(mt);
+  }
+
+  function canCreateNewRecord(mt) {
+    return !isMeetingBusy(mt);
   }
 
   function canRecord(st) {
@@ -86,14 +136,16 @@
     return String(st.rawText || "").trim().length > 0;
   }
 
-  function canNewRecord(st) {
+  function canNewRecord(st, mt) {
     st = st || {};
-    return st.state === "idle";
+    if (st.state !== "idle") return false;
+    if (mt && isMeetingBusy(mt)) return false;
+    return true;
   }
 
   function canMeetingStart(mt) {
     mt = mt || {};
-    return mt.recState === "idle" && !mt.uploading && !mt.normalizing;
+    return mt.recState === "idle" && !isMeetingBusy(mt);
   }
 
   function canMeetingPause(mt) {
@@ -220,6 +272,39 @@
     }
   }
 
+  function fmtClockTime(val) {
+    if (!val) return "--";
+    var d = null;
+    if (typeof val === "number" || (typeof val === "string" && /^\d+(\.\d+)?$/.test(val.trim()))) {
+      var n = Number(val);
+      if (n <= 0) return "--";
+      if (n < 1e11) n = n * 1000;
+      d = new Date(n);
+    } else if (typeof val === "string") {
+      d = new Date(val);
+    }
+    if (!d || isNaN(d.getTime())) return "--";
+
+    var pad = function (num) { return (num < 10 ? "0" : "") + num; };
+    var hh = pad(d.getHours());
+    var mm = pad(d.getMinutes());
+    var ss = pad(d.getSeconds());
+    var timeStr = hh + ":" + mm + ":" + ss;
+
+    var now = new Date();
+    var isToday = (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
+    if (!isToday) {
+      var day = pad(d.getDate());
+      var mon = pad(d.getMonth() + 1);
+      return timeStr + " (" + day + "/" + mon + ")";
+    }
+    return timeStr;
+  }
+
   function renderSetupHintHtml() {
     var dUrl = "https://huggingface.co/pyannote/speaker-diarization-3.1";
     var sUrl = "https://huggingface.co/pyannote/segmentation-3.0";
@@ -230,11 +315,51 @@
     return esc(tw("vr.meeting.setup_hint_prefix")) + " " + dLink + " " + esc(tw("vr.meeting.setup_hint_and")) + " " + sLink + " " + esc(tw("vr.meeting.setup_hint_suffix"));
   }
 
+  function buildOriginBadge(origin) {
+    var isClient = origin && origin !== "local";
+    if (isClient) {
+      return '<span class="vr-origin-badge is-client">' + ico("globe") + " <span>" + esc(tw("vr.queue.origin_client", { ip: origin })) + "</span></span>";
+    }
+    return '<span class="vr-origin-badge is-local">' + ico("hard-drive") + " <span>" + esc(tw("vr.queue.origin_local")) + "</span></span>";
+  }
+
+  function buildStatusBadge(r) {
+    r = r || {};
+    if (r.status === "queued") {
+      return '<span class="vr-status-badge is-queued">' + ico("clock") + " <span>" + esc(tw("vr.queue.status_queued", { pos: r.queue_position || 1 })) + "</span></span>";
+    }
+    if (r.status === "done") {
+      return '<span class="vr-status-badge is-done">' + ico("circle-check") + " <span>" + esc(tw("vr.queue.status_done")) + "</span></span>";
+    }
+    if (r.status === "failed") {
+      var html = '<span class="vr-status-badge is-failed">' + ico("triangle-alert") + " <span>" + esc(tw("vr.queue.status_failed")) + "</span></span>";
+      if (r.id && (r.has_log || r.log_path)) {
+        html += ' <a href="/voice-records/meeting/jobs/' + encodeURIComponent(r.id) + '/log" target="_blank" rel="noopener noreferrer" class="vr-queue-log-link" title="Xem log chi tiết">' + ico("file-text") + ' Log</a>';
+      }
+      return html;
+    }
+    var prog = Math.max(0, Math.min(100, Math.round(Number(r.progress) || 0)));
+    var html = '<span class="vr-status-badge is-running">' + ico("loader-circle", { cls: "vr-spin" }) + " <span>" + esc(tw("vr.queue.status_running", { prog: prog })) + "</span></span>";
+    if (r.stage) {
+      html += '<div class="vr-queue-stage-sub">' + esc(r.stage) + "</div>";
+    }
+    return html;
+  }
+
   var pure = {
     CHUNK_SIZE_BYTES: CHUNK_SIZE_BYTES,
     fmtTime: fmtTime,
+    fmtEstimatedTime: fmtEstimatedTime,
+    fmtClockTime: fmtClockTime,
+    buildOriginBadge: buildOriginBadge,
+    buildStatusBadge: buildStatusBadge,
     joinRawText: joinRawText,
     isBusy: isBusy,
+    isMeetingBusy: isMeetingBusy,
+    canNormalizeMeeting: canNormalizeMeeting,
+    canRediarizeMeeting: canRediarizeMeeting,
+    canExportMeeting: canExportMeeting,
+    canCreateNewRecord: canCreateNewRecord,
     canRecord: canRecord,
     canCancelTake: canCancelTake,
     canNormalize: canNormalize,
@@ -280,6 +405,9 @@
     editorClosed: false,
     history: [],
     historyLoading: false,
+    queueData: null,
+    queueLoading: false,
+    queueTimer: null,
     dict: null,
     startedAt: 0,
     clock: null,
@@ -491,6 +619,13 @@
     if (pq) pq.hidden = S.tab !== "quick";
     if (pm) pm.hidden = S.tab !== "meeting";
     if (ps) ps.hidden = S.tab !== "settings";
+
+    if (S.tab === "settings") {
+      fetchMeetingQueue();
+      startQueuePolling();
+    } else {
+      stopQueuePolling();
+    }
   }
 
   function syncQuickUi() {
@@ -824,7 +959,7 @@
     if (btnResume) { btnResume.hidden = !canMeetingResume(mt); }
     if (btnStop) { btnStop.hidden = !canMeetingStop(mt); }
     if (btnCancel) { btnCancel.hidden = mt.recState === "idle"; }
-    if (btnUpload) { btnUpload.disabled = mt.recState !== "idle" || mt.uploading; }
+    if (btnUpload) { btnUpload.disabled = mt.recState !== "idle" || mt.uploading || isMeetingBusy(mt); }
 
     var progBox = $("vrMtProgress");
     if (progBox) {
@@ -853,6 +988,10 @@
         errEl.innerHTML = "";
       }
     }
+    if (S.tab === "settings") {
+      renderMeetingQueue();
+    }
+    syncEditorCard();
   }
 
   function syncEditorCard() {
@@ -873,6 +1012,10 @@
 
     var isMeeting = rec.mode === "meeting";
     var canRediarize = isMeeting && !!rec.has_audio;
+    var mtBusy = isMeeting && isMeetingBusy(S.mt);
+    var job = S.mt.activeJob;
+    var activeJobRunning = Boolean(job && ["uploading", "queued", "converting", "transcribing", "diarizing", "merging"].indexOf(job.status) >= 0);
+    var isRediarizeActive = Boolean(S.mt.rediarizing || (job && job.job_type === "rediarize" && activeJobRunning));
 
     if (edNote) {
       var isResumeMode = isMeeting && canRediarize && (!rec.segments || !rec.segments.length);
@@ -899,14 +1042,17 @@
           var bSpin = isResumeMode ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
           edNote.innerHTML = '<div class="vr-fallback-row">' +
             '<span>' + esc(warnTxt) + '</span>' +
-            '<button type="button" class="gcard-btn vr-btn-rediarize-banner" id="vrMtBtnRediarizeBanner">' +
-            ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
-            ' <span>' + esc(S.mt.rediarizing ? bSpin : bLabel) + '</span></button>' +
+            '<button type="button" class="gcard-btn vr-btn-rediarize-banner" id="vrMtBtnRediarizeBanner"' + (mtBusy ? ' disabled' : '') + '>' +
+            ico(isRediarizeActive ? "loader" : "refresh-cw", { cls: isRediarizeActive ? "spin" : "" }) +
+            ' <span>' + esc(isRediarizeActive ? bSpin : bLabel) + '</span></button>' +
             '</div>';
           var btnBanner = $("vrMtBtnRediarizeBanner");
           if (btnBanner) {
-            btnBanner.disabled = !!S.mt.rediarizing;
-            btnBanner.onclick = function () { rediarizeMeetingRecord(rec); };
+            btnBanner.disabled = mtBusy;
+            btnBanner.onclick = function () {
+              if (isMeetingBusy(S.mt)) return;
+              rediarizeMeetingRecord(rec);
+            };
           }
         } else {
           edNote.textContent = warnTxt || "";
@@ -926,13 +1072,11 @@
         var pinBtn = $("vrMtBtnPin");
         if (pinBtn) {
           var pinned = !!rec.pinned;
+          pinBtn.disabled = mtBusy;
           pinBtn.classList.toggle("is-pinned", pinned);
           pinBtn.innerHTML = ico(pinned ? "pin-off" : "pin") + " <span>" + esc(pinned ? tw("vr.meeting.btn_pinned") : tw("vr.meeting.btn_pin")) + "</span>";
-        }
-        var retTxt = $("vrMtBtnPin");
-        if (retTxt) {
           var keepDays = (S.mt.statusData && S.mt.statusData.config && S.mt.statusData.config.keep_audio_days) || 30;
-          retTxt.title = rec.pinned ? tw("vr.meeting.audio_pinned_note") : tw("vr.meeting.audio_retention", { days: keepDays });
+          pinBtn.title = rec.pinned ? tw("vr.meeting.audio_pinned_note") : tw("vr.meeting.audio_retention", { days: keepDays });
         }
       }
     }
@@ -943,6 +1087,8 @@
     if (spkWrap && spkGrid) {
       spkWrap.hidden = !(isMeeting && speakers.length > 0);
       if (!spkWrap.hidden) {
+        var applySpkBtn = $("vrMtBtnApplySpk");
+        if (applySpkBtn) applySpkBtn.disabled = mtBusy;
         var draft = S.mt.speakerDraft || {};
         spkGrid.innerHTML = speakers.map(function (sp) {
           var val = draft[sp.id] != null ? draft[sp.id] : ((rec.speaker_map && rec.speaker_map[sp.id]) || "");
@@ -951,11 +1097,14 @@
             '<span class="vr-mt-spk-id">' + esc(sp.id) + "</span>" +
             '<span class="vr-mt-spk-stat">' + esc(tw("vr.meeting.speaker_stats", { dur: fmtTime(sp.duration), turns: sp.turns })) + "</span>" +
             "</div>" +
-            '<input type="text" class="vr-input vr-mt-spk-input" data-spkid="' + esc(sp.id) + '" value="' + esc(val) + '" placeholder="' + esc(tw("vr.meeting.speaker_placeholder")) + '">' +
+            '<input type="text" class="vr-input vr-mt-spk-input" data-spkid="' + esc(sp.id) + '" value="' + esc(val) + '"' +
+            (mtBusy ? ' disabled' : '') + ' placeholder="' + esc(tw("vr.meeting.speaker_placeholder")) + '">' +
             "</div>";
         }).join("");
         spkGrid.querySelectorAll(".vr-mt-spk-input").forEach(function (inp) {
+          inp.disabled = mtBusy;
           inp.addEventListener("input", function () {
+            if (isMeetingBusy(S.mt)) return;
             S.mt.speakerDraft[inp.getAttribute("data-spkid")] = inp.value;
           });
         });
@@ -968,8 +1117,9 @@
       actBar.classList.toggle("has-3-cols", !canRediarize);
       var normBtn = $("vrMtBtnNormalizeRec");
       if (normBtn) {
-        normBtn.disabled = !!S.mt.normalizing;
-        normBtn.innerHTML = ico("sparkles") + " <span>" + esc(S.mt.normalizing ? tw("vr.btn.normalizing") : tw("vr.btn.normalize")) + "</span>";
+        normBtn.disabled = mtBusy;
+        normBtn.innerHTML = ico(S.mt.normalizing ? "loader" : "sparkles", { cls: S.mt.normalizing ? "spin" : "" }) +
+          " <span>" + esc(S.mt.normalizing ? tw("vr.btn.normalizing") : tw("vr.btn.normalize")) + "</span>";
       }
       var rediarizeBtn = $("vrMtBtnRediarizeRec");
       if (rediarizeBtn) {
@@ -978,20 +1128,185 @@
           var isResume = !rec.segments || !rec.segments.length;
           var btnLabel = isResume ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_rediarize");
           var btnSpin = isResume ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
-          rediarizeBtn.disabled = !!S.mt.rediarizing;
-          rediarizeBtn.innerHTML = ico(S.mt.rediarizing ? "loader" : "refresh-cw", { cls: S.mt.rediarizing ? "spin" : "" }) +
-            " <span>" + esc(S.mt.rediarizing ? btnSpin : btnLabel) + "</span>";
+          rediarizeBtn.disabled = mtBusy;
+          rediarizeBtn.innerHTML = ico(isRediarizeActive ? "loader" : "refresh-cw", { cls: isRediarizeActive ? "spin" : "" }) +
+            " <span>" + esc(isRediarizeActive ? btnSpin : btnLabel) + "</span>";
         }
       }
-      var exts = ["srt", "vtt", "txt", "json"];
+      var newRecBtn = $("vrMtBtnNewRec");
+      if (newRecBtn) {
+        newRecBtn.disabled = mtBusy;
+      }
+      var expGroup = $("vrMtExpGroup");
+      if (expGroup) {
+        expGroup.classList.toggle("is-disabled", mtBusy);
+        if (mtBusy) {
+          expGroup.setAttribute("aria-disabled", "true");
+        } else {
+          expGroup.removeAttribute("aria-disabled");
+        }
+      }
+      var exts = ["txt", "srt", "vtt", "json"];
       exts.forEach(function (ext) {
         var lnk = $("vrMtExp_" + ext);
-        if (lnk) lnk.href = "/voice-records/" + encodeURIComponent(rec.id) + "/export?format=" + ext;
+        if (lnk) {
+          lnk.classList.toggle("is-disabled", mtBusy);
+          if (mtBusy) {
+            lnk.setAttribute("aria-disabled", "true");
+            lnk.removeAttribute("href");
+            lnk.onclick = function (e) {
+              if (e && typeof e.preventDefault === "function") e.preventDefault();
+              return false;
+            };
+          } else {
+            lnk.removeAttribute("aria-disabled");
+            lnk.href = "/voice-records/" + encodeURIComponent(rec.id) + "/export?format=" + ext;
+            lnk.onclick = null;
+          }
+        }
       });
     }
 
     if (closedBar) closedBar.hidden = !S.editorClosed;
     if (vrEdit) vrEdit.hidden = !!S.editorClosed;
+  }
+
+  async function fetchMeetingQueue() {
+    if (!S.mounted) return;
+    S.queueLoading = true;
+    try {
+      var r = await fetch("/voice-records/meeting/queue");
+      var d = await r.json().catch(function () { return {}; });
+      if (d && d.ok) {
+        S.queueData = d;
+      }
+    } catch (e) {
+      // background polling error ignored
+    } finally {
+      S.queueLoading = false;
+      renderMeetingQueue();
+    }
+  }
+
+  function startQueuePolling() {
+    if (S.queueTimer) return;
+    S.queueTimer = setInterval(function () {
+      if (S.tab === "settings" && S.mounted) {
+        fetchMeetingQueue();
+      } else {
+        stopQueuePolling();
+      }
+    }, 4000);
+  }
+
+  function stopQueuePolling() {
+    if (S.queueTimer) {
+      clearInterval(S.queueTimer);
+      S.queueTimer = null;
+    }
+  }
+
+  function renderQueueTable(items, isRecent) {
+    if (!items || !items.length) return "";
+    var rows = items.map(function (r) {
+      var originBadge = buildOriginBadge(r.origin);
+      var statusBadge = buildStatusBadge(r);
+      var typeIcon = r.job_type === "remote_diarize" ? "share-2" : "mic";
+      var durText = (r.duration_sec && r.duration_sec > 0) ? fmtTime(r.duration_sec) : "--";
+      var startedText = fmtClockTime(r.started_iso || r.started_at);
+      var finishedText = fmtClockTime(r.finished_iso || r.finished_at);
+      var actualText = (r.elapsed_sec && r.elapsed_sec > 0) ? fmtTime(r.elapsed_sec) : "--";
+      var estText = (r.estimated_sec && r.estimated_sec > 0) ? fmtEstimatedTime(r.estimated_sec) : "--";
+      var titleText = r.title || r.id || "audio";
+
+      var startedTitle = r.started_iso ? (' title="' + esc(r.started_iso) + '"') : "";
+      var finishedTitle = r.finished_iso ? (' title="' + esc(r.finished_iso) + '"') : "";
+
+      return '<tr>' +
+        '<td class="vr-queue-col-file">' +
+          '<div class="vr-queue-file-wrap">' +
+            '<span class="vr-queue-type-icon">' + ico(typeIcon) + "</span>" +
+            '<span class="vr-queue-file-title" title="' + esc(titleText) + '">' + esc(titleText) + "</span>" +
+          '</div>' +
+        '</td>' +
+        '<td class="vr-queue-col-origin">' + originBadge + '</td>' +
+        '<td class="vr-queue-col-dur"><span class="vr-queue-mono">' + esc(durText) + '</span></td>' +
+        '<td class="vr-queue-col-started"><span class="vr-queue-mono"' + startedTitle + '>' + esc(startedText) + '</span></td>' +
+        '<td class="vr-queue-col-finished"><span class="vr-queue-mono"' + finishedTitle + '>' + esc(finishedText) + '</span></td>' +
+        '<td class="vr-queue-col-actual"><span class="vr-queue-mono">' + esc(actualText) + '</span></td>' +
+        '<td class="vr-queue-col-est"><span class="vr-queue-mono">' + esc(estText) + '</span></td>' +
+        '<td class="vr-queue-col-status">' + statusBadge + '</td>' +
+        '</tr>';
+    }).join("");
+
+    return '<div class="vr-queue-table-wrap">' +
+      '<table class="vr-queue-table' + (isRecent ? ' is-recent' : '') + '">' +
+      '<thead>' +
+      '<tr>' +
+      '<th>' + esc(tw("vr.queue.col_file")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_origin")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_duration")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_started")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_finished")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_actual")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_estimated")) + '</th>' +
+      '<th>' + esc(tw("vr.queue.col_status")) + '</th>' +
+      '</tr>' +
+      '</thead>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      '</div>';
+  }
+
+  function renderMeetingQueue() {
+    var wrap = $("vrQueueWrap");
+    if (!wrap) return;
+    var countBadge = $("vrQueueCountBadge");
+
+    var data = S.queueData || { active: [], queued: [], recent: [], total_pending: 0 };
+    var active = Array.isArray(data.active) ? data.active : [];
+    var queued = Array.isArray(data.queued) ? data.queued : [];
+    var recent = Array.isArray(data.recent) ? data.recent : [];
+    var totalPending = Number(data.total_pending || (active.length + queued.length));
+
+    if (countBadge) {
+      if (totalPending > 0) {
+        countBadge.hidden = false;
+        countBadge.textContent = tw("vr.queue.pending_count", { n: totalPending });
+      } else {
+        countBadge.hidden = true;
+      }
+    }
+
+    if (!active.length && !queued.length) {
+      var emptyHtml = '<div class="vr-queue-empty">' +
+        ico("circle-check", { cls: "ic-ok" }) +
+        " <span>" + esc(tw("vr.queue.empty")) + "</span>" +
+        '</div>';
+
+      if (recent.length) {
+        emptyHtml += '<div class="vr-queue-recent-sec" style="margin-top:14px">' +
+          '<div class="vr-audit-sub" style="margin-bottom:8px; font-weight:600">' + esc(tw("vr.queue.recent_title")) + " (" + recent.length + ")</div>" +
+          renderQueueTable(recent, true) +
+          '</div>';
+      }
+      wrap.innerHTML = emptyHtml;
+      return;
+    }
+
+    var items = active.concat(queued);
+    var html = '<div class="vr-queue-active-sec">' +
+      renderQueueTable(items, false) +
+      '</div>';
+
+    if (recent.length) {
+      html += '<div class="vr-queue-recent-sec" style="margin-top:16px">' +
+        '<div class="vr-audit-sub" style="margin-bottom:8px; font-weight:600">' + esc(tw("vr.queue.recent_title")) + " (" + recent.length + ")</div>" +
+        renderQueueTable(recent, true) +
+        '</div>';
+    }
+
+    wrap.innerHTML = html;
   }
 
   function syncUi() {
@@ -1017,6 +1332,8 @@
       return;
     }
     var activeId = S.activeRecord ? S.activeRecord.id : "";
+    var busyNow = isBusy(S) || S.state === "recording" || isMeetingBusy(S.mt);
+    list.classList.toggle("is-busy", busyNow);
     list.innerHTML = S.history.map(function (r) {
       var act = activeId && r.id === activeId ? " active" : "";
       var isMt = r.mode === "meeting";
@@ -1024,17 +1341,20 @@
       if (snippet.length > 120) snippet = snippet.slice(0, 120) + "...";
       return '<button type="button" class="vr-hist-item' + act + '" data-vrid="' + esc(r.id) + '">' +
         '<div class="vr-hist-top">' +
-        '<span class="vr-hist-file">' + ico(isMt ? "file-audio" : "file-text") + " <span>" + esc(basename(r.file_path) || r.file_path) + "</span></span>" +
-        (isMt ? '<span class="vr-hist-badge">' + esc(tw("vr.hist.badge_meeting") + (r.duration_sec ? " · " + fmtTime(r.duration_sec) : "")) + "</span>" : "") +
-        '<span class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</span>" +
+        (isMt
+          ? '<span class="vr-hist-badge">' + esc(tw("vr.hist.badge_meeting") + (r.duration_sec ? " · " + fmtTime(r.duration_sec) : "")) + "</span>"
+          : '<span class="vr-hist-file">' + ico("file-text") + " <span>" + esc(basename(r.file_path) || r.file_path) + "</span></span>" +
+            '<span class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</span>"
+        ) +
         "</div>" +
+        (isMt ? '<div class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</div>" : "") +
         '<div class="vr-hist-raw">' + esc(snippet) + "</div>" +
         "</button>";
     }).join("");
 
     list.querySelectorAll(".vr-hist-item").forEach(function (btn) {
       btn.onclick = function () {
-        if (isBusy(S) || S.state === "recording" || S.mt.recState !== "idle" || S.mt.uploading) return;
+        if (isBusy(S) || S.state === "recording" || isMeetingBusy(S.mt)) return;
         var id = btn.getAttribute("data-vrid");
         var rec = S.history.find(function (x) { return x.id === id; });
         if (rec) openRecordInEditor(rec);
@@ -1230,7 +1550,7 @@
   }
 
   function resetNewRecording() {
-    if (!canNewRecord(S) || S.mt.recState !== "idle" || S.mt.uploading) return;
+    if (!canNewRecord(S, S.mt) || isMeetingBusy(S.mt)) return;
     try {
       if (window.JavisNoteEditor && typeof window.JavisNoteEditor.closeInSlot === "function") {
         window.JavisNoteEditor.closeInSlot();
@@ -1795,7 +2115,7 @@
 
   async function applySpeakerMap() {
     var rec = S.activeRecord;
-    if (!rec || !rec.speakers || !rec.speakers.length) return;
+    if (!rec || !rec.speakers || !rec.speakers.length || isMeetingBusy(S.mt)) return;
     S.mt.errorMsg = "";
     var smap = buildSpeakerMapPayload(rec.speakers, S.mt.speakerDraft);
     try {
@@ -1825,7 +2145,7 @@
 
   async function normalizeMeetingRecord() {
     var rec = S.activeRecord;
-    if (!rec || S.mt.normalizing) return;
+    if (!rec || S.mt.normalizing || isMeetingBusy(S.mt)) return;
     S.mt.normalizing = true;
     S.mt.errorMsg = "";
     S.infoNote = "";
@@ -1860,7 +2180,7 @@
 
   async function rediarizeMeetingRecord(targetRec) {
     var rec = targetRec || S.activeRecord;
-    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.rediarizing) return;
+    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.rediarizing || isMeetingBusy(S.mt)) return;
     S.mt.rediarizing = true;
     S.mt.errorMsg = "";
     S.mt.warnMsg = "";
@@ -1902,7 +2222,7 @@
 
   async function toggleRecordPin() {
     var rec = S.activeRecord;
-    if (!rec) return;
+    if (!rec || isMeetingBusy(S.mt)) return;
     S.mt.errorMsg = "";
     try {
       var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/pin", {
@@ -1942,7 +2262,9 @@
       });
       if (active) {
         S.mt.activeJob = active;
+        if (active.job_type === "rediarize") S.mt.rediarizing = true;
         syncMeetingUi();
+        syncEditorCard();
         startJobPolling(active.id);
       }
     } catch (e) { }
@@ -2242,6 +2564,18 @@
       '<div class="vr-mt-install-notice" id="vrClientNotice" hidden style="margin-top:10px"></div>' +
       "</div>" +
       "</div>" +
+      // Background Task Queue Monitor
+      '<div class="vr-settings-sec" id="vrQueueSection" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
+      '<div class="vr-settings-sec-head" style="margin-bottom:8px; display:flex; align-items:center; justify-content:space-between">' +
+      '<div class="vr-settings-sec-title" style="display:flex; align-items:center; gap:8px">' +
+      ico("layers") + " <span>" + esc(tw("vr.queue.title")) + "</span>" +
+      '<span class="vr-pill is-ok" id="vrQueueCountBadge" hidden style="font-size:11px"></span>' +
+      "</div>" +
+      '<button type="button" class="gcard-btn sm" id="vrBtnRefreshQueue" title="' + esc(tw("common.refresh")) + '">' + ico("refresh-cw") + " <span>" + esc(tw("common.refresh")) + "</span></button>" +
+      "</div>" +
+      '<div class="vr-audit-sub" style="margin:4px 0 12px 0">' + esc(tw("vr.queue.desc")) + "</div>" +
+      '<div id="vrQueueWrap" class="vr-queue-wrap"></div>' +
+      "</div>" +
       "</div>" +
       "</div>" +
       "</div>" +
@@ -2366,14 +2700,19 @@
     if (mtNumSpk) mtNumSpk.onchange = function () { S.mt.numSpeakers = Number(mtNumSpk.value || 0); };
     if (mtDiarize) mtDiarize.onchange = function () { S.mt.diarize = !!mtDiarize.checked; S.mt.diarizeTouched = true; saveMeetingConfig({ diarize: S.mt.diarize }); syncMeetingUi(); };
 
-    if (mtStart) mtStart.onclick = startMeetingRecording;
+    if (mtStart) mtStart.onclick = function () { if (!isMeetingBusy(S.mt)) startMeetingRecording(); };
     if (mtPause) mtPause.onclick = pauseMeetingRecording;
     if (mtResume) mtResume.onclick = resumeMeetingRecording;
     if (mtStop) mtStop.onclick = function () { stopMeetingRecording(false); };
     if (mtCancel) mtCancel.onclick = function () { stopMeetingRecording(true); };
     if (mtUploadBtn && mtFileIn) {
-      mtUploadBtn.onclick = function () { mtFileIn.value = ""; mtFileIn.click(); };
+      mtUploadBtn.onclick = function () {
+        if (isMeetingBusy(S.mt)) return;
+        mtFileIn.value = "";
+        mtFileIn.click();
+      };
       mtFileIn.onchange = function () {
+        if (isMeetingBusy(S.mt)) return;
         var f = mtFileIn.files && mtFileIn.files[0];
         if (f) submitUploadedFile(f);
       };
@@ -2395,11 +2734,11 @@
     var mtDelMod = $("vrMtBtnDeleteModel");
     if (mtDelMod) mtDelMod.onclick = function () { deleteSelectedModel(); };
 
-    if (mtApplySpk) mtApplySpk.onclick = applySpeakerMap;
-    if (mtNormRec) mtNormRec.onclick = normalizeMeetingRecord;
-    if (mtRediarizeRec) mtRediarizeRec.onclick = function () { rediarizeMeetingRecord(); };
-    if (mtNewRec) mtNewRec.onclick = resetNewRecording;
-    if (mtPin) mtPin.onclick = toggleRecordPin;
+    if (mtApplySpk) mtApplySpk.onclick = function () { if (!isMeetingBusy(S.mt)) applySpeakerMap(); };
+    if (mtNormRec) mtNormRec.onclick = function () { if (!isMeetingBusy(S.mt)) normalizeMeetingRecord(); };
+    if (mtRediarizeRec) mtRediarizeRec.onclick = function () { if (!isMeetingBusy(S.mt)) rediarizeMeetingRecord(); };
+    if (mtNewRec) mtNewRec.onclick = function () { if (!isMeetingBusy(S.mt)) resetNewRecording(); };
+    if (mtPin) mtPin.onclick = function () { if (!isMeetingBusy(S.mt)) toggleRecordPin(); };
 
     // Remote Diarization Mode Switches
     var modeOff = $("vrModeBtnOff");
@@ -2556,6 +2895,13 @@
       saveMeetingConfig({ remote_mode: "off", client_base_uri: "", clear_client_api_key: true });
     };
 
+    var btnRefreshQueue = $("vrBtnRefreshQueue");
+    if (btnRefreshQueue) {
+      btnRefreshQueue.onclick = function () {
+        fetchMeetingQueue();
+      };
+    }
+
     window.addEventListener("beforeunload", onBeforeUnload);
 
     syncUi();
@@ -2572,6 +2918,7 @@
     stopMeter();
     stopJobPolling();
     stopInstallPolling();
+    stopQueuePolling();
     if (S.dict) {
       try { S.dict.cancel(); } catch (e) { }
       S.dict = null;

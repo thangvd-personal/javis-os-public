@@ -5,6 +5,7 @@
 import os
 import re
 import sqlite3
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -239,6 +240,124 @@ if target_md.is_file():
     md_content = target_md.read_text(encoding="utf-8")
     check("markdown file contains warning block and guidance",
           "[!WARNING]" in md_content and "Tách lại người nói" in md_content)
+
+# 7. Test Background Task Queue and Remote Diarize async queuing
+_curr_settings["voice"]["meeting_stt"]["remote_mode"] = "server"
+_orig_venv_ready = main.meeting_stt.venv_diarize_ready
+_orig_hf_token = main.meeting_stt.resolve_hf_token
+_orig_py_exe = main.meeting_stt.resolve_worker_python
+_orig_exec_remote = meeting_jobs._execute_remote_diarize_job
+
+main.meeting_stt.venv_diarize_ready = lambda: True
+main.meeting_stt.resolve_hf_token = lambda cfg=None: ("hf_test_token", "env")
+main.meeting_stt.resolve_worker_python = lambda need_diarize=True: (sys.executable, True)
+async def _fake_exec_remote(jid):
+    pass
+meeting_jobs._execute_remote_diarize_job = _fake_exec_remote
+
+# Test GET /voice-records/meeting/queue
+r_q = client.get("/voice-records/meeting/queue")
+check("GET /voice-records/meeting/queue returns 200 with queue summary",
+      r_q.status_code == 200 and r_q.json().get("ok") is True and "active" in r_q.json() and "queued" in r_q.json())
+
+# Test POST /voice-records/remote-diarize async enqueue
+dummy_upload_wav = _STATE / "test_client_audio.wav"
+dummy_upload_wav.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88\x58\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00")
+
+with open(dummy_upload_wav, "rb") as af:
+    r_remote_post = client.post(
+        "/voice-records/remote-diarize",
+        headers={"X-Speaker-Diarization-Key": test_srv_key},
+        files={"file": ("test_client_audio.wav", af, "audio/wav")},
+        data={"num_speakers": "2"},
+    )
+check("POST /voice-records/remote-diarize enqueues job and returns queued status",
+      r_remote_post.status_code == 200
+      and r_remote_post.json().get("status") in ("queued", "diarizing")
+      and bool(r_remote_post.json().get("job_id"))
+      and r_remote_post.json().get("queue_position") is not None)
+
+remote_job_id = r_remote_post.json().get("job_id")
+
+# Test GET /voice-records/remote-diarize/jobs/{job_id} polling
+r_poll_nokey = client.get(f"/voice-records/remote-diarize/jobs/{remote_job_id}")
+check("GET /voice-records/remote-diarize/jobs/{job_id} rejects without key",
+      r_poll_nokey.status_code == 401)
+
+r_poll_ok = client.get(
+    f"/voice-records/remote-diarize/jobs/{remote_job_id}",
+    headers={"X-Speaker-Diarization-Key": test_srv_key},
+)
+check("GET /voice-records/remote-diarize/jobs/{job_id} returns job status with key",
+      r_poll_ok.status_code == 200
+      and r_poll_ok.json().get("job_id") == remote_job_id
+      and r_poll_ok.json().get("status") in ("queued", "diarizing", "done", "failed"))
+
+main.meeting_stt.venv_diarize_ready = _orig_venv_ready
+main.meeting_stt.resolve_hf_token = _orig_hf_token
+main.meeting_stt.resolve_worker_python = _orig_py_exe
+meeting_jobs._execute_remote_diarize_job = _orig_exec_remote
+
+# 8. Test Estimation, Timestamps, and Worker Log file
+est_80m = meeting_jobs.estimate_processing_time_sec(4773.81, job_type="meeting_transcribe")
+check("estimate_processing_time_sec for 80m audio matches dur*2+900 (>10000s)", est_80m >= 10400)
+
+log_test_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Log Test Job",
+    status="failed",
+    duration_sec=120.0,
+    estimated_sec=1140.0,
+    started_at=1000.0,
+    started_iso="2026-11-13T10:00:00+07:00",
+    finished_at=1060.0,
+    finished_iso="2026-11-13T10:01:00+07:00",
+    elapsed_sec=60.0,
+)
+check("create_job preserves started/finished timestamps and elapsed_sec",
+      log_test_job.get("started_at") == 1000.0 and log_test_job.get("elapsed_sec") == 60.0)
+
+test_logs_dir = Path(main.cfgmod.STATE_DIR) / "meeting-logs"
+test_logs_dir.mkdir(parents=True, exist_ok=True)
+dummy_log_file = test_logs_dir / f"{log_test_job['id']}.log"
+dummy_log_file.write_text("Line 1: started worker\nLine 2: error occurred\n", encoding="utf-8")
+
+store.update_job(log_test_job["id"], log_path=str(dummy_log_file))
+pub = voice_records.public_job(store.get_job(log_test_job["id"]))
+check("public_job detects has_log True when log file exists", pub.get("has_log") is True)
+
+r_log_get = client.get(f"/voice-records/meeting/jobs/{log_test_job['id']}/log")
+check("GET /voice-records/meeting/jobs/{id}/log returns 200 with log text",
+      r_log_get.status_code == 200 and "Line 1: started worker" in r_log_get.text)
+
+# Test log file deletion on success simulation
+dummy_log_file.unlink(missing_ok=True)
+r_log_404 = client.get(f"/voice-records/meeting/jobs/{log_test_job['id']}/log")
+check("GET /voice-records/meeting/jobs/{id}/log returns 404 when log file is removed",
+      r_log_404.status_code == 404)
+
+# 9. Test In-Memory Waveform Preloading for Pyannote
+import wave
+from meeting_ear import worker
+
+test_worker_wav = _STATE / "test_worker_16k.wav"
+with wave.open(str(test_worker_wav), "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(16000)
+    wf.writeframes(b"\x00\x00" * 1600)  # 0.1s mono 16k
+
+check("worker._is_16k_mono_pcm16_wav returns True for 16kHz mono PCM16",
+      worker._is_16k_mono_pcm16_wav(str(test_worker_wav)) is True)
+
+w_path, w_istmp, w_err = worker._ensure_16k_mono_wav(str(test_worker_wav))
+check("worker._ensure_16k_mono_wav preserves existing 16k mono wav without re-encoding",
+      w_istmp is False and not w_err and w_path == str(test_worker_wav))
+
+w_tensor, w_sr, w_lerr = worker._load_audio_waveform(str(test_worker_wav))
+check("worker._load_audio_waveform loads (1, N) float32 tensor or reports missing torch",
+      (w_lerr == "torch_not_installed") or (not w_lerr and w_tensor is not None and w_tensor.shape == (1, 1600) and w_sr == 16000))
 
 # Restore
 main.cfgmod.gate_active = _orig_gate

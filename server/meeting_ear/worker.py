@@ -356,6 +356,102 @@ def _load_whisper_model(model_name: str, model_dir: str, device: str, compute_ty
         raise
 
 
+def _is_16k_mono_pcm16_wav(path: str) -> bool:
+    try:
+        with wave.open(path, "rb") as wf:
+            return wf.getnchannels() == 1 and wf.getframerate() == 16000 and wf.getsampwidth() == 2
+    except Exception:
+        return False
+
+
+def _ensure_16k_mono_wav(audio_path: str, tmp_dir: str | None = None) -> tuple[str, bool, str]:
+    """Ensure audio file is 16kHz mono PCM16 WAV. If already so, returns (audio_path, False, '').
+
+    Otherwise, converts using ffmpeg to a temporary WAV in tmp_dir and returns (converted_path, True, '').
+    """
+    if _is_16k_mono_pcm16_wav(audio_path):
+        return audio_path, False, ""
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return "", False, "ffmpeg not found on PATH"
+
+    if not tmp_dir:
+        tmp_dir = tempfile.gettempdir()
+    os.makedirs(tmp_dir, exist_ok=True)
+    out_wav = os.path.join(tmp_dir, f"converted_16k_{os.getpid()}_{abs(hash(audio_path)) & 0xffffffff}.wav")
+
+    cmd = [
+        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+        "-i", audio_path,
+        "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+        out_wav,
+    ]
+    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if res.returncode != 0:
+        return "", False, (res.stderr or f"ffmpeg exited with {res.returncode}")[:400]
+    return out_wav, True, ""
+
+
+def _load_audio_waveform(wav_path: str) -> tuple[Any, int, str]:
+    """Load WAV into memory as (1, N) float32 torch.Tensor and sample_rate.
+
+    Prefers `soundfile` for maximum speed, with fallback to torchaudio and standard wave/numpy.
+    """
+    try:
+        import torch
+    except ImportError:
+        return None, 0, "torch_not_installed"
+
+    # 1. Try soundfile (fastest for uncompressed WAV)
+    try:
+        import soundfile as sf
+        data, sr = sf.read(wav_path, dtype="float32")
+        if data.ndim == 1:
+            tensor = torch.from_numpy(data).unsqueeze(0)
+        elif data.ndim == 2:
+            mono = data.mean(axis=1) if data.shape[1] > 1 else data[:, 0]
+            tensor = torch.from_numpy(mono).unsqueeze(0)
+        else:
+            return None, 0, f"Unsupported audio dimensions from soundfile: {data.ndim}"
+        return tensor, int(sr), ""
+    except Exception:
+        pass
+
+    # 2. Try torchaudio.load
+    try:
+        import torchaudio
+        tensor, sr = torchaudio.load(wav_path)
+        if tensor.ndim == 2 and tensor.shape[0] > 1:
+            tensor = tensor.mean(dim=0, keepdim=True)
+        return tensor.to(torch.float32), int(sr), ""
+    except Exception:
+        pass
+
+    # 3. Fallback using standard library wave + numpy
+    try:
+        import numpy as np
+        with wave.open(wav_path, "rb") as wf:
+            sr = wf.getframerate()
+            frames = wf.readframes(wf.getnframes())
+            sampwidth = wf.getsampwidth()
+            n_channels = wf.getnchannels()
+
+        if sampwidth == 2:
+            pcm = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+        elif sampwidth == 4:
+            pcm = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
+        else:
+            pcm = np.frombuffer(frames, dtype=np.uint8).astype(np.float32) / 128.0 - 1.0
+
+        if n_channels > 1:
+            pcm = pcm.reshape(-1, n_channels).mean(axis=1)
+        tensor = torch.from_numpy(pcm).unsqueeze(0)
+        return tensor, int(sr), ""
+    except Exception as e:
+        return None, 0, f"Failed to load audio into memory: {e}"
+
+
 def _run_pyannote_diarization(
     wav_path: str,
     *,
@@ -364,6 +460,9 @@ def _run_pyannote_diarization(
     num_speakers: int | None,
     min_speakers: int | None,
     max_speakers: int | None,
+    stage_name: str = "diarizing",
+    progress_base: int = 70,
+    progress_span: int = 25,
 ) -> tuple[list[dict[str, Any]], str]:
     try:
         import torch
@@ -371,50 +470,121 @@ def _run_pyannote_diarization(
     except ImportError as e:
         return [], f"pyannote_not_installed: {e}"
 
+    # 1. Convert to 16kHz mono WAV once if needed
+    norm_wav, is_temp, conv_err = _ensure_16k_mono_wav(wav_path)
+    if conv_err:
+        return [], f"audio_conversion_failed: {conv_err}"
+
+    waveform = None
+    audio_dict = None
     try:
-        try:
-            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
-        except TypeError:
-            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
-    except Exception as e:
-        msg = str(e)
-        if "401" in msg or "403" in msg or "gated" in msg.lower() or "token" in msg.lower():
-            return [], f"pyannote_auth_error: {msg[:240]}"
-        return [], f"pyannote_load_error: {msg[:240]}"
+        # 2. Pre-load WAV into RAM as float32 tensor to bypass torchcodec / StreamingMediaDecoder
+        waveform, sr, load_err = _load_audio_waveform(norm_wav)
+        if load_err or waveform is None:
+            return [], f"audio_load_failed: {load_err}"
 
-    if pipeline is None:
-        return [], "pyannote_auth_error: Pipeline returned None (check HF_TOKEN and license acceptance for pyannote/speaker-diarization-3.1 and pyannote/segmentation-3.0)"
+        audio_dict = {
+            "waveform": waveform,
+            "sample_rate": sr,
+            "uri": Path(wav_path).stem or "audio",
+        }
 
-    if device == "cuda" and torch.cuda.is_available():
+        # 3. Load pipeline
         try:
-            pipeline.to(torch.device("cuda"))
+            try:
+                pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
+            except TypeError:
+                pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
+        except Exception as e:
+            msg = str(e)
+            if "401" in msg or "403" in msg or "gated" in msg.lower() or "token" in msg.lower():
+                return [], f"pyannote_auth_error: {msg[:240]}"
+            return [], f"pyannote_load_error: {msg[:240]}"
+
+        if pipeline is None:
+            return [], "pyannote_auth_error: Pipeline returned None (check HF_TOKEN and license acceptance for pyannote/speaker-diarization-3.1 and pyannote/segmentation-3.0)"
+
+        if device == "cuda" and torch.cuda.is_available():
+            try:
+                pipeline.to(torch.device("cuda"))
+            except Exception:
+                pass
+
+        # Progress hook to track segmentation and embedding stages
+        last_reported_pct = progress_base
+        def _pyannote_hook(step_name, step_artifact=None, file=None, completed=None, total=None, **_):
+            nonlocal last_reported_pct
+            step_str = str(step_name or "").lower()
+            if "segment" in step_str:
+                w_start, w_end = 0.05, 0.45
+            elif "embed" in step_str:
+                w_start, w_end = 0.45, 0.88
+            else:
+                w_start, w_end = 0.88, 0.98
+
+            if completed is not None and total is not None and total > 0:
+                frac = min(1.0, max(0.0, float(completed) / float(total)))
+                sub_pct = w_start + frac * (w_end - w_start)
+                detail = f"{step_name}: {completed}/{total} ({int(frac * 100)}%)"
+            else:
+                sub_pct = w_start
+                detail = str(step_name)
+
+            curr_pct = progress_base + int(sub_pct * progress_span)
+            curr_pct = max(progress_base, min(progress_base + progress_span, curr_pct))
+            if curr_pct >= last_reported_pct + 1:
+                last_reported_pct = curr_pct
+                emit_progress(stage_name, curr_pct, detail)
+
+        kwargs: dict[str, Any] = {"hook": _pyannote_hook}
+        if num_speakers and int(num_speakers) > 0:
+            kwargs["num_speakers"] = int(num_speakers)
+        else:
+            if min_speakers and int(min_speakers) > 0:
+                kwargs["min_speakers"] = int(min_speakers)
+            if max_speakers and int(max_speakers) > 0:
+                kwargs["max_speakers"] = int(max_speakers)
+
+        try:
+            diarization = pipeline(audio_dict, **kwargs)
+        except TypeError as e:
+            if "hook" in str(e) and "hook" in kwargs:
+                del kwargs["hook"]
+                diarization = pipeline(audio_dict, **kwargs)
+            else:
+                raise
+        except Exception as e:
+            return [], f"pyannote_runtime_error: {type(e).__name__}: {str(e)[:240]}"
+
+        # pyannote 3.1 returns Annotation directly; handle future wrappers gracefully too
+        annotation = getattr(diarization, "speaker_diarization", diarization)
+        turns: list[dict[str, Any]] = []
+        for turn, _track, speaker in annotation.itertracks(yield_label=True):
+            turns.append({
+                "start": float(turn.start),
+                "end": float(turn.end),
+                "speaker": str(speaker),
+            })
+        return turns, ""
+    finally:
+        if is_temp and norm_wav and os.path.isfile(norm_wav):
+            try:
+                os.unlink(norm_wav)
+            except OSError:
+                pass
+        try:
+            del waveform
+            del audio_dict
         except Exception:
             pass
-
-    kwargs: dict[str, Any] = {}
-    if num_speakers and int(num_speakers) > 0:
-        kwargs["num_speakers"] = int(num_speakers)
-    else:
-        if min_speakers and int(min_speakers) > 0:
-            kwargs["min_speakers"] = int(min_speakers)
-        if max_speakers and int(max_speakers) > 0:
-            kwargs["max_speakers"] = int(max_speakers)
-
-    try:
-        diarization = pipeline(wav_path, **kwargs)
-    except Exception as e:
-        return [], f"pyannote_runtime_error: {type(e).__name__}: {str(e)[:240]}"
-
-    # pyannote 3.1 returns Annotation directly; handle future wrappers gracefully too
-    annotation = getattr(diarization, "speaker_diarization", diarization)
-    turns: list[dict[str, Any]] = []
-    for turn, _track, speaker in annotation.itertracks(yield_label=True):
-        turns.append({
-            "start": float(turn.start),
-            "end": float(turn.end),
-            "speaker": str(speaker),
-        })
-    return turns, ""
+        try:
+            import gc
+            gc.collect()
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
 
 
 def _run_remote_diarization(
@@ -460,14 +630,68 @@ def _run_remote_diarization(
         req.add_header("Authorization", f"Bearer {api_key}")
 
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=120.0) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             if not isinstance(data, dict):
                 return [], "remote_diarize_error: Invalid response from server"
             if not data.get("ok"):
                 return [], f"remote_diarize_error: {data.get('error') or 'Unknown server error'}"
-            turns = data.get("turns") or []
-            return turns, ""
+
+            # If server returned turns synchronously
+            if "turns" in data:
+                return data.get("turns") or [], ""
+
+            job_id = data.get("job_id")
+            if not job_id:
+                return [], "remote_diarize_error: Missing job_id from server"
+
+        # Background queue mode: poll until job completes
+        poll_url = base_uri.rstrip("/") + f"/voice-records/remote-diarize/jobs/{job_id}"
+        poll_req = urllib.request.Request(poll_url, method="GET")
+        if api_key:
+            poll_req.add_header("X-Speaker-Diarization-Key", api_key)
+            poll_req.add_header("Authorization", f"Bearer {api_key}")
+
+        import time
+        start_time = time.time()
+        max_poll_time = float(timeout or 14400.0)
+        last_progress_emit = 0
+
+        while (time.time() - start_time) < max_poll_time:
+            time.sleep(2.5)
+            try:
+                with urllib.request.urlopen(poll_req, timeout=30.0) as poll_resp:
+                    pdata = json.loads(poll_resp.read().decode("utf-8"))
+                    if not isinstance(pdata, dict) or not pdata.get("ok"):
+                        err_txt = (pdata or {}).get("error") or "Polling failed"
+                        return [], f"remote_diarize_error: {err_txt}"
+
+                    status = str(pdata.get("status") or "")
+                    if status == "done":
+                        emit_progress("diarizing", 95, "Máy chủ đã hoàn tất phân tách")
+                        return pdata.get("turns") or [], ""
+                    if status == "failed":
+                        return [], f"remote_diarize_error: {pdata.get('error') or 'Job failed on server'}"
+
+                    q_pos = int(pdata.get("queue_position") or 0)
+                    prog = int(pdata.get("progress") or 0)
+                    detail = str(pdata.get("stage_detail") or "")
+                    if status == "queued":
+                        msg = f"Đang chờ trong hàng đợi máy chủ (thứ tự: #{q_pos})" if q_pos > 0 else "Đang chờ máy chủ xử lý..."
+                        emit_progress("diarizing", 70, msg)
+                    elif status in ("diarizing", "processing", "converting"):
+                        calc_pct = 70 + int(prog * 0.24)
+                        if calc_pct >= last_progress_emit + 1:
+                            last_progress_emit = calc_pct
+                            emit_progress("diarizing", calc_pct, f"Máy chủ đang tách: {detail or f'{prog}%'}")
+            except urllib.error.HTTPError as he:
+                if he.code in (401, 403, 404):
+                    return [], f"remote_diarize_http_{he.code}"
+                continue
+            except Exception:
+                continue
+
+        return [], f"remote_diarize_timeout: Quá thời gian chờ máy chủ ({int(max_poll_time // 60)} phút)"
     except urllib.error.HTTPError as e:
         err_msg = ""
         try:
@@ -504,6 +728,9 @@ def run_diarize_only(job_path: str) -> int:
         num_speakers=job.get("num_speakers"),
         min_speakers=job.get("min_speakers"),
         max_speakers=job.get("max_speakers"),
+        stage_name="diarizing",
+        progress_base=15,
+        progress_span=75,
     )
 
     out_json = str(job.get("output_json") or "").strip()
@@ -641,6 +868,9 @@ def run_job(job_path: str) -> int:
                     num_speakers=job.get("num_speakers"),
                     min_speakers=job.get("min_speakers"),
                     max_speakers=job.get("max_speakers"),
+                    stage_name="diarizing",
+                    progress_base=70,
+                    progress_span=23,
                 )
                 if derr:
                     warnings.append(derr)

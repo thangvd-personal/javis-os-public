@@ -218,6 +218,135 @@ check("voice-record.js contains remote diarization mode buttons and key fields",
   && vrJsSrc.includes("vrBtnPingRemote")
   && vrJsSrc.includes("vrBtnGenServerKey"));
 
+// 11. Background Task Queue Monitoring
+check("fmtEstimatedTime handles empty, seconds, minutes, hours",
+  VR.fmtEstimatedTime(0) === "--"
+  && VR.fmtEstimatedTime(45).startsWith("~45")
+  && VR.fmtEstimatedTime(180).startsWith("~3")
+  && VR.fmtEstimatedTime(3660).startsWith("~1"));
+
+check("buildOriginBadge renders local vs client origin",
+  VR.buildOriginBadge("local").includes("is-local")
+  && VR.buildOriginBadge("192.168.1.50").includes("is-client"));
+
+check("buildStatusBadge renders queued, running, done, and failed",
+  VR.buildStatusBadge({ status: "queued", queue_position: 3 }).includes("is-queued")
+  && VR.buildStatusBadge({ status: "transcribing", progress: 65 }).includes("is-running")
+  && VR.buildStatusBadge({ status: "done" }).includes("is-done")
+  && VR.buildStatusBadge({ status: "failed" }).includes("is-failed"));
+
+check("voice-record.js contains queue section, wrap, and refresh button",
+  vrJsSrc.includes("vrQueueSection")
+  && vrJsSrc.includes("vrQueueWrap")
+  && vrJsSrc.includes("vrBtnRefreshQueue")
+  && vrJsSrc.includes("fetchMeetingQueue")
+  && vrJsSrc.includes("renderMeetingQueue"));
+
+const qKeys = [
+  "vr.queue.title",
+  "vr.queue.desc",
+  "vr.queue.empty",
+  "vr.queue.col_file",
+  "vr.queue.col_origin",
+  "vr.queue.col_duration",
+  "vr.queue.col_estimated",
+  "vr.queue.col_status",
+  "vr.queue.origin_local",
+  "vr.queue.origin_client",
+  "vr.queue.status_queued",
+  "vr.queue.status_running",
+];
+check("vi.json and en.json have all queue monitor i18n keys",
+  qKeys.every(function (k) { return viJson[k] && enJson[k]; }));
+
+// 12. Meeting CTA locking and busy state transitions
+check("isMeetingBusy returns false for idle meeting without active job",
+  VR.isMeetingBusy({ recState: "idle" }) === false);
+
+check("isMeetingBusy returns true for recording, paused, uploading, normalizing, or rediarizing",
+  VR.isMeetingBusy({ recState: "recording" }) === true
+  && VR.isMeetingBusy({ recState: "paused" }) === true
+  && VR.isMeetingBusy({ recState: "idle", uploading: true }) === true
+  && VR.isMeetingBusy({ recState: "idle", normalizing: true }) === true
+  && VR.isMeetingBusy({ recState: "idle", rediarizing: true }) === true);
+
+check("isMeetingBusy returns true for active background job stages",
+  VR.isMeetingBusy({ recState: "idle", activeJob: { status: "queued" } }) === true
+  && VR.isMeetingBusy({ recState: "idle", activeJob: { status: "converting" } }) === true
+  && VR.isMeetingBusy({ recState: "idle", activeJob: { status: "transcribing" } }) === true
+  && VR.isMeetingBusy({ recState: "idle", activeJob: { status: "diarizing" } }) === true
+  && VR.isMeetingBusy({ recState: "idle", activeJob: { status: "merging" } }) === true);
+
+check("isMeetingBusy returns false once job is done or failed",
+  VR.isMeetingBusy({ recState: "idle", activeJob: { status: "done" } }) === false
+  && VR.isMeetingBusy({ recState: "idle", activeJob: { status: "failed" } }) === false);
+
+const busyMt = { recState: "idle", rediarizing: true };
+const idleMt = { recState: "idle", rediarizing: false };
+const mtRec = { mode: "meeting", has_audio: true };
+
+check("dependent meeting CTAs are blocked while busy and allowed when idle",
+  VR.canNormalizeMeeting(busyMt) === false
+  && VR.canNormalizeMeeting(idleMt) === true
+  && VR.canRediarizeMeeting(busyMt, mtRec) === false
+  && VR.canRediarizeMeeting(idleMt, mtRec) === true
+  && VR.canExportMeeting(busyMt) === false
+  && VR.canExportMeeting(idleMt) === true
+  && VR.canCreateNewRecord(busyMt) === false
+  && VR.canCreateNewRecord(idleMt) === true
+  && VR.canMeetingStart(busyMt) === false
+  && VR.canMeetingStart(idleMt) === true
+  && VR.canNewRecord({ state: "idle" }, busyMt) === false
+  && VR.canNewRecord({ state: "idle" }, idleMt) === true);
+
+check("voice-record.js wires disabled states for normalize, rediarize, new record, export group, and banner",
+  vrJsSrc.includes("normBtn.disabled = mtBusy")
+  && vrJsSrc.includes("rediarizeBtn.disabled = mtBusy")
+  && vrJsSrc.includes("newRecBtn.disabled = mtBusy")
+  && vrJsSrc.includes('expGroup.classList.toggle("is-disabled", mtBusy)')
+  && vrJsSrc.includes("btnBanner.disabled = mtBusy")
+  && vrJsSrc.includes("applySpkBtn.disabled = mtBusy"));
+
+check("console.css contains disabled styling for vr-act-btn, vr-btn-group, vr-btn-pin, and banner",
+  consoleCss.includes(".vr-mt-actions-bar .vr-act-btn:disabled")
+  && consoleCss.includes(".vr-btn-group.is-disabled")
+  && consoleCss.includes(".vr-btn-pin:disabled")
+  && consoleCss.includes(".vr-btn-rediarize-banner:disabled"));
+
+// 12. Background Queue Table Time Columns, Estimation, and Worker Log link
+check("fmtClockTime returns -- for empty or invalid values",
+  VR.fmtClockTime(null) === "--"
+  && VR.fmtClockTime(undefined) === "--"
+  && VR.fmtClockTime(0) === "--"
+  && VR.fmtClockTime("") === "--"
+  && VR.fmtClockTime("invalid-date") === "--");
+
+check("fmtClockTime formats valid ISO strings and timestamps into clock format",
+  /^\d{2}:\d{2}:\d{2}/.test(VR.fmtClockTime("2026-11-13T10:15:30+07:00"))
+  && /^\d{2}:\d{2}:\d{2}/.test(VR.fmtClockTime(1731512345)));
+
+const failedWithLogBadge = VR.buildStatusBadge({ id: "job123", status: "failed", has_log: true });
+check("buildStatusBadge includes Log link for failed jobs with log",
+  failedWithLogBadge.includes("vr-queue-log-link")
+  && failedWithLogBadge.includes("/voice-records/meeting/jobs/job123/log")
+  && failedWithLogBadge.includes("Log"));
+
+const failedNoLogBadge = VR.buildStatusBadge({ id: "job456", status: "failed", has_log: false });
+check("buildStatusBadge omits Log link when has_log is false",
+  !failedNoLogBadge.includes("vr-queue-log-link"));
+
+check("voice-record.js contains started, finished, and actual queue table headers in order",
+  vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_started")) + \'</th>')
+  && vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_finished")) + \'</th>')
+  && vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_actual")) + \'</th>')
+  && vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_estimated")) + \'</th>'));
+
+check("console.css contains styling for vr-queue-log-link and column classes",
+  consoleCss.includes(".vr-queue-log-link")
+  && consoleCss.includes(".vr-queue-col-started")
+  && consoleCss.includes(".vr-queue-col-finished")
+  && consoleCss.includes(".vr-queue-col-actual"));
+
 
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);

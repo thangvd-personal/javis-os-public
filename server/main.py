@@ -361,7 +361,7 @@ if (os.getenv("JAVIS_DEV_CORS", "") or "").strip().lower() in ("1", "true", "yes
 # 2026-11-05 audit: "/static" and "/health" had no trailing slash, the same trap as "/s" above. "/health" opened
 # /health/loop (stack traces, server paths, restart history) and would open any later /health* or /static* route.
 # The probe stays public as an exact path; the static mount keeps its prefix WITH the slash.
-_AUTH_PUBLIC_PREFIX = ("/static/", "/s/", "/hooks/")
+_AUTH_PUBLIC_PREFIX = ("/static/", "/s/", "/hooks/", "/voice-records/remote-diarize/")
 # /brand-logo: hiện trên màn đăng nhập (trước session). /tls-check: Caddy gọi (không đăng nhập được).
 _AUTH_PUBLIC_EXACT = ("/", "/favicon.ico", "/health", "/auth/status", "/auth/login", "/auth/setup",
                       # /robots.txt (2026-11-09): crawlers must read it with no session, see bot_shield.py.
@@ -457,7 +457,7 @@ async def _csrf_guard(request: Request, call_next):
     # lõi GỠ cookie khỏi request trước khi giao cho plugin ở những đường này - không có gì để
     # mượn. Chặn nhầm thì máy chủ bên ngoài (OpenAI đổi token, webhook) không gọi vào được.
     _dr = duong_dan_router(request)
-    if _dr in ("/voice-records/remote-diarize", "/voice-records/remote-diarize/ping"):
+    if _dr == "/voice-records/remote-diarize" or _dr.startswith("/voice-records/remote-diarize/"):
         return await call_next(request)
     if ((_dr.startswith("/ext/") or _dr.startswith("/.well-known/"))
             and plugins_host.http_khong_cookie(_dr, request.method)):
@@ -18858,6 +18858,7 @@ def voice_meeting_get_server_key():
 @app.post("/voice-records/meeting/remote-ping")
 async def voice_meeting_remote_ping(request: Request):
     """Test connection to remote speaker diarization server."""
+    import httpx
     try:
         body = await request.json()
     except Exception:
@@ -18950,18 +18951,7 @@ def voice_remote_diarize_ping(
     }
 
 
-@app.post("/voice-records/remote-diarize")
-async def voice_remote_diarize(
-    request: Request,
-    file: UploadFile = File(...),
-    num_speakers: int | None = Form(None),
-    min_speakers: int | None = Form(None),
-    max_speakers: int | None = Form(None),
-    device: str | None = Form(None),
-    x_speaker_diarization_key: str = Header("", alias="X-Speaker-Diarization-Key"),
-    authorization: str = Header("", alias="Authorization"),
-):
-    """Execute pyannote speaker diarization for remote client."""
+def _validate_remote_diarize_key(x_speaker_diarization_key: str, authorization: str) -> JSONResponse | None:
     import hmac
     cfg = cfgmod.read_settings()
     mc = meeting_stt.get_config(cfg)
@@ -18991,7 +18981,26 @@ async def voice_remote_diarize(
             {"ok": False, "error": localefmt.chu("speaker-diarization-key không chính xác.", "Invalid speaker-diarization-key.")},
             status_code=401,
         )
+    return None
 
+
+@app.post("/voice-records/remote-diarize")
+async def voice_remote_diarize(
+    request: Request,
+    file: UploadFile = File(...),
+    num_speakers: int | None = Form(None),
+    min_speakers: int | None = Form(None),
+    max_speakers: int | None = Form(None),
+    device: str | None = Form(None),
+    x_speaker_diarization_key: str = Header("", alias="X-Speaker-Diarization-Key"),
+    authorization: str = Header("", alias="Authorization"),
+):
+    """Receive audio from remote client, enqueue into background queue, return queue status."""
+    err_resp = _validate_remote_diarize_key(x_speaker_diarization_key, authorization)
+    if err_resp:
+        return err_resp
+
+    cfg = cfgmod.read_settings()
     tok, _ = meeting_stt.resolve_hf_token(cfg)
     if not tok:
         return JSONResponse(
@@ -19004,100 +19013,136 @@ async def voice_remote_diarize(
             status_code=503,
         )
 
-    py_exe, py_path = meeting_stt.resolve_worker_python(need_diarize=True)
+    py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=True)
     if not py_exe:
         return JSONResponse(
             {"ok": False, "error": localefmt.chu("Không tìm thấy Python worker cho pyannote trên máy chủ.", "Python worker for pyannote not found on server.")},
             status_code=503,
         )
 
-    with tempfile.TemporaryDirectory(prefix="javis-remote-diarize-") as tmpdir:
-        tmp_dir_path = Path(tmpdir)
-        raw_in = tmp_dir_path / f"input{Path(file.filename or 'audio.wav').suffix or '.wav'}"
-        content = await file.read()
-        raw_in.write_bytes(content)
+    client_ip = ""
+    xf = request.headers.get("x-forwarded-for") or ""
+    if xf:
+        client_ip = xf.split(",")[0].strip()
+    elif request.client and request.client.host:
+        client_ip = str(request.client.host).strip()
+    if not client_ip:
+        client_ip = "Client"
 
-        wav_16k = tmp_dir_path / "audio_16k.wav"
-        ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
-        cmd = [ffmpeg, "-y", "-i", str(raw_in), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wav_16k)]
+    store = voice_records.get_store()
+    job_id = uuid.uuid4().hex
+    orig_name = str(file.filename or "audio.wav").strip()
+    ext = meeting_jobs.sanitize_ext(orig_name or ".wav")
+    aud_dir = meeting_stt.audio_dir()
+    aud_dir.mkdir(parents=True, exist_ok=True)
+    dest_audio = aud_dir / f"remote_{job_id}{ext}"
+
+    with open(dest_audio, "wb") as out_f:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            out_f.write(chunk)
+
+    dur = meeting_jobs.probe_audio_duration_sec(dest_audio) or 0.0
+    mc = meeting_stt.get_config(cfg)
+    dev = str(device or mc["device"] or "auto").strip().lower()
+    est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="remote_diarize", device=dev)
+
+    now_dt = localefmt.now()
+    job = store.create_job(
+        brain="",
+        brain_path="",
+        title=orig_name,
+        upload_mode="raw_upload",
+        file_ext=ext,
+        device=dev,
+        num_speakers=_safe_int(num_speakers),
+        min_speakers=_safe_int(min_speakers),
+        max_speakers=_safe_int(max_speakers),
+        audio_path=str(dest_audio),
+        status="queued",
+        origin=client_ip,
+        job_type="remote_diarize",
+        duration_sec=dur,
+        estimated_sec=est_time,
+        created_at=now_dt.timestamp(),
+        created_iso=now_dt.isoformat(),
+    )
+
+    meeting_jobs.enqueue_remote_diarize_job(job["id"])
+    queue_pos = store.get_job_queue_position(job["id"])
+
+    return {
+        "ok": True,
+        "job_id": job["id"],
+        "status": "queued",
+        "queue_position": queue_pos,
+        "duration_sec": dur,
+        "estimated_sec": est_time,
+        "message": localefmt.chu(
+            f"Đã đưa vào hàng đợi xử lý (thứ tự: #{queue_pos})",
+            f"Queued for processing (position: #{queue_pos})",
+        ),
+    }
+
+
+@app.get("/voice-records/remote-diarize/jobs/{job_id}")
+def voice_remote_diarize_job_status(
+    job_id: str,
+    x_speaker_diarization_key: str = Header("", alias="X-Speaker-Diarization-Key"),
+    authorization: str = Header("", alias="Authorization"),
+):
+    """Check status or retrieve finished result of a background remote diarization job."""
+    err_resp = _validate_remote_diarize_key(x_speaker_diarization_key, authorization)
+    if err_resp:
+        return err_resp
+
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job or job.get("job_type") != "remote_diarize":
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy tác vụ", "Job not found")}, status_code=404)
+
+    status = str(job.get("status") or "")
+    if status == "done":
         try:
-            conv = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL, **winproc.kwargs_no_window()
-            )
-            await conv.wait()
+            res_dict = json.loads(job.get("result_json") or "{}")
         except Exception:
-            pass
-        target_wav = wav_16k if wav_16k.is_file() and wav_16k.stat().st_size > 44 else raw_in
-
-        job_json = tmp_dir_path / "diarize_job.json"
-        out_json = tmp_dir_path / "diarize_out.json"
-        worker_payload = {
-            "wav_path": str(target_wav),
-            "hf_token": tok,
-            "device": str(device or mc["device"] or "auto").strip().lower(),
-            "num_speakers": num_speakers,
-            "min_speakers": min_speakers,
-            "max_speakers": max_speakers,
-            "output_json": str(out_json),
-        }
-        job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
-
-        env = meeting_stt.worker_env(cfg, extra_pythonpath=py_path)
-        proc = await asyncio.create_subprocess_exec(
-            py_exe,
-            "-u",
-            str(meeting_stt.worker_script()),
-            "--diarize-only",
-            "--job",
-            str(job_json),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env=env,
-            cwd=str(meeting_stt.meeting_ear_root() if meeting_stt.meeting_ear_root().exists() else tmp_dir_path),
-            **winproc.kwargs_no_window(),
-        )
-
-        stdout_lines = []
-        try:
-            assert proc.stdout is not None
-            while True:
-                line = await proc.stdout.readline()
-                if not line:
-                    break
-                decoded = line.decode("utf-8", "replace").strip()
-                if decoded:
-                    stdout_lines.append(decoded)
-            await asyncio.wait_for(proc.wait(), timeout=600.0)
-        except TimeoutError:
-            await _terminate_proc(proc)
-            return JSONResponse({"ok": False, "error": "Remote diarization timed out after 10 minutes."}, status_code=504)
-
-        result_data: dict[str, Any] = {}
-        if out_json.is_file():
-            try:
-                result_data = json.loads(out_json.read_text(encoding="utf-8"))
-            except Exception:
-                pass
-
-        if not result_data and stdout_lines:
-            for line in reversed(stdout_lines):
-                try:
-                    parsed = json.loads(line)
-                    if isinstance(parsed, dict) and "turns" in parsed:
-                        result_data = parsed
-                        break
-                except Exception:
-                    pass
-
-        if proc.returncode != 0 or not result_data.get("ok"):
-            err = result_data.get("error") or (stdout_lines[-1] if stdout_lines else f"Diarize worker failed with code {proc.returncode}")
-            return JSONResponse({"ok": False, "error": str(err)[:400]}, status_code=500)
-
+            res_dict = {}
         return {
             "ok": True,
-            "turns": result_data.get("turns") or [],
-            "warnings": result_data.get("warnings") or [],
+            "job_id": job_id,
+            "status": "done",
+            "progress": 100,
+            "stage_detail": "Completed",
+            "turns": res_dict.get("turns") or [],
+            "warnings": res_dict.get("warnings") or [],
         }
+
+    if status == "failed":
+        return {
+            "ok": False,
+            "job_id": job_id,
+            "status": "failed",
+            "error": job.get("error") or "Remote diarization failed",
+        }
+
+    queue_pos = store.get_job_queue_position(job_id)
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "status": status,
+        "progress": int(job.get("progress") or 0),
+        "stage_detail": str(job.get("stage_detail") or ""),
+        "queue_position": queue_pos,
+        "estimated_sec": float(job.get("estimated_sec") or 0.0),
+    }
+
+
+@app.get("/voice-records/meeting/queue")
+def voice_meeting_queue(limit_recent: int = Query(10)):
+    """Return background processing queue summary for dashboard UI."""
+    return {"ok": True, **voice_records.get_store().get_queue_summary(limit_recent=limit_recent)}
 
 
 @app.get("/voice-records/meeting/jobs")
@@ -19222,6 +19267,38 @@ def voice_meeting_job_status(job_id: str):
         return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy phiên ghi âm", "Meeting job not found")}, status_code=404)
     rec = store.get(job["record_id"]) if job.get("record_id") else None
     return {"ok": True, "job": voice_records.public_job(job), "record": voice_records.public_record(rec)}
+
+
+@app.get("/voice-records/meeting/jobs/{job_id}/log")
+def voice_meeting_job_log(job_id: str):
+    """Retrieve full worker execution log for a meeting or remote diarization job."""
+    store = voice_records.get_store()
+    job = store.get_job(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy tác vụ", "Job not found")}, status_code=404)
+    log_path = str(job.get("log_path") or "").strip()
+    candidate = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{job_id}.log"
+    target_path: Path | None = None
+    if log_path and Path(log_path).is_file():
+        target_path = Path(log_path)
+    elif candidate.is_file():
+        target_path = candidate
+    if not target_path or not target_path.is_file():
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    "Không có tệp log hoặc tiến trình đã hoàn tất thành công (tệp log tự động xóa).",
+                    "Log file not found or process completed successfully (logs auto-deleted).",
+                ),
+            },
+            status_code=404,
+        )
+    try:
+        content = target_path.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 
 @app.post("/voice-records/normalize")
@@ -19495,6 +19572,8 @@ async def voice_record_rediarize(record_id: str, request: Request):
     brain = str(rec.get("brain") or "brain")
     broot = Path(_brain_root(brain)).resolve()
     now = localefmt.now()
+    dur = float(rec.get("duration_sec") or 0.0)
+    est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="meeting_transcribe")
     job = store.create_job(
         brain=brain,
         brain_path=brain_ident.canonical(str(broot)),
@@ -19513,6 +19592,8 @@ async def voice_record_rediarize(record_id: str, request: Request):
         record_id=record_id,
         status="queued",
         pinned=bool(rec.get("pinned")),
+        duration_sec=dur,
+        estimated_sec=est_time,
         created_at=now.timestamp(),
         created_iso=now.isoformat(),
     )

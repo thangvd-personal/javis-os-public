@@ -82,7 +82,17 @@ CREATE TABLE IF NOT EXISTS meeting_jobs (
     pinned          INTEGER NOT NULL DEFAULT 0,
     record_id       TEXT NOT NULL DEFAULT '',
     error           TEXT NOT NULL DEFAULT '',
-    warnings_json   TEXT NOT NULL DEFAULT '[]'
+    warnings_json   TEXT NOT NULL DEFAULT '[]',
+    origin          TEXT NOT NULL DEFAULT 'local',
+    job_type        TEXT NOT NULL DEFAULT 'meeting',
+    estimated_sec   REAL NOT NULL DEFAULT 0,
+    result_json     TEXT NOT NULL DEFAULT '{}',
+    started_at      REAL NOT NULL DEFAULT 0,
+    started_iso     TEXT NOT NULL DEFAULT '',
+    finished_at     REAL NOT NULL DEFAULT 0,
+    finished_iso    TEXT NOT NULL DEFAULT '',
+    elapsed_sec     REAL NOT NULL DEFAULT 0,
+    log_path        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_mj_created ON meeting_jobs(created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_mj_brain_created ON meeting_jobs(brain_path, created_at DESC);
@@ -104,6 +114,16 @@ _VR_EXTRA_COLS = (
 
 _MJ_EXTRA_COLS = (
     ("log_tail", "TEXT NOT NULL DEFAULT ''"),
+    ("origin", "TEXT NOT NULL DEFAULT 'local'"),
+    ("job_type", "TEXT NOT NULL DEFAULT 'meeting'"),
+    ("estimated_sec", "REAL NOT NULL DEFAULT 0"),
+    ("result_json", "TEXT NOT NULL DEFAULT '{}'"),
+    ("started_at", "REAL NOT NULL DEFAULT 0"),
+    ("started_iso", "TEXT NOT NULL DEFAULT ''"),
+    ("finished_at", "REAL NOT NULL DEFAULT 0"),
+    ("finished_iso", "TEXT NOT NULL DEFAULT ''"),
+    ("elapsed_sec", "REAL NOT NULL DEFAULT 0"),
+    ("log_path", "TEXT NOT NULL DEFAULT ''"),
 )
 
 
@@ -378,6 +398,71 @@ def public_job(job: dict[str, Any] | None) -> dict[str, Any] | None:
     out = dict(job)
     ap = str(out.pop("audio_path", "") or "")
     out["has_audio"] = bool(ap and Path(ap).is_file())
+    if "result_json" in out:
+        rj = out.pop("result_json")
+        out["result"] = _loads(rj, {})
+
+    # Compute started / finished fallbacks for legacy or interrupted rows
+    st_at = float(out.get("started_at") or 0.0)
+    st_iso = str(out.get("started_iso") or "").strip()
+    fn_at = float(out.get("finished_at") or 0.0)
+    fn_iso = str(out.get("finished_iso") or "").strip()
+    status = str(out.get("status") or "")
+    created_at = float(out.get("created_at") or 0.0)
+    created_iso = str(out.get("created_iso") or "")
+    updated_at = float(out.get("updated_at") or 0.0)
+
+    if st_at <= 0 and status in ("converting", "transcribing", "diarizing", "merging", "processing", "done", "failed"):
+        st_at = created_at
+        st_iso = created_iso
+        out["started_at"] = st_at
+        out["started_iso"] = st_iso
+
+    if fn_at <= 0 and status in ("done", "failed"):
+        fn_at = updated_at or created_at
+        if fn_at > 0:
+            out["finished_at"] = fn_at
+            try:
+                out["finished_iso"] = datetime.fromtimestamp(fn_at).astimezone().isoformat()
+            except Exception:
+                out["finished_iso"] = ""
+
+    # Compute elapsed_sec
+    elapsed = float(out.get("elapsed_sec") or 0.0)
+    if elapsed <= 0:
+        if fn_at > 0 and st_at > 0 and fn_at >= st_at:
+            elapsed = max(0.0, round(fn_at - st_at, 1))
+        elif st_at > 0 and status in ("converting", "transcribing", "diarizing", "merging", "processing"):
+            elapsed = max(0.0, round(time.time() - st_at, 1))
+    out["elapsed_sec"] = elapsed
+
+    dur = float(out.get("duration_sec") or 0.0)
+    est = float(out.get("estimated_sec") or 0.0)
+    if dur > 0 and (est <= 0 or est < dur):
+        # Recalculate realistic estimate for legacy rows
+        try:
+            import meeting_jobs
+            out["estimated_sec"] = meeting_jobs.estimate_processing_time_sec(dur, job_type=str(out.get("job_type") or "meeting"))
+        except Exception:
+            pass
+
+    lp = str(out.get("log_path") or "").strip()
+    if lp and Path(lp).is_file():
+        out["has_log"] = True
+    else:
+        jid = str(out.get("id") or "")
+        if jid:
+            try:
+                candidate = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{jid}.log"
+                if candidate.is_file():
+                    out["has_log"] = True
+                    out["log_path"] = str(candidate)
+                else:
+                    out["has_log"] = False
+            except Exception:
+                out["has_log"] = False
+        else:
+            out["has_log"] = False
     return out
 
 
@@ -414,6 +499,16 @@ def _job_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "error": row["error"],
         "warnings": _loads(row["warnings_json"], []),
         "log_tail": row["log_tail"] if "log_tail" in keys else "",
+        "origin": row["origin"] if "origin" in keys else "local",
+        "job_type": row["job_type"] if "job_type" in keys else "meeting",
+        "estimated_sec": float(row["estimated_sec"]) if "estimated_sec" in keys else 0.0,
+        "result_json": row["result_json"] if "result_json" in keys else "{}",
+        "started_at": float(row["started_at"]) if "started_at" in keys else 0.0,
+        "started_iso": row["started_iso"] if "started_iso" in keys else "",
+        "finished_at": float(row["finished_at"]) if "finished_at" in keys else 0.0,
+        "finished_iso": row["finished_iso"] if "finished_iso" in keys else "",
+        "elapsed_sec": float(row["elapsed_sec"]) if "elapsed_sec" in keys else 0.0,
+        "log_path": row["log_path"] if "log_path" in keys else "",
     }
 
 
@@ -705,6 +800,16 @@ class VoiceRecordStore:
         pinned: bool = False,
         created_at: float | None = None,
         created_iso: str = "",
+        origin: str = "local",
+        job_type: str = "meeting",
+        duration_sec: float = 0.0,
+        estimated_sec: float = 0.0,
+        started_at: float = 0.0,
+        started_iso: str = "",
+        finished_at: float = 0.0,
+        finished_iso: str = "",
+        elapsed_sec: float = 0.0,
+        log_path: str = "",
     ) -> dict[str, Any]:
         jid = uuid.uuid4().hex
         now_ts = float(created_at if created_at is not None else time.time())
@@ -713,8 +818,9 @@ class VoiceRecordStore:
                 "INSERT INTO meeting_jobs "
                 "(id, created_at, created_iso, updated_at, brain, brain_path, title, status, progress, "
                 "stage_detail, upload_mode, file_ext, model, device, language, diarize, "
-                "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks, audio_path, record_id, pinned) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
+                "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks, audio_path, record_id, pinned, "
+                "origin, job_type, duration_sec, estimated_sec, started_at, started_iso, finished_at, finished_iso, elapsed_sec, log_path) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     jid,
                     now_ts,
@@ -737,6 +843,16 @@ class VoiceRecordStore:
                     str(audio_path or ""),
                     str(record_id or ""),
                     1 if pinned else 0,
+                    str(origin or "local"),
+                    str(job_type or "meeting"),
+                    float(duration_sec or 0.0),
+                    float(estimated_sec or 0.0),
+                    float(started_at or 0.0),
+                    str(started_iso or ""),
+                    float(finished_at or 0.0),
+                    str(finished_iso or ""),
+                    float(elapsed_sec or 0.0),
+                    str(log_path or ""),
                 ),
             )
             self._db.commit()
@@ -753,6 +869,9 @@ class VoiceRecordStore:
             "status", "progress", "stage_detail", "upload_mode", "file_ext",
             "total_chunks", "received_chunks", "audio_path", "duration_sec",
             "pinned", "record_id", "error", "warnings_json", "log_tail",
+            "origin", "job_type", "estimated_sec", "result_json",
+            "started_at", "started_iso", "finished_at", "finished_iso",
+            "elapsed_sec", "log_path",
         }
         sets: list[str] = ["updated_at=?"]
         vals: list[Any] = [time.time()]
@@ -775,14 +894,66 @@ class VoiceRecordStore:
 
     def fail_stuck_jobs(self, reason: str = "Server restarted before job completed") -> int:
         now_ts = time.time()
+        now_iso = datetime.fromtimestamp(now_ts).astimezone().isoformat()
         with self._lock:
             cur = self._db.execute(
-                "UPDATE meeting_jobs SET status='failed', error=?, updated_at=? "
+                "UPDATE meeting_jobs SET status='failed', error=?, updated_at=?, "
+                "finished_at=COALESCE(NULLIF(finished_at, 0), ?), "
+                "finished_iso=COALESCE(NULLIF(finished_iso, ''), ?) "
                 "WHERE status IN ('queued', 'converting', 'transcribing', 'diarizing', 'merging', 'processing')",
-                (str(reason), now_ts),
+                (str(reason), now_ts, now_ts, now_iso),
             )
             self._db.commit()
             return cur.rowcount or 0
+
+    def get_queue_summary(self, limit_recent: int = 10) -> dict[str, Any]:
+        """Return active running jobs, queued waiting jobs (with position), and recent completed/failed jobs."""
+        with self._lock:
+            active_rows = self._db.execute(
+                "SELECT * FROM meeting_jobs "
+                "WHERE status IN ('converting', 'transcribing', 'diarizing', 'merging', 'processing') "
+                "ORDER BY created_at ASC"
+            ).fetchall()
+            queued_rows = self._db.execute(
+                "SELECT * FROM meeting_jobs WHERE status = 'queued' ORDER BY created_at ASC"
+            ).fetchall()
+            recent_rows = self._db.execute(
+                "SELECT * FROM meeting_jobs WHERE status IN ('done', 'failed') ORDER BY updated_at DESC LIMIT ?",
+                (max(1, min(int(limit_recent or 10), 50)),),
+            ).fetchall()
+
+        active = [_job_to_dict(r) for r in active_rows if r]
+        queued = []
+        for idx, r in enumerate(queued_rows, start=1):
+            j = _job_to_dict(r)
+            if j:
+                j["queue_position"] = idx
+                queued.append(j)
+        recent = [_job_to_dict(r) for r in recent_rows if r]
+        return {
+            "active": [public_job(j) for j in active if j],
+            "queued": [public_job(j) for j in queued if j],
+            "recent": [public_job(j) for j in recent if j],
+            "total_pending": len(active) + len(queued),
+        }
+
+    def get_job_queue_position(self, job_id: str) -> int:
+        """Return 0 if active/running, 1..N if queued in line, or -1 if completed/failed/missing."""
+        with self._lock:
+            target = self._db.execute("SELECT status, created_at FROM meeting_jobs WHERE id=?", (job_id,)).fetchone()
+            if not target:
+                return -1
+            st = str(target["status"] or "")
+            if st in ("converting", "transcribing", "diarizing", "merging", "processing"):
+                return 0
+            if st != "queued":
+                return -1
+            created = float(target["created_at"])
+            row = self._db.execute(
+                "SELECT COUNT(*) AS cnt FROM meeting_jobs WHERE status='queued' AND created_at <= ?",
+                (created,),
+            ).fetchone()
+            return int(row["cnt"]) if row else 1
 
     def list_jobs_for_brain(
         self,

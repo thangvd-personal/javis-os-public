@@ -4656,15 +4656,15 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 .vr-fallback-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .vr-btn-rediarize-banner { font-size: 12px; padding: 4px 10px; background: var(--surface-1); border: 1px solid var(--accent-line, var(--border)); color: var(--accent-ink, var(--text)); border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .vr-btn-rediarize-banner:hover:not(:disabled) { background: var(--accent-wash); border-color: var(--accent); }
-.vr-btn-rediarize-banner:disabled { opacity: .6; cursor: not-allowed; }
+.vr-btn-rediarize-banner:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
 .vr-closed-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: 10px; font-size: 13.5px; color: var(--text2); }
 .vr-edit { display: flex; position: relative; min-height: 460px; }
 .vr-edit > .note-editor:not(.ne-full) { position: static; inset: auto; z-index: auto; flex: 1 1 auto; min-height: 460px; max-height: 72vh; border: 1px solid var(--hairline, var(--border)); border-radius: 12px; overflow: hidden; }
 .vr-history-card { position: sticky; top: 12px; }
 .vr-hist-count { font-size: 12px; color: var(--text3); }
-.vr-hist-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; }
+.vr-hist-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow-y: auto; overflow-x: hidden; }
 .vr-hist-empty { font-size: 13px; color: var(--text3); padding: 10px 2px; }
-.vr-hist-item { width: 100%; text-align: left; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: border-color .15s, background .15s; }
+.vr-hist-item { width: 100%; box-sizing: border-box; text-align: left; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-1); color: var(--text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: border-color .15s, background .15s; overflow: hidden; }
 .vr-hist-item:hover { border-color: var(--accent-line, var(--accent)); background: var(--surface-2); }
 .vr-hist-item.active { background: var(--accent-wash); border-color: var(--accent-line, var(--accent)); }
 .vr-hist-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; }
@@ -4802,6 +4802,11 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.vr-mt-actions-bar .vr-act-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .vr-btn-group {
   display: flex;
   align-items: stretch;
@@ -4812,6 +4817,17 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
   background: var(--surface-1);
   overflow: hidden;
   box-sizing: border-box;
+}
+.vr-btn-group.is-disabled {
+  opacity: .45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+.vr-btn-group.is-disabled .vr-btn-group-item,
+.vr-btn-group-item.is-disabled {
+  opacity: .45;
+  pointer-events: none;
+  cursor: not-allowed;
 }
 .vr-btn-group-item {
   flex: 1 1 0;
@@ -4855,6 +4871,8 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 }
 .vr-hist-badge { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--accent-wash); color: var(--accent-ink, var(--accent)); flex: none; }
 .vr-btn-pin.is-pinned { background: var(--accent-wash); border-color: var(--accent-line, var(--accent)); color: var(--accent-ink, var(--text)); }
+.vr-btn-pin:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+.vr-hist-list.is-busy .vr-hist-item { opacity: .7; cursor: not-allowed; }
 @media (max-width: 900px) {
   .vr-mt-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .vr-mt-actions-bar, .vr-mt-actions-bar.has-3-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -4879,6 +4897,166 @@ button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var
 .vr-remote-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .vr-remote-input-row { display: flex; align-items: center; gap: 8px; }
 .vr-remote-input-row .vr-input { flex: 1 1 auto; height: 38px; min-height: 38px; box-sizing: border-box; }
+
+/* Background Task Queue Monitor styles */
+.vr-queue-wrap {
+  width: 100%;
+}
+.vr-queue-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: var(--surface-1);
+  border: 1px dashed var(--border);
+  color: var(--text-sub);
+  font-size: 13px;
+}
+.vr-queue-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.vr-queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  text-align: left;
+}
+.vr-queue-table thead {
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid var(--border);
+}
+.vr-queue-table th {
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+.vr-queue-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+.vr-queue-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.vr-queue-table.is-recent td {
+  opacity: 0.85;
+}
+.vr-queue-file-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vr-queue-type-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--primary);
+}
+.vr-queue-file-title {
+  font-weight: 500;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vr-queue-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+.vr-origin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.vr-origin-badge.is-local {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.vr-origin-badge.is-client {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+.vr-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.vr-status-badge.is-queued {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.vr-status-badge.is-running {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+  border: 1px solid rgba(14, 165, 233, 0.25);
+}
+.vr-status-badge.is-done {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.vr-status-badge.is-failed {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.vr-queue-stage-sub {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+.vr-queue-col-started,
+.vr-queue-col-finished,
+.vr-queue-col-actual,
+.vr-queue-col-est {
+  white-space: nowrap;
+}
+.vr-queue-log-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.vr-queue-log-link:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #b91c1c;
+  text-decoration: none;
+}
+.vr-spin {
+  animation: vr-spin 1s linear infinite;
+}
+@keyframes vr-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 
 
 
