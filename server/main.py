@@ -19467,6 +19467,23 @@ async def voice_record_map_speakers(record_id: str, request: Request):
     return {"ok": True, "record": voice_records.public_record(updated)}
 
 
+_MEETING_NORM_PROGRESS: dict[str, dict] = {}
+
+
+@app.get("/voice-records/{record_id}/normalize-progress")
+def voice_record_normalize_progress(record_id: str):
+    """Tra ve tien trinh chuan hoa theo thoi gian thuc gom % va buoc dang thuc hien."""
+    now_ts = time.time()
+    if len(_MEETING_NORM_PROGRESS) > 100:
+        stale_keys = [k for k, v in _MEETING_NORM_PROGRESS.items() if now_ts - v.get("updated_at", 0) > 600]
+        for k in stale_keys:
+            _MEETING_NORM_PROGRESS.pop(k, None)
+    prog = _MEETING_NORM_PROGRESS.get(record_id)
+    if not prog:
+        return {"ok": True, "active": False, "progress": 0, "pct": 0, "label": "", "stage": "idle"}
+    return {"ok": True, **prog}
+
+
 @app.post("/voice-records/{record_id}/normalize")
 async def voice_record_normalize_existing(record_id: str, request: Request):
     store = voice_records.get_store()
@@ -19484,11 +19501,28 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
+    def _on_norm_progress(pct: int, label: str, stage: str = "") -> None:
+        _MEETING_NORM_PROGRESS[record_id] = {
+            "pct": int(pct),
+            "progress": int(pct),
+            "label": str(label or ""),
+            "stage": str(stage or ""),
+            "active": pct < 100,
+            "updated_at": time.time(),
+        }
+
+    _on_norm_progress(2, "Bắt đầu chuẩn hóa...", "init")
+
     segments = rec.get("segments") or []
     if rec.get("mode") == "meeting" and segments:
         smap = rec.get("speaker_map") or {}
         t_norm_start = time.time()
-        res = await transcript_fix.normalize_meeting_segments(cfg, segments, speaker_map=smap)
+        try:
+            res = await transcript_fix.normalize_meeting_segments(
+                cfg, segments, speaker_map=smap, progress_callback=_on_norm_progress
+            )
+        finally:
+            _on_norm_progress(100, "Hoàn tất chuẩn hóa (100%)", "done")
         norm_elapsed = time.time() - t_norm_start
         norm_segs = res.get("segments") or []
         rendered = voice_records.render_meeting_markdown(
@@ -19785,6 +19819,7 @@ def voice_record_review_queue(record_id: str):
         reason_val = str(item.get("flag_reason") or item.get("drift_reason") or "")
         item["flag_reason"] = reason_val
         item["drift_reason"] = reason_val
+        item["suggested_hotword"] = str(item.get("suggested_hotword") or "")
 
         curr_ns = ns_map.get(idx_val)
         if curr_ns:

@@ -214,15 +214,16 @@ def effective_segments(
     for i, seg in enumerate(base):
         if not isinstance(seg, dict):
             continue
-        if i in dropped_indices:
+        seg_idx = int(seg.get("idx", i))
+        if seg_idx in dropped_indices:
             continue
         sid = str(seg.get("speaker") or "").strip()
         disp = resolve_speaker_name(sid, speaker_map)
-        txt = norm_by_idx.get(i) or str(seg.get("text") or "").strip()
+        txt = norm_by_idx.get(seg_idx) or str(seg.get("text") or "").strip()
         if not txt:
             continue
         out.append({
-            "idx": i,
+            "idx": seg_idx,
             "start": float(seg.get("start", 0.0)),
             "end": float(seg.get("end", 0.0)),
             "speaker_id": sid,
@@ -270,7 +271,7 @@ def render_meeting_markdown(
 ) -> str:
     """Render VoiceRecord Markdown with YAML frontmatter and `[MM:SS - Speaker] text` turns."""
     eff = effective_segments(segments, speaker_map, normalized_segments=normalized_segments)
-    spk_summary = summarize_speakers(segments, speaker_map)
+    spk_summary = summarize_speakers(eff, speaker_map)
     has_hours = float(duration_sec or 0) >= 3600 or any(float(s.get("start", 0)) >= 3600 for s in eff)
     diarized = bool(spk_summary)
 

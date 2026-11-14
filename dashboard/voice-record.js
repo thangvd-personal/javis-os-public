@@ -994,9 +994,9 @@
 
     var progBox = $("vrMtProgress");
     if (progBox) {
-      var showProg = mt.uploading || activeJobRunning || (job && job.status === "failed");
+      var showProg = mt.uploading || mt.normalizing || activeJobRunning || (job && job.status === "failed");
       progBox.hidden = !showProg;
-      if (showProg) {
+      if (showProg && !mt.normalizing) {
         var pct = mt.uploading
           ? (mt.uploadTotal ? Math.round((mt.uploadDone / mt.uploadTotal) * 100) : 5)
           : Math.max(0, Math.min(100, Number((job && job.progress) || 0)));
@@ -1174,6 +1174,10 @@
         normBtn.disabled = mtBusy;
         normBtn.innerHTML = ico(S.mt.normalizing ? "loader" : "sparkles", { cls: S.mt.normalizing ? "spin" : "" }) +
           " <span>" + esc(S.mt.normalizing ? tw("vr.btn.normalizing") : tw("vr.btn.normalize")) + "</span>";
+      }
+      var normBox = $("vrMtNormProgress");
+      if (normBox && !S.mt.normalizing) {
+        normBox.hidden = true;
       }
       var newRecBtn = $("vrMtBtnNewRec");
       if (newRecBtn) {
@@ -2539,13 +2543,67 @@
     }
   }
 
+  function updateNormProgressUi(pct, label) {
+    var pVal = Math.max(0, Math.min(100, Math.round(Number(pct || 0))));
+    var pText = pVal + "%";
+    var lText = String(label || "").trim();
+
+    var normBox = $("vrMtNormProgress");
+    var normLab = $("vrMtNormProgLabel");
+    var normPct = $("vrMtNormProgPct");
+    var normFill = $("vrMtNormProgFill");
+    if (normBox) normBox.hidden = false;
+    if (normLab && lText) normLab.textContent = lText;
+    if (normPct) normPct.textContent = pText;
+    if (normFill) normFill.style.width = pText;
+
+    var mtBox = $("vrMtProgress");
+    var mtLab = $("vrMtProgLabel");
+    var mtPct = $("vrMtProgPct");
+    var mtFill = $("vrMtProgFill");
+    if (S.mt.normalizing && mtBox) {
+      mtBox.hidden = false;
+      if (mtLab && lText) mtLab.textContent = lText;
+      if (mtPct) mtPct.textContent = pText;
+      if (mtFill) mtFill.style.width = pText;
+    }
+  }
+
+  function hideNormProgressUi() {
+    var normBox = $("vrMtNormProgress");
+    if (normBox) normBox.hidden = true;
+    var normFill = $("vrMtNormProgFill");
+    if (normFill) normFill.style.width = "0%";
+    var mtBox = $("vrMtProgress");
+    if (mtBox && !S.mt.uploading && !S.mt.activeJob) mtBox.hidden = true;
+  }
+
   async function normalizeMeetingRecord() {
     var rec = S.activeRecord;
     if (!rec || S.mt.normalizing || isMeetingBusy(S.mt)) return;
     S.mt.normalizing = true;
     S.mt.errorMsg = "";
     S.infoNote = "";
+    updateNormProgressUi(5, "Pass 1: Bắt đầu phân tích bối cảnh & thuật ngữ (5%)...");
     syncUi();
+
+    var normProgTimer = setInterval(async function () {
+      if (!S.mounted || !S.mt.normalizing) return;
+      try {
+        var pr = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/normalize-progress", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        var pd = await pr.json().catch(function () { return {}; });
+        if (pd && pd.ok && S.mt.normalizing) {
+          var pVal = pd.progress != null ? pd.progress : pd.pct;
+          if (pVal != null && pd.label) {
+            updateNormProgressUi(pVal, pd.label);
+          }
+        }
+      } catch (e) {}
+    }, 400);
+
     try {
       var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/normalize", {
         method: "POST",
@@ -2554,29 +2612,39 @@
         body: JSON.stringify({ title: S.mt.title || "" }),
       });
       var d = await r.json().catch(function () { return {}; });
+      clearInterval(normProgTimer);
       if (!S.mounted) return;
-      S.mt.normalizing = false;
       if (r.ok && d && d.ok && d.record) {
-        if (!d.ai) S.infoNote = tw("vr.audit.fallback_note");
-        S.activeRecord = d.record;
-        S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
-        S.mt.resTab = "main";
-        S.mt.sourceTexts = null;
-        if (Array.isArray(d.review_queue)) {
-          S.mt.reviewQueue = d.review_queue;
-          S.mt.reviewQueueRecordId = d.record.id;
-        } else {
-          S.mt.reviewQueue = [];
-          S.mt.reviewQueueRecordId = "";
-        }
-        openRecordInEditor(d.record, { switchTab: false });
+        updateNormProgressUi(100, "Hoàn tất chuẩn hóa (100%)");
+        setTimeout(function () {
+          if (!S.mounted) return;
+          S.mt.normalizing = false;
+          hideNormProgressUi();
+          if (!d.ai) S.infoNote = tw("vr.audit.fallback_note");
+          S.activeRecord = d.record;
+          S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
+          S.mt.resTab = "main";
+          S.mt.sourceTexts = null;
+          if (Array.isArray(d.review_queue)) {
+            S.mt.reviewQueue = d.review_queue;
+            S.mt.reviewQueueRecordId = d.record.id;
+          } else {
+            S.mt.reviewQueue = [];
+            S.mt.reviewQueueRecordId = "";
+          }
+          openRecordInEditor(d.record, { switchTab: false });
+        }, 500);
       } else {
+        S.mt.normalizing = false;
+        hideNormProgressUi();
         S.mt.errorMsg = (d && d.error) || tw("vr.err.normalize");
         syncUi();
       }
     } catch (e) {
+      clearInterval(normProgTimer);
       if (S.mounted) {
         S.mt.normalizing = false;
+        hideNormProgressUi();
         S.mt.errorMsg = (e && e.message) || tw("vr.err.normalize");
         syncUi();
       }
@@ -3092,6 +3160,13 @@
       '<a class="vr-btn-group-item" id="vrMtExp_json" download title="' + esc(tw("vr.meeting.export_label")) + ' JSON">JSON</a>' +
       "</div>" +
       "</div>" +
+      '<div class="vr-mt-progress" id="vrMtNormProgress" hidden style="margin-bottom:12px">' +
+      '<div class="vr-mt-prog-top">' +
+      '<span id="vrMtNormProgLabel"></span>' +
+      '<span id="vrMtNormProgPct">0%</span>' +
+      "</div>" +
+      '<div class="vr-mt-prog-track"><div class="vr-mt-prog-fill" id="vrMtNormProgFill" style="width:0%"></div></div>' +
+      "</div>" +
       '<div class="vr-res-tabs-bar" id="vrResTabsBar" hidden>' +
       '<div class="vr-res-tabs" role="tablist">' +
       '<button type="button" class="vr-res-tab active" id="vrResTabMain" data-res-tab="main" role="tab">' + ico("file-text") + " <span>" + esc(tw("vr.res.tab_main")) + "</span></button>" +
@@ -3474,12 +3549,10 @@
           });
           var defWord = "";
           if (item) {
-            if (Array.isArray(item.suspicious_words) && item.suspicious_words.length > 0) {
-              defWord = item.suspicious_words.join(", ");
-            } else {
-              var rawStr = item.raw_text || item.raw || "";
-              var words = rawStr.trim().split(/\s+/);
-              if (words.length > 0 && words.length <= 4) defWord = rawStr.trim();
+            if (item.suggested_hotword) {
+              defWord = item.suggested_hotword;
+            } else if (item.glossary_term) {
+              defWord = item.glossary_term;
             }
           }
           var hw = prompt(tw("vr.res.prompt_add_hotword") || "Nhập từ khóa:", defWord);

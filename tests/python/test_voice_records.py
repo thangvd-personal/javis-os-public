@@ -544,6 +544,82 @@ check("store.create_job stores vad_filter True", vad_job.get("vad_filter") is Tr
 pub_vad = voice_records.public_job(store.get_job(vad_job["id"]))
 check("voice_records.public_job exposes vad_filter", pub_vad.get("vad_filter") is True)
 
+# 14. Test Normalization Progress Endpoint and Callback
+r_prog_idle = client.get("/voice-records/dummy_rec_id_idle/normalize-progress")
+check("GET /voice-records/{id}/normalize-progress returns idle when no active job",
+      r_prog_idle.status_code == 200 and r_prog_idle.json().get("active") is False)
+
+main._MEETING_NORM_PROGRESS["test_rec_prog"] = {
+    "pct": 65,
+    "progress": 65,
+    "label": "Pass 2: Đang chuẩn hóa lượt nói (65%)",
+    "stage": "pass2_batch",
+    "active": True,
+    "updated_at": 1700000000.0,
+}
+r_prog_act = client.get("/voice-records/test_rec_prog/normalize-progress")
+check("GET /voice-records/{id}/normalize-progress returns active progress",
+      r_prog_act.status_code == 200 and r_prog_act.json().get("progress") == 65 and r_prog_act.json().get("active") is True)
+main._MEETING_NORM_PROGRESS.pop("test_rec_prog", None)
+
+# Test progress_callback in normalize_meeting_segments
+_t_orig_ask = transcript_fix._ASK
+transcript_fix._ASK = None
+prog_events = []
+def _on_test_prog(pct, label, stage=""):
+    prog_events.append((pct, stage))
+
+asyncio.run(transcript_fix.normalize_meeting_segments(
+    {"model": {}},
+    [{"start": 0.0, "end": 2.0, "text": "Đoạn 1", "speaker": "SPEAKER_00"}],
+    speaker_map={},
+    progress_callback=_on_test_prog,
+))
+transcript_fix._ASK = _t_orig_ask
+check("normalize_meeting_segments invokes progress_callback through 100%",
+      len(prog_events) > 0 and prog_events[-1][0] == 100)
+
+# 15. Test Semantic Drift Detection for Glossary and Speakers
+flagged_glo, _, _, reason_glo, hw_glo = transcript_fix._detect_semantic_drift(
+    "chúng tôi giao hàng bóng gói cẩn thận",
+    "chúng tôi giao hàng bóc gói cẩn thận",
+    glossary=["bóng gói"],
+)
+check("_detect_semantic_drift flags changed glossary term even if Jaccard high",
+      flagged_glo is True and "glossary" in reason_glo and hw_glo == "bóng gói")
+
+flagged_spk, _, _, reason_spk, _ = transcript_fix._detect_semantic_drift(
+    "anh Thắng báo cáo kết quả dự án",
+    "anh Dũng báo cáo kết quả dự án",
+    speaker_names=["Thắng", "Dũng"],
+)
+check("_detect_semantic_drift flags missing/added speaker name",
+      flagged_spk is True and "người nói" in reason_spk)
+
+# 16. Test effective_segments with non-sequential idx and summarize_speakers on eff
+segs_nonseq = [
+    {"idx": 101, "start": 0.0, "end": 5.0, "text": "Chào anh", "speaker": "SPK_0"},
+    {"idx": 202, "start": 5.0, "end": 10.0, "text": "Dạ em đây", "speaker": "SPK_1"},
+]
+eff_dropped = voice_records.effective_segments(
+    segs_nonseq,
+    speaker_map={"SPK_0": "Thắng", "SPK_1": "Hải"},
+    normalized_segments=[{"idx": 101, "dropped": True}],
+)
+check("effective_segments correctly drops segment by its non-sequential idx",
+      len(eff_dropped) == 1 and eff_dropped[0]["idx"] == 202)
+
+md_rendered = voice_records.render_meeting_markdown(
+    created_iso="2026-11-14T15:00:00+07:00",
+    duration_sec=10.0,
+    model_used="test",
+    segments=segs_nonseq,
+    speaker_map={"SPK_0": "Thắng", "SPK_1": "Hải"},
+    normalized_segments=[{"idx": 101, "dropped": True}],
+)
+check("render_meeting_markdown does not count dropped speaker in frontmatter",
+      "Thắng" not in md_rendered.split("---")[1] if "---" in md_rendered else True)
+
 # Restore
 main.cfgmod.gate_active = _orig_gate
 main._brain_root = _orig_brain_root
