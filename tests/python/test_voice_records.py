@@ -2,6 +2,7 @@
 
     python tests/run.py voice_records
 """
+import json
 import os
 import re
 import sqlite3
@@ -358,6 +359,190 @@ check("worker._ensure_16k_mono_wav preserves existing 16k mono wav without re-en
 w_tensor, w_sr, w_lerr = worker._load_audio_waveform(str(test_worker_wav))
 check("worker._load_audio_waveform loads (1, N) float32 tensor or reports missing torch",
       (w_lerr == "torch_not_installed") or (not w_lerr and w_tensor is not None and w_tensor.shape == (1, 1600) and w_sr == 16000))
+
+# 10. Test Meeting Log Directory Structure, Artifacts, and Debug Timing Endpoint
+ts_dir = test_logs_dir / "2026.11.14-09.00.00"
+ts_dir.mkdir(parents=True, exist_ok=True)
+exec_log = ts_dir / "execution.log"
+exec_log.write_text("Worker execution line 1\nWorker execution line 2\n", encoding="utf-8")
+
+whisper_json = ts_dir / "whisper_output.json"
+whisper_json.write_text(json.dumps({"segments": [{"start": 0.0, "end": 2.5, "text": "Xin chào"}], "language": "vi"}), encoding="utf-8")
+
+diar_json = ts_dir / "diarization_output.json"
+diar_json.write_text(json.dumps({"segments": [{"start": 0.0, "end": 2.5, "speaker": "SPEAKER_00"}], "speakers": ["SPEAKER_00"]}), encoding="utf-8")
+
+timing_json = ts_dir / "debug_timing.json"
+timing_json.write_text(json.dumps({"whisper_transcription_sec": 1.25, "diarization_sec": 0.85, "whisper_rtf": 0.5}), encoding="utf-8")
+
+art_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Artifact Job",
+    status="done",
+    duration_sec=2.5,
+    log_path=str(exec_log),
+)
+
+check("store.get_job_by_record returns None when empty", store.get_job_by_record("") is None)
+store.update_job(art_job["id"], record_id="dummy_rec_123")
+check("store.get_job_by_record retrieves job by record_id", store.get_job_by_record("dummy_rec_123")["id"] == art_job["id"])
+
+# Query default log
+r_art_def = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log")
+check("GET job log default returns execution.log content", r_art_def.status_code == 200 and "Worker execution line 1" in r_art_def.text)
+
+# Query file=list
+r_art_list = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log?file=list")
+check("GET job log?file=list returns list of files", r_art_list.status_code == 200 and r_art_list.json().get("ok") is True)
+file_names = [f["name"] for f in r_art_list.json().get("files", [])]
+check("file list contains execution.log, whisper_output.json, diarization_output.json, debug_timing.json",
+      "execution.log" in file_names and "whisper_output.json" in file_names and "debug_timing.json" in file_names)
+
+# Query file=whisper_output.json
+r_art_w = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log?file=whisper_output.json")
+check("GET job log?file=whisper_output.json returns JSON response", r_art_w.status_code == 200 and r_art_w.json().get("language") == "vi")
+
+# Query file=debug_timing.json
+r_art_t = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log?file=debug_timing.json")
+check("GET job log?file=debug_timing.json returns timing JSON", r_art_t.status_code == 200 and r_art_t.json().get("whisper_transcription_sec") == 1.25)
+
+# 11. Test Audio Conversion Probing and Reproducible FFMPEG Command
+probe_info = worker._probe_audio_file(str(test_worker_wav))
+check("worker._probe_audio_file extracts sample_rate and codec",
+      probe_info.get("sample_rate") == 16000 and "pcm" in (probe_info.get("codec") or ""))
+check("worker._probe_audio_file includes formatted duration_clock",
+      bool(probe_info.get("duration_clock")))
+
+out_converted_wav = _STATE / "test_out_conv.wav"
+conv_ok, conv_err, conv_meta = worker._convert_audio_to_wav([str(test_worker_wav)], str(out_converted_wav))
+check("worker._convert_audio_to_wav succeeds and returns metadata", conv_ok is True and not conv_err)
+check("worker._convert_audio_to_wav includes reproducible ffmpeg_command_str",
+      "ffmpeg" in conv_meta.get("ffmpeg_command_str", "") and "-ar 16000" in conv_meta.get("ffmpeg_command_str", ""))
+check("worker._convert_audio_to_wav includes source and target audio specs",
+      conv_meta.get("source", {}).get("total_size_bytes", 0) > 0 and conv_meta.get("target", {}).get("codec") == "pcm_s16le")
+
+# Save audio_conversion.json in ts_dir to test API endpoint
+(ts_dir / "audio_conversion.json").write_text(json.dumps(conv_meta, ensure_ascii=False, indent=2), encoding="utf-8")
+r_conv_get = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log?file=audio_conversion.json")
+check("GET job log?file=audio_conversion.json returns audio conversion spec",
+      r_conv_get.status_code == 200 and "ffmpeg_command_str" in r_conv_get.json())
+
+# Test Diarization parameters & speaker stats in diarization_output.json
+diar_rich_data = {
+    "pipeline": {
+        "name": "pyannote/speaker-diarization-3.1",
+        "segmentation_model": "pyannote/segmentation-3.0",
+        "mode": "local",
+        "device": "cuda",
+    },
+    "input_audio": {
+        "path": str(test_worker_wav),
+        "sample_rate": 16000,
+        "channels": 1,
+        "duration_sec": 0.1,
+        "duration_clock": "00:00:00.100",
+    },
+    "parameters": {
+        "num_speakers": 2,
+        "min_speakers": 1,
+        "max_speakers": 3,
+        "pipeline_kwargs": {"num_speakers": 2},
+    },
+    "results": {
+        "diarized": True,
+        "turns_count": 2,
+        "speakers_count": 2,
+        "speakers": ["SPEAKER_00", "SPEAKER_01"],
+        "speaker_statistics": {
+            "SPEAKER_00": {"total_speaking_sec": 0.06, "total_speaking_clock": "00:00:00.060", "turns_count": 1, "speaking_ratio_percent": 60.0},
+            "SPEAKER_01": {"total_speaking_sec": 0.04, "total_speaking_clock": "00:00:00.040", "turns_count": 1, "speaking_ratio_percent": 40.0},
+        },
+    },
+    "timing": {
+        "elapsed_sec": 0.85,
+        "real_time_factor": 8.5,
+    },
+}
+(ts_dir / "diarization_output.json").write_text(json.dumps(diar_rich_data, ensure_ascii=False, indent=2), encoding="utf-8")
+r_diar_get = client.get(f"/voice-records/meeting/jobs/{art_job['id']}/log?file=diarization_output.json")
+check("GET job log?file=diarization_output.json returns rich parameters and speaker stats",
+      r_diar_get.status_code == 200 and r_diar_get.json().get("parameters", {}).get("num_speakers") == 2)
+
+# Test Normalization artifact creation into the job's log directory
+norm_test_rec = store.create_raw(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    file_path="VoiceRecord/test_norm.md",
+    ceil_path="VoiceRecord/test_norm.md",
+    raw_text="Xin chào",
+    duration_sec=2.5,
+    mode="meeting",
+    segments=[{"start": 0.0, "end": 2.5, "text": "Xin chào", "speaker": "SPEAKER_00"}],
+)
+store.update_job(art_job["id"], record_id=norm_test_rec["id"])
+
+r_norm_post = client.post(f"/voice-records/{norm_test_rec['id']}/normalize", json={"title": "Norm Test"})
+check("POST /voice-records/{id}/normalize returns 200", r_norm_post.status_code == 200 and r_norm_post.json().get("ok") is True)
+check("normalization_result.json created in job log_dir", (ts_dir / "normalization_result.json").is_file())
+check("normalized_meeting.md created in job log_dir", (ts_dir / "normalized_meeting.md").is_file())
+
+# 12. Test Whisper Hallucination Detection & Word-Based Segment Timestamp Clamping
+check("worker._is_whisper_hallucination detects YouTube spam",
+      worker._is_whisper_hallucination("Hãy subscribe cho kênh lalaschool Để không bỏ lỡ") is True)
+check("worker._is_whisper_hallucination ignores normal speech",
+      worker._is_whisper_hallucination("Hôm nay chúng ta họp bàn về kế hoạch quý tới") is False)
+
+dummy_long_words = [
+    {"start": 129.6, "end": 131.0, "word": "Trên"},
+    {"start": 131.0, "end": 132.5, "word": "thị"},
+    {"start": 132.5, "end": 134.0, "word": "trường"},
+    {"start": 134.0, "end": 135.8, "word": "Việt"},
+]
+# Test segment stretching across 152 seconds: clamped to last word end + 0.1
+split_chunks = worker._split_segment_by_words(
+    seg_start=129.6,
+    seg_end=282.2,
+    text="Trên thị trường Việt",
+    words=dummy_long_words,
+)
+check("worker._split_segment_by_words clamps 152s segment to actual words end (~135.9s)",
+      len(split_chunks) == 1 and split_chunks[0]["end"] < 137.0 and split_chunks[0]["start"] == 129.6)
+
+# Test segment with large gap between words: split into 2 chunks
+words_with_gap = [
+    {"start": 10.0, "end": 12.0, "word": "Đoạn 1"},
+    {"start": 30.0, "end": 32.0, "word": "Đoạn 2"},
+]
+split_gap_chunks = worker._split_segment_by_words(
+    seg_start=10.0,
+    seg_end=32.0,
+    text="Đoạn 1 Đoạn 2",
+    words=words_with_gap,
+    max_gap_sec=2.5,
+)
+check("worker._split_segment_by_words splits segment at >2.5s gap into 2 chunks",
+      len(split_gap_chunks) == 2 and split_gap_chunks[0]["end"] < 13.0 and split_gap_chunks[1]["start"] == 30.0)
+
+# 13. Test VAD Filter Configuration in meeting_stt and Job Store
+import meeting_stt
+st_cfg = meeting_stt.get_config()
+check("meeting_stt.get_config defaults vad_filter to False", st_cfg.get("vad_filter") is False)
+
+meeting_stt.update_config({"vad_filter": True})
+st_cfg_updated = meeting_stt.get_config()
+check("meeting_stt.update_config saves vad_filter True", st_cfg_updated.get("vad_filter") is True)
+meeting_stt.update_config({"vad_filter": False})
+
+vad_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="VAD Test Job",
+    vad_filter=True,
+)
+check("store.create_job stores vad_filter True", vad_job.get("vad_filter") is True)
+pub_vad = voice_records.public_job(store.get_job(vad_job["id"]))
+check("voice_records.public_job exposes vad_filter", pub_vad.get("vad_filter") is True)
 
 # Restore
 main.cfgmod.gate_active = _orig_gate

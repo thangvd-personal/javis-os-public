@@ -741,6 +741,15 @@
       diarizeCb.checked = !!mt.diarize;
       diarizeCb.disabled = mt.recState !== "idle" || mt.uploading;
     }
+    var vadCb = $("vrMtVad");
+    if (vadCb) {
+      vadCb.checked = !!mt.vadFilter;
+      vadCb.disabled = mt.recState !== "idle" || mt.uploading;
+    }
+    var vadFilterCb = $("vrMtVadFilter");
+    if (vadFilterCb) {
+      vadFilterCb.checked = !!mt.vadFilter;
+    }
     var titleEl = $("vrMtTitle");
     if (titleEl && titleEl.value !== mt.title) titleEl.value = mt.title;
 
@@ -1815,6 +1824,7 @@
           model: S.mt.model || "large-v3-turbo",
           language: S.mt.language || "vi",
           diarize: !!S.mt.diarize,
+          vad_filter: !!S.mt.vadFilter,
           num_speakers: Number(S.mt.numSpeakers || 0),
           total_chunks: parts.length,
         }),
@@ -1978,6 +1988,9 @@
           if (d.config.language) S.mt.language = d.config.language;
           if (!S.mt.diarizeTouched) {
             S.mt.diarize = d.diarize_ready ? true : Boolean(d.config.diarize);
+          }
+          if (!S.mt.vadTouched) {
+            S.mt.vadFilter = Boolean(d.config.vad_filter);
           }
         }
       }
@@ -2195,6 +2208,7 @@
           model: S.mt.model || (rec.model_used || "large-v3-turbo"),
           language: S.mt.language || "vi",
           num_speakers: Number(S.mt.numSpeakers || 0),
+          vad_filter: !!S.mt.vadFilter,
           title: S.mt.title || "",
         }),
       });
@@ -2340,6 +2354,7 @@
     S.mt.warnMsg = "";
     S.mt.speakerDraft = {};
     S.mt.diarizeTouched = false;
+    S.mt.vadTouched = false;
 
     el.innerHTML =
       '<div class="vr-page">' +
@@ -2417,6 +2432,9 @@
       '<label class="vr-check-wrap">' +
       '<input type="checkbox" id="vrMtDiarize" checked> <span>' + esc(tw("vr.meeting.diarize_toggle")) + "</span>" +
       "</label>" +
+      '<label class="vr-check-wrap" title="' + esc(tw("vr.meeting.vad_desc")) + '">' +
+      '<input type="checkbox" id="vrMtVad"> <span>' + esc(tw("vr.meeting.vad_toggle")) + "</span>" +
+      "</label>" +
       "</div>" +
       '<div class="vr-bar-top">' +
       '<div class="vr-status">' +
@@ -2491,6 +2509,13 @@
       '<button type="button" class="gcard-btn" id="vrMtBtnInstallModel"></button>' +
       '<button type="button" class="gcard-btn ghost" id="vrMtBtnRedownload" hidden></button>' +
       '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrMtBtnDeleteModel" hidden></button>' +
+      "</div>" +
+      '<div class="vr-field vr-field-vad" style="margin-top:14px; display:flex; align-items:flex-start; gap:8px;">' +
+      '<input type="checkbox" id="vrMtVadFilter" style="margin-top:3px; cursor:pointer;">' +
+      '<div>' +
+      '<label for="vrMtVadFilter" style="font-weight:600; cursor:pointer;">' + esc(tw("vr.meeting.vad_label")) + "</label>" +
+      '<div class="vr-audit-sub" style="margin:2px 0 0 0; font-size:12px;">' + esc(tw("vr.meeting.vad_desc")) + "</div>" +
+      "</div>" +
       "</div>" +
       '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
       '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
@@ -2699,6 +2724,10 @@
     if (mtLang) mtLang.onchange = function () { S.mt.language = mtLang.value; saveMeetingConfig({ language: S.mt.language }); };
     if (mtNumSpk) mtNumSpk.onchange = function () { S.mt.numSpeakers = Number(mtNumSpk.value || 0); };
     if (mtDiarize) mtDiarize.onchange = function () { S.mt.diarize = !!mtDiarize.checked; S.mt.diarizeTouched = true; saveMeetingConfig({ diarize: S.mt.diarize }); syncMeetingUi(); };
+    var mtVad = $("vrMtVad");
+    if (mtVad) mtVad.onchange = function () { S.mt.vadFilter = !!mtVad.checked; S.mt.vadTouched = true; saveMeetingConfig({ vad_filter: S.mt.vadFilter }); syncMeetingUi(); };
+    var mtVadFilter = $("vrMtVadFilter");
+    if (mtVadFilter) mtVadFilter.onchange = function () { S.mt.vadFilter = !!mtVadFilter.checked; S.mt.vadTouched = true; saveMeetingConfig({ vad_filter: S.mt.vadFilter }); syncMeetingUi(); };
 
     if (mtStart) mtStart.onclick = function () { if (!isMeetingBusy(S.mt)) startMeetingRecording(); };
     if (mtPause) mtPause.onclick = pauseMeetingRecording;

@@ -19183,6 +19183,7 @@ async def voice_meeting_jobs_create(request: Request):
         upload_mode = "raw_upload"
     ext = meeting_jobs.sanitize_ext(str(body.get("file_ext") or body.get("filename") or ".webm"))
     diarize = mc["diarize"] if "diarize" not in body else bool(body.get("diarize"))
+    vad_filter = mc.get("vad_filter", False) if "vad_filter" not in body else bool(body.get("vad_filter"))
     now = localefmt.now()
     job = voice_records.get_store().create_job(
         brain=brain,
@@ -19194,6 +19195,7 @@ async def voice_meeting_jobs_create(request: Request):
         device=device,
         language=language,
         diarize=diarize,
+        vad_filter=vad_filter,
         num_speakers=max(0, _safe_int(body.get("num_speakers"))),
         min_speakers=max(0, _safe_int(body.get("min_speakers"))),
         max_speakers=max(0, _safe_int(body.get("max_speakers"))),
@@ -19270,34 +19272,91 @@ def voice_meeting_job_status(job_id: str):
 
 
 @app.get("/voice-records/meeting/jobs/{job_id}/log")
-def voice_meeting_job_log(job_id: str):
-    """Retrieve full worker execution log for a meeting or remote diarization job."""
+def voice_meeting_job_log(job_id: str, file: str = Query("")):
+    """Retrieve execution log or A/B testing / debug artifact for a meeting job."""
     store = voice_records.get_store()
     job = store.get_job(job_id)
     if not job:
         return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy tác vụ", "Job not found")}, status_code=404)
+
     log_path = str(job.get("log_path") or "").strip()
-    candidate = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{job_id}.log"
-    target_path: Path | None = None
+    log_dir: Path | None = None
     if log_path and Path(log_path).is_file():
-        target_path = Path(log_path)
-    elif candidate.is_file():
-        target_path = candidate
-    if not target_path or not target_path.is_file():
+        log_dir = Path(log_path).parent
+    elif log_path and Path(log_path).is_dir():
+        log_dir = Path(log_path)
+    else:
+        base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        if base.is_dir():
+            for d in base.iterdir():
+                if d.is_dir() and job_id in d.name:
+                    log_dir = d
+                    break
+        if not log_dir:
+            cand = base / f"{job_id}.log"
+            if cand.is_file():
+                return PlainTextResponse(cand.read_text(encoding="utf-8", errors="replace"), media_type="text/plain; charset=utf-8")
+
+    if not log_dir or not log_dir.is_dir():
         return JSONResponse(
             {
                 "ok": False,
                 "error": localefmt.chu(
-                    "Không có tệp log hoặc tiến trình đã hoàn tất thành công (tệp log tự động xóa).",
-                    "Log file not found or process completed successfully (logs auto-deleted).",
+                    "Không tìm thấy thư mục log của tác vụ này.",
+                    "Log directory not found for this job.",
                 ),
             },
             status_code=404,
         )
+
+    # List available artifacts
+    if file in ("list", "artifacts", "index"):
+        from datetime import datetime as _dt
+        files = []
+        for f in sorted(log_dir.iterdir()):
+            if f.is_file():
+                files.append({
+                    "name": f.name,
+                    "size_bytes": f.stat().st_size,
+                    "modified_iso": _dt.fromtimestamp(f.stat().st_mtime).astimezone().isoformat(),
+                })
+        return {"ok": True, "job_id": job_id, "log_dir": str(log_dir), "files": files}
+
+    target_name = file.strip() or "execution.log"
+    target_path = (log_dir / target_name).resolve()
+    try:
+        if not target_path.is_relative_to(log_dir.resolve()):
+            return JSONResponse({"ok": False, "error": "Invalid file path"}, status_code=403)
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid file path"}, status_code=403)
+
+    if not target_path.is_file() and not file:
+        cand_log = log_dir / f"{job_id}.log"
+        if cand_log.is_file():
+            target_path = cand_log
+
+    if not target_path.is_file():
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    f"Không tìm thấy tệp {target_name}",
+                    f"File {target_name} not found",
+                ),
+            },
+            status_code=404,
+        )
+
     try:
         content = target_path.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    if target_path.suffix == ".json":
+        try:
+            return JSONResponse(json.loads(content))
+        except Exception:
+            pass
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 
@@ -19428,7 +19487,9 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
     segments = rec.get("segments") or []
     if rec.get("mode") == "meeting" and segments:
         smap = rec.get("speaker_map") or {}
+        t_norm_start = time.time()
         res = await transcript_fix.normalize_meeting_segments(cfg, segments, speaker_map=smap)
+        norm_elapsed = time.time() - t_norm_start
         norm_segs = res.get("segments") or []
         rendered = voice_records.render_meeting_markdown(
             created_iso=rec.get("created_iso") or "",
@@ -19446,6 +19507,49 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
             source=str(res.get("source") or ""),
             normalized_segments=norm_segs,
         )
+
+        # Save normalization debug artifact for A/B testing
+        try:
+            norm_log_dir = None
+            job_id = str(rec.get("job_id") or "").strip()
+            job_rec = None
+            if job_id:
+                job_rec = store.get_job(job_id)
+            if not job_rec:
+                job_rec = store.get_job_by_record(record_id)
+                if job_rec:
+                    job_id = job_rec.get("id") or ""
+
+            if job_rec and job_rec.get("log_path"):
+                lp = Path(job_rec["log_path"])
+                if lp.is_file():
+                    norm_log_dir = lp.parent
+                elif lp.is_dir():
+                    norm_log_dir = lp
+            if not norm_log_dir:
+                now_ts_str = localefmt.now().strftime("%Y.%m.%d-%H.%M.%S")
+                norm_log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{now_ts_str}_norm_{record_id[:6]}"
+                norm_log_dir.mkdir(parents=True, exist_ok=True)
+
+            norm_artifact = {
+                "record_id": record_id,
+                "job_id": job_id,
+                "timestamp": localefmt.now().isoformat(),
+                "elapsed_sec": round(norm_elapsed, 3),
+                "source": str(res.get("source") or ""),
+                "ai": bool(res.get("ai")),
+                "raw_segments_count": len(segments),
+                "normalized_segments_count": len(norm_segs),
+                "raw_segments": segments,
+                "normalized_segments": norm_segs,
+            }
+            (norm_log_dir / "normalization_result.json").write_text(
+                json.dumps(norm_artifact, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            (norm_log_dir / "normalized_meeting.md").write_text(rendered, encoding="utf-8")
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "record": voice_records.public_record(updated or rec),
@@ -19454,7 +19558,9 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
         }
 
     raw_text = str(rec.get("raw_text") or "").strip()
+    t_norm_start = time.time()
     res = await transcript_fix.normalize_voice_record(cfg, raw_text)
+    norm_elapsed = time.time() - t_norm_start
     norm_text = str((res or {}).get("text") or raw_text).strip() or raw_text
     await asyncio.to_thread(_atomic_write_text, target, norm_text)
     updated = store.mark_normalized(
@@ -19462,6 +19568,25 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
         normalized_text=norm_text,
         source=str((res or {}).get("source") or ""),
     )
+    try:
+        now_ts_str = localefmt.now().strftime("%Y.%m.%d-%H.%M.%S")
+        norm_log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{now_ts_str}_norm_quick_{record_id[:6]}"
+        norm_log_dir.mkdir(parents=True, exist_ok=True)
+        norm_artifact = {
+            "record_id": record_id,
+            "timestamp": localefmt.now().isoformat(),
+            "elapsed_sec": round(norm_elapsed, 3),
+            "source": str((res or {}).get("source") or ""),
+            "ai": bool((res or {}).get("ai")),
+            "raw_text": raw_text,
+            "normalized_text": norm_text,
+        }
+        (norm_log_dir / "normalization_result.json").write_text(
+            json.dumps(norm_artifact, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        (norm_log_dir / "normalized_note.txt").write_text(norm_text, encoding="utf-8")
+    except Exception:
+        pass
     return {
         "ok": True,
         "record": voice_records.public_record(updated or rec),
@@ -19574,6 +19699,7 @@ async def voice_record_rediarize(record_id: str, request: Request):
     now = localefmt.now()
     dur = float(rec.get("duration_sec") or 0.0)
     est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="meeting_transcribe")
+    vad_filter = mc.get("vad_filter", False) if "vad_filter" not in body else bool(body.get("vad_filter"))
     job = store.create_job(
         brain=brain,
         brain_path=brain_ident.canonical(str(broot)),
@@ -19584,6 +19710,7 @@ async def voice_record_rediarize(record_id: str, request: Request):
         device=device,
         language=language,
         diarize=True,
+        vad_filter=vad_filter,
         num_speakers=max(0, _safe_int(body.get("num_speakers"))),
         min_speakers=max(0, _safe_int(body.get("min_speakers"))),
         max_speakers=max(0, _safe_int(body.get("max_speakers"))),

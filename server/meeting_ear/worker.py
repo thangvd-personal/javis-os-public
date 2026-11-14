@@ -10,11 +10,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import wave
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,165 @@ def emit_progress(stage: str, progress: int, detail: str = "") -> None:
         "progress": max(0, min(100, int(progress))),
         "detail": detail,
     })
+
+
+def _fmt_clock_sec(seconds: float) -> str:
+    sec = max(0.0, float(seconds or 0.0))
+    m, s = divmod(sec, 60.0)
+    h, m = divmod(m, 60.0)
+    return f"{int(h):02d}:{int(m):02d}:{s:06.3f}"
+
+
+def _human_size(size_bytes: int | float) -> str:
+    s = float(size_bytes or 0)
+    for u in ["B", "KB", "MB", "GB"]:
+        if s < 1024.0 or u == "GB":
+            return f"{s:.2f} {u}" if u != "B" else f"{int(s)} B"
+        s /= 1024.0
+    return f"{s:.2f} GB"
+
+
+def _probe_audio_file(path: str) -> dict[str, Any]:
+    p = Path(path)
+    if not p.is_file():
+        return {
+            "path": str(path),
+            "file_name": p.name,
+            "exists": False,
+            "size_bytes": 0,
+            "size_human": "0 B",
+            "format_name": "",
+            "codec": "",
+            "sample_rate": 0,
+            "channels": 0,
+            "channel_layout": "",
+            "duration_sec": 0.0,
+            "duration_clock": "00:00:00.000",
+            "bit_rate": 0,
+        }
+
+    size_bytes = p.stat().st_size
+    info: dict[str, Any] = {
+        "path": str(p),
+        "file_name": p.name,
+        "exists": True,
+        "size_bytes": size_bytes,
+        "size_human": _human_size(size_bytes),
+        "format_name": p.suffix.lstrip(".").lower() or "unknown",
+        "codec": "",
+        "sample_rate": 0,
+        "channels": 0,
+        "channel_layout": "",
+        "duration_sec": 0.0,
+        "duration_clock": "00:00:00.000",
+        "bit_rate": 0,
+    }
+
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        try:
+            cmd = [
+                ffprobe,
+                "-v", "error",
+                "-select_streams", "a:0",
+                "-show_entries", "stream=codec_name,sample_rate,channels,channel_layout,duration,bit_rate:format=format_name,duration,size,bit_rate",
+                "-of", "json",
+                str(p),
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout)
+                streams = data.get("streams") or []
+                fmt = data.get("format") or {}
+                if streams:
+                    s0 = streams[0]
+                    info["codec"] = str(s0.get("codec_name") or "")
+                    if s0.get("sample_rate"):
+                        try:
+                            info["sample_rate"] = int(s0["sample_rate"])
+                        except Exception:
+                            pass
+                    if s0.get("channels"):
+                        try:
+                            info["channels"] = int(s0["channels"])
+                        except Exception:
+                            pass
+                    info["channel_layout"] = str(s0.get("channel_layout") or "")
+                    if s0.get("duration"):
+                        try:
+                            info["duration_sec"] = round(float(s0["duration"]), 3)
+                        except Exception:
+                            pass
+                    if s0.get("bit_rate"):
+                        try:
+                            info["bit_rate"] = int(s0["bit_rate"])
+                        except Exception:
+                            pass
+                if fmt:
+                    if fmt.get("format_name"):
+                        info["format_name"] = str(fmt["format_name"])
+                    if info["duration_sec"] <= 0 and fmt.get("duration"):
+                        try:
+                            info["duration_sec"] = round(float(fmt["duration"]), 3)
+                        except Exception:
+                            pass
+                    if not info["bit_rate"] and fmt.get("bit_rate"):
+                        try:
+                            info["bit_rate"] = int(fmt["bit_rate"])
+                        except Exception:
+                            pass
+                    if not info["size_bytes"] and fmt.get("size"):
+                        try:
+                            info["size_bytes"] = int(fmt["size"])
+                            info["size_human"] = _human_size(info["size_bytes"])
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    # Fallback to wave module for WAV files if ffprobe didn't get details
+    if p.suffix.lower() == ".wav" and (info["duration_sec"] <= 0 or not info["codec"]):
+        try:
+            with wave.open(str(p), "rb") as wf:
+                sr = wf.getframerate() or 16000
+                frames = wf.getnframes()
+                info["sample_rate"] = sr
+                info["channels"] = wf.getnchannels()
+                info["codec"] = "pcm_s16le" if wf.getsampwidth() == 2 else f"pcm_{wf.getsampwidth()*8}bit"
+                info["duration_sec"] = round(frames / float(sr), 3)
+        except Exception:
+            pass
+
+    info["duration_clock"] = _fmt_clock_sec(info["duration_sec"])
+    return info
+
+
+def _get_system_debug_info() -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "platform": sys.platform,
+        "python_version": sys.version.split()[0],
+    }
+    try:
+        import torch
+        info["torch_version"] = torch.__version__
+        info["cuda_available"] = torch.cuda.is_available()
+        if torch.cuda.is_available():
+            info["cuda_version"] = getattr(torch.version, "cuda", "") or ""
+            info["device_count"] = torch.cuda.device_count()
+            info["device_name"] = torch.cuda.get_device_name(0)
+            props = torch.cuda.get_device_properties(0)
+            info["vram_total_mb"] = round(props.total_memory / (1024 * 1024), 1)
+            info["vram_allocated_mb"] = round(torch.cuda.memory_allocated(0) / (1024 * 1024), 1)
+            info["vram_reserved_mb"] = round(torch.cuda.memory_reserved(0) / (1024 * 1024), 1)
+    except Exception:
+        pass
+    return info
+
+
+def _log_debug(stage: str, msg: str, elapsed: float | None = None) -> None:
+    now_iso = datetime.now().astimezone().isoformat()
+    el_str = f" in {elapsed:.3f}s" if elapsed is not None else ""
+    print(f"[{now_iso}] [{stage}] {msg}{el_str}", flush=True)
 
 
 def _overlap(a0: float, a1: float, b0: float, b1: float) -> float:
@@ -202,6 +364,97 @@ def assign_speakers_word_level(
     return merged
 
 
+def _is_whisper_hallucination(text: str) -> bool:
+    t = (text or "").lower().strip()
+    if not t:
+        return False
+    hallucination_phrases = [
+        "subscribe cho kênh",
+        "đăng ký kênh",
+        "subscribe kênh",
+        "like và subscribe",
+        "like and subscribe",
+        "hẹn gặp lại trong các video",
+        "hẹn gặp lại các bạn",
+        "cảm ơn các bạn đã theo dõi",
+        "cảm ơn quý vị đã theo dõi",
+        "lalaschool",
+        "thank you for watching",
+        "thanks for watching",
+    ]
+    for p in hallucination_phrases:
+        if p in t:
+            return True
+    return False
+
+
+def _split_segment_by_words(
+    seg_start: float,
+    seg_end: float,
+    text: str,
+    words: list[dict[str, Any]],
+    max_gap_sec: float = 2.5,
+    max_segment_len_sec: float = 30.0,
+) -> list[dict[str, Any]]:
+    """Clean and split Whisper segment using word timestamps.
+
+    Fixes Whisper bug where seg.end stretches across long silence (e.g. 150s with only 10s of words).
+    Splits segments when gaps between words exceed max_gap_sec or chunk length exceeds max_segment_len_sec.
+    """
+    if not words:
+        clamped_end = min(seg_end, seg_start + max_segment_len_sec)
+        return [{
+            "start": round(seg_start, 3),
+            "end": round(clamped_end, 3),
+            "text": text.strip(),
+            "words": [],
+        }]
+
+    chunks: list[dict[str, Any]] = []
+    current_words: list[dict[str, Any]] = []
+
+    for w in words:
+        if not current_words:
+            current_words.append(w)
+            continue
+
+        prev_w = current_words[-1]
+        gap = float(w["start"]) - float(prev_w["end"])
+        curr_span = float(w["end"]) - float(current_words[0]["start"])
+
+        # Split if gap between words > max_gap_sec OR current chunk exceeds max_segment_len_sec
+        if gap > max_gap_sec or (curr_span > max_segment_len_sec and gap > 0.8):
+            chunk_text = "".join(cw["word"] for cw in current_words).strip()
+            if not chunk_text:
+                chunk_text = text.strip()
+            w_s = float(current_words[0]["start"])
+            w_e = float(current_words[-1]["end"]) + 0.1
+            chunks.append({
+                "start": round(w_s, 3),
+                "end": round(w_e, 3),
+                "text": chunk_text,
+                "words": current_words,
+            })
+            current_words = [w]
+        else:
+            current_words.append(w)
+
+    if current_words:
+        chunk_text = "".join(cw["word"] for cw in current_words).strip()
+        if not chunk_text:
+            chunk_text = text.strip()
+        w_s = float(current_words[0]["start"])
+        w_e = float(current_words[-1]["end"]) + 0.1
+        chunks.append({
+            "start": round(w_s, 3),
+            "end": round(w_e, 3),
+            "text": chunk_text,
+            "words": current_words,
+        })
+
+    return chunks
+
+
 def _has_nvidia_gpu() -> bool:
     nvsmi = shutil.which("nvidia-smi") or ("/usr/bin/nvidia-smi" if Path("/usr/bin/nvidia-smi").is_file() else "")
     if not nvsmi:
@@ -232,14 +485,42 @@ def _convert_audio_to_wav(
     input_paths: list[str],
     wav_path: str,
     combined_audio_out: str = "",
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict[str, Any]]:
     ffmpeg = shutil.which("ffmpeg")
+    empty_meta: dict[str, Any] = {
+        "ok": False,
+        "error": "",
+        "ffmpeg_parameters": {},
+        "ffmpeg_command": [],
+        "ffmpeg_command_str": "",
+        "source": {},
+        "target": {},
+    }
     if not ffmpeg:
-        return False, "ffmpeg not found on PATH"
+        empty_meta["error"] = "ffmpeg not found on PATH"
+        return False, "ffmpeg not found on PATH", empty_meta
     valid_inputs = [p for p in input_paths if p and Path(p).is_file()]
     if not valid_inputs:
-        return False, "No valid audio input file found"
+        empty_meta["error"] = "No valid audio input file found"
+        return False, "No valid audio input file found", empty_meta
 
+    source_probes = [_probe_audio_file(p) for p in valid_inputs]
+    total_source_bytes = sum(s.get("size_bytes", 0) for s in source_probes)
+    total_source_dur = sum(s.get("duration_sec", 0.0) for s in source_probes)
+    primary_src = source_probes[0]
+
+    ffmpeg_params: dict[str, Any] = {
+        "executable": ffmpeg,
+        "overwrite": "-y",
+        "hide_banner": "-hide_banner",
+        "log_level": "-loglevel error",
+        "disable_video": "-vn",
+        "sample_rate": "16000 (-ar 16000)",
+        "channels": "1 (-ac 1)",
+        "audio_codec": "pcm_s16le (-c:a pcm_s16le)",
+    }
+
+    combined_cmd_str = ""
     if len(valid_inputs) == 1:
         cmd = [
             ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
@@ -249,39 +530,91 @@ def _convert_audio_to_wav(
         ]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.returncode != 0:
-            return False, (res.stderr or f"ffmpeg exited with {res.returncode}")[:400]
+            err = (res.stderr or f"ffmpeg exited with {res.returncode}")[:400]
+            empty_meta["error"] = err
+            empty_meta["ffmpeg_command"] = cmd
+            empty_meta["ffmpeg_command_str"] = shlex.join(cmd)
+            return False, err, empty_meta
         if combined_audio_out and Path(valid_inputs[0]).resolve() != Path(combined_audio_out).resolve():
             os.makedirs(os.path.dirname(combined_audio_out), exist_ok=True)
             shutil.copy2(valid_inputs[0], combined_audio_out)
-        return True, ""
+    else:
+        # Multi-segment inputs (e.g. separate MediaRecorder clips from Pause/Resume):
+        # filter_complex concat re-encodes safely so differing WebM/Opus cluster headers never break.
+        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
+        for p in valid_inputs:
+            cmd.extend(["-i", p])
+        inputs_tag = "".join(f"[{i}:a]" for i in range(len(valid_inputs)))
+        filter_str = f"{inputs_tag}concat=n={len(valid_inputs)}:v=0:a=1[outa]"
+        cmd.extend([
+            "-filter_complex", filter_str,
+            "-map", "[outa]", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+            wav_path,
+        ])
+        ffmpeg_params["filter_complex"] = filter_str
+        ffmpeg_params["map"] = "[outa]"
 
-    # Multi-segment inputs (e.g. separate MediaRecorder clips from Pause/Resume):
-    # filter_complex concat re-encodes safely so differing WebM/Opus cluster headers never break.
-    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
-    for p in valid_inputs:
-        cmd.extend(["-i", p])
-    inputs_tag = "".join(f"[{i}:a]" for i in range(len(valid_inputs)))
-    cmd.extend([
-        "-filter_complex", f"{inputs_tag}concat=n={len(valid_inputs)}:v=0:a=1[outa]",
-        "-map", "[outa]", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
-        wav_path,
-    ])
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if res.returncode != 0:
-        return False, (res.stderr or f"ffmpeg concat exited with {res.returncode}")[:400]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0:
+            err = (res.stderr or f"ffmpeg concat exited with {res.returncode}")[:400]
+            empty_meta["error"] = err
+            empty_meta["ffmpeg_command"] = cmd
+            empty_meta["ffmpeg_command_str"] = shlex.join(cmd)
+            return False, err, empty_meta
 
+        if combined_audio_out:
+            os.makedirs(os.path.dirname(combined_audio_out), exist_ok=True)
+            cmd_m4a = [
+                ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+                "-i", wav_path,
+                "-c:a", "aac", "-b:a", "96k",
+                combined_audio_out,
+            ]
+            combined_cmd_str = shlex.join(cmd_m4a)
+            res2 = subprocess.run(cmd_m4a, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if res2.returncode != 0:
+                shutil.copy2(wav_path, combined_audio_out)
+
+    target_probe = _probe_audio_file(wav_path)
+    conversion_meta: dict[str, Any] = {
+        "ok": True,
+        "error": "",
+        "source": {
+            "inputs_count": len(valid_inputs),
+            "files": source_probes,
+            "format": primary_src.get("format_name") or "",
+            "codec": primary_src.get("codec") or "",
+            "sample_rate": primary_src.get("sample_rate") or 0,
+            "channels": primary_src.get("channels") or 0,
+            "channel_layout": primary_src.get("channel_layout") or "",
+            "total_size_bytes": total_source_bytes,
+            "total_size_human": _human_size(total_source_bytes),
+            "duration_sec": round(total_source_dur, 3),
+            "duration_clock": _fmt_clock_sec(total_source_dur),
+        },
+        "target": {
+            "path": wav_path,
+            "format": "wav",
+            "codec": target_probe.get("codec") or "pcm_s16le",
+            "sample_rate": target_probe.get("sample_rate") or 16000,
+            "channels": target_probe.get("channels") or 1,
+            "channel_layout": target_probe.get("channel_layout") or "mono",
+            "bit_depth": "16-bit",
+            "size_bytes": target_probe.get("size_bytes") or 0,
+            "size_human": target_probe.get("size_human") or "0 B",
+            "duration_sec": target_probe.get("duration_sec") or 0.0,
+            "duration_clock": target_probe.get("duration_clock") or "00:00:00.000",
+        },
+        "ffmpeg_parameters": ffmpeg_params,
+        "ffmpeg_command": cmd,
+        "ffmpeg_command_str": shlex.join(cmd),
+    }
     if combined_audio_out:
-        os.makedirs(os.path.dirname(combined_audio_out), exist_ok=True)
-        cmd_m4a = [
-            ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-            "-i", wav_path,
-            "-c:a", "aac", "-b:a", "96k",
-            combined_audio_out,
-        ]
-        res2 = subprocess.run(cmd_m4a, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res2.returncode != 0:
-            shutil.copy2(wav_path, combined_audio_out)
-    return True, ""
+        conversion_meta["combined_audio"] = {
+            "path": combined_audio_out,
+            "ffmpeg_command_str": combined_cmd_str,
+        }
+    return True, "", conversion_meta
 
 
 def _pick_whisper_device(requested: str) -> tuple[str, str]:
@@ -710,7 +1043,13 @@ def run_diarize_only(job_path: str) -> int:
     except (AttributeError, OSError):
         pass
 
+    t_start = time.time()
     job = json.loads(Path(job_path).read_text(encoding="utf-8"))
+    log_dir_str = str(job.get("log_dir") or "").strip()
+    log_dir = Path(log_dir_str) if log_dir_str else None
+    if log_dir:
+        log_dir.mkdir(parents=True, exist_ok=True)
+
     wav_path = str(job.get("wav_path") or "").strip()
     hf_token = str(job.get("hf_token") or os.getenv("HF_TOKEN") or "").strip()
     device = str(job.get("device") or "auto").strip().lower()
@@ -721,6 +1060,8 @@ def run_diarize_only(job_path: str) -> int:
         except Exception:
             device = "cpu"
 
+    _log_debug("JOB_START", f"Starting diarize-only worker on {device}")
+    t_diarize_start = time.time()
     turns, derr = _run_pyannote_diarization(
         wav_path,
         hf_token=hf_token,
@@ -732,6 +1073,9 @@ def run_diarize_only(job_path: str) -> int:
         progress_base=15,
         progress_span=75,
     )
+    t_diarize_end = time.time()
+    diarize_dur = t_diarize_end - t_diarize_start
+    _log_debug("STAGE:DIARIZE", f"Diarize-only finished ({len(turns)} turns)", diarize_dur)
 
     out_json = str(job.get("output_json") or "").strip()
     result = {
@@ -746,6 +1090,180 @@ def run_diarize_only(job_path: str) -> int:
             Path(out_json).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         except Exception as e:
             result["warnings"].append(f"write_output_failed: {e}")
+
+    total_dur = time.time() - t_start
+    if log_dir:
+        wav_probe = _probe_audio_file(wav_path)
+        wav_dur = float(wav_probe.get("duration_sec") or 0.0)
+        rtf_diarize = diarize_dur / max(0.1, wav_dur)
+
+        speaker_stats: dict[str, dict[str, Any]] = {}
+        for t in turns:
+            spk = t.get("speaker") or "UNKNOWN"
+            t_len = max(0.0, float(t.get("end", 0)) - float(t.get("start", 0)))
+            if spk not in speaker_stats:
+                speaker_stats[spk] = {
+                    "speaker": spk,
+                    "total_speaking_sec": 0.0,
+                    "turns_count": 0,
+                }
+            speaker_stats[spk]["total_speaking_sec"] += t_len
+            speaker_stats[spk]["turns_count"] += 1
+
+        total_spoken_sec = sum(s["total_speaking_sec"] for s in speaker_stats.values())
+        for spk, st in speaker_stats.items():
+            st["total_speaking_sec"] = round(st["total_speaking_sec"], 3)
+            st["total_speaking_clock"] = _fmt_clock_sec(st["total_speaking_sec"])
+            st["speaking_ratio_percent"] = round((st["total_speaking_sec"] / max(0.001, total_spoken_sec)) * 100, 1)
+
+        unique_speakers = sorted(speaker_stats.keys())
+
+        pipeline_kwargs_record: dict[str, Any] = {}
+        if job.get("num_speakers") and int(job["num_speakers"]) > 0:
+            pipeline_kwargs_record["num_speakers"] = int(job["num_speakers"])
+        if job.get("min_speakers") and int(job["min_speakers"]) > 0:
+            pipeline_kwargs_record["min_speakers"] = int(job["min_speakers"])
+        if job.get("max_speakers") and int(job["max_speakers"]) > 0:
+            pipeline_kwargs_record["max_speakers"] = int(job["max_speakers"])
+
+        # Also save audio_conversion.json for diarize-only
+        (log_dir / "audio_conversion.json").write_text(
+            json.dumps({
+                "ok": True,
+                "note": "Input audio passed directly to diarize-only worker",
+                "source": {
+                    "inputs_count": 1,
+                    "files": [wav_probe],
+                    "format": wav_probe.get("format_name") or "wav",
+                    "codec": wav_probe.get("codec") or "pcm_s16le",
+                    "sample_rate": wav_probe.get("sample_rate") or 16000,
+                    "channels": wav_probe.get("channels") or 1,
+                    "channel_layout": wav_probe.get("channel_layout") or "mono",
+                    "total_size_bytes": wav_probe.get("size_bytes") or 0,
+                    "total_size_human": wav_probe.get("size_human") or "0 B",
+                    "duration_sec": wav_dur,
+                    "duration_clock": wav_probe.get("duration_clock") or "00:00:00.000",
+                },
+                "target": {
+                    "path": wav_path,
+                    "format": "wav",
+                    "codec": wav_probe.get("codec") or "pcm_s16le",
+                    "sample_rate": wav_probe.get("sample_rate") or 16000,
+                    "channels": wav_probe.get("channels") or 1,
+                    "channel_layout": wav_probe.get("channel_layout") or "mono",
+                    "bit_depth": "16-bit",
+                    "size_bytes": wav_probe.get("size_bytes") or 0,
+                    "size_human": wav_probe.get("size_human") or "0 B",
+                    "duration_sec": wav_dur,
+                    "duration_clock": wav_probe.get("duration_clock") or "00:00:00.000",
+                },
+                "ffmpeg_parameters": {
+                    "note": "Pre-converted WAV was provided directly",
+                },
+                "ffmpeg_command": [],
+                "ffmpeg_command_str": f"ffmpeg -y -hide_banner -loglevel error -i {shlex.quote(wav_path)} -vn -ar 16000 -ac 1 -c:a pcm_s16le output_16k.wav",
+            }, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        diarize_data = {
+            "pipeline": {
+                "name": "pyannote/speaker-diarization-3.1",
+                "segmentation_model": "pyannote/segmentation-3.0",
+                "mode": "local",
+                "remote_endpoint": None,
+                "device": device,
+                "hf_token_configured": bool(hf_token),
+            },
+            "input_audio": {
+                "path": wav_path,
+                "format": "wav",
+                "codec": wav_probe.get("codec") or "pcm_s16le",
+                "sample_rate": wav_probe.get("sample_rate") or 16000,
+                "channels": wav_probe.get("channels") or 1,
+                "channel_layout": wav_probe.get("channel_layout") or "mono",
+                "duration_sec": wav_dur,
+                "duration_clock": wav_probe.get("duration_clock") or "00:00:00.000",
+                "in_memory_tensor_preloaded": True,
+            },
+            "parameters": {
+                "num_speakers": job.get("num_speakers"),
+                "min_speakers": job.get("min_speakers"),
+                "max_speakers": job.get("max_speakers"),
+                "pipeline_kwargs": pipeline_kwargs_record,
+            },
+            "results": {
+                "diarized": bool(turns),
+                "turns_count": len(turns),
+                "speakers_count": len(unique_speakers),
+                "speakers": unique_speakers,
+                "speaker_statistics": speaker_stats,
+                "total_spoken_sec": round(total_spoken_sec, 3),
+                "total_spoken_clock": _fmt_clock_sec(total_spoken_sec),
+                "turns": turns,
+                "error": derr if derr else "",
+                "warnings": [derr] if derr else [],
+            },
+            "timing": {
+                "elapsed_sec": round(diarize_dur, 3),
+                "real_time_factor": round(rtf_diarize, 4),
+                "real_time_factor_str": f"{rtf_diarize:.3f}x realtime",
+            },
+            "device": device,
+            "elapsed_sec": round(diarize_dur, 3),
+            "real_time_factor": round(rtf_diarize, 4),
+            "turns_count": len(turns),
+            "speakers_count": len(unique_speakers),
+            "turns": turns,
+            "error": derr if derr else "",
+            "warnings": [derr] if derr else [],
+        }
+        (log_dir / "diarization_output.json").write_text(json.dumps(diarize_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        timeline_header = [
+            "=== THONG SO DAU VAO PHAN TACH GIONG NOI ===",
+            "Pipeline: pyannote/speaker-diarization-3.1 (diarize-only)",
+            f"Device: {device}",
+            f"Audio duration: {_fmt_clock_sec(wav_dur)} ({wav_dur:.2f}s)",
+            f"Parameters: num_speakers={job.get('num_speakers')}, min_speakers={job.get('min_speakers')}, max_speakers={job.get('max_speakers')}",
+            f"Processing time: {diarize_dur:.3f}s (RTF: {rtf_diarize:.3f}x)",
+            "",
+            "=== TONG KET THEO NGUOI NOI ===",
+        ]
+        for spk in unique_speakers:
+            s_info = speaker_stats[spk]
+            timeline_header.append(
+                f"- {spk}: {s_info['turns_count']} turns, {s_info['total_speaking_clock']} ({s_info['speaking_ratio_percent']}%)"
+            )
+        timeline_header.append(f"Tong so nguoi noi: {len(unique_speakers)}")
+        timeline_header.append("")
+        timeline_header.append("=== DONG THOI GIAN CHI TIET (TIMELINE) ===")
+
+        timeline_lines = timeline_header + [
+            f"[{_fmt_clock_sec(t['start'])} -> {_fmt_clock_sec(t['end'])}] {t.get('speaker', '')}"
+            for t in turns
+        ]
+        (log_dir / "diarization_timeline.txt").write_text("\n".join(timeline_lines), encoding="utf-8")
+
+        debug_timing = {
+            "job_id": job.get("job_id") or "",
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "total_elapsed_sec": round(total_dur, 3),
+            "stages": {
+                "speaker_diarization": {
+                    "elapsed_sec": round(diarize_dur, 3),
+                    "real_time_factor": round(rtf_diarize, 4),
+                    "turns_count": len(turns),
+                    "speakers_count": len(unique_speakers),
+                    "device": device,
+                    "num_speakers": job.get("num_speakers"),
+                    "min_speakers": job.get("min_speakers"),
+                    "max_speakers": job.get("max_speakers"),
+                }
+            },
+            "system": _get_system_debug_info(),
+        }
+        (log_dir / "debug_timing.json").write_text(json.dumps(debug_timing, ensure_ascii=False, indent=2), encoding="utf-8")
+        _log_debug("ARTIFACT", f"Saved diarization artifacts, audio_conversion.json, and debug_timing.json to {log_dir}")
+
     emit(result)
     return 0 if not derr else 1
 
@@ -756,7 +1274,14 @@ def run_job(job_path: str) -> int:
     except (AttributeError, OSError):
         pass
 
+    t_run_start = time.time()
     job = json.loads(Path(job_path).read_text(encoding="utf-8"))
+    log_dir_str = str(job.get("log_dir") or "").strip()
+    log_dir = Path(log_dir_str) if log_dir_str else None
+    if log_dir:
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+    timings: dict[str, dict[str, Any]] = {}
     model_name = str(job.get("model") or "large-v3-turbo").strip()
     model_dir = str(job.get("model_dir") or "").strip()
     req_device = str(job.get("device") or "auto").strip().lower()
@@ -769,41 +1294,118 @@ def run_job(job_path: str) -> int:
     combined_audio_out = str(job.get("combined_audio_out") or "").strip()
     output_json = str(job.get("output_json") or "").strip()
 
+    _log_debug("JOB_START", f"Starting meeting worker for job {job.get('job_id', 'unknown')}")
+
     with tempfile.TemporaryDirectory(prefix="javis-meeting-") as tmpdir:
         wav_path = os.path.join(tmpdir, "audio_16k.wav")
         emit_progress("converting", 5, "ffmpeg 16kHz mono")
-        ok_conv, conv_err = _convert_audio_to_wav(input_paths, wav_path, combined_audio_out=combined_audio_out)
+
+        t_conv_start = time.time()
+        _log_debug("STAGE:CONVERT", f"Starting audio conversion with ffmpeg (inputs: {len(input_paths)})...")
+        ok_conv, conv_err, conv_meta = _convert_audio_to_wav(input_paths, wav_path, combined_audio_out=combined_audio_out)
+        t_conv_end = time.time()
+        conv_dur = t_conv_end - t_conv_start
         if not ok_conv:
+            _log_debug("STAGE:CONVERT_FAILED", f"Audio conversion failed: {conv_err}", conv_dur)
             emit({"type": "result", "ok": False, "error": f"Audio conversion failed: {conv_err}"})
             return 1
 
+        src_meta = conv_meta.get("source") or {}
+        tgt_meta = conv_meta.get("target") or {}
+        _log_debug(
+            "STAGE:CONVERT",
+            f"Conversion completed: Source ({src_meta.get('format')}/{src_meta.get('codec')}, {src_meta.get('total_size_human')}, {src_meta.get('duration_clock')}) -> Target ({tgt_meta.get('format')}/{tgt_meta.get('codec')}, {tgt_meta.get('size_human')}, {tgt_meta.get('duration_clock')})",
+            conv_dur,
+        )
+        _log_debug("FFMPEG_CMD", f"FFMPEG reproducible command: {conv_meta.get('ffmpeg_command_str')}")
+        timings["audio_conversion"] = {
+            "elapsed_sec": round(conv_dur, 3),
+            "inputs_count": len(input_paths),
+            "source_format": src_meta.get("format"),
+            "source_codec": src_meta.get("codec"),
+            "source_size_human": src_meta.get("total_size_human"),
+            "source_duration_clock": src_meta.get("duration_clock"),
+            "target_format": tgt_meta.get("format"),
+            "target_codec": tgt_meta.get("codec"),
+            "target_size_human": tgt_meta.get("size_human"),
+            "target_duration_clock": tgt_meta.get("duration_clock"),
+            "ffmpeg_command_str": conv_meta.get("ffmpeg_command_str"),
+        }
+        if log_dir:
+            (log_dir / "audio_conversion.json").write_text(
+                json.dumps(conv_meta, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            _log_debug("ARTIFACT", f"Saved audio_conversion.json to {log_dir}")
+
         duration = _wav_duration_sec(wav_path)
+        _log_debug("AUDIO_PROBE", f"WAV duration: {duration:.2f}s ({_fmt_clock_sec(duration)})")
         emit_progress("transcribing", 12, f"Loading Whisper {model_name}")
 
+        t_load_w_start = time.time()
+        _log_debug("STAGE:WHISPER_LOAD", f"Loading Whisper model {model_name} on {req_device}...")
         dev, ctype = _pick_whisper_device(req_device)
         loaded = _load_whisper_model(model_name, model_dir, dev, ctype)
         if isinstance(loaded, tuple):
             model, dev, ctype = loaded
         else:
             model = loaded
+        t_load_w_end = time.time()
+        load_w_dur = t_load_w_end - t_load_w_start
+        _log_debug("STAGE:WHISPER_LOAD", f"Whisper {model_name} loaded on {dev}/{ctype}", load_w_dur)
+        timings["whisper_model_load"] = {
+            "elapsed_sec": round(load_w_dur, 3),
+            "model": model_name,
+            "device": dev,
+            "compute_type": ctype,
+        }
 
-        emit_progress("transcribing", 16, f"Whisper {model_name} ({dev}/{ctype})")
+        t_transcribe_start = time.time()
+        want_vad = bool(job.get("vad_filter", False))
+        beam_size = int(job.get("beam_size") or 5)
+        condition_on_previous_text = bool(job.get("condition_on_previous_text", False))
+        no_speech_threshold = float(job.get("no_speech_threshold") or 0.6)
+        compression_ratio_threshold = float(job.get("compression_ratio_threshold") or 2.4)
+        log_prob_threshold = float(job.get("log_prob_threshold") or -1.0)
+        vad_params = {"min_silence_duration_ms": 500} if want_vad else None
+
+        _log_debug(
+            "STAGE:WHISPER_TRANSCRIBE",
+            f"Transcribing audio with Whisper (duration: {duration:.2f}s, vad_filter={want_vad}, beam_size={beam_size})...",
+        )
+        emit_progress("transcribing", 16, f"Whisper {model_name} ({dev}/{ctype}, VAD={'on' if want_vad else 'off'})")
         audio_arr = _load_wav_float32(wav_path)
         fw_lang = None if lang in ("auto", "") else lang
-        segments_iter, info = model.transcribe(
-            audio_arr,
-            language=fw_lang,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
-            word_timestamps=True,
-            condition_on_previous_text=False,
-        )
+        transcribe_kwargs: dict[str, Any] = {
+            "language": fw_lang,
+            "beam_size": beam_size,
+            "vad_filter": want_vad,
+            "word_timestamps": True,
+            "condition_on_previous_text": condition_on_previous_text,
+            "no_speech_threshold": no_speech_threshold,
+            "compression_ratio_threshold": compression_ratio_threshold,
+            "log_prob_threshold": log_prob_threshold,
+        }
+        if want_vad and vad_params:
+            transcribe_kwargs["vad_parameters"] = vad_params
+
+        segments_iter, info = model.transcribe(audio_arr, **transcribe_kwargs)
 
         whisper_segments: list[dict[str, Any]] = []
         last_pct = 16
         max_pct = 65 if want_diarize else 92
+        raw_seg_count = 0
+        hallucination_count = 0
         for seg in segments_iter:
+            raw_seg_count += 1
+            seg_text = str(seg.text or "").strip()
+            if not seg_text:
+                continue
+
+            if _is_whisper_hallucination(seg_text):
+                hallucination_count += 1
+                _log_debug("WHISPER_HALLUCINATION_DROPPED", f"Dropped hallucination segment: '{seg_text}' at [{seg.start:.2f}s - {seg.end:.2f}s]")
+                continue
+
             words_list = []
             if getattr(seg, "words", None):
                 for w in seg.words:
@@ -812,18 +1414,73 @@ def run_job(job_path: str) -> int:
                         "end": float(w.end),
                         "word": str(w.word),
                     })
-            whisper_segments.append({
-                "start": float(seg.start),
-                "end": float(seg.end),
-                "text": str(seg.text or "").strip(),
-                "words": words_list,
-            })
+
+            sub_segs = _split_segment_by_words(
+                seg_start=float(seg.start),
+                seg_end=float(seg.end),
+                text=seg_text,
+                words=words_list,
+                max_gap_sec=2.5,
+                max_segment_len_sec=30.0,
+            )
+            whisper_segments.extend(sub_segs)
+
             if duration > 0:
                 pct = 16 + int(((float(seg.end) / duration) * (max_pct - 16)))
                 pct = max(last_pct, min(max_pct, pct))
                 if pct >= last_pct + 2:
                     last_pct = pct
                     emit_progress("transcribing", pct, f"{int(seg.end)}s / {int(duration)}s")
+
+        t_transcribe_end = time.time()
+        transcribe_dur = t_transcribe_end - t_transcribe_start
+        rtf_whisper = transcribe_dur / max(0.1, duration)
+        total_words_count = sum(len(s.get("words") or []) for s in whisper_segments)
+        _log_debug(
+            "STAGE:WHISPER_TRANSCRIBE",
+            f"Whisper transcribe completed: {len(whisper_segments)} segments (from {raw_seg_count} raw, {hallucination_count} hallucinations dropped), {total_words_count} words, RTF: {rtf_whisper:.3f}",
+            transcribe_dur,
+        )
+        timings["whisper_transcription"] = {
+            "elapsed_sec": round(transcribe_dur, 3),
+            "audio_duration_sec": round(duration, 2),
+            "real_time_factor": round(rtf_whisper, 4),
+            "segments_count": len(whisper_segments),
+            "raw_segments_count": raw_seg_count,
+            "words_count": total_words_count,
+            "vad_filter": want_vad,
+            "beam_size": beam_size,
+        }
+
+        if log_dir:
+            whisper_data = {
+                "model": model_name,
+                "device": dev,
+                "compute_type": ctype,
+                "language": getattr(info, "language", "") or lang,
+                "duration_sec": round(duration, 2),
+                "elapsed_sec": round(transcribe_dur, 3),
+                "real_time_factor": round(rtf_whisper, 4),
+                "parameters": {
+                    "vad_filter": want_vad,
+                    "vad_parameters": vad_params,
+                    "beam_size": beam_size,
+                    "condition_on_previous_text": condition_on_previous_text,
+                    "word_timestamps": True,
+                    "no_speech_threshold": no_speech_threshold,
+                    "compression_ratio_threshold": compression_ratio_threshold,
+                    "log_prob_threshold": log_prob_threshold,
+                },
+                "segments_count": len(whisper_segments),
+                "raw_segments_count": raw_seg_count,
+                "hallucinations_dropped_count": hallucination_count,
+                "words_count": total_words_count,
+                "segments": whisper_segments,
+            }
+            (log_dir / "whisper_output.json").write_text(json.dumps(whisper_data, ensure_ascii=False, indent=2), encoding="utf-8")
+            raw_w_text = " ".join(seg["text"] for seg in whisper_segments if seg.get("text")).strip()
+            (log_dir / "whisper_raw.txt").write_text(raw_w_text, encoding="utf-8")
+            _log_debug("ARTIFACT", f"Saved whisper_output.json ({len(whisper_segments)} segments, {total_words_count} words) and whisper_raw.txt to {log_dir}")
 
         # Release Whisper VRAM before loading pyannote if both use CUDA
         del model
@@ -840,10 +1497,12 @@ def run_job(job_path: str) -> int:
         speaker_turns: list[dict[str, Any]] = []
         diarized = False
 
+        t_diarize_start = time.time()
         if want_diarize:
             remote_cfg = job.get("remote_diarize") or {}
             if remote_cfg.get("enabled") and remote_cfg.get("base_uri"):
                 emit_progress("diarizing", 70, "Sending audio to remote speaker diarization server")
+                _log_debug("STAGE:DIARIZE", f"Sending audio to remote diarization server at {remote_cfg.get('base_uri')}...")
                 turns, derr = _run_remote_diarization(
                     wav_path,
                     base_uri=remote_cfg["base_uri"],
@@ -859,8 +1518,10 @@ def run_job(job_path: str) -> int:
                     diarized = bool(turns)
             elif not hf_token:
                 warnings.append("missing_hf_token")
+                _log_debug("STAGE:DIARIZE", "Skipping diarization: missing HF_TOKEN")
             else:
                 emit_progress("diarizing", 70, "Running pyannote/speaker-diarization-3.1")
+                _log_debug("STAGE:DIARIZE", "Starting local pyannote speaker diarization...")
                 turns, derr = _run_pyannote_diarization(
                     wav_path,
                     hf_token=hf_token,
@@ -878,9 +1539,149 @@ def run_job(job_path: str) -> int:
                     speaker_turns = turns
                     diarized = bool(turns)
 
+        t_diarize_end = time.time()
+        diarize_dur = t_diarize_end - t_diarize_start
+        rtf_diarize = diarize_dur / max(0.1, duration)
+
+        speaker_stats: dict[str, dict[str, Any]] = {}
+        for t in speaker_turns:
+            spk = t.get("speaker") or "UNKNOWN"
+            t_len = max(0.0, float(t.get("end", 0)) - float(t.get("start", 0)))
+            if spk not in speaker_stats:
+                speaker_stats[spk] = {
+                    "speaker": spk,
+                    "total_speaking_sec": 0.0,
+                    "turns_count": 0,
+                }
+            speaker_stats[spk]["total_speaking_sec"] += t_len
+            speaker_stats[spk]["turns_count"] += 1
+
+        total_spoken_sec = sum(s["total_speaking_sec"] for s in speaker_stats.values())
+        for spk, st in speaker_stats.items():
+            st["total_speaking_sec"] = round(st["total_speaking_sec"], 3)
+            st["total_speaking_clock"] = _fmt_clock_sec(st["total_speaking_sec"])
+            st["speaking_ratio_percent"] = round((st["total_speaking_sec"] / max(0.001, total_spoken_sec)) * 100, 1)
+
+        unique_speakers = sorted(speaker_stats.keys())
+        remote_cfg = job.get("remote_diarize") or {}
+        is_remote = bool(remote_cfg.get("enabled") and remote_cfg.get("base_uri"))
+
+        pipeline_kwargs_record: dict[str, Any] = {}
+        if job.get("num_speakers") and int(job["num_speakers"]) > 0:
+            pipeline_kwargs_record["num_speakers"] = int(job["num_speakers"])
+        if job.get("min_speakers") and int(job["min_speakers"]) > 0:
+            pipeline_kwargs_record["min_speakers"] = int(job["min_speakers"])
+        if job.get("max_speakers") and int(job["max_speakers"]) > 0:
+            pipeline_kwargs_record["max_speakers"] = int(job["max_speakers"])
+
+        _log_debug("STAGE:DIARIZE", f"Speaker diarization finished: {len(speaker_turns)} turns across {len(unique_speakers)} speakers, RTF: {rtf_diarize:.3f}", diarize_dur)
+        timings["speaker_diarization"] = {
+            "elapsed_sec": round(diarize_dur, 3),
+            "real_time_factor": round(rtf_diarize, 4),
+            "turns_count": len(speaker_turns),
+            "speakers_count": len(unique_speakers),
+            "diarized": diarized,
+            "device": dev,
+            "num_speakers": job.get("num_speakers"),
+            "min_speakers": job.get("min_speakers"),
+            "max_speakers": job.get("max_speakers"),
+        }
+
+        if log_dir and want_diarize:
+            diarize_data = {
+                "pipeline": {
+                    "name": "pyannote/speaker-diarization-3.1",
+                    "segmentation_model": "pyannote/segmentation-3.0",
+                    "mode": "remote" if is_remote else "local",
+                    "remote_endpoint": remote_cfg.get("base_uri") if is_remote else None,
+                    "device": dev,
+                    "hf_token_configured": bool(hf_token),
+                },
+                "input_audio": {
+                    "path": wav_path,
+                    "format": "wav",
+                    "codec": "pcm_s16le",
+                    "sample_rate": 16000,
+                    "channels": 1,
+                    "channel_layout": "mono",
+                    "duration_sec": round(duration, 3),
+                    "duration_clock": _fmt_clock_sec(duration),
+                    "in_memory_tensor_preloaded": True,
+                },
+                "parameters": {
+                    "num_speakers": job.get("num_speakers"),
+                    "min_speakers": job.get("min_speakers"),
+                    "max_speakers": job.get("max_speakers"),
+                    "pipeline_kwargs": pipeline_kwargs_record,
+                },
+                "results": {
+                    "diarized": diarized,
+                    "turns_count": len(speaker_turns),
+                    "speakers_count": len(unique_speakers),
+                    "speakers": unique_speakers,
+                    "speaker_statistics": speaker_stats,
+                    "total_spoken_sec": round(total_spoken_sec, 3),
+                    "total_spoken_clock": _fmt_clock_sec(total_spoken_sec),
+                    "turns": speaker_turns,
+                    "warnings": warnings,
+                },
+                "timing": {
+                    "elapsed_sec": round(diarize_dur, 3),
+                    "real_time_factor": round(rtf_diarize, 4),
+                    "real_time_factor_str": f"{rtf_diarize:.3f}x realtime",
+                },
+                "enabled": want_diarize,
+                "diarized": diarized,
+                "device": dev,
+                "duration_sec": round(duration, 2),
+                "elapsed_sec": round(diarize_dur, 3),
+                "real_time_factor": round(rtf_diarize, 4),
+                "turns_count": len(speaker_turns),
+                "speakers_count": len(unique_speakers),
+                "turns": speaker_turns,
+                "warnings": warnings,
+            }
+            (log_dir / "diarization_output.json").write_text(json.dumps(diarize_data, ensure_ascii=False, indent=2), encoding="utf-8")
+            timeline_header = [
+                "=== THONG SO DAU VAO PHAN TACH GIONG NOI ===",
+                f"Pipeline: pyannote/speaker-diarization-3.1 ({'remote' if is_remote else 'local'})",
+                f"Device: {dev}",
+                f"Audio duration: {_fmt_clock_sec(duration)} ({duration:.2f}s)",
+                f"Parameters: num_speakers={job.get('num_speakers')}, min_speakers={job.get('min_speakers')}, max_speakers={job.get('max_speakers')}",
+                f"Processing time: {diarize_dur:.3f}s (RTF: {rtf_diarize:.3f}x)",
+                "",
+                "=== TONG KET THEO NGUOI NOI ===",
+            ]
+            for spk in unique_speakers:
+                s_info = speaker_stats[spk]
+                timeline_header.append(
+                    f"- {spk}: {s_info['turns_count']} turns, {s_info['total_speaking_clock']} ({s_info['speaking_ratio_percent']}%)"
+                )
+            timeline_header.append(f"Tong so nguoi noi: {len(unique_speakers)}")
+            timeline_header.append("")
+            timeline_header.append("=== DONG THOI GIAN CHI TIET (TIMELINE) ===")
+
+            timeline_lines = timeline_header + [
+                f"[{_fmt_clock_sec(t['start'])} -> {_fmt_clock_sec(t['end'])}] {t.get('speaker', '')}"
+                for t in speaker_turns
+            ]
+            (log_dir / "diarization_timeline.txt").write_text("\n".join(timeline_lines), encoding="utf-8")
+            _log_debug("ARTIFACT", f"Saved diarization_output.json and diarization_timeline.txt to {log_dir}")
+
         emit_progress("merging", 95, "Merging timestamps and speakers")
+        t_merge_start = time.time()
+        _log_debug("STAGE:MERGE", "Merging Whisper words with speaker turns...")
         merged_segments = assign_speakers_word_level(whisper_segments, speaker_turns)
         speakers = summarize_speakers(merged_segments)
+        t_merge_end = time.time()
+        merge_dur = t_merge_end - t_merge_start
+        _log_debug("STAGE:MERGE", f"Merge completed ({len(merged_segments)} segments across {len(speakers)} speakers)", merge_dur)
+        timings["speaker_merging"] = {
+            "elapsed_sec": round(merge_dur, 3),
+            "merged_segments_count": len(merged_segments),
+            "speakers_count": len(speakers),
+        }
+
         raw_text_lines = []
         for seg in merged_segments:
             sec = int(float(seg["start"]))
@@ -892,6 +1693,31 @@ def run_job(job_path: str) -> int:
                 raw_text_lines.append(f"[{ts} - {spk}] {seg['text']}")
             else:
                 raw_text_lines.append(f"[{ts}] {seg['text']}")
+
+        if log_dir:
+            (log_dir / "merged_segments.json").write_text(json.dumps(merged_segments, ensure_ascii=False, indent=2), encoding="utf-8")
+            (log_dir / "meeting_raw.txt").write_text("\n".join(raw_text_lines), encoding="utf-8")
+            _log_debug("ARTIFACT", f"Saved merged_segments.json and meeting_raw.txt to {log_dir}")
+
+        total_dur = time.time() - t_run_start
+        _log_debug("JOB_DONE", f"Worker finished successfully in {total_dur:.2f}s")
+        timings["total_processing"] = {
+            "elapsed_sec": round(total_dur, 3),
+            "overall_rtf": round(total_dur / max(0.1, duration), 4),
+        }
+
+        if log_dir:
+            debug_timing = {
+                "job_id": job.get("job_id") or "",
+                "timestamp": datetime.now().astimezone().isoformat(),
+                "audio_duration_sec": round(duration, 2),
+                "total_elapsed_sec": round(total_dur, 3),
+                "overall_rtf": round(total_dur / max(0.1, duration), 4),
+                "stages": timings,
+                "system": _get_system_debug_info(),
+            }
+            (log_dir / "debug_timing.json").write_text(json.dumps(debug_timing, ensure_ascii=False, indent=2), encoding="utf-8")
+            _log_debug("ARTIFACT", f"Saved debug_timing.json to {log_dir}")
 
         result_payload = {
             "type": "result",
@@ -906,10 +1732,15 @@ def run_job(job_path: str) -> int:
             "model_used": model_name,
             "diarized": diarized,
             "warnings": warnings,
+            "timings": timings,
         }
         if output_json:
             os.makedirs(os.path.dirname(output_json), exist_ok=True)
             Path(output_json).write_text(json.dumps(result_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        emit_progress("done", 100, "Done")
+        emit(result_payload)
+        return 0
 
         emit_progress("done", 100, "Done")
         emit(result_payload)

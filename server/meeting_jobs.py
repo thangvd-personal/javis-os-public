@@ -395,9 +395,13 @@ async def _execute_job(
         tail_lines: list[str] = []
         now_ts = time.time()
         now_dt = localefmt.now()
-        log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        ts_str = now_dt.strftime("%Y.%m.%d-%H.%M.%S")
+        log_base_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        log_dir = log_base_dir / ts_str
+        if log_dir.exists():
+            log_dir = log_base_dir / f"{ts_str}_{job_id[:6]}"
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / f"{job_id}.log"
+        log_file = log_dir / "execution.log"
         store.update_job(
             job_id,
             started_at=now_ts,
@@ -467,7 +471,11 @@ async def _execute_job(
                 "num_speakers": int(job.get("num_speakers") or 0) or None,
                 "min_speakers": int(job.get("min_speakers") or 0) or None,
                 "max_speakers": int(job.get("max_speakers") or 0) or None,
+                "vad_filter": bool(job.get("vad_filter")) if "vad_filter" in job else bool(mc.get("vad_filter", False)),
                 "output_json": str(out_json),
+                "log_dir": str(log_dir),
+                "job_id": job_id,
+                "debug": True,
             }
             job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
 
@@ -488,9 +496,6 @@ async def _execute_job(
             )
 
             last_result: dict[str, Any] | None = None
-            log_dir = meeting_stt.audio_dir()
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_file = log_dir / f"{job_id}.log"
 
             async def _read_stream() -> None:
                 nonlocal last_result
@@ -636,8 +641,7 @@ async def _execute_job(
                     elapsed_sec=elapsed,
                 )
                 try:
-                    log_file.unlink(missing_ok=True)
-                    store.update_job(job_id, log_path="")
+                    (log_dir / "result_meeting.md").write_text(md_text, encoding="utf-8")
                 except Exception:
                     pass
                 return
@@ -710,10 +714,8 @@ async def _execute_job(
                 finished_iso=fin_dt.isoformat(),
                 elapsed_sec=elapsed,
             )
-            # Log file is removed on success to free disk space
             try:
-                log_file.unlink(missing_ok=True)
-                store.update_job(job_id, log_path="")
+                (log_dir / "result_meeting.md").write_text(md_text, encoding="utf-8")
             except Exception:
                 pass
         except asyncio.CancelledError:
@@ -809,9 +811,13 @@ async def _execute_remote_diarize_job(job_id: str) -> None:
         tail_lines: list[str] = []
         now_ts = time.time()
         now_dt = localefmt.now()
-        log_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        ts_str = now_dt.strftime("%Y.%m.%d-%H.%M.%S")
+        log_base_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        log_dir = log_base_dir / ts_str
+        if log_dir.exists():
+            log_dir = log_base_dir / f"{ts_str}_{job_id[:6]}"
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = log_dir / f"{job_id}.log"
+        log_file = log_dir / "execution.log"
         store.update_job(
             job_id,
             started_at=now_ts,
@@ -861,7 +867,11 @@ async def _execute_remote_diarize_job(job_id: str) -> None:
                 "num_speakers": int(job.get("num_speakers") or 0) or None,
                 "min_speakers": int(job.get("min_speakers") or 0) or None,
                 "max_speakers": int(job.get("max_speakers") or 0) or None,
+                "vad_filter": bool(job.get("vad_filter")) if "vad_filter" in job else bool(mc.get("vad_filter", False)),
                 "output_json": str(out_json),
+                "log_dir": str(log_dir),
+                "job_id": job_id,
+                "debug": True,
             }
             job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
 
@@ -959,11 +969,6 @@ async def _execute_remote_diarize_job(job_id: str) -> None:
                 finished_iso=fin_dt.isoformat(),
                 elapsed_sec=elapsed,
             )
-            try:
-                log_file.unlink(missing_ok=True)
-                store.update_job(job_id, log_path="")
-            except Exception:
-                pass
         except Exception as e:
             fin_ts = time.time()
             fin_dt = localefmt.now()

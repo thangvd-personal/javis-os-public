@@ -135,6 +135,7 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     if lang not in VALID_LANGUAGES:
         lang = "vi"
     diarize = True if "diarize" not in raw else bool(raw.get("diarize"))
+    vad_filter = False if "vad_filter" not in raw else bool(raw.get("vad_filter"))
     try:
         keep_days = int(raw.get("keep_audio_days", 30))
     except (TypeError, ValueError):
@@ -153,6 +154,7 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "device": dev,
         "language": lang,
         "diarize": diarize,
+        "vad_filter": vad_filter,
         "keep_audio_days": keep_days,
         "hf_token": tok,
         "remote_mode": remote_mode,
@@ -209,6 +211,8 @@ def update_config(patch: dict[str, Any]) -> dict[str, Any]:
             clean["language"] = l
     if "diarize" in patch:
         clean["diarize"] = bool(patch["diarize"])
+    if "vad_filter" in patch:
+        clean["vad_filter"] = bool(patch["vad_filter"])
     if "keep_audio_days" in patch:
         try:
             clean["keep_audio_days"] = max(1, min(3650, int(patch["keep_audio_days"])))
@@ -523,6 +527,7 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
             "device": mc["device"],
             "language": mc["language"],
             "diarize": mc["diarize"],
+            "vad_filter": mc["vad_filter"],
             "keep_audio_days": mc["keep_audio_days"],
             "remote_mode": mc["remote_mode"],
             "server_base_uri": mc["server_base_uri"],

@@ -124,6 +124,7 @@ _MJ_EXTRA_COLS = (
     ("finished_iso", "TEXT NOT NULL DEFAULT ''"),
     ("elapsed_sec", "REAL NOT NULL DEFAULT 0"),
     ("log_path", "TEXT NOT NULL DEFAULT ''"),
+    ("vad_filter", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 
@@ -451,17 +452,28 @@ def public_job(job: dict[str, Any] | None) -> dict[str, Any] | None:
         out["has_log"] = True
     else:
         jid = str(out.get("id") or "")
+        found = False
         if jid:
             try:
                 candidate = Path(cfgmod.STATE_DIR) / "meeting-logs" / f"{jid}.log"
                 if candidate.is_file():
                     out["has_log"] = True
                     out["log_path"] = str(candidate)
+                    found = True
                 else:
-                    out["has_log"] = False
+                    base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+                    if base.is_dir():
+                        for d in base.iterdir():
+                            if d.is_dir() and jid in d.name:
+                                cand_exec = d / "execution.log"
+                                if cand_exec.is_file():
+                                    out["has_log"] = True
+                                    out["log_path"] = str(cand_exec)
+                                    found = True
+                                    break
             except Exception:
-                out["has_log"] = False
-        else:
+                pass
+        if not found and not out.get("has_log"):
             out["has_log"] = False
     return out
 
@@ -509,6 +521,7 @@ def _job_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "finished_iso": row["finished_iso"] if "finished_iso" in keys else "",
         "elapsed_sec": float(row["elapsed_sec"]) if "elapsed_sec" in keys else 0.0,
         "log_path": row["log_path"] if "log_path" in keys else "",
+        "vad_filter": bool(row["vad_filter"]) if "vad_filter" in keys else False,
     }
 
 
@@ -810,6 +823,7 @@ class VoiceRecordStore:
         finished_iso: str = "",
         elapsed_sec: float = 0.0,
         log_path: str = "",
+        vad_filter: bool = False,
     ) -> dict[str, Any]:
         jid = uuid.uuid4().hex
         now_ts = float(created_at if created_at is not None else time.time())
@@ -819,8 +833,8 @@ class VoiceRecordStore:
                 "(id, created_at, created_iso, updated_at, brain, brain_path, title, status, progress, "
                 "stage_detail, upload_mode, file_ext, model, device, language, diarize, "
                 "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks, audio_path, record_id, pinned, "
-                "origin, job_type, duration_sec, estimated_sec, started_at, started_iso, finished_at, finished_iso, elapsed_sec, log_path) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "origin, job_type, duration_sec, estimated_sec, started_at, started_iso, finished_at, finished_iso, elapsed_sec, log_path, vad_filter) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     jid,
                     now_ts,
@@ -853,6 +867,7 @@ class VoiceRecordStore:
                     str(finished_iso or ""),
                     float(elapsed_sec or 0.0),
                     str(log_path or ""),
+                    1 if vad_filter else 0,
                 ),
             )
             self._db.commit()
@@ -864,6 +879,16 @@ class VoiceRecordStore:
             row = self._db.execute("SELECT * FROM meeting_jobs WHERE id=?", (job_id,)).fetchone()
         return _job_to_dict(row)
 
+    def get_job_by_record(self, record_id: str) -> dict[str, Any] | None:
+        if not record_id:
+            return None
+        with self._lock:
+            row = self._db.execute(
+                "SELECT * FROM meeting_jobs WHERE record_id=? ORDER BY created_at DESC LIMIT 1",
+                (str(record_id),),
+            ).fetchone()
+        return _job_to_dict(row)
+
     def update_job(self, job_id: str, **fields: Any) -> dict[str, Any] | None:
         allowed = {
             "status", "progress", "stage_detail", "upload_mode", "file_ext",
@@ -871,7 +896,7 @@ class VoiceRecordStore:
             "pinned", "record_id", "error", "warnings_json", "log_tail",
             "origin", "job_type", "estimated_sec", "result_json",
             "started_at", "started_iso", "finished_at", "finished_iso",
-            "elapsed_sec", "log_path",
+            "elapsed_sec", "log_path", "vad_filter",
         }
         sets: list[str] = ["updated_at=?"]
         vals: list[Any] = [time.time()]
