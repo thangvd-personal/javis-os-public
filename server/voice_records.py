@@ -200,19 +200,27 @@ def effective_segments(
     """Combine immutable raw segments with optional normalized text and speaker mapping."""
     base = list(segments or [])
     norm_by_idx: dict[int, str] = {}
+    dropped_indices: set[int] = set()
     if isinstance(normalized_segments, list):
         for i, ns in enumerate(normalized_segments):
-            if isinstance(ns, dict) and str(ns.get("text") or "").strip():
+            if isinstance(ns, dict):
                 idx = int(ns.get("idx", i))
-                norm_by_idx[idx] = str(ns.get("text") or "").strip()
+                if ns.get("dropped"):
+                    dropped_indices.add(idx)
+                elif str(ns.get("text") or "").strip():
+                    norm_by_idx[idx] = str(ns.get("text") or "").strip()
 
     out: list[dict[str, Any]] = []
     for i, seg in enumerate(base):
         if not isinstance(seg, dict):
             continue
+        if i in dropped_indices:
+            continue
         sid = str(seg.get("speaker") or "").strip()
         disp = resolve_speaker_name(sid, speaker_map)
         txt = norm_by_idx.get(i) or str(seg.get("text") or "").strip()
+        if not txt:
+            continue
         out.append({
             "idx": i,
             "start": float(seg.get("start", 0.0)),
@@ -649,6 +657,26 @@ class VoiceRecordStore:
             updated = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
         return _row_to_dict(updated)
 
+    def restore_diarized_raw(
+        self,
+        record_id: str,
+        *,
+        rendered_text: str = "",
+    ) -> dict[str, Any] | None:
+        """Khoi phuc ve ban tho diarized ban dau, xoa toan bo normalized_segments."""
+        now_ts = time.time()
+        with self._lock:
+            row = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
+            if not row:
+                return None
+            self._db.execute(
+                "UPDATE voice_records SET normalized_text=?, normalized_segments_json='[]', source='raw', status='diarized', updated_at=? WHERE id=?",
+                (str(rendered_text or ""), now_ts, record_id),
+            )
+            self._db.commit()
+            updated = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
+        return _row_to_dict(updated)
+
     def update_speaker_map(
         self,
         record_id: str,
@@ -692,6 +720,7 @@ class VoiceRecordStore:
         duration_sec: float | None = None,
         model_used: str = "",
         device_used: str = "",
+        job_id: str = "",
     ) -> dict[str, Any] | None:
         now_ts = time.time()
         with self._lock:
@@ -704,10 +733,11 @@ class VoiceRecordStore:
             dur = float(duration_sec if duration_sec is not None else row["duration_sec"] or 0.0)
             mu = str(model_used or row["model_used"] or "")
             du = str(device_used or row["device_used"] or "")
+            jid = str(job_id or row["job_id"] or "")
             self._db.execute(
                 "UPDATE voice_records SET segments_json=?, raw_text=?, warnings_json=?, "
-                "normalized_text=?, duration_sec=?, model_used=?, device_used=?, updated_at=? WHERE id=?",
-                (seg_json, str(raw_text or ""), warn_json, norm_text, dur, mu, du, now_ts, record_id),
+                "normalized_text=?, duration_sec=?, model_used=?, device_used=?, job_id=?, updated_at=? WHERE id=?",
+                (seg_json, str(raw_text or ""), warn_json, norm_text, dur, mu, du, jid, now_ts, record_id),
             )
             self._db.commit()
             updated = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()

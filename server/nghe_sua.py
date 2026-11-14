@@ -43,7 +43,8 @@ BASE_VOCABULARY = ("Javis",)
 # phải tự khác âm với các tên còn lại, nếu không lớp sửa sẽ đổi nhầm: "Groq" và "Grok" đều có,
 # nên nói "Groq" vẫn giữ nguyên, còn "Grox" mới được sửa thành "Grok" (2026-11-06).
 AI_TERMS = ("Javis OS", "Groq", "Grok", "Claude", "ChatGPT", "Gemini", "OpenAI", "OpenRouter",
-             "DeepSeek", "Ollama", "Whisper", "Codex", "Antigravity", "Anthropic", "Telegram")
+             "DeepSeek", "Ollama", "Whisper", "Codex", "Antigravity", "Anthropic", "Telegram",
+             "FPT", "Legal AI", "white label")
 MAX_VOCABULARY = 60          # Whisper chỉ nhìn ~224 token cuối của prompt; hơn nữa là vô ích
 MAX_GHEP = 3              # ghép tối đa 3 tiếng liền nhau làm một ứng viên ("Gia vít", "Open Router")
 MAX_GOI_Y = 600           # trần độ dài prompt gửi Whisper (stt.groq_nghe cũng cắt ở mức này)
@@ -60,6 +61,7 @@ TU_TIENG_ANH_MOI = (
     # 0.231.0: AI products the owner names all the time; "ChatGPT" came out as "chắc gpt".
     "ChatGPT", "OpenAI", "Claude", "Gemini", "Grok", "OpenRouter", "Antigravity", "Telegram", "Zalo",
     "livestream", "inbox", "content", "marketing", "email",
+    "FPT", "Legal AI", "white label", "white-label", "web", "ký số", "module", "hạ tầng",
 )
 
 # Trùng âm từ mức này trở lên: sửa ở mọi vị trí (thực tế là trùng khoá âm hoàn toàn).

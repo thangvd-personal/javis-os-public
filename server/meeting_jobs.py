@@ -454,6 +454,44 @@ async def _execute_job(
             up_dir.mkdir(parents=True, exist_ok=True)
             job_json = up_dir / "worker_job.json"
             out_json = up_dir / "worker_out.json"
+
+            job_type = str(job.get("job_type") or "meeting")
+            is_diarize_only = bool(job.get("diarize_only") or job_type == "diarize")
+            whisper_segs = list(job.get("whisper_segments") or [])
+            if is_diarize_only and not whisper_segs and job.get("record_id"):
+                rec_ex = store.get(job["record_id"])
+                found_from_file = False
+                candidates = []
+                if rec_ex and rec_ex.get("job_id"):
+                    candidates.append(rec_ex["job_id"])
+                for p_jid in candidates:
+                    pj = store.get_job(p_jid)
+                    if pj and pj.get("log_path"):
+                        p_file = Path(pj["log_path"]).parent / "whisper_output.json"
+                        if p_file.is_file():
+                            try:
+                                w_data = json.loads(p_file.read_text(encoding="utf-8"))
+                                w_segs = list(w_data.get("segments") or [])
+                                if w_segs:
+                                    whisper_segs = w_segs
+                                    found_from_file = True
+                                    break
+                            except Exception:
+                                pass
+                if not found_from_file and rec_ex and rec_ex.get("log_path"):
+                    p_file = Path(rec_ex["log_path"]).parent / "whisper_output.json"
+                    if p_file.is_file():
+                        try:
+                            w_data = json.loads(p_file.read_text(encoding="utf-8"))
+                            w_segs = list(w_data.get("segments") or [])
+                            if w_segs:
+                                whisper_segs = w_segs
+                                found_from_file = True
+                        except Exception:
+                            pass
+                if not found_from_file and rec_ex and rec_ex.get("segments"):
+                    whisper_segs = list(rec_ex.get("segments") or [])
+
             worker_payload = {
                 "input_paths": input_paths,
                 "combined_audio_out": final_audio_path,
@@ -463,6 +501,8 @@ async def _execute_job(
                 "device": job.get("device") or mc["device"],
                 "language": job.get("language") or mc["language"],
                 "diarize": diarize_req,
+                "diarize_only": is_diarize_only and bool(whisper_segs),
+                "whisper_segments": whisper_segs if is_diarize_only else [],
                 "remote_diarize": {
                     "enabled": is_remote_diarize,
                     "base_uri": mc.get("client_base_uri") or "",
@@ -620,6 +660,7 @@ async def _execute_job(
                     duration_sec=duration_sec or float(existing_rec.get("duration_sec") or 0.0),
                     model_used=model_used or str(existing_rec.get("model_used") or ""),
                     device_used=device_used or str(existing_rec.get("device_used") or ""),
+                    job_id=job_id,
                 )
                 fin_ts = time.time()
                 fin_dt = localefmt.now()

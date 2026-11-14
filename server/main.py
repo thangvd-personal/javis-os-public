@@ -19540,6 +19540,13 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
                 "ai": bool(res.get("ai")),
                 "raw_segments_count": len(segments),
                 "normalized_segments_count": len(norm_segs),
+                "dropped_segments_count": len(res.get("dropped_segments") or []),
+                "flagged_segments_count": len(res.get("review_queue") or []),
+                "context_summary": res.get("context_summary") or "",
+                "extracted_glossary": res.get("extracted_glossary") or [],
+                "batch_reports": res.get("batch_reports") or [],
+                "dropped_segments": res.get("dropped_segments") or [],
+                "review_queue": res.get("review_queue") or [],
                 "raw_segments": segments,
                 "normalized_segments": norm_segs,
             }
@@ -19555,6 +19562,10 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
             "record": voice_records.public_record(updated or rec),
             "ai": bool(res.get("ai")),
             "source": str(res.get("source") or ""),
+            "dropped_count": len(res.get("dropped_segments") or []),
+            "flagged_count": len(res.get("review_queue") or []),
+            "dropped_segments": res.get("dropped_segments") or [],
+            "review_queue": res.get("review_queue") or [],
         }
 
     raw_text = str(rec.get("raw_text") or "").strip()
@@ -19595,6 +19606,367 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
     }
 
 
+@app.post("/voice-records/{record_id}/restore-raw")
+async def voice_record_restore_raw(record_id: str, request: Request):
+    """Khoi phuc bien ban cuoc hop ve ban tho diarized ban dau truoc khi chuan hoa."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    try:
+        target = _record_target_file(rec)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    segments = rec.get("segments") or []
+    smap = rec.get("speaker_map") or {}
+    rendered = voice_records.render_meeting_markdown(
+        created_iso=rec.get("created_iso") or "",
+        duration_sec=float(rec.get("duration_sec") or 0),
+        model_used=rec.get("model_used") or "",
+        segments=segments,
+        speaker_map=smap,
+        normalized_segments=None,
+        title=str(body.get("title") or "").strip(),
+    )
+    await asyncio.to_thread(_atomic_write_text, target, rendered)
+    updated = store.restore_diarized_raw(record_id, rendered_text=rendered)
+    return {"ok": True, "record": voice_records.public_record(updated or rec)}
+
+
+@app.get("/voice-records/{record_id}/source-texts")
+def voice_record_source_texts(record_id: str):
+    """Lay noi dung ban goc tu Whisper va ban sau khi da tach nguoi noi."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+
+    raw_diarized = str(rec.get("raw_text") or "").strip()
+    raw_whisper = ""
+    job_id = str(rec.get("job_id") or "").strip()
+    job_rec = store.get_job(job_id) if job_id else None
+    if not job_rec:
+        job_rec = store.get_job_by_record(record_id)
+
+    log_dirs_to_check: list[Path] = []
+    if job_rec and job_rec.get("log_path"):
+        lp = Path(job_rec["log_path"])
+        ldir = lp.parent if lp.is_file() else lp
+        if ldir.is_dir():
+            log_dirs_to_check.append(ldir)
+
+    # Quet fallback cac thu muc meeting-logs neu co
+    try:
+        logs_base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        if logs_base.is_dir():
+            for d in sorted(logs_base.iterdir(), reverse=True):
+                if d.is_dir() and d not in log_dirs_to_check:
+                    log_dirs_to_check.append(d)
+    except Exception:
+        pass
+
+    for ldir in log_dirs_to_check:
+        if not raw_whisper:
+            w_file = ldir / "whisper_raw.txt"
+            if w_file.is_file():
+                try:
+                    txt = w_file.read_text(encoding="utf-8").strip()
+                    if txt:
+                        raw_whisper = txt
+                except Exception:
+                    pass
+            if not raw_whisper:
+                w_json = ldir / "whisper_output.json"
+                if w_json.is_file():
+                    try:
+                        wdata = json.loads(w_json.read_text(encoding="utf-8"))
+                        wsegs = wdata.get("segments") or []
+                        txt = " ".join(s.get("text", "") for s in wsegs if s.get("text")).strip()
+                        if txt:
+                            raw_whisper = txt
+                    except Exception:
+                        pass
+        if not raw_diarized:
+            m_file = ldir / "meeting_raw.txt"
+            if m_file.is_file():
+                try:
+                    txt = m_file.read_text(encoding="utf-8").strip()
+                    if txt:
+                        raw_diarized = txt
+                except Exception:
+                    pass
+        if raw_whisper and raw_diarized:
+            break
+
+    # Neu raw_diarized chua co, dung lai tu cac segments
+    if not raw_diarized and rec.get("segments"):
+        smap = rec.get("speaker_map") or {}
+        lines = []
+        for s in rec["segments"]:
+            sid = str(s.get("speaker") or "").strip()
+            disp = smap.get(sid) or sid
+            sec = int(float(s.get("start", 0) or 0))
+            mm, ss = divmod(sec, 60)
+            if disp:
+                lines.append(f"[{mm:02d}:{ss:02d} - {disp}] {s.get('text', '')}")
+            else:
+                lines.append(f"[{mm:02d}:{ss:02d}] {s.get('text', '')}")
+        raw_diarized = "\n\n".join(lines)
+
+    # Neu raw_whisper van chua co, lay tu cac segments
+    if not raw_whisper and rec.get("segments"):
+        raw_whisper = " ".join(str(s.get("text") or "").strip() for s in rec["segments"] if s.get("text")).strip()
+
+    return {
+        "ok": True,
+        "raw_whisper": raw_whisper,
+        "raw_diarized": raw_diarized,
+        "whisper_raw": raw_whisper,
+        "diarized_raw": raw_diarized,
+        "has_whisper_raw": bool(raw_whisper),
+    }
+
+
+@app.get("/voice-records/{record_id}/review-queue")
+def voice_record_review_queue(record_id: str):
+    """Lay danh sach cac cau bi canh bao lech nghia hoac co tu la can nguoi dung duyet."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+
+    review_queue = []
+    dropped_segments = []
+
+    # Uu tien doc tu normalization_result.json trong log_dir
+    job_id = str(rec.get("job_id") or "").strip()
+    job_rec = store.get_job(job_id) if job_id else None
+    if not job_rec:
+        job_rec = store.get_job_by_record(record_id)
+    norm_art_path = None
+    if job_rec and job_rec.get("log_path"):
+        lp = Path(job_rec["log_path"])
+        ldir = lp.parent if lp.is_file() else lp
+        norm_art = ldir / "normalization_result.json"
+        if norm_art.is_file():
+            norm_art_path = norm_art
+            try:
+                data = json.loads(norm_art.read_text(encoding="utf-8"))
+                review_queue = data.get("review_queue") or []
+                dropped_segments = data.get("dropped_segments") or []
+            except Exception:
+                pass
+
+    ns_map = {}
+    for ns in (rec.get("normalized_segments") or []):
+        if isinstance(ns, dict) and "idx" in ns:
+            ns_map[int(ns["idx"])] = ns
+
+    out_queue = []
+    for it in review_queue:
+        if not isinstance(it, dict):
+            continue
+        item = dict(it)
+        idx_val = int(item.get("idx") if item.get("idx") is not None else item.get("seg_idx", 0))
+        item["idx"] = idx_val
+        item["seg_idx"] = idx_val
+        raw_val = str(item.get("raw") or item.get("raw_text") or "")
+        item["raw"] = raw_val
+        item["raw_text"] = raw_val
+        norm_val = str(item.get("normalized") or item.get("normalized_text") or "")
+        item["normalized"] = norm_val
+        item["normalized_text"] = norm_val
+        reason_val = str(item.get("flag_reason") or item.get("drift_reason") or "")
+        item["flag_reason"] = reason_val
+        item["drift_reason"] = reason_val
+
+        curr_ns = ns_map.get(idx_val)
+        if curr_ns:
+            if curr_ns.get("accepted"):
+                item["accepted"] = True
+                item["status"] = "accepted"
+            elif curr_ns.get("reverted"):
+                item["reverted"] = True
+                item["status"] = "reverted"
+                item["normalized"] = str(curr_ns.get("text") or raw_val)
+                item["normalized_text"] = item["normalized"]
+            elif not curr_ns.get("flagged_for_review", False) and curr_ns.get("accepted") is not False:
+                # If flagged_for_review was cleared previously by an accept action
+                item["accepted"] = True
+                item["status"] = "accepted"
+        out_queue.append(item)
+
+    if not out_queue and rec.get("normalized_segments"):
+        segs = rec.get("segments") or []
+        smap = rec.get("speaker_map") or {}
+        for ns in rec["normalized_segments"]:
+            if isinstance(ns, dict) and (ns.get("flagged_for_review") or ns.get("flagged") or ns.get("accepted") or ns.get("reverted")):
+                idx = int(ns.get("idx", 0))
+                orig = segs[idx] if idx < len(segs) else {}
+                sid = str(orig.get("speaker") or "").strip()
+                raw_t = str(orig.get("text") or "")
+                norm_t = str(ns.get("text") or "")
+                reason_t = str(ns.get("flag_reason") or ns.get("drift_reason") or "Cần duyệt")
+                out_queue.append({
+                    "idx": idx,
+                    "seg_idx": idx,
+                    "start": orig.get("start", 0.0),
+                    "end": orig.get("end", 0.0),
+                    "speaker": smap.get(sid) or sid,
+                    "raw": raw_t,
+                    "raw_text": raw_t,
+                    "normalized": norm_t,
+                    "normalized_text": norm_t,
+                    "drift_score": ns.get("drift_score", 0.0),
+                    "flag_reason": reason_t,
+                    "drift_reason": reason_t,
+                    "accepted": bool(ns.get("accepted")),
+                    "reverted": bool(ns.get("reverted")),
+                    "status": "accepted" if ns.get("accepted") else ("reverted" if ns.get("reverted") else "pending"),
+                })
+
+    return {
+        "ok": True,
+        "review_queue": out_queue,
+        "dropped_segments": dropped_segments,
+    }
+
+
+@app.post("/voice-records/{record_id}/review-queue/{seg_idx}/action")
+async def voice_record_review_action(record_id: str, seg_idx: int, request: Request):
+    """Xu ly mot cau trong review queue: accept (chap nhan cau sua), revert (khoi phuc cau goc), add_hotword (them tu vao tu dien)."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+    action = str(body.get("action") or "accept").strip()
+
+    try:
+        target = _record_target_file(rec)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+    # Them vao hotwords neu yeu cau
+    hotword = str(body.get("hotword") or "").strip()
+    if action == "add_hotword" or hotword:
+        hw = hotword
+        if hw:
+            cfg = cfgmod.read_settings() or {}
+            v = cfg.get("voice") or {}
+            cur_hw = str(v.get("hotwords") or "").strip()
+            existing = [x.strip() for x in re.split(r"[,\n;]+", cur_hw) if x.strip()]
+            if hw.lower() not in [x.lower() for x in existing]:
+                existing.append(hw)
+                v["hotwords"] = ", ".join(existing)
+                cfg["voice"] = v
+                cfgmod.update_settings(cfg)
+
+    norm_segs = list(rec.get("normalized_segments") or [])
+    segs = list(rec.get("segments") or [])
+    edit_text = str(body.get("text") or "").strip()
+    if action in ("edit", "update", "save") and not edit_text:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Nội dung không được để trống", "Content cannot be empty")}, status_code=400)
+
+    found = False
+    for ns in norm_segs:
+        if int(ns.get("idx", -1)) == seg_idx:
+            found = True
+            if action == "accept":
+                ns.pop("flagged_for_review", None)
+                ns["accepted"] = True
+                ns["reverted"] = False
+            elif action == "revert":
+                orig_txt = segs[seg_idx].get("text", "") if seg_idx < len(segs) else ""
+                ns["text"] = orig_txt
+                ns.pop("flagged_for_review", None)
+                ns["accepted"] = False
+                ns["reverted"] = True
+            elif action in ("edit", "update", "save"):
+                ns["text"] = edit_text
+                ns.pop("flagged_for_review", None)
+                ns["accepted"] = True
+                ns["reverted"] = False
+                ns["edited"] = True
+            break
+
+    if not found and action == "revert" and seg_idx < len(segs):
+        norm_segs.append({"idx": seg_idx, "text": segs[seg_idx].get("text", ""), "reverted": True, "accepted": False})
+    elif not found and action in ("edit", "update", "save") and seg_idx < len(segs):
+        norm_segs.append({"idx": seg_idx, "text": edit_text, "accepted": True, "edited": True, "reverted": False})
+
+    smap = rec.get("speaker_map") or {}
+    rendered = voice_records.render_meeting_markdown(
+        created_iso=rec.get("created_iso") or "",
+        duration_sec=float(rec.get("duration_sec") or 0),
+        model_used=rec.get("model_used") or "",
+        segments=segs,
+        speaker_map=smap,
+        normalized_segments=norm_segs,
+    )
+    await asyncio.to_thread(_atomic_write_text, target, rendered)
+    updated = store.mark_normalized(
+        record_id,
+        normalized_text=rendered,
+        normalized_segments=norm_segs,
+    )
+
+    # Cap nhat vao file normalization_result.json neu co
+    job_id = str(rec.get("job_id") or "").strip()
+    job_rec = store.get_job(job_id) if job_id else None
+    if not job_rec:
+        job_rec = store.get_job_by_record(record_id)
+    if job_rec and job_rec.get("log_path"):
+        lp = Path(job_rec["log_path"])
+        ldir = lp.parent if lp.is_file() else lp
+        norm_art = ldir / "normalization_result.json"
+        if norm_art.is_file():
+            try:
+                data = json.loads(norm_art.read_text(encoding="utf-8"))
+                for it in (data.get("review_queue") or []):
+                    it_idx = int(it.get("idx") if it.get("idx") is not None else it.get("seg_idx", -1))
+                    if it_idx == seg_idx:
+                        if action == "accept":
+                            it["accepted"] = True
+                            it["reverted"] = False
+                            it["status"] = "accepted"
+                        elif action == "revert":
+                            orig_txt = segs[seg_idx].get("text", "") if seg_idx < len(segs) else ""
+                            it["reverted"] = True
+                            it["accepted"] = False
+                            it["status"] = "reverted"
+                            it["normalized"] = orig_txt
+                            it["normalized_text"] = orig_txt
+                        elif action in ("edit", "update", "save"):
+                            it["accepted"] = True
+                            it["reverted"] = False
+                            it["edited"] = True
+                            it["status"] = "accepted"
+                            it["normalized"] = edit_text
+                            it["normalized_text"] = edit_text
+                norm_art.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
+    return {
+        "ok": True,
+        "record": voice_records.public_record(updated or rec),
+        "action": action,
+        "seg_idx": seg_idx,
+        "text": edit_text if action in ("edit", "update", "save") else None,
+    }
+
+
 @app.post("/voice-records/{record_id}/pin")
 async def voice_record_pin(record_id: str, request: Request):
     store = voice_records.get_store()
@@ -19611,9 +19983,99 @@ async def voice_record_pin(record_id: str, request: Request):
     return {"ok": True, "record": voice_records.public_record(updated)}
 
 
-@app.post("/voice-records/{record_id}/rediarize")
-async def voice_record_rediarize(record_id: str, request: Request):
-    """Re-run speaker diarization (pyannote) on an existing meeting record using its saved audio."""
+@app.post("/voice-records/{record_id}/transcribe")
+async def voice_record_transcribe(record_id: str, request: Request):
+    """Chuyen audio cuoc hop thanh van ban bang Whisper (khong chay tach nguoi noi)."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+    if rec.get("mode") != "meeting":
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("Chỉ hỗ trợ chuyển văn bản cho bản ghi cuộc họp", "Transcribe is only supported for meeting records")},
+            status_code=400,
+        )
+    audio_path = str(rec.get("audio_path") or "").strip()
+    if not audio_path or not Path(audio_path).is_file():
+        return JSONResponse(
+            {"ok": False, "error": localefmt.chu("File âm thanh gốc không còn trên máy", "Original audio file is no longer available")},
+            status_code=404,
+        )
+
+    py_exe, _ = meeting_stt.resolve_worker_python(need_diarize=False)
+    if not py_exe:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    "Chưa cài thư viện Whisper trên máy. Hãy bấm Cài đặt ở trang Ghi âm trước.",
+                    "Whisper libraries are not installed yet. Please click Install on the Record page first.",
+                ),
+            },
+            status_code=400,
+        )
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    body = body or {}
+
+    cfg = cfgmod.read_settings()
+    mc = meeting_stt.get_config(cfg)
+    model = str(body.get("model") or rec.get("model_used") or mc["whisper_model"]).strip()
+    if model not in meeting_stt.SUPPORTED_WHISPER_MODELS:
+        model = mc["whisper_model"]
+    device = str(body.get("device") or rec.get("device_used") or mc["device"]).strip().lower()
+    if device not in meeting_stt.VALID_DEVICES:
+        device = mc["device"]
+    language = str(body.get("language") or mc["language"]).strip().lower()
+    if language not in meeting_stt.VALID_LANGUAGES:
+        language = mc["language"]
+
+    brain = str(rec.get("brain") or "brain")
+    broot = Path(_brain_root(brain)).resolve()
+    now = localefmt.now()
+    dur = float(rec.get("duration_sec") or 0.0)
+    est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="meeting_transcribe", device=device)
+    vad_filter = mc.get("vad_filter", False) if "vad_filter" not in body else bool(body.get("vad_filter"))
+    job = store.create_job(
+        brain=brain,
+        brain_path=brain_ident.canonical(str(broot)),
+        title=str(body.get("title") or "").strip()[:160],
+        upload_mode="raw_upload",
+        file_ext=Path(audio_path).suffix or ".webm",
+        model=model,
+        device=device,
+        language=language,
+        diarize=False,
+        vad_filter=vad_filter,
+        num_speakers=0,
+        min_speakers=0,
+        max_speakers=0,
+        total_chunks=0,
+        audio_path=audio_path,
+        record_id=record_id,
+        status="queued",
+        pinned=bool(rec.get("pinned")),
+        duration_sec=dur,
+        estimated_sec=est_time,
+        created_at=now.timestamp(),
+        created_iso=now.isoformat(),
+        job_type="transcribe",
+    )
+    queued = meeting_jobs.enqueue_job(
+        job["id"],
+        brain_root_fn=_brain_root,
+        files_root_fn=_files_root,
+        files_rel_fn=_files_rel,
+    )
+    return {"ok": True, "job": voice_records.public_job(queued), "record": voice_records.public_record(rec)}
+
+
+@app.post("/voice-records/{record_id}/diarize")
+async def voice_record_diarize(record_id: str, request: Request):
+    """Tach giong nguoi noi (pyannote) cho ban ghi cuoc hop dua tren am thanh va ghep vao van ban Whisper da co."""
     store = voice_records.get_store()
     rec = store.get(record_id)
     if not rec:
@@ -19628,6 +20090,31 @@ async def voice_record_rediarize(record_id: str, request: Request):
         return JSONResponse(
             {"ok": False, "error": localefmt.chu("File âm thanh gốc không còn trên máy", "Original audio file is no longer available")},
             status_code=404,
+        )
+
+    # Kiem tra da co segments Whisper chua
+    whisper_segs = list(rec.get("segments") or [])
+    if not whisper_segs:
+        prev_job = store.get_job_by_record(record_id)
+        if prev_job and prev_job.get("log_path"):
+            prev_w = Path(prev_job["log_path"]).parent / "whisper_output.json"
+            if prev_w.is_file():
+                try:
+                    w_data = json.loads(prev_w.read_text(encoding="utf-8"))
+                    whisper_segs = list(w_data.get("segments") or [])
+                except Exception:
+                    pass
+
+    if not whisper_segs:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": localefmt.chu(
+                    "Bản ghi chưa có văn bản nhận dạng từ âm thanh. Vui lòng bấm 'Chuyển thành văn bản' trước.",
+                    "No speech transcript found for this record. Please click 'Transcribe' first.",
+                ),
+            },
+            status_code=400,
         )
 
     cfg = cfgmod.read_settings()
@@ -19683,34 +20170,22 @@ async def voice_record_rediarize(record_id: str, request: Request):
         body = {}
     body = body or {}
 
-    mc = meeting_stt.get_config(cfg)
-    model = str(body.get("model") or rec.get("model_used") or mc["whisper_model"]).strip()
-    if model not in meeting_stt.SUPPORTED_WHISPER_MODELS:
-        model = mc["whisper_model"]
-    device = str(body.get("device") or rec.get("device_used") or mc["device"]).strip().lower()
-    if device not in meeting_stt.VALID_DEVICES:
-        device = mc["device"]
-    language = str(body.get("language") or mc["language"]).strip().lower()
-    if language not in meeting_stt.VALID_LANGUAGES:
-        language = mc["language"]
-
     brain = str(rec.get("brain") or "brain")
     broot = Path(_brain_root(brain)).resolve()
     now = localefmt.now()
     dur = float(rec.get("duration_sec") or 0.0)
-    est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="meeting_transcribe")
-    vad_filter = mc.get("vad_filter", False) if "vad_filter" not in body else bool(body.get("vad_filter"))
+    est_time = meeting_jobs.estimate_processing_time_sec(dur, job_type="meeting_diarize")
     job = store.create_job(
         brain=brain,
         brain_path=brain_ident.canonical(str(broot)),
         title=str(body.get("title") or "").strip()[:160],
         upload_mode="raw_upload",
         file_ext=Path(audio_path).suffix or ".webm",
-        model=model,
-        device=device,
-        language=language,
+        model=str(rec.get("model_used") or mc["whisper_model"]),
+        device=str(body.get("device") or rec.get("device_used") or mc["device"]).strip().lower(),
+        language=str(rec.get("language") or mc["language"]).strip().lower(),
         diarize=True,
-        vad_filter=vad_filter,
+        vad_filter=bool(rec.get("vad_filter", False)),
         num_speakers=max(0, _safe_int(body.get("num_speakers"))),
         min_speakers=max(0, _safe_int(body.get("min_speakers"))),
         max_speakers=max(0, _safe_int(body.get("max_speakers"))),
@@ -19723,6 +20198,7 @@ async def voice_record_rediarize(record_id: str, request: Request):
         estimated_sec=est_time,
         created_at=now.timestamp(),
         created_iso=now.isoformat(),
+        job_type="diarize",
     )
     queued = meeting_jobs.enqueue_job(
         job["id"],
@@ -19731,6 +20207,12 @@ async def voice_record_rediarize(record_id: str, request: Request):
         files_rel_fn=_files_rel,
     )
     return {"ok": True, "job": voice_records.public_job(queued), "record": voice_records.public_record(rec)}
+
+
+@app.post("/voice-records/{record_id}/rediarize")
+async def voice_record_rediarize(record_id: str, request: Request):
+    """Re-run speaker diarization (pyannote) - alias for /diarize."""
+    return await voice_record_diarize(record_id, request)
 
 
 @app.get("/voice-records/{record_id}/audio")

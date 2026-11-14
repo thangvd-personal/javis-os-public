@@ -36,8 +36,10 @@ is tried, and when none keeps the language the words stay as heard.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import sys
+import time
 import unicodedata
 
 import aux_engine
@@ -489,18 +491,114 @@ async def normalize_voice_record(cfg: dict, text: str) -> dict:
 
 
 _MEETING_LINE_RE = re.compile(r"^\s*\[([^\]]+)\]\s*(.+)$")
+_DROP_RE = re.compile(r"^\s*\[?(?:bỏ|drop|loại bỏ|xóa|xoá)(?:\s*[-:]\s*([^\]]+))?\]?\s*$", re.IGNORECASE)
 
 
-def _build_meeting_batch_prompt(lines: list[str], terms: list) -> str:
+def _detect_semantic_drift(orig: str, normalized: str, terms: list[str]) -> tuple[bool, float, list[str], str]:
+    """Phát hiện nếu câu chuẩn hóa bị lệch nghĩa lớn hoặc tự thêm từ lạ không có trong âm gốc."""
+    if not normalized or not orig:
+        return (False, 0.0, [], "")
+    orig_words = set(re.findall(r"\w+", orig.lower()))
+    norm_words = set(re.findall(r"\w+", normalized.lower()))
+    if not orig_words or not norm_words:
+        return (False, 0.0, [], "")
+    known_term_words = set()
+    for t in (terms or []):
+        for w in re.findall(r"\w+", str(t).lower()):
+            known_term_words.add(w)
+    common = orig_words.intersection(norm_words)
+    union = orig_words.union(norm_words)
+    jaccard = len(common) / len(union) if union else 1.0
+    drift_score = round(1.0 - jaccard, 2)
+    new_words = [w for w in (norm_words - orig_words) if len(w) >= 3 and w not in known_term_words]
+
+    if len(orig.split()) >= 6 and jaccard < 0.40:
+        return (True, drift_score, new_words[:5], "Độ tương đồng từ vựng thấp (nghi vấn viết lại câu hoặc lệch nghĩa)")
+    if len(new_words) >= 4 and len(orig.split()) >= 6:
+        return (True, drift_score, new_words[:5], f"Xuất hiện nhiều từ mới không có trong âm gốc ({', '.join(new_words[:4])})")
+    return (False, drift_score, [], "")
+
+
+def _build_context_extraction_prompt(lines: list[str], speakers: list[str]) -> str:
+    spk_note = f"Những người tham gia cuộc họp: {', '.join(speakers)}" if speakers else ""
+    return (
+        "Bạn là chuyên gia phân tích biên bản ghi âm cuộc họp.\n"
+        "Dưới đây là các lượt nói thô từ máy nhận dạng giọng nói chép lại.\n"
+        f"{spk_note}\n\n"
+        "Nhiệm vụ của bạn:\n"
+        "1. Tóm tắt ngắn gọn chủ đề, bối cảnh chính của cuộc họp (3-5 câu ngắn gọn).\n"
+        "2. Trích xuất danh sách thuật ngữ chuyên ngành, từ viết tắt tiếng Anh, tên sản phẩm/dịch vụ/công ty (glossary) xuất hiện trong cuộc họp.\n"
+        "3. Liệt kê các từ/cụm từ hay bị Whisper nhận dạng sai âm trong cuộc họp này kèm từ đúng tương ứng (ví dụ: 'quay label' -> 'white label', 'Lego' -> 'Legal AI', 'FTP' -> 'FPT', 'bếp' -> 'web', 'một nồi' -> 'một người').\n\n"
+        "Chỉ trả về JSON định dạng sau (không giải thích thêm):\n"
+        "```json\n"
+        "{\n"
+        '  "summary": "Tóm tắt chủ đề...",\n'
+        '  "glossary": ["từ 1", "từ 2"],\n'
+        '  "corrections": {"từ sai": "từ đúng"}\n'
+        "}\n"
+        "```\n\n"
+        "Văn bản thô từ ghi âm:\n"
+        "<van_ban_tho>\n" + "\n".join(lines) + "\n</van_ban_tho>"
+    )
+
+
+async def _extract_meeting_context(cfg: dict, prepared: list[dict], speakers: list[str], pick) -> tuple[str, list[str], dict[str, str]]:
+    """Pass 1: Trích xuất chủ đề, thuật ngữ (glossary) và các từ sửa âm hệ thống từ toàn bộ văn bản thô."""
+    if len(prepared) < 4:
+        return ("", [], {})
+
+    # Lấy mẫu đại diện nếu quá dài để không vượt trần token (tối đa ~120 dòng đầu + cuối)
+    if len(prepared) <= 120:
+        sample_lines = [f"{it['prefix']} {it['orig']}" for it in prepared]
+    else:
+        sample_lines = [f"{it['prefix']} {it['orig']}" for it in prepared[:80]] + [f"{it['prefix']} {it['orig']}" for it in prepared[-40:]]
+
+    prompt = _build_context_extraction_prompt(sample_lines, speakers)
+    quick = [(pick[0], lambda p=prompt, j="\n".join(sample_lines[:15]): _ask_normalize_api(pick, p, j))] if pick is not None else []
+    main = [("main", lambda p=prompt: asyncio.wait_for(_ASK(p), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
+    tries = quick + main if main_is_cli(cfg or {}) else main + quick
+
+    for source, run in tries:
+        try:
+            raw_out = clean_normalize(await run())
+            # Trích xuất JSON từ markdown block hoặc chuỗi
+            json_m = re.search(r"\{[\s\S]*\}", raw_out)
+            if json_m:
+                data = json.loads(json_m.group(0))
+                summary = str(data.get("summary") or "").strip()
+                glossary = [str(g).strip() for g in (data.get("glossary") or []) if str(g).strip()]
+                corrs = {str(k).strip(): str(v).strip() for k, v in (data.get("corrections") or {}).items() if str(k).strip() and str(v).strip()}
+                return (summary, glossary, corrs)
+        except Exception as e:
+            print(f"[transcript_fix] pass 1 context extraction via {source} failed: {type(e).__name__}", file=sys.stderr)
+            continue
+    return ("", [], {})
+
+
+def _build_meeting_batch_prompt(
+    lines: list[str],
+    terms: list,
+    context_summary: str = "",
+    prev_context: list[str] | None = None,
+    next_context: list[str] | None = None,
+) -> str:
     parts = [
         "Quy tắc chuẩn hóa biên bản cuộc họp:\n"
         "- Giữ NGUYÊN CHÍNH XÁC phần đầu dòng dạng `[...]` (timestamp và tên người nói) ở đầu mỗi dòng.\n"
         "- Giữ NGUYÊN ĐÚNG SỐ LƯỢNG DÒNG và ĐÚNG THỨ TỰ, mỗi dòng đầu vào ứng với đúng một dòng đầu ra.\n"
         "- Chỉ sửa chính tả, từ bị nghe nhầm theo âm, dấu câu và văn phạm của phần nội dung lời nói sau `[...]`.\n"
-        "- Không dịch ngôn ngữ, không gộp dòng, không tách thành nhiều dòng, không dùng em dash (U+2014)."
+        "- XỬ LÝ LỌC BỎ (DROP): Nếu một lượt nói thuần túy là ảo giác âm thanh (câu outro YouTube như 'Để không bỏ lỡ những video...', 'Hãy like và đăng ký kênh...', tạp âm rác), hoặc chỉ là chuỗi từ đệm vô nghĩa (như 'à à à', 'ừm'), hãy viết:\n"
+        "  `[HH:MM - Tên] [BỎ - Ảo giác]` hoặc `[HH:MM - Tên] [BỎ - Từ đệm]`.\n"
+        "- Không dịch ngôn ngữ, không gộp dòng, không tách thành nhiều dòng, không tự thêm dòng mới, không dùng em dash (U+2014)."
     ]
+    if context_summary:
+        parts.append("Bối cảnh và chủ đề cuộc họp:\n" + context_summary)
     if terms:
         parts.append("Tên riêng và thuật ngữ hay gặp: " + ", ".join(terms))
+    if prev_context:
+        parts.append("Ngữ cảnh các lượt nói trước đó (chỉ đọc để hiểu mạch nói, KHÔNG chuẩn hóa lại và KHÔNG đưa vào kết quả):\n" + "\n".join(prev_context))
+    if next_context:
+        parts.append("Ngữ cảnh các lượt nói tiếp theo (chỉ đọc để hiểu mạch nói, KHÔNG chuẩn hóa lại và KHÔNG đưa vào kết quả):\n" + "\n".join(next_context))
     joined = "\n".join(lines)
     if not_vietnamese(joined):
         parts.append(KEEP_LANGUAGE_NOTE)
@@ -513,16 +611,24 @@ async def normalize_meeting_segments(
     segments: list[dict],
     speaker_map: dict | None = None,
 ) -> dict:
-    """Chuan hoa tung luot noi trong bien ban cuoc hop, giu nguyen 100% prefix `[HH:MM:SS - Ten]`.
+    """Chuan hoa tung luot noi trong bien ban cuoc hop theo kien truc 2-pass song song.
 
-    Tra `{"segments": [{"idx": int, "text": str}, ...], "source": str, "ai": bool}`.
+    - Pass 1: Trich xuat ngu canh cuoc hop & glossary chuyen nganh.
+    - Pass 2: Chuan hoa tung batch dong thoi qua asyncio.gather (semaphore 4), ho tro drop ao giac.
+    - Post-QA: Kiem tra semantic drift va tao review queue.
     """
     if not segments:
-        return {"segments": [], "source": "rules", "ai": False}
+        return {"segments": [], "source": "rules", "ai": False, "dropped_segments": [], "review_queue": [], "batch_reports": []}
 
     terms = _terms(cfg)
     smap = speaker_map if isinstance(speaker_map, dict) else {}
     has_hours = any(float(s.get("start", 0) or 0) >= 3600 for s in segments)
+
+    # Them ten nguoi noi vao danh sach thuat ngu
+    for spk_name in smap.values():
+        clean_spk = str(spk_name or "").strip()
+        if clean_spk and clean_spk not in terms:
+            terms.append(clean_spk)
 
     prepared = []
     for idx, seg in enumerate(segments):
@@ -537,12 +643,34 @@ async def normalize_meeting_segments(
         prefix = f"[{ts} - {disp}]" if disp else f"[{ts}]"
         prepared.append({
             "idx": int(seg.get("idx", idx)),
+            "start": float(seg.get("start", 0) or 0),
+            "end": float(seg.get("end", 0) or 0),
+            "speaker": disp,
             "prefix": prefix,
             "orig": orig_txt,
             "rules": rule_txt or orig_txt,
         })
 
-    # Chunk into manageable batches (~16 turns or ~1800 chars each)
+    pick = pick_quick_api(cfg or {})
+
+    # Pass 1: Trich xuat ngu canh & glossary neu co it nhat 4 segments
+    context_summary, extracted_glossary, corrections = "", [], {}
+    if len(prepared) >= 4 and (pick is not None or _ASK is not None):
+        speakers_list = [v for v in smap.values() if v]
+        context_summary, extracted_glossary, corrections = await _extract_meeting_context(cfg, prepared, speakers_list, pick)
+        for g in extracted_glossary:
+            if g and g not in terms:
+                terms.append(g)
+        # Ap dung cac cap sua loi he thong neu tim thay
+        if corrections:
+            for it in prepared:
+                txt = it["rules"]
+                for bad, good in corrections.items():
+                    if bad.lower() in txt.lower():
+                        txt = re.sub(re.escape(bad), good, txt, flags=re.IGNORECASE)
+                it["rules"] = txt
+
+    # Chia thanh cac batch ~16 luot hoac ~1800 ky tu
     batches = []
     cur = []
     cur_chars = 0
@@ -557,48 +685,226 @@ async def normalize_meeting_segments(
     if cur:
         batches.append(cur)
 
-    used_source = "rules"
-    any_ai = False
+    # Pass 2: Chuan hoa song song cac batch voi Semaphore(4)
+    sem = asyncio.Semaphore(4)
+
+    async def _process_batch(b_idx: int, batch: list[dict]) -> dict:
+        async with sem:
+            t0 = time.time()
+            batch_lines = [f"{it['prefix']} {it['rules']}" for it in batch]
+
+            # Lay 2 luot truoc va 2 luot sau lam ngu canh
+            first_idx = batch[0]["idx"]
+            last_idx = batch[-1]["idx"]
+            prev_items = [f"{it['prefix']} {it['rules']}" for it in prepared if it["idx"] in (first_idx - 2, first_idx - 1)]
+            next_items = [f"{it['prefix']} {it['rules']}" for it in prepared if it["idx"] in (last_idx + 1, last_idx + 2)]
+
+            prompt = _build_meeting_batch_prompt(
+                batch_lines,
+                terms,
+                context_summary=context_summary,
+                prev_context=prev_items,
+                next_context=next_items,
+            )
+
+            main = [("main", lambda p=prompt: asyncio.wait_for(_ASK(p), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
+            quick = [(pick[0], lambda p=prompt, j="\n".join(batch_lines): _ask_normalize_api(pick, p, j))] if pick is not None else []
+            tries = quick + main if main_is_cli(cfg or {}) else main + quick
+
+            accepted = None
+            used_src = "rules"
+            err_msg = ""
+
+            for source, run in tries:
+                try:
+                    raw_out = clean_normalize(await run())
+                except Exception as e:
+                    err_msg = f"{type(e).__name__}: {e}"
+                    print(f"[transcript_fix] meeting batch #{b_idx} via {source} failed: {err_msg}", file=sys.stderr)
+                    continue
+
+                out_lines = [ln.strip() for ln in raw_out.splitlines() if ln.strip()]
+
+                # Parse cac dong kem nhan dien drop
+                parsed_items = []
+                valid = True
+
+                if len(out_lines) == len(batch):
+                    for it, line in zip(batch, out_lines):
+                        m = _MEETING_LINE_RE.match(line)
+                        if not m:
+                            valid = False
+                            break
+                        fixed = m.group(2).strip()
+                        drop_m = _DROP_RE.match(fixed)
+                        if drop_m or fixed.lower() in ("[bỏ]", "[drop]", "[bỏ - ảo giác]", "[bỏ - từ đệm]"):
+                            parsed_items.append({
+                                "text": "",
+                                "dropped": True,
+                                "drop_reason": drop_m.group(1).strip() if (drop_m and drop_m.group(1)) else "Ảo giác / từ đệm thừa",
+                            })
+                            continue
+                        if not fixed or not is_safe_normalize(it["rules"], fixed) or not keeps_language(it["rules"], fixed):
+                            valid = False
+                            break
+                        parsed_items.append({
+                            "text": fixed,
+                            "dropped": False,
+                            "drop_reason": "",
+                        })
+                else:
+                    # Neu so luong dong khong khop 100%, map theo prefix
+                    line_by_pfx = {}
+                    for ln in out_lines:
+                        m = _MEETING_LINE_RE.match(ln)
+                        if m:
+                            line_by_pfx[m.group(1).strip().lower()] = m.group(2).strip()
+
+                    match_count = sum(1 for it in batch if it["prefix"].strip("[]").strip().lower() in line_by_pfx)
+                    if match_count >= max(1, len(batch) - 2):
+                        for it in batch:
+                            pfx_key = it["prefix"].strip("[]").strip().lower()
+                            fixed = line_by_pfx.get(pfx_key)
+                            if fixed is None:
+                                # Model bo hoan toan dong nay
+                                parsed_items.append({
+                                    "text": "",
+                                    "dropped": True,
+                                    "drop_reason": "Bị bỏ bởi mô hình AI",
+                                })
+                            else:
+                                drop_m = _DROP_RE.match(fixed)
+                                if drop_m or fixed.lower() in ("[bỏ]", "[drop]"):
+                                    parsed_items.append({
+                                        "text": "",
+                                        "dropped": True,
+                                        "drop_reason": drop_m.group(1).strip() if (drop_m and drop_m.group(1)) else "Ảo giác",
+                                    })
+                                elif is_safe_normalize(it["rules"], fixed) and keeps_language(it["rules"], fixed):
+                                    parsed_items.append({
+                                        "text": fixed,
+                                        "dropped": False,
+                                        "drop_reason": "",
+                                    })
+                                else:
+                                    parsed_items.append({
+                                        "text": it["rules"],
+                                        "dropped": False,
+                                        "drop_reason": "",
+                                    })
+                    else:
+                        valid = False
+
+                if valid and len(parsed_items) == len(batch):
+                    accepted = parsed_items
+                    used_src = source
+                    break
+
+            # Ket qua cho tung item trong batch
+            res_items = []
+            for i, it in enumerate(batch):
+                if accepted is not None:
+                    res_items.append({
+                        "idx": it["idx"],
+                        "start": it["start"],
+                        "end": it["end"],
+                        "speaker": it["speaker"],
+                        "orig": it["orig"],
+                        "text": accepted[i]["text"],
+                        "dropped": accepted[i]["dropped"],
+                        "drop_reason": accepted[i]["drop_reason"],
+                    })
+                else:
+                    res_items.append({
+                        "idx": it["idx"],
+                        "start": it["start"],
+                        "end": it["end"],
+                        "speaker": it["speaker"],
+                        "orig": it["orig"],
+                        "text": it["rules"],
+                        "dropped": False,
+                        "drop_reason": "",
+                    })
+
+            elapsed = round(time.time() - t0, 3)
+            return {
+                "batch_idx": b_idx,
+                "items": res_items,
+                "source": used_src,
+                "ai": accepted is not None,
+                "elapsed_s": elapsed,
+                "status": "ai" if accepted is not None else "rules_fallback",
+                "error": err_msg if accepted is None else "",
+            }
+
+    # Chay dong thoi cac batch
+    batch_reports = await asyncio.gather(*[_process_batch(i, b) for i, b in enumerate(batches)])
+
     out_segments = []
+    dropped_segments = []
+    review_queue = []
+    any_ai = False
+    source_counts = {}
 
-    pick = pick_quick_api(cfg or {})
-    for batch in batches:
-        batch_lines = [f"{it['prefix']} {it['rules']}" for it in batch]
-        prompt = _build_meeting_batch_prompt(batch_lines, terms)
-        main = [("main", lambda p=prompt: asyncio.wait_for(_ASK(p), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
-        quick = [(pick[0], lambda p=prompt, j="\n".join(batch_lines): _ask_normalize_api(pick, p, j))] if pick is not None else []
-        tries = quick + main if main_is_cli(cfg or {}) else main + quick
+    for rep in batch_reports:
+        if rep["ai"]:
+            any_ai = True
+        src = rep["source"]
+        source_counts[src] = source_counts.get(src, 0) + 1
 
-        accepted = None
-        for source, run in tries:
-            try:
-                raw_out = clean_normalize(await run())
-            except Exception as e:
-                print(f"[transcript_fix] meeting normalize via {source} failed: {type(e).__name__}", file=sys.stderr)
-                continue
-            out_lines = [ln.strip() for ln in raw_out.splitlines() if ln.strip()]
-            if len(out_lines) != len(batch):
-                continue
-            parsed_texts = []
-            valid = True
-            for it, line in zip(batch, out_lines):
-                m = _MEETING_LINE_RE.match(line)
-                if not m:
-                    valid = False
-                    break
-                fixed = m.group(2).strip()
-                if not fixed or not is_safe_normalize(it["rules"], fixed) or not keeps_language(it["rules"], fixed):
-                    valid = False
-                    break
-                parsed_texts.append(fixed)
-            if valid:
-                accepted = parsed_texts
-                used_source = source
-                any_ai = True
-                break
+        for it in rep["items"]:
+            if it["dropped"]:
+                dropped_segments.append({
+                    "idx": it["idx"],
+                    "start": it["start"],
+                    "end": it["end"],
+                    "speaker": it["speaker"],
+                    "raw": it["orig"],
+                    "reason": it["drop_reason"],
+                })
+                out_segments.append({
+                    "idx": it["idx"],
+                    "text": "",
+                    "dropped": True,
+                    "drop_reason": it["drop_reason"],
+                })
+            else:
+                flagged, drift_score, suspicious_words, reason = _detect_semantic_drift(it["orig"], it["text"], terms)
+                seg_dict = {
+                    "idx": it["idx"],
+                    "text": it["text"],
+                    "dropped": False,
+                }
+                if flagged:
+                    seg_dict["flagged_for_review"] = True
+                    seg_dict["drift_score"] = drift_score
+                    review_queue.append({
+                        "idx": it["idx"],
+                        "seg_idx": it["idx"],
+                        "start": it["start"],
+                        "end": it["end"],
+                        "speaker": it["speaker"],
+                        "raw": it["orig"],
+                        "raw_text": it["orig"],
+                        "normalized": it["text"],
+                        "normalized_text": it["text"],
+                        "drift_score": drift_score,
+                        "suspicious_words": suspicious_words,
+                        "flag_reason": reason,
+                        "drift_reason": reason,
+                    })
+                out_segments.append(seg_dict)
 
-        for i, it in enumerate(batch):
-            final_txt = accepted[i] if accepted is not None else it["rules"]
-            out_segments.append({"idx": it["idx"], "text": final_txt})
+    # Chon nguon chinh dai dien
+    primary_source = max(source_counts.items(), key=lambda x: x[1])[0] if source_counts else "rules"
 
-    return {"segments": out_segments, "source": used_source, "ai": any_ai}
+    return {
+        "segments": out_segments,
+        "source": primary_source,
+        "ai": any_ai,
+        "dropped_segments": dropped_segments,
+        "review_queue": review_queue,
+        "batch_reports": batch_reports,
+        "context_summary": context_summary,
+        "extracted_glossary": extracted_glossary,
+    }

@@ -73,6 +73,42 @@ wo = mt_worker.assign_speakers_word_level(whisper_segs, [])
 check("whisper-only fallback keeps clean segment with empty speaker",
       len(wo) == 1 and wo[0]["speaker"] == "" and "Chào mọi người" in wo[0]["text"])
 
+# Test worker run_job with diarize_only (skip_whisper=True)
+_orig_conv = mt_worker._convert_audio_to_wav
+_orig_pyannote = mt_worker._run_pyannote_diarization
+_orig_wav_dur = mt_worker._wav_duration_sec
+_orig_emit = mt_worker.emit
+
+test_emitted = []
+mt_worker._convert_audio_to_wav = lambda in_p, out_p, combined_audio_out="": (True, "", {"source": {}, "target": {}})
+mt_worker._wav_duration_sec = lambda p: 10.0
+mt_worker._run_pyannote_diarization = lambda *a, **k: ([{"start": 0.0, "end": 4.0, "speaker": "SPEAKER_00"}], None)
+mt_worker.emit = lambda payload: test_emitted.append(payload)
+
+with tempfile.TemporaryDirectory() as td:
+    jpath = Path(td) / "job.json"
+    jpath.write_text(json.dumps({
+        "job_id": "test_diarize_only_job",
+        "input_paths": ["/tmp/fake.wav"],
+        "diarize": True,
+        "diarize_only": True,
+        "language": "vi",
+        "whisper_segments": [
+            {"start": 0.0, "end": 4.0, "text": "Chào mọi người.", "words": []}
+        ]
+    }), encoding="utf-8")
+    os.environ["HF_TOKEN"] = "fake_hf_token"
+    ret = mt_worker.run_job(str(jpath))
+    check("mt_worker.run_job with diarize_only finishes with returncode 0", ret == 0)
+    res = next((x for x in test_emitted if isinstance(x, dict) and x.get("type") == "result"), None)
+    check("mt_worker.run_job with diarize_only emits ok=True and detected_language",
+          res is not None and res.get("ok") is True and res.get("detected_language") == "vi")
+
+mt_worker._convert_audio_to_wav = _orig_conv
+mt_worker._run_pyannote_diarization = _orig_pyannote
+mt_worker._wav_duration_sec = _orig_wav_dur
+mt_worker.emit = _orig_emit
+
 # 2. Setup state: local-ear model cache detection + encrypted hf_token handling
 store = voice_records.VoiceRecordStore(_STATE / "voice_records.sqlite3")
 fake_snap = _STATE / "local-ear" / "models" / "models--Systran--faster-whisper-medium" / "snapshots" / "abc"
@@ -364,6 +400,34 @@ check("POST /voice-records/{id}/rediarize creates job linked to existing record_
       and d_redia["job"]["diarize"] == 1
       and d_redia["job"]["has_audio"] is True)
 
+# Test POST /voice-records/{id}/transcribe
+r_trans_ok = client.post(f"/voice-records/{rid}/transcribe", json={"title": "Hop Q4 Transcribe"})
+d_trans = r_trans_ok.json()
+check("POST /voice-records/{id}/transcribe creates transcribe job linked to existing record_id",
+      r_trans_ok.status_code == 200
+      and d_trans.get("ok") is True
+      and d_trans["job"]["record_id"] == rid
+      and d_trans["job"]["diarize"] == 0
+      and d_trans["job"]["job_type"] == "transcribe"
+      and d_trans["job"]["has_audio"] is True)
+
+# Test POST /voice-records/{id}/diarize
+meeting_stt.resolve_hf_token = lambda cfg=None: ("", False)
+r_dia_no_tok = client.post(f"/voice-records/{rid}/diarize")
+check("POST /voice-records/{id}/diarize rejects when HF_TOKEN is absent",
+      r_dia_no_tok.status_code == 400 and "HF_TOKEN" in r_dia_no_tok.json().get("error", ""))
+
+meeting_stt.resolve_hf_token = lambda cfg=None: ("hf_mock_token_123", True)
+r_dia_ok = client.post(f"/voice-records/{rid}/diarize", json={"title": "Hop Q4 Diarize"})
+d_dia = r_dia_ok.json()
+check("POST /voice-records/{id}/diarize creates diarize job linked to existing record_id",
+      r_dia_ok.status_code == 200
+      and d_dia.get("ok") is True
+      and d_dia["job"]["record_id"] == rid
+      and d_dia["job"]["diarize"] == 1
+      and d_dia["job"]["job_type"] == "diarize"
+      and d_dia["job"]["has_audio"] is True)
+
 new_diarized_segs = [
     {"start": 2.0, "end": 6.5, "speaker": "SPEAKER_00", "text": "Hôm nay chúng ta chốt kế hoạch quý 4."},
     {"start": 7.0, "end": 12.0, "speaker": "SPEAKER_01", "text": "Em đã chuẩn bị báo cáo doanh thu tháng này."},
@@ -401,6 +465,52 @@ client.post(f"/voice-records/{rid}/pin", json={"pinned": False})
 gc_unpinned = meeting_jobs.cleanup_expired_audio(now_ts=time.time())
 check("30-day audio GC removes expired unpinned audio and updates record",
       gc_unpinned["files"] == 1 and not aud_file.exists() and client.get(f"/voice-records/{rid}/audio").status_code == 404)
+
+# 5. Test source-texts, review-queue, review-action, restore-raw, and drop filter
+r_src = client.get(f"/voice-records/{rid}/source-texts")
+check("GET /voice-records/{id}/source-texts returns raw_diarized and keys",
+      r_src.status_code == 200
+      and "raw text with diarization" in r_src.json().get("raw_diarized", "")
+      and "raw_whisper" in r_src.json()
+      and "whisper_raw" in r_src.json()
+      and "diarized_raw" in r_src.json())
+
+r_rev = client.get(f"/voice-records/{rid}/review-queue")
+check("GET /voice-records/{id}/review-queue returns review_queue list",
+      r_rev.status_code == 200 and isinstance(r_rev.json().get("review_queue"), list))
+
+# Test review action with add_hotword
+r_act = client.post(f"/voice-records/{rid}/review-queue/0/action", json={"action": "add_hotword", "hotword": "white label"})
+check("POST /voice-records/{id}/review-queue/0/action add_hotword updates settings",
+      r_act.status_code == 200 and "white label" in (cfgmod.read_settings().get("voice", {}).get("hotwords", "")))
+
+# Test review action with edit
+r_act_edit = client.post(f"/voice-records/{rid}/review-queue/0/action", json={"action": "edit", "text": "Câu đã được chỉnh sửa bằng tay."})
+d_act_edit = r_act_edit.json()
+check("POST /voice-records/{id}/review-queue/0/action edit updates normalized text and accepts segment",
+      r_act_edit.status_code == 200
+      and d_act_edit.get("ok") is True
+      and any(s.get("idx") == 0 and s.get("text") == "Câu đã được chỉnh sửa bằng tay." and s.get("accepted") is True
+              for s in d_act_edit["record"].get("normalized_segments", [])))
+
+# Test restore-raw
+r_res_raw = client.post(f"/voice-records/{rid}/restore-raw", json={"title": "Hop Q4"})
+check("POST /voice-records/{id}/restore-raw reverts to diarized status and clears normalized_segments",
+      r_res_raw.status_code == 200 and r_res_raw.json()["record"]["status"] == "diarized"
+      and not r_res_raw.json()["record"]["normalized_segments"])
+
+# Test dropped segment filter in effective_segments
+test_drop_segs = [
+    {"idx": 0, "start": 0.0, "end": 2.0, "speaker": "A", "text": "câu bình thường"},
+    {"idx": 1, "start": 2.0, "end": 4.0, "speaker": "A", "text": "để không bỏ lỡ video hấp dẫn"},
+]
+test_norm_with_drop = [
+    {"idx": 0, "text": "Câu bình thường.", "dropped": False},
+    {"idx": 1, "text": "", "dropped": True, "drop_reason": "Ảo giác"},
+]
+eff = voice_records.effective_segments(test_drop_segs, {}, normalized_segments=test_norm_with_drop)
+check("effective_segments excludes dropped segments from rendering",
+      len(eff) == 1 and eff[0]["text"] == "Câu bình thường.")
 
 # Cleanup mocks and temp dirs
 main.cfgmod.gate_active = _orig_gate

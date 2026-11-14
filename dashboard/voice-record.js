@@ -94,6 +94,8 @@
     if (Boolean(mt.uploading)) return true;
     if (Boolean(mt.normalizing)) return true;
     if (Boolean(mt.rediarizing)) return true;
+    if (Boolean(mt.transcribing)) return true;
+    if (Boolean(mt.diarizing)) return true;
     var job = mt.activeJob;
     if (job && ["uploading", "queued", "converting", "transcribing", "diarizing", "merging"].indexOf(job.status) >= 0) {
       return true;
@@ -105,10 +107,20 @@
     return !isMeetingBusy(mt);
   }
 
-  function canRediarizeMeeting(mt, rec) {
+  function canTranscribeMeeting(mt, rec) {
     rec = rec || {};
     if (rec.mode !== "meeting" || !rec.has_audio) return false;
     return !isMeetingBusy(mt);
+  }
+
+  function canDiarizeMeeting(mt, rec) {
+    rec = rec || {};
+    if (rec.mode !== "meeting" || !rec.has_audio) return false;
+    return !isMeetingBusy(mt);
+  }
+
+  function canRediarizeMeeting(mt, rec) {
+    return canDiarizeMeeting(mt, rec);
   }
 
   function canExportMeeting(mt) {
@@ -452,6 +464,16 @@
       mimeType: "audio/webm",
       cancelled: false,
       speakerDraft: {},
+      transcribing: false,
+      diarizing: false,
+      resTab: "main",
+      rawSubTab: "whisper",
+      sourceTexts: null,
+      sourceTextsLoading: false,
+      reviewQueue: [],
+      reviewQueueRecordId: "",
+      reviewQueueLoading: false,
+      restoringRaw: false,
     },
   };
 
@@ -1024,7 +1046,9 @@
     var mtBusy = isMeeting && isMeetingBusy(S.mt);
     var job = S.mt.activeJob;
     var activeJobRunning = Boolean(job && ["uploading", "queued", "converting", "transcribing", "diarizing", "merging"].indexOf(job.status) >= 0);
-    var isRediarizeActive = Boolean(S.mt.rediarizing || (job && job.job_type === "rediarize" && activeJobRunning));
+    var isTranscribeActive = Boolean(S.mt.transcribing || (job && job.job_type === "transcribe" && activeJobRunning));
+    var isDiarizeActive = Boolean(S.mt.diarizing || S.mt.rediarizing || (job && (job.job_type === "diarize" || job.job_type === "rediarize") && activeJobRunning));
+    var isRediarizeActive = isDiarizeActive;
 
     if (edNote) {
       var isResumeMode = isMeeting && canRediarize && (!rec.segments || !rec.segments.length);
@@ -1047,20 +1071,20 @@
           ))
         );
         if (canRediarize && isRetryable) {
-          var bLabel = isResumeMode ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_rediarize");
-          var bSpin = isResumeMode ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
+          var bLabel = isResumeMode ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_diarize");
+          var bSpin = isResumeMode ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_diarizing");
           edNote.innerHTML = '<div class="vr-fallback-row">' +
             '<span>' + esc(warnTxt) + '</span>' +
             '<button type="button" class="gcard-btn vr-btn-rediarize-banner" id="vrMtBtnRediarizeBanner"' + (mtBusy ? ' disabled' : '') + '>' +
-            ico(isRediarizeActive ? "loader" : "refresh-cw", { cls: isRediarizeActive ? "spin" : "" }) +
-            ' <span>' + esc(isRediarizeActive ? bSpin : bLabel) + '</span></button>' +
+            ico(isDiarizeActive ? "loader" : "users", { cls: isDiarizeActive ? "spin" : "" }) +
+            ' <span>' + esc(isDiarizeActive ? bSpin : bLabel) + '</span></button>' +
             '</div>';
           var btnBanner = $("vrMtBtnRediarizeBanner");
           if (btnBanner) {
             btnBanner.disabled = mtBusy;
             btnBanner.onclick = function () {
               if (isMeetingBusy(S.mt)) return;
-              rediarizeMeetingRecord(rec);
+              diarizeMeetingRecord(rec);
             };
           }
         } else {
@@ -1124,23 +1148,32 @@
     if (actBar) {
       actBar.hidden = !isMeeting;
       actBar.classList.toggle("has-3-cols", !canRediarize);
+      var transcribeBtn = $("vrMtBtnTranscribeRec");
+      if (transcribeBtn) {
+        transcribeBtn.hidden = !canRediarize;
+        if (canRediarize) {
+          transcribeBtn.disabled = mtBusy;
+          transcribeBtn.innerHTML = ico(isTranscribeActive ? "loader" : "file-text", { cls: isTranscribeActive ? "spin" : "" }) +
+            " <span>" + esc(isTranscribeActive ? tw("vr.meeting.btn_transcribing") : tw("vr.meeting.btn_transcribe")) + "</span>";
+        }
+      }
+      var diarizeBtn = $("vrMtBtnDiarizeRec");
+      if (diarizeBtn) {
+        diarizeBtn.hidden = !canRediarize;
+        if (canRediarize) {
+          var isResume = !rec.segments || !rec.segments.length;
+          var btnLabel = isResume ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_diarize");
+          var btnSpin = isResume ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_diarizing");
+          diarizeBtn.disabled = mtBusy;
+          diarizeBtn.innerHTML = ico(isDiarizeActive ? "loader" : "users", { cls: isDiarizeActive ? "spin" : "" }) +
+            " <span>" + esc(isDiarizeActive ? btnSpin : btnLabel) + "</span>";
+        }
+      }
       var normBtn = $("vrMtBtnNormalizeRec");
       if (normBtn) {
         normBtn.disabled = mtBusy;
         normBtn.innerHTML = ico(S.mt.normalizing ? "loader" : "sparkles", { cls: S.mt.normalizing ? "spin" : "" }) +
           " <span>" + esc(S.mt.normalizing ? tw("vr.btn.normalizing") : tw("vr.btn.normalize")) + "</span>";
-      }
-      var rediarizeBtn = $("vrMtBtnRediarizeRec");
-      if (rediarizeBtn) {
-        rediarizeBtn.hidden = !canRediarize;
-        if (canRediarize) {
-          var isResume = !rec.segments || !rec.segments.length;
-          var btnLabel = isResume ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_rediarize");
-          var btnSpin = isResume ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_rediarizing");
-          rediarizeBtn.disabled = mtBusy;
-          rediarizeBtn.innerHTML = ico(isRediarizeActive ? "loader" : "refresh-cw", { cls: isRediarizeActive ? "spin" : "" }) +
-            " <span>" + esc(isRediarizeActive ? btnSpin : btnLabel) + "</span>";
-        }
       }
       var newRecBtn = $("vrMtBtnNewRec");
       if (newRecBtn) {
@@ -1178,6 +1211,338 @@
 
     if (closedBar) closedBar.hidden = !S.editorClosed;
     if (vrEdit) vrEdit.hidden = !!S.editorClosed;
+
+    var tabsBar = $("vrResTabsBar");
+    if (tabsBar) tabsBar.hidden = !isMeeting;
+
+    var btnRestore = $("vrBtnRestoreRaw");
+    if (btnRestore) {
+      var canRestore = isMeeting && rec.status === "normalized";
+      btnRestore.hidden = !canRestore;
+      btnRestore.disabled = mtBusy || Boolean(S.mt.restoringRaw);
+      btnRestore.innerHTML = ico(S.mt.restoringRaw ? "loader" : "rotate-ccw", { cls: S.mt.restoringRaw ? "spin" : "" }) +
+        " <span>" + esc(S.mt.restoringRaw ? tw("vr.btn.restoring") : tw("vr.btn.restore_raw")) + "</span>";
+    }
+
+    if (!isMeeting) {
+      S.mt.resTab = "main";
+    }
+
+    var tMain = $("vrResTabMain");
+    var tRaw = $("vrResTabRaw");
+    var tRev = $("vrResTabReview");
+    if (tMain) tMain.classList.toggle("active", S.mt.resTab === "main");
+    if (tRaw) tRaw.classList.toggle("active", S.mt.resTab === "raw");
+    if (tRev) tRev.classList.toggle("active", S.mt.resTab === "review");
+
+    var pMain = $("vrResPanelMain");
+    var pRaw = $("vrResPanelRaw");
+    var pRev = $("vrResPanelReview");
+    if (pMain) pMain.hidden = isMeeting && S.mt.resTab !== "main";
+    if (pRaw) pRaw.hidden = !isMeeting || S.mt.resTab !== "raw";
+    if (pRev) pRev.hidden = !isMeeting || S.mt.resTab !== "review";
+
+    var badgeEl = $("vrResBadgeReview");
+    if (badgeEl) {
+      var unreviewed = 0;
+      if (isMeeting && rec.status === "normalized") {
+        if (Array.isArray(S.mt.reviewQueue) && S.mt.reviewQueue.length > 0 && S.mt.reviewQueueRecordId === rec.id) {
+          unreviewed = S.mt.reviewQueue.filter(function (it) {
+            return !it.accepted && !it.reverted && it.status !== "accepted" && it.status !== "reverted";
+          }).length;
+        } else if (Array.isArray(rec.normalized_segments)) {
+          unreviewed = rec.normalized_segments.filter(function (seg) {
+            return seg && (seg.flagged || seg.flagged_for_review) && !seg.accepted && !seg.reverted;
+          }).length;
+        }
+      }
+      badgeEl.textContent = String(unreviewed);
+      badgeEl.hidden = unreviewed <= 0;
+    }
+
+    if (isMeeting && S.mt.resTab === "raw") {
+      if (!S.mt.sourceTexts || S.mt.sourceTexts.recordId !== rec.id) {
+        if (!S.mt.sourceTextsLoading) fetchSourceTexts(rec.id);
+      } else {
+        renderRawTextView();
+      }
+    } else if (isMeeting && S.mt.resTab === "review") {
+      if (!S.mt.reviewQueue || S.mt.reviewQueueRecordId !== rec.id) {
+        if (!S.mt.reviewQueueLoading) fetchReviewQueue(rec.id);
+      } else {
+        renderReviewQueueList();
+      }
+    }
+  }
+
+  function switchResultTab(tab) {
+    if (["main", "raw", "review"].indexOf(tab) < 0) return;
+    S.mt.resTab = tab;
+    var rec = S.activeRecord;
+    if (rec && rec.mode === "meeting") {
+      if (tab === "raw" && (!S.mt.sourceTexts || S.mt.sourceTexts.recordId !== rec.id)) {
+        fetchSourceTexts(rec.id);
+      }
+      if (tab === "review" && (!S.mt.reviewQueue || S.mt.reviewQueueRecordId !== rec.id)) {
+        fetchReviewQueue(rec.id);
+      }
+    }
+    syncEditorCard();
+  }
+
+  function switchRawSubTab(sub) {
+    if (["whisper", "diarized"].indexOf(sub) < 0) return;
+    S.mt.rawSubTab = sub;
+    renderRawTextView();
+  }
+
+  async function fetchSourceTexts(recId) {
+    if (!recId) return;
+    S.mt.sourceTextsLoading = true;
+    renderRawTextView();
+    try {
+      var r = await fetch("/voice-records/" + encodeURIComponent(recId) + "/source-texts");
+      var d = await r.json().catch(function () { return {}; });
+      if (d && d.ok) {
+        S.mt.sourceTexts = {
+          recordId: recId,
+          whisper: d.whisper_raw || d.raw_whisper || "",
+          diarized: d.diarized_raw || d.raw_diarized || "",
+        };
+      }
+    } catch (e) {
+    } finally {
+      S.mt.sourceTextsLoading = false;
+      renderRawTextView();
+    }
+  }
+
+  function renderRawTextView() {
+    var subWh = $("vrRawSubtabWhisper");
+    var subDi = $("vrRawSubtabDiarized");
+    var view = $("vrRawTextView");
+    if (subWh) subWh.classList.toggle("active", S.mt.rawSubTab === "whisper");
+    if (subDi) subDi.classList.toggle("active", S.mt.rawSubTab === "diarized");
+    if (!view) return;
+    if (S.mt.sourceTextsLoading) {
+      view.textContent = tw("common.loading") || "Đang tải dữ liệu...";
+      return;
+    }
+    var st = S.mt.sourceTexts;
+    if (!st) {
+      view.textContent = "";
+      return;
+    }
+    var txt = S.mt.rawSubTab === "whisper" ? st.whisper : st.diarized;
+    view.textContent = txt || "";
+  }
+
+  function copyRawText() {
+    var st = S.mt.sourceTexts;
+    if (!st) return;
+    var txt = S.mt.rawSubTab === "whisper" ? st.whisper : st.diarized;
+    if (txt) {
+      copyToClip(txt);
+      var btn = $("vrRawBtnCopy");
+      if (btn) {
+        var old = btn.innerHTML;
+        btn.innerHTML = ico("check") + " <span>" + esc(tw("app.copied") || "Đã copy") + "</span>";
+        setTimeout(function () { if (btn) btn.innerHTML = old; }, 1800);
+      }
+    }
+  }
+
+  async function fetchReviewQueue(recId) {
+    if (!recId) return;
+    S.mt.reviewQueueLoading = true;
+    try {
+      var r = await fetch("/voice-records/" + encodeURIComponent(recId) + "/review-queue");
+      var d = await r.json().catch(function () { return {}; });
+      if (d && d.ok && Array.isArray(d.review_queue)) {
+        S.mt.reviewQueue = d.review_queue;
+        S.mt.reviewQueueRecordId = recId;
+      }
+    } catch (e) {
+    } finally {
+      S.mt.reviewQueueLoading = false;
+      syncEditorCard();
+    }
+  }
+
+  function renderReviewQueueList() {
+    var listEl = $("vrReviewList");
+    if (!listEl) return;
+    if (S.mt.reviewQueueLoading) {
+      listEl.innerHTML = '<div class="vr-review-empty">' + esc(tw("common.loading") || "Đang tải danh sách cảnh báo...") + '</div>';
+      return;
+    }
+    var q = S.mt.reviewQueue || [];
+    if (!q.length) {
+      listEl.innerHTML = '<div class="vr-review-empty">' + esc(tw("vr.res.review_empty")) + '</div>';
+      return;
+    }
+
+    if (!S.mt.editingSegs) S.mt.editingSegs = {};
+
+    listEl.innerHTML = q.map(function (it) {
+      var isAcc = it.accepted || it.status === "accepted";
+      var isRev = it.reverted || it.status === "reverted";
+      var segIndex = it.seg_idx != null ? it.seg_idx : it.idx;
+      var isEditing = Boolean(S.mt.editingSegs && S.mt.editingSegs.hasOwnProperty(segIndex));
+      var itemCls = "vr-review-item is-flagged" + (isAcc ? " is-accepted" : "") + (isRev ? " is-reverted" : "") + (isEditing ? " is-editing" : "");
+      var timeStr = fmtTime(it.start) + " - " + fmtTime(it.end);
+      var reasonStr = it.flag_reason || it.drift_reason || ("Lệch từ vựng: " + Math.round(Number(it.drift_score || 0) * 100) + "%");
+      var rawTxt = it.raw_text || it.raw || "";
+      var normTxt = it.normalized_text || it.normalized || "";
+      var draftTxt = isEditing ? S.mt.editingSegs[segIndex] : normTxt;
+
+      var normBoxHtml = "";
+      if (isEditing) {
+        normBoxHtml = '<div class="vr-rev-box is-editing">' +
+          '<div class="vr-rev-box-head">' +
+          '<div class="vr-rev-box-title">' + esc(tw("vr.res.col_norm")) + ' <span class="vr-badge-editing">' + esc(tw("vr.res.editing_badge") || "Đang sửa") + '</span></div>' +
+          '</div>' +
+          '<textarea class="vr-rev-edit-textarea" data-seg="' + segIndex + '" rows="3" placeholder="' + esc(tw("vr.res.col_norm")) + '">' + esc(draftTxt) + '</textarea>' +
+          '<div class="vr-rev-edit-actions">' +
+          '<button type="button" class="vr-btn-rev-save" data-act="save-edit" data-seg="' + segIndex + '">' +
+          ico("check") + ' <span>' + esc(tw("vr.btn.save_norm") || "Lưu") + '</span></button>' +
+          '<button type="button" class="vr-btn-rev-cancel" data-act="cancel-edit" data-seg="' + segIndex + '">' +
+          ico("x") + ' <span>' + esc(tw("vr.btn.cancel_edit") || "Đóng") + '</span></button>' +
+          '</div>' +
+          '</div>';
+      } else {
+        normBoxHtml = '<div class="vr-rev-box">' +
+          '<div class="vr-rev-box-head">' +
+          '<div class="vr-rev-box-title">' + esc(tw("vr.res.col_norm")) + '</div>' +
+          '<button type="button" class="vr-btn-edit-norm" data-act="start-edit" data-seg="' + segIndex + '" title="' + esc(tw("vr.btn.edit_norm") || "Sửa") + '">' +
+          ico("pencil") + ' <span>' + esc(tw("vr.btn.edit_norm") || "Sửa") + '</span></button>' +
+          '</div>' +
+          '<div class="vr-rev-norm-text">' + esc(normTxt) + '</div>' +
+          '</div>';
+      }
+
+      var actionsHtml = "";
+      if (isAcc) {
+        actionsHtml = '<span class="vr-res-badge-status" style="color:var(--green,#10b981);font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:4px;">' +
+          ico("check") + ' ' + esc(tw("vr.res.accepted_badge")) + '</span>';
+      } else if (isRev) {
+        actionsHtml = '<span class="vr-res-badge-status" style="color:var(--warn-ink,#d97706);font-weight:600;font-size:12px;display:inline-flex;align-items:center;gap:4px;">' +
+          ico("rotate-ccw") + ' ' + esc(tw("vr.res.reverted_badge")) + '</span>';
+      } else {
+        actionsHtml = '<button type="button" class="vr-btn-rev-action vr-btn-rev-accept" data-act="accept" data-seg="' + segIndex + '">' +
+          ico("check") + ' <span>' + esc(tw("vr.btn.accept_norm")) + '</span></button>' +
+          '<button type="button" class="vr-btn-rev-action vr-btn-rev-revert" data-act="revert" data-seg="' + segIndex + '">' +
+          ico("rotate-ccw") + ' <span>' + esc(tw("vr.btn.revert_seg")) + '</span></button>' +
+          '<button type="button" class="vr-btn-rev-action vr-btn-rev-hw" data-act="hotword" data-seg="' + segIndex + '">' +
+          ico("book-open") + ' <span>' + esc(it.hotword_added ? tw("vr.btn.hotword_added") : tw("vr.btn.add_hotword")) + '</span></button>';
+      }
+
+      return '<div class="' + itemCls + '" data-seg-idx="' + segIndex + '">' +
+        '<div class="vr-rev-meta">' +
+        '<span class="vr-rev-speaker">' + esc(it.speaker || "SPEAKER") + ' <small style="font-weight:normal;color:var(--text3);">[' + esc(timeStr) + ']</small></span>' +
+        '<span class="vr-rev-reason">' + esc(reasonStr) + '</span>' +
+        '</div>' +
+        '<div class="vr-rev-compare">' +
+        '<div class="vr-rev-box">' +
+        '<div class="vr-rev-box-head"><div class="vr-rev-box-title">' + esc(tw("vr.res.col_raw")) + '</div></div>' +
+        '<div class="vr-rev-raw-text">' + esc(rawTxt) + '</div>' +
+        '</div>' +
+        normBoxHtml +
+        '</div>' +
+        '<div class="vr-rev-actions">' + actionsHtml + '</div>' +
+        '</div>';
+    }).join("");
+  }
+
+  async function handleReviewAction(segIdx, action, hotword, editText) {
+    var rec = S.activeRecord;
+    if (!rec || !rec.id) return;
+    try {
+      var bodyPayload = { action: action, hotword: hotword || "" };
+      if (action === "edit" || action === "save" || action === "update") {
+        bodyPayload.text = String(editText || "").trim();
+      }
+      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/review-queue/" + encodeURIComponent(segIdx) + "/action", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyPayload),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (r.ok && d && d.ok && d.record) {
+        S.activeRecord = d.record;
+        S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
+        if (S.mt.editingSegs) {
+          delete S.mt.editingSegs[segIdx];
+        }
+        (S.mt.reviewQueue || []).forEach(function (it) {
+          var itIdx = it.seg_idx != null ? it.seg_idx : it.idx;
+          if (itIdx === segIdx) {
+            if (action === "accept") {
+              it.accepted = true;
+              it.status = "accepted";
+            }
+            if (action === "revert") {
+              it.reverted = true;
+              it.status = "reverted";
+              var rawStr = it.raw_text || it.raw || "";
+              it.normalized_text = rawStr;
+              it.normalized = rawStr;
+            }
+            if (action === "edit" || action === "save" || action === "update") {
+              it.accepted = true;
+              it.status = "accepted";
+              it.edited = true;
+              it.normalized_text = bodyPayload.text;
+              it.normalized = bodyPayload.text;
+            }
+            if (action === "add_hotword") { it.hotword_added = true; }
+          }
+        });
+        if (action === "revert" || action === "accept" || action === "edit" || action === "save" || action === "update") {
+          openRecordInEditor(d.record, { switchTab: false });
+        }
+        syncEditorCard();
+      } else {
+        alert((d && d.error) || "Lỗi xử lý hành động");
+      }
+    } catch (e) {
+      alert((e && e.message) || "Network error");
+    }
+  }
+
+  async function restoreMeetingRaw() {
+    var rec = S.activeRecord;
+    if (!rec || rec.mode !== "meeting" || isMeetingBusy(S.mt) || S.mt.restoringRaw) return;
+    if (!confirm(tw("vr.res.confirm_restore_raw") || "Khôi phục lại bản gốc đã tách người nói?")) return;
+    S.mt.restoringRaw = true;
+    syncEditorCard();
+    try {
+      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/restore-raw", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (r.ok && d && d.ok && d.record) {
+        S.activeRecord = d.record;
+        S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
+        S.mt.sourceTexts = null;
+        S.mt.reviewQueue = [];
+        S.mt.reviewQueueRecordId = "";
+        S.mt.resTab = "main";
+        openRecordInEditor(d.record, { switchTab: false });
+      } else {
+        S.mt.errorMsg = (d && d.error) || "Khôi phục thất bại";
+        syncUi();
+      }
+    } catch (e) {
+      S.mt.errorMsg = (e && e.message) || "Network error";
+      syncUi();
+    } finally {
+      S.mt.restoringRaw = false;
+      syncEditorCard();
+    }
   }
 
   async function fetchMeetingQueue() {
@@ -1380,7 +1745,19 @@
     if (rec.mode === "meeting") {
       if (opts.switchTab !== false) S.tab = "meeting";
       S.mt.speakerDraft = Object.assign({}, rec.speaker_map || {});
+      if (!S.mt.sourceTexts || S.mt.sourceTexts.recordId !== rec.id) {
+        S.mt.sourceTexts = null;
+      }
+      if (rec.status === "normalized") {
+        if (!S.mt.reviewQueue || S.mt.reviewQueueRecordId !== rec.id) {
+          fetchReviewQueue(rec.id);
+        }
+      } else {
+        S.mt.reviewQueue = [];
+        S.mt.reviewQueueRecordId = "";
+      }
     } else {
+      S.mt.resTab = "main";
       S.locked = true;
       S.rawText = String(rec.raw_text || "");
     }
@@ -1890,6 +2267,9 @@
           var st = d.job.status;
           if (st === "done") {
             S.mt.rediarizing = false;
+            S.mt.transcribing = false;
+            S.mt.diarizing = false;
+            S.mt.sourceTexts = null;
             S.mt.warnMsg = warningTextForCodes(d.job.warnings);
             if (d.record) {
               S.history = [d.record].concat(S.history.filter(function (x) { return x.id !== d.record.id; }));
@@ -1900,6 +2280,8 @@
           }
           if (st === "failed") {
             S.mt.rediarizing = false;
+            S.mt.transcribing = false;
+            S.mt.diarizing = false;
             S.mt.errorMsg = d.job.error || tw("vr.meeting.status_failed");
             syncMeetingUi();
             return;
@@ -2143,6 +2525,7 @@
       if (r.ok && d && d.ok && d.record) {
         S.activeRecord = d.record;
         S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
+        S.mt.sourceTexts = null;
         openRecordInEditor(d.record, { switchTab: false });
       } else {
         S.mt.errorMsg = (d && d.error) || ("HTTP " + r.status);
@@ -2177,6 +2560,15 @@
         if (!d.ai) S.infoNote = tw("vr.audit.fallback_note");
         S.activeRecord = d.record;
         S.history = S.history.map(function (x) { return x.id === d.record.id ? d.record : x; });
+        S.mt.resTab = "main";
+        S.mt.sourceTexts = null;
+        if (Array.isArray(d.review_queue)) {
+          S.mt.reviewQueue = d.review_queue;
+          S.mt.reviewQueueRecordId = d.record.id;
+        } else {
+          S.mt.reviewQueue = [];
+          S.mt.reviewQueueRecordId = "";
+        }
         openRecordInEditor(d.record, { switchTab: false });
       } else {
         S.mt.errorMsg = (d && d.error) || tw("vr.err.normalize");
@@ -2191,23 +2583,22 @@
     }
   }
 
-  async function rediarizeMeetingRecord(targetRec) {
+  async function transcribeMeetingRecord(targetRec) {
     var rec = targetRec || S.activeRecord;
-    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.rediarizing || isMeetingBusy(S.mt)) return;
-    S.mt.rediarizing = true;
+    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.transcribing || isMeetingBusy(S.mt)) return;
+    S.mt.transcribing = true;
     S.mt.errorMsg = "";
     S.mt.warnMsg = "";
     S.infoNote = "";
     syncUi();
     try {
-      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/rediarize", {
+      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/transcribe", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: S.mt.model || (rec.model_used || "large-v3-turbo"),
           language: S.mt.language || "vi",
-          num_speakers: Number(S.mt.numSpeakers || 0),
           vad_filter: !!S.mt.vadFilter,
           title: S.mt.title || "",
         }),
@@ -2221,17 +2612,66 @@
         var progBox = $("vrMtProgress");
         if (progBox) progBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else {
-        S.mt.rediarizing = false;
+        S.mt.transcribing = false;
         S.mt.errorMsg = (d && d.error) || ("HTTP " + r.status);
         syncUi();
       }
     } catch (e) {
       if (S.mounted) {
-        S.mt.rediarizing = false;
+        S.mt.transcribing = false;
         S.mt.errorMsg = (e && e.message) || "Network error";
         syncUi();
       }
     }
+  }
+
+  async function diarizeMeetingRecord(targetRec) {
+    var rec = targetRec || S.activeRecord;
+    if (!rec || rec.mode !== "meeting" || !rec.has_audio || S.mt.diarizing || isMeetingBusy(S.mt)) return;
+    if (!rec.segments || !rec.segments.length) {
+      S.mt.warnMsg = tw("vr.meeting.no_whisper_warn");
+      syncMeetingUi();
+      return;
+    }
+    S.mt.diarizing = true;
+    S.mt.errorMsg = "";
+    S.mt.warnMsg = "";
+    S.infoNote = "";
+    syncUi();
+    try {
+      var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/diarize", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          num_speakers: Number(S.mt.numSpeakers || 0),
+          title: S.mt.title || "",
+        }),
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!S.mounted) return;
+      if (r.ok && d && d.ok && d.job) {
+        S.mt.activeJob = d.job;
+        startJobPolling(d.job.id);
+        syncMeetingUi();
+        var progBox = $("vrMtProgress");
+        if (progBox) progBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else {
+        S.mt.diarizing = false;
+        S.mt.errorMsg = (d && d.error) || ("HTTP " + r.status);
+        syncUi();
+      }
+    } catch (e) {
+      if (S.mounted) {
+        S.mt.diarizing = false;
+        S.mt.errorMsg = (e && e.message) || "Network error";
+        syncUi();
+      }
+    }
+  }
+
+  async function rediarizeMeetingRecord(targetRec) {
+    return diarizeMeetingRecord(targetRec);
   }
 
   async function toggleRecordPin() {
@@ -2276,7 +2716,8 @@
       });
       if (active) {
         S.mt.activeJob = active;
-        if (active.job_type === "rediarize") S.mt.rediarizing = true;
+        if (active.job_type === "rediarize" || active.job_type === "diarize") S.mt.diarizing = true;
+        if (active.job_type === "transcribe") S.mt.transcribing = true;
         syncMeetingUi();
         syncEditorCard();
         startJobPolling(active.id);
@@ -2353,6 +2794,16 @@
     S.mt.errorMsg = "";
     S.mt.warnMsg = "";
     S.mt.speakerDraft = {};
+    S.mt.transcribing = false;
+    S.mt.diarizing = false;
+    S.mt.resTab = "main";
+    S.mt.rawSubTab = "whisper";
+    S.mt.sourceTexts = null;
+    S.mt.sourceTextsLoading = false;
+    S.mt.reviewQueue = [];
+    S.mt.reviewQueueRecordId = "";
+    S.mt.reviewQueueLoading = false;
+    S.mt.restoringRaw = false;
     S.mt.diarizeTouched = false;
     S.mt.vadTouched = false;
 
@@ -2630,8 +3081,9 @@
       '<div class="vr-mt-spk-grid" id="vrMtSpeakersGrid"></div>' +
       "</div>" +
       '<div class="vr-mt-actions-bar" id="vrMtActionsBar" hidden>' +
+      '<button type="button" class="vr-btn vr-act-btn vr-btn-transcribe" id="vrMtBtnTranscribeRec" hidden></button>' +
+      '<button type="button" class="vr-btn vr-act-btn vr-btn-diarize" id="vrMtBtnDiarizeRec" hidden></button>' +
       '<button type="button" class="vr-btn vr-btn-norm vr-act-btn" id="vrMtBtnNormalizeRec"></button>' +
-      '<button type="button" class="vr-btn vr-act-btn vr-btn-rediarize" id="vrMtBtnRediarizeRec" hidden></button>' +
       '<button type="button" class="vr-btn vr-act-btn" id="vrMtBtnNewRec">' + ico("plus") + " <span>" + esc(tw("vr.btn.new")) + "</span></button>" +
       '<div class="vr-btn-group" id="vrMtExpGroup" role="group" aria-label="' + esc(tw("vr.meeting.export_label")) + '">' +
       '<a class="vr-btn-group-item is-primary" id="vrMtExp_txt" download title="' + esc(tw("vr.meeting.export_label")) + ' TXT">' + ico("download") + " TXT</a>" +
@@ -2640,11 +3092,39 @@
       '<a class="vr-btn-group-item" id="vrMtExp_json" download title="' + esc(tw("vr.meeting.export_label")) + ' JSON">JSON</a>' +
       "</div>" +
       "</div>" +
+      '<div class="vr-res-tabs-bar" id="vrResTabsBar" hidden>' +
+      '<div class="vr-res-tabs" role="tablist">' +
+      '<button type="button" class="vr-res-tab active" id="vrResTabMain" data-res-tab="main" role="tab">' + ico("file-text") + " <span>" + esc(tw("vr.res.tab_main")) + "</span></button>" +
+      '<button type="button" class="vr-res-tab" id="vrResTabRaw" data-res-tab="raw" role="tab">' + ico("align-left") + " <span>" + esc(tw("vr.res.tab_raw")) + "</span></button>" +
+      '<button type="button" class="vr-res-tab" id="vrResTabReview" data-res-tab="review" role="tab">' + ico("alert-triangle") + " <span>" + esc(tw("vr.res.tab_review")) + "</span>" +
+      '<span class="vr-res-badge" id="vrResBadgeReview" hidden>0</span></button>' +
+      "</div>" +
+      "</div>" +
+      '<div class="vr-res-panel" id="vrResPanelMain">' +
+      '<div class="vr-res-subbar" id="vrResSubbarMain">' +
+      "<div></div>" +
+      '<button type="button" class="vr-btn-restore" id="vrBtnRestoreRaw" hidden>' + ico("rotate-ccw") + " <span>" + esc(tw("vr.btn.restore_raw")) + "</span></button>" +
+      "</div>" +
       '<div class="vr-closed-notice" id="vrClosedNotice" hidden>' +
       "<span>" + esc(tw("vr.editor.closed")) + "</span>" +
       '<button type="button" class="gcard-btn" id="vrBtnReopen">' + ico("file-text") + " " + esc(tw("vr.btn.open_editor")) + "</button>" +
       "</div>" +
       '<div class="vr-edit" id="vrEdit" data-ne-host="1"></div>' +
+      "</div>" +
+      '<div class="vr-res-panel" id="vrResPanelRaw" hidden>' +
+      '<div class="vr-raw-head">' +
+      '<div class="vr-raw-subtabs">' +
+      '<button type="button" class="vr-raw-subtab active" id="vrRawSubtabWhisper" data-raw-sub="whisper">' + esc(tw("vr.res.raw_whisper")) + "</button>" +
+      '<button type="button" class="vr-raw-subtab" id="vrRawSubtabDiarized" data-raw-sub="diarized">' + esc(tw("vr.res.raw_diarized")) + "</button>" +
+      "</div>" +
+      '<button type="button" class="gcard-btn vr-btn-copy" id="vrRawBtnCopy">' + ico("copy") + " <span>" + esc(tw("vr.meeting.btn_copy")) + "</span></button>" +
+      "</div>" +
+      '<pre class="vr-raw-text-view" id="vrRawTextView"></pre>' +
+      "</div>" +
+      '<div class="vr-res-panel" id="vrResPanelReview" hidden>' +
+      '<div class="vr-review-header">' + ico("info") + ' <span id="vrReviewDesc">' + esc(tw("vr.res.review_desc")) + "</span></div>" +
+      '<div class="vr-review-list" id="vrReviewList"></div>' +
+      "</div>" +
       "</div>" +
       "</div>" +
       '<aside class="gcard vr-history-card">' +
@@ -2714,6 +3194,8 @@
     var mtApplySpk = $("vrMtBtnApplySpk");
     var mtNormRec = $("vrMtBtnNormalizeRec");
     var mtRediarizeRec = $("vrMtBtnRediarizeRec");
+    var mtTranscribeRec = $("vrMtBtnTranscribeRec");
+    var mtDiarizeRec = $("vrMtBtnDiarizeRec") || mtRediarizeRec;
     var mtNewRec = $("vrMtBtnNewRec");
     var mtPin = $("vrMtBtnPin");
 
@@ -2764,8 +3246,10 @@
     if (mtDelMod) mtDelMod.onclick = function () { deleteSelectedModel(); };
 
     if (mtApplySpk) mtApplySpk.onclick = function () { if (!isMeetingBusy(S.mt)) applySpeakerMap(); };
+    if (mtTranscribeRec) mtTranscribeRec.onclick = function () { if (!isMeetingBusy(S.mt)) transcribeMeetingRecord(); };
+    if (mtDiarizeRec) mtDiarizeRec.onclick = function () { if (!isMeetingBusy(S.mt)) diarizeMeetingRecord(); };
+    if (mtRediarizeRec && mtRediarizeRec !== mtDiarizeRec) mtRediarizeRec.onclick = function () { if (!isMeetingBusy(S.mt)) diarizeMeetingRecord(); };
     if (mtNormRec) mtNormRec.onclick = function () { if (!isMeetingBusy(S.mt)) normalizeMeetingRecord(); };
-    if (mtRediarizeRec) mtRediarizeRec.onclick = function () { if (!isMeetingBusy(S.mt)) rediarizeMeetingRecord(); };
     if (mtNewRec) mtNewRec.onclick = function () { if (!isMeetingBusy(S.mt)) resetNewRecording(); };
     if (mtPin) mtPin.onclick = function () { if (!isMeetingBusy(S.mt)) toggleRecordPin(); };
 
@@ -2929,6 +3413,107 @@
       btnRefreshQueue.onclick = function () {
         fetchMeetingQueue();
       };
+    }
+
+    // Meeting result tabs & actions
+    var tabResMain = $("vrResTabMain");
+    var tabResRaw = $("vrResTabRaw");
+    var tabResReview = $("vrResTabReview");
+    if (tabResMain) tabResMain.onclick = function () { switchResultTab("main"); };
+    if (tabResRaw) tabResRaw.onclick = function () { switchResultTab("raw"); };
+    if (tabResReview) tabResReview.onclick = function () { switchResultTab("review"); };
+
+    var rawSubWh = $("vrRawSubtabWhisper");
+    var rawSubDi = $("vrRawSubtabDiarized");
+    if (rawSubWh) rawSubWh.onclick = function () { switchRawSubTab("whisper"); };
+    if (rawSubDi) rawSubDi.onclick = function () { switchRawSubTab("diarized"); };
+
+    var rawBtnCopy = $("vrRawBtnCopy");
+    if (rawBtnCopy) rawBtnCopy.onclick = copyRawText;
+
+    var btnRestoreRaw = $("vrBtnRestoreRaw");
+    if (btnRestoreRaw) btnRestoreRaw.onclick = restoreMeetingRaw;
+
+    var revList = $("vrReviewList");
+    if (revList) {
+      revList.onclick = function (e) {
+        var btn = e.target.closest(".vr-btn-rev-action, .vr-btn-edit-norm, .vr-btn-rev-save, .vr-btn-rev-cancel");
+        if (!btn) return;
+        var act = btn.getAttribute("data-act");
+        var seg = parseInt(btn.getAttribute("data-seg"), 10);
+        if (isNaN(seg)) return;
+
+        if (act === "accept" || act === "revert") {
+          handleReviewAction(seg, act);
+        } else if (act === "start-edit") {
+          if (!S.mt.editingSegs) S.mt.editingSegs = {};
+          var item = (S.mt.reviewQueue || []).find(function (it) {
+            return (it.seg_idx != null ? it.seg_idx : it.idx) === seg;
+          });
+          S.mt.editingSegs[seg] = item ? (item.normalized_text || item.normalized || "") : "";
+          renderReviewQueueList();
+          var ta = revList.querySelector('textarea[data-seg="' + seg + '"]');
+          if (ta) {
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+          }
+        } else if (act === "cancel-edit") {
+          if (S.mt.editingSegs) delete S.mt.editingSegs[seg];
+          renderReviewQueueList();
+        } else if (act === "save-edit") {
+          var ta = revList.querySelector('textarea[data-seg="' + seg + '"]');
+          var newTxt = ta ? ta.value.trim() : (S.mt.editingSegs && S.mt.editingSegs[seg] ? S.mt.editingSegs[seg].trim() : "");
+          if (!newTxt) {
+            alert(tw("vr.res.empty_warn") || "Nội dung không được để trống");
+            return;
+          }
+          handleReviewAction(seg, "edit", null, newTxt);
+        } else if (act === "hotword") {
+          var item = (S.mt.reviewQueue || []).find(function (it) {
+            return (it.seg_idx != null ? it.seg_idx : it.idx) === seg;
+          });
+          var defWord = "";
+          if (item) {
+            if (Array.isArray(item.suspicious_words) && item.suspicious_words.length > 0) {
+              defWord = item.suspicious_words.join(", ");
+            } else {
+              var rawStr = item.raw_text || item.raw || "";
+              var words = rawStr.trim().split(/\s+/);
+              if (words.length > 0 && words.length <= 4) defWord = rawStr.trim();
+            }
+          }
+          var hw = prompt(tw("vr.res.prompt_add_hotword") || "Nhập từ khóa:", defWord);
+          if (hw && hw.trim()) {
+            handleReviewAction(seg, "add_hotword", hw.trim());
+          }
+        }
+      };
+
+      revList.addEventListener("input", function (e) {
+        var ta = e.target.closest(".vr-rev-edit-textarea");
+        if (!ta) return;
+        var seg = parseInt(ta.getAttribute("data-seg"), 10);
+        if (!isNaN(seg) && S.mt.editingSegs) {
+          S.mt.editingSegs[seg] = ta.value;
+        }
+      });
+
+      revList.addEventListener("keydown", function (e) {
+        var ta = e.target.closest(".vr-rev-edit-textarea");
+        if (!ta) return;
+        var seg = parseInt(ta.getAttribute("data-seg"), 10);
+        if (isNaN(seg)) return;
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          var newTxt = ta.value.trim();
+          if (!newTxt) return;
+          handleReviewAction(seg, "edit", null, newTxt);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          if (S.mt.editingSegs) delete S.mt.editingSegs[seg];
+          renderReviewQueueList();
+        }
+      });
     }
 
     window.addEventListener("beforeunload", onBeforeUnload);

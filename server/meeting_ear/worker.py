@@ -379,6 +379,9 @@ def _is_whisper_hallucination(text: str) -> bool:
         "cảm ơn các bạn đã theo dõi",
         "cảm ơn quý vị đã theo dõi",
         "lalaschool",
+        "để không bỏ lỡ những video",
+        "để không bỏ lỡ video",
+        "không bỏ lỡ những video hấp dẫn",
         "thank you for watching",
         "thanks for watching",
     ]
@@ -618,7 +621,10 @@ def _convert_audio_to_wav(
 
 
 def _pick_whisper_device(requested: str) -> tuple[str, str]:
-    import ctranslate2
+    try:
+        import ctranslate2
+    except Exception:
+        return "cpu", "int8"
 
     req = (requested or "auto").strip().lower()
     cuda_ok = False
@@ -1339,159 +1345,176 @@ def run_job(job_path: str) -> int:
 
         duration = _wav_duration_sec(wav_path)
         _log_debug("AUDIO_PROBE", f"WAV duration: {duration:.2f}s ({_fmt_clock_sec(duration)})")
-        emit_progress("transcribing", 12, f"Loading Whisper {model_name}")
 
-        t_load_w_start = time.time()
-        _log_debug("STAGE:WHISPER_LOAD", f"Loading Whisper model {model_name} on {req_device}...")
         dev, ctype = _pick_whisper_device(req_device)
-        loaded = _load_whisper_model(model_name, model_dir, dev, ctype)
-        if isinstance(loaded, tuple):
-            model, dev, ctype = loaded
-        else:
-            model = loaded
-        t_load_w_end = time.time()
-        load_w_dur = t_load_w_end - t_load_w_start
-        _log_debug("STAGE:WHISPER_LOAD", f"Whisper {model_name} loaded on {dev}/{ctype}", load_w_dur)
-        timings["whisper_model_load"] = {
-            "elapsed_sec": round(load_w_dur, 3),
-            "model": model_name,
-            "device": dev,
-            "compute_type": ctype,
-        }
-
-        t_transcribe_start = time.time()
-        want_vad = bool(job.get("vad_filter", False))
-        beam_size = int(job.get("beam_size") or 5)
-        condition_on_previous_text = bool(job.get("condition_on_previous_text", False))
-        no_speech_threshold = float(job.get("no_speech_threshold") or 0.6)
-        compression_ratio_threshold = float(job.get("compression_ratio_threshold") or 2.4)
-        log_prob_threshold = float(job.get("log_prob_threshold") or -1.0)
-        vad_params = {"min_silence_duration_ms": 500} if want_vad else None
-
-        _log_debug(
-            "STAGE:WHISPER_TRANSCRIBE",
-            f"Transcribing audio with Whisper (duration: {duration:.2f}s, vad_filter={want_vad}, beam_size={beam_size})...",
-        )
-        emit_progress("transcribing", 16, f"Whisper {model_name} ({dev}/{ctype}, VAD={'on' if want_vad else 'off'})")
-        audio_arr = _load_wav_float32(wav_path)
-        fw_lang = None if lang in ("auto", "") else lang
-        transcribe_kwargs: dict[str, Any] = {
-            "language": fw_lang,
-            "beam_size": beam_size,
-            "vad_filter": want_vad,
-            "word_timestamps": True,
-            "condition_on_previous_text": condition_on_previous_text,
-            "no_speech_threshold": no_speech_threshold,
-            "compression_ratio_threshold": compression_ratio_threshold,
-            "log_prob_threshold": log_prob_threshold,
-        }
-        if want_vad and vad_params:
-            transcribe_kwargs["vad_parameters"] = vad_params
-
-        segments_iter, info = model.transcribe(audio_arr, **transcribe_kwargs)
-
+        existing_w_segs = job.get("whisper_segments") or []
+        skip_whisper = bool(job.get("diarize_only") and existing_w_segs)
         whisper_segments: list[dict[str, Any]] = []
-        last_pct = 16
-        max_pct = 65 if want_diarize else 92
-        raw_seg_count = 0
-        hallucination_count = 0
-        for seg in segments_iter:
-            raw_seg_count += 1
-            seg_text = str(seg.text or "").strip()
-            if not seg_text:
-                continue
+        info: Any = None
 
-            if _is_whisper_hallucination(seg_text):
-                hallucination_count += 1
-                _log_debug("WHISPER_HALLUCINATION_DROPPED", f"Dropped hallucination segment: '{seg_text}' at [{seg.start:.2f}s - {seg.end:.2f}s]")
-                continue
-
-            words_list = []
-            if getattr(seg, "words", None):
-                for w in seg.words:
-                    words_list.append({
-                        "start": float(w.start),
-                        "end": float(w.end),
-                        "word": str(w.word),
-                    })
-
-            sub_segs = _split_segment_by_words(
-                seg_start=float(seg.start),
-                seg_end=float(seg.end),
-                text=seg_text,
-                words=words_list,
-                max_gap_sec=2.5,
-                max_segment_len_sec=30.0,
+        if skip_whisper:
+            whisper_segments = existing_w_segs
+            total_words_count = sum(len(s.get("words") or []) for s in whisper_segments)
+            _log_debug(
+                "STAGE:WHISPER_REUSED",
+                f"Reusing existing {len(whisper_segments)} Whisper segments ({total_words_count} words), skipping transcription."
             )
-            whisper_segments.extend(sub_segs)
+            if log_dir:
+                raw_w_text = " ".join(str(seg.get("text") or "").strip() for seg in whisper_segments if seg.get("text")).strip()
+                if not (log_dir / "whisper_raw.txt").is_file() and raw_w_text:
+                    (log_dir / "whisper_raw.txt").write_text(raw_w_text, encoding="utf-8")
+        else:
+            emit_progress("transcribing", 12, f"Loading Whisper {model_name}")
 
-            if duration > 0:
-                pct = 16 + int(((float(seg.end) / duration) * (max_pct - 16)))
-                pct = max(last_pct, min(max_pct, pct))
-                if pct >= last_pct + 2:
-                    last_pct = pct
-                    emit_progress("transcribing", pct, f"{int(seg.end)}s / {int(duration)}s")
-
-        t_transcribe_end = time.time()
-        transcribe_dur = t_transcribe_end - t_transcribe_start
-        rtf_whisper = transcribe_dur / max(0.1, duration)
-        total_words_count = sum(len(s.get("words") or []) for s in whisper_segments)
-        _log_debug(
-            "STAGE:WHISPER_TRANSCRIBE",
-            f"Whisper transcribe completed: {len(whisper_segments)} segments (from {raw_seg_count} raw, {hallucination_count} hallucinations dropped), {total_words_count} words, RTF: {rtf_whisper:.3f}",
-            transcribe_dur,
-        )
-        timings["whisper_transcription"] = {
-            "elapsed_sec": round(transcribe_dur, 3),
-            "audio_duration_sec": round(duration, 2),
-            "real_time_factor": round(rtf_whisper, 4),
-            "segments_count": len(whisper_segments),
-            "raw_segments_count": raw_seg_count,
-            "words_count": total_words_count,
-            "vad_filter": want_vad,
-            "beam_size": beam_size,
-        }
-
-        if log_dir:
-            whisper_data = {
+            t_load_w_start = time.time()
+            _log_debug("STAGE:WHISPER_LOAD", f"Loading Whisper model {model_name} on {req_device}...")
+            loaded = _load_whisper_model(model_name, model_dir, dev, ctype)
+            if isinstance(loaded, tuple):
+                model, dev, ctype = loaded
+            else:
+                model = loaded
+            t_load_w_end = time.time()
+            load_w_dur = t_load_w_end - t_load_w_start
+            _log_debug("STAGE:WHISPER_LOAD", f"Whisper {model_name} loaded on {dev}/{ctype}", load_w_dur)
+            timings["whisper_model_load"] = {
+                "elapsed_sec": round(load_w_dur, 3),
                 "model": model_name,
                 "device": dev,
                 "compute_type": ctype,
-                "language": getattr(info, "language", "") or lang,
-                "duration_sec": round(duration, 2),
+            }
+
+            t_transcribe_start = time.time()
+            want_vad = bool(job.get("vad_filter", False))
+            beam_size = int(job.get("beam_size") or 5)
+            condition_on_previous_text = bool(job.get("condition_on_previous_text", False))
+            no_speech_threshold = float(job.get("no_speech_threshold") or 0.6)
+            compression_ratio_threshold = float(job.get("compression_ratio_threshold") or 2.4)
+            log_prob_threshold = float(job.get("log_prob_threshold") or -1.0)
+            vad_params = {"min_silence_duration_ms": 500} if want_vad else None
+
+            _log_debug(
+                "STAGE:WHISPER_TRANSCRIBE",
+                f"Transcribing audio with Whisper (duration: {duration:.2f}s, vad_filter={want_vad}, beam_size={beam_size})...",
+            )
+            emit_progress("transcribing", 16, f"Whisper {model_name} ({dev}/{ctype}, VAD={'on' if want_vad else 'off'})")
+            audio_arr = _load_wav_float32(wav_path)
+            fw_lang = None if lang in ("auto", "") else lang
+            transcribe_kwargs: dict[str, Any] = {
+                "language": fw_lang,
+                "beam_size": beam_size,
+                "vad_filter": want_vad,
+                "word_timestamps": True,
+                "condition_on_previous_text": condition_on_previous_text,
+                "no_speech_threshold": no_speech_threshold,
+                "compression_ratio_threshold": compression_ratio_threshold,
+                "log_prob_threshold": log_prob_threshold,
+            }
+            if want_vad and vad_params:
+                transcribe_kwargs["vad_parameters"] = vad_params
+
+            segments_iter, info = model.transcribe(audio_arr, **transcribe_kwargs)
+
+            last_pct = 16
+            max_pct = 65 if want_diarize else 92
+            raw_seg_count = 0
+            hallucination_count = 0
+            for seg in segments_iter:
+                raw_seg_count += 1
+                seg_text = str(seg.text or "").strip()
+                if not seg_text:
+                    continue
+
+                if _is_whisper_hallucination(seg_text):
+                    hallucination_count += 1
+                    _log_debug("WHISPER_HALLUCINATION_DROPPED", f"Dropped hallucination segment: '{seg_text}' at [{seg.start:.2f}s - {seg.end:.2f}s]")
+                    continue
+
+                words_list = []
+                if getattr(seg, "words", None):
+                    for w in seg.words:
+                        words_list.append({
+                            "start": float(w.start),
+                            "end": float(w.end),
+                            "word": str(w.word),
+                        })
+
+                sub_segs = _split_segment_by_words(
+                    seg_start=float(seg.start),
+                    seg_end=float(seg.end),
+                    text=seg_text,
+                    words=words_list,
+                    max_gap_sec=2.5,
+                    max_segment_len_sec=30.0,
+                )
+                whisper_segments.extend(sub_segs)
+
+                if duration > 0:
+                    pct = 16 + int(((float(seg.end) / duration) * (max_pct - 16)))
+                    pct = max(last_pct, min(max_pct, pct))
+                    if pct >= last_pct + 2:
+                        last_pct = pct
+                        emit_progress("transcribing", pct, f"{int(seg.end)}s / {int(duration)}s")
+
+            t_transcribe_end = time.time()
+            transcribe_dur = t_transcribe_end - t_transcribe_start
+            rtf_whisper = transcribe_dur / max(0.1, duration)
+            total_words_count = sum(len(s.get("words") or []) for s in whisper_segments)
+            _log_debug(
+                "STAGE:WHISPER_TRANSCRIBE",
+                f"Whisper transcribe completed: {len(whisper_segments)} segments (from {raw_seg_count} raw, {hallucination_count} hallucinations dropped), {total_words_count} words, RTF: {rtf_whisper:.3f}",
+                transcribe_dur,
+            )
+            timings["whisper_transcription"] = {
                 "elapsed_sec": round(transcribe_dur, 3),
+                "audio_duration_sec": round(duration, 2),
                 "real_time_factor": round(rtf_whisper, 4),
-                "parameters": {
-                    "vad_filter": want_vad,
-                    "vad_parameters": vad_params,
-                    "beam_size": beam_size,
-                    "condition_on_previous_text": condition_on_previous_text,
-                    "word_timestamps": True,
-                    "no_speech_threshold": no_speech_threshold,
-                    "compression_ratio_threshold": compression_ratio_threshold,
-                    "log_prob_threshold": log_prob_threshold,
-                },
                 "segments_count": len(whisper_segments),
                 "raw_segments_count": raw_seg_count,
-                "hallucinations_dropped_count": hallucination_count,
                 "words_count": total_words_count,
-                "segments": whisper_segments,
+                "vad_filter": want_vad,
+                "beam_size": beam_size,
             }
-            (log_dir / "whisper_output.json").write_text(json.dumps(whisper_data, ensure_ascii=False, indent=2), encoding="utf-8")
-            raw_w_text = " ".join(seg["text"] for seg in whisper_segments if seg.get("text")).strip()
-            (log_dir / "whisper_raw.txt").write_text(raw_w_text, encoding="utf-8")
-            _log_debug("ARTIFACT", f"Saved whisper_output.json ({len(whisper_segments)} segments, {total_words_count} words) and whisper_raw.txt to {log_dir}")
 
-        # Release Whisper VRAM before loading pyannote if both use CUDA
-        del model
-        try:
-            import gc
-            gc.collect()
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:
-            pass
+            if log_dir:
+                whisper_data = {
+                    "model": model_name,
+                    "device": dev,
+                    "compute_type": ctype,
+                    "language": getattr(info, "language", "") or lang,
+                    "duration_sec": round(duration, 2),
+                    "elapsed_sec": round(transcribe_dur, 3),
+                    "real_time_factor": round(rtf_whisper, 4),
+                    "parameters": {
+                        "vad_filter": want_vad,
+                        "vad_parameters": vad_params,
+                        "beam_size": beam_size,
+                        "condition_on_previous_text": condition_on_previous_text,
+                        "word_timestamps": True,
+                        "no_speech_threshold": no_speech_threshold,
+                        "compression_ratio_threshold": compression_ratio_threshold,
+                        "log_prob_threshold": log_prob_threshold,
+                    },
+                    "segments_count": len(whisper_segments),
+                    "raw_segments_count": raw_seg_count,
+                    "hallucinations_dropped_count": hallucination_count,
+                    "words_count": total_words_count,
+                    "segments": whisper_segments,
+                }
+                (log_dir / "whisper_output.json").write_text(json.dumps(whisper_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                raw_w_text = " ".join(seg["text"] for seg in whisper_segments if seg.get("text")).strip()
+                (log_dir / "whisper_raw.txt").write_text(raw_w_text, encoding="utf-8")
+                _log_debug("ARTIFACT", f"Saved whisper_output.json ({len(whisper_segments)} segments, {total_words_count} words) and whisper_raw.txt to {log_dir}")
+
+            # Release Whisper VRAM before loading pyannote if both use CUDA
+            del model
+            try:
+                import gc
+                gc.collect()
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
 
         warnings: list[str] = []
         speaker_turns: list[dict[str, Any]] = []
@@ -1719,6 +1742,10 @@ def run_job(job_path: str) -> int:
             (log_dir / "debug_timing.json").write_text(json.dumps(debug_timing, ensure_ascii=False, indent=2), encoding="utf-8")
             _log_debug("ARTIFACT", f"Saved debug_timing.json to {log_dir}")
 
+        detected_lang = getattr(info, "language", "") if info is not None else ""
+        if not detected_lang:
+            detected_lang = str(job.get("language") or lang or "vi")
+
         result_payload = {
             "type": "result",
             "ok": True,
@@ -1726,7 +1753,7 @@ def run_job(job_path: str) -> int:
             "speakers": speakers,
             "raw_text": "\n".join(raw_text_lines),
             "duration": duration,
-            "detected_language": getattr(info, "language", "") or lang,
+            "detected_language": detected_lang,
             "device_used": dev,
             "compute_type": ctype,
             "model_used": model_name,
@@ -1741,9 +1768,6 @@ def run_job(job_path: str) -> int:
         emit_progress("done", 100, "Done")
         emit(result_payload)
         return 0
-
-        emit_progress("done", 100, "Done")
-        emit(result_payload)
         return 0
 
 
