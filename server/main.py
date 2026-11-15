@@ -10981,21 +10981,68 @@ _THU_MUC_LOGIC = {
 _NOTE_IMAGE_EXTS = {".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif", ".bmp"}
 
 
+def _convert_to_markdown_if_needed(dest_path: str, folder_logic: str = "") -> tuple[str | None, str | None]:
+    """Chuyển đổi file sang Markdown bằng markitdown nếu không phải là text thuần (markdown, txt, rst...).
+    Lưu file .md tại cùng thư mục với tệp gốc."""
+    parts = [p.strip() for p in (folder_logic or "").replace("\\", "/").split("/") if p.strip()]
+    if parts and parts[0].lower() == "images":
+        return None, None
+    p = Path(dest_path)
+    ext = p.suffix.lower()
+    plain_text_exts = {
+        ".md", ".markdown", ".txt", ".rst", ".srt", ".vtt",
+        ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
+        ".xml", ".html", ".htm", ".css", ".js", ".mjs", ".cjs", ".ts",
+        ".py", ".sh", ".bash", ".zsh", ".sql", ".c", ".cpp", ".h", ".hpp",
+        ".java", ".go", ".rs", ".php", ".rb", ".log", ".diff", ".patch",
+        ".csv", ".tsv",
+    }
+    if ext in plain_text_exts:
+        return None, None
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        res = md.convert(str(p))
+        if res and res.text_content and res.text_content.strip():
+            md_name = f"{p.stem}.md"
+            md_dest = p.parent / md_name
+            if md_dest != p:
+                md_dest.write_text(res.text_content, encoding="utf-8")
+                return md_name, str(md_dest)
+    except Exception as e:
+        print(f"[markitdown] could not convert {p.name}: {e}", file=sys.stderr)
+    return None, None
+
+
 @app.post("/files/upload")
 async def files_upload(file: UploadFile = File(...), brain: str = Form("brain"),
-                       path: str = Form(""), folder: str = Form("")):
+                       path: str = Form(""), folder: str = Form(""),
+                       subfolder: str = Form("")):
     """Tải file vào brain. Đưa `folder` (tên logic) thì server tự tìm đúng thư mục thật;
-    không thì dùng `path` như cũ (tương đối TRẦN duyệt)."""
+    không thì dùng `path` như cũ (tương đối TRẦN duyệt). Có thể đưa `subfolder` để lưu vào thư mục con."""
     if folder:
-        mau = _THU_MUC_LOGIC.get(folder.strip().lower())
+        parts = [p.strip() for p in folder.strip().replace("\\", "/").split("/") if p.strip()]
+        logic_name = parts[0].lower() if parts else ""
+        mau = _THU_MUC_LOGIC.get(logic_name)
         if not mau:
             return JSONResponse({"error": localefmt.chu("Thư mục không hợp lệ", "Invalid folder")}, status_code=400)
-        if folder.strip().lower() == "images" and \
+        if logic_name == "images" and \
                 os.path.splitext(_sanitize_filename(file.filename))[1].lower() not in _NOTE_IMAGE_EXTS:
             return JSONResponse({"error": localefmt.chu(
                 "Ảnh trong note chỉ nhận WebP, JPG, PNG, GIF, AVIF hoặc BMP",
                 "Note images accept only WebP, JPG, PNG, GIF, AVIF or BMP")}, status_code=400)
         d = Path(_resolve_subfolder(_brain_root(brain), *mau))
+        extra_subs = parts[1:]
+        if subfolder:
+            for s in subfolder.strip().replace("\\", "/").split("/"):
+                s = s.strip()
+                if s and s not in (".", ".."):
+                    extra_subs.append(s)
+        if extra_subs:
+            for sub in extra_subs:
+                clean_sub = re.sub(r"[^\w\s-]", "", sub).strip()
+                if clean_sub and clean_sub not in (".", ".."):
+                    d = d / clean_sub
         try:
             # Client lưu và mở file bằng đường dẫn tương đối TRẦN duyệt, nên phải quy về đó -
             # trả đường tuyệt đối là đẩy một đường dẫn máy chủ vào cơ sở dữ liệu project.
@@ -11003,7 +11050,7 @@ async def files_upload(file: UploadFile = File(...), brain: str = Form("brain"),
             # and the renderer resolves it from the BRAIN ROOT, so it must be brain-root relative.
             # Locally the browse ceiling can be a whole drive; relative to that, the note would get
             # "Users/.../images/a.webp" and break as soon as the brain moves or changes machine.
-            if folder.strip().lower() == "images":
+            if logic_name == "images":
                 rel_dir = d.resolve().relative_to(Path(_brain_root(brain)).resolve()).as_posix()
             else:
                 rel_dir = d.relative_to(_files_root(brain)).as_posix()
@@ -11022,9 +11069,51 @@ async def files_upload(file: UploadFile = File(...), brain: str = Form("brain"),
     except Exception as e:
         return JSONResponse({"error": localefmt.chu(f"Ghi file thất bại: {e}", f"Writing the file failed: {e}")}, status_code=500)
     ten = os.path.basename(dest)
-    # Trả luôn đường dẫn ĐÃ DÙNG: caller khỏi phải ghép lại và khỏi đoán sai tên thư mục.
-    return {"ok": True, "name": ten, "dir": rel_dir,
-            "path": (rel_dir + "/" + ten) if rel_dir else ten}
+
+    converted_name, _ = await asyncio.to_thread(_convert_to_markdown_if_needed, dest, folder)
+    resp = {
+        "ok": True,
+        "name": ten,
+        "dir": rel_dir,
+        "path": (rel_dir + "/" + ten) if rel_dir else ten,
+    }
+    if converted_name:
+        resp["converted_name"] = converted_name
+        resp["converted_path"] = (rel_dir + "/" + converted_name) if rel_dir else converted_name
+    return resp
+
+
+@app.post("/files/convert-markdown")
+async def files_convert_markdown(brain: str = Form("brain"), path: str = Form(...),
+                                 project_id: str = Form(""), session_id: str = Form("")):
+    try:
+        alo = _safe_path(brain, path)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if not alo.is_file():
+        return JSONResponse({"error": localefmt.chu("Không tìm thấy file trên đĩa",
+                                                    "File not found on disk")}, status_code=404)
+    converted_name, converted_dest = await asyncio.to_thread(_convert_to_markdown_if_needed, str(alo), "")
+    if not converted_name or not converted_dest:
+        return JSONResponse({"error": localefmt.chu("Không thể chuyển đổi file này sang Markdown",
+                                                    "Could not convert this file to Markdown")}, status_code=400)
+    dir_part = posixpath.dirname((path or "").replace("\\", "/"))
+    converted_rel_path = f"{dir_part}/{converted_name}" if dir_part else converted_name
+    new_fid = None
+    if project_id:
+        p = get_store().get_project(project_id)
+        if p:
+            new_fid = get_store().add_project_file(project_id, converted_rel_path, converted_name)
+    elif session_id:
+        s = get_store().get_session(session_id)
+        if s:
+            new_fid = get_store().add_session_file(session_id, converted_rel_path, converted_name)
+    return {
+        "ok": True,
+        "id": new_fid,
+        "path": converted_rel_path,
+        "name": converted_name,
+    }
 
 
 @app.get("/files/download")
@@ -24659,6 +24748,39 @@ def sessions_pin_file(session_id: str, file_id: str, pinned: str = Form("1")):
     return {"ok": get_store().set_session_file_pinned(session_id, file_id, on), "pinned": on}
 
 
+@app.post("/sessions/{session_id}/assets/files/{file_id}/convert-markdown")
+async def sessions_convert_file_markdown(session_id: str, file_id: str):
+    sess, err = _cuoc_or_404(session_id)
+    if err:
+        return err
+    f = get_store().get_session_file(session_id, file_id)
+    if not f:
+        return JSONResponse({"error": localefmt.chu("Không tìm thấy file trong cuộc hội thoại",
+                                                    "File not found in this conversation")}, status_code=404)
+    b = (sess.get("brain") or "brain").strip() or "brain"
+    rel_path = f.get("path") or ""
+    try:
+        alo = _safe_path(b, rel_path)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if not alo.is_file():
+        return JSONResponse({"error": localefmt.chu("Không tìm thấy file trên đĩa",
+                                                    "File not found on disk")}, status_code=404)
+    converted_name, converted_dest = await asyncio.to_thread(_convert_to_markdown_if_needed, str(alo), "")
+    if not converted_name or not converted_dest:
+        return JSONResponse({"error": localefmt.chu("Không thể chuyển đổi file này sang Markdown",
+                                                    "Could not convert this file to Markdown")}, status_code=400)
+    dir_part = posixpath.dirname(rel_path.replace("\\", "/"))
+    converted_rel_path = f"{dir_part}/{converted_name}" if dir_part else converted_name
+    new_fid = get_store().add_session_file(session_id, converted_rel_path, converted_name)
+    return {
+        "ok": True,
+        "id": new_fid,
+        "path": converted_rel_path,
+        "name": converted_name,
+    }
+
+
 @app.post("/sessions/{session_id}/assets/links")
 def sessions_add_link(session_id: str, url: str = Form(...), label: str = Form("")):
     sess, err = _cuoc_or_404(session_id)
@@ -24930,8 +25052,20 @@ def projects_create(name: str = Form(...), icon: str = Form(""),
                           brain: str = Form("brain")):
     if not (name or "").strip():
         return JSONResponse({"error": localefmt.chu("thiếu tên project", "missing project name")}, status_code=400)
-    pid = get_store().create_project(name, icon=icon, brain=brain or "brain")
-    return {"ok": True, "id": pid}
+    bname = brain or "brain"
+    pid = get_store().create_project(name, icon=icon, brain=bname)
+    p = get_store().get_project(pid)
+    slug = (p or {}).get("slug") or ""
+    if slug:
+        try:
+            mau = _THU_MUC_LOGIC.get("sources")
+            if mau:
+                src_dir = Path(_resolve_subfolder(_brain_root(bname), *mau))
+                proj_dir = src_dir / slug
+                proj_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            print(f"[projects_create] warning: could not create project folder sources/{slug}: {e}", file=sys.stderr)
+    return {"ok": True, "id": pid, "slug": slug}
 
 
 @app.get("/projects/{project_id}")
@@ -25005,6 +25139,39 @@ def projects_pin_file(project_id: str, file_id: str, pinned: str = Form("1")):
         return err
     on = str(pinned).strip() in ("1", "true", "True", "on")
     return {"ok": get_store().set_project_file_pinned(project_id, file_id, on), "pinned": on}
+
+
+@app.post("/projects/{project_id}/files/{file_id}/convert-markdown")
+async def projects_convert_file_markdown(project_id: str, file_id: str):
+    p, err = _proj_or_404(project_id)
+    if err:
+        return err
+    f = get_store().get_project_file(project_id, file_id)
+    if not f:
+        return JSONResponse({"error": localefmt.chu("Không tìm thấy file trong dự án",
+                                                    "File not found in this project")}, status_code=404)
+    brain = p.get("brain") or "brain"
+    rel_path = f.get("path") or ""
+    try:
+        alo = _safe_path(brain, rel_path)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if not alo.is_file():
+        return JSONResponse({"error": localefmt.chu("Không tìm thấy file trên đĩa",
+                                                    "File not found on disk")}, status_code=404)
+    converted_name, converted_dest = await asyncio.to_thread(_convert_to_markdown_if_needed, str(alo), "")
+    if not converted_name or not converted_dest:
+        return JSONResponse({"error": localefmt.chu("Không thể chuyển đổi file này sang Markdown",
+                                                    "Could not convert this file to Markdown")}, status_code=400)
+    dir_part = posixpath.dirname(rel_path.replace("\\", "/"))
+    converted_rel_path = f"{dir_part}/{converted_name}" if dir_part else converted_name
+    new_fid = get_store().add_project_file(project_id, converted_rel_path, converted_name)
+    return {
+        "ok": True,
+        "id": new_fid,
+        "path": converted_rel_path,
+        "name": converted_name,
+    }
 
 
 @app.post("/projects/{project_id}/links")

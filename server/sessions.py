@@ -27,6 +27,7 @@ import re
 import sqlite3
 import threading
 import time
+import unicodedata
 import uuid
 import weakref
 import zlib
@@ -257,7 +258,8 @@ CREATE TABLE IF NOT EXISTS projects (
     -- luôn ở trên", và nó KHÔNG đụng updated_at (ghim không phải một lượt làm việc).
     pinned     INTEGER NOT NULL DEFAULT 0,
     created_at REAL NOT NULL,
-    updated_at REAL NOT NULL
+    updated_at REAL NOT NULL,
+    slug       TEXT
 );
 
 -- Tài liệu và link gắn vào một project. KHÔNG có cột `brain`: project đã thuộc đúng một
@@ -481,6 +483,15 @@ def _sach_icon(icon: str | None) -> str | None:
     return v if _ICON_RE.match(v) else None
 
 
+def _project_slug(name: str) -> str:
+    """Tạo slug an toàn cho thư mục project trong sources: 'ASCTax-Chatbot' -> 'asctax-chatbot'."""
+    s = unicodedata.normalize("NFD", str(name or "")).replace("đ", "d").replace("Đ", "D")
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn").lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    s = re.sub(r"-{2,}", "-", s)
+    return (s or "project")[:60].strip("-") or "project"
+
+
 class SessionStore:
     """Kho hội thoại SQLite thread-safe (1 connection + app-lock, WAL)."""
 
@@ -616,7 +627,8 @@ class SessionStore:
             cols_p = {r[1] for r in self._conn.execute(
                 "PRAGMA table_info(projects)").fetchall()}
             for name, ddl in (("instructions", "TEXT"),
-                              ("pinned", "INTEGER NOT NULL DEFAULT 0")):
+                              ("pinned", "INTEGER NOT NULL DEFAULT 0"),
+                              ("slug", "TEXT")):
                 if name not in cols_p:
                     self._conn.execute(
                         f"ALTER TABLE projects ADD COLUMN {name} {ddl}")
@@ -1658,14 +1670,20 @@ class SessionStore:
 
     # ── projects (nhóm hội thoại) ──
 
-    def create_project(self, name: str, *, icon: str = "", brain: str = "brain") -> str:
+    def create_project(self, name: str, *, icon: str = "", brain: str = "brain", slug: str = "") -> str:
         pid = uuid.uuid4().hex
         now = time.time()
+        base_slug = _project_slug(slug or name)
+        final_slug = base_slug
+        i = 2
+        while self._read("SELECT 1 FROM projects WHERE brain = ? AND slug = ?", (brain or "brain", final_slug)):
+            final_slug = f"{base_slug}-{i}"
+            i += 1
         self._write(lambda c: c.execute(
-            "INSERT INTO projects (id, name, icon, brain, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO projects (id, name, icon, brain, created_at, updated_at, slug) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (pid, (name or "").strip()[:80] or "Project", _sach_icon(icon),
-             brain or "brain", now, now),
+             brain or "brain", now, now, final_slug),
         ))
         return pid
 
@@ -1675,7 +1693,7 @@ class SessionStore:
         where_sql, params = ("WHERE p.brain = ?", (brain,)) if brain else ("", ())
         rows = self._read(
             f"""
-            SELECT p.id, p.name, p.icon, p.brain, p.pinned, p.created_at, p.updated_at,
+            SELECT p.id, p.name, p.icon, p.brain, p.pinned, p.created_at, p.updated_at, p.slug,
                    (SELECT COUNT(*) FROM sessions s WHERE s.project_id = p.id) AS session_count,
                    (SELECT COUNT(*) FROM project_files f WHERE f.project_id = p.id) AS file_count,
                    (SELECT COUNT(*) FROM project_links l WHERE l.project_id = p.id) AS link_count,
@@ -1816,6 +1834,11 @@ class SessionStore:
             "VALUES (?, ?, ?, ?, 0, ?)", (fid, project_id, rel, ten[:160], time.time())))
         return fid
 
+    def get_project_file(self, project_id: str, file_id: str) -> dict[str, Any] | None:
+        rows = self._read("SELECT * FROM project_files WHERE project_id = ? AND id = ?",
+                          (project_id, file_id))
+        return dict(rows[0]) if rows else None
+
     def all_project_file_paths(self) -> set:
         """MỌI đường dẫn đang được một project trỏ tới (gộp mọi project).
 
@@ -1900,6 +1923,11 @@ class SessionStore:
             "INSERT INTO session_files (id, session_id, path, name, pinned, added_at) "
             "VALUES (?, ?, ?, ?, 0, ?)", (fid, session_id, rel, ten[:160], time.time())))
         return fid
+
+    def get_session_file(self, session_id: str, file_id: str) -> dict[str, Any] | None:
+        rows = self._read("SELECT * FROM session_files WHERE session_id = ? AND id = ?",
+                          (session_id, file_id))
+        return dict(rows[0]) if rows else None
 
     def remove_session_file(self, session_id: str, file_id: str) -> bool:
         # Kèm session_id trong WHERE vì id đến từ client: đoán trúng một uuid không được phép

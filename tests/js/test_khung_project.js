@@ -385,6 +385,17 @@ check("cột hẹp: chip CÓ nội dung mới xuống hàng riêng",
   /\.hud-right \.panel-label \.proj-chip-host:not\(:empty\) \{ flex: 1 0 100%; order: 3; \}/.test(CCSS)
   && /\.panel-label \{[^}]*flex-wrap: wrap/.test(CSS));
 
+// ── CTA chuyển markdown cho file office ──
+check("nút CTA chuyển markdown tồn tại trong hàng file",
+  /class="pd-row-act pd-chuyen-md"/.test(SU)
+  && /chuyenFileMarkdown/.test(SU));
+check("chỉ hiện nút chuyển markdown cho file office",
+  /laFileOffice/.test(SU)
+  && /pdf/.test(SU) && /docx/.test(SU) && /xlsx/.test(SU));
+check("từ điển có đủ nhãn chuyển markdown",
+  !!VI["proj.convert_md"] && !!EN["proj.convert_md"]
+  && !!VI["proj.err_convert_md"] && !!EN["proj.err_convert_md"]);
+
 console.log("");
 if (fails.length) { console.log("ĐỎ " + fails.length + " mục"); process.exit(1); }
 console.log("Tất cả xanh.");

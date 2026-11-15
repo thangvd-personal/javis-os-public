@@ -248,6 +248,93 @@ _r2 = _c.post("/files/upload", data={"brain": _brain, "folder": "misc"},
 check("an unknown folder name is blocked with 400, nothing written to the brain",
       _r2.status_code == 400, _r2.text)
 
+# ── Project slug & markitdown conversion tests ──────────────────────────────────────────
+# 1. Project creation automatically generates slug
+_pid_slug = st.create_project("ASCTax-Chatbot", brain=_brain)
+_proj_rec = st.get_project(_pid_slug)
+check("project created has slug", _proj_rec.get("slug") == "asctax-chatbot", _proj_rec)
+
+# Duplicate slug in same brain gets indexed suffix
+_pid_slug2 = st.create_project("ASCTax-Chatbot", brain=_brain)
+check("duplicate project slug gets indexed suffix",
+      st.get_project(_pid_slug2).get("slug") == "asctax-chatbot-2")
+
+# 2. POST /projects creates the folder sources/<slug> on disk
+_rp = _c.post("/projects", data={"name": "Kế toán Thuế", "brain": _brain}).json()
+check("POST /projects returns slug", _rp.get("slug") == "ke-toan-thue", _rp)
+check("sources/<slug> folder created on disk",
+      os.path.isdir(os.path.join(_brain, "01 - Sources", "ke-toan-thue")))
+
+# 3. Upload with subfolder stores file in sources/<slug>/
+_ru = _c.post("/files/upload",
+              data={"brain": _brain, "folder": "sources", "subfolder": "ke-toan-thue"},
+              files={"file": ("notes.txt", b"plain text content", "text/plain")}).json()
+check("upload with subfolder lands in sources/<slug>",
+      "01 - Sources/ke-toan-thue/notes.txt" in _ru.get("path", ""), _ru)
+check("plain text file does NOT create .md conversion",
+      not _ru.get("converted_path"), _ru)
+
+# 4. Upload non-text file converts with markitdown and saves .md alongside original file
+import io
+import openpyxl
+
+_wb = openpyxl.Workbook()
+_ws = _wb.active
+_ws['A1'] = "Test Markitdown Conversion"
+_buf = io.BytesIO()
+_wb.save(_buf)
+_buf.seek(0)
+
+_rx = _c.post("/files/upload",
+              data={"brain": _brain, "folder": "sources", "subfolder": "ke-toan-thue"},
+              files={"file": ("report.xlsx", _buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}).json()
+check("non-text upload returns converted_path pointing to .md",
+      bool(_rx.get("converted_path") and _rx.get("converted_path").endswith("report.md")), _rx)
+check("converted .md exists on disk in same folder",
+      os.path.isfile(os.path.join(_brain, "01 - Sources", "ke-toan-thue", "report.md")))
+_md_content = open(os.path.join(_brain, "01 - Sources", "ke-toan-thue", "report.md"), encoding="utf-8").read()
+check("converted .md has content", "Test Markitdown Conversion" in _md_content)
+
+# 5. Endpoint POST /projects/{project_id}/files/{file_id}/convert-markdown
+# Add an office file to project
+_wb2 = openpyxl.Workbook()
+_ws2 = _wb2.active
+_ws2['A1'] = "CTA Convert Markdown Test"
+_wb2_path = os.path.join(_brain, "01 - Sources", "ke-toan-thue", "manual-report.xlsx")
+_wb2.save(_wb2_path)
+
+_fid_xlsx = _mainmod.get_store().add_project_file(_rp["id"], "01 - Sources/ke-toan-thue/manual-report.xlsx")
+check("added manual-report.xlsx to project", bool(_fid_xlsx))
+check("get_project_file returns record",
+      bool(_mainmod.get_store().get_project_file(_rp["id"], _fid_xlsx)))
+
+_rc = _c.post(f"/projects/{_rp['id']}/files/{_fid_xlsx}/convert-markdown").json()
+check("CTA convert markdown endpoint returns ok", _rc.get("ok") is True, _rc)
+check("CTA convert returns converted path",
+      _rc.get("path") == "01 - Sources/ke-toan-thue/manual-report.md", _rc)
+check("converted .md exists on disk",
+      os.path.isfile(os.path.join(_brain, "01 - Sources", "ke-toan-thue", "manual-report.md")))
+_md_content2 = open(os.path.join(_brain, "01 - Sources", "ke-toan-thue", "manual-report.md"), encoding="utf-8").read()
+check("converted .md contains spreadsheet text", "CTA Convert Markdown Test" in _md_content2)
+
+# Verify that converted .md is registered in project_files
+_proj_files = _mainmod.get_store().get_project_full(_rp["id"])["files"]
+check("converted .md registered in project_files",
+      any(f["path"] == "01 - Sources/ke-toan-thue/manual-report.md" for f in _proj_files))
+
+# Converting already-markdown or plain-text file returns error
+_rc_err = _c.post(f"/projects/{_rp['id']}/files/{_rc['id']}/convert-markdown")
+check("converting markdown file returns 400", _rc_err.status_code == 400)
+
+# 6. Endpoint POST /files/convert-markdown
+_rc_generic = _c.post("/files/convert-markdown", data={
+    "brain": _brain,
+    "path": "01 - Sources/ke-toan-thue/manual-report.xlsx",
+    "project_id": _rp["id"]
+}).json()
+check("generic convert-markdown returns ok", _rc_generic.get("ok") is True, _rc_generic)
+
+
 print()
 if _fails:
     print(f"FAIL {len(_fails)}: " + "; ".join(_fails))

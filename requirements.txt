@@ -95,3 +95,7 @@ yt-dlp>=2026.8.19
 # 6.21.4 (2026-11-10): 6.18.1 had 21 advisories, all of the same kind: a crafted PDF sends the parser into an endless
 # loop or makes it allocate without bound. Javis reads PDFs that strangers control (web pages, files customers send).
 pypdf==6.21.4
+
+# markitdown: chuyển đổi tài liệu không phải text thuần (pdf, docx, xlsx, pptx...) sang Markdown (Microsoft MarkItDown)
+markitdown[all]>=0.1.9
+

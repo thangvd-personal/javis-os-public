@@ -4045,6 +4045,8 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .pd-ghim.on { color: var(--accent); }
 .pd-go:hover { color: var(--red); }
 .pd-sao:hover { color: var(--accent); }
+.pd-chuyen-md:hover { color: var(--accent); }
+.pd-chuyen-md.loading { pointer-events: none; opacity: .7; }
 /* Nháy dấu tích sau khi chép xong (window.JavisCopy trong copy-path.js đặt lớp này). Màu
    chứ không chỉ đổi icon: nút chỉ 26px, đổi icon không thôi thì liếc qua khó thấy. */
 .pd-row-act.da-chep, .ne-actions button.da-chep { color: var(--green); }

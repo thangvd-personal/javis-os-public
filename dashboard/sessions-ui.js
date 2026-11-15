@@ -1074,6 +1074,13 @@
     return "file";
   }
 
+  var OFFICE_EXTS = ["pdf", "docx", "doc", "xlsx", "xls", "xlsm", "pptx", "ppt", "epub", "msg", "rtf", "odt", "ods", "odp"];
+  function laFileOffice(ten) {
+    if (!ten) return false;
+    var e = (String(ten).split(".").pop() || "").toLowerCase();
+    return OFFICE_EXTS.indexOf(e) >= 0;
+  }
+
   /** Nút CHÉP ĐƯỜNG DẪN của một hàng. Có ở MỌI hàng, kể cả hàng tự dò và hàng file đã mất:
    *  chủ dự án hay cần đúng chuỗi đường dẫn để dán sang chỗ khác làm tiếp, và với file đã đổi
    *  chỗ thì đường dẫn CŨ chính là thứ cần chép đi tra. Đường dẫn nằm sẵn ở dòng mô tả nhưng
@@ -1084,6 +1091,12 @@
     var title = o.saoTitle || pdT("common.copy_path");
     return '<button class="pd-row-act pd-sao" type="button" data-sao="' + esc(o.sao) + '" title="' +
       esc(title + ": " + o.sao) + '">' + ic("copy") + "</button>";
+  }
+
+  function nutMd(o) {
+    if (!o.chuyenMd) return "";
+    return '<button class="pd-row-act pd-chuyen-md" type="button" title="' +
+      esc(pdT("proj.convert_md")) + '">' + ic("markdown") + "</button>";
   }
 
   function hangMuc(o) {
@@ -1101,6 +1114,7 @@
           '<span class="pd-row-sub"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + (o.subHtml || esc(o.sub || "")) + "</span>" +
         (o.moDuoc ? "</button>" : "</span>") +
         nutSao(o) +
+        nutMd(o) +
       "</div>";
     }
     return '<div class="pd-row' + (o.mat ? " mat" : "") + '" data-id="' + esc(o.id) + '">' +
@@ -1117,6 +1131,7 @@
           '<span class="pd-row-sub"' + (rowTip ? ' title="' + esc(rowTip) + '"' : '') + '>' + (o.subHtml || esc(o.sub || "")) + "</span>" +
         (o.moDuoc ? "</button>" : "</span>") +
         nutSao(o) +
+        nutMd(o) +
         '<button class="pd-row-act pd-ghim' + (o.pinned ? " on" : "") + '" type="button" title="' +
           esc(o.pinned ? pdT("proj.pin_off") : o.ghimTitle) + '">' + ic("pin") + "</button>" +
         '<button class="pd-row-act pd-go" type="button" title="' + esc(pdT(pdK("remove"))) + '">' +
@@ -1164,6 +1179,7 @@
                        // (chat, wikilink, tool đọc file).
                        sao: f.brain_path || f.path,
                        icon: f.image ? "image" : icoFile(f.name || f.path), pinned: !!f.pinned,
+                       chuyenMd: con && laFileOffice(f.name || f.path),
                        ghimTitle: pdT("proj.pin_on"), moDuoc: con, xoaDuoc: con, mat: !con });
     };
     var veTuDong = function (f) {
@@ -1171,6 +1187,7 @@
                        sub: f.exists ? f.brain_path : pdT("cts.file_gone"),
                        sao: f.brain_path || f.path,
                        icon: f.image ? "image" : icoFile(f.name),
+                       chuyenMd: !!f.exists && laFileOffice(f.name || f.path),
                        moDuoc: !!f.exists, mat: !f.exists });
     };
     if (!fs.length) return '<div class="pd-empty">' + esc(pdT(pdK("files_empty"))) + "</div>";
@@ -1245,6 +1262,13 @@
         ev.stopPropagation();
         if (window.JavisCopy) window.JavisCopy(sao.dataset.sao, sao);
       };
+      var mdAuto = row.querySelector(".pd-chuyen-md");
+      if (mdAuto && !row.dataset.id) {
+        mdAuto.onclick = function (ev) {
+          ev.stopPropagation();
+          chuyenFileMarkdown({ path: row.dataset.path }, mdAuto);
+        };
+      }
       // Hàng TỰ DÒ chỉ mang đường dẫn, không có bản ghi nào phía sau để gỡ hay ghim.
       if (!row.dataset.id) {
         var mo = row.querySelector(".pd-row-body.mo-duoc");
@@ -1256,6 +1280,11 @@
       if (!m) return;
       var moBtn = row.querySelector(".pd-row-body.mo-duoc");
       if (moBtn) moBtn.onclick = function () { moFile(m); };
+      var md = row.querySelector(".pd-chuyen-md");
+      if (md) md.onclick = function (ev) {
+        ev.stopPropagation();
+        chuyenFileMarkdown(m, md);
+      };
       row.querySelector(".pd-ghim").onclick = function () { laFile ? ghimFile(m) : ghimLink(m); };
       row.querySelector(".pd-go").onclick = function () { laFile ? goFile(m) : goLink(m); };
       var xoa = row.querySelector(".pd-xoa");
@@ -1264,6 +1293,10 @@
   }
 
   function formFile() {
+    var p = pdDuLieu() || {};
+    var destText = (pdCheDo === "project" && p.slug)
+      ? "File tải lên nằm ở thư mục sources/" + esc(p.slug) + " của brain"
+      : esc(pdT("proj.upload_dest"));
     return '<div class="pd-form">' +
       '<div class="pd-modes">' +
         '<button class="pd-mode' + (pdFileMode === "search" ? " on" : "") + '" data-mode="search" type="button">' +
@@ -1276,7 +1309,7 @@
           '<div class="pd-results"><div class="pd-empty">' + esc(pdT("proj.search_hint")) + "</div></div>"
         : '<input type="file" class="pd-file" multiple hidden>' +
           '<button class="pd-drop" type="button">' + ic("upload-cloud") + " " + esc(pdT("proj.dropzone")) + "</button>" +
-          '<div class="pd-note pd-up-note">' + ic("info") + "<span>" + esc(pdT("proj.upload_dest")) + "</span></div>") +
+          '<div class="pd-note pd-up-note">' + ic("info") + "<span>" + destText + "</span></div>") +
       "</div>";
   }
 
@@ -1422,11 +1455,63 @@
     try {
       var fd = new FormData();
       fd.append("file", file); fd.append("brain", brain()); fd.append("folder", "sources");
+      var p = pdDuLieu() || {};
+      var sub = "";
+      if (pdCheDo === "project" && p.slug) {
+        sub = p.slug;
+      } else if (pdLaCuoc()) {
+        var sid = currentId();
+        var s = sid && cached && cached.items && cached.items.find(function (x) { return x.id === sid; });
+        if (s && s.project_id) {
+          var pr = projById(s.project_id);
+          if (pr && pr.slug) sub = pr.slug;
+        }
+      }
+      if (sub) fd.append("subfolder", sub);
       up = await (await fetch("/files/upload", { method: "POST", body: fd })).json();
     } catch (e) {}
     if (!up || !up.ok) return (up && up.error) || "?";
     await themFile(up.path, up.name, null);
+    if (up.converted_path && up.converted_path !== up.path) {
+      await themFile(up.converted_path, up.converted_name || "", null);
+    }
     return "";
+  }
+
+  async function chuyenFileMarkdown(f, nut) {
+    if (!f || (nut && nut.classList.contains("loading"))) return;
+    var cuHtml = nut ? nut.innerHTML : "";
+    if (nut) {
+      nut.classList.add("loading");
+      nut.innerHTML = ic("loader", { cls: "ic-spin" }) || "...";
+    }
+    try {
+      var r;
+      if (f.id) {
+        r = await pdPost("/files/" + encodeURIComponent(f.id) + "/convert-markdown", {});
+      } else {
+        r = await post("/files/convert-markdown", {
+          brain: brain(),
+          path: f.path || "",
+          session_id: pdLaCuoc() ? (currentId() || "") : "",
+          project_id: (pdCheDo === "project" && projChiTiet) ? (projChiTiet.id || "") : "",
+        });
+      }
+      if (r && r.ok) {
+        await napLaiChiTiet();
+        napLaiChip();
+        veLaiDanhSach();
+      } else {
+        alert(pdT("proj.err_convert_md") + ": " + ((r && r.error) || ""));
+      }
+    } catch (e) {
+      alert(pdT("proj.err_convert_md") + ": " + (e.message || String(e)));
+    } finally {
+      if (nut) {
+        nut.classList.remove("loading");
+        nut.innerHTML = cuHtml;
+      }
+    }
   }
 
   async function ghimFile(f) {

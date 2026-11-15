@@ -46,6 +46,8 @@
     "neural-net":
       '<path d="M6.1 6.34L9.9 5.16M5.87 8.17L10.13 10.83M5.19 8.85L10.81 17.65M5.19 15.15L10.81 6.35M5.87 15.83L10.13 13.17M6.1 17.66L9.9 18.84M14.1 5.16L17.9 6.34M13.19 6.35L18.81 15.15M13.87 10.83L18.13 8.17M13.87 13.17L18.13 15.83M13.19 17.65L18.81 8.85M14.1 18.84L17.9 17.66" stroke-width="1.3"/>' +
       '<circle cx="4" cy="7" r="2.2" stroke-width="1.9"/><circle cx="4" cy="17" r="2.2" stroke-width="1.9"/><circle cx="12" cy="4.5" r="2.2" stroke-width="1.9"/><circle cx="12" cy="12" r="2.2" stroke-width="1.9"/><circle cx="12" cy="19.5" r="2.2" stroke-width="1.9"/><circle cx="20" cy="7" r="2.2" stroke-width="1.9"/><circle cx="20" cy="17" r="2.2" stroke-width="1.9"/>',
+    "markdown":
+      '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15V9l3 3.5L12 9v6M17 9v6M14.5 12.5L17 15l2.5-2.5"/>',
   };
   var missing = Object.create(null);
   var cache = Object.create(null);
