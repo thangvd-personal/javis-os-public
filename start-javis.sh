@@ -46,8 +46,9 @@ else
     export JAVIS_STATE_DIR="$STATE_DIR"
     export JAVIS_PORT="$PORT"
     export JAVIS_HOST="$HOST"
-    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$LOG" 2>&1 &
-    echo $! > "$PIDF"
+    setsid nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$LOG" 2>&1 &
+    PID=$!
+    echo $PID > "$PIDF"
   )
 fi
 

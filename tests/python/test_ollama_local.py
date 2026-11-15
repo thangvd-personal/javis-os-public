@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from _paths import ROOT, SERVER, moi_duong_dan  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-ollama-"))
+os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
 
 import main
 import ollama_catalog

@@ -23,6 +23,7 @@ import tempfile
 from _paths import ROOT, SERVER  # noqa: F401
 
 os.environ.setdefault("JAVIS_STATE_DIR", tempfile.mkdtemp(prefix="javis-rewrite-"))
+os.environ["JAVIS_REQUIRE_LOGIN"] = "0"
 
 import main
 import nghe_sua

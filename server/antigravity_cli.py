@@ -851,9 +851,13 @@ def co_quyen_cho_mode(mode: str | None) -> list[str]:
         if co_co("--dangerously-skip-permissions"):
             co.append("--dangerously-skip-permissions")
         return co
-    # suggest + mọi giá trị lạ: bật sandbox nếu bản CLI có. suggest không tự duyệt tool nên
-    # không dính tổ hợp hỏng ở trên.
-    if co_co("--sandbox"):
+    # suggest + mọi giá trị lạ:
+    # Trong chế độ headless (-p), CLI không thể hỏi quyền duyệt qua terminal; nếu thiếu
+    # --dangerously-skip-permissions thì bất kỳ lệnh nào cần quyền đều bị auto-denied.
+    # An toàn được đảm bảo qua MCP Hub (chặn hành động ghi qua X-Javis-Mode).
+    if co_co("--dangerously-skip-permissions"):
+        co.append("--dangerously-skip-permissions")
+    elif co_co("--sandbox"):
         co.append("--sandbox")
     return co
 

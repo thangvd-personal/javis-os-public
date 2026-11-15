@@ -953,6 +953,20 @@ def ollama_local_url() -> str:
     ep = ep.rstrip("/")
     return (ep + "/v1/chat/completions") if ep else ""
 
+
+def ollama_local_default_model() -> str:
+    """Model mặc định của Ollama máy nhà khi card để 'mặc định' (chuỗi rỗng).
+    Lấy model đầu tiên trong danh mục model đã cài (catalog) của ollama-local.
+    """
+    import config as cfgmod
+    try:
+        cat = (cfgmod.read_settings().get("model", {}).get("catalog", {}) or {}).get("ollama-local") or []
+        if cat and str(cat[0]).strip():
+            return str(cat[0]).strip()
+    except Exception:
+        pass
+    return ""
+
 def openai_compat_base() -> str:
     """Base URL của provider 'openai-compat' (tính tới /v1, không có gạch chéo cuối). "" = chưa đặt."""
     import config as cfgmod
@@ -1278,6 +1292,10 @@ async def ollama_local_stream(api_key, model, messages, reasoning="off"):
     if not url:
         yield {"type": "error", "content": _c("Chưa đặt địa chỉ Ollama trong trang Models.", "No Ollama address set on the Models page.")}
         return
+    model = (model or "").strip() or ollama_local_default_model()
+    if not model:
+        yield {"type": "error", "content": _c("Chưa có model nào được cài đặt trong Ollama Local.", "No model installed in Ollama Local.")}
+        return
     extra = _ollama_thinking(ollama_local_reasoning())
     while True:
         retry = False
@@ -1326,6 +1344,10 @@ async def ollama_local_chat_with_mcp(api_key, model, messages, reasoning, mcp_to
     url = ollama_local_url()
     if not url:
         yield {"type": "error", "content": _c("Chưa đặt địa chỉ Ollama trong trang Models.", "No Ollama address set on the Models page.")}
+        return
+    model = (model or "").strip() or ollama_local_default_model()
+    if not model:
+        yield {"type": "error", "content": _c("Chưa có model nào được cài đặt trong Ollama Local.", "No model installed in Ollama Local.")}
         return
     headers = {"Authorization": f"Bearer {api_key or 'local'}", "Content-Type": "application/json"}
     # Own thinking level, not `reasoning` (the shared Effort button): see `ollama_local_reasoning`. With thinking on, a 400

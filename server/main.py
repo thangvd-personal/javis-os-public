@@ -2446,6 +2446,11 @@ def _set_main_model(cfg, provider, model):
     # fallback paths, disconnect handlers) moves its card to the top; the others keep their order.
     model_routing.promote(m, provider, model)
     m["main"] = {"provider": provider, "model": model}
+    try:
+        import aux_engine
+        aux_engine.clear_cooldown_for_provider(provider)
+    except Exception:
+        pass
     if provider == "openrouter":
         m["engine"] = "openrouter"; m["openrouter_model"] = model
     elif provider == "anthropic-api":
@@ -2790,8 +2795,13 @@ def _reply_policy_sandbox_engine(system_prompt: str, tag: str, cwd_name: str = "
     next-message suggestion alone spent that after EVERY chat turn. The named deny list stays as the second wall;
     "*" only takes the schemas out of the request. Pass bare=False for a turn whose session or pinned evidence
     depends on the preset."""
-    cwd = cfgmod.STATE_DIR / cwd_name
+    import tempfile
+    cwd = Path(tempfile.gettempdir()) / "javis_sandboxes" / cwd_name
     cwd.mkdir(parents=True, exist_ok=True)
+    try:
+        (cwd / ".antigravitycli").mkdir(exist_ok=True)
+    except Exception:
+        pass
     cli = claude_engine(system_prompt=system_prompt, cwd=str(cwd), tag=tag,
                         allowed_tools=["javis_reply_policy_khong_cong_cu"])
     _mcpf = _empty_mcp_file()
@@ -2832,13 +2842,13 @@ async def _reply_policy_review_ask(prompt: str) -> str:
     return final
 
 
-async def _transcript_rewrite_ask(prompt: str) -> str:
+async def _transcript_rewrite_ask(prompt: str, system_prompt: str | None = None) -> str:
     """One text-only turn on the MAIN brain for the end of a dictation (transcript_fix.rewrite_transcript, 2026-11-06).
 
     Owner: rewrite what the mic heard with "chính mô hình chính", whether it is a subscription CLI or an API key. Same
     sandbox as the group chat judge's review: an empty folder, no MCP, every tool refused, so a dictated sentence that
     sounds like an order is only rewritten, never carried out."""
-    base = _reply_policy_sandbox_engine(transcript_fix.REWRITE_SYSTEM, "transcript-rewrite",
+    base = _reply_policy_sandbox_engine(system_prompt or transcript_fix.REWRITE_SYSTEM, "transcript-rewrite",
                                         cwd_name="transcript_rewrite_cwd")
     cli = aux_engine.swap(base, mode="suggest", tag="transcript-rewrite", spec=aux_engine.main_spec(),
                           codex_profile=_write_codex_profile)
@@ -2847,7 +2857,11 @@ async def _transcript_rewrite_ask(prompt: str) -> str:
         raise RuntimeError("main brain not ready")
     final = ""
     async for ev in cli.query(prompt):
-        if ev.get("type") == "final":
+        if ev.get("type") == "model_used":
+            m_label = transcript_fix._format_model_name(ev.get("provider", ""), ev.get("model", ""))
+            if m_label:
+                transcript_fix.set_current_model(m_label)
+        elif ev.get("type") == "final":
             final = ev.get("content", "") or ""
         elif ev.get("type") == "error":
             raise RuntimeError(str(ev.get("content") or "engine error")[:200])
@@ -3588,6 +3602,11 @@ def _clear_pin_limit(provider: str) -> bool:
             model_routing.clear_rest(prov, plan_accounts.MAIN)   # one account: its rest IS the card's rest
     except Exception as e:  # noqa: BLE001 - lifting a mark must never fail the owner's click
         print(f"[routing] clear limit {prov}: {type(e).__name__}: {e}", file=sys.stderr)
+    try:
+        import aux_engine
+        aux_engine.clear_cooldown_for_provider(prov)
+    except Exception:
+        pass
     return _SIGNED_OUT.pop(prov, None) is not None or had
 
 
@@ -7222,6 +7241,10 @@ def _default_model_name(mcfg, prov: str) -> str:
             return mcfg["openrouter_model"].strip()
         if prov in engine.DEFAULT_MODELS:
             return engine.DEFAULT_MODELS[prov]
+        if prov == "ollama-local":
+            cat = (mcfg.get("catalog", {}) or {}).get("ollama-local") or []
+            if cat and str(cat[0]).strip():
+                return str(cat[0]).strip()
         if prov == "openai-oauth":
             m = _codex_safe_model("")
             if m:
@@ -7258,15 +7281,34 @@ def _routing_view(mcfg, providers) -> dict:
     except Exception as e:  # noqa: BLE001 - a broken view must not take the whole settings page down
         print(f"[routing] view: {type(e).__name__}: {e}", file=sys.stderr)
     limited = {}
+    resting_info = {}
+    aux_resting = {}
+    try:
+        import aux_engine
+        aux_resting = aux_engine.get_resting_providers()
+    except Exception:
+        pass
+
+    now_ts = time.time()
     for p in o:
         until = _pin_limited_until(p)
         if until:
             limited[p] = int(until)
+            resting_info[p] = {
+                "until": int(until),
+                "secs_left": max(1, int(until - now_ts)),
+                "reason": "Chạm hạn mức quota gói chat",
+                "detail": "",
+            }
+        elif p in aux_resting:
+            info = aux_resting[p]
+            limited[p] = int(info["until"])
+            resting_info[p] = info
     background = model_routing.background_spec(mcfg)
     if background.get("auto"):
         # Automatic: the page names both models, the one for Javis's own work and the one for handed-over jobs.
         background["light"] = model_routing.background_spec(mcfg, "light")["model"]
-    return {"order": o, "profiles": {p: model_routing.profile(mcfg, p) for p in o}, "limited": limited,
+    return {"order": o, "profiles": {p: model_routing.profile(mcfg, p) for p in o}, "limited": limited, "resting_info": resting_info,
             "background": background, "chat_in_use": chat, "bg_in_use": bg,
             "multi_key": list(_routing_key_fields()), "multi_plan": [p for p in plan_accounts.KIND if plan_accounts.available(p)],
             "defaults": {p["id"]: d for p in providers if (d := _default_model_name(mcfg, p["id"]))}}
@@ -19511,7 +19553,9 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
             "updated_at": time.time(),
         }
 
-    _on_norm_progress(2, "Bắt đầu chuẩn hóa...", "init")
+    active_m = transcript_fix.detect_active_model_name(cfg)
+    m_init_str = f" với {active_m}" if active_m else ""
+    _on_norm_progress(2, f"Bắt đầu chuẩn hóa{m_init_str}...", "init")
 
     segments = rec.get("segments") or []
     if rec.get("mode") == "meeting" and segments:
@@ -19522,7 +19566,8 @@ async def voice_record_normalize_existing(record_id: str, request: Request):
                 cfg, segments, speaker_map=smap, progress_callback=_on_norm_progress
             )
         finally:
-            _on_norm_progress(100, "Hoàn tất chuẩn hóa (100%)", "done")
+            curr_lbl = _MEETING_NORM_PROGRESS.get(record_id, {}).get("label") or "Hoàn tất chuẩn hóa (100%)"
+            _on_norm_progress(100, curr_lbl, "done")
         norm_elapsed = time.time() - t_norm_start
         norm_segs = res.get("segments") or []
         rendered = voice_records.render_meeting_markdown(

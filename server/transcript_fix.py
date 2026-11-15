@@ -203,6 +203,54 @@ _rewrite_cache: dict = {}
 # Set by main.py: `async def ask(prompt: str) -> str` runs ONE text-only turn on the main brain, in an empty folder,
 # with no tools and no MCP (the same sandbox as the group chat judge).
 _ASK = None
+_CURRENT_MODEL_LABEL = ""
+_ON_MODEL_CHANGED = None
+
+
+def _format_model_name(provider: str, model: str) -> str:
+    prov = str(provider or "").strip().lower()
+    mod = str(model or "").strip()
+    if prov in ("ollama-local", "ollama") or "ollama" in mod.lower():
+        return "ollama-local"
+    return mod or prov
+
+
+def set_current_model(label: str) -> None:
+    global _CURRENT_MODEL_LABEL
+    if label and str(label).strip():
+        _CURRENT_MODEL_LABEL = str(label).strip()
+        if _ON_MODEL_CHANGED:
+            try:
+                _ON_MODEL_CHANGED(_CURRENT_MODEL_LABEL)
+            except Exception:
+                pass
+
+
+def get_current_model() -> str:
+    return _CURRENT_MODEL_LABEL
+
+
+def detect_active_model_name(cfg: dict) -> str:
+    """Xac dinh truoc ten model/provider AI dang san sang phuc vu chuan hoa."""
+    try:
+        cur = get_current_model()
+        if cur:
+            return cur
+        pick = pick_quick_api(cfg or {})
+        if pick is not None and not main_is_cli(cfg or {}):
+            return _format_model_name(pick[0], pick[2])
+        import aux_engine
+        import main
+        base = main._reply_policy_sandbox_engine(REWRITE_SYSTEM, "transcript-rewrite", cwd_name="transcript_rewrite_cwd")
+        cli = aux_engine.swap(base, mode="suggest", tag="transcript-rewrite", spec=aux_engine.main_spec(), codex_profile=main._write_codex_profile)
+        cli = aux_engine.strip_tools(cli, base)
+        first_eng = list(cli._order())[0] if isinstance(cli, aux_engine._FallbackChain) else cli
+        prov = getattr(first_eng, "provider", "") or type(first_eng).__name__
+        model = getattr(first_eng, "model", "") or prov
+        return _format_model_name(prov, model)
+    except Exception:
+        pass
+    return ""
 
 
 def wire(*, ask) -> None:
@@ -373,7 +421,7 @@ async def rewrite_transcript(cfg: dict, text, context=None) -> dict:
 
 # ───────────── voice record normalization (long-form grammar & structure) ─────────────
 
-NORMALIZE_MAIN_TIMEOUT_S = 45.0
+NORMALIZE_MAIN_TIMEOUT_S = 150.0
 NORMALIZE_API_TIMEOUT_S = 30.0
 
 NORMALIZE_SYSTEM = (
@@ -614,11 +662,20 @@ async def _extract_meeting_context(cfg: dict, prepared: list[dict], speakers: li
 
     prompt = _build_context_extraction_prompt(sample_lines, speakers)
     quick = [(pick[0], lambda p=prompt: _ask_normalize_api(pick, p, "", max_tokens=4096))] if pick is not None else []
-    main = [("main", lambda p=prompt: asyncio.wait_for(_ASK(p), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
+
+    async def _call_main(p=prompt):
+        try:
+            return await _ASK(p, system_prompt=NORMALIZE_SYSTEM)
+        except TypeError:
+            return await _ASK(p)
+
+    main = [("main", lambda: asyncio.wait_for(_call_main(), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
     tries = quick + main if main_is_cli(cfg or {}) else main + quick
 
     for source, run in tries:
         try:
+            if source != "main" and pick is not None:
+                set_current_model(_format_model_name(pick[0], pick[2]))
             raw_out = clean_normalize(await run())
             # Trích xuất JSON từ markdown block hoặc chuỗi
             json_m = re.search(r"\{[\s\S]*\}", raw_out)
@@ -674,6 +731,30 @@ def _build_meeting_batch_prompt(
     return "\n\n".join(parts)
 
 
+def _prepare_meeting_segments_sync(segments: list, terms: list, smap: dict, has_hours: bool) -> list[dict]:
+    prepared = []
+    for idx, seg in enumerate(segments):
+        orig_txt = " ".join(str(seg.get("text") or "").split()).strip()
+        rule_txt = nghe_sua.sua(orig_txt, terms) if orig_txt else ""
+        sec = max(0, int(float(seg.get("start", 0) or 0)))
+        hh, rem = divmod(sec, 3600)
+        mm, ss = divmod(rem, 60)
+        ts = f"{hh:02d}:{mm:02d}:{ss:02d}" if (hh > 0 or has_hours) else f"{mm:02d}:{ss:02d}"
+        sid = str(seg.get("speaker_id") or seg.get("speaker") or "").strip()
+        disp = str(smap.get(sid) or "").strip() or sid
+        prefix = f"[{ts} - {disp}]" if disp else f"[{ts}]"
+        prepared.append({
+            "idx": int(seg.get("idx", idx)),
+            "start": float(seg.get("start", 0) or 0),
+            "end": float(seg.get("end", 0) or 0),
+            "speaker": disp,
+            "prefix": prefix,
+            "orig": orig_txt,
+            "rules": rule_txt or orig_txt,
+        })
+    return prepared
+
+
 async def normalize_meeting_segments(
     cfg: dict,
     segments: list[dict],
@@ -700,7 +781,21 @@ async def normalize_meeting_segments(
         _report_prog(100, "Hoàn tất chuẩn hóa (100%)", "done")
         return {"segments": [], "source": "rules", "ai": False, "dropped_segments": [], "review_queue": [], "batch_reports": []}
 
-    _report_prog(5, "Pass 1: Bắt đầu phân tích bối cảnh & thuật ngữ (5%)...", "pass1_start")
+    active_model = detect_active_model_name(cfg)
+    if active_model:
+        set_current_model(active_model)
+    model_str = f" với {active_model}" if active_model else ""
+
+    _report_prog(5, f"Pass 1: Bắt đầu phân tích bối cảnh & thuật ngữ{model_str} (5%)...", "pass1_start")
+
+    def _on_model_detected(model_name: str) -> None:
+        nonlocal active_model
+        if model_name and model_name != active_model:
+            active_model = model_name
+            _report_prog(10, f"Pass 1: Đang phân tích bối cảnh & thuật ngữ với {model_name} (10%)...", "pass1_running")
+
+    global _ON_MODEL_CHANGED
+    _ON_MODEL_CHANGED = _on_model_detected
     terms = _terms(cfg)
     smap = speaker_map if isinstance(speaker_map, dict) else {}
     has_hours = any(float(s.get("start", 0) or 0) >= 3600 for s in segments)
@@ -711,26 +806,7 @@ async def normalize_meeting_segments(
         if clean_spk and clean_spk not in terms:
             terms.append(clean_spk)
 
-    prepared = []
-    for idx, seg in enumerate(segments):
-        orig_txt = " ".join(str(seg.get("text") or "").split()).strip()
-        rule_txt = nghe_sua.sua(orig_txt, terms) if orig_txt else ""
-        sec = max(0, int(float(seg.get("start", 0) or 0)))
-        hh, rem = divmod(sec, 3600)
-        mm, ss = divmod(rem, 60)
-        ts = f"{hh:02d}:{mm:02d}:{ss:02d}" if (hh > 0 or has_hours) else f"{mm:02d}:{ss:02d}"
-        sid = str(seg.get("speaker_id") or seg.get("speaker") or "").strip()
-        disp = str(smap.get(sid) or "").strip() or sid
-        prefix = f"[{ts} - {disp}]" if disp else f"[{ts}]"
-        prepared.append({
-            "idx": int(seg.get("idx", idx)),
-            "start": float(seg.get("start", 0) or 0),
-            "end": float(seg.get("end", 0) or 0),
-            "speaker": disp,
-            "prefix": prefix,
-            "orig": orig_txt,
-            "rules": rule_txt or orig_txt,
-        })
+    prepared = await asyncio.to_thread(_prepare_meeting_segments_sync, segments, terms, smap, has_hours)
 
     pick = pick_quick_api(cfg or {})
 
@@ -742,9 +818,12 @@ async def normalize_meeting_segments(
         for g in extracted_glossary:
             if g and g not in terms:
                 terms.append(g)
-        _report_prog(20, "Pass 1: Hoàn thành phân tích bối cảnh cuộc họp (20%)", "pass1_done")
+        active_model = get_current_model() or active_model
+        model_str = f" với {active_model}" if active_model else ""
+        _report_prog(20, f"Pass 1: Hoàn thành phân tích bối cảnh cuộc họp{model_str} (20%)", "pass1_done")
     else:
         _report_prog(20, "Bỏ qua Pass 1 (biên bản ngắn), chuyển sang Pass 2 (20%)...", "pass1_skip")
+    _ON_MODEL_CHANGED = None
 
     # Chia thanh cac batch ~16 luot hoac ~1800 ky tu
     batches = []
@@ -763,7 +842,9 @@ async def normalize_meeting_segments(
 
     completed_batches = 0
     total_batches = len(batches)
-    _report_prog(20, f"Pass 2: Bắt đầu chuẩn hóa ({total_batches} lô)...", "pass2_start")
+    active_model = get_current_model() or active_model
+    model_str = f" với {active_model}" if active_model else ""
+    _report_prog(20, f"Pass 2: Bắt đầu chuẩn hóa ({total_batches} lô){model_str}...", "pass2_start")
 
     # Pass 2: Chuan hoa song song cac batch
     # API nhanh (Groq, OpenAI, Gemini...) dung api_sem(4)
@@ -773,7 +854,10 @@ async def normalize_meeting_segments(
 
     async def _run_main_sandbox(prompt_text: str) -> str:
         async with main_sem:
-            return await asyncio.wait_for(_ASK(prompt_text), NORMALIZE_MAIN_TIMEOUT_S)
+            try:
+                return await asyncio.wait_for(_ASK(prompt_text, system_prompt=NORMALIZE_SYSTEM), NORMALIZE_MAIN_TIMEOUT_S)
+            except TypeError:
+                return await asyncio.wait_for(_ASK(prompt_text), NORMALIZE_MAIN_TIMEOUT_S)
 
     async def _run_quick_api(prompt_text: str, lines_text: str) -> str:
         async with api_sem:
@@ -809,6 +893,8 @@ async def normalize_meeting_segments(
 
         for source, run in tries:
             try:
+                if source != "main" and pick is not None:
+                    set_current_model(_format_model_name(pick[0], pick[2]))
                 raw_out = clean_normalize(await run())
             except Exception as e:
                 err_msg = f"{type(e).__name__}: {e}"
@@ -926,10 +1012,12 @@ async def normalize_meeting_segments(
                 })
 
         completed_batches += 1
+        curr_model = get_current_model() or active_model
+        model_str = f" với {curr_model}" if curr_model else ""
         batch_pct = 20 + int(70 * completed_batches / total_batches) if total_batches else 90
         _report_prog(
             batch_pct,
-            f"Pass 2: Đang chuẩn hóa lượt nói ({completed_batches}/{total_batches} lô) ({batch_pct}%)",
+            f"Pass 2: Đang chuẩn hóa lượt nói ({completed_batches}/{total_batches} lô){model_str} ({batch_pct}%)",
             "pass2_batch",
         )
 
@@ -946,7 +1034,9 @@ async def normalize_meeting_segments(
 
     # Chay dong thoi cac batch
     batch_reports = await asyncio.gather(*[_process_batch(i, b) for i, b in enumerate(batches)])
-    _report_prog(90, "Pass 2: Hoàn tất chuẩn hóa các lượt nói (90%)", "pass2_done")
+    curr_model = get_current_model() or active_model
+    model_str = f" với {curr_model}" if curr_model else ""
+    _report_prog(90, f"Pass 2: Hoàn tất chuẩn hóa các lượt nói{model_str} (90%)", "pass2_done")
 
     out_segments = []
     dropped_segments = []
@@ -1030,7 +1120,9 @@ async def normalize_meeting_segments(
     # Chon nguon chinh dai dien
     primary_source = max(source_counts.items(), key=lambda x: x[1])[0] if source_counts else "rules"
 
-    _report_prog(100, "Hoàn tất chuẩn hóa (100%)", "done")
+    curr_model = get_current_model() or active_model
+    model_str = f" với {curr_model}" if curr_model else ""
+    _report_prog(100, f"Hoàn tất chuẩn hóa{model_str} (100%)", "done")
     return {
         "segments": out_segments,
         "source": primary_source,

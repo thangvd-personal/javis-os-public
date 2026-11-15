@@ -61,6 +61,7 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(aux_engine.cooldown_for("404 model not found"), aux_engine.COOLDOWN_ACCESS_S)
         self.assertEqual(aux_engine.cooldown_for("401 invalid api key"), aux_engine.COOLDOWN_ACCESS_S)
         self.assertEqual(aux_engine.cooldown_for("tool javis_read_file failed: no such file"), 0.0)
+        self.assertEqual(aux_engine.cooldown_for('jetski: no output produced - a tool required the "command" permission that headless mode cannot prompt for, so it was auto-denied'), 0.0)
 
     def test_retry_after_wins(self):
         self.assertEqual(aux_engine.cooldown_for("429, Retry-After: 42"), 42.0)

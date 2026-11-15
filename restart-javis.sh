@@ -146,7 +146,7 @@ else
     export JAVIS_STATE_DIR="$APP_DIR/server/state"
     export JAVIS_PORT="$PORT"
     export JAVIS_HOST="$HOST"
-    nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$APP_DIR/server/state/javis.log" 2>&1 &
+    setsid nohup "$PY" -m uvicorn main:app --host "$HOST" --port "$PORT" > "$APP_DIR/server/state/javis.log" 2>&1 &
     echo $! > "$APP_DIR/server/state/javis.pid"
   )
 fi

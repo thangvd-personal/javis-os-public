@@ -3487,6 +3487,7 @@
     // Code as signed in whenever the binary exists, so a definite "not signed in" from /claude/status moves it out
     // (a timeout or an unknown answer keeps it where the server put it).
     const R = m.routing || {};
+    el._routing = R;
     MODEL_DEFAULTS = R.defaults || {};
     const pById = (id) => providers.find(p => p.id === id);
     const claudeP = pById("anthropic-cli") || {};
@@ -3558,12 +3559,20 @@
     // A card the router skips because a quota refusal marked it: say so and until when, with "Use again now". Before,
     // the page only showed the next card as "in use" and the owner could not tell why MAIN was passed over.
     const limitedAt = R.limited || {};
+    const restingInfo = R.resting_info || {};
     const limitLine = (p, ord) => {
       const u = ord && limitedAt[p.id];
       if (!u) return "";
+      const info = restingInfo[p.id] || {};
       const gio = new Date(u * 1000).toLocaleString([], { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
-      return `<div class="ord-limit">${WARN_ICON} <span>${esc(t("models.limited_until", { gio }))}</span>
-          <button type="button" class="gcard-btn ghost" data-retry="${esc(p.id)}">${esc(t("models.retry_now"))}</button></div>`;
+      const badge = esc(t("models.resting_badge") || "Đang tạm nghỉ");
+      const reason = info.reason ? esc(info.reason) : esc(t("models.limited_until", { gio }));
+      const detail = info.detail ? `<div class="ord-limit-detail" style="font-size:12px;opacity:0.85;margin-top:3px;word-break:break-word;"><code>${esc(info.detail)}</code></div>` : "";
+      return `<div class="ord-limit">${WARN_ICON} <div class="ord-limit-body" style="flex:1 1 200px;min-width:0;">
+          <div class="ord-limit-head"><strong>${badge}</strong> (đến ${gio}): ${reason}</div>
+          ${detail}
+        </div>
+        <button type="button" class="gcard-btn ghost" data-retry="${esc(p.id)}">${esc(t("models.retry_now"))}</button></div>`;
     };
     const cardOpen = (p, ord) => `<div class="prov-card${(ord ? ord.idx === 0 : p.is_main) ? " main" : ""}${ord ? " ord-card" : ""}${chatLive(p, ord) ? " ord-inuse" : ""}"${ord ? ` data-dnd="prov" data-p="${esc(p.id)}"` : ` data-offp="${esc(p.id)}"`}>`;
     // The account a provider runs on now: the first one switched on and not resting (model_routing.active_account).
@@ -3674,16 +3683,21 @@
         </div>`;
     };
     const statusIc = (p, on) => limitedAt[p.id] ? ic("clock") : on ? ic("circle-check") : "";
-    const provHead = (p, on, kindLabel, statusText, withInfo, ord) => `
+    const provHead = (p, on, kindLabel, statusText, withInfo, ord) => {
+      const isRest = !!(limitedAt[p.id] && ord);
+      const cleanSt = statusText ? String(statusText).replace(/^●\s*/, "") : "";
+      const stDisp = isRest ? `${esc(t("models.resting_badge") || "Đang tạm nghỉ")}${cleanSt ? " · " + cleanSt : ""}` : (statusIc(p, on) ? cleanSt : statusText);
+      return `
         <div class="prov-head${ord ? " ord-head" : ""}">
           ${ordGrip(p, ord)}
           ${logoTile(p, on)}
           <div class="prov-info">
             <div class="prov-name">${esc(p.label)} <span class="prov-kind">${esc(kindTag(p))}</span>${withInfo ? infoBtn() : ""}</div>
-            <div class="prov-status ${limitedAt[p.id] && ord ? "rest" : on ? "on" : ""}">${statusIc(p, on)}<span>${statusIc(p, on) ? String(statusText).replace(/^●\s*/, "") : statusText}${ord ? esc(ordStatus(p)) : ""}</span></div>
+            <div class="prov-status ${isRest ? "rest" : on ? "on" : ""}">${statusIc(p, on)}<span>${stDisp}${ord ? esc(ordStatus(p)) : ""}</span></div>
           </div>
           ${cardMenuBtn(p, ord)}
         </div>${ordChips(p, ord)}${limitLine(p, ord)}`;
+    };
     // CLI chưa có trên máy (thẻ agy và grok). Bản Docker tự cài hai CLI này lúc khởi động (0.85.1),
     // nên trong lúc nó đang cài thì nói đúng như vậy, đừng đưa một dòng lệnh cho người cài qua
     // Hostinger không có chỗ nào để gõ. `tu_cai` rỗng = máy không tự cài (bản cài tay): giữ lệnh như cũ.
@@ -3905,7 +3919,9 @@
         ${provHead(p, on, p.kind === "cli" ? "MCP/skill" : "MCP Javis", (on ? t("models.st_connected") : t("models.st_not_connected")) + " · " + p.models.length + " model", false, ord)}
         ${ord && multiKey.indexOf(p.id) >= 0 ? acctList(p) : p.needs_key
           ? `<div class="prov-action">${!on && multiKey.indexOf(p.id) >= 0 ? acctNameField(p.id) : ""}<input class="js-input" id="pk-${p.id}" type="password" placeholder="${on ? esc(t("models.key_change_ph", { duoi: masked })) : esc(t("models.key_ph"))}"><button class="gcard-btn" data-pk="${p.id}">${on ? esc(t("models.key_change")) : esc(t("models.connect"))}</button>${on && !ord ? `<button class="gcard-btn ghost" data-disc="${p.id}">${esc(t("models.disconnect"))}</button>` : ""}</div>`
-          : `<div class="prov-note">${esc(t("models.no_key_note"))}</div>`}
+          : p.id === "ollama-local"
+            ? `<div class="prov-note">${esc(t("models.ollama_no_key_note"))}</div>`
+            : `<div class="prov-note">${esc(t("models.no_key_note"))}</div>`}
         ${ordActs(p, ord, { add: ord && multiKey.indexOf(p.id) >= 0 ? "key" : "" })}
       </div>`;
     };
@@ -5086,9 +5102,18 @@
       return;
     }
     if (d.connected) {
-      st.className = "prov-status on";
-      st.textContent = t("models.st_connected") + acctLine("anthropic-cli", [d.email, d.plan])
-        + (d.stale ? " · " + t("models.st_stale") : "");
+      const R = el._routing || {};
+      const isRest = !!((R.limited || {})["anthropic-cli"]);
+      const cleanSt = acctLine("anthropic-cli", [d.email, d.plan]) + (d.stale ? " · " + t("models.st_stale") : "");
+      if (isRest) {
+        st.className = "prov-status rest";
+        st.innerHTML = `${ic("clock")}<span>${esc(t("models.resting_badge") || "Đang tạm nghỉ")}${cleanSt ? " · " + esc(cleanSt) : ""}</span>`;
+      } else {
+        st.className = "prov-status on";
+        st.textContent = t("models.st_connected") + cleanSt;
+      }
+      const dot = el.querySelector('[data-p="anthropic-cli"] .prov-dot');
+      if (dot) dot.className = "prov-dot" + (isRest ? " rest" : " on");
       // A card in the usage order has Disconnect in its own button row (and its ⋯ sheet), so none here.
       if (act.closest && act.closest(".ord-card")) { act.innerHTML = ""; return; }
       act.innerHTML = `<div class="prov-action"><button class="gcard-btn ghost" id="cliLogout">${esc(t("models.disconnect"))}</button></div>`;

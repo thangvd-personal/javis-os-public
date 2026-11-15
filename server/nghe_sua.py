@@ -279,10 +279,16 @@ def sua(text, tv) -> str:
     dem = frozenset(bo_dau(x) for x in (_MO_DAU | _KET_GOI | _NGOI_THU_BA))
     verbatim = [(m.start(), m.end()) for m in VERBATIM.finditer(s)]
 
+    _diem_don_cache: dict[int, float] = {}
+
     def _diem_don(j):
         """Điểm cao nhất của RIÊNG tiếng thứ j so với cả bộ từ vựng."""
+        if j in _diem_don_cache:
+            return _diem_don_cache[j]
         k = khoa_am(toks[j].group(0))
-        return max((do_giong(k, kt) for _, kt, _ in ds), default=0.0) if len(k) >= 3 else 0.0
+        val = max((do_giong(k, kt) for _, kt, _ in ds), default=0.0) if len(k) >= 3 else 0.0
+        _diem_don_cache[j] = val
+        return val
 
     ra, pos, i, doi = [], 0, 0, False
     while i < len(toks):

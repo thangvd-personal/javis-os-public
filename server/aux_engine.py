@@ -34,6 +34,7 @@ Hợp đồng sự kiện giữ y như ClaudeSDK để nơi gọi không phải 
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import sys
@@ -470,6 +471,14 @@ class _ApiAuxEngine:
                                                                  "Could not pick a free OpenRouter model.")}
                 return
 
+        if self.provider == "ollama-local" and not self.model:
+            self.model = eng.ollama_local_default_model()
+            if not self.model:
+                import localefmt
+                yield {"type": "error", "content": localefmt.chu("Chưa có model nào được cài đặt trong Ollama Local.",
+                                                                 "No model installed in Ollama Local.")}
+                return
+
         tools, route = [], {}
         # `no_tools` (strip_tools): text-only turn on untrusted input, so the hub is never asked for anything.
         co_terminal = False
@@ -667,10 +676,180 @@ COOLDOWN_DOWN_S = 30 * 60          # 502/503/504/529/timeout: an outage outlasts
 COOLDOWN_ACCESS_S = 6 * 3600       # 401/403/404 / no access to the model: will not change in a minute
 COOLDOWN_MAX_S = 6 * 3600
 _COOLDOWN: dict = {}               # key -> monotonic time it may be tried first again
+_COOLDOWN_LOADED = False
 _COOL_CLASSES = ("ClaudeSDK", "CodexCLI", "GrokCLI", "AntigravityCLI")
 
 _RE_RETRY_AFTER = re.compile(r"retry[- ]?after\D{0,5}(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?)?", re.IGNORECASE)
 _RE_TRY_AGAIN = re.compile(r"try again in\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|seconds?|m|min|minutes?|h|hours?)", re.IGNORECASE)
+
+
+def _cool_file():
+    try:
+        from pathlib import Path
+        return Path(cfgmod.STATE_DIR) / "aux_cooldown.json"
+    except Exception:
+        return None
+
+
+def _ensure_cooldown_loaded() -> None:
+    global _COOLDOWN_LOADED
+    if _COOLDOWN_LOADED:
+        return
+    _COOLDOWN_LOADED = True
+    f = _cool_file()
+    if not f or not f.is_file():
+        return
+    try:
+        import json
+        data = json.loads(f.read_text(encoding="utf-8")) or {}
+        now_epoch = time.time()
+        now_mono = time.monotonic()
+        for k, val in data.items():
+            expire_epoch = float(val.get("until", 0)) if isinstance(val, dict) else float(val)
+            rem = expire_epoch - now_epoch
+            if rem > 0:
+                _COOLDOWN[str(k)] = now_mono + rem
+    except Exception:
+        pass
+
+
+def classify_rest_reason(error: str) -> str:
+    """Tự động phân loại lý do nghỉ thành câu giải thích dễ hiểu cho người dùng."""
+    text = str(error or "").strip()
+    low = text.lower()
+    if "không phản hồi" in low or "timed out" in low or "timeout" in low:
+        return "Không phản hồi sau 10s (thường do hết credit hoặc tài khoản bị giới hạn)"
+    if "credit" in low:
+        return "Tài khoản hết credit hoặc số dư không đủ"
+    if any(k in low for k in ("quota", "rate limit", "rate_limit", "429", "too many requests", "hết lượt", "hết hạn mức")):
+        return "Chạm hạn mức tần suất (429 Too Many Requests) hoặc tạm hết quota"
+    if any(k in low for k in ("401", "403", "unauthorized", "forbidden", "permission denied", "mất đăng nhập", "invalid api key")):
+        return "Lỗi xác thực tài khoản (401/403) hoặc mất đăng nhập"
+    if any(k in low for k in ("502", "503", "504", "unavailable", "bad gateway")):
+        return "Máy chủ dịch vụ tạm thời không sẵn sàng (502/503/504)"
+    return text[:120] if text else "Lỗi tạm thời khi kết nối"
+
+
+def _save_cooldown(key: str, secs: float, error: str = "") -> None:
+    f = _cool_file()
+    if not f:
+        return
+    try:
+        import json
+        data = {}
+        if f.is_file():
+            try:
+                data = json.loads(f.read_text(encoding="utf-8")) or {}
+            except Exception:
+                data = {}
+        now_epoch = time.time()
+        expire_at = now_epoch + float(secs)
+        reason = classify_rest_reason(error) if error else "Tạm nghỉ do lỗi ở lượt trước"
+        detail = str(error or "")[:200].strip()
+        data[key] = {
+            "until": expire_at,
+            "reason": reason,
+            "detail": detail,
+        }
+        cleaned = {}
+        for k, v in data.items():
+            exp = float(v.get("until", 0)) if isinstance(v, dict) else float(v)
+            if exp > now_epoch:
+                cleaned[k] = v
+        f.write_text(json.dumps(cleaned, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def get_resting_providers() -> dict[str, dict]:
+    """Trả về danh sách các provider đang nghỉ kèm lý do và thời gian hết hạn."""
+    _ensure_cooldown_loaded()
+    out = {}
+    f = _cool_file()
+    now_epoch = time.time()
+    now_mono = time.monotonic()
+    cls_rev = {
+        "ClaudeSDK": "anthropic-cli",
+        "CodexCLI": "openai-oauth",
+        "GrokCLI": "grok-cli",
+        "AntigravityCLI": "antigravity-cli",
+    }
+    if f and f.is_file():
+        try:
+            import json
+            data = json.loads(f.read_text(encoding="utf-8")) or {}
+            for k, val in data.items():
+                if isinstance(val, dict):
+                    until = float(val.get("until", 0))
+                    reason = str(val.get("reason", ""))
+                    detail = str(val.get("detail", ""))
+                else:
+                    until = float(val)
+                    reason = "Tạm nghỉ do lỗi ở lượt trước"
+                    detail = ""
+                if until > now_epoch:
+                    prov = k.split(":")[0]
+                    prov_id = cls_rev.get(prov, prov)
+                    out[prov_id] = {
+                        "until": int(until),
+                        "secs_left": max(1, int(until - now_epoch)),
+                        "reason": reason,
+                        "detail": detail,
+                    }
+        except Exception:
+            pass
+
+    for k, until_mono in list(_COOLDOWN.items()):
+        rem = until_mono - now_mono
+        if rem > 0:
+            prov = k.split(":")[0]
+            prov_id = cls_rev.get(prov, prov)
+            if prov_id not in out:
+                until_epoch = int(now_epoch + rem)
+                out[prov_id] = {
+                    "until": until_epoch,
+                    "secs_left": max(1, int(rem)),
+                    "reason": "Tạm nghỉ do lỗi ở lượt trước",
+                    "detail": "",
+                }
+    return out
+
+
+def _remove_cooldown(key: str) -> None:
+    f = _cool_file()
+    if not f or not f.is_file():
+        return
+    try:
+        import json
+        data = json.loads(f.read_text(encoding="utf-8")) or {}
+        if key in data:
+            data.pop(key, None)
+            f.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def clear_cooldown_for_provider(provider: str) -> None:
+    """Xóa trạng thái nghỉ của một provider khi user bấm Thử lại, Kiểm tra hoặc đổi cấu hình."""
+    global _COOLDOWN
+    prov = str(provider or "").strip()
+    if not prov:
+        return
+    _ensure_cooldown_loaded()
+    cls_map = {
+        "anthropic-cli": "ClaudeSDK",
+        "openai-oauth": "CodexCLI",
+        "grok-cli": "GrokCLI",
+        "antigravity-cli": "AntigravityCLI",
+    }
+    cls_name = cls_map.get(prov, prov)
+    keys_to_remove = [
+        k for k in list(_COOLDOWN.keys())
+        if k.startswith(prov + ":") or k.startswith(cls_name + ":") or k == prov or k == cls_name
+    ]
+    for k in keys_to_remove:
+        _COOLDOWN.pop(k, None)
+        _remove_cooldown(k)
 
 
 def _seconds(num: str, unit: str) -> float:
@@ -694,9 +873,13 @@ def cooldown_for(error) -> float:
         m = rx.search(text)
         if m:
             return min(COOLDOWN_MAX_S, max(1.0, _seconds(m.group(1), m.group(2) or "s")))
+    # Tool-level permission or OS file permission issues must not be misclassified as model access lockout
+    if any(x in low for x in ("tool required", "command permission", "errno 13", "permission prompt")):
+        return 0.0
     if re.search(r"\b(401|403|404)\b", low) or any(k in low for k in (
-            "not found", "does not exist", "no access", "permission", "unauthorized", "forbidden",
-            "invalid api key", "invalid_api_key", "model_not_found", "mất đăng nhập", "not logged in")):
+            "not found", "does not exist", "no access", "permission denied", "permission_denied",
+            "unauthorized", "forbidden", "invalid api key", "invalid_api_key", "model_not_found",
+            "mất đăng nhập", "not logged in")):
         return COOLDOWN_ACCESS_S
     if re.search(r"\b429\b", low) or any(k in low for k in (
             "quota", "rate limit", "rate_limit", "usage limit", "too many requests", "hết lượt", "hết hạn mức",
@@ -747,6 +930,7 @@ def _note_plan_limit(e, error) -> None:
 
 def _resting(e, now: float) -> float:
     """Monotonic time a resting link wakes, 0 when it is not resting."""
+    _ensure_cooldown_loaded()
     key = _cool_key(e)
     until = _COOLDOWN.get(key, 0.0) if key else 0.0
     return until if until > now else 0.0
@@ -815,6 +999,7 @@ class _FallbackChain:
         key, secs = _cool_key(e), cooldown_for(error)
         if key and secs:
             _COOLDOWN[key] = time.monotonic() + secs
+            _save_cooldown(key, secs, error=str(error or ""))
             # A quota error on one API key rests that ACCOUNT for chat too (model_routing), so the next chat turn and
             # the next job start on key 2 instead of paying for the same dead key again.
             acc = getattr(e, "account_id", "")
@@ -831,14 +1016,36 @@ class _FallbackChain:
     async def query(self, prompt: str):
         fail = "chuỗi engine việc nền rỗng"
         dau = ""      # lỗi của mắt xích ĐẦU TIÊN thật sự chạy - thường là lỗi có nghĩa nhất
-        for e in self._order():
+        order = list(self._order())
+        for idx, e in enumerate(order):
             try:
                 if not e.is_available():
                     fail = f"{self._name(e)} không sẵn sàng"
                     continue
-                got_final, got_error, acted = False, None, False
-                async for ev in _query_retrying_hub(e, prompt, self._name(e)):
+                got_final, got_error, acted, got_model_emitted = False, None, False, False
+                has_next = idx < len(order) - 1
+                tag = str(getattr(e, "tag", "") or "")
+                # Claude/Codex CLI can hang on process init; cap first event wait when fallbacks exist
+                first_cap = 10.0 if (has_next and type(e).__name__ in ("ClaudeSDK", "CodexCLI")
+                                     and tag in ("transcript-rewrite", "reply-policy", "reply-policy-review")) else None
+                stream = _query_retrying_hub(e, prompt, self._name(e))
+                while True:
+                    try:
+                        if first_cap and not got_final and not acted:
+                            ev = await asyncio.wait_for(stream.__anext__(), timeout=first_cap)
+                        else:
+                            ev = await stream.__anext__()
+                    except StopAsyncIteration:
+                        break
+                    except (asyncio.TimeoutError, TimeoutError):
+                        got_error = f"{self._name(e)} không phản hồi sau {int(first_cap)}s"
+                        break
                     t = (ev or {}).get("type")
+                    if not got_model_emitted and t in ("text_delta", "delta", "content", "final", "usage", "tool_call"):
+                        got_model_emitted = True
+                        model_name = getattr(e, "model", "") or self._name(e)
+                        prov_name = getattr(e, "provider", "") or type(e).__name__
+                        yield {"type": "model_used", "model": model_name, "provider": prov_name}
                     if t == "tool_call":
                         acted = True
                     if t == "error":
@@ -884,12 +1091,18 @@ class _FallbackChain:
                         got_final = True
                 if got_final:
                     _COOLDOWN.pop(_cool_key(e), None)            # it works again: no more rest
+                    _remove_cooldown(_cool_key(e))
                     _score_link(e)
                     return                                       # mắt này chạy ngon → xong
                 fail = got_error or f"{self._name(e)} kết thúc mà không có final"
                 _score_link(e, fail)
                 self._rest(e, fail)
-                if acted:
+                is_safe_retry = (
+                    getattr(e, "no_tools", False)
+                    or getattr(e, "mode", None) in ("suggest", "readonly")
+                    or tag in ("transcript-rewrite", "reply-policy", "reply-policy-review")
+                )
+                if acted and not is_safe_retry:
                     # 0.350.0 (spec 2.7): this link already called a tool before it broke. Running the prompt again on
                     # another engine could send the message or post the article twice, so the chain stops here and
                     # says why. This is what lets `full` jobs have a fallback chain at all.
@@ -1168,6 +1381,14 @@ def strip_tools(engine, base):
                 grok_cli.ghi_mcp_settings(e.cwd, None)
                 keep.append(e)
                 continue
+            import antigravity_cli
+            if isinstance(e, antigravity_cli.AntigravityCLI):
+                from claude_cli import _empty_mcp_file
+                e.mcp_config = _empty_mcp_file()
+                e.mode = "suggest"
+                e.no_tools = True
+                keep.append(e)
+                continue
         except Exception as ex:      # noqa: BLE001 - cannot prove it is tool-free: drop it
             print(f"[aux strip_tools] bỏ {type(e).__name__}: {type(ex).__name__}: {ex}", file=sys.stderr)
             continue
@@ -1251,6 +1472,20 @@ def _links_for_step(step: dict, cli, mode, tag, codex_profile, settings, claude_
         if prov == ANTIGRAVITY:
             return [_build_antigravity(sp, cli, mode, tag)]
         if prov in API_PROVIDERS:
+            if prov in ("openai-compat", "anthropic-compat") and not str(sp.get("model") or "").strip():
+                return []
+            if prov == "ollama-local":
+                s = settings if settings is not None else cfgmod.read_settings()
+                m = s.get("model", {}) or {}
+                if not (m.get("ollama_local_endpoint") or "").strip():
+                    return []
+                if not str(sp.get("model") or "").strip():
+                    import engine as eng
+                    m_dfl = eng.ollama_local_default_model()
+                    if m_dfl:
+                        sp = dict(sp, model=m_dfl)
+                    else:
+                        return []
             s = settings if settings is not None else cfgmod.read_settings()
             m = s.get("model", {}) or {}
             field = _KEY_FIELD.get(prov, "")

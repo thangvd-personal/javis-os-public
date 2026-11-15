@@ -2584,10 +2584,10 @@
     S.mt.normalizing = true;
     S.mt.errorMsg = "";
     S.infoNote = "";
-    updateNormProgressUi(5, "Pass 1: Bắt đầu phân tích bối cảnh & thuật ngữ (5%)...");
+    updateNormProgressUi(2, "Bắt đầu chuẩn hóa...");
     syncUi();
 
-    var normProgTimer = setInterval(async function () {
+    var checkProg = async function () {
       if (!S.mounted || !S.mt.normalizing) return;
       try {
         var pr = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/normalize-progress", {
@@ -2602,7 +2602,9 @@
           }
         }
       } catch (e) {}
-    }, 400);
+    };
+    var normProgTimer = setInterval(checkProg, 300);
+    setTimeout(checkProg, 100);
 
     try {
       var r = await fetch("/voice-records/" + encodeURIComponent(rec.id) + "/normalize", {
@@ -2615,7 +2617,12 @@
       clearInterval(normProgTimer);
       if (!S.mounted) return;
       if (r.ok && d && d.ok && d.record) {
-        updateNormProgressUi(100, "Hoàn tất chuẩn hóa (100%)");
+        var lastLbl = $("vrMtNormProgLbl") ? $("vrMtNormProgLbl").textContent : "";
+        if (!lastLbl || !lastLbl.includes("100%")) {
+          updateNormProgressUi(100, "Hoàn tất chuẩn hóa (100%)");
+        } else {
+          updateNormProgressUi(100, lastLbl);
+        }
         setTimeout(function () {
           if (!S.mounted) return;
           S.mt.normalizing = false;
