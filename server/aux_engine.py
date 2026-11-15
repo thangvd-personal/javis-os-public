@@ -436,6 +436,14 @@ class _ApiAuxEngine:
         self.terminal = bool(terminal) and (mode or "full") == "full"
 
     def is_available(self) -> bool:
+        try:
+            import model_routing
+            s = cfgmod.read_settings()
+            sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), self.provider)
+            if not sched_ok:
+                return False
+        except Exception:
+            pass
         return bool(self.api_key or api_key_for(self.provider))
 
     def reset_session(self):

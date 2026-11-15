@@ -299,7 +299,179 @@ def resting_until(provider: str, account_id: str, now: float = None) -> float:
     return until if until > (time.time() if now is None else now) else 0.0
 
 
+# ---------------------------------------------------------------- priority schedule
+
+DEFAULT_DEEPSEEK_SCHEDULE = {
+    "enabled": False,
+    "timezone": "UTC",
+    "days": [1, 2, 3, 4, 5],
+    "windows": [
+        {"start": "00:00", "end": "01:00"},
+        {"start": "04:00", "end": "06:00"},
+        {"start": "10:00", "end": "24:00"},
+    ],
+    "weekend_all_day": True,
+}
+
+
+def has_schedule_support(provider: str) -> bool:
+    return provider == "deepseek"
+
+
+def default_schedule(provider: str = "deepseek") -> dict:
+    if provider == "deepseek":
+        return json.loads(json.dumps(DEFAULT_DEEPSEEK_SCHEDULE))
+    return {
+        "enabled": False,
+        "timezone": "UTC",
+        "days": [1, 2, 3, 4, 5, 6, 7],
+        "windows": [{"start": "00:00", "end": "24:00"}],
+        "weekend_all_day": True,
+    }
+
+
+def schedule(m: dict, provider: str) -> dict:
+    s = ((m or {}).get("schedules") or {}).get(provider)
+    if isinstance(s, dict):
+        out = default_schedule(provider)
+        out.update(s)
+        out["enabled"] = bool(s.get("enabled", False))
+        return out
+    return default_schedule(provider)
+
+
+def set_schedule(m: dict, provider: str, sched: dict) -> None:
+    if not isinstance(sched, dict):
+        return
+    cur = default_schedule(provider)
+    cur["enabled"] = bool(sched.get("enabled", False))
+    tz = str(sched.get("timezone") or "UTC").strip()
+    cur["timezone"] = tz if tz else "UTC"
+    if isinstance(sched.get("days"), list):
+        parsed_days = []
+        for x in sched["days"]:
+            try:
+                ix = int(x)
+                if 1 <= ix <= 7 and ix not in parsed_days:
+                    parsed_days.append(ix)
+            except (ValueError, TypeError):
+                pass
+        cur["days"] = sorted(parsed_days) if parsed_days else cur["days"]
+    if isinstance(sched.get("windows"), list):
+        wins = []
+        for w in sched["windows"]:
+            if isinstance(w, dict) and "start" in w and "end" in w:
+                s = str(w["start"]).strip()
+                e = str(w["end"]).strip()
+                if s and e:
+                    wins.append({"start": s, "end": e})
+        if wins:
+            cur["windows"] = wins
+    if "weekend_all_day" in sched:
+        cur["weekend_all_day"] = bool(sched["weekend_all_day"])
+    m.setdefault("schedules", {})[provider] = cur
+
+
+def is_in_schedule(sched: dict, now: float = None) -> tuple[bool, str, float]:
+    """Kiểm tra thời điểm hiện tại có nằm trong khung giờ ưu tiên hoạt động không.
+
+    Trả về (is_active: bool, reason: str, next_epoch: float).
+    Khi không kích hoạt lịch (enabled=False): luôn trả (True, "", 0.0).
+    Khi ngoài khung giờ: trả về (False, reason, thời điểm mở lại tiếp theo).
+    """
+    if not sched or not sched.get("enabled"):
+        return True, "", 0.0
+
+    tz_spec = sched.get("timezone", "UTC")
+    now_ts = time.time() if now is None else float(now)
+
+    try:
+        from datetime import UTC, datetime, time as dtime, timedelta
+        from zoneinfo import ZoneInfo
+        if tz_spec == "UTC":
+            target_tz = UTC
+        elif tz_spec in ("local", ""):
+            import localefmt
+            target_tz = localefmt.tz()
+        else:
+            try:
+                target_tz = ZoneInfo(tz_spec)
+            except Exception:
+                target_tz = UTC
+    except Exception:
+        from datetime import datetime, timezone as dt_tz, time as dtime, timedelta
+        target_tz = dt_tz.utc
+
+    try:
+        dt = datetime.fromtimestamp(now_ts, tz=target_tz)
+    except Exception:
+        return True, "", 0.0
+
+    weekday = dt.isoweekday()  # 1 = Mon ... 7 = Sun
+    cur_min = dt.hour * 60 + dt.minute
+
+    days = sched.get("days") or [1, 2, 3, 4, 5]
+    windows = sched.get("windows") or []
+    weekend_all = sched.get("weekend_all_day", True)
+
+    is_active = False
+    if weekend_all and weekday in (6, 7):
+        is_active = True
+    elif weekday in days:
+        for w in windows:
+            try:
+                sh, sm = map(int, str(w.get("start") or "").split(":"))
+                eh, em = map(int, str(w.get("end") or "").split(":"))
+                s_min = sh * 60 + sm
+                e_min = 1440 if eh == 24 else eh * 60 + em
+                if s_min <= cur_min < e_min:
+                    is_active = True
+                    break
+            except Exception:
+                continue
+
+    if is_active:
+        return True, "", 0.0
+
+    # Tính thời điểm kích hoạt lại tiếp theo
+    next_ts = None
+    for offset in range(8):
+        c_date = dt.date() + timedelta(days=offset)
+        c_wday = c_date.isoweekday()
+        if weekend_all and c_wday in (6, 7):
+            try:
+                c_dt = datetime.combine(c_date, dtime(0, 0), tzinfo=target_tz)
+                ts = c_dt.timestamp()
+                if ts > now_ts:
+                    if next_ts is None or ts < next_ts:
+                        next_ts = ts
+            except Exception:
+                pass
+        if c_wday in days:
+            for w in windows:
+                try:
+                    sh, sm = map(int, str(w.get("start") or "").split(":"))
+                    c_dt = datetime.combine(c_date, dtime(sh, sm), tzinfo=target_tz)
+                    ts = c_dt.timestamp()
+                    if ts > now_ts:
+                        if next_ts is None or ts < next_ts:
+                            next_ts = ts
+                except Exception:
+                    continue
+
+    reason = "Ngoài khung giờ ưu tiên (giờ cao điểm DeepSeek)"
+    return False, reason, float(next_ts if next_ts is not None else (now_ts + 3600.0))
+
+
+def provider_in_schedule(m: dict, provider: str, now: float = None) -> tuple[bool, str, float]:
+    sched = schedule(m, provider)
+    return is_in_schedule(sched, now)
+
+
 def usable_accounts(m: dict, provider: str, key_field: str = "", now: float = None) -> list:
+    sched_ok, _, _ = provider_in_schedule(m, provider, now)
+    if not sched_ok:
+        return []
     return [a for a in accounts(m, provider, key_field)
             if a["enabled"] and (a["key"] or not key_field) and not resting_until(provider, a["id"], now)]
 

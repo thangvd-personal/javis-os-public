@@ -3451,6 +3451,9 @@ def _route_ready(mcfg, prov) -> bool:
     d = _provider_def(prov)
     if not d:
         return False
+    sched_ok, _, _ = model_routing.provider_in_schedule(mcfg, prov)
+    if not sched_ok:
+        return False
     if d.get("kind") == "api":
         if prov in adv_keys.PROVIDERS and adv_keys.gateways(mcfg, prov):
             return adv_keys.active(mcfg, prov) is not None
@@ -3921,6 +3924,9 @@ def _route_rest_until(mcfg, prov: str, now: float = None) -> float:
     marked out of quota gives its reset time; otherwise the earliest account or key of the card to come back."""
     now = time.time() if now is None else now
     try:
+        sched_ok, _, sched_until = model_routing.provider_in_schedule(mcfg, prov, now)
+        if not sched_ok and sched_until > now:
+            return float(sched_until)
         until = _pin_limited_until(prov, now)
         if until:
             return float(until)
@@ -3968,11 +3974,16 @@ def _route_view(mcfg, row, run=None, now: float = None) -> dict:
     if out["fallback"]:
         lost = sel["provider"] in signed_out
         until = 0 if lost else (limited.get(sel["provider"]) or _pin_limited_until(sel["provider"], now))
-        out["reason"] = "signin" if lost else "quota" if until else "unavailable"
-        out["until"] = float(until or 0)
+        sched_ok, _, sched_until = model_routing.provider_in_schedule(mcfg, sel["provider"], now)
+        sched_rest = not sched_ok
+        out["reason"] = "signin" if lost else "schedule" if sched_rest else "quota" if until else "unavailable"
+        out["until"] = float(until or (sched_until if sched_rest else 0) or 0)
         if lost:
             vi = f"{out['selected_name']} mất đăng nhập → đang dùng {out['name']}."
             en = f"{out['selected_name']} lost its sign-in → using {out['name']}."
+        elif sched_rest:
+            vi = f"{out['selected_name']} đang tạm nghỉ (ngoài khung giờ) → đang dùng {out['name']}."
+            en = f"{out['selected_name']} is resting (outside active hours) → using {out['name']}."
         elif until:
             vi = f"{out['selected_name']} hết lượt → đang dùng {out['name']}."
             en = f"{out['selected_name']} is out of quota → using {out['name']}."
@@ -7291,19 +7302,31 @@ def _routing_view(mcfg, providers) -> dict:
 
     now_ts = time.time()
     for p in o:
-        until = _pin_limited_until(p)
-        if until:
-            limited[p] = int(until)
+        sched_ok, sched_reason, sched_until = model_routing.provider_in_schedule(mcfg, p, now_ts)
+        if not sched_ok and sched_until > now_ts:
+            limited[p] = int(sched_until)
             resting_info[p] = {
-                "until": int(until),
-                "secs_left": max(1, int(until - now_ts)),
-                "reason": "Chạm hạn mức quota gói chat",
-                "detail": "",
+                "until": int(sched_until),
+                "secs_left": max(1, int(sched_until - now_ts)),
+                "reason": sched_reason or localefmt.chu("Ngoài khung giờ ưu tiên (Off-peak)", "Outside active hours (Off-peak)"),
+                "detail": localefmt.chu("Đang trong giờ cao điểm của DeepSeek, tạm nghỉ để tiết kiệm chi phí.",
+                                        "DeepSeek peak hours, resting to save cost."),
+                "schedule": True,
             }
-        elif p in aux_resting:
-            info = aux_resting[p]
-            limited[p] = int(info["until"])
-            resting_info[p] = info
+        else:
+            until = _pin_limited_until(p)
+            if until:
+                limited[p] = int(until)
+                resting_info[p] = {
+                    "until": int(until),
+                    "secs_left": max(1, int(until - now_ts)),
+                    "reason": "Chạm hạn mức quota gói chat",
+                    "detail": "",
+                }
+            elif p in aux_resting:
+                info = aux_resting[p]
+                limited[p] = int(info["until"])
+                resting_info[p] = info
     background = model_routing.background_spec(mcfg)
     if background.get("auto"):
         # Automatic: the page names both models, the one for Javis's own work and the one for handed-over jobs.
@@ -7311,7 +7334,8 @@ def _routing_view(mcfg, providers) -> dict:
     return {"order": o, "profiles": {p: model_routing.profile(mcfg, p) for p in o}, "limited": limited, "resting_info": resting_info,
             "background": background, "chat_in_use": chat, "bg_in_use": bg,
             "multi_key": list(_routing_key_fields()), "multi_plan": [p for p in plan_accounts.KIND if plan_accounts.available(p)],
-            "defaults": {p["id"]: d for p in providers if (d := _default_model_name(mcfg, p["id"]))}}
+            "defaults": {p["id"]: d for p in providers if (d := _default_model_name(mcfg, p["id"]))},
+            "schedules": {p: model_routing.schedule(mcfg, p) for p in o if model_routing.has_schedule_support(p)}}
 
 
 @app.post("/settings")
@@ -7502,6 +7526,16 @@ async def settings_set(section: str = Form(...), data: str = Form("{}")):
                     model_routing.add_to_order(m, pid)
                 elif items is not None:
                     model_routing.drop_from_order(m, pid)
+        # Khung giờ ưu tiên hoạt động cho model (ví dụ DeepSeek off-peak)
+        if isinstance(patch.get("schedule"), dict):
+            ps = patch["schedule"]
+            pid = str(ps.get("provider") or "")
+            if _provider_def(pid):
+                model_routing.set_schedule(m, pid, ps)
+        if isinstance(patch.get("schedules"), dict):
+            for pid, ps in patch["schedules"].items():
+                if _provider_def(str(pid)) and isinstance(ps, dict):
+                    model_routing.set_schedule(m, str(pid), ps)
         # Fast mode (composer bolt, 0.153.0). This POST drops unknown keys, so it needs its own branch.
         if "fast" in patch:
             m["fast"] = patch["fast"] is True

@@ -3517,6 +3517,23 @@
     const showOff = ui.set ? ui.showOff : !connList.length;
 
     const KEYFIELD = { "openrouter": "openrouter_key", "anthropic-api": "anthropic_api_key", "openai": "openai_api_key", "gemini": "gemini_api_key", "groq": "groq_api_key", "deepseek": "deepseek_api_key", "ollama": "ollama_key", "openai-compat": "openai_compat_key", "anthropic-compat": "anthropic_compat_key" };
+    const schedules = R.schedules || {};
+    const schedOf = (pid) => (schedules && schedules[pid]) || {
+      enabled: false, timezone: "UTC", days: [1, 2, 3, 4, 5],
+      windows: [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }],
+      weekend_all_day: true
+    };
+    const hasSched = (pid) => pid === "deepseek" || (schedules && !!schedules[pid]);
+    const schedChip = (pid) => {
+      if (!hasSched(pid)) return "";
+      const sc = schedOf(pid);
+      const isRest = limitedAt[pid] && restingInfo[pid] && restingInfo[pid].schedule;
+      const label = sc.enabled
+        ? (isRest ? t("models.sched_chip_rest") : t("models.sched_chip_on"))
+        : t("models.sched_btn");
+      const cls = sc.enabled ? (isRest ? " rest" : " on") : "";
+      return `<button type="button" class="mb-chip ord-schip${cls}" data-sched="${esc(pid)}" title="${esc(t("models.sched_title"))}">${ic("clock")}<span class="ord-mtxt">${esc(label)}</span></button>`;
+    };
     // ---- Usage order cards (0.351.0). `ord` = {idx} for a card in the order, null for a card still to connect. ----
     const effName = (v) => t((window.JavisEffortSlider && window.JavisEffortSlider.LABEL_KEY[v]) || "eff.off");
     const FAST_BOLT = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>';
@@ -3549,6 +3566,7 @@
       return `<div class="ord-chips" data-p="${esc(p.id)}">
           <button type="button" class="mb-chip ord-mchip" data-ordpop="model" aria-expanded="false" title="${esc(t("models.change_model"))}">${ic("cpu")}<span class="ord-mtxt">${esc(pr.model || defName(p.id))}</span>${ic("chevron-up", { cls: "ord-up" })}</button>
           ${effChip(p.id, pr.reasoning)}
+          ${schedChip(p.id)}
           ${ordBadges(p, ord)}
         </div>`;
     };
@@ -3572,7 +3590,9 @@
           <div class="ord-limit-head"><strong>${badge}</strong> (đến ${gio}): ${reason}</div>
           ${detail}
         </div>
-        <button type="button" class="gcard-btn ghost" data-retry="${esc(p.id)}">${esc(t("models.retry_now"))}</button></div>`;
+        ${info.schedule
+          ? `<button type="button" class="gcard-btn ghost" data-sched="${esc(p.id)}">${ic("clock")} ${esc(t("models.sched_edit"))}</button>`
+          : `<button type="button" class="gcard-btn ghost" data-retry="${esc(p.id)}">${esc(t("models.retry_now"))}</button>`}</div>`;
     };
     const cardOpen = (p, ord) => `<div class="prov-card${(ord ? ord.idx === 0 : p.is_main) ? " main" : ""}${ord ? " ord-card" : ""}${chatLive(p, ord) ? " ord-inuse" : ""}"${ord ? ` data-dnd="prov" data-p="${esc(p.id)}"` : ` data-offp="${esc(p.id)}"`}>`;
     // The account a provider runs on now: the first one switched on and not resting (model_routing.active_account).
@@ -3676,6 +3696,7 @@
       const canDisc = !(p.id === "anthropic-cli" && p.auth_mode === "api_key");
       return `<div class="ord-acts">
           ${isBg(p) ? "" : `<button type="button" class="ord-act" data-setbg="${esc(p.id)}">${ic("workflow")}<span>${esc(t("models.use_bg"))}</span></button>`}
+          ${hasSched(p.id) ? `<button type="button" class="ord-act" data-sched="${esc(p.id)}">${ic("clock")}<span>${esc(t("models.sched_btn"))}</span></button>` : ""}
           ${o.check ? `<button type="button" class="ord-act" ${o.check}="1">${ic("refresh-cw")}<span>${esc(t("models.check_short"))}</span></button>` : ""}
           ${o.add === "plan" ? `<button type="button" class="ord-act" data-addacc="${esc(p.id)}">${ic("user-plus")}<span>${esc(t("models.pacct_add"))}</span></button>` : ""}
           ${o.add === "key" ? `<button type="button" class="ord-act" data-addkey="${esc(p.id)}">${ic("plus")}<span>${esc(t("models.acct_add"))}</span></button>` : ""}
@@ -3981,7 +4002,7 @@
 
     bindOrderCards(el, {
       order, connList, offList, prof, accts, bgCfg, effName, multiKey, multiPlan, limited: limitedAt,
-      fast: m.fast === true, kindTag,
+      fast: m.fast === true, kindTag, schedules, schedOf, hasSched,
       again: () => renderModelsCloudTab(el)
     });
     // Nguồn xác thực của gói Claude Code. Vẽ lại cả trang sau khi lưu vì cảnh báo phụ thuộc
@@ -4483,6 +4504,223 @@
       return sh;
     };
     const need = (box, f) => { const x = box(f); if (x) x.focus(); return true; };
+
+    // ---- Priority schedule (DeepSeek off-peak etc.) ----
+    const schedSheet = (btn, pid) => {
+      closePop();
+      const p = cardOf(pid);
+      const cur = c.schedOf ? c.schedOf(pid) : {
+        enabled: false, timezone: "UTC", days: [1, 2, 3, 4, 5],
+        windows: [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }],
+        weekend_all_day: true
+      };
+      const title = t("models.sched_sheet_title", { ten: p.label || pid });
+      const sh = shell(null, "ord-msheet", title, t("models.sched_sub"), logoOf(pid));
+      sh.pop.setAttribute("role", "dialog");
+      sh.pop.setAttribute("aria-label", title);
+
+      let enabled = !!cur.enabled;
+      let tzChoice = cur.timezone || "UTC";
+      let days = new Set(cur.days || [1, 2, 3, 4, 5]);
+      let weekendAll = cur.weekend_all_day !== false;
+      let windows = (cur.windows && cur.windows.length)
+        ? cur.windows.map(w => ({ start: w.start || "00:00", end: w.end || "24:00" }))
+        : [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }];
+
+      const userTz = (window.JavisTz && window.JavisTz.name) || (typeof Intl !== "undefined" && Intl.DateTimeFormat().resolvedOptions().timeZone) || "UTC+7";
+
+      const render = () => {
+        const DAY_NAMES = [
+          { d: 1, l: "T2" }, { d: 2, l: "T3" }, { d: 3, l: "T4" },
+          { d: 4, l: "T5" }, { d: 5, l: "T6" }, { d: 6, l: "T7" }, { d: 7, l: "CN" }
+        ];
+        const daysHtml = DAY_NAMES.map(item => `
+          <button type="button" class="sched-day${days.has(item.d) ? " active" : ""}" data-day="${item.d}">
+            ${item.l}
+          </button>
+        `).join("");
+
+        const winsHtml = windows.map((w, idx) => `
+          <div class="sched-win-row" data-widx="${idx}">
+            <span style="font-size:14px;color:var(--text2);flex:none;">${esc(t("models.sched_from"))}</span>
+            <input type="text" class="js-input sched-time sched-start" value="${esc(w.start)}" placeholder="00:00" style="max-width:85px;min-height:38px;padding:4px 8px;text-align:center;">
+            <span style="font-size:14px;color:var(--text2);flex:none;">${esc(t("models.sched_to"))}</span>
+            <input type="text" class="js-input sched-time sched-end" value="${esc(w.end)}" placeholder="24:00" style="max-width:85px;min-height:38px;padding:4px 8px;text-align:center;">
+            ${windows.length > 1 ? `<button type="button" class="ord-ib sched-del" data-delwin="${idx}" title="${esc(t("common.delete"))}">${ic("trash-2")}</button>` : ""}
+          </div>
+        `).join("");
+
+        sh.body.innerHTML = `
+          <div class="ord-sform" style="gap:14px;">
+            <label class="prov-auth-opt" style="margin-bottom:4px;cursor:pointer;">
+              <input type="checkbox" id="schedEn" ${enabled ? "checked" : ""}>
+              <span><b>${esc(t("models.sched_enable_label"))}</b>
+              <div style="font-size:13px;color:var(--text3);margin-top:2px;">${esc(t("models.sched_enable_sub"))}</div></span>
+            </label>
+
+            <div class="ord-offnote" style="margin:0;">
+              ${ic("info")}
+              <div style="font-size:13px;line-height:1.5;">${esc(t("models.sched_ds_note"))}</div>
+            </div>
+
+            <button type="button" class="ord-btn" id="schedPreset" style="min-height:42px;font-size:14px;font-weight:600;">
+              ${ic("sparkles")} <span>${esc(t("models.sched_preset_ds"))}</span>
+            </button>
+
+            <div class="sched-sec">
+              <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${esc(t("models.sched_tz_label"))}</div>
+              <div style="display:flex;gap:16px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                  <input type="radio" name="schedTz" value="UTC" ${tzChoice === "UTC" ? "checked" : ""}>
+                  <span>${esc(t("models.sched_tz_utc"))}</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                  <input type="radio" name="schedTz" value="local" ${tzChoice !== "UTC" ? "checked" : ""}>
+                  <span>${esc(t("models.sched_tz_local", { tz: userTz }))}</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="sched-sec">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <div style="font-weight:600;font-size:14px;">${esc(t("models.sched_days_label"))}</div>
+                <div style="display:flex;gap:8px;">
+                  <button type="button" class="gcard-btn ghost mini" id="schedWorkdays" style="padding:2px 8px;font-size:12px;">${esc(t("models.sched_workdays"))}</button>
+                  <button type="button" class="gcard-btn ghost mini" id="schedAllweek" style="padding:2px 8px;font-size:12px;">${esc(t("models.sched_all_week"))}</button>
+                </div>
+              </div>
+              <div class="sched-days" style="display:flex;gap:6px;">${daysHtml}</div>
+              <label style="display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer;font-size:14px;">
+                <input type="checkbox" id="schedWeekend" ${weekendAll ? "checked" : ""}>
+                <span>${esc(t("models.sched_weekend_all_day"))}</span>
+              </label>
+            </div>
+
+            <div class="sched-sec">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-weight:600;font-size:14px;">${esc(t("models.sched_windows_label"))}</div>
+                <button type="button" class="gcard-btn ghost mini" id="schedAddWin" style="padding:2px 8px;font-size:12px;">
+                  ${ic("plus")} ${esc(t("models.sched_add_win"))}
+                </button>
+              </div>
+              <div id="schedWinList">${winsHtml}</div>
+            </div>
+
+            <div class="ord-sfmsg gcard-meta"></div>
+            <div class="ord-btns">
+              <button type="button" class="ord-btn" data-sf="cancel">${esc(t("common.cancel"))}</button>
+              <button type="button" class="ord-btn pri" data-sf="save">${ic("check")}${esc(t("common.save"))}</button>
+            </div>
+          </div>
+        `;
+        bind();
+      };
+
+      const syncInputs = () => {
+        const enBox = sh.body.querySelector("#schedEn");
+        if (enBox) enabled = enBox.checked;
+        const tzRad = sh.body.querySelector('input[name="schedTz"]:checked');
+        if (tzRad) tzChoice = tzRad.value;
+        const weBox = sh.body.querySelector("#schedWeekend");
+        if (weBox) weekendAll = weBox.checked;
+        const rowEls = sh.body.querySelectorAll(".sched-win-row");
+        const newWins = [];
+        rowEls.forEach(row => {
+          const s = (row.querySelector(".sched-start")?.value || "").trim();
+          const e = (row.querySelector(".sched-end")?.value || "").trim();
+          if (s && e) newWins.push({ start: s, end: e });
+        });
+        if (newWins.length) windows = newWins;
+      };
+
+      const bind = () => {
+        sh.body.querySelectorAll(".sched-day").forEach(b => b.onclick = () => {
+          const d = Number(b.dataset.day);
+          if (days.has(d)) {
+            if (days.size > 1) days.delete(d);
+          } else {
+            days.add(d);
+          }
+          syncInputs();
+          render();
+        });
+
+        const pBtn = sh.body.querySelector("#schedPreset");
+        if (pBtn) pBtn.onclick = () => {
+          enabled = true;
+          tzChoice = "UTC";
+          days = new Set([1, 2, 3, 4, 5]);
+          weekendAll = true;
+          windows = [
+            { start: "00:00", end: "01:00" },
+            { start: "04:00", end: "06:00" },
+            { start: "10:00", end: "24:00" }
+          ];
+          render();
+        };
+
+        const wBtn = sh.body.querySelector("#schedWorkdays");
+        if (wBtn) wBtn.onclick = () => {
+          days = new Set([1, 2, 3, 4, 5]);
+          syncInputs();
+          render();
+        };
+
+        const aBtn = sh.body.querySelector("#schedAllweek");
+        if (aBtn) aBtn.onclick = () => {
+          days = new Set([1, 2, 3, 4, 5, 6, 7]);
+          syncInputs();
+          render();
+        };
+
+        const addW = sh.body.querySelector("#schedAddWin");
+        if (addW) addW.onclick = () => {
+          syncInputs();
+          windows.push({ start: "00:00", end: "24:00" });
+          render();
+        };
+
+        sh.body.querySelectorAll("[data-delwin]").forEach(b => b.onclick = () => {
+          syncInputs();
+          const idx = Number(b.dataset.delwin);
+          if (windows.length > 1) {
+            windows.splice(idx, 1);
+            render();
+          }
+        });
+
+        const cancelBtn = sh.body.querySelector('[data-sf="cancel"]');
+        if (cancelBtn) cancelBtn.onclick = () => closePop();
+
+        const saveBtn = sh.body.querySelector('[data-sf="save"]');
+        if (saveBtn) saveBtn.onclick = async () => {
+          syncInputs();
+          saveBtn.disabled = true;
+          try {
+            await save({
+              schedule: {
+                provider: pid,
+                enabled: enabled,
+                timezone: tzChoice,
+                days: Array.from(days).sort(),
+                windows: windows,
+                weekend_all_day: weekendAll
+              }
+            });
+            closePop();
+            setTimeout(c.again, 0);
+          } catch (err) {
+            saveBtn.disabled = false;
+            const msgEl = sh.body.querySelector(".ord-sfmsg");
+            if (msgEl) msgEl.innerHTML = WARN_ICON + " " + esc(String(err));
+          }
+        };
+      };
+
+      render();
+      opened(btn, sh);
+      return sh;
+    };
 
     // ---- the keys of an API card ----
     const addKeySheet = (btn, pid) => formSheet(btn, t("models.acct_add"), cardOf(pid).label, [
@@ -5003,6 +5241,12 @@
       menuSheet(b, p.label, [
         [{ ic: "cpu", label: t("models.change_model").replace(/\s*▾$/, ""), sub: pr.model || defName(pid), run: chip("model") },
         { ic: "gauge", label: t("models.eff_title"), sub: c.effName(pr.reasoning), run: chip("eff") }],
+        [c.hasSched && c.hasSched(pid) && {
+          ic: "clock",
+          label: t("models.sched_title"),
+          sub: (c.schedOf && c.schedOf(pid).enabled) ? t("models.sched_status_active") : t("models.sched_sub"),
+          run: () => schedSheet(b, pid)
+        }],
         [c.limited[pid] && { ic: "rotate-cw", label: t("models.retry_now"), sub: t("models.retry_now_d", { gio: until }), tone: "warn", run: () => retry(pid) }],
         [c.bgCfg.provider === pid
           ? { ic: "workflow", label: t("models.bg_running"), sub: t("models.bg_d"), tone: "bgsel", sel: true }
@@ -5026,6 +5270,11 @@
           danger: true, run: () => discSheet(b, pid)
         }],
       ], i === 0 ? "MAIN · " + c.kindTag(p) : t("models.ord_backup", { n: i }) + " · " + c.kindTag(p), logoOf(pid));
+    });
+
+    el.querySelectorAll("[data-sched]").forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      schedSheet(b, b.dataset.sched);
     });
   }
 

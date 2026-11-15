@@ -285,6 +285,11 @@ body.ord-is-dragging, body.ord-is-dragging * { cursor: grabbing !important; user
 /* Chips: model (chip icon) and Effort (the app's own chip, with the Fast mode bolt), then the badges at the end. */
 .ord-chips .ord-mchip .ic { width: 16px; height: 16px; flex: none; color: var(--text2); }
 .ord-chips .ord-mchip .ord-up { color: var(--text3); }
+.ord-chips .ord-schip .ic { width: 15px; height: 15px; flex: none; }
+.ord-schip.on { border-color: color-mix(in srgb, var(--green) 40%, var(--border)); }
+.ord-schip.on .ic { color: var(--green); }
+.ord-schip.rest { border-color: color-mix(in srgb, var(--warn-ink) 40%, var(--border)); }
+.ord-schip.rest .ic { color: var(--warn-ink); }
 .ord-badges-m { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-left: auto; }
 .ord-badges-m .prov-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
 .ord-badges-m .prov-badge .ic { width: 14px; height: 14px; }
@@ -364,6 +369,10 @@ button.ord-mi:hover, button.ord-mi:focus-visible { background: var(--bg3); }
 .ord-btn[hidden] { display: none; }
 .ord-pstep .ord-btn { margin-top: 8px; width: 100%; }
 .ord-cmd { display: block; padding: 10px 12px; border-radius: 10px; background: var(--bg); overflow-wrap: anywhere; font-size: 14px; }
+.sched-days { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.sched-day { flex: 1 0 34px; min-height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text2); font-weight: 600; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.sched-day.active { background: var(--accent); color: var(--on-accent, #1a0d05); border-color: var(--accent); }
+.sched-win-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .ord-msec { cursor: default; border-top: 1px solid var(--border); margin-top: 6px; }
 @media (max-width: 600px) {
   .ord-head .prov-status { overflow-wrap: anywhere; }
