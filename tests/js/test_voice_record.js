@@ -417,6 +417,21 @@ check("voice-record.js provides tooltips and guide popups for assistants on all 
     "debug_enable_tip", "debug_enable_guide"
   ].every(k => viJson["vr.meeting." + k] && enJson["vr.meeting." + k]));
 
+// 16. Designated LLM model for transcript normalization
+check("settings pane includes LLM normalization model picker and fallback support",
+  vrJsSrc.includes('id="vrLlmNormModelPick"')
+  && vrJsSrc.includes('id="vrLlmNormModelBtn"')
+  && vrJsSrc.includes('id="vrLlmNormModelPop"')
+  && vrJsSrc.includes('id="vrLlmNormModelTxt"')
+  && consoleCss.includes(".vr-model-pick")
+  && consoleCss.includes(".vr-model-btn")
+  && consoleCss.includes(".vr-model-pop")
+  && [
+    "llm_norm_title", "llm_norm_label", "llm_norm_default",
+    "llm_norm_tip", "llm_norm_guide", "llm_norm_btn_title",
+    "llm_norm_sub_default", "llm_norm_sub_custom"
+  ].every(k => viJson["vr.meeting." + k] && enJson["vr.meeting." + k]));
+
 
 
 if (fails.length) {

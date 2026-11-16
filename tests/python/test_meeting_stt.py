@@ -630,6 +630,33 @@ check("POST /voice-records/meeting/logs/clean returns 200 and cleans logs",
 stats_after = meeting_stt.get_logs_stats()
 check("stats after clean shows 0 files", stats_after.get("total_files") == 0)
 
+# Test designated LLM normalization model configuration & resolution
+r_llm_cfg = client.post("/voice-records/meeting/config", json={
+    "normalize_model": "gpt-4o",
+    "normalize_model_provider": "openai"
+})
+check("POST /voice-records/meeting/config updates normalize_model & normalize_model_provider",
+      r_llm_cfg.status_code == 200
+      and r_llm_cfg.json().get("normalize_model") == "gpt-4o"
+      and r_llm_cfg.json().get("normalize_model_provider") == "openai"
+      and r_llm_cfg.json()["config"].get("normalize_model") == "gpt-4o")
+
+spec_res = transcript_fix.resolve_normalize_spec(main.cfgmod.read_settings())
+check("resolve_normalize_spec returns designated provider and model",
+      spec_res == {"provider": "openai", "model": "gpt-4o"})
+
+detected_m = transcript_fix.detect_active_model_name(main.cfgmod.read_settings())
+check("detect_active_model_name prioritizes designated normalize_model",
+      detected_m == "gpt-4o")
+
+# Reset to default
+client.post("/voice-records/meeting/config", json={
+    "normalize_model": "",
+    "normalize_model_provider": ""
+})
+check("resolve_normalize_spec returns None when reset to default",
+      transcript_fix.resolve_normalize_spec(main.cfgmod.read_settings()) is None)
+
 # Cleanup mocks and temp dirs
 main.cfgmod.gate_active = _orig_gate
 voice_records.get_store = _orig_store_get

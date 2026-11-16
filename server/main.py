@@ -3123,7 +3123,7 @@ async def _reply_policy_review_ask(prompt: str) -> str:
     return final
 
 
-async def _transcript_rewrite_ask(prompt: str, system_prompt: str | None = None) -> str:
+async def _transcript_rewrite_ask(prompt: str, system_prompt: str | None = None, spec: dict | None = None) -> str:
     """One text-only turn on the MAIN brain for the end of a dictation (transcript_fix.rewrite_transcript, 2026-11-06).
 
     Owner: rewrite what the mic heard with "chính mô hình chính", whether it is a subscription CLI or an API key. Same
@@ -3139,7 +3139,8 @@ async def _transcript_rewrite_ask(prompt: str, system_prompt: str | None = None)
             base.effort = "low"
         except Exception:  # noqa: BLE001 - an engine without the field keeps its default
             pass
-    cli = aux_engine.swap(base, mode="suggest", tag="transcript-rewrite", spec=aux_engine.main_spec(),
+    target_spec = spec or transcript_fix.resolve_normalize_spec() or aux_engine.main_spec()
+    cli = aux_engine.swap(base, mode="suggest", tag="transcript-rewrite", spec=target_spec,
                           codex_profile=_write_codex_profile)
     cli = aux_engine.strip_tools(cli, base)
     _rewrite_low_effort_codex(cli)

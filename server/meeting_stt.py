@@ -314,6 +314,8 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "stt_profiles": stt_profiles,
         "audio_inspect": audio_inspect_cfg,
         "debug_mode": debug_mode,
+        "normalize_model": str(raw.get("normalize_model") or "").strip(),
+        "normalize_model_provider": str(raw.get("normalize_model_provider") or "").strip(),
     }
 
 
@@ -424,6 +426,10 @@ def update_config(patch: dict[str, Any]) -> dict[str, Any]:
             clean["audio_inspect"] = ai_clean
     if "debug_mode" in patch:
         clean["debug_mode"] = bool(patch["debug_mode"])
+    if "normalize_model" in patch:
+        clean["normalize_model"] = str(patch["normalize_model"] or "").strip()
+    if "normalize_model_provider" in patch:
+        clean["normalize_model_provider"] = str(patch["normalize_model_provider"] or "").strip()
 
     if clean:
         new_cfg = cfgmod.update_settings({"voice": {"meeting_stt": clean}})
@@ -724,6 +730,8 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
         "stt_profiles": mc.get("stt_profiles", {}),
         "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
         "debug_mode": mc.get("debug_mode", True),
+        "normalize_model": mc.get("normalize_model", ""),
+        "normalize_model_provider": mc.get("normalize_model_provider", ""),
         "config": {
             "whisper_model": mc["whisper_model"],
             "device": mc["device"],
@@ -737,6 +745,8 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
             "stt_profiles": mc.get("stt_profiles", {}),
             "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
             "debug_mode": mc.get("debug_mode", True),
+            "normalize_model": mc.get("normalize_model", ""),
+            "normalize_model_provider": mc.get("normalize_model_provider", ""),
         },
     }
 

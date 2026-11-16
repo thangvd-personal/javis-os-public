@@ -456,6 +456,12 @@
       numSpeakers: 0,
       diarize: true,
       diarizeTouched: false,
+      normalizeModel: "",
+      normalizeModelProvider: "",
+      appSettings: null,
+      llmPopOpen: false,
+      llmFilter: "",
+      llmExpanded: "",
       drawerOpen: false,
       statusData: null,
       activeJob: null,
@@ -661,6 +667,7 @@
     if (S.tab === "settings") {
       fetchMeetingQueue();
       fetchLogsStats();
+      fetchAppSettings().then(function () { syncMeetingUi(); });
       startQueuePolling();
     } else {
       stopQueuePolling();
@@ -821,6 +828,27 @@
     if (debugCb && (!activeEl || activeEl.id !== "vrDebugLoggingEnable")) {
       var dbgMode = st.debug_mode !== undefined ? st.debug_mode : ((st.config && st.config.debug_mode) !== undefined ? st.config.debug_mode : true);
       debugCb.checked = dbgMode !== false;
+    }
+
+    var normTxt = $("vrLlmNormModelTxt");
+    var normSub = $("vrLlmNormSub");
+    var normHiddenModel = $("vrLlmNormModel");
+    var normHiddenProv = $("vrLlmNormProvider");
+    if (normTxt) {
+      var nModel = S.mt.normalizeModel || (st.config && st.config.normalize_model) || st.normalize_model || "";
+      var nProv = S.mt.normalizeModelProvider || (st.config && st.config.normalize_model_provider) || st.normalize_model_provider || "";
+      if (normHiddenModel) normHiddenModel.value = nModel;
+      if (normHiddenProv) normHiddenProv.value = nProv;
+      if (!nModel) {
+        normTxt.textContent = tw("vr.meeting.llm_norm_default");
+        if (normSub) normSub.textContent = tw("vr.meeting.llm_norm_sub_default");
+      } else {
+        var provs = ((S.mt.appSettings && S.mt.appSettings.model && S.mt.appSettings.model.providers) || []);
+        var pObj = provs.find(function (x) { return x.id === nProv; });
+        var pLabel = pObj ? (pObj.label || pObj.id) : nProv;
+        normTxt.textContent = (pLabel ? pLabel + " · " : "") + nModel;
+        if (normSub) normSub.textContent = tw("vr.meeting.llm_norm_sub_custom", { model: nModel });
+      }
     }
 
     var modelBadge = $("vrMtActiveModelBadge");
@@ -2596,6 +2624,18 @@
     S.mt.installPollTimer = setTimeout(poll, 1000);
   }
 
+  async function fetchAppSettings() {
+    if (S.mt.appSettings) return S.mt.appSettings;
+    try {
+      var r = await fetch("/settings", { cache: "no-store", credentials: "same-origin" });
+      var s = await r.json().catch(function () { return {}; });
+      S.mt.appSettings = s;
+      return s;
+    } catch (e) {
+      return {};
+    }
+  }
+
   async function fetchMeetingStatus() {
     var wasInstalling = Boolean(S.mt.statusData && S.mt.statusData.installing);
     try {
@@ -2607,6 +2647,12 @@
         if (S.mt.recState === "idle" && !S.mt.uploading && !S.mt.installPending && !d.installing) {
           if (d.config.whisper_model) S.mt.model = d.config.whisper_model;
           if (d.config.language) S.mt.language = d.config.language;
+          if (d.config.normalize_model !== undefined) {
+            S.mt.normalizeModel = d.config.normalize_model || "";
+          }
+          if (d.config.normalize_model_provider !== undefined) {
+            S.mt.normalizeModelProvider = d.config.normalize_model_provider || "";
+          }
           if (!S.mt.diarizeTouched) {
             S.mt.diarize = ("diarize" in d.config) ? Boolean(d.config.diarize) : Boolean(d.diarize_ready);
           }
@@ -3370,6 +3416,27 @@
       '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
       '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
       "</div>" +
+      // LLM Text Normalization Model Section
+      '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
+      '<div class="vr-settings-sec-head" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
+      '<div class="vr-settings-sec-title">' + ico("sparkles") + " <span>" + esc(tw("vr.meeting.llm_norm_title")) + "</span></div>" +
+      infoBtn(tw("vr.meeting.llm_norm_tip")) +
+      "</div>" +
+      infoBody(tw("vr.meeting.llm_norm_guide")) +
+      '<div class="vr-field vr-field-model" style="max-width:480px; position:relative;">' +
+      '<label for="vrLlmNormModelBtn" style="font-size:12px; font-weight:600; margin-bottom:4px;">' + esc(tw("vr.meeting.llm_norm_label")) + "</label>" +
+      '<div class="vr-model-pick" id="vrLlmNormModelPick">' +
+      '<button type="button" class="vr-model-btn" id="vrLlmNormModelBtn" title="' + esc(tw("vr.meeting.llm_norm_btn_title")) + '">' +
+      '<span id="vrLlmNormModelTxt">' + esc(tw("vr.meeting.llm_norm_default")) + "</span>" +
+      ico("chevron-down") +
+      "</button>" +
+      '<input type="hidden" id="vrLlmNormModel" value="">' +
+      '<input type="hidden" id="vrLlmNormProvider" value="">' +
+      '<div class="mb-pop vr-model-pop" id="vrLlmNormModelPop" hidden></div>' +
+      "</div>" +
+      '<div class="vr-audit-sub" id="vrLlmNormSub" style="margin-top:4px; font-size:12px;">' + esc(tw("vr.meeting.llm_norm_sub_default")) + "</div>" +
+      "</div>" +
+      "</div>" +
       // Audio Inspection Section
       '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
       '<div class="vr-settings-sec-head" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
@@ -3767,6 +3834,102 @@
         }
       };
     }
+
+    async function veLlmNormPop() {
+      var mPop = $("vrLlmNormModelPop");
+      if (!mPop) return;
+      var appSt = await fetchAppSettings();
+      var provs = ((appSt && appSt.model && appSt.model.providers) || []);
+      var mModel = S.mt.normalizeModel || "";
+      var mProv = S.mt.normalizeModelProvider || "";
+      var hangMacDinh = '<div class="mb-item ' + (!mModel ? "cur" : "") + '" data-prov="" data-model="">' +
+        '<span class="tick">' + (!mModel ? ico("check", { cls: "ic-ok" }) : "") + '</span>' +
+        '<span>' + esc(tw("vr.meeting.llm_norm_default")) + '</span></div>';
+      var o = {
+        providers: provs,
+        expanded: S.mt.llmExpanded,
+        filter: S.mt.llmFilter,
+        selected: { provider: mProv, model: mModel },
+        searchId: "vrLlmNormSearch",
+        extraTop: hangMacDinh,
+      };
+      var loc = S.mt.llmFilter;
+      var ML = typeof window !== "undefined" && window.JavisModelList;
+      if (ML && typeof ML.render === "function") {
+        mPop.innerHTML = await ML.render(o);
+        if (o.cho && o.cho.length) {
+          Promise.all(o.cho).then(function () {
+            if (!mPop.hidden && loc === S.mt.llmFilter) veLlmNormPop();
+          });
+        }
+      } else {
+        mPop.innerHTML = hangMacDinh;
+      }
+      var se = $("vrLlmNormSearch");
+      if (se) {
+        se.oninput = function () {
+          S.mt.llmFilter = se.value;
+          veLlmNormPop();
+        };
+        try {
+          se.focus();
+          se.selectionStart = se.selectionEnd = se.value.length;
+        } catch (e) {}
+      }
+    }
+
+    var normBtn = $("vrLlmNormModelBtn");
+    var normPop = $("vrLlmNormModelPop");
+    var dongNormPop = function () {
+      if (normPop) normPop.hidden = true;
+      S.mt.llmPopOpen = false;
+    };
+    if (normBtn) {
+      normBtn.onclick = async function () {
+        if (!normPop.hidden) {
+          dongNormPop();
+          return;
+        }
+        normPop.hidden = false;
+        S.mt.llmPopOpen = true;
+        await veLlmNormPop();
+        try { normPop.scrollIntoView({ block: "nearest" }); } catch (e) {}
+      };
+    }
+    if (normPop) {
+      normPop.onclick = function (e) {
+        var goto = e.target.closest && e.target.closest("[data-goto]");
+        if (goto) {
+          dongNormPop();
+          try { if (window.Alpine) Alpine.store("nav").go(goto.dataset.goto); } catch (er) {}
+          return;
+        }
+        var it = e.target.closest && e.target.closest(".mb-item");
+        if (it) {
+          var pId = it.dataset.prov || "";
+          var mId = it.dataset.model || "";
+          S.mt.normalizeModel = mId;
+          S.mt.normalizeModelProvider = pId;
+          saveMeetingConfig({ normalize_model: mId, normalize_model_provider: pId });
+          syncMeetingUi();
+          dongNormPop();
+          return;
+        }
+        var pr = e.target.closest && e.target.closest(".mb-prov");
+        if (pr && pr.dataset.prov) {
+          S.mt.llmExpanded = S.mt.llmExpanded === pr.dataset.prov ? "" : pr.dataset.prov;
+          veLlmNormPop();
+        }
+      };
+    }
+    var normPick = $("vrLlmNormModelPick");
+    document.addEventListener("click", function (e) {
+      if (!normPop || normPop.hidden) return;
+      var duong = e.composedPath ? e.composedPath() : [e.target];
+      if (normPick && duong.indexOf(normPick) < 0) {
+        dongNormPop();
+      }
+    });
 
     var audioInspectCb = $("vrAudioInspectEnable");
     if (audioInspectCb) {

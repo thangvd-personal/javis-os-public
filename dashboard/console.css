@@ -4733,6 +4733,16 @@ button.vr-pill { font: inherit; font-size: 12px; font-weight: 600; line-height: 
 .vr-pill.is-clickable:hover { filter: brightness(1.08); border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,.08); transform: translateY(-0.5px); }
 .vr-pill.is-clickable:active { transform: translateY(0); filter: brightness(0.95); }
 .vr-pill.is-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.vr-model-pick { position: relative; }
+.vr-model-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; box-sizing: border-box; min-height: 38px; border: 1px solid var(--border); border-radius: 9px;
+  padding: 8px 12px; background: var(--bg2); color: var(--text); font: inherit; font-size: 13px;
+  line-height: 1.5; text-align: left; cursor: pointer; }
+.vr-model-btn:hover { border-color: var(--accent); }
+.vr-model-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vr-model-btn > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vr-model-pop { position: absolute; top: calc(100% + 6px); bottom: auto; left: 0; right: 0;
+  width: auto; max-height: min(52vh, 340px); z-index: 70; }
 .vr-warn-banner { margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--warn-wash, rgba(245, 166, 35, .14)); border: 1px solid rgba(245, 166, 35, .32); color: var(--warn-ink, var(--text)); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .vr-mt-form { display: grid; grid-template-columns: minmax(200px, 2.5fr) minmax(130px, 1fr) minmax(180px, 1.3fr); gap: 10px; align-items: end; margin-bottom: 10px; }
 .vr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }

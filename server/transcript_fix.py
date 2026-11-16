@@ -253,9 +253,36 @@ def get_current_model() -> str:
     return _CURRENT_MODEL_LABEL
 
 
+def resolve_normalize_spec(cfg: dict | None = None) -> dict | None:
+    """Return {'provider': str, 'model': str} if user designated a specific LLM for normalization, else None."""
+    try:
+        if cfg is None:
+            import config as cfgmod
+            cfg = cfgmod.read_settings()
+        voice = (cfg.get("voice") or {}) if isinstance(cfg, dict) else {}
+        mst = (voice.get("meeting_stt") or {}) if isinstance(voice, dict) else {}
+        prov = str(mst.get("normalize_model_provider") or "").strip()
+        model = str(mst.get("normalize_model") or "").strip()
+        if not prov and not model:
+            return None
+        if model and not prov:
+            m_sec = (cfg.get("model") or {}) if isinstance(cfg, dict) else {}
+            provs = m_sec.get("providers") or []
+            for p in provs:
+                if model in (p.get("models") or []):
+                    prov = p.get("id") or ""
+                    break
+        return {"provider": prov, "model": model}
+    except Exception:
+        return None
+
+
 def detect_active_model_name(cfg: dict) -> str:
     """Xac dinh truoc ten model/provider AI dang san sang phuc vu chuan hoa."""
     try:
+        norm_spec = resolve_normalize_spec(cfg)
+        if norm_spec and (norm_spec.get("model") or norm_spec.get("provider")):
+            return _format_model_name(norm_spec.get("provider", ""), norm_spec.get("model", ""))
         cur = get_current_model()
         if cur:
             return cur
@@ -617,7 +644,11 @@ async def normalize_voice_record(cfg: dict, text: str) -> dict:
     main = [("main", lambda: asyncio.wait_for(_ASK(prompt), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
     pick = pick_quick_api(cfg or {})
     quick = [(pick[0], lambda: _ask_normalize_api(pick, prompt, by_rules))] if pick is not None else []
-    tries = quick + main if main_is_cli(cfg or {}) else main + quick
+    norm_spec = resolve_normalize_spec(cfg)
+    if norm_spec and (norm_spec.get("provider") or norm_spec.get("model")):
+        tries = main + quick
+    else:
+        tries = quick + main if main_is_cli(cfg or {}) else main + quick
     for source, run in tries:
         try:
             out = clean_normalize(await run())
@@ -764,7 +795,11 @@ async def _extract_meeting_context(cfg: dict, prepared: list[dict], speakers: li
             return await _ASK(p)
 
     main = [("main", lambda: asyncio.wait_for(_call_main(), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
-    tries = quick + main if main_is_cli(cfg or {}) else main + quick
+    norm_spec = resolve_normalize_spec(cfg)
+    if norm_spec and (norm_spec.get("provider") or norm_spec.get("model")):
+        tries = main + quick
+    else:
+        tries = quick + main if main_is_cli(cfg or {}) else main + quick
 
     for source, run in tries:
         try:
@@ -979,7 +1014,11 @@ async def normalize_meeting_segments(
 
         main = [("main", lambda p=prompt: _run_main_sandbox(p))] if _ASK is not None else []
         quick = [(pick[0], lambda p=prompt, j="\n".join(batch_lines): _run_quick_api(p, j))] if pick is not None else []
-        tries = quick + main if main_is_cli(cfg or {}) else main + quick
+        norm_spec = resolve_normalize_spec(cfg)
+        if norm_spec and (norm_spec.get("provider") or norm_spec.get("model")):
+            tries = main + quick
+        else:
+            tries = quick + main if main_is_cli(cfg or {}) else main + quick
 
         accepted = None
         used_src = "rules"
