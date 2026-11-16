@@ -320,6 +320,38 @@ Endpoint `GET /voice-records/{record_id}/export?format={srt|vtt|txt|json}` gọi
 
 ---
 
+### 3.5. Tích hợp Ghi chú nhanh (Quick Note) dùng chung mô hình STT & LLM chuẩn hóa
+
+Nhằm mang lại trải nghiệm đồng bộ và độ chính xác nhận dạng tối ưu cho cả tác vụ ghi chú cá nhân lẫn cuộc họp, chức năng "Ghi chú nhanh" (tab Ghi chú nhanh trong `dashboard/voice-record.js`) đã được nâng cấp toàn diện:
+
+#### 1. Dùng chung mô hình STT và tham số kỹ thuật từ tab Thiết lập
+- Ghi chú nhanh không còn phụ thuộc vào Web Speech API của trình duyệt (vốn hay bị ngắt kết nối hoặc giới hạn từ vựng tiếng Việt).
+- Chức năng tự động sử dụng chung mô hình STT khai báo ở tab Thiết lập (`whisper_model`, ví dụ: `phowhisper-medium`, `phowhisper-large`, hoặc `large-v3-turbo`) cùng toàn bộ cấu hình tham số suy luận (`beam_size`, `temperature`, `no_speech_threshold`, `vad_filter`, `condition_on_previous_text`).
+- Huy hiệu hiển thị mô hình (`#vrQnActiveModelTag`, `#vrQnModelBadge`) được đặt ngay trên tiêu đề thẻ "Văn bản thô", cho phép bấm trực tiếp để chuyển nhanh sang tab "Thiết lập".
+
+#### 2. Thu âm liên tục và cơ chế cắt lát theo khoảng lặng
+- Frontend sử dụng `navigator.mediaDevices.getUserMedia` kết hợp `AudioContext` và `AnalyserNode` để đo năng lượng âm thanh theo thời gian thực (chu kỳ 100ms).
+- **Nhận diện khoảng nghỉ dài (Long Pause Detection)**: Khi phát hiện khoảng lặng kéo dài >= 1.4 giây (1400ms) sau khi có tiếng nói, hệ thống xem như đã kết thúc một câu trọn vẹn hoặc một ý mới, tự động chốt lát audio hiện tại và đánh dấu ngắt dòng (`\n`).
+- **Giới hạn thời lượng lát liên tục**: Nếu người dùng nói liên tục không nghỉ quá 12 giây, hệ thống tự động cắt lát để gửi đi nhận dạng nền, nối văn bản bằng dấu cách (`" "`) nhằm giữ độ trễ phản hồi thấp và không bị đầy bộ nhớ đệm.
+- Lát âm thanh được đưa vào hàng đợi tuần tự (`qn.uploadQueue`) và gửi tới endpoint backend `POST /voice-records/quick-stt`.
+
+#### 3. Chống mất dữ liệu khi mất tiêu điểm (Focus / Blur / Tab switch resilience)
+- Trước đây, việc click chuột ra ngoài ô nhập hoặc chuyển sang tab/ứng dụng khác khiến trình duyệt ngắt SpeechRecognition và làm mất phần văn bản đang nói.
+- Với kiến trúc mới qua `MediaRecorder` và backend STT:
+  - Luồng mic thu âm tiếp tục hoạt động liên tục trong tiến trình nền của trình duyệt ngay cả khi tab bị ẩn hoặc cửa sổ mất active.
+  - Ô "Văn bản thô" (`#vrRawInput`) không còn bị khóa `readOnly` trong lúc ghi âm, cho phép người dùng vừa nói vừa chỉnh sửa hoặc click chuột tự do mà không làm gián đoạn tiến trình.
+  - Các sự kiện `input`, `change`, `blur` của ô nhập cùng sự kiện `visibilitychange` và `focus` của cửa sổ được đồng bộ hai chiều mượt mà với biến trạng thái `S.rawText`.
+  - Hàm `appendRawText(base, spoken, endWithNewline)` đảm bảo việc nối văn bản vào ô nhập luôn chính xác theo từng đoạn, tôn trọng ngắt dòng khi có khoảng nghỉ dài.
+
+#### 4. Sử dụng mô hình LLM chuyên trách cho tác vụ chuẩn hóa
+- Khi người dùng bấm "Chuẩn hóa", endpoint `POST /voice-records/normalize` chuyển qua `transcript_fix.normalize_voice_record`.
+- Hàm tự động phân giải mô hình chuẩn hóa đã chỉ định (`normalize_model` và `normalize_model_provider` từ `resolve_normalize_spec(cfg)`).
+- Nếu mô hình chỉ định tạm thời bận hoặc hết quota, hệ thống tự động fallback an toàn qua danh sách các mô hình API khả dụng khác đã cấu hình.
+
+---
+
+---
+
 ## 4. Sơ đồ tuần tự và phụ thuộc giữa các hàm (Sequence & Call Graph)
 
 ### 4.1. Sơ đồ tuần tự: Thu âm, Chia lát & Khởi tạo Job

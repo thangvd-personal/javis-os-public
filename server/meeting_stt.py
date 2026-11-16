@@ -1036,3 +1036,105 @@ def delete_job_log(job_id: str) -> dict[str, Any]:
         "deleted": deleted,
         "freed_bytes": freed_bytes,
     }
+
+
+async def transcribe_clip(audio_bytes: bytes, filename: str = "clip.webm", cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Chuyển thể audio ngắn (quick note) sang văn bản bằng mô hình STT khai báo ở tab Thiết lập.
+
+    Trả {"ok": True, "text": "...", "model": "..."} hoặc {"ok": False, "error": "..."}.
+    """
+    import asyncio
+    import json
+    import uuid
+    import nghe_sua
+
+    if not audio_bytes:
+        return {"ok": False, "error": "Dữ liệu âm thanh rỗng"}
+
+    cfg = cfg or cfgmod.read_settings()
+    mc = get_config(cfg)
+    model = str(mc.get("whisper_model") or "phowhisper-medium").strip()
+    device = str(mc.get("device") or "auto").strip()
+    language = str(mc.get("language") or "vi").strip()
+    stt_params = {
+        "beam_size": mc.get("beam_size", 5),
+        "temperature": mc.get("temperature", 0.0),
+        "no_speech_threshold": mc.get("no_speech_threshold", 0.6),
+        "vad_filter": mc.get("vad_filter", False),
+        "condition_on_previous_text": mc.get("condition_on_previous_text", False),
+    }
+
+    py_exe, py_path = resolve_worker_python(need_diarize=False)
+    if not py_exe or not is_whisper_model_cached(model):
+        try:
+            import local_stt
+            if local_stt.installed():
+                return await local_stt.transcribe(audio_bytes, filename, language)
+        except Exception:
+            pass
+        if not py_exe:
+            return {"ok": False, "error": "Chưa cài đặt bộ công cụ STT"}
+        return {"ok": False, "error": f"Mô hình {model} chưa được tải về"}
+
+    up_dir = uploads_dir()
+    up_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename).suffix or ".webm"
+    tmp_path = up_dir / f"quick_clip_{uuid.uuid4().hex[:12]}{ext}"
+    try:
+        await asyncio.to_thread(tmp_path.write_bytes, audio_bytes)
+        env = worker_env(cfg, extra_pythonpath=py_path)
+        cmd = [
+            py_exe,
+            str(worker_script()),
+            "--transcribe-clip",
+            "--audio", str(tmp_path),
+            "--model", model,
+            "--model-dir", str(models_dir()),
+            "--device", device,
+            "--language", language,
+            "--params-json", json.dumps(stt_params),
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=90.0)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+                await proc.wait()
+            except Exception:
+                pass
+            return {"ok": False, "error": "Quá thời gian chuyển văn bản (Timeout)"}
+
+        lines = (out or b"").decode("utf-8", "replace").splitlines()
+        res = None
+        for line in reversed(lines):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    if data.get("type") == "result":
+                        res = data
+                        break
+                except Exception:
+                    pass
+
+        if not res or not res.get("ok"):
+            err_msg = (res and res.get("error")) or (err or b"").decode("utf-8", "replace")[-300:] or "Lỗi xử lý âm thanh"
+            return {"ok": False, "error": err_msg}
+
+        raw_text = str(res.get("text") or "").strip()
+        tv = nghe_sua.fix_vocabulary(cfg)
+        fixed_text = nghe_sua.sua(raw_text, tv) if raw_text else ""
+        return {"ok": True, "text": fixed_text, "model": model}
+    finally:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+

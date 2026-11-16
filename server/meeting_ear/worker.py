@@ -2132,6 +2132,60 @@ def run_install(mode: str, venv_dir: str, model_dir: str, hf_home: str, model_na
     return 0
 
 
+def run_transcribe_clip(
+    audio_path: str,
+    model_name: str,
+    model_dir: str,
+    device: str = "auto",
+    language: str = "vi",
+    params_json: str = "",
+) -> int:
+    try:
+        p_audio = Path(audio_path)
+        if not p_audio.is_file():
+            emit({"type": "result", "ok": False, "error": f"Audio file not found: {audio_path}"})
+            return 1
+        dev, comp = _pick_whisper_device(device)
+        model = _load_whisper_model(model_name, model_dir, dev, comp)
+        if isinstance(model, tuple):
+            model = model[0]
+        wav_path, is_tmp, err = _ensure_16k_mono_wav(audio_path)
+        if err or not Path(wav_path).is_file():
+            emit({"type": "result", "ok": False, "error": f"Audio conversion failed: {err}"})
+            return 1
+        try:
+            audio_arr = _load_wav_float32(wav_path)
+            stt_params = json.loads(params_json) if params_json else {}
+            transcribe_kwargs: dict[str, Any] = {
+                "language": language if language and language != "auto" else None,
+                "task": "transcribe",
+                "beam_size": int(stt_params.get("beam_size", 5)),
+                "temperature": float(stt_params.get("temperature", 0.0)),
+                "no_speech_threshold": float(stt_params.get("no_speech_threshold", 0.6)),
+                "condition_on_previous_text": bool(stt_params.get("condition_on_previous_text", False)),
+            }
+            if stt_params.get("vad_filter"):
+                transcribe_kwargs["vad_filter"] = True
+            segments_iter, info = model.transcribe(audio_arr, **transcribe_kwargs)
+            text_parts = []
+            for seg in segments_iter:
+                t = str(seg.text or "").strip()
+                if t:
+                    text_parts.append(t)
+            full_text = " ".join(text_parts).strip()
+            emit({"type": "result", "ok": True, "text": full_text, "model": model_name})
+            return 0
+        finally:
+            if is_tmp:
+                try:
+                    Path(wav_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+    except Exception as e:
+        emit({"type": "result", "ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"})
+        return 1
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--install", action="store_true")
@@ -2143,6 +2197,11 @@ def main(argv=None) -> int:
     p.add_argument("--model", default="large-v3-turbo")
     p.add_argument("--run", action="store_true")
     p.add_argument("--diarize-only", action="store_true")
+    p.add_argument("--transcribe-clip", action="store_true")
+    p.add_argument("--audio", default="")
+    p.add_argument("--device", default="auto")
+    p.add_argument("--language", default="vi")
+    p.add_argument("--params-json", default="")
     p.add_argument("--job", default="")
     a = p.parse_args(argv)
     try:
@@ -2158,6 +2217,18 @@ def main(argv=None) -> int:
                 emit({"type": "result", "ok": False, "error": "--job is required with --diarize-only"})
                 return 1
             return run_diarize_only(a.job)
+        if a.transcribe_clip:
+            if not a.audio:
+                emit({"type": "result", "ok": False, "error": "--audio is required with --transcribe-clip"})
+                return 1
+            return run_transcribe_clip(
+                a.audio,
+                a.model,
+                a.model_dir,
+                device=a.device,
+                language=a.language,
+                params_json=a.params_json,
+            )
         p.print_help()
         return 0
     except Exception as e:

@@ -96,6 +96,17 @@
     return base + (/\s$/.test(base) ? "" : " ") + spoken;
   }
 
+  function appendRawText(base, spoken, endWithNewline) {
+    base = String(base == null ? "" : base);
+    spoken = String(spoken == null ? "" : spoken).trim();
+    if (!spoken) return base;
+    if (!base.trim()) return spoken;
+    if (endWithNewline || /\n$/.test(base)) {
+      return base.replace(/[ \t]+$/, "") + (/\n$/.test(base) ? "" : "\n") + spoken;
+    }
+    return base + (/\s$/.test(base) ? "" : " ") + spoken;
+  }
+
   function isBusy(st) {
     var s = (st && st.state) || "idle";
     return s === "starting" || s === "finishing" || s === "normalizing";
@@ -379,6 +390,7 @@
     buildOriginBadge: buildOriginBadge,
     buildStatusBadge: buildStatusBadge,
     joinRawText: joinRawText,
+    appendRawText: appendRawText,
     isBusy: isBusy,
     isMeetingBusy: isMeetingBusy,
     canNormalizeMeeting: canNormalizeMeeting,
@@ -715,8 +727,8 @@
       newBtn.disabled = !canNewRecord(S);
     }
     if (rawEl) {
-      if (rawEl.value !== S.rawText) rawEl.value = S.rawText;
-      rawEl.readOnly = S.locked || S.state !== "idle";
+      if (rawEl.value !== S.rawText && document.activeElement !== rawEl) rawEl.value = S.rawText;
+      rawEl.readOnly = S.locked || S.state === "normalizing";
       rawEl.classList.toggle("is-locked", S.locked);
     }
     if (lockBadge) lockBadge.hidden = !S.locked;
@@ -877,6 +889,12 @@
         : (tw("vr.meeting.model_badge_tip_missing", { model: mName }) || (mName + " (Ch\u01b0a t\u1ea3i v\u1ec1) - " + tw("vr.meeting.model_badge_tip")));
       modelBadge.title = badgeTip;
       if (modelDesc) modelDesc.textContent = mDesc ? "(" + mDesc + ")" : "";
+      var qnBadge = $("vrQnModelBadge");
+      if (qnBadge) {
+        qnBadge.textContent = mName;
+        qnBadge.className = "vr-pill is-clickable " + (isCached ? "is-ok" : "is-warn");
+        qnBadge.title = badgeTip;
+      }
     }
 
     var langSel = $("vrMtLang");
@@ -2029,19 +2047,19 @@
 
   function startRecording() {
     if (!canRecord(S) || S.state !== "idle") return;
-    var D = window.JavisDictate;
-    if (!D || typeof D.create !== "function") {
-      S.errorMsg = errorText("unsupported");
-      syncUi();
-      return;
-    }
+    var rawEl = $("vrRawInput");
+    if (rawEl) S.rawText = rawEl.value;
 
     S.errorMsg = "";
     S.infoNote = "";
     S.baseBeforeTake = S.rawText;
-    S.takeText = "";
-    S.takeCommitted = false;
     S.takeCancelled = false;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      S.errorMsg = errorText("unsupported");
+      syncUi();
+      return;
+    }
 
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
@@ -2049,81 +2067,225 @@
       if (S.ctx && S.ctx.state !== "running" && S.ctx.resume) S.ctx.resume();
     } catch (e) { }
 
-    var live = !(D.isPhoneUA && D.isPhoneUA());
     S.state = "starting";
     syncUi();
 
-    S.dict = D.create({
-      polish: false,
-      onText: function (text, isFinal) {
-        if (!S.mounted || S.takeCancelled) return;
-        S.takeText = String(text || "");
-        if (isFinal) {
-          S.takeCommitted = true;
-          S.rawText = joinRawText(S.baseBeforeTake, S.takeText);
-          syncUi();
-        } else if (live && (S.state === "recording" || S.state === "starting")) {
-          S.rawText = joinRawText(S.baseBeforeTake, S.takeText);
-          var rawEl = $("vrRawInput");
-          if (rawEl) {
-            rawEl.value = S.rawText;
-            rawEl.scrollTop = rawEl.scrollHeight;
-          }
-        }
-      },
-      onState: function (st) {
-        if (!S.mounted) return;
-        if (st === "listening") {
-          S.state = "recording";
-          startClock();
-          syncUi();
-        } else if (st === "transcribing") {
-          stopClock();
-          stopMeter();
-          S.state = "finishing";
-          syncUi();
-        } else if (st === "idle") {
-          stopClock();
-          stopMeter();
-          if (!S.takeCancelled && !S.takeCommitted && S.takeText) {
-            S.rawText = joinRawText(S.baseBeforeTake, S.takeText);
-          }
-          if (S.takeCancelled) {
-            S.rawText = S.baseBeforeTake;
-          }
-          S.state = "idle";
-          S.dict = null;
-          syncUi();
-        }
-      },
-      onError: function (code) {
-        if (!S.mounted) return;
-        S.errorMsg = errorText(code);
-        syncUi();
-      },
-      onStream: function (stream) {
-        startMeter(stream, "vrMeter");
-      },
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      if (!S.mounted || S.takeCancelled) {
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
+        return;
+      }
+      onQuickMicReady(stream);
+    }).catch(function (err) {
+      if (!S.mounted) return;
+      S.state = "idle";
+      S.errorMsg = errorText("denied");
+      syncUi();
     });
+  }
 
-    S.dict.start();
+  function onQuickMicReady(stream) {
+    startMeter(stream, "vrMeter");
+    startClock();
+    S.state = "recording";
+    syncUi();
+
+    var mime = pickAudioMime();
+    var qn = {
+      stream: stream,
+      mime: mime,
+      mr: null,
+      chunks: [],
+      active: true,
+      speaking: false,
+      lastSpeechTime: Date.now(),
+      sliceStartTime: Date.now(),
+      pauseHandled: false,
+      uploadQueue: Promise.resolve(),
+      lastEndedWithNewline: false,
+      analyserTimer: null,
+    };
+    S.qn = qn;
+
+    function startQuickSlice() {
+      if (!qn.active || !qn.stream) return;
+      qn.chunks = [];
+      var opts = qn.mime ? { mimeType: qn.mime } : undefined;
+      try {
+        qn.mr = opts ? new MediaRecorder(qn.stream, opts) : new MediaRecorder(qn.stream);
+      } catch (e) {
+        qn.mr = new MediaRecorder(qn.stream);
+      }
+      qn.sliceStartTime = Date.now();
+      qn.pauseHandled = false;
+      qn.mr.ondataavailable = function (e) {
+        if (e.data && e.data.size > 0) qn.chunks.push(e.data);
+      };
+      try {
+        qn.mr.start();
+      } catch (e) {
+        console.warn("[quick-record] start slice error:", e);
+      }
+    }
+
+    function commitQuickSlice(endWithNewline) {
+      if (!qn.mr || qn.mr.state === "inactive") return;
+      var mr = qn.mr;
+      qn.mr = null;
+      mr.onstop = function () {
+        if (qn.chunks.length > 0) {
+          var blob = new Blob(qn.chunks, { type: qn.mime || "audio/webm" });
+          qn.chunks = [];
+          if (blob.size >= 1500) {
+            enqueueQuickSlice(blob, endWithNewline);
+          }
+        }
+        if (qn.active) {
+          startQuickSlice();
+        }
+      };
+      try { mr.stop(); } catch (e) { }
+    }
+
+    startQuickSlice();
+
+    qn.analyserTimer = setInterval(function () {
+      if (!qn.active) return;
+      var now = Date.now();
+      var lvl = 0;
+      if (S.buf && S.buf.length) {
+        lvl = levelOf(S.buf);
+      }
+      var SPEECH_THRESH = 0.07;
+      if (lvl >= SPEECH_THRESH) {
+        qn.speaking = true;
+        qn.lastSpeechTime = now;
+        qn.pauseHandled = false;
+      } else {
+        var silenceMs = now - qn.lastSpeechTime;
+        // Khoảng nghỉ dài: im lặng >= 1400ms sau khi nói -> hoàn thành câu, xuống dòng
+        if (qn.speaking && silenceMs >= 1400 && !qn.pauseHandled) {
+          qn.pauseHandled = true;
+          qn.speaking = false;
+          commitQuickSlice(true);
+        }
+      }
+      // Nếu nói liên tục không nghỉ > 12s: cắt lát gửi dần để văn bản ghi liên tục
+      if (qn.speaking && now - qn.sliceStartTime >= 12000 && !qn.pauseHandled) {
+        commitQuickSlice(false);
+      }
+    }, 100);
+  }
+
+  function enqueueQuickSlice(blob, endWithNewline) {
+    var qn = S.qn;
+    if (!qn) return;
+    qn.uploadQueue = qn.uploadQueue.then(function () {
+      var fd = new FormData();
+      var ext = extFromMime(blob.type);
+      fd.append("file", blob, "quick_slice" + ext);
+      return fetch("/voice-records/quick-stt", {
+        method: "POST",
+        credentials: "same-origin",
+        body: fd,
+      }).then(function (r) {
+        return r.json();
+      }).then(function (res) {
+        if (!S.mounted || !res || !res.ok || !res.text) return;
+        var spoken = String(res.text || "").trim();
+        if (!spoken) return;
+
+        var rawEl = $("vrRawInput");
+        var current = (rawEl && rawEl.value) || S.rawText || "";
+        current = current.trim();
+
+        var next = appendRawText(current, spoken, qn.lastEndedWithNewline);
+        qn.lastEndedWithNewline = endWithNewline;
+
+        S.rawText = next;
+        if (rawEl) {
+          rawEl.value = next;
+          rawEl.scrollTop = rawEl.scrollHeight;
+        }
+        var nb = $("vrBtnNormalize");
+        if (nb) nb.disabled = !canNormalize(S);
+      }).catch(function (err) {
+        console.warn("[quick-stt] slice upload failed:", err);
+      });
+    });
   }
 
   function stopRecording() {
-    if (S.dict && (S.state === "recording" || S.state === "starting")) {
-      S.dict.stop();
+    var qn = S.qn;
+    if (!qn || !qn.active) return;
+    qn.active = false;
+    if (qn.analyserTimer) {
+      clearInterval(qn.analyserTimer);
+      qn.analyserTimer = null;
     }
+    stopClock();
+    stopMeter();
+
+    if (qn.stream) {
+      try { qn.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
+    }
+
+    S.state = "finishing";
+    syncUi();
+
+    var finishPromise = Promise.resolve();
+    if (qn.mr && qn.mr.state !== "inactive") {
+      finishPromise = new Promise(function (resolve) {
+        qn.mr.onstop = function () {
+          if (qn.chunks.length > 0) {
+            var blob = new Blob(qn.chunks, { type: qn.mime || "audio/webm" });
+            qn.chunks = [];
+            if (blob.size >= 1500) {
+              enqueueQuickSlice(blob, true);
+            }
+          }
+          resolve();
+        };
+        try { qn.mr.stop(); } catch (e) { resolve(); }
+      });
+    }
+
+    finishPromise.then(function () {
+      return qn.uploadQueue;
+    }).finally(function () {
+      S.qn = null;
+      S.state = "idle";
+      syncUi();
+      var rawEl = $("vrRawInput");
+      if (rawEl) {
+        rawEl.value = S.rawText;
+      }
+    });
   }
 
   function cancelCurrentTake() {
-    if (!S.dict || S.state !== "recording") return;
-    S.takeCancelled = true;
-    S.rawText = S.baseBeforeTake;
+    var qn = S.qn;
+    if (qn) {
+      qn.active = false;
+      if (qn.analyserTimer) {
+        clearInterval(qn.analyserTimer);
+        qn.analyserTimer = null;
+      }
+      if (qn.mr && qn.mr.state !== "inactive") {
+        try { qn.mr.stop(); } catch (e) { }
+      }
+      if (qn.stream) {
+        try { qn.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { }
+      }
+      S.qn = null;
+    }
     stopClock();
     stopMeter();
-    S.dict.cancel();
+    S.takeCancelled = true;
+    S.rawText = S.baseBeforeTake || "";
+    var rawEl = $("vrRawInput");
+    if (rawEl) rawEl.value = S.rawText;
     S.state = "idle";
-    S.dict = null;
     syncUi();
   }
 
@@ -3207,6 +3369,9 @@
       '<div class="vr-card-head">' +
       '<div class="vr-card-title">' + esc(tw("vr.raw.title")) + "</div>" +
       '<div class="vr-card-meta">' +
+      '<span class="vr-active-model-tag" id="vrQnActiveModelTag" style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text2); cursor:pointer;" title="' + esc(tw("vr.meeting.model_badge_tip")) + '">' +
+      ico("cpu") + ' <button type="button" class="vr-pill is-ok is-clickable" id="vrQnModelBadge" style="cursor:pointer; font-size:11.5px; padding:2px 8px;">PhoWhisper Medium</button>' +
+      "</span>" +
       '<span class="vr-live-hint" id="vrLiveHint" hidden>' + esc(tw("vr.raw.live")) + "</span>" +
       '<span class="vr-badge-lock" id="vrLockBadge" hidden>' + ico("lock") + " " + esc(tw("vr.raw.locked_badge")) + "</span>" +
       "</div>" +
@@ -3674,13 +3839,26 @@
     if (newBtn) newBtn.onclick = resetNewRecording;
     if (reopenBtn) reopenBtn.onclick = function () { if (S.activeRecord) openRecordInEditor(S.activeRecord, { switchTab: false }); };
     if (rawEl) {
-      rawEl.addEventListener("input", function () {
-        if (S.locked || S.state !== "idle") return;
+      function syncFromInput() {
+        if (S.locked) return;
         S.rawText = rawEl.value;
         var nb = $("vrBtnNormalize");
         if (nb) nb.disabled = !canNormalize(S);
-      });
+      }
+      rawEl.addEventListener("input", syncFromInput);
+      rawEl.addEventListener("change", syncFromInput);
+      rawEl.addEventListener("blur", syncFromInput);
     }
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden && rawEl && S.state !== "recording") {
+        if (rawEl.value !== S.rawText) rawEl.value = S.rawText;
+      }
+    });
+    window.addEventListener("focus", function () {
+      if (rawEl && S.state !== "recording") {
+        if (rawEl.value !== S.rawText) rawEl.value = S.rawText;
+      }
+    });
 
     // Meeting handlers
     var mtCfgBtn = $("vrMtBtnConfig");
@@ -3759,6 +3937,16 @@
           onGoSettings();
         }
       };
+      var qnModelTag = $("vrQnActiveModelTag");
+      if (qnModelTag) {
+        qnModelTag.onclick = onGoSettings;
+        qnModelTag.onkeydown = function (ev) {
+          if (ev && (ev.key === "Enter" || ev.key === " ")) {
+            ev.preventDefault();
+            onGoSettings();
+          }
+        };
+      }
     }
     var btnGoSetModel = $("vrMtBtnGoSettingsModel");
     if (btnGoSetModel) btnGoSetModel.onclick = function () { S.tab = "settings"; syncUi(); };
@@ -4289,6 +4477,13 @@
     stopJobPolling();
     stopInstallPolling();
     stopQueuePolling();
+    if (S.qn) {
+      S.qn.active = false;
+      if (S.qn.analyserTimer) { clearInterval(S.qn.analyserTimer); S.qn.analyserTimer = null; }
+      if (S.qn.mr && S.qn.mr.state !== "inactive") { try { S.qn.mr.stop(); } catch (e) { } }
+      if (S.qn.stream) { try { S.qn.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { } }
+      S.qn = null;
+    }
     if (S.dict) {
       try { S.dict.cancel(); } catch (e) { }
       S.dict = null;

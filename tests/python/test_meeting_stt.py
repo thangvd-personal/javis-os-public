@@ -657,6 +657,33 @@ client.post("/voice-records/meeting/config", json={
 check("resolve_normalize_spec returns None when reset to default",
       transcript_fix.resolve_normalize_spec(main.cfgmod.read_settings()) is None)
 
+# Test Quick Note STT endpoint /voice-records/quick-stt
+r_quick_empty = client.post("/voice-records/quick-stt", files={"file": ("test.webm", b"", "audio/webm")})
+check("POST /voice-records/quick-stt with empty file returns 400", r_quick_empty.status_code == 400)
+
+_orig_transcribe_clip = meeting_stt.transcribe_clip
+
+
+async def _mock_transcribe_clip(data, filename="quick.webm", cfg=None):
+    if b"bad" in data:
+        return {"ok": False, "error": "STT clip failed"}
+    return {"ok": True, "text": "Hôm nay chúng ta họp bàn về dự án", "model": "phowhisper-medium"}
+
+meeting_stt.transcribe_clip = _mock_transcribe_clip
+
+r_quick_ok = client.post("/voice-records/quick-stt", files={"file": ("clip.webm", b"dummy_audio_bytes", "audio/webm")})
+check("POST /voice-records/quick-stt returns 200 and transcribed text with model",
+      r_quick_ok.status_code == 200
+      and r_quick_ok.json().get("ok") is True
+      and r_quick_ok.json().get("text") == "Hôm nay chúng ta họp bàn về dự án"
+      and r_quick_ok.json().get("model") == "phowhisper-medium")
+
+r_quick_err = client.post("/voice-records/quick-stt", files={"file": ("clip.webm", b"bad_audio_data", "audio/webm")})
+check("POST /voice-records/quick-stt on STT error returns 500",
+      r_quick_err.status_code == 500 and r_quick_err.json().get("ok") is False)
+
+meeting_stt.transcribe_clip = _orig_transcribe_clip
+
 # Cleanup mocks and temp dirs
 main.cfgmod.gate_active = _orig_gate
 voice_records.get_store = _orig_store_get

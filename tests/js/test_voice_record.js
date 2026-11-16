@@ -434,9 +434,27 @@ check("settings pane includes LLM normalization model picker and fallback suppor
 
 
 
+// 17. Quick Note continuous STT & model badge wiring
+check("appendRawText appends with space when false and newline when true",
+  VR.appendRawText("", "xin chào", false) === "xin chào"
+  && VR.appendRawText("câu một", "câu hai", false) === "câu một câu hai"
+  && VR.appendRawText("câu một", "câu hai", true) === "câu một\ncâu hai"
+  && VR.appendRawText("câu một\n", "câu hai", false) === "câu một\ncâu hai"
+  && VR.appendRawText("câu một  ", "câu hai", true) === "câu một\ncâu hai");
+
+check("Quick Note wires shared STT model badge and continuous backend STT",
+  vrJsSrc.includes('id="vrQnActiveModelTag"')
+  && vrJsSrc.includes('id="vrQnModelBadge"')
+  && vrJsSrc.includes('/voice-records/quick-stt')
+  && vrJsSrc.includes('appendRawText')
+  && vrJsSrc.includes('onQuickMicReady')
+  && vrJsSrc.includes('blur')
+  && vrJsSrc.includes('visibilitychange'));
+
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);
   process.exit(1);
 }
 console.log("\nOK - voice_record");
+
 

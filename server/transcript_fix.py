@@ -641,10 +641,10 @@ async def normalize_voice_record(cfg: dict, text: str) -> dict:
     terms = _terms(cfg)
     by_rules = _apply_rules_multiline(original, terms)
     prompt = build_normalize_prompt(by_rules, terms)
-    main = [("main", lambda: asyncio.wait_for(_ASK(prompt), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
+    norm_spec = resolve_normalize_spec(cfg)
+    main = [("main", lambda: asyncio.wait_for(_ASK(prompt, spec=norm_spec), NORMALIZE_MAIN_TIMEOUT_S))] if _ASK is not None else []
     pick = pick_quick_api(cfg or {})
     quick = [(pick[0], lambda: _ask_normalize_api(pick, prompt, by_rules))] if pick is not None else []
-    norm_spec = resolve_normalize_spec(cfg)
     if norm_spec and (norm_spec.get("provider") or norm_spec.get("model")):
         tries = main + quick
     else:

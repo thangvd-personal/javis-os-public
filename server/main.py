@@ -20277,6 +20277,19 @@ def voice_meeting_logs_clean():
     return meeting_stt.clean_all_logs()
 
 
+@app.post("/voice-records/quick-stt")
+async def voice_records_quick_stt(file: UploadFile = File(...)):
+    """Chuyen the audio ghi chu nhanh sang van ban bang mo hinh STT khai bao o tab Thiet lap."""
+    data = await file.read()
+    if not data:
+        return JSONResponse({"ok": False, "error": localefmt.chu("File âm thanh rỗng", "Empty audio file")}, status_code=400)
+    cfg = cfgmod.read_settings()
+    res = await meeting_stt.transcribe_clip(data, filename=file.filename or "quick.webm", cfg=cfg)
+    if not res.get("ok"):
+        return JSONResponse({"ok": False, "error": res.get("error") or "STT failed"}, status_code=500)
+    return res
+
+
 @app.post("/voice-records/normalize")
 async def voice_records_normalize(request: Request):
     """Save raw voice transcript to SQLite audit first, normalize grammar, write VoiceRecord/YYYY.MM.DD-HH.MM.SS.md."""
