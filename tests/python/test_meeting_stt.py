@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -683,6 +684,66 @@ check("POST /voice-records/quick-stt on STT error returns 500",
       r_quick_err.status_code == 500 and r_quick_err.json().get("ok") is False)
 
 meeting_stt.transcribe_clip = _orig_transcribe_clip
+
+# Test DELETE /voice-records/{record_id} cascading deletion
+r_del_404 = client.delete("/voice-records/non_existent_rec_id")
+check("DELETE /voice-records/{id} with invalid id returns 404", r_del_404.status_code == 404)
+
+# Create dummy job, audio file, markdown file, log file
+dummy_del_jid = "del_job_" + uuid.uuid4().hex[:8] if "uuid" in globals() else "del_job_12345"
+aud_dir = _STATE / "meeting-audio"
+aud_dir.mkdir(parents=True, exist_ok=True)
+dummy_audio_file = aud_dir / f"{dummy_del_jid}.webm"
+dummy_audio_file.write_bytes(b"dummy audio content to be deleted")
+
+vr_dir = _BRAIN / "VoiceRecord"
+vr_dir.mkdir(parents=True, exist_ok=True)
+dummy_note_file = vr_dir / "2026.11.16-test_delete.md"
+dummy_note_file.write_text("# Meeting Note to be deleted\nContent", encoding="utf-8")
+
+dummy_log_dir = _STATE / "meeting-logs" / f"2026.11.16-{dummy_del_jid}"
+dummy_log_dir.mkdir(parents=True, exist_ok=True)
+dummy_log_file = dummy_log_dir / "execution.log"
+dummy_log_file.write_text("dummy worker logs", encoding="utf-8")
+
+dummy_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Job to be deleted",
+    status="done",
+    created_at=time.time(),
+    created_iso="2026-11-16T12:00:00+07:00",
+)
+store.update_job(dummy_job["id"], audio_path=str(dummy_audio_file), log_path=str(dummy_log_file), pinned=1)
+
+dummy_rec = store.create_raw(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    raw_text="[00:00 - SPEAKER_00] Bản ghi thử nghiệm xóa",
+    file_path="VoiceRecord/2026.11.16-test_delete.md",
+    ceil_path="VoiceRecord/2026.11.16-test_delete.md",
+    mode="meeting",
+    job_id=dummy_job["id"],
+    audio_path=str(dummy_audio_file),
+    pinned=True,
+)
+
+check("dummy_rec exists in store before delete", store.get(dummy_rec["id"]) is not None)
+check("dummy_audio_file exists before delete", dummy_audio_file.is_file())
+check("dummy_note_file exists before delete", dummy_note_file.is_file())
+check("dummy_log_file exists before delete", dummy_log_file.is_file())
+
+r_del_ok = client.delete(f"/voice-records/{dummy_rec['id']}")
+check("DELETE /voice-records/{record_id} returns 200 with deleted=True",
+      r_del_ok.status_code == 200
+      and r_del_ok.json().get("ok") is True
+      and r_del_ok.json().get("deleted") is True)
+
+check("dummy_rec deleted from database", store.get(dummy_rec["id"]) is None)
+check("linked dummy_job deleted from database", store.get_job(dummy_job["id"]) is None)
+check("dummy_audio_file deleted from filesystem (even though pinned)", not dummy_audio_file.exists())
+check("dummy_note_file deleted from filesystem", not dummy_note_file.exists())
+check("dummy_log_file/dir deleted from filesystem", not dummy_log_dir.exists())
 
 # Cleanup mocks and temp dirs
 main.cfgmod.gate_active = _orig_gate

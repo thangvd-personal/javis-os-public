@@ -20364,6 +20364,112 @@ def voice_record_detail(record_id: str):
     return {"ok": True, "record": voice_records.public_record(rec)}
 
 
+@app.delete("/voice-records/{record_id}")
+@app.post("/voice-records/{record_id}/delete")
+async def voice_record_delete(record_id: str):
+    """Xóa vĩnh viễn một bản ghi và toàn bộ nội dung liên quan (tệp audio, ghi chú, nhật ký, dữ liệu database)."""
+    store = voice_records.get_store()
+    rec = store.get(record_id)
+    if not rec:
+        return JSONResponse({"ok": False, "error": localefmt.chu("Không tìm thấy bản ghi", "Voice record not found")}, status_code=404)
+
+    job_id = str(rec.get("job_id") or "").strip()
+    job_rec = store.get_job(job_id) if job_id else None
+    if not job_rec:
+        job_rec = store.get_job_by_record(record_id)
+    if job_rec and not job_id:
+        job_id = str(job_rec.get("id") or "").strip()
+
+    # 1. Xóa tệp văn bản ghi chú Markdown
+    rel = str(rec.get("file_path") or "").strip()
+    if rel:
+        try:
+            p = Path(rel)
+            if p.is_file():
+                p.unlink(missing_ok=True)
+            else:
+                target = _record_target_file(rec)
+                if target.is_file():
+                    target.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # 2. Xóa tệp âm thanh ghi âm (kể cả trường hợp có ghim giữ lại)
+    audio_paths = set()
+    if rec.get("audio_path"):
+        audio_paths.add(str(rec["audio_path"]))
+    if job_rec and job_rec.get("audio_path"):
+        audio_paths.add(str(job_rec["audio_path"]))
+
+    for ap_str in audio_paths:
+        ap = Path(ap_str)
+        if not ap.is_absolute():
+            ap = Path(cfgmod.STATE_DIR) / ap_str
+        try:
+            if ap.is_file():
+                ap.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Quét dọn thêm các tệp âm thanh trùng mã trong meeting-audio
+    try:
+        aud_dir = meeting_stt.audio_dir()
+        if aud_dir.is_dir():
+            for f in aud_dir.iterdir():
+                if f.is_file() and (f.name.startswith(record_id) or (job_id and f.name.startswith(job_id))):
+                    try:
+                        f.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    # 3. Xóa các tệp nhật ký xử lý và debug artifacts
+    if job_id:
+        try:
+            meeting_stt.delete_job_log(job_id)
+        except Exception:
+            pass
+    if job_rec and job_rec.get("id") and job_rec["id"] != job_id:
+        try:
+            meeting_stt.delete_job_log(job_rec["id"])
+        except Exception:
+            pass
+
+    try:
+        logs_base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+        if logs_base.is_dir():
+            for d in logs_base.iterdir():
+                if d.is_dir() and (record_id in d.name or (job_id and job_id in d.name)):
+                    shutil.rmtree(d, ignore_errors=True)
+    except Exception:
+        pass
+
+    # 4. Xóa tệp chunk uploads nếu còn sót
+    try:
+        up_base = meeting_stt.uploads_dir()
+        if up_base.is_dir():
+            if job_id:
+                shutil.rmtree(up_base / job_id, ignore_errors=True)
+            shutil.rmtree(up_base / record_id, ignore_errors=True)
+    except Exception:
+        pass
+
+    # 5. Dọn cache normalize progress
+    _MEETING_NORM_PROGRESS.pop(record_id, None)
+    if job_id:
+        _MEETING_NORM_PROGRESS.pop(job_id, None)
+
+    # 6. Xóa khỏi database
+    deleted_rec = store.delete_record(record_id)
+    return {
+        "ok": True,
+        "record_id": record_id,
+        "deleted": bool(deleted_rec),
+        "message": localefmt.chu("Đã xóa bản ghi thành công", "Voice record deleted successfully"),
+    }
+
+
 @app.post("/voice-records/{record_id}/speakers")
 async def voice_record_map_speakers(record_id: str, request: Request):
     store = voice_records.get_store()

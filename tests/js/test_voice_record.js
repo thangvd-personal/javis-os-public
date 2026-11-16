@@ -451,6 +451,20 @@ check("Quick Note wires shared STT model badge and continuous backend STT",
   && vrJsSrc.includes('blur')
   && vrJsSrc.includes('visibilitychange'));
 
+// 18. Record history delete CTA & confirmation wiring
+check("Record history items include delete CTA icon with confirmation and full cascading deletion",
+  vrJsSrc.includes('class="vr-hist-btn-del"')
+  && vrJsSrc.includes('data-del-vrid=')
+  && vrJsSrc.includes('deleteRecord(')
+  && vrJsSrc.includes('confirm_delete')
+  && consoleCss.includes('.vr-hist-btn-del')
+  && viJson["vr.history.btn_delete_tip"] === "Xóa bản ghi"
+  && enJson["vr.history.btn_delete_tip"] === "Delete record"
+  && viJson["vr.history.confirm_delete"].includes("xóa vĩnh viễn")
+  && enJson["vr.history.confirm_delete"].includes("permanently delete")
+  && viJson["vr.history.deleted_ok"]
+  && enJson["vr.history.deleted_ok"]);
+
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);
   process.exit(1);

@@ -1766,6 +1766,20 @@
     }
   }
 
+  function notify(msg, type) {
+    if (!msg) return;
+    if (typeof window !== "undefined" && typeof window.toast === "function") {
+      window.toast(msg, type === "err");
+    } else if (typeof window !== "undefined" && typeof window.showToast === "function") {
+      window.showToast(msg, type === "err");
+    } else if (type === "err") {
+      if (typeof alert === "function") alert(msg);
+      else console.error("[VR]", msg);
+    } else {
+      console.log("[VR]", msg);
+    }
+  }
+
   async function deleteJobLog(jobId) {
     try {
       var r = await fetch("/voice-records/meeting/jobs/" + encodeURIComponent(jobId) + "/log", {
@@ -1972,27 +1986,109 @@
       var isMt = r.mode === "meeting";
       var snippet = String(r.raw_text || "").replace(/\s+/g, " ").trim();
       if (snippet.length > 120) snippet = snippet.slice(0, 120) + "...";
-      return '<button type="button" class="vr-hist-item' + act + '" data-vrid="' + esc(r.id) + '">' +
+      return '<div class="vr-hist-item' + act + '" data-vrid="' + esc(r.id) + '" role="button" tabindex="0">' +
         '<div class="vr-hist-top">' +
         (isMt
           ? '<span class="vr-hist-badge">' + esc(tw("vr.hist.badge_meeting") + (r.duration_sec ? " · " + fmtTime(r.duration_sec) : "")) + "</span>"
-          : '<span class="vr-hist-file">' + ico("file-text") + " <span>" + esc(basename(r.file_path) || r.file_path) + "</span></span>" +
-            '<span class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</span>"
+          : '<span class="vr-hist-file">' + ico("file-text") + " <span>" + esc(basename(r.file_path) || r.file_path) + "</span></span>"
         ) +
+        '<button type="button" class="vr-hist-btn-del" data-del-vrid="' + esc(r.id) + '" title="' + esc(tw("vr.history.btn_delete_tip") || "Xóa bản ghi") + '" aria-label="' + esc(tw("vr.history.btn_delete_tip") || "Xóa bản ghi") + '">' +
+        ico("trash-2") +
+        "</button>" +
         "</div>" +
-        (isMt ? '<div class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</div>" : "") +
+        '<div class="vr-hist-time">' + esc(fmtDateLabel(r.created_iso)) + "</div>" +
         '<div class="vr-hist-raw">' + esc(snippet) + "</div>" +
-        "</button>";
+        "</div>";
     }).join("");
 
-    list.querySelectorAll(".vr-hist-item").forEach(function (btn) {
-      btn.onclick = function () {
+    list.querySelectorAll(".vr-hist-item").forEach(function (item) {
+      item.onclick = function (e) {
+        if (e.target && (e.target.closest(".vr-hist-btn-del") || (e.target.classList && e.target.classList.contains("vr-hist-btn-del")))) {
+          return;
+        }
         if (isBusy(S) || S.state === "recording" || isMeetingBusy(S.mt)) return;
-        var id = btn.getAttribute("data-vrid");
+        var id = item.getAttribute("data-vrid");
         var rec = S.history.find(function (x) { return x.id === id; });
         if (rec) openRecordInEditor(rec);
       };
+      item.onkeydown = function (e) {
+        if (e.target && (e.target.closest(".vr-hist-btn-del") || (e.target.classList && e.target.classList.contains("vr-hist-btn-del")))) {
+          return;
+        }
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          item.click();
+        }
+      };
     });
+
+    list.querySelectorAll(".vr-hist-btn-del").forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = btn.getAttribute("data-del-vrid");
+        if (!id) return;
+        if (isBusy(S) || S.state === "recording" || (S.mt && S.mt.recState === "recording")) {
+          notify(tw("vr.history.cannot_delete_busy") || "Không thể xóa bản ghi khi đang thu âm.", "err");
+          return;
+        }
+        var msg = tw("vr.history.confirm_delete") ||
+          "Bạn có chắc chắn muốn xóa bản ghi này?\n\nThao tác này sẽ xóa vĩnh viễn toàn bộ nội dung liên quan đã lưu trước đó (tệp âm thanh ghi âm, tệp văn bản ghi chú, các tệp nhật ký xử lý...), kể cả trường hợp có ghim giữ lại tệp âm thanh.";
+        if (!window.confirm(msg)) return;
+        deleteRecord(id);
+      };
+    });
+  }
+
+  async function deleteRecord(recordId) {
+    if (!recordId) return;
+    try {
+      var res = await fetch("/voice-records/" + encodeURIComponent(recordId), {
+        method: "DELETE"
+      });
+      if (!res.ok && res.status !== 404) {
+        res = await fetch("/voice-records/" + encodeURIComponent(recordId) + "/delete", {
+          method: "POST"
+        });
+      }
+      var d = await res.json().catch(function () { return {}; });
+      if (!res.ok || (d && d.ok === false)) {
+        var err = (d && d.error) || tw("common.error");
+        notify(tw("vr.history.delete_failed", { err: err }), "err");
+        return;
+      }
+
+      S.history = S.history.filter(function (x) { return x.id !== recordId; });
+
+      if (S.activeRecord && S.activeRecord.id === recordId) {
+        try {
+          if (window.JavisNoteEditor && typeof window.JavisNoteEditor.closeInSlot === "function") {
+            window.JavisNoteEditor.closeInSlot();
+          }
+        } catch (e) { }
+        S.activeRecord = null;
+        S.mt.sourceTexts = null;
+        S.mt.reviewQueue = [];
+        S.mt.reviewQueueRecordId = "";
+        S.mt.speakerDraft = {};
+        S.editorClosed = false;
+        if (S.tab === "quick") {
+          S.locked = false;
+          S.rawText = "";
+          S.baseBeforeTake = "";
+          S.takeText = "";
+        }
+      }
+
+      syncUi();
+      notify(tw("vr.history.deleted_ok"), "ok");
+      if (S.tab === "settings") {
+        fetchLogsStats();
+        fetchMeetingQueue();
+      }
+    } catch (e) {
+      notify(tw("vr.history.delete_failed", { err: String(e && e.message ? e.message : e) }), "err");
+    }
   }
 
   function openRecordInEditor(rec, opts) {

@@ -792,6 +792,21 @@ class VoiceRecordStore:
             row = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
         return _row_to_dict(row)
 
+    def delete_record(self, record_id: str) -> dict[str, Any] | None:
+        """Xóa bản ghi và các job liên quan trong database. Trả về dict bản ghi vừa xóa hoặc None."""
+        with self._lock:
+            row = self._db.execute("SELECT * FROM voice_records WHERE id=?", (record_id,)).fetchone()
+            if not row:
+                return None
+            rec = _row_to_dict(row)
+            self._db.execute("DELETE FROM voice_records WHERE id=?", (record_id,))
+            job_id = rec.get("job_id") if rec else None
+            if job_id:
+                self._db.execute("DELETE FROM meeting_jobs WHERE id=?", (job_id,))
+            self._db.execute("DELETE FROM meeting_jobs WHERE record_id=?", (record_id,))
+            self._db.commit()
+            return rec
+
     def list_for_brain(
         self,
         brain: str = "",

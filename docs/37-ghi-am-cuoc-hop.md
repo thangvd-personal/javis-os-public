@@ -112,6 +112,7 @@ Dưới đây là ma trận ánh xạ chi tiết giữa từng giai đoạn nghi
 | **19. Xử lý câu cần duyệt** | `handleReviewAction()` | `POST /.../review-queue/{seg}/action` | `voice_record_review_action()` | `server/main.py` | Item updated | In: `{ action: "accept" / "revert" / "add_hotword" }`<br>Out: Updated `.md` & `voice.hotwords` |
 | **20. Khôi phục bản thô** | `restoreMeetingRaw()` | `POST /voice-records/{id}/restore-raw` | `store.restore_diarized_raw()` | `server/main.py` | Record restored | In: `{ title }`<br>Out: File restored to raw text |
 | **21. Xuất file đa định dạng** | Click export button | `GET /voice-records/{id}/export?format=` | `export_meeting_transcript()` | `server/voice_records.py` | Export stream | In: format (`srt`, `vtt`, `txt`, `json`)<br>Out: Downloadable File stream |
+| **22. Xóa toàn diện bản ghi** | `deleteRecord()` | `DELETE /voice-records/{id}`<br>`POST /voice-records/{id}/delete` | `voice_record_delete()` | `server/main.py` -> `voice_records.py` | Record deleted | In: Record ID<br>Out: Xóa file audio (kể cả ghim), file note, log, SQLite |
 
 ---
 
@@ -347,6 +348,29 @@ Nhằm mang lại trải nghiệm đồng bộ và độ chính xác nhận dạ
 - Khi người dùng bấm "Chuẩn hóa", endpoint `POST /voice-records/normalize` chuyển qua `transcript_fix.normalize_voice_record`.
 - Hàm tự động phân giải mô hình chuẩn hóa đã chỉ định (`normalize_model` và `normalize_model_provider` từ `resolve_normalize_spec(cfg)`).
 - Nếu mô hình chỉ định tạm thời bận hoặc hết quota, hệ thống tự động fallback an toàn qua danh sách các mô hình API khả dụng khác đã cấu hình.
+
+---
+
+### 3.6. Xóa toàn diện bản ghi (Full Cascading Deletion)
+
+Để hỗ trợ người dùng dọn dẹp dung lượng lưu trữ và kiểm soát dữ liệu cuộc họp/ghi chú, hệ thống cung cấp tính năng xóa toàn diện:
+
+#### 1. Nút CTA xóa trên góc phải từng thẻ bản ghi
+- Trong danh sách "Lịch sử ghi âm" (`#vrHistoryList`), mỗi thẻ bản ghi được trang bị nút biểu tượng thùng rác (`.vr-hist-btn-del`) ở góc phải trên cùng.
+- Nút này hỗ trợ ngăn chặn sự kiện nổi bọt (`e.stopPropagation()`) để khi người dùng click xóa sẽ không vô tình kích hoạt sự kiện mở bản ghi vào trình soạn thảo.
+
+#### 2. Hộp thoại xác nhận an toàn (Confirmation Prompt)
+- Do thao tác xóa mang tính chất vĩnh viễn và không thể hoàn tác, hệ thống hiển thị thông báo xác nhận rõ ràng trước khi thực hiện.
+- Cảnh báo chi tiết tới người dùng rằng thao tác này sẽ xóa toàn bộ các thành phần liên quan, kể cả khi tệp âm thanh đang được bật chế độ ghim giữ lại (`pinned = 1`).
+
+#### 3. Quy trình dọn dẹp phân tầng phía Backend (`DELETE /voice-records/{record_id}`)
+Khi yêu cầu được gửi tới server, hàm `voice_record_delete` tiến hành dọn dẹp triệt để theo các lớp:
+1. **Tệp ghi chú Markdown**: Xóa tệp ghi chú trong `<brain>/VoiceRecord/*.md`.
+2. **Tệp âm thanh**: Xóa tệp âm thanh trong `<STATE_DIR>/meeting-audio/` (kể cả tệp đã ghim).
+3. **Nhật ký & Tạo tác gỡ lỗi**: Xóa toàn bộ thư mục log liên kết trong `<STATE_DIR>/meeting-logs/` cùng các file artifact (`whisper_output.json`, `diarization_output.json`...).
+4. **Staging Uploads**: Xóa các file cắt lát dở dang trong `<STATE_DIR>/meeting-uploads/` nếu có.
+5. **Bộ nhớ tạm thời**: Giải phóng các tiến trình theo dõi chuẩn hóa trong `_MEETING_NORM_PROGRESS`.
+6. **Cơ sở dữ liệu SQLite**: Xóa bản ghi trong bảng `voice_records` và xóa tác vụ tương ứng trong `meeting_jobs`.
 
 ---
 
