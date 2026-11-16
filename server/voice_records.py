@@ -125,6 +125,7 @@ _MJ_EXTRA_COLS = (
     ("elapsed_sec", "REAL NOT NULL DEFAULT 0"),
     ("log_path", "TEXT NOT NULL DEFAULT ''"),
     ("vad_filter", "INTEGER NOT NULL DEFAULT 0"),
+    ("stt_params_json", "TEXT NOT NULL DEFAULT '{}'"),
 )
 
 
@@ -531,6 +532,7 @@ def _job_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
         "elapsed_sec": float(row["elapsed_sec"]) if "elapsed_sec" in keys else 0.0,
         "log_path": row["log_path"] if "log_path" in keys else "",
         "vad_filter": bool(row["vad_filter"]) if "vad_filter" in keys else False,
+        "stt_params": _loads(row["stt_params_json"], {}) if "stt_params_json" in keys else {},
     }
 
 
@@ -855,17 +857,19 @@ class VoiceRecordStore:
         elapsed_sec: float = 0.0,
         log_path: str = "",
         vad_filter: bool = False,
+        stt_params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         jid = uuid.uuid4().hex
         now_ts = float(created_at if created_at is not None else time.time())
+        stt_p_json = json.dumps(stt_params or {}, ensure_ascii=False)
         with self._lock:
             self._db.execute(
                 "INSERT INTO meeting_jobs "
                 "(id, created_at, created_iso, updated_at, brain, brain_path, title, status, progress, "
                 "stage_detail, upload_mode, file_ext, model, device, language, diarize, "
                 "num_speakers, min_speakers, max_speakers, total_chunks, received_chunks, audio_path, record_id, pinned, "
-                "origin, job_type, duration_sec, estimated_sec, started_at, started_iso, finished_at, finished_iso, elapsed_sec, log_path, vad_filter) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "origin, job_type, duration_sec, estimated_sec, started_at, started_iso, finished_at, finished_iso, elapsed_sec, log_path, vad_filter, stt_params_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     jid,
                     now_ts,
@@ -899,6 +903,7 @@ class VoiceRecordStore:
                     float(elapsed_sec or 0.0),
                     str(log_path or ""),
                     1 if vad_filter else 0,
+                    stt_p_json,
                 ),
             )
             self._db.commit()
@@ -927,12 +932,14 @@ class VoiceRecordStore:
             "pinned", "record_id", "error", "warnings_json", "log_tail",
             "origin", "job_type", "estimated_sec", "result_json",
             "started_at", "started_iso", "finished_at", "finished_iso",
-            "elapsed_sec", "log_path", "vad_filter",
+            "elapsed_sec", "log_path", "vad_filter", "stt_params_json",
         }
         sets: list[str] = ["updated_at=?"]
         vals: list[Any] = [time.time()]
         if "warnings" in fields and "warnings_json" not in fields:
             fields["warnings_json"] = json.dumps(fields.pop("warnings") or [], ensure_ascii=False)
+        if "stt_params" in fields and "stt_params_json" not in fields:
+            fields["stt_params_json"] = json.dumps(fields.pop("stt_params") or {}, ensure_ascii=False)
         for k, v in fields.items():
             if k not in allowed:
                 continue

@@ -23,9 +23,16 @@ from typing import Any
 
 
 WHISPER_REPOS = {
+    "phowhisper-medium": "vinai/PhoWhisper-medium",
+    "phowhisper-large": "vinai/PhoWhisper-large",
     "large-v3-turbo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
     "medium": "Systran/faster-whisper-medium",
     "small": "Systran/faster-whisper-small",
+}
+
+WHISPER_LOCAL_DIRS = {
+    "phowhisper-medium": "phowhisper-medium-ct2",
+    "phowhisper-large": "phowhisper-large-ct2",
 }
 
 
@@ -659,7 +666,26 @@ def _load_wav_float32(wav_path: str):
     return pcm.astype(np.float32) / 32768.0
 
 
+def _resolve_model_path_or_name(model_name: str, model_dir: str) -> str:
+    local_dir_name = WHISPER_LOCAL_DIRS.get(model_name)
+    if local_dir_name and model_dir:
+        cand = Path(model_dir) / local_dir_name
+        if cand.is_dir() and (cand / "model.bin").is_file():
+            return str(cand)
+    if Path(model_name).is_dir() and (Path(model_name) / "model.bin").is_file():
+        return model_name
+    return model_name
+
+
 def _is_cached_locally(model_name: str, model_dir: str) -> bool:
+    local_dir_name = WHISPER_LOCAL_DIRS.get(model_name)
+    if local_dir_name and model_dir:
+        cand = Path(model_dir) / local_dir_name
+        try:
+            if cand.is_dir() and (cand / "model.bin").is_file() and (cand / "config.json").is_file():
+                return True
+        except OSError:
+            pass
     repo = WHISPER_REPOS.get(model_name)
     if not repo or not model_dir:
         return False
@@ -674,10 +700,11 @@ def _is_cached_locally(model_name: str, model_dir: str) -> bool:
 def _load_whisper_model(model_name: str, model_dir: str, device: str, compute_type: str):
     from faster_whisper import WhisperModel
 
+    resolved_path = _resolve_model_path_or_name(model_name, model_dir)
     local_only = _is_cached_locally(model_name, model_dir)
     try:
         return WhisperModel(
-            model_name,
+            resolved_path,
             device=device,
             compute_type=compute_type,
             download_root=model_dir,
@@ -686,7 +713,7 @@ def _load_whisper_model(model_name: str, model_dir: str, device: str, compute_ty
     except Exception as e:
         if device == "cuda" and ("CUDA" in str(e).upper() or "CUBLAS" in str(e).upper() or "LIBRARY" in str(e).upper()):
             return WhisperModel(
-                model_name,
+                resolved_path,
                 device="cpu",
                 compute_type="int8",
                 download_root=model_dir,
@@ -1346,6 +1373,63 @@ def run_job(job_path: str) -> int:
         duration = _wav_duration_sec(wav_path)
         _log_debug("AUDIO_PROBE", f"WAV duration: {duration:.2f}s ({_fmt_clock_sec(duration)})")
 
+        # Audio Inspection Gate (cổng cảnh báo trước STT, không block)
+        inspect_data: dict[str, Any] = {}
+        warnings: list[str] = []
+        ai_enabled = True
+        ai_cfg = job.get("audio_inspect")
+        if isinstance(ai_cfg, dict) and "enabled" in ai_cfg:
+            ai_enabled = bool(ai_cfg["enabled"])
+
+        if ai_enabled:
+            emit_progress("converting", 8, "Inspecting audio quality (SNR & modulation)")
+            t_ai_start = time.time()
+            try:
+                try:
+                    import audio_inspect
+                except ImportError:
+                    try:
+                        from server.meeting_ear import audio_inspect  # type: ignore
+                    except ImportError:
+                        cur_dir = str(Path(__file__).resolve().parent)
+                        if cur_dir not in sys.path:
+                            sys.path.insert(0, cur_dir)
+                        import audio_inspect  # type: ignore
+
+                info_res = audio_inspect.inspect(Path(wav_path).read_bytes())
+                decision = audio_inspect.gate_decision(info_res)
+                inspect_data = {
+                    "snr_db": info_res.snr_db,
+                    "speech_ratio": info_res.speech_ratio,
+                    "modulation": info_res.modulation,
+                    "quality": info_res.quality,
+                    "decision": decision,
+                    "warning": info_res.warning,
+                    "seconds": info_res.seconds,
+                }
+                t_ai_end = time.time()
+                ai_dur = t_ai_end - t_ai_start
+                timings["audio_inspect"] = {
+                    "elapsed_sec": round(ai_dur, 3),
+                    **inspect_data,
+                }
+                _log_debug(
+                    "STAGE:AUDIO_INSPECT",
+                    f"Audio inspect completed in {ai_dur:.2f}s: quality={info_res.quality}, SNR={info_res.snr_db}dB, speech={info_res.speech_ratio}, mod={info_res.modulation}, decision={decision}",
+                )
+
+                if log_dir:
+                    (log_dir / "audio_inspect.json").write_text(
+                        json.dumps(inspect_data, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+
+                if info_res.quality in ("poor", "unusable", "silent"):
+                    warnings.append(f"audio_{info_res.quality}")
+                    if info_res.warning:
+                        _log_debug("AUDIO_INSPECT_WARN", f"Audio quality notice: {info_res.warning}")
+            except Exception as e_ai:
+                _log_debug("AUDIO_INSPECT_ERR", f"Audio inspect failed to execute: {e_ai}")
+
         dev, ctype = _pick_whisper_device(req_device)
         existing_w_segs = job.get("whisper_segments") or []
         skip_whisper = bool(job.get("diarize_only") and existing_w_segs)
@@ -1384,17 +1468,22 @@ def run_job(job_path: str) -> int:
             }
 
             t_transcribe_start = time.time()
-            want_vad = bool(job.get("vad_filter", False))
-            beam_size = int(job.get("beam_size") or 5)
-            condition_on_previous_text = bool(job.get("condition_on_previous_text", False))
-            no_speech_threshold = float(job.get("no_speech_threshold") or 0.6)
-            compression_ratio_threshold = float(job.get("compression_ratio_threshold") or 2.4)
-            log_prob_threshold = float(job.get("log_prob_threshold") or -1.0)
+            stt_p = dict(job.get("stt_params") or {})
+            want_vad = bool(stt_p.get("vad_filter", job.get("vad_filter", False)))
+            beam_size = int(stt_p.get("beam_size") or job.get("beam_size") or 5)
+            condition_on_previous_text = bool(stt_p.get("condition_on_previous_text", job.get("condition_on_previous_text", False)))
+            no_speech_threshold = float(stt_p.get("no_speech_threshold") or job.get("no_speech_threshold") or 0.6)
+            compression_ratio_threshold = float(stt_p.get("compression_ratio_threshold") or job.get("compression_ratio_threshold") or 2.4)
+            log_prob_threshold = float(stt_p.get("log_prob_threshold") or job.get("log_prob_threshold") or -1.0)
+            try:
+                temperature = float(stt_p.get("temperature") if "temperature" in stt_p else job.get("temperature", 0.0))
+            except (TypeError, ValueError):
+                temperature = 0.0
             vad_params = {"min_silence_duration_ms": 500} if want_vad else None
 
             _log_debug(
                 "STAGE:WHISPER_TRANSCRIBE",
-                f"Transcribing audio with Whisper (duration: {duration:.2f}s, vad_filter={want_vad}, beam_size={beam_size})...",
+                f"Transcribing audio with Whisper (duration: {duration:.2f}s, vad_filter={want_vad}, beam_size={beam_size}, temp={temperature})...",
             )
             emit_progress("transcribing", 16, f"Whisper {model_name} ({dev}/{ctype}, VAD={'on' if want_vad else 'off'})")
             audio_arr = _load_wav_float32(wav_path)
@@ -1408,6 +1497,7 @@ def run_job(job_path: str) -> int:
                 "no_speech_threshold": no_speech_threshold,
                 "compression_ratio_threshold": compression_ratio_threshold,
                 "log_prob_threshold": log_prob_threshold,
+                "temperature": temperature,
             }
             if want_vad and vad_params:
                 transcribe_kwargs["vad_parameters"] = vad_params
@@ -1476,7 +1566,16 @@ def run_job(job_path: str) -> int:
             }
 
             if log_dir:
+                resolved_model_path = _resolve_model_path_or_name(model_name, model_dir)
+                try:
+                    rel_model_path = str(Path(resolved_model_path).relative_to(Path(model_dir).parent))
+                except Exception:
+                    rel_model_path = resolved_model_path
+
                 whisper_data = {
+                    "stt_engine": "faster-whisper",
+                    "stt_model": model_name,
+                    "model_path": rel_model_path,
                     "model": model_name,
                     "device": dev,
                     "compute_type": ctype,
@@ -1484,12 +1583,20 @@ def run_job(job_path: str) -> int:
                     "duration_sec": round(duration, 2),
                     "elapsed_sec": round(transcribe_dur, 3),
                     "real_time_factor": round(rtf_whisper, 4),
+                    "beam_size": beam_size,
+                    "vad_filter": want_vad,
+                    "word_timestamps": True,
+                    "temperature": temperature,
+                    "no_speech_threshold": no_speech_threshold,
+                    "condition_on_previous_text": condition_on_previous_text,
+                    "audio_inspect": inspect_data,
                     "parameters": {
                         "vad_filter": want_vad,
                         "vad_parameters": vad_params,
                         "beam_size": beam_size,
                         "condition_on_previous_text": condition_on_previous_text,
                         "word_timestamps": True,
+                        "temperature": temperature,
                         "no_speech_threshold": no_speech_threshold,
                         "compression_ratio_threshold": compression_ratio_threshold,
                         "log_prob_threshold": log_prob_threshold,
@@ -1516,7 +1623,6 @@ def run_job(job_path: str) -> int:
             except Exception:
                 pass
 
-        warnings: list[str] = []
         speaker_turns: list[dict[str, Any]] = []
         diarized = False
 
@@ -1759,6 +1865,7 @@ def run_job(job_path: str) -> int:
             "model_used": model_name,
             "diarized": diarized,
             "warnings": warnings,
+            "audio_inspect": inspect_data,
             "timings": timings,
         }
         if output_json:
@@ -1803,10 +1910,15 @@ def _venv_health_ok(py_bin: str) -> bool:
 
 
 def _wipe_model_cache(model_dir: str, model_name: str) -> None:
+    base = Path(model_dir).resolve()
+    local_dir_name = WHISPER_LOCAL_DIRS.get(model_name)
+    if local_dir_name:
+        loc = base / local_dir_name
+        if loc.exists():
+            shutil.rmtree(loc, ignore_errors=True)
     repo = WHISPER_REPOS.get(model_name, "")
     if not repo or not model_dir:
         return
-    base = Path(model_dir).resolve()
     slug = "models--" + repo.replace("/", "--")
     root = base / slug
     if root.exists():
@@ -1852,6 +1964,14 @@ def _wipe_model_cache(model_dir: str, model_name: str) -> None:
 
 
 def _verify_model_files(model_dir: str, model_name: str) -> bool:
+    local_dir_name = WHISPER_LOCAL_DIRS.get(model_name)
+    if local_dir_name and model_dir:
+        cand = Path(model_dir) / local_dir_name
+        try:
+            if cand.is_dir() and (cand / "model.bin").is_file() and (cand / "config.json").is_file():
+                return True
+        except OSError:
+            pass
     repo = WHISPER_REPOS.get(model_name, "")
     if not repo or not model_dir:
         return False
@@ -1946,6 +2066,18 @@ def run_install(mode: str, venv_dir: str, model_dir: str, hf_home: str, model_na
             _wipe_model_cache(model_dir, model_name)
         if not force and mode != "redownload" and _verify_model_files(model_dir, model_name):
             print(f"Whisper model {model_name} already cached and verified in {model_dir}.", flush=True)
+        elif model_name in WHISPER_LOCAL_DIRS:
+            local_dir_name = WHISPER_LOCAL_DIRS[model_name]
+            target_path = Path(model_dir) / local_dir_name
+            if not target_path.exists():
+                src_candidate = Path("/media/thang-vo/Data/SoftwareDev/PhoWhisper/models") / local_dir_name
+                if src_candidate.is_dir():
+                    print(f"Copying {model_name} from {src_candidate} to {target_path} ...", flush=True)
+                    shutil.copytree(src_candidate, target_path)
+            if not _verify_model_files(model_dir, model_name):
+                emit({"type": "result", "ok": False, "error": f"PhoWhisper CT2 model {model_name} files incomplete in {model_dir}"})
+                return 1
+            print(f"Whisper model {model_name} verified in {model_dir}.", flush=True)
         else:
             print(f"Downloading / verifying Whisper model {model_name} in {model_dir} ...", flush=True)
             venv_py = str(Path(venv_dir) / ("Scripts/python.exe" if os.name == "nt" else "bin/python"))

@@ -492,14 +492,22 @@ async def _execute_job(
                 if not found_from_file and rec_ex and rec_ex.get("segments"):
                     whisper_segs = list(rec_ex.get("segments") or [])
 
+            eff_model = str(job.get("model") or mc.get("whisper_model") or "phowhisper-medium").strip()
+            model_profile = dict(mc.get("stt_profiles", {}).get(eff_model) or meeting_stt.DEFAULT_STT_PROFILES.get(eff_model, {}))
+            job_stt_params = dict(job.get("stt_params") or {})
+            combined_stt_params = dict(model_profile)
+            combined_stt_params.update(meeting_stt.sanitize_stt_profile(job_stt_params))
+            if "vad_filter" in job:
+                combined_stt_params["vad_filter"] = bool(job["vad_filter"])
+
             worker_payload = {
                 "input_paths": input_paths,
                 "combined_audio_out": final_audio_path,
-                "model": job.get("model") or mc["whisper_model"],
+                "model": eff_model,
                 "model_dir": str(meeting_stt.models_dir()),
                 "hf_home": str(meeting_stt.hf_home()),
-                "device": job.get("device") or mc["device"],
-                "language": job.get("language") or mc["language"],
+                "device": job.get("device") or combined_stt_params.get("device") or mc["device"],
+                "language": job.get("language") or combined_stt_params.get("language") or mc["language"],
                 "diarize": diarize_req,
                 "diarize_only": is_diarize_only and bool(whisper_segs),
                 "whisper_segments": whisper_segs if is_diarize_only else [],
@@ -511,7 +519,15 @@ async def _execute_job(
                 "num_speakers": int(job.get("num_speakers") or 0) or None,
                 "min_speakers": int(job.get("min_speakers") or 0) or None,
                 "max_speakers": int(job.get("max_speakers") or 0) or None,
-                "vad_filter": bool(job.get("vad_filter")) if "vad_filter" in job else bool(mc.get("vad_filter", False)),
+                "vad_filter": bool(combined_stt_params.get("vad_filter", False)),
+                "stt_params": combined_stt_params,
+                "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
+                "beam_size": int(combined_stt_params.get("beam_size", 5)),
+                "condition_on_previous_text": bool(combined_stt_params.get("condition_on_previous_text", False)),
+                "temperature": float(combined_stt_params.get("temperature", 0.0)),
+                "no_speech_threshold": float(combined_stt_params.get("no_speech_threshold", 0.6)),
+                "compression_ratio_threshold": float(combined_stt_params.get("compression_ratio_threshold", 2.4)),
+                "log_prob_threshold": float(combined_stt_params.get("log_prob_threshold", -1.0)),
                 "output_json": str(out_json),
                 "log_dir": str(log_dir),
                 "job_id": job_id,

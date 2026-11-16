@@ -618,6 +618,9 @@
     codes.forEach(function (c) {
       var s = String(c || "");
       if (s === "missing_hf_token") msgs.push(tw("vr.meeting.token_missing_warn"));
+      else if (s === "audio_poor") msgs.push(tw("vr.meeting.audio_poor_warn"));
+      else if (s === "audio_unusable") msgs.push(tw("vr.meeting.audio_unusable_warn"));
+      else if (s === "audio_silent") msgs.push(tw("vr.meeting.audio_silent_warn"));
       else if (s === "worker_timeout" || s === "diarize_timeout") msgs.push(tw("vr.meeting.worker_timeout_warn"));
       else if (s === "diarize_interrupted" || s === "process_failed") msgs.push(tw("vr.meeting.diarize_interrupted_warn"));
       else if (s.indexOf("pyannote_not_installed") === 0) msgs.push(tw("vr.meeting.diarize_not_installed_warn"));
@@ -739,13 +742,95 @@
 
     var modelSel = $("vrMtModel");
     if (modelSel && st.models && st.models.length) {
-      var curVal = mt.model || "large-v3-turbo";
+      var curVal = mt.model || (st.config && st.config.whisper_model) || "phowhisper-medium";
       modelSel.innerHTML = st.models.map(function (m) {
         var tag = m.cached ? tw("vr.meeting.model_ready") : tw("vr.meeting.model_download", { size: m.size_hint });
         return '<option value="' + esc(m.id) + '">' + esc(m.id + " " + tag) + "</option>";
       }).join("");
       modelSel.value = curVal;
       modelSel.disabled = mt.recState !== "idle" || mt.uploading || ctaState.busy;
+    }
+
+    var summaryEl = $("vrMtModelSummary");
+    if (summaryEl) {
+      var selId = mt.model || (st.config && st.config.whisper_model) || "phowhisper-medium";
+      var sumHtml = "";
+      if (selId === "phowhisper-medium") {
+        sumHtml = "<strong>PhoWhisper Medium</strong> (CTranslate2) - T\u1ed1i \u01b0u nh\u1eadn d\u1ea1ng ti\u1ebfng Vi\u1ec7t (WER ~7.8%). Ch\u1ea1y m\u01b0\u1ee3t tr\u00ean GPU t\u1ea7m trung ho\u1eb7c CPU int8 (~1.5GB VRAM). Khuy\u00ean d\u00f9ng cho h\u1ed9i tho\u1ea1i ti\u1ebfng Vi\u1ec7t.";
+      } else if (selId === "phowhisper-large") {
+        sumHtml = "<strong>PhoWhisper Large</strong> (CTranslate2) - T\u1ed1i \u01b0u nh\u1eadn d\u1ea1ng ti\u1ebfng Vi\u1ec7t \u0111\u1ed9 ch\u00ednh x\u00e1c cao nh\u1ea5t (WER ~6.2%). C\u1ea7n GPU c\u00f3 VRAM >= 4GB (~3GB VRAM).";
+      } else if (selId === "large-v3-turbo") {
+        sumHtml = "<strong>Whisper Large v3 Turbo</strong> (CTranslate2) - \u0110a ng\u00f4n ng\u1eef, t\u1ed1c \u0111\u1ed9 gi\u1ea3i m\u00e3 nhanh, ph\u00f9 h\u1ee3p cho cu\u1ed9c h\u1ecdp song ng\u1eef Anh - Vi\u1ec7t ho\u1eb7c nhi\u1ec1u ng\u00f4n ng\u1eef.";
+      } else {
+        sumHtml = "<strong>" + esc(selId) + "</strong> - M\u00f4 h\u00ecnh Whisper ti\u00eau chu\u1ea9n.";
+      }
+      summaryEl.innerHTML = sumHtml;
+    }
+
+    var sttHeader = $("vrSttParamsHeader");
+    if (sttHeader) {
+      var activeModelName = mt.model || (st.config && st.config.whisper_model) || "phowhisper-medium";
+      sttHeader.textContent = tw("vr.meeting.stt_params_title") + " (" + activeModelName + ")";
+    }
+
+    var activeModelId = mt.model || (st.config && st.config.whisper_model) || "phowhisper-medium";
+    var profs = st.stt_profiles || (st.config && st.config.stt_profiles) || {};
+    var prof = profs[activeModelId] || {};
+
+    var activeEl = typeof document !== "undefined" ? document.activeElement : null;
+    var beamIn = $("vrSttBeamSize");
+    if (beamIn && (!activeEl || activeEl.id !== "vrSttBeamSize")) {
+      beamIn.value = prof.beam_size !== undefined ? prof.beam_size : 5;
+    }
+    var tempIn = $("vrSttTemp");
+    if (tempIn && (!activeEl || activeEl.id !== "vrSttTemp")) {
+      tempIn.value = prof.temperature !== undefined ? prof.temperature : 0.0;
+    }
+    var noSpeechIn = $("vrSttNoSpeech");
+    if (noSpeechIn && (!activeEl || activeEl.id !== "vrSttNoSpeech")) {
+      noSpeechIn.value = prof.no_speech_threshold !== undefined ? prof.no_speech_threshold : 0.6;
+    }
+    var sttVadCb = $("vrSttVadFilter");
+    if (sttVadCb && (!activeEl || activeEl.id !== "vrSttVadFilter")) {
+      sttVadCb.checked = prof.vad_filter !== undefined ? !!prof.vad_filter : !!mt.vadFilter;
+    }
+    var condPrevCb = $("vrSttCondPrev");
+    if (condPrevCb && (!activeEl || activeEl.id !== "vrSttCondPrev")) {
+      condPrevCb.checked = prof.condition_on_previous_text !== undefined ? !!prof.condition_on_previous_text : false;
+    }
+    var inspectCb = $("vrAudioInspectEnable");
+    if (inspectCb && (!activeEl || activeEl.id !== "vrAudioInspectEnable")) {
+      var inspCfg = st.audio_inspect || (st.config && st.config.audio_inspect) || {};
+      inspectCb.checked = inspCfg.enabled !== false;
+    }
+
+    var modelBadge = $("vrMtActiveModelBadge");
+    var modelDesc = $("vrMtActiveModelDesc");
+    if (modelBadge) {
+      var cachedMap = st.cached_whisper_models || {};
+      var isCached = Boolean(cachedMap[activeModelId]);
+      var mName = activeModelId;
+      var mDesc = "";
+      if (activeModelId === "phowhisper-medium") {
+        mName = "PhoWhisper Medium";
+        mDesc = "T\u1ed1i \u01b0u ti\u1ebfng Vi\u1ec7t (WER ~7.8%, nh\u1eb9, nhanh)";
+      } else if (activeModelId === "phowhisper-large") {
+        mName = "PhoWhisper Large";
+        mDesc = "T\u1ed1i \u01b0u ti\u1ebfng Vi\u1ec7t \u0111\u1ed9 ch\u00ednh x\u00e1c cao nh\u1ea5t (WER ~6.2%)";
+      } else if (activeModelId === "large-v3-turbo") {
+        mName = "Whisper Large v3 Turbo";
+        mDesc = "\u0110a ng\u00f4n ng\u1eef, t\u1ed1c \u0111\u1ed9 gi\u1ea3i m\u00e3 nhanh (~8x realtime)";
+      } else {
+        mDesc = "M\u00f4 h\u00ecnh Whisper ti\u00eau chu\u1ea9n";
+      }
+      modelBadge.textContent = mName;
+      modelBadge.className = "vr-pill " + (isCached ? "is-ok" : "is-warn");
+      if (!isCached) {
+        modelBadge.title = "Ch\u01b0a t\u1ea3i m\u00f4 h\u00ecnh v\u1ec1 m\u00e1y";
+      } else {
+        modelBadge.title = "\u0110\u00e3 s\u1eb5n s\u00e0ng s\u1eed d\u1ee5ng c\u1ee5c b\u1ed9";
+      }
+      if (modelDesc) modelDesc.textContent = mDesc ? "(" + mDesc + ")" : "";
     }
 
     var langSel = $("vrMtLang");
@@ -755,7 +840,11 @@
     }
     var spkSel = $("vrMtNumSpk");
     if (spkSel) {
-      spkSel.value = String(mt.numSpeakers || 0);
+      if (!mt.diarize) {
+        spkSel.value = "off";
+      } else {
+        spkSel.value = String(mt.numSpeakers || 0);
+      }
       spkSel.disabled = mt.recState !== "idle" || mt.uploading;
     }
     var diarizeCb = $("vrMtDiarize");
@@ -768,8 +857,8 @@
       vadCb.checked = !!mt.vadFilter;
       vadCb.disabled = mt.recState !== "idle" || mt.uploading;
     }
-    var vadFilterCb = $("vrMtVadFilter");
-    if (vadFilterCb) {
+    var vadFilterCb = $("vrSttVadFilter") || $("vrMtVadFilter");
+    if (vadFilterCb && (!activeEl || (activeEl.id !== "vrSttVadFilter" && activeEl.id !== "vrMtVadFilter"))) {
       vadFilterCb.checked = !!mt.vadFilter;
     }
     var titleEl = $("vrMtTitle");
@@ -1164,7 +1253,8 @@
           var isResume = !rec.segments || !rec.segments.length;
           var btnLabel = isResume ? tw("vr.meeting.btn_resume") : tw("vr.meeting.btn_diarize");
           var btnSpin = isResume ? tw("vr.meeting.btn_resuming") : tw("vr.meeting.btn_diarizing");
-          diarizeBtn.disabled = mtBusy;
+          var rediarizeBtn = diarizeBtn;
+          rediarizeBtn.disabled = mtBusy;
           diarizeBtn.innerHTML = ico(isDiarizeActive ? "loader" : "users", { cls: isDiarizeActive ? "spin" : "" }) +
             " <span>" + esc(isDiarizeActive ? btnSpin : btnLabel) + "</span>";
         }
@@ -2184,6 +2274,31 @@
     });
   }
 
+  function getCurrentSttParams() {
+    var beamIn = $("vrSttBeamSize");
+    var tempIn = $("vrSttTemp");
+    var noSpeechIn = $("vrSttNoSpeech");
+    var vadIn = $("vrSttVadFilter");
+    var condPrevIn = $("vrSttCondPrev");
+
+    var beam = beamIn ? (parseInt(beamIn.value, 10) || 5) : 5;
+    var temp = tempIn ? parseFloat(tempIn.value) : 0.0;
+    if (isNaN(temp)) temp = 0.0;
+    var noSpeech = noSpeechIn ? parseFloat(noSpeechIn.value) : 0.6;
+    if (isNaN(noSpeech)) noSpeech = 0.6;
+    var vad = vadIn ? !!vadIn.checked : !!S.mt.vadFilter;
+    var condPrev = condPrevIn ? !!condPrevIn.checked : false;
+
+    return {
+      beam_size: Math.max(1, Math.min(10, beam)),
+      temperature: Math.max(0.0, Math.min(1.0, temp)),
+      no_speech_threshold: Math.max(0.0, Math.min(1.0, noSpeech)),
+      vad_filter: vad,
+      condition_on_previous_text: condPrev,
+      word_timestamps: true
+    };
+  }
+
   async function runChunkedJobUpload(parts, meta) {
     S.mt.uploading = true;
     S.mt.errorMsg = "";
@@ -2202,12 +2317,13 @@
           title: S.mt.title || "",
           upload_mode: meta.upload_mode || "raw_upload",
           file_ext: meta.file_ext || ".webm",
-          model: S.mt.model || "large-v3-turbo",
+          model: S.mt.model || "phowhisper-medium",
           language: S.mt.language || "vi",
           diarize: !!S.mt.diarize,
           vad_filter: !!S.mt.vadFilter,
           num_speakers: Number(S.mt.numSpeakers || 0),
           total_chunks: parts.length,
+          stt_params: getCurrentSttParams(),
         }),
       });
       var cd = await cr.json().catch(function () { return {}; });
@@ -2373,7 +2489,7 @@
           if (d.config.whisper_model) S.mt.model = d.config.whisper_model;
           if (d.config.language) S.mt.language = d.config.language;
           if (!S.mt.diarizeTouched) {
-            S.mt.diarize = d.diarize_ready ? true : Boolean(d.config.diarize);
+            S.mt.diarize = ("diarize" in d.config) ? Boolean(d.config.diarize) : Boolean(d.diarize_ready);
           }
           if (!S.mt.vadTouched) {
             S.mt.vadFilter = Boolean(d.config.vad_filter);
@@ -2672,10 +2788,11 @@
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: S.mt.model || (rec.model_used || "large-v3-turbo"),
+          model: S.mt.model || (rec.model_used || "phowhisper-medium"),
           language: S.mt.language || "vi",
           vad_filter: !!S.mt.vadFilter,
           title: S.mt.title || "",
+          stt_params: getCurrentSttParams(),
         }),
       });
       var d = await r.json().catch(function () { return {}; });
@@ -2951,16 +3068,27 @@
       '<div class="vr-field">' +
       "<label>" + esc(tw("vr.meeting.speakers_label")) + "</label>" +
       '<select class="vr-select" id="vrMtNumSpk">' +
+      '<option value="off">' + esc(tw("vr.meeting.speakers_none")) + "</option>" +
       '<option value="0">' + esc(tw("vr.meeting.speakers_auto")) + "</option>" +
-      '<option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>' +
+      '<option value="2">2 ' + esc(tw("vr.meeting.speakers_unit")) + '</option>' +
+      '<option value="3">3 ' + esc(tw("vr.meeting.speakers_unit")) + '</option>' +
+      '<option value="4">4 ' + esc(tw("vr.meeting.speakers_unit")) + '</option>' +
+      '<option value="5">5 ' + esc(tw("vr.meeting.speakers_unit")) + '</option>' +
+      '<option value="6">6 ' + esc(tw("vr.meeting.speakers_unit")) + '</option>' +
       "</select>" +
       "</div>" +
-      '<label class="vr-check-wrap">' +
-      '<input type="checkbox" id="vrMtDiarize" checked> <span>' + esc(tw("vr.meeting.diarize_toggle")) + "</span>" +
-      "</label>" +
-      '<label class="vr-check-wrap" title="' + esc(tw("vr.meeting.vad_desc")) + '">' +
-      '<input type="checkbox" id="vrMtVad"> <span>' + esc(tw("vr.meeting.vad_toggle")) + "</span>" +
-      "</label>" +
+      "</div>" +
+      '<div class="vr-mt-model-info" id="vrMtActiveModelInfo" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0 12px 0; padding:8px 12px; background:var(--surface-1, rgba(0,0,0,0.02)); border:1px solid var(--border); border-radius:8px; font-size:13px; flex-wrap:wrap;">' +
+      '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+      '<span style="display:inline-flex; align-items:center; gap:5px; font-weight:600; color:var(--text);">' +
+      ico("cpu") + " <span>" + esc(tw("vr.meeting.model_info_label")) + "</span>" +
+      "</span>" +
+      '<span class="vr-pill is-ok" id="vrMtActiveModelBadge" style="font-weight:600;">PhoWhisper Medium</span>' +
+      '<span id="vrMtActiveModelDesc" style="color:var(--text2); font-size:12.5px;"></span>' +
+      "</div>" +
+      '<button type="button" class="gcard-btn sm ghost" id="vrMtBtnGoSettingsModel" style="height:26px; padding:0 10px; font-size:12px; display:inline-flex; align-items:center; gap:5px; cursor:pointer;" title="' + esc(tw("vr.meeting.model_info_btn_title")) + '">' +
+      ico("sliders") + " <span>" + esc(tw("vr.meeting.model_info_btn")) + "</span>" +
+      "</button>" +
       "</div>" +
       '<div class="vr-bar-top">' +
       '<div class="vr-status">' +
@@ -3026,8 +3154,8 @@
       '<div class="vr-settings-sec-head" style="margin-bottom:12px">' +
       '<div class="vr-settings-sec-title">' + ico("cpu") + " <span>" + esc(tw("vr.meeting.model_section_title")) + "</span></div>" +
       "</div>" +
-      '<div class="vr-mt-model-row">' +
-      '<div class="vr-field vr-field-model">' +
+      '<div class="vr-mt-model-row" style="display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap;">' +
+      '<div class="vr-field vr-field-model" style="flex:1; min-width:240px;">' +
       "<label>" + esc(tw("vr.meeting.model_label")) + "</label>" +
       '<select class="vr-select" id="vrMtModel"></select>' +
       "</div>" +
@@ -3036,15 +3164,74 @@
       '<button type="button" class="gcard-btn ghost" id="vrMtBtnRedownload" hidden></button>' +
       '<button type="button" class="vr-btn vr-btn-ghost gcard-btn ghost" id="vrMtBtnDeleteModel" hidden></button>' +
       "</div>" +
-      '<div class="vr-field vr-field-vad" style="margin-top:14px; display:flex; align-items:flex-start; gap:8px;">' +
-      '<input type="checkbox" id="vrMtVadFilter" style="margin-top:3px; cursor:pointer;">' +
-      '<div>' +
-      '<label for="vrMtVadFilter" style="font-weight:600; cursor:pointer;">' + esc(tw("vr.meeting.vad_label")) + "</label>" +
-      '<div class="vr-audit-sub" style="margin:2px 0 0 0; font-size:12px;">' + esc(tw("vr.meeting.vad_desc")) + "</div>" +
+      '<div class="vr-model-summary" id="vrMtModelSummary" style="margin:10px 0; padding:10px 14px; background:var(--bg-subtle, rgba(0,0,0,0.02)); border:1px solid var(--border); border-radius:6px; font-size:13px; line-height:1.5;"></div>' +
+      '<div class="vr-stt-params-card" id="vrSttParamsCard" style="margin-top:14px; padding:14px 16px; border:1px solid var(--border); border-radius:8px; background:var(--bg-subtle, rgba(0,0,0,0.01));">' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">' +
+      '<div style="font-weight:600; display:flex; align-items:center; gap:8px;">' +
+      ico("sliders") + ' <span id="vrSttParamsHeader">' + esc(tw("vr.meeting.stt_params_title")) + "</span>" +
       "</div>" +
+      '<div style="display:flex; align-items:center; gap:8px;">' +
+      '<button type="button" class="gcard-btn sm" id="vrBtnSaveSttParams">' + ico("circle-check") + " <span>" + esc(tw("vr.meeting.stt_params_save_btn")) + "</span></button>" +
+      '<button type="button" class="gcard-btn sm ghost" id="vrBtnResetSttParams" title="' + esc(tw("vr.meeting.stt_params_reset_btn")) + '">' + ico("rotate-ccw") + " <span>" + esc(tw("vr.meeting.stt_params_reset_btn")) + "</span></button>" +
+      "</div>" +
+      "</div>" +
+      '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-bottom:12px;">' +
+      '<div class="vr-field">' +
+      '<label for="vrSttBeamSize" style="font-size:12px; font-weight:600;">' + esc(tw("vr.meeting.stt_params_beam_size")) + "</label>" +
+      '<input type="number" id="vrSttBeamSize" min="1" max="10" step="1" value="5" class="vr-input" style="height:32px;">' +
+      '<div class="vr-audit-sub" style="font-size:11px; margin-top:2px;">1 - 10 (mặc định 5)</div>' +
+      "</div>" +
+      '<div class="vr-field">' +
+      '<label for="vrSttTemp" style="font-size:12px; font-weight:600;">' + esc(tw("vr.meeting.stt_params_temp")) + "</label>" +
+      '<input type="number" id="vrSttTemp" min="0" max="1" step="0.1" value="0.0" class="vr-input" style="height:32px;">' +
+      '<div class="vr-audit-sub" style="font-size:11px; margin-top:2px;">0.0 = greedy</div>' +
+      "</div>" +
+      '<div class="vr-field">' +
+      '<label for="vrSttNoSpeech" style="font-size:12px; font-weight:600;">' + esc(tw("vr.meeting.stt_params_no_speech")) + "</label>" +
+      '<input type="number" id="vrSttNoSpeech" min="0" max="1" step="0.05" value="0.6" class="vr-input" style="height:32px;">' +
+      '<div class="vr-audit-sub" style="font-size:11px; margin-top:2px;">Ngưỡng bỏ đoạn lặng</div>' +
+      "</div>" +
+      "</div>" +
+      '<div style="display:flex; flex-direction:column; gap:10px; padding-top:10px; border-top:1px solid var(--border);">' +
+      '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+      '<input type="checkbox" id="vrSttVadFilter" style="margin-top:3px; cursor:pointer;">' +
+      "<div>" +
+      '<label for="vrSttVadFilter" style="font-weight:600; cursor:pointer; font-size:13px;">' + esc(tw("vr.meeting.vad_label")) + "</label>" +
+      '<div style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">' + esc(tw("vr.meeting.stt_params_vad_hint")) + "</div>" +
+      "</div>" +
+      "</div>" +
+      '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+      '<input type="checkbox" id="vrSttCondPrev" style="margin-top:3px; cursor:pointer;">' +
+      "<div>" +
+      '<label for="vrSttCondPrev" style="font-weight:600; cursor:pointer; font-size:13px;">' + esc(tw("vr.meeting.stt_params_cond_prev")) + "</label>" +
+      '<div style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">Tắt giúp chống lặp lại từ vô tận khi gặp câu khó nghe.</div>' +
+      "</div>" +
+      "</div>" +
+      '<div style="display:flex; align-items:flex-start; gap:8px; opacity:0.85;">' +
+      '<input type="checkbox" id="vrSttWordTimestamps" checked disabled style="margin-top:3px;">' +
+      "<div>" +
+      '<label style="font-weight:600; font-size:13px;">Mốc thời gian cấp độ từ (word_timestamps)</label>' +
+      '<div style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">' + esc(tw("vr.meeting.stt_params_word_ts_locked")) + "</div>" +
+      "</div>" +
+      "</div>" +
+      "</div>" +
+      '<div id="vrSttParamsNotice" class="vr-mt-install-notice" hidden style="margin-top:10px;"></div>' +
       "</div>" +
       '<div class="vr-mt-install-notice" id="vrMtInstallNotice" hidden></div>' +
       '<div class="vr-mt-install-log" id="vrMtInstallLog" hidden></div>' +
+      "</div>" +
+      // Audio Inspection Section
+      '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
+      '<div class="vr-settings-sec-head" style="margin-bottom:12px">' +
+      '<div class="vr-settings-sec-title">' + ico("activity") + " <span>" + esc(tw("vr.meeting.audio_inspect_title")) + "</span></div>" +
+      "</div>" +
+      '<div style="display:flex; align-items:flex-start; gap:8px;">' +
+      '<input type="checkbox" id="vrAudioInspectEnable" checked style="margin-top:3px; cursor:pointer;">' +
+      "<div>" +
+      '<label for="vrAudioInspectEnable" style="font-weight:600; cursor:pointer; font-size:13px;">' + esc(tw("vr.meeting.audio_inspect_enable")) + "</label>" +
+      '<div class="vr-audit-sub" style="margin:2px 0 0 0; font-size:12px;">' + esc(tw("vr.meeting.audio_inspect_desc")) + "</div>" +
+      "</div>" +
+      "</div>" +
       "</div>" +
       // Remote Diarization Section
       '<div class="vr-settings-sec" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border)">' +
@@ -3286,12 +3473,125 @@
     if (mtTitle) mtTitle.addEventListener("input", function () { S.mt.title = mtTitle.value; });
     if (mtModel) mtModel.onchange = function () { S.mt.model = mtModel.value; S.mt.installNotice = null; saveMeetingConfig({ whisper_model: S.mt.model }); syncMeetingUi(); };
     if (mtLang) mtLang.onchange = function () { S.mt.language = mtLang.value; saveMeetingConfig({ language: S.mt.language }); };
-    if (mtNumSpk) mtNumSpk.onchange = function () { S.mt.numSpeakers = Number(mtNumSpk.value || 0); };
+    if (mtNumSpk) {
+      mtNumSpk.onchange = function () {
+        var v = mtNumSpk.value;
+        if (v === "off") {
+          S.mt.diarize = false;
+          S.mt.numSpeakers = 0;
+          S.mt.diarizeTouched = true;
+          saveMeetingConfig({ diarize: false });
+        } else {
+          S.mt.diarize = true;
+          S.mt.numSpeakers = Number(v || 0);
+          S.mt.diarizeTouched = true;
+          saveMeetingConfig({ diarize: true });
+        }
+        syncMeetingUi();
+      };
+    }
     if (mtDiarize) mtDiarize.onchange = function () { S.mt.diarize = !!mtDiarize.checked; S.mt.diarizeTouched = true; saveMeetingConfig({ diarize: S.mt.diarize }); syncMeetingUi(); };
     var mtVad = $("vrMtVad");
     if (mtVad) mtVad.onchange = function () { S.mt.vadFilter = !!mtVad.checked; S.mt.vadTouched = true; saveMeetingConfig({ vad_filter: S.mt.vadFilter }); syncMeetingUi(); };
     var mtVadFilter = $("vrMtVadFilter");
     if (mtVadFilter) mtVadFilter.onchange = function () { S.mt.vadFilter = !!mtVadFilter.checked; S.mt.vadTouched = true; saveMeetingConfig({ vad_filter: S.mt.vadFilter }); syncMeetingUi(); };
+
+    var btnGoSetModel = $("vrMtBtnGoSettingsModel");
+    if (btnGoSetModel) btnGoSetModel.onclick = function () { S.tab = "settings"; syncUi(); };
+
+    var btnSaveStt = $("vrBtnSaveSttParams");
+    if (btnSaveStt) {
+      btnSaveStt.onclick = function () {
+        var curModel = S.mt.model || "phowhisper-medium";
+        var params = getCurrentSttParams();
+        var patch = {
+          stt_profiles: {}
+        };
+        patch.stt_profiles[curModel] = params;
+        patch.vad_filter = params.vad_filter;
+        S.mt.vadFilter = params.vad_filter;
+        saveMeetingConfig(patch);
+        var notice = $("vrSttParamsNotice");
+        if (notice) {
+          notice.hidden = false;
+          notice.className = "vr-mt-install-notice is-ok";
+          notice.innerHTML = ico("circle-check") + " <span>" + esc(tw("vr.meeting.stt_params_saved")) + "</span>";
+          setTimeout(function () {
+            if ($("vrSttParamsNotice")) $("vrSttParamsNotice").hidden = true;
+          }, 3000);
+        }
+      };
+    }
+
+    var btnResetStt = $("vrBtnResetSttParams");
+    if (btnResetStt) {
+      btnResetStt.onclick = function () {
+        var curModel = S.mt.model || "phowhisper-medium";
+        var defaultBeam = 5;
+        var defaultTemp = 0.0;
+        var defaultNoSpeech = 0.6;
+        var defaultVad = false;
+        var defaultCondPrev = false;
+
+        var beamIn = $("vrSttBeamSize");
+        if (beamIn) beamIn.value = defaultBeam;
+        var tempIn = $("vrSttTemp");
+        if (tempIn) tempIn.value = defaultTemp;
+        var noSpeechIn = $("vrSttNoSpeech");
+        if (noSpeechIn) noSpeechIn.value = defaultNoSpeech;
+        var vadIn = $("vrSttVadFilter");
+        if (vadIn) vadIn.checked = defaultVad;
+        var condPrevIn = $("vrSttCondPrev");
+        if (condPrevIn) condPrevIn.checked = defaultCondPrev;
+
+        var patch = {
+          stt_profiles: {}
+        };
+        patch.stt_profiles[curModel] = {
+          beam_size: defaultBeam,
+          temperature: defaultTemp,
+          no_speech_threshold: defaultNoSpeech,
+          vad_filter: defaultVad,
+          condition_on_previous_text: defaultCondPrev,
+          word_timestamps: true
+        };
+        patch.vad_filter = defaultVad;
+        S.mt.vadFilter = defaultVad;
+        saveMeetingConfig(patch);
+
+        var notice = $("vrSttParamsNotice");
+        if (notice) {
+          notice.hidden = false;
+          notice.className = "vr-mt-install-notice is-ok";
+          notice.innerHTML = ico("circle-check") + " <span>" + esc(tw("vr.meeting.stt_params_reset_btn")) + " (" + esc(curModel) + ")</span>";
+          setTimeout(function () {
+            if ($("vrSttParamsNotice")) $("vrSttParamsNotice").hidden = true;
+          }, 3000);
+        }
+      };
+    }
+
+    var audioInspectCb = $("vrAudioInspectEnable");
+    if (audioInspectCb) {
+      audioInspectCb.onchange = function () {
+        saveMeetingConfig({
+          audio_inspect: {
+            enabled: !!audioInspectCb.checked,
+            mode: "warn"
+          }
+        });
+      };
+    }
+
+    var sttVadCb = $("vrSttVadFilter");
+    if (sttVadCb) {
+      sttVadCb.onchange = function () {
+        S.mt.vadFilter = !!sttVadCb.checked;
+        S.mt.vadTouched = true;
+        var mtVadEl = $("vrMtVad");
+        if (mtVadEl) mtVadEl.checked = S.mt.vadFilter;
+      };
+    }
 
     if (mtStart) mtStart.onclick = function () { if (!isMeetingBusy(S.mt)) startMeetingRecording(); };
     if (mtPause) mtPause.onclick = pauseMeetingRecording;

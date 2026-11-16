@@ -4729,7 +4729,7 @@ button.tm-quote-src:hover, button.tm-quote-src:focus-visible { border-color: var
 .vr-pill.is-ok { background: rgba(63, 220, 134, .12); border-color: rgba(63, 220, 134, .35); color: var(--green, #3fdc86); }
 .vr-pill.is-warn { background: var(--warn-wash, rgba(245, 166, 35, .14)); border-color: rgba(245, 166, 35, .35); color: var(--warn-ink, #d97706); }
 .vr-warn-banner { margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--warn-wash, rgba(245, 166, 35, .14)); border: 1px solid rgba(245, 166, 35, .32); color: var(--warn-ink, var(--text)); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.vr-mt-form { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(2, minmax(130px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 12px; }
+.vr-mt-form { display: grid; grid-template-columns: minmax(200px, 2.5fr) minmax(130px, 1fr) minmax(180px, 1.3fr); gap: 10px; align-items: end; margin-bottom: 10px; }
 .vr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .vr-field label { font-size: 11.5px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .03em; }
 .vr-input, .vr-select { width: 100%; box-sizing: border-box; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font: inherit; font-size: 13.5px; }

@@ -256,6 +256,77 @@ check("POST /voice-records/meeting/models/delete removes cached model and return
       and r_del.json()["status"]["cached_whisper_models"].get("large-v3-turbo") is False
       and meeting_stt.is_whisper_model_cached("large-v3-turbo") is False)
 
+# 2d. PhoWhisper integration & CT2 local directory cache check
+check("PhoWhisper models registered in SUPPORTED_WHISPER_MODELS",
+      "phowhisper-medium" in meeting_stt.SUPPORTED_WHISPER_MODELS
+      and "phowhisper-large" in meeting_stt.SUPPORTED_WHISPER_MODELS
+      and meeting_stt.SUPPORTED_WHISPER_MODELS["phowhisper-medium"]["local_dir"] == "phowhisper-medium-ct2"
+      and mt_worker.WHISPER_LOCAL_DIRS.get("phowhisper-medium") == "phowhisper-medium-ct2")
+
+pho_dir = _STATE / "local-ear" / "models" / "phowhisper-medium-ct2"
+pho_dir.mkdir(parents=True, exist_ok=True)
+(pho_dir / "model.bin").write_bytes(b"pho_weight")
+(pho_dir / "config.json").write_text('{"model": "phowhisper-medium"}', encoding="utf-8")
+check("PhoWhisper CT2 local directory detected as cached",
+      meeting_stt.is_whisper_model_cached("phowhisper-medium") is True)
+
+r_st_pho = client.get("/voice-records/meeting/status").json()
+check("status reports phowhisper-medium cached and exposes stt_profiles and audio_inspect",
+      r_st_pho.get("cached_whisper_models", {}).get("phowhisper-medium") is True
+      and "stt_profiles" in r_st_pho
+      and "phowhisper-medium" in r_st_pho["stt_profiles"]
+      and r_st_pho["stt_profiles"]["phowhisper-medium"]["word_timestamps"] is True
+      and "audio_inspect" in r_st_pho)
+
+# 2e. STT tuning profiles and audio_inspect config updates
+r_cfg_up = client.post("/voice-records/meeting/config", json={
+    "stt_profiles": {
+        "phowhisper-medium": {
+            "beam_size": 7,
+            "temperature": 0.2,
+            "vad_filter": True,
+            "condition_on_previous_text": False,
+            "no_speech_threshold": 0.5,
+            "word_timestamps": False  # Must be locked to True by sanitizer
+        }
+    },
+    "audio_inspect": {"enabled": False, "mode": "warn"}
+})
+d_cfg_up = r_cfg_up.json()
+check("POST /voice-records/meeting/config updates stt_profiles and locks word_timestamps",
+      r_cfg_up.status_code == 200
+      and d_cfg_up.get("ok") is True
+      and d_cfg_up["stt_profiles"]["phowhisper-medium"]["beam_size"] == 7
+      and d_cfg_up["stt_profiles"]["phowhisper-medium"]["temperature"] == 0.2
+      and d_cfg_up["stt_profiles"]["phowhisper-medium"]["vad_filter"] is True
+      and d_cfg_up["stt_profiles"]["phowhisper-medium"]["word_timestamps"] is True
+      and d_cfg_up["audio_inspect"]["enabled"] is False)
+
+# 2f. Audio inspect unit test
+import audio_inspect
+import struct, math
+# Generate 1s of 440Hz sine wave (16kHz mono 16-bit PCM)
+sine_samples = [int(16000 * 0.4 * math.sin(2 * math.pi * 440 * i / 16000)) for i in range(16000)]
+pcm_bytes = struct.pack(f"<{len(sine_samples)}h", *sine_samples)
+with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+    wav_test_path = tf.name
+try:
+    import wave
+    with wave.open(wav_test_path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(pcm_bytes)
+    insp_res, _ = audio_inspect.inspect_file(wav_test_path)
+    check("audio_inspect.inspect_file analyzes WAV and returns expected metrics",
+          insp_res.quality in ("usable", "good", "poor")
+          and isinstance(insp_res.snr_db, (int, float))
+          and isinstance(insp_res.speech_ratio, (int, float))
+          and insp_res.warning is not None)
+finally:
+    if os.path.exists(wav_test_path):
+        os.remove(wav_test_path)
+
 # 3. Chunked upload, retry overwrite idempotency, assembly, and stuck job recovery
 called_jobs = []
 meeting_jobs.enqueue_job = lambda jid, **kw: (called_jobs.append(jid) or store.update_job(jid, status="queued", progress=1))

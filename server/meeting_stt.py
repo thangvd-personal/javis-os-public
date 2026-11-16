@@ -23,23 +23,111 @@ import config as cfgmod
 import localefmt
 
 SUPPORTED_WHISPER_MODELS = {
+    "phowhisper-medium": {
+        "repo": "vinai/PhoWhisper-medium",
+        "local_dir": "phowhisper-medium-ct2",
+        "size_hint": "~1.5 GB",
+        "label_vi": "PhoWhisper medium (Tiếng Việt tối ưu - Khuyên dùng)",
+        "label_en": "PhoWhisper medium (Vietnamese optimized - Recommended)",
+        "default_for": "vi",
+        "benchmark_hint": "90.0% từ · RTF 0.051 · 0 ảo giác",
+    },
+    "phowhisper-large": {
+        "repo": "vinai/PhoWhisper-large",
+        "local_dir": "phowhisper-large-ct2",
+        "size_hint": "~2.9 GB",
+        "label_vi": "PhoWhisper large (Tiếng Việt chính xác cao)",
+        "label_en": "PhoWhisper large (Vietnamese high accuracy)",
+        "default_for": "vi_large",
+        "benchmark_hint": "91.3% từ · RTF 0.079 · 0 ảo giác",
+    },
     "large-v3-turbo": {
         "repo": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
         "size_hint": "~1.6 GB",
-        "label_vi": "large-v3-turbo (Chính xác cao)",
-        "label_en": "large-v3-turbo (High accuracy)",
+        "label_vi": "large-v3-turbo (Song ngữ / Đa ngôn ngữ)",
+        "label_en": "large-v3-turbo (Multilingual)",
+        "default_for": "multilingual",
+        "benchmark_hint": "75.5% từ · RTF 0.022 · Đa ngôn ngữ",
     },
     "medium": {
         "repo": "Systran/faster-whisper-medium",
         "size_hint": "~1.5 GB",
-        "label_vi": "medium (Cân bằng)",
+        "label_vi": "medium (Whisper gốc)",
         "label_en": "medium (Balanced)",
     },
     "small": {
         "repo": "Systran/faster-whisper-small",
         "size_hint": "~0.5 GB",
-        "label_vi": "small (Nhẹ)",
+        "label_vi": "small (Whisper nhẹ)",
         "label_en": "small (Light)",
+    },
+}
+
+DEFAULT_STT_PROFILES: dict[str, dict[str, Any]] = {
+    "phowhisper-medium": {
+        "beam_size": 5,
+        "vad_filter": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "language": "vi",
+        "device": "auto",
+        "compute_type": "float16",
+        "temperature": 0.0,
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+    },
+    "phowhisper-large": {
+        "beam_size": 5,
+        "vad_filter": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "language": "vi",
+        "device": "auto",
+        "compute_type": "float16",
+        "temperature": 0.0,
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+    },
+    "large-v3-turbo": {
+        "beam_size": 5,
+        "vad_filter": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "language": "vi",
+        "device": "auto",
+        "compute_type": "float16",
+        "temperature": 0.0,
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+    },
+    "medium": {
+        "beam_size": 5,
+        "vad_filter": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "language": "vi",
+        "device": "auto",
+        "compute_type": "float16",
+        "temperature": 0.0,
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
+    },
+    "small": {
+        "beam_size": 5,
+        "vad_filter": False,
+        "condition_on_previous_text": False,
+        "word_timestamps": True,
+        "language": "vi",
+        "device": "auto",
+        "compute_type": "float16",
+        "temperature": 0.0,
+        "no_speech_threshold": 0.6,
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": -1.0,
     },
 }
 
@@ -119,15 +207,56 @@ def worker_script() -> Path:
     return Path(__file__).resolve().parent / "meeting_ear" / "worker.py"
 
 
+def sanitize_stt_profile(raw: dict[str, Any] | None) -> dict[str, Any]:
+    raw = raw or {}
+    out: dict[str, Any] = {}
+    if "beam_size" in raw:
+        try:
+            out["beam_size"] = max(1, min(10, int(raw["beam_size"])))
+        except (TypeError, ValueError):
+            pass
+    if "vad_filter" in raw:
+        out["vad_filter"] = bool(raw["vad_filter"])
+    if "condition_on_previous_text" in raw:
+        out["condition_on_previous_text"] = bool(raw["condition_on_previous_text"])
+    # word_timestamps is locked to True for word-level diarization
+    out["word_timestamps"] = True
+    if "temperature" in raw:
+        try:
+            out["temperature"] = max(0.0, min(1.0, float(raw["temperature"])))
+        except (TypeError, ValueError):
+            pass
+    if "no_speech_threshold" in raw:
+        try:
+            out["no_speech_threshold"] = max(0.0, min(1.0, float(raw["no_speech_threshold"])))
+        except (TypeError, ValueError):
+            pass
+    if "compression_ratio_threshold" in raw:
+        try:
+            out["compression_ratio_threshold"] = max(1.0, min(3.0, float(raw["compression_ratio_threshold"])))
+        except (TypeError, ValueError):
+            pass
+    if "log_prob_threshold" in raw:
+        try:
+            out["log_prob_threshold"] = max(-3.0, min(0.0, float(raw["log_prob_threshold"])))
+        except (TypeError, ValueError):
+            pass
+    if "language" in raw:
+        l = str(raw["language"] or "").strip().lower()
+        if l in VALID_LANGUAGES:
+            out["language"] = l
+    return out
+
+
 def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     """Read meeting_stt config with defaults applied (includes secret hf_token internally)."""
     if cfg is None:
         cfg = cfgmod.read_settings()
     voice = (cfg.get("voice") or {}) if isinstance(cfg, dict) else {}
     raw = (voice.get("meeting_stt") or {}) if isinstance(voice, dict) else {}
-    model = str(raw.get("whisper_model") or "large-v3-turbo").strip()
-    if model not in SUPPORTED_WHISPER_MODELS:
-        model = "large-v3-turbo"
+    model = str(raw.get("whisper_model") or "").strip()
+    if not model or model not in SUPPORTED_WHISPER_MODELS:
+        model = "phowhisper-medium" if is_whisper_model_cached("phowhisper-medium") else "large-v3-turbo"
     dev = str(raw.get("device") or "auto").strip().lower()
     if dev not in VALID_DEVICES:
         dev = "auto"
@@ -149,6 +278,25 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     server_api_key = str(raw.get("server_api_key") or "").strip()
     client_base_uri = str(raw.get("client_base_uri") or "").strip()
     client_api_key = str(raw.get("client_api_key") or "").strip()
+
+    stt_profiles: dict[str, dict[str, Any]] = {}
+    raw_profiles = raw.get("stt_profiles") if isinstance(raw.get("stt_profiles"), dict) else {}
+    for mid, default_prof in DEFAULT_STT_PROFILES.items():
+        prof = dict(default_prof)
+        if mid in raw_profiles and isinstance(raw_profiles[mid], dict):
+            prof.update(sanitize_stt_profile(raw_profiles[mid]))
+        prof["word_timestamps"] = True
+        stt_profiles[mid] = prof
+
+    audio_inspect_cfg = {"enabled": True, "mode": "warn"}
+    if isinstance(raw.get("audio_inspect"), dict):
+        if "enabled" in raw["audio_inspect"]:
+            audio_inspect_cfg["enabled"] = bool(raw["audio_inspect"]["enabled"])
+        if "mode" in raw["audio_inspect"]:
+            m = str(raw["audio_inspect"]["mode"] or "warn").strip().lower()
+            if m in ("warn", "block"):
+                audio_inspect_cfg["mode"] = m
+
     return {
         "whisper_model": model,
         "device": dev,
@@ -162,6 +310,8 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "server_api_key": server_api_key,
         "client_base_uri": client_base_uri,
         "client_api_key": client_api_key,
+        "stt_profiles": stt_profiles,
+        "audio_inspect": audio_inspect_cfg,
     }
 
 
@@ -245,6 +395,32 @@ def update_config(patch: dict[str, Any]) -> dict[str, Any]:
         if ck and not ck.startswith("••••"):
             clean["client_api_key"] = ck
 
+    if "stt_profiles" in patch and isinstance(patch["stt_profiles"], dict):
+        current_cfg = cfgmod.read_settings()
+        voice_raw = (current_cfg.get("voice") or {}) if isinstance(current_cfg, dict) else {}
+        mst_raw = (voice_raw.get("meeting_stt") or {}) if isinstance(voice_raw, dict) else {}
+        stored_profiles = dict(mst_raw.get("stt_profiles") or {})
+        for mid, prof_patch in patch["stt_profiles"].items():
+            if mid in SUPPORTED_WHISPER_MODELS and isinstance(prof_patch, dict):
+                clean_p = sanitize_stt_profile(prof_patch)
+                existing = stored_profiles.get(mid) or dict(DEFAULT_STT_PROFILES.get(mid, {}))
+                existing.update(clean_p)
+                existing["word_timestamps"] = True
+                stored_profiles[mid] = existing
+        clean["stt_profiles"] = stored_profiles
+
+    if "audio_inspect" in patch and isinstance(patch["audio_inspect"], dict):
+        ai_patch = patch["audio_inspect"]
+        ai_clean = {}
+        if "enabled" in ai_patch:
+            ai_clean["enabled"] = bool(ai_patch["enabled"])
+        if "mode" in ai_patch:
+            m = str(ai_patch["mode"] or "warn").strip().lower()
+            if m in ("warn", "block"):
+                ai_clean["mode"] = m
+        if ai_clean:
+            clean["audio_inspect"] = ai_clean
+
     if clean:
         new_cfg = cfgmod.update_settings({"voice": {"meeting_stt": clean}})
     else:
@@ -289,8 +465,17 @@ def is_whisper_model_cached(model_name: str) -> bool:
     spec = SUPPORTED_WHISPER_MODELS.get(model_name)
     if not spec:
         return False
+    mdir = models_dir()
+    local_dir_name = spec.get("local_dir")
+    if local_dir_name:
+        loc = mdir / local_dir_name
+        try:
+            if loc.is_dir() and (loc / "model.bin").is_file() and (loc / "config.json").is_file():
+                return True
+        except OSError:
+            pass
     slug = "models--" + spec["repo"].replace("/", "--")
-    root = models_dir() / slug
+    root = mdir / slug
     if not root.is_dir():
         return False
     try:
@@ -315,9 +500,15 @@ def delete_cached_whisper_model(model_name: str) -> dict[str, Any]:
     if not spec:
         return {"ok": False, "error": f"Unsupported model: {model_name}"}
     base = models_dir().resolve()
+    removed = 0
+    local_dir_name = spec.get("local_dir")
+    if local_dir_name:
+        loc = base / local_dir_name
+        if loc.exists():
+            shutil.rmtree(loc, ignore_errors=True)
+            removed += 1
     slug = "models--" + spec["repo"].replace("/", "--")
     root = base / slug
-    removed = 0
     if root.exists():
         candidate_targets: list[Path] = []
         try:
@@ -474,12 +665,16 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
 
     models_list = []
     for mid, spec in SUPPORTED_WHISPER_MODELS.items():
+        prof = mc.get("stt_profiles", {}).get(mid, DEFAULT_STT_PROFILES.get(mid, {}))
         models_list.append({
             "id": mid,
             "repo": spec["repo"],
             "cached": cached[mid],
             "size_hint": spec["size_hint"],
             "label": localefmt.chu(spec["label_vi"], spec["label_en"]),
+            "default_for": spec.get("default_for", ""),
+            "benchmark_hint": spec.get("benchmark_hint", ""),
+            "profile": prof,
         })
 
     if install_job is None:
@@ -522,6 +717,8 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
             "has_client_key": bool(resolve_client_key(cfg)),
             "client_ready": bool(mc["client_base_uri"] and resolve_client_key(cfg)),
         },
+        "stt_profiles": mc.get("stt_profiles", {}),
+        "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
         "config": {
             "whisper_model": mc["whisper_model"],
             "device": mc["device"],
@@ -532,6 +729,8 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
             "remote_mode": mc["remote_mode"],
             "server_base_uri": mc["server_base_uri"],
             "client_base_uri": mc["client_base_uri"],
+            "stt_profiles": mc.get("stt_profiles", {}),
+            "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
         },
     }
 

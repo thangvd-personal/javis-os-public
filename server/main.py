@@ -20074,6 +20074,9 @@ async def voice_meeting_jobs_create(request: Request):
     ext = meeting_jobs.sanitize_ext(str(body.get("file_ext") or body.get("filename") or ".webm"))
     diarize = mc["diarize"] if "diarize" not in body else bool(body.get("diarize"))
     vad_filter = mc.get("vad_filter", False) if "vad_filter" not in body else bool(body.get("vad_filter"))
+    stt_params = meeting_stt.sanitize_stt_profile(body.get("stt_params") or {})
+    if "vad_filter" in body:
+        stt_params["vad_filter"] = vad_filter
     now = localefmt.now()
     job = voice_records.get_store().create_job(
         brain=brain,
@@ -20090,6 +20093,7 @@ async def voice_meeting_jobs_create(request: Request):
         min_speakers=max(0, _safe_int(body.get("min_speakers"))),
         max_speakers=max(0, _safe_int(body.get("max_speakers"))),
         total_chunks=max(0, _safe_int(body.get("total_chunks"))),
+        stt_params=stt_params,
         created_at=now.timestamp(),
         created_iso=now.isoformat(),
     )
@@ -20961,6 +20965,14 @@ async def voice_record_transcribe(record_id: str, request: Request):
     if language not in meeting_stt.VALID_LANGUAGES:
         language = mc["language"]
 
+    raw_stt_params = body.get("stt_params")
+    stt_params = None
+    if isinstance(raw_stt_params, dict):
+        stt_params = {}
+        for k in ("beam_size", "temperature", "no_speech_threshold", "vad_filter", "condition_on_previous_text", "word_timestamps"):
+            if k in raw_stt_params:
+                stt_params[k] = raw_stt_params[k]
+
     brain = str(rec.get("brain") or "brain")
     broot = Path(_brain_root(brain)).resolve()
     now = localefmt.now()
@@ -20984,6 +20996,7 @@ async def voice_record_transcribe(record_id: str, request: Request):
         total_chunks=0,
         audio_path=audio_path,
         record_id=record_id,
+        stt_params=stt_params,
         status="queued",
         pinned=bool(rec.get("pinned")),
         duration_sec=dur,

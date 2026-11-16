@@ -347,6 +347,15 @@ check("console.css contains styling for vr-queue-log-link and column classes",
   && consoleCss.includes(".vr-queue-col-finished")
   && consoleCss.includes(".vr-queue-col-actual"));
 
+// 13. PhoWhisper UI updates: speakers dropdown with off option & active model info
+check("vrMtNumSpk includes off option for disabling diarization and active model info row",
+  vrJsSrc.includes('<option value="off">\' + esc(tw("vr.meeting.speakers_none"))')
+  && vrJsSrc.includes('id="vrMtActiveModelInfo"')
+  && vrJsSrc.includes('id="vrMtActiveModelBadge"')
+  && viJson["vr.meeting.speakers_none"] === "Không tách người nói"
+  && enJson["vr.meeting.speakers_none"] === "Do not separate speakers");
+
+
 
 if (fails.length) {
   console.log("\nFAIL:", fails.length, fails);

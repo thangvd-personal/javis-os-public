@@ -12,7 +12,7 @@ Các cuộc họp doanh nghiệp thường kéo dài từ 30 phút đến vài g
 Hệ thống ghi âm cuộc họp trong JAVIS OS được thiết kế để giải quyết trọn vẹn các thách thức trên thông qua:
 1. **Thu âm bền vững tại trình duyệt**: Hỗ trợ ghi âm thời lượng lớn, tạm dừng / tiếp tục (Pause/Resume), chia nhỏ file tải lên dạng chunked resumable upload (8 MB/lát) để tránh nghẽn mạng hoặc tràn RAM trình duyệt.
 2. **Kiến trúc Subprocess Worker cô lập**: Tiến trình nặng xử lý AI (faster-whisper, Pyannote) chạy trong tiến trình con độc lập (`server/meeting_ear/worker.py`), tách biệt với tiến trình web server FastAPI chính nhằm bảo vệ GPU VRAM và RAM hệ thống, tránh làm treo ứng dụng.
-3. **Core STT tối ưu**: Sử dụng `faster-whisper` với mô hình mặc định `large-v3-turbo` (chính xác cao, tốc độ ~8x realtime) hoặc `medium` (cân bằng), kết hợp trích xuất dấu thời gian cấp độ từ (`word_timestamps=True`).
+3. **Core STT tối ưu**: Sử dụng `faster-whisper` với họ mô hình chuyên biệt tiếng Việt `phowhisper-medium`, `phowhisper-large` (CTranslate2, tối ưu tỷ lệ lỗi từ WER cho tiếng Việt) cùng `large-v3-turbo` (đa ngôn ngữ, tốc độ ~8x realtime), kết hợp cổng tiền kiểm tra chất lượng âm thanh (Audio Inspect Gate: SNR, tỷ lệ lời nói, modulation index) và trích xuất dấu thời gian cấp độ từ (`word_timestamps=True`).
 4. **Phân tách người nói chuyên sâu**: Sử dụng `pyannote/speaker-diarization-3.1` (chạy cục bộ qua môi trường ảo riêng biệt hoặc kết nối máy chủ phân tách từ xa Remote Diarization Server).
 5. **Thuật toán ghép nối cấp độ từ (Word-level Merging)**: Khắc phục triệt để tình trạng một câu nói bị chia đôi hoặc gán sai người khi có sự chuyển giao lượt nói giữa chừng.
 6. **Chuẩn hóa 2-Pass với LLM kết hợp giám sát lệch nghĩa (Semantic Drift)**: Pass 1 phân tích ngữ cảnh và trích xuất bảng thuật ngữ (glossary); Pass 2 chuẩn hóa song song theo lô với ngữ cảnh trượt (sliding window); Post-QA tự động đối soát Jaccard similarity và đưa các câu nghi vấn vào hàng đợi duyệt (Review Queue).
@@ -507,12 +507,17 @@ Dựa trên dữ liệu thực tế tại `server/state/meeting-logs/` trên mô
 -> **Tổng thời gian hoàn tất một cuộc họp 60 phút đạt khoảng 12 đến 16 phút** (Overall RTF ~ 0.22x).
 
 ### 6.2. Khuyến nghị Vận hành & Cấu hình Hệ thống
-1. **Lựa chọn mô hình Whisper**:
-   - Sử dụng `large-v3-turbo` làm mô hình mặc định: Tốc độ xử lý nhanh tương đương bản `medium` nhưng giữ được độ chính xác nhận dạng từ vựng tiếng Việt gần như tương đương bản `large-v3` đầy đủ.
-   - Đối với máy chỉ có CPU (không có GPU rời): Chuyển sang mô hình `small` hoặc `medium` với cấu hình thiết bị `cpu`, kiểu tính toán `int8` để tránh quá tải CPU.
-2. **Quản lý Token Hugging Face**:
+1. **Lựa chọn mô hình STT (Speech-to-Text)**:
+   - **`phowhisper-medium`** (Mặc định khuyến nghị cho tiếng Việt): Tối ưu hóa sâu cho hội thoại tiếng Việt (WER ~7.8%), chạy mượt mà trên GPU tầm trung hoặc CPU int8 (~1.5GB VRAM).
+   - **`phowhisper-large`**: Độ chính xác nhận dạng tiếng Việt cao nhất (WER ~6.2%), phù hợp máy trạm hoặc GPU có VRAM >= 4GB (~3GB VRAM).
+   - **`large-v3-turbo`**: Đa ngôn ngữ, tốc độ giải mã cực nhanh (~8x realtime), phù hợp cho cuộc họp song ngữ Anh - Việt hoặc đa ngôn ngữ.
+   - Đối với máy chỉ có CPU: Có thể dùng `phowhisper-medium` hoặc `small` với kiểu tính toán `int8` để tránh quá tải CPU.
+2. **Cổng tiền kiểm tra âm thanh (Audio Inspect Gate)**:
+   - Hệ thống tự động đo SNR (dB), tỷ lệ tiếng nói và chỉ số điều chế phổ để phát hiện âm thanh kém chất lượng (ồn, rè, quá nhỏ hoặc im lặng).
+   - Cổng này chỉ đưa ra cảnh báo phi ức chế (warning banner) và không chặn tiến trình xử lý, đồng thời không tự ý can thiệp khử ồn làm biến dạng tín hiệu âm học gốc.
+3. **Quản lý Token Hugging Face**:
    - Để kích hoạt tính năng phân tách người nói cục bộ, người dùng cần chấp thuận điều khoản sử dụng model trên Hugging Face cho `pyannote/speaker-diarization-3.1` và `pyannote/segmentation-3.0`, sau đó dán token vào cấu hình Ghi âm.
-3. **Triển khai Mô hình Tách giọng Từ xa (Remote Diarization)**:
+4. **Triển khai Mô hình Tách giọng Từ xa (Remote Diarization)**:
    - Trong môi trường văn phòng có nhiều máy trạm yếu nhưng có 1 máy chủ GPU mạnh, nên cấu hình máy chủ GPU ở chế độ `server` (`POST /voice-records/meeting/generate-diarize-key`), và các máy trạm cấu hình ở chế độ `client` trỏ về IP của máy chủ. Thao tác này giúp tận dụng tối đa tài nguyên phần cứng mà không làm đơ máy người dùng.
-4. **Tận dụng Tính năng Học từ khóa (Hotword Learning)**:
+5. **Tận dụng Tính năng Học từ khóa (Hotword Learning)**:
    - Định kỳ kiểm tra tab **Duyệt câu hỏi** trong trang Ghi âm. Đối với các tên riêng nhân sự hoặc tên dự án nội bộ, bấm nút **Thêm từ khóa** để hệ thống tự động nạp vào từ điển nhận dạng giọng nói, giúp các cuộc họp tiếp theo đạt độ chính xác cao ngay từ lần nghe đầu tiên.
