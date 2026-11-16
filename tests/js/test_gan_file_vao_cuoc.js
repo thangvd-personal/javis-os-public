@@ -39,9 +39,10 @@ const check = (name, cond, them) => {
 // riêng, và mọi thứ thêm cho project sau này sẽ không tới được nó.
 check("bỏ hẳn hai pane riêng của chế độ cuộc",
   !/function paneCuocFile/.test(SU) && !/function paneCuocLink/.test(SU));
-check("veDrawer dùng chung paneFile/paneLink cho cả hai chế độ",
-  /projTab === "instr" \? paneHuongDan\(p\) : projTab === "files" \? paneFile\(p\) : paneLink\(p\)/.test(SU)
-  && (SU.match(/function paneFile\(/g) || []).length === 1);
+// 2026-11-13 (owner): files, folders and links share ONE documents pane, so every mode draws it with paneFile.
+check("veDrawer dùng chung MỘT pane tài liệu (file, thư mục, link) cho mọi chế độ",
+  /projTab === "learned" \? paneLearned\(p\) : projTab === "instr" \? paneHuongDan\(p\) : paneFile\(p\)/.test(SU)
+  && (SU.match(/function paneFile\(/g) || []).length === 1 && !/function paneLink\(/.test(SU));
 // Ba chế độ (project / cuộc / trợ lý) dùng chung một ngăn kéo, nên "dữ liệu đang mở" phải
 // đọc ở MỘT chỗ. Rẽ nhánh lại ở từng hàm là thêm chế độ thứ tư sẽ sót đúng một chỗ.
 check("có hàm đọc dữ liệu đang mở, không rẽ nhánh ở từng chỗ",
@@ -114,11 +115,16 @@ check("có trần số lượng để một cuộc dài không âm thầm phình
 // Cắt riêng thân hàm rồi soi thứ tự bên trong: đo bằng cửa sổ ký tự thì thêm một dòng chú
 // thích là phép kiểm đỏ oan.
 const themFilePY = (PY.match(/def sessions_add_file\([\s\S]*?\n\n\n/) || [""])[0];
+// 2026-11-12 (owner: "chọn được cả thư mục"): the fence moved one call down, into `_asset_target`, shared by the
+// project, chat and agent routes. It takes a file or a whole folder, and still refuses the empty path.
+const targetPY = (PY.match(/def _asset_target\([\s\S]*?\n\n\n/) || [""])[0];
 check("route thêm file kiểm đường dẫn TRƯỚC khi ghi kho",
-  themFilePY.indexOf("_safe_path(b, path)") > 0
-  && themFilePY.indexOf("_safe_path(b, path)") < themFilePY.indexOf("add_session_file"));
-// Đường dẫn rỗng giải ra chính thư mục trần, mà thư mục thì "có tồn tại".
-check("và chỉ nhận đúng FILE, không nhận thư mục", /if not alo\.is_file\(\):/.test(themFilePY));
+  themFilePY.indexOf("_asset_target(b, path)") > 0
+  && themFilePY.indexOf("_asset_target(b, path)") < themFilePY.indexOf("add_session_file")
+  && targetPY.indexOf("_safe_path(brain, path)") > 0);
+// Đường dẫn rỗng giải ra chính thư mục trần, mà thư mục thì "có tồn tại": it stays refused (`if rel and ...`).
+check("a file or a real folder is taken, the empty path (the ceiling itself) is not",
+  /if rel and target\.is_dir\(\):\n\s+return rel \+ "\/", target\.name, True\n\s+if target\.is_file\(\):/.test(targetPY));
 check("brain lấy từ phiên, không nhận từ client",
   /sessions_add_file[\s\S]{0,300}sess\.get\("brain"\)/.test(PY));
 check("link chỉ nhận http/https",
@@ -154,17 +160,40 @@ check("lượt chat dashboard truyền session_id vào prompt",
 check("chú thích ghim nói rõ chỉ áp cho RIÊNG cuộc này",
   /RIÊNG cuộc này/.test(VI["cts.pin_note"] || ""));
 check("ô rỗng chỉ luôn đường thêm vào chứ không chỉ báo trống",
-  /Thêm file/.test(VI["cts.files_empty"] || "") && /Thêm link/.test(VI["cts.links_empty"] || ""));
+  /Thêm tài liệu/.test(VI["cts.files_empty"] || "") && /link/.test(VI["cts.files_empty"] || "")
+  && VI["proj.add_doc"] === "Thêm tài liệu");
 // Link tự dò: địa chỉ là thứ bấm được ở dòng TÊN, dòng dưới chỉ nói ai gửi. Nhét địa chỉ vào
 // cả hai dòng là bắt đọc hai lần một thứ trong một hàng cao 40px.
 check("link tự dò không lặp địa chỉ ở cả hai dòng",
-  /tuDong: true, icon: "link", tenHtml: aHtml\(l\),\s*\n\s*sub: l\.vai === "user"/.test(SU));
+  /tuDong: true, icon: "link", tenHtml: linkAnchor\(l\),\s*\n\s*sub: l\.vai === "user"/.test(SU));
 // Gạch ngang là dấu "file này đã dời đi". Suy nó từ moDuoc thì mọi hàng link đều bị gạch,
 // vì link không có khái niệm mở-được.
 check("gạch ngang là cờ RIÊNG, không suy từ moDuoc",
   /if \(o\.tuDong\) \{\s*\n\s*return '<div class="pd-row' \+ \(o\.mat \? " mat" : ""\)/.test(SU));
 check("chú thích ghim chỉ hiện khi đã có hàng ghim được",
   /function coGhimDuoc\(p\)/.test(SU) && /coGhimDuoc\(p\)\s*\n\s*\? '<div class="pd-note">/.test(SU));
+
+// ---- a whole folder (2026-11-12, owner: "chọn được cả thư mục") ----
+// The drawer is shared by the project, the chat and the agent, so these hold for all three.
+const timFile = (SU.match(/async function timFile\([\s\S]*?\n  \}\n/) || [""])[0];
+check("the brain search asks for folders too", timFile.includes("&mode=name&include_dirs=true&limit=20&q="));
+check("a folder result goes by its path with a trailing slash, the spelling the server stores",
+  /var dir = it\.type === "dir", duong = dir \? folderPath\(it\.path\) : it\.path;/.test(timFile)
+  && /data-path="' \+ esc\(duong\)/.test(timFile) && /ic\(dir \? "folder" : icoFile\(it\.name\)\)/.test(timFile));
+// The helper is run for real: the Add / Remove button finds a row again only when both sides spell the path alike.
+const folderPath = new Function((SU.match(/function folderPath\(p\) \{[^\n]*\}/) || ["function folderPath(){}"])[0] + "; return folderPath;")();
+const isFolderRow = new Function((SU.match(/function isFolderRow\(f\) \{[^\n]*\}/) || ["function isFolderRow(){}"])[0] + "; return isFolderRow;")();
+check("folderPath leaves exactly one trailing slash", folderPath("a/b") === "a/b/" && folderPath("a/b//") === "a/b/");
+check("a row is a folder by the server's flag or by its slash, never by a missing extension",
+  isFolderRow({ dir: true, path: "a" }) && isFolderRow({ path: "a/b/" }) && !isFolderRow({ path: "a/README" }) && !isFolderRow(null));
+check("a folder row never gets the 'delete from the brain' button", SU.includes("xoaDuoc: con && !dir"));
+check("a folder row opens the Files page instead of the editor",
+  /function moFile\(f\) \{\s*\n\s*if \(isFolderRow\(f\)\) \{ openFolderRow\(f\); return; \}/.test(SU)
+  && /window\.JavisOpenFiles\(folderPath\(duong\)\)/.test(SU));
+check("the folder's pin and open titles exist in both languages",
+  ["proj.pin_on_dir", "proj.open_dir"].every((k) => VI[k] && EN[k] && VI[k] !== EN[k]));
+check("the search box says folders can be found", /thư mục/.test(VI["proj.search_ph"]) && /folder/.test(EN["proj.search_ph"])
+  && /thư mục/.test(VI["teams.pick.doc_search_ph"]) && /folder/.test(EN["teams.pick.doc_search_ph"]));
 
 console.log("");
 if (fails.length) { console.log("ĐỎ " + fails.length + " mục"); process.exit(1); }

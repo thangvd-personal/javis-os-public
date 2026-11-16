@@ -146,7 +146,7 @@
   }
 
   // ───────────── documents picked in the create box (2026-11-12) ─────────────
-  // st.docs:  [{ name, brain_path }] for a file already in the brain, [{ name, path, uid, busy, err }] for an upload
+  // st.docs:  [{ name, brain_path, dir }] for a file or a whole folder (`dir`) of the brain, [{ name, path, uid, busy, err }] for an upload
   //           (`path` is the staged path /upload returned; empty while it uploads or when it failed).
   // st.links: ["https://..."]
   var DOCS_MAX = 10;         // files, and links: the server takes at most this many at creation (team_api.CREATE_DOCS_MAX)
@@ -207,14 +207,52 @@
     };
   }
 
-  function docsCount(st) { return (st.docs || []).length + (st.links || []).length; }
+  // /files/search rows as the box keeps them. A folder's path gets ONE trailing "/": the spelling the server stores for
+  // a folder document, so "already added" is one string comparison, here and in the team's Info tab.
+  function searchRows(items) {
+    return (items || []).map(function (it) {
+      var dir = it.type === "dir";
+      return { path: dir ? String(it.path || "").replace(/\/+$/, "") + "/" : it.path, name: it.name, dir: dir };
+    });
+  }
+
+  function docsCount(st) { return (st.docs || []).length + (st.links || []).length + (st.repos || []).length; }
+
+  // 2026-11-15 (owner: "cả trong tài liệu của agent và team cũng có khả năng thêm repo"): GitHub repos picked in the
+  // create box. The picker is team-github.js, saving into the box's state; teams.js attaches them to the new team's
+  // chat once POST /teams answers (the same route as the "Repo GitHub" part of the team's Info tab).
+  function repoLogo() {
+    var G = typeof window !== "undefined" && window.JavisGithubRepos;
+    return G && G.logo ? G.logo : ic("git-branch");
+  }
+  function setRepos(st, names) {
+    var out = [];
+    (names || []).forEach(function (n) {
+      n = String(n || "").trim();
+      if (n && out.map(function (x) { return x.toLowerCase(); }).indexOf(n.toLowerCase()) < 0) out.push(n);
+    });
+    return Object.assign({}, st, { repos: out });
+  }
+  function removeRepo(st, i) {
+    var repos = (st.repos || []).slice();
+    repos.splice(Number(i), 1);
+    return Object.assign({}, st, { repos: repos });
+  }
+  function repoChipsHtml(st) {
+    return (st.repos || []).map(function (n, i) {
+      return '<span class="tmp-doc tmp-repo">' + repoLogo() + '<span class="tmp-doc-name" title="' + esc(n) + '">' +
+        esc(String(n).split("/").pop()) + '</span><button type="button" class="tmp-sel-x" data-repo-del="' + i + '" aria-label="' +
+        esc(tw("teams.pick.doc_remove", { name: n })) + '">' + ic("x") + "</button></span>";
+    }).join("");
+  }
 
   function docChipsHtml(st) {
     var docs = st.docs || [], links = st.links || [];
-    if (!docs.length && !links.length) return "";
+    if (!docs.length && !links.length) return repoChipsHtml(st);
     return docs.map(function (d, i) {
       var state = d.busy ? tw("teams.pick.doc_uploading") : d.err ? tw("teams.pick.doc_failed") : "";
-      return '<span class="tmp-doc' + (d.err ? " is-err" : "") + (d.busy ? " is-busy" : "") + '">' + ic(d.brain_path ? "file-text" : "upload-cloud") +
+      return '<span class="tmp-doc' + (d.err ? " is-err" : "") + (d.busy ? " is-busy" : "") + '">' +
+        ic(d.dir ? "folder" : d.brain_path ? "file-text" : "upload-cloud") +
         '<span class="tmp-doc-name" title="' + esc(d.brain_path || d.name) + '">' + esc(d.name) + "</span>" +
         (state ? '<span class="tmp-doc-state">' + esc(state) + "</span>" : "") +
         '<button type="button" class="tmp-sel-x" data-doc-del="' + i + '" aria-label="' + esc(tw("teams.pick.doc_remove", { name: d.name })) +
@@ -223,10 +261,11 @@
       return '<span class="tmp-doc">' + ic("link") + '<span class="tmp-doc-name" title="' + esc(u) + '">' + esc(u.replace(/^https?:\/\//i, "")) +
         '</span><button type="button" class="tmp-sel-x" data-link-del="' + i + '" aria-label="' + esc(tw("teams.pick.doc_remove", { name: u })) +
         '">' + ic("x") + "</button></span>";
-    }).join("");
+    }).join("") + repoChipsHtml(st);
   }
 
-  // Search results: files of the brain whose name matches. One already picked says so and cannot be added twice.
+  // Search results: files and folders of the brain whose name matches (a folder row has `dir`, and its path ends in
+  // "/"). One already picked says so and cannot be added twice.
   function docResultsHtml(st) {
     if (!String(st.docQuery || "").trim()) return "";
     if (st.docState === "searching") return '<div class="tmp-doc-note" role="status">' + esc(tw("teams.pick.doc_searching")) + "</div>";
@@ -235,7 +274,7 @@
     var full = (st.docs || []).length >= DOCS_MAX;
     return rows.map(function (r, i) {
       var have = hasDoc(st, r.path);
-      return '<div class="tmp-doc-res">' + ic("file-text") + '<span class="tmp-doc-res-text"><b>' + esc(r.name) + "</b><i>" + esc(r.path) +
+      return '<div class="tmp-doc-res">' + ic(r.dir ? "folder" : "file-text") + '<span class="tmp-doc-res-text"><b>' + esc(r.name) + "</b><i>" + esc(r.path) +
         '</i></span><button type="button" class="ws-btn tmp-doc-pick" data-doc-add="' + i + '"' + (have || full ? " disabled" : "") + ">" +
         esc(tw(have ? "teams.pick.doc_added" : "teams.pick.doc_add")) + "</button></div>";
     }).join("");
@@ -247,7 +286,7 @@
   }
 
   function docsHtml(st) {
-    var open = !!(st.docsOpen || docsCount(st) || st.docQuery || st.linkDraft);
+    var open = !!(st.docsOpen || docsCount(st) || st.docQuery || st.linkDraft || st.repoOpen);
     return '<details class="tmp-desc tmp-docs"' + (open ? " open" : "") + '><summary class="tmp-docs-sum">' + docsSummaryHtml(st) +
       '</summary><p class="tmp-docs-help">' + esc(tw("teams.pick.docs_help")) + '</p><div class="tmp-docs-chips">' + docChipsHtml(st) +
       '</div><div class="tmp-docs-row"><input class="tmp-doc-search" type="search" value="' + esc(st.docQuery || "") + '" placeholder="' +
@@ -256,7 +295,10 @@
       '<div class="tmp-doc-results">' + docResultsHtml(st) + '</div><div class="tmp-docs-row"><input class="tmp-link-input" type="url" value="' +
       esc(st.linkDraft || "") + '" placeholder="' + esc(tw("teams.pick.link_ph")) + '" aria-label="' + esc(tw("teams.pick.link_ph")) + '">' +
       '<button type="button" class="ws-btn tmp-link-add">' + esc(tw("teams.pick.link_add")) + "</button></div>" +
-      (st.linkBad ? '<div class="tmp-doc-note tmp-doc-warn" role="alert">' + esc(tw("teams.pick.link_bad")) + "</div>" : "") + "</details>";
+      (st.linkBad ? '<div class="tmp-doc-note tmp-doc-warn" role="alert">' + esc(tw("teams.pick.link_bad")) + "</div>" : "") +
+      '<div class="tmp-docs-row"><button type="button" class="ws-btn tmp-repo-open" aria-expanded="' + (st.repoOpen ? "true" : "false") + '">' +
+      repoLogo() + " " + esc(tw("teams.gh_attach")) + "</button></div>" +
+      '<div class="tmp-repo-box"' + (st.repoOpen ? "" : " hidden") + "></div></details>";
   }
 
   function face(a, size) {
@@ -402,8 +444,9 @@
     leaderHtml: leaderHtml, footerHtml: footerHtml, previewHtml: previewHtml, setLeader: setLeader, NO_TAG: NO_TAG,
     pool: pool,
     DOCS_MAX: DOCS_MAX, docsBusy: docsBusy, hasDoc: hasDoc, addDoc: addDoc, removeDoc: removeDoc, cleanLink: cleanLink,
+    setRepos: setRepos, removeRepo: removeRepo, repoChipsHtml: repoChipsHtml,
     addLink: addLink, removeLink: removeLink, docPayload: docPayload, docsCount: docsCount, docsHtml: docsHtml,
-    docChipsHtml: docChipsHtml, docResultsHtml: docResultsHtml, docsSummaryHtml: docsSummaryHtml,
+    docChipsHtml: docChipsHtml, docResultsHtml: docResultsHtml, docsSummaryHtml: docsSummaryHtml, searchRows: searchRows,
     setStrings: function (o) { FALLBACK = o || {}; } };
   if (typeof window !== "undefined") window.JavisTeamPicker = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

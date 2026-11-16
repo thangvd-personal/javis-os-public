@@ -889,6 +889,9 @@ body.in-console .graph-stats { display: none; }
    the eye needs back. */
 .set-sec .auth-pw input { padding-right: 44px; }
 .auth-err { color: var(--red); font-size: 14px; min-height: 16px; }
+.auth-remember-row { display: flex; align-items: center; gap: 6px; }
+.auth-remember { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--text2); cursor: pointer; min-height: 40px; }
+.auth-body .auth-remember input { width: 20px; height: 20px; margin: 0; padding: 0; flex: none; accent-color: var(--accent); cursor: pointer; }
 .auth-help { font-size: 14px; }
 .auth-help span { color: var(--accent); cursor: pointer; text-decoration: underline; }
 .auth-reset { font-size: 13px; color: var(--text3); line-height: 1.6; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; }
@@ -1301,6 +1304,19 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .msg-user .bubble .uquote { display: block; margin: 0 0 8px; padding: 2px 0 2px 10px;
   border-left: 3px solid var(--accent); color: var(--text2); font-size: .94em;
   max-height: 7.6em; overflow: hidden; }
+/* 2026-11-14 (quote-jump.js): a tap on the quote scrolls back to the words it quotes and marks them for a moment. */
+.msg-user .bubble .uquote { cursor: pointer; border-radius: 0 6px 6px 0; -webkit-tap-highlight-color: transparent;
+  transition: background-color .15s, color .15s; }
+.msg-user .bubble .uquote:hover { color: var(--text); background: var(--accent-wash); }
+.msg-user .bubble .uquote:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+::highlight(jv-quote-hit) { background-color: rgba(255, 150, 70, 0.38); color: inherit; }
+:root[data-theme="light"] ::highlight(jv-quote-hit) { background-color: rgba(255, 170, 60, 0.42); }
+/* A browser without the Highlight API flashes the whole answer instead. */
+.msg.quote-flash .bubble { animation: jv-quote-flash 1.8s ease; }
+@keyframes jv-quote-flash { 0%, 45% { box-shadow: 0 0 0 3px var(--accent-line); } 100% { box-shadow: 0 0 0 3px transparent; } }
+@media (prefers-reduced-motion: reduce) { .msg.quote-flash .bubble { animation: none; outline: 2px solid var(--accent-line); } }
+/* The "not found" note: as wide as its words, never wider than the screen (left: 50% alone halves the room it has). */
+.mp-toast.qj-note { width: max-content; max-width: calc(100vw - 32px); text-align: center; border-radius: 14px; }
 .attach-chip.quote-chip { max-width: min(520px, 100%); }
 .attach-chip.quote-chip .chip-ico { color: var(--accent); }
 .msg-user .bubble .utext.clamped { display: -webkit-box; -webkit-line-clamp: 10;
@@ -1649,14 +1665,30 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
 .cp-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cp-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
 .cp-gap { flex: 1 1 auto; }
-/* Suggested next message (chat-suggest.js, 2026-11-07): the grey placeholder of the empty box IS the suggestion, and
-   this chip fills it in (the way on a phone, which has no Tab key). Main chat and Teams share it. */
-.sug-tab { flex: none; align-self: center; font: 600 12px/1 var(--font); padding: 6px 9px; border-radius: 7px;
-  border: 1px solid var(--border); background: var(--bg3); color: var(--text2); cursor: pointer; white-space: nowrap; }
-.sug-tab:hover { border-color: var(--accent); color: var(--accent); }
-.sug-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.sug-tab[hidden] { display: none; }
-@media (pointer: coarse) { .sug-tab { font-size: 14px; padding: 8px 11px; } }
+/* The suggestion is drawn on a mirror layer over the box (2026-11-13), same font, padding and width (chat-suggest.js
+   copies them): the typed part unseen, only there to take up its room, then the rest in grey exactly where the typed
+   text ends. An empty box is drawn the same way and hides its own placeholder text (.sug-ghosted), so a long
+   suggestion wraps and the box grows to show all of it. Main chat and Teams share it. The suggestion adds nothing to
+   the button row under the box: the "Tab" chip that stood there went on 2026-11-13 (owner: "không cần hiện chữ tab
+   đâu em, và nhớ phải giữ lại các nút khác"); the Tab key and the ">" below take it. */
+.sug-ghost { position: absolute; margin: 0; border: 0; box-sizing: border-box; overflow: hidden; pointer-events: none;
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; background: none; }
+.sug-ghost[hidden] { display: none; }
+.sug-ghost-typed { visibility: hidden; }
+.sug-ghost-rest { color: var(--text3); }
+textarea.sug-ghosted::placeholder { color: transparent; }
+/* The ">" after the suggestion: no border, no background, a little darker and heavier than the grey text so it reads as
+   something to tap (owner, 2026-11-13: "1 mũi tên nhỏ theo kiểu > thôi", "ngay sau chữ luôn nhé", "bôi đậm lên một
+   chút"). It is tied to the last word (nowrap) so it never wraps alone, no taller than a line of text so the lines keep
+   their height, and its ::after is the room around it: a little for a mouse, more for a finger. It first showed on a
+   touch screen only; the owner asked for it on a computer too the same day ("không có mũi tên >"). */
+.sug-ghost-tail { white-space: nowrap; }
+.sug-go { display: inline-flex; align-items: center; justify-content: center; position: relative; pointer-events: auto;
+  width: 1em; height: 1em; margin: 0 0 0 .3em; padding: 0; border: 0; background: none; color: var(--text2);
+  font: inherit; line-height: 1; vertical-align: -0.12em; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sug-go::after { content: ""; position: absolute; inset: -4px -6px; }
+.sug-go:hover, .sug-go:active { color: var(--accent); }
+@media (pointer: coarse) { .sug-go::after { inset: -8px -10px; } }
 .cp-plus, .cp-limit {
   flex: none; width: 32px; height: 32px; border-radius: 50%; padding: 0;
   border: 1px solid var(--border); background: transparent; color: var(--text2);
@@ -2674,6 +2706,12 @@ li.task-done > .dv-ttext { text-decoration: line-through; text-decoration-color:
   border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-3);
 }
 .eff-pop[hidden], .cp-menu[hidden] { display: none; }
+/* In the composer card (owner, 14/11/2026) the popovers open just above the row of chips, not above the whole card: a
+   tall card (a file attached, a few lines typed) left them far from the chip. Their height stops at the top of the part
+   of the screen in view, so the first rows are never cut off. model-picker.js (POP_ANCHOR) sets both values. */
+.hud-voice .mb-pop, .hud-voice .eff-pop, .hud-voice .cp-menu { bottom: var(--cp-pop-bottom, calc(100% + 6px)); }
+.hud-voice .mb-pop { max-height: min(62vh, var(--cp-pop-room, 62vh)); }
+.hud-voice .cp-menu { max-height: min(60vh, 440px, var(--cp-pop-room, 60vh)); }
 /* Phone sheet wrappers (2026-11-11): boxless on a computer, so the three popovers still place themselves against the
    card. Up to 860px they become one sheet from the bottom, see the phone block of the composer above. */
 .cp-sheet, .cp-sheet-card { display: contents; }
@@ -3658,15 +3696,43 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   border: 1px solid var(--warn-line); }
 .cb-quyen.full { color: var(--red); background: var(--danger-wash);
   border: 1px solid var(--danger-line); }
-/* Nhóm đang chờ chủ cho phép. Cố ý nổi bằng màu thông tin chứ không phải màu lỗi: không có gì
-   hỏng cả, chỉ là có một quyết định đang chờ đúng một cú bấm. */
-.cb-nhomcho { border: 1px solid var(--info-line); background: var(--info-wash);
-  border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
-.cb-nhomcho-t { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  font-size: 13px; color: var(--text); }
-.cb-nhomcho-id { font-family: var(--mono, monospace); font-size: 11.5px; color: var(--text3); }
-.cb-nhomcho-d { font-size: 12.5px; line-height: 1.5; color: var(--text3); }
-.cb-nhomcho-a { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Chats waiting for the owner's decision, in the status popup. Info colour on purpose, not error colour: nothing is
+   broken, a decision is waiting. Since 13/11/2026 a row is one tick box (the whole row is the tap target, 48px tall for
+   a thumb) and Allow / Ignore are ONE bar for every ticked row, instead of two buttons on each row. */
+.cb-pd { display: flex; flex-direction: column; gap: 8px; }
+.cb-pd-h { display: flex; align-items: center; gap: 6px; font-size: 16px; color: var(--text); }
+.cb-pd-pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cb-pd-pick[hidden] { display: none; }
+.cb-form label.cb-pd-all { display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 11px;
+  min-height: 40px; font-size: 16px; font-weight: 600; color: var(--text); cursor: pointer; }
+.cb-pd-n { font-size: 14.5px; color: var(--text3); }
+.cb-pd-list { display: flex; flex-direction: column; gap: 6px; }
+.cb-form label.cb-nhomcho { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px;
+  min-height: 48px; box-sizing: border-box; border: 1px solid var(--border); background: var(--surface-1);
+  border-radius: 9px; font-weight: 400; color: var(--text); cursor: pointer; }
+.cb-form label.cb-nhomcho:hover { border-color: var(--info-line); }
+.cb-form label.cb-nhomcho.on { border-color: var(--info-line); background: var(--info-wash); }
+.cb-pd input[type=checkbox] { flex: none; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); }
+.cb-pd-m { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.cb-nhomcho-t { font-size: 16px; line-height: 1.4; color: var(--text); }
+.cb-nhomcho-t svg { vertical-align: -2px; color: var(--text3); }
+.cb-nhomcho-id { font-family: var(--mono, monospace); font-size: 12.5px; color: var(--text3); }
+.cb-nhomcho-d { font-size: 14.5px; line-height: 1.4; color: var(--warn-ink); }
+/* The bar stays at the bottom of the popup while the list scrolls, so twenty rows never push the buttons out of
+   reach. The negative offset covers the popup's own bottom padding. */
+.cb-pd-bar { position: sticky; bottom: -18px; z-index: 1; display: flex; align-items: center; flex-wrap: wrap;
+  gap: 8px; padding: 10px 0; background: var(--bg2); border-top: 1px solid var(--border); }
+.cb-pd-bar .s-btn, .cb-pd-bar .s-btn-ghost { min-height: 44px; display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap; }
+.cb-pd-msg { font-size: 16px; color: var(--text2); }
+.cb-pd-msg.err { color: var(--red); }
+.cb-pd-msg:empty { display: none; }
+@media (max-width: 600px) {
+  /* A phone gives the popup about 340px: less side padding for the names, and two buttons that share the row. */
+  .cb-form.cb-st-form { padding: 16px 14px 18px; }
+  .cb-pd-bar .s-btn, .cb-pd-bar .s-btn-ghost { flex: 1 1 0; justify-content: center; padding-left: 8px; padding-right: 8px; }
+  .cb-pd-msg { flex: 1 1 100%; }
+}
 .cb-acts { display: flex; gap: 6px; margin-top: 2px; }
 /* 0.309.0: a long error (a raw API reply, a Google link) used to run out of the card. Wrap anywhere. */
 .cb-err, .cb-quyen-t, .cb-nhomcho-t, .cb-nhomcho-d { overflow-wrap: anywhere; word-break: break-word; }
@@ -3685,8 +3751,7 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .cb-st-chip.wait { color: var(--text); }
 .cb-st-more { flex: none; display: inline-flex; align-items: center; gap: 2px; color: var(--text3); }
 .cb-st-body { display: flex; flex-direction: column; gap: 10px; }
-.cb-st-body .cb-err, .cb-st-body .cb-quyen, .cb-st-body .cb-nhomcho-d { font-size: 16px; }
-.cb-st-body .cb-nhomcho-t { font-size: 16px; }
+.cb-st-body .cb-err, .cb-st-body .cb-quyen { font-size: 16px; }
 .cb-empty { grid-column: 1 / -1; text-align: center; color: var(--text3); padding: 40px 16px;
   font-size: 14px; line-height: 1.7; }
 .cb-empty b { color: var(--text); display: block; margin: 8px 0 4px; font-size: 15px; }
@@ -3757,14 +3822,6 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 .cb-gio-truc label { flex: 1; min-width: 0; }
 .cb-tag-list { margin: 6px 0 8px; }
 #cbTagMore { width: 100%; }
-/* Ba ô có mặc định dùng được ngay (ngôn ngữ tự nhận, không chuyển người thật, chưa khai nhóm)
-   gấp vào đây. Ô mức quyền thì KHÔNG: đọc sót nó là mất tiền thật. */
-.cb-nangcao { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 4px; }
-.cb-nangcao summary { cursor: pointer; font-size: 13.5px; color: var(--text2); font-weight: 600;
-  display: flex; align-items: center; gap: 6px; list-style: none; padding: 8px 0; }
-.cb-nangcao summary::-webkit-details-marker { display: none; }
-.cb-nangcao[open] summary { color: var(--text); }
-
 /* ---- Form bot 0.64.85: bốn phần, thẻ chọn, nút chọn một, ô chọn người và nhóm ----
    Mỗi phần một quyết định, cách nhau bằng đường kẻ mảnh thay vì hộp lồng hộp. Chữ giải thích rút
    về một dòng dưới ô chọn; phần dài chuyển sang tài liệu. */
@@ -4036,6 +4093,11 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   color: var(--text); font-size: 13.5px; }
 .pd-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--text3); font-size: 11.5px; }
+/* 2026-11-13: one line saying what an attached file or link holds (Javis writes it, the owner can fix it). It wraps
+   to two lines instead of cutting at the edge: the whole point of the line is to be read. */
+.pd-row-desc { color: var(--text2); font-size: 13px; line-height: 1.45; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pd-desc.on { color: var(--accent); }
 .pd-row-sub a { color: var(--text3); text-decoration: none; }
 .pd-row-sub a:hover { color: var(--accent); text-decoration: underline; }
 .pd-row-act { flex: none; width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
@@ -4055,6 +4117,27 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
 /* Icon trên đầu mỗi tab: ba tab chỉ khác nhau bằng chữ thì liếc qua phải đọc mới biết đang
    ở đâu, y như hai tab Hội thoại/Thư mục ở cột trái đã có icon. */
 .pd-tab .ic { vertical-align: -2px; margin-right: 2px; }
+/* 2026-11-13: a project now has four tabs. Each keeps its label on one line and takes the room its text needs; on a
+   very narrow screen the bar scrolls sideways instead of breaking "Hướng dẫn" in two. */
+.pd-tabs { overflow-x: auto; scrollbar-width: none; }
+.pd-tabs::-webkit-scrollbar { display: none; }
+.pd-tab { flex: 1 0 auto; white-space: nowrap; }
+
+/* Tab "Đã học" (2026-11-13): the notes Javis keeps about the project. A note is a sentence to read, so it wraps in
+   full and uses the reading size of the drawer (14px, 15px on a phone), not the small size of a file path. */
+.pd-learn-head { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 1.5; }
+.pd-nrow { display: flex; align-items: flex-start; gap: 6px; padding: 9px 9px 9px 11px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg); }
+.pd-nbody { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pd-ntext { color: var(--text); font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.pd-nmeta { color: var(--text3); font-size: 12px; }
+.pd-nform .pd-nin { resize: vertical; min-height: 54px; font-size: 14px; line-height: 1.5; }
+.pd-nform .pd-nkind { flex: 1 1 auto; min-width: 0; }
+@media (max-width: 600px) {
+  .pd-ntext, .pd-nform .pd-nin { font-size: 15px; }
+  .pd-nmeta, .pd-row-desc { font-size: 13px; }
+  .pd-nrow .pd-row-act { width: 34px; height: 34px; }
+}
 
 .pd-add { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
   margin-top: 4px; padding: 7px 11px; border-radius: 8px; cursor: pointer;
@@ -4070,6 +4153,14 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   border: 1px solid var(--border); background: transparent; color: var(--text3);
   font-family: inherit; font-size: 12.5px; }
 .pd-mode.on { border-color: var(--accent-line); background: var(--accent-wash-2); color: var(--accent); }
+/* 2026-11-15: a project and an assistant have a fourth way to add (GitHub repo): two by two, so no label gets cut. */
+.pd-modes.four { display: grid; grid-template-columns: 1fr 1fr; }
+.pd-mode .cp-ic { width: 14px; height: 14px; }
+.pd-repo-row .pd-row-ico .cp-ic { width: 18px; height: 18px; }
+.pd-repo-box .gh-results { max-height: min(45vh, 340px); overflow-y: auto; }
+/* The "+" row under the repo list of a project, an assistant or a new team: the list scrolls on its own here, so the
+   foot sits under it instead of sticking to the bottom of a + menu. */
+.pd-repo-box .gh-foot, .tmp-repo-box .gh-foot { position: static; margin: 6px 0 0; padding: 4px 0 0; background: none; }
 .pd-in { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--field-bg); color: var(--text); font-family: inherit;
   font-size: 13px; outline: none; }
@@ -4360,11 +4451,10 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   filter: drop-shadow(0 0 5px var(--pet-face, #f28c28));
 }
 .pet-rig { transform-origin: 160px 160px; }
-/* Nghỉ yên (pet.js, 0.418.0): vòng vẽ JS dừng, vành quay bằng hoạt ảnh này (pet.js đặt thời lượng và steps để chỉ đổi
-   10 lần mỗi giây, bắt đầu từ đúng chỗ vành đang đứng qua --vanh0), mắt liếc bằng transition. Transition cũng theo
-   steps(10): đổi transform của nhóm SVG bắt trình duyệt dàn lại bố cục MỖI khung, đo được bận 17% so với 14% khi chỉ
-   đổi 10 lần cho cả cú liếc (mỗi lần dịch chưa tới 1px, mắt không thấy bậc). */
-@keyframes petVanh { from { stroke-dashoffset: var(--vanh0, 0); } to { stroke-dashoffset: calc(var(--vanh0, 0) - 360); } }
+/* Nghỉ yên (pet.js, 0.418.0): vòng vẽ JS dừng, mắt liếc bằng transition. Transition theo steps(10): đổi transform của
+   nhóm SVG bắt trình duyệt dàn lại bố cục MỖI khung, đo được bận 17% so với 14% khi chỉ đổi 10 lần cho cả cú liếc (mỗi
+   lần dịch chưa tới 1px, mắt không thấy bậc). The ring no longer spins on a CSS animation here (2026-11-12): a running
+   animation is ticked on every frame whatever its steps() say; pet.js moves the ring on a slow timer (spinRingRest). */
 .pet.pet-nghi .pet-rig, .pet.pet-nghi .pet-eyes { transition: transform 2.4s steps(10); }
 
 /* PHẢN ỨNG TẠM của linh vật (pet.js -> dienPhanUng, 0.64.39). Gắn lên <svg> chứ không lên
@@ -4584,6 +4674,11 @@ div.cb-quyen > svg { flex: none; margin-top: 2px; }
   font-weight: 500; cursor: pointer; }
 .cb-rp-form { width: min(820px, 96vw); }
 .cb-rp-body { max-height: 64vh; overflow-y: auto; }
+/* Judge idle for this bot (not in Auto-judge mode): one line plus the Edit button, 16px text and a 44px tap target. */
+.cb-rp-idle { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
+  margin-bottom: 10px; padding: 8px 12px; font-size: 16px; line-height: 1.5; color: var(--warn-ink);
+  background: var(--warn-wash); border: 1px solid var(--warn-line); border-radius: 9px; }
+.cb-rp-idle .rp-edit { min-height: 44px; }
 /* Thử bot (0.78.0) */
 .cb-try-form textarea { width: 100%; background: var(--field-bg); border: 1px solid var(--border); color: var(--text);
   border-radius: 8px; padding: 9px 11px; font-size: 15px; font-family: inherit; resize: vertical; min-height: 72px; }

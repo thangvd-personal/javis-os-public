@@ -23,13 +23,20 @@ Clicking the icon opens Javis in its own window (no address bar), Javis starts w
   curl -fsSL https://raw.githubusercontent.com/blogminhquy/javis-os/main/packaging/macos/get-javis.sh | bash
   ```
 
+What the installers change on your computer, who signs them and what Javis sends where: [Code signing policy](docs/code-signing-policy.md) · [Privacy policy](PRIVACY.md).
+
 If you already downloaded the file with the browser and it was blocked:
+- Edge or Chrome says "JavisOS-Setup.exe isn't commonly downloaded" and does not save the file: in the Downloads box, hover over that line, click the three dots, choose **Keep**, then **Show more** and **Keep anyway**.
 - Windows shows "Windows protected your PC": click **More info**, then **Run anyway**.
+- Your antivirus deletes the file, or Windows blocks it with no **Run anyway** button (Smart App Control is on): install without the .exe. Install [Git](https://git-scm.com/download/win), open PowerShell, paste this line and press Enter. When it ends, Javis opens at http://localhost:7777 and starts with the computer:
+  ```
+  git clone https://github.com/blogminhquy/javis-os.git "$env:USERPROFILE\JavisOS"; cd "$env:USERPROFILE\JavisOS"; powershell -ExecutionPolicy Bypass -File install.ps1
+  ```
 - macOS says it cannot open the app: go to **System Settings → Privacy & Security**, scroll down, click **Open Anyway**, then open JAVIS OS again.
 
 ## Option 1 - Hostinger VPS (Docker Manager, one click)
 
-> 🛒 **No VPS yet?** [Get a Hostinger VPS here](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN). Docker Manager comes built in, so Javis installs in one click. Once it is ready, come back to the steps below.
+> 🛒 **No VPS yet?** [Get a Hostinger VPS here](https://www.hostinger.com?REFERRALCODE=JAVISOS). Docker Manager comes built in, so Javis installs in one click. Once it is ready, come back to the steps below.
 
 1. hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL**.
 2. Paste this URL:
@@ -50,7 +57,7 @@ To update: press **⬆ Update now** in the app (Updates page), or **Redeploy** i
 
 ## Option 2 - Docker on any machine or VPS
 
-> 🛒 **Need a VPS?** A [Hostinger VPS](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN) runs this option too.
+> 🛒 **Need a VPS?** A [Hostinger VPS](https://www.hostinger.com?REFERRALCODE=JAVISOS) runs this option too.
 
 ```
 docker compose -f docker-compose.yml up -d

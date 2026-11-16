@@ -265,9 +265,11 @@ check("nạp ngầm không nhấp nháy màn hình", /async function tai\(im\)/.
 // tự nhận việc trong nhóm lạ" là đúng, nhưng cách từ chối thì sai: im hoàn toàn, không log,
 // không dòng nào ở đây. "Hành vi đúng" và "bot hỏng" trông y hệt nhau.
 check("thẻ hiện nhóm đang chờ chủ cho phép", /b\.nhom_cho/.test(CB) && /cb-nhomcho/.test(CB));
-check("cho phép nhóm bằng ĐÚNG một cú bấm",
-  /cb-ok-nhom/.test(CB) && /\/groups"/.test(CB) && /choNhom\(b, cid, true, loai\)/.test(CB));
-check("và bỏ qua được nhóm không muốn", /cb-bo-nhom/.test(CB) && /choNhom\(b, cid, false, loai\)/.test(CB));
+// 13/11/2026: mỗi dòng chờ là một ô tích, Cho phép / Bỏ qua là MỘT thanh nút cho mọi dòng đã tích (chủ repo: chín nhóm
+// chờ là chín lượt mở popup rồi bấm). Hành vi chi tiết ở tests/js/test_bot_pending_bulk.js.
+check("cho phép nhiều nhóm bằng MỘT cú bấm: dòng có ô tích, một nút Cho phép chung",
+  /class="cb-pd-c"/.test(CB) && /cb-pd-ok/.test(CB) && /\/groups"/.test(CB) && /settle\(true\)/.test(CB));
+check("và bỏ qua được các nhóm không muốn", /cb-pd-skip/.test(CB) && /settle\(false\)/.test(CB));
 check("CSS cho khối nhóm chờ đã có", /\.cb-nhomcho \{/.test(CSS));
 // Khai nhóm ngay lúc TẠO. Bản trước chỉ cho khai ở form Sửa, nên đường đi tự nhiên nhất (tạo
 // bot rồi thả thẳng vào nhóm) bảo đảm lần thử đầu của mọi người dùng gặp một con bot im lặng.
@@ -391,10 +393,11 @@ check("hai nút ở chân form đổi vai theo bước chứ không mọc thêm 
   noi("cb.quay_lai", "Quay lại") && noi("cb.tiep_tuc", "Tiếp tục"));
 // Ba ô có mặc định dùng được ngay mới được gấp. Mức quyền thì KHÔNG: đọc sót nó là mất tiền
 // thật, nên nó phải nằm phơi ra trên màn hình chứ không phải sau một cú bấm.
-check("chỉ ngôn ngữ gấp vào Nâng cao; nhóm và người nằm ở phần Bot trả lời ai, ngoài khối gấp",
-  /class="cb-nangcao"/.test(CB) && noi("cb.nang_cao", "Nâng cao: ngôn ngữ trả lời") &&
-  CB.indexOf('class="cb-nangcao"') < CB.indexOf('id="cbNgonNgu"') &&
-  CB.indexOf('id="cbPk"') < CB.indexOf('class="cb-nangcao"') && !/id="cbNhomBox"/.test(CB));
+// 15/11/2026 (chủ repo): bot luôn trả lời khách bằng đúng thứ tiếng khách nhắn, nên ô ghim ngôn ngữ và khối
+// "Nâng cao" chỉ chứa mỗi ô đó đã bị gỡ.
+check("form không còn ô ghim ngôn ngữ; nhóm và người nằm ở phần Bot trả lời ai",
+  !/id="cbNgonNgu"/.test(CB) && !/class="cb-nangcao"/.test(CB) && !/ngon_ngu:/.test(CB) &&
+  CB.indexOf('id="cbPk"') > -1 && !/id="cbNhomBox"/.test(CB));
 // 0.64.83: chủ dự án bỏ ô "người trực nhận chuyển tiếp" (Chat ID Telegram, vô nghĩa với bot Zalo).
 check("form KHÔNG còn ô người trực nhận chuyển tiếp và không gửi handoff_to lên server",
   !/id="cbHandoff"/.test(CB) && !/handoff_to:\s*ho/.test(CB) && !/cb\.lb_handoff/.test(CB));
@@ -441,7 +444,7 @@ check("thẻ bot có một dòng 'Trả lời: ...' và menu '...' cho việc ph
   /tomTatDoiTuong\(b\)/.test(CB) && /class="cb-mn"/.test(CB) && /class="cb-mn-l" hidden/.test(CB) &&
   /cb-log/.test(CB) && /cb-hoi-thoai/.test(CB) && /cb-del/.test(CB));
 check("hàng chờ duyệt có cả người, nút Cho phép gọi /people cho người và /groups cho nhóm",
-  /\/people"/.test(CB) && /cb2\.cho_nguoi/.test(CB) && /data-loai=/.test(CB));
+  /\/people"/.test(CB) && /kind === "private" \? "\/people" : "\/groups"/.test(CB) && /data-loai=/.test(CB));
 check("cảnh báo mức quyền gọn: hiện 2 câu đầu, còn lại sau 'Xem đủ rủi ro'",
   /const HIEN|var HIEN = 2/.test(CB) && /class="cb-xem-du"/.test(CB) && tu("cb2.xem_du", "Xem đủ rủi ro"));
 check("mọi khoá cb2.* giao diện dùng đều có trong tiếng Việt và tiếng Anh", (function () {
@@ -451,11 +454,11 @@ check("mọi khoá cb2.* giao diện dùng đều có trong tiếng Việt và t
   if (thieu.length) console.log("  thiếu:", thieu.join(", "));
   return Object.keys(ks).length > 30 && !thieu.length;
 })());
-check("CANARY: mức quyền KHÔNG bị gấp vào khối Nâng cao",
-  CB.indexOf('htmlMuc(muc0)') > -1 && CB.indexOf('htmlMuc(muc0)') < CB.indexOf('class="cb-nangcao"'));
+check("CANARY: mức quyền KHÔNG bị gấp vào khối nào",
+  CB.indexOf('htmlMuc(muc0)') > -1 && !/class="cb-nangcao"/.test(CB));
 check("CSS của form hai bước đã có",
   /\.cb-wizard \.cb-form-acts/.test(CSS) && /\.cb-buoc \{/.test(CSS) &&
-  /\.cb-tom \{/.test(CSS) && /\.cb-nangcao \{/.test(CSS) &&
+  /\.cb-tom \{/.test(CSS) &&
   /\.cb-rc \{|\.cb-form label\.cb-rc \{/.test(CSS) && /\.cb-seg \{/.test(CSS) && /\.cb-pk \{/.test(CSS) &&
   /\.cb-mn \{/.test(CSS));
 // Gõ lại đúng cái tên vừa đọc ở bước trước là việc thừa.

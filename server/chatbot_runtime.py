@@ -374,20 +374,13 @@ def build_bot_prompt(bot: dict) -> str:
     phan = [f"Bạn là **{ten}**." + (f" {vai}" if vai else "")]
 
     # NGÔN NGỮ của bot, và đây là hòn đảo prompt tách hẳn: nó không nối CLAUDE.md, không đi
-    # qua ContextCompiler, không đi qua build_system_prompt. Bỏ sót chỗ này thì đúng ca dùng
-    # đáng tiền nhất (chủ shop Việt, bot đối ngoại phục vụ khách Nhật/Hàn) không có một dòng
-    # chỉ dẫn ngôn ngữ nào.
+    # qua ContextCompiler, không đi qua build_system_prompt. Bỏ sót chỗ này thì bot không có
+    # một dòng chỉ dẫn ngôn ngữ nào.
     #
-    # Một câu ngắn chứ không phải khối đầy đủ như prompt chính: prompt bot vốn chỉ vài chục
-    # token, nhét 60 token luật ngôn ngữ vào là làm lệch hẳn tỉ trọng so với file Agent của
-    # chủ - mà file đó mới là thứ quyết định bot nói gì.
-    _ma = lang_registry.chuan_hoa((bot or {}).get("ngon_ngu") or "")
-    if _ma:
-        _l = lang_registry.get(_ma)
-        phan.append(f"\nNGÔN NGỮ: luôn trả lời khách bằng {_l.lang_directive}, "
-                    f"kể cả khi khách nhắn bằng tiếng khác. {_l.nudge}")
-    else:
-        phan.append("\nNGÔN NGỮ: trả lời bằng ĐÚNG ngôn ngữ khách đang nhắn.")
+    # Owner, 2026-11-15: no language pin per bot any more; the bot answers each customer in the language they
+    # write. A shop that wants a fixed language writes it in the bot's Agent file. A `ngon_ngu` saved on an older
+    # bot record is no longer read.
+    phan.append("\nNGÔN NGỮ: trả lời bằng ĐÚNG ngôn ngữ khách đang nhắn.")
     # Kênh của LƯỢT này, do _make_answer_fn gắn vào. Chỉ Zalo cá nhân mới có thêm đoạn này, và nó đứng
     # TRƯỚC file Agent: mặc định của Javis đọc trước, luật của chủ đọc sau và thắng (0.172.0).
     if (bot or {}).get("_kenh_luot") == "zalo_personal":
@@ -788,8 +781,8 @@ CUSTOMER_PROFILE_MAX = conversations.MAX_GHI_CHU
 
 
 def customer_profile(cfg: dict, meta: dict) -> str:
-    """The stored profile of the person in this PRIVATE chat, ready for the prompt, or "" (a group, nobody known yet,
-    a store error). Hidden characters and the block's own closing tag are stripped; line breaks stay."""
+    """The stored profile of the person in this PRIVATE chat, ready for the prompt, or "" (a group, a public comment
+    thread, nobody known yet, a store error). Hidden characters and the block's own closing tag are stripped; line breaks stay."""
     m = meta or {}
     try:
         if _rp_is_group(m) or not m.get("chat_id"):

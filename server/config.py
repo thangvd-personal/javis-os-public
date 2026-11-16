@@ -5,6 +5,7 @@ Auth CHỈ bật khi đã đặt mật khẩu → bản local chưa đặt vẫn
 """
 import hashlib
 import json
+import kept
 import os
 import secrets
 import threading
@@ -50,13 +51,15 @@ _DEFAULT = {
     # Ngôn ngữ và locale. TÁCH BA BIẾN có chủ ý (spec đa ngôn ngữ mục 4.1):
     #   ui_lang     chữ trên màn hình      - "" = chưa ai chọn: dashboard đoán theo trình duyệt
     #               rồi ghi lại đây (0.66.0). Bản cài cũ đã lưu "vi" nên không bị đổi.
-    #   reply_lang  Javis trả lời          - "auto" = bám theo ngôn ngữ người dùng đang viết
+    #   reply_lang  Javis trả lời          - always "auto" since 2026-11-15: Javis follows whoever writes and
+    #               Settings only set the interface (owner). Kept because the improvement trials read it; a pin
+    #               saved before moves into the profile at startup (main.migrate_reply_lang_to_profile).
     #   tz/currency locale, KHÁC ngôn ngữ  - người dùng tiếng Anh ở VN vẫn xài UTC+7 và VND
     # Gộp ba cái làm một là chặn đứng ca dùng đáng tiền nhất: chủ Việt, giao diện Việt, brain
     # Việt, nhưng chatbot đối ngoại trả lời tiếng Nhật.
     "locale": {
         "ui_lang": "",
-        "reply_lang": "auto",              # auto | vi | en
+        "reply_lang": "auto",              # always "auto", see above
         "tz": "Asia/Ho_Chi_Minh",
         "currency": "VND",
     },
@@ -611,6 +614,20 @@ def _transform_secret_fields(cfg, fn):
 # ghi đè) thì mtime/size đổi -> tự đọc lại. Trả deep copy để caller sửa thoải mái không bẩn cache.
 _SETTINGS_CACHE = {"sig": None, "cfg": None}
 
+
+def _settings_sig_now():
+    try:
+        st = SETTINGS_PATH.stat()
+        return (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+
+
+# 2026-11-13: that one stat ran four times per request on the event loop (both guards, twice each). On a disk that
+# stalls it froze every request, so the loop now reads the signature from memory (kept.py). A save through Javis drops
+# it and shows at once; a hand edit of the file shows on the event loop about a second later.
+_SETTINGS_SIG = kept.Value(lambda: _settings_sig_now(), key=lambda: str(SETTINGS_PATH), name="settings.json")
+
 # Một khoá cho mọi lần đọc-sửa-ghi settings.json (update_settings, write_settings). RLock vì
 # update_settings gọi write_settings bên trong. Chặn hai luồng (endpoint chạy trong threadpool,
 # asyncio.to_thread) cùng đọc bản cũ rồi ghi đè lên thay đổi của nhau.
@@ -740,6 +757,7 @@ def _ghi_nguyen_tu(text: str) -> None:
                 if lan == 4:
                     raise
                 time.sleep(0.05 * (lan + 1))
+        _SETTINGS_SIG.drop()      # the next read looks at the new file, whichever thread makes it
     finally:
         try:
             if tmp.exists():
@@ -974,11 +992,7 @@ def _ui_lang_ban_cu(cfg: dict, data: dict) -> None:
 
 
 def read_settings():
-    try:
-        st = SETTINGS_PATH.stat()
-        sig = (st.st_mtime_ns, st.st_size)
-    except OSError:
-        sig = None
+    sig = _SETTINGS_SIG.get()
     if sig is not None and sig == _SETTINGS_CACHE["sig"] and _SETTINGS_CACHE["cfg"] is not None:
         return json.loads(_SETTINGS_CACHE["cfg"])
     cfg = json.loads(json.dumps(_DEFAULT))   # deep copy
@@ -1182,10 +1196,10 @@ def auth_guard_check(grace: float = None):
     never taken for an attack. No stamp yet (first run of this version) = adopt the current block silently."""
     grace = AUTH_GUARD_GRACE if grace is None else grace
     with _SETTINGS_LOCK:
-        try:
-            st = SETTINGS_PATH.stat()
-            sig = (st.st_mtime_ns, st.st_size)
-        except OSError:
+        # The same kept signature as read_settings (2026-11-13): `valid_session` calls this for every signed-in
+        # request, and the stat it made here ran on the event loop each time.
+        sig = _SETTINGS_SIG.get()
+        if sig is None:
             return None
         if sig == _AUTH_CHECK["sig"]:
             return None
@@ -1573,13 +1587,40 @@ def _save_sessions():
         pass
 
 
-def new_session(ip: str = "", ua: str = ""):
+def new_session(ip: str = "", ua: str = "", remember: bool = True):
+    """A new sign-in session. remember=False is "Keep me signed in" left unticked (see _SHORT_SESSION_IDLE)."""
     t = secrets.token_urlsafe(32)
     SESSIONS[t] = _time.time()
     _save_sessions()
     if ip or ua:
         note_session_device(t, ip, ua)
+    if not remember:
+        SESSION_META.setdefault(t, {})["remember"] = False
+        _save_session_meta()
     return t
+
+
+# "Keep me signed in" left unticked (2026-11-14). The owner asked for it to sign in on someone else's device: the
+# cookie then has no max_age, so the browser drops it when it closes. A browser that restores its last session, or a
+# phone browser that never really closes, would keep it anyway, so the server also ends such a session after a few
+# hours with no request from it, and a day after sign-in at the latest. An open dashboard tab polls every few seconds,
+# so the idle limit never hits someone who is using it. The flag lives in SESSION_META (.sessions.json stays
+# {token: ts} for older versions); a session without it is a remembered one, which is every session made before this.
+_SHORT_SESSION_IDLE = 4 * 3600
+_SHORT_SESSION_MAX = 24 * 3600
+
+
+def session_remembered(token) -> bool:
+    return (SESSION_META.get(token) or {}).get("remember") is not False
+
+
+def _short_session_over(token, now: float) -> bool:
+    m = SESSION_META.get(token) or {}
+    if m.get("remember") is not False:
+        return False
+    started = float(m.get("created") or SESSIONS.get(token) or 0)
+    last = float(m.get("last") or started)
+    return now - started > _SHORT_SESSION_MAX or now - last > _SHORT_SESSION_IDLE
 
 
 def valid_session(token):
@@ -1591,7 +1632,7 @@ def valid_session(token):
         pass
     if token not in SESSIONS:
         return False
-    if _time.time() - SESSIONS.get(token, 0) > _SESSION_TTL:
+    if _time.time() - SESSIONS.get(token, 0) > _SESSION_TTL or _short_session_over(token, _time.time()):
         SESSIONS.pop(token, None)
         SESSION_META.pop(token, None)
         _save_sessions()
@@ -1613,6 +1654,8 @@ def renew_session(token) -> bool:
     ts = SESSIONS.get(token) if token else None
     if ts is None or _time.time() - ts < _SESSION_RENEW_AFTER or _time.time() - ts > _SESSION_TTL:
         return False
+    if not session_remembered(token):
+        return False   # never re-issued: that would hand an unticked sign-in a 30-day cookie
     SESSION_META.setdefault(token, {}).setdefault("created", ts)
     SESSIONS[token] = _time.time()
     _save_sessions()
@@ -1701,13 +1744,14 @@ def touch_session(token, ip: str = ""):
 
 def list_sessions(current: str = "") -> list:
     out = []
+    now = _time.time()
     for tok, created in SESSIONS.items():
-        if _time.time() - float(created or 0) > _SESSION_TTL:
+        if now - float(created or 0) > _SESSION_TTL or _short_session_over(tok, now):
             continue
         m = SESSION_META.get(tok) or {}
         out.append({"id": session_id(tok), "created": float(m.get("created") or created or 0), "last": float(m.get("last") or created or 0),
                     "ip": m.get("ip", ""), "last_ip": m.get("last_ip") or m.get("ip", ""), "ua": m.get("ua", ""),
-                    "current": bool(current) and tok == current})
+                    "remember": session_remembered(tok), "current": bool(current) and tok == current})
     out.sort(key=lambda x: (not x["current"], -x["last"]))
     return out
 

@@ -23,13 +23,20 @@ Bấm vào biểu tượng là Javis mở thành cửa sổ riêng (không thanh
   curl -fsSL https://raw.githubusercontent.com/blogminhquy/javis-os/main/packaging/macos/get-javis.sh | bash
   ```
 
+Bộ cài thay đổi gì trên máy, ai ký số, Javis gửi gì đi đâu: [Code signing policy](docs/code-signing-policy.md) · [Privacy policy](PRIVACY.md) (tiếng Anh).
+
 Nếu đã tải file bằng trình duyệt và bị chặn:
+- Edge hoặc Chrome báo "JavisOS-Setup.exe isn't commonly downloaded" và không lưu file: trong ô Downloads, rê chuột vào dòng đó, bấm dấu ba chấm, chọn **Keep**, rồi **Show more** và **Keep anyway**.
 - Windows hiện "Windows protected your PC": bấm **More info** rồi **Run anyway**.
+- Trình diệt virus xoá mất file, hoặc Windows chặn mà không có nút **Run anyway** (máy bật Smart App Control): cài không qua file exe. Cài [Git](https://git-scm.com/download/win), mở PowerShell, dán dòng này rồi Enter. Xong thì Javis tự mở ở http://localhost:7777 và tự chạy cùng máy:
+  ```
+  git clone https://github.com/blogminhquy/javis-os.git "$env:USERPROFILE\JavisOS"; cd "$env:USERPROFILE\JavisOS"; powershell -ExecutionPolicy Bypass -File install.ps1
+  ```
 - macOS báo không mở được: vào **System Settings → Privacy & Security**, kéo xuống bấm **Open Anyway**, rồi mở lại JAVIS OS.
 
 ## Cách 1 - Hostinger VPS (Docker Manager, 1-click)
 
-> 🛒 **Chưa có VPS?** [Đăng ký VPS Hostinger tại đây](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN). VPS có sẵn Docker Manager nên cài Javis đúng một cú bấm. Thuê xong quay lại làm các bước dưới.
+> 🛒 **Chưa có VPS?** [Đăng ký VPS Hostinger tại đây](https://www.hostinger.com?REFERRALCODE=JAVISOS). VPS có sẵn Docker Manager nên cài Javis đúng một cú bấm. Thuê xong quay lại làm các bước dưới.
 
 1. hPanel → VPS → **Docker Manager** → **Compose** → **Compose from URL**.
 2. Dán URL:
@@ -50,7 +57,7 @@ Cập nhật bản mới: bấm **⬆ Cập nhật ngay** trong app (trang Cập
 
 ## Cách 2 - Docker ở máy/VPS bất kỳ
 
-> 🛒 **Cần thuê VPS?** [VPS Hostinger](https://www.hostinger.com?REFERRALCODE=UTRBLOGMIDSN) chạy được cả cách này.
+> 🛒 **Cần thuê VPS?** [VPS Hostinger](https://www.hostinger.com?REFERRALCODE=JAVISOS) chạy được cả cách này.
 
 ```
 docker compose -f docker-compose.yml up -d

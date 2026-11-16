@@ -626,6 +626,40 @@ def _file_co_danh_muc() -> Path | None:
     return p if p.is_file() else None
 
 
+def _claude_config_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"))
+
+
+def _catalog_cache_files() -> list:
+    """Claude Code's own model-catalog cache (`<config dir>/cache/model-catalog/*.json`).
+
+    Claude Code downloads the model list from Anthropic and keeps it here, so a model released
+    after the installed binary was built appears here first. The file holds model names only,
+    no credential, so reading it stays within the rule set in the module header.
+    """
+    folder = _claude_config_dir() / "cache" / "model-catalog"
+    try:
+        return sorted(f for f in folder.glob("*.json") if f.is_file())
+    except OSError:
+        return []
+
+
+def _catalog_cache_ids(files) -> list:
+    """Model ids listed in the catalog cache files. A file that fails to parse is skipped."""
+    out = []
+    for f in files or []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            models = (((data.get("catalog") or {}).get("config") or {}).get("models")) or []
+        except Exception:  # noqa: BLE001 - a broken cache file must not hide the binary's list
+            continue
+        for m in models:
+            mid = str((m or {}).get("id") or "") if isinstance(m, dict) else ""
+            if mid and tach_phien_ban(mid) and mid not in out:
+                out.append(mid)
+    return out
+
+
 _FAMILY_TIERS = ("fable", "mythos", "opus", "sonnet", "haiku")
 
 
@@ -678,21 +712,38 @@ def list_models() -> list | None:
     Claude Code là lần hỏi sau tự quét lại, còn bình thường thì không đụng đĩa.
     """
     p = _file_co_danh_muc()
-    if not p:
+    catalog_files = _catalog_cache_files()
+    if not p and not catalog_files:
         return None
     try:
-        st = p.stat()
-        if st.st_size > _MAX_QUET_MB * (1 << 20):
-            return None
-        sig = (str(p), st.st_size, st.st_mtime_ns)
+        sig = []
+        if p:
+            st = p.stat()
+            if st.st_size > _MAX_QUET_MB * (1 << 20):
+                p = None
+            else:
+                sig.append((str(p), st.st_size, st.st_mtime_ns))
+        for f in catalog_files:
+            st = f.stat()
+            sig.append((str(f), st.st_size, st.st_mtime_ns))
+        sig = tuple(sig)
     except OSError:
+        return None
+    if not sig:
         return None
     if _MODELS_CACHE["sig"] == sig:
         return list(_MODELS_CACHE["ids"]) if _MODELS_CACHE["ids"] else None
-    try:
-        tho = _doc_id_model(p)
-    except Exception:
-        return None
+    tho = []
+    if p:
+        try:
+            tho = _doc_id_model(p)
+        except Exception:
+            tho = []
+    # Models Anthropic ships after the installed CLI was built (Fable 5.2, 2026-11) are not in
+    # the binary: Claude Code fetches them into its model-catalog cache. Merge that list in.
+    for mid in _catalog_cache_ids(catalog_files):
+        if mid not in tho:
+            tho.append(mid)
     ket_qua = sort_models(tho)[:40]
     if not ket_qua:
         _MODELS_CACHE.update(sig=sig, ids=None)
@@ -2292,6 +2343,10 @@ class CodexCLI:
         final_text = ""
         messages = []   # this turn's agent messages, joined into `final_text` when the turn ends (codex_answer_text)
         sandbox_hong = False
+        # 2026-11-16: each agent message is its own paragraph in the live chat, as on the app-server path
+        # (codex_steer); they used to reach the chat glued together ("...xong.Bước tiếp...").
+        import text_breaks
+        shown = text_breaks.Joiner()
         while True:
             item = await queue.get()
             if item is SENTINEL:
@@ -2350,7 +2405,8 @@ class CodexCLI:
                     if txt.strip():
                         # Shown live as before; the answer (`final`) leaves lead-ins out (codex_answer_text).
                         messages.append({"text": txt, "phase": it.get("phase")})
-                        yield {"type": "text", "content": txt}
+                        shown.tool()   # a new message: a new paragraph after earlier text
+                        yield {"type": "text", "content": shown.text(txt)}
                 elif itype in _CODEX_TOOL_ITEMS:
                     codex_mark_step(messages)
                     # Câu lệnh đi kèm trong `item` để tool_label.chi_tiet rút ra khi cần.

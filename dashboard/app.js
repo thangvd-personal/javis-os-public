@@ -1100,6 +1100,9 @@ function _ghiDut(code, clean, moLuc) {
 // tới máy chủ" and retried every 3 seconds forever, every list read 0, and restarting the server changed nothing.
 // Ask /auth/status (public, cheap) at most every 15 s; signed out means the sign-in screen, not "reconnecting".
 let _loginCheckAt = 0;
+// True once this page has seen a valid session. A browser that was never signed in (first visit, someone else's device)
+// also gets its socket refused, and must see a plain sign-in screen, not "your sign-in has expired" (2026-11-14).
+let _authedThisPage = false;
 async function _checkLoginAfterRefusal() {
   if (Date.now() - _loginCheckAt < 15000) return;
   _loginCheckAt = Date.now();
@@ -1108,7 +1111,7 @@ async function _checkLoginAfterRefusal() {
   baoDutMang(false);
   await initAuthGate();
   const err = document.getElementById("authErr");
-  if (err && authOverlay && authOverlay.classList.contains("open")) err.textContent = window.t("app.ws_login_lost");
+  if (_authedThisPage && err && authOverlay && authOverlay.classList.contains("open")) err.textContent = window.t("app.ws_login_lost");
 }
 // The same check when an HTTP call gets 401 while the socket is still open (fetch-gop.js raises the event): the
 // session expired mid-use, so chat still answered but images and lists failed silently (2026-11-10).
@@ -2055,7 +2058,10 @@ function sendMessage(text, opts) {
     savedSessionId = newSid();                           // hội thoại mới → mint id để định tuyến
     // Đang mở một project ở cột Lịch sử thì hội thoại mới rơi thẳng vào project đó, khỏi phải
     // gắn tay. Gắn NGAY tại đây vì đây là chỗ duy nhất biết "id này vừa được sinh ra".
-    try { if (window.JavisProjects) window.JavisProjects.claim(savedSessionId); } catch (e) {}
+    let _projClaim = null;
+    try { if (window.JavisProjects) _projClaim = window.JavisProjects.claim(savedSessionId) || null; } catch (e) {}
+    // 2026-11-15: the first turn waits for that claim (below, with the pin and the repos), so the project's
+    // instructions and its GitHub repos reach this very first message instead of the next one.
     // Model đã chọn khi khung chat còn trống -> ghim luôn cho phiên vừa sinh (model-picker.js).
     try { if (window.JavisModelBar) window.JavisModelBar.claimPending(savedSessionId); } catch (e) {}
     // A working folder pinned on the empty chat follows the session that was just minted (0.158.0).
@@ -2068,6 +2074,10 @@ function sendMessage(text, opts) {
         _pinWait = (_pinWait || Promise.resolve()).then(() => window.JavisGithubRepos.claimPending(_sidNew), () => window.JavisGithubRepos.claimPending(_sidNew));
       }
     } catch (e) {}
+    if (_projClaim && _projClaim.then) {
+      const _before = _pinWait || Promise.resolve();
+      _pinWait = Promise.all([_before.catch(() => {}), _projClaim.catch(() => {})]);
+    }
   }
   const sid = savedSessionId;
   // Phiên đang trả lời thì không gửi chồng lượt. NHƯNG tin từ MIC (hay gõ trong lúc rảnh tay)
@@ -3617,14 +3627,50 @@ chatArea.addEventListener("click", (e) => {
   const t = e.target;
   const actBtn = t.closest && t.closest(".msg-act");
   if (actBtn) { runMsgAct(actBtn); return; }
+  const quoted = t.closest && t.closest(".msg-user .uquote");
+  if (quoted) { jumpToQuoted(quoted); return; }
   // The code block Copy button (chat-render.js) and "Show more" on a long message (chat-acts.js) are handled on the
   // document, so they work in every chat container.
+});
+// Owner, 2026-11-14: a tap on the quote at the top of a sent message scrolls back to the exact words it quotes in the
+// answer above and marks them for a moment (quote-jump.js). Not on screen any more: older pages load until it is.
+function jumpToQuoted(qEl) {
+  const J = window.JavisQuoteJump;
+  const msgEl = qEl.closest(".msg");
+  if (!J || !msgEl || J.selecting(qEl)) return;
+  const quote = window.JavisQuote ? window.JavisQuote.tach(msgEl.dataset.text || "").quote : "";
+  J.go({
+    quote: quote || qEl.textContent,
+    candidates: () => J.before(chatArea.querySelectorAll(".msg"), msgEl),
+    skip: ".uquote",
+    scroller: chatArea,
+    beforeScroll: () => chatScroll.setStuck(false),
+    loadOlder: async () => {
+      const st = _tinCu;
+      if (!st || !st.con || st.sid !== savedSessionId) return false;
+      // A page already on its way (the list reached the top by itself): give it a moment, then look again.
+      if (st.dangTai) { await new Promise(r => setTimeout(r, 500)); return true; }
+      const n = chatArea.querySelectorAll(".msg").length;
+      await taiTinCu();
+      return chatArea.querySelectorAll(".msg").length > n;
+    },
+    flashClass: "quote-flash",
+  });
+}
+// The quote is a span with role="button": Enter and Space work on it like on a real button.
+chatArea.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const quoted = e.target.closest && e.target.closest(".msg-user .uquote");
+  if (!quoted) return;
+  e.preventDefault();
+  jumpToQuoted(quoted);
 });
 // Điện thoại không có hover: chạm vào tin để bật/tắt hàng nút của đúng tin đó.
 chatArea.addEventListener("click", (e) => {
   try { if (!window.matchMedia("(hover: none)").matches) return; } catch (err) { return; }
   if (!e.target.closest) return;
   if (e.target.closest(".msg-acts")) return;   // bấm chính nút thì đừng đóng hàng nút
+  if (e.target.closest(".uquote")) return;     // a tap on the quote scrolls back to its source, it is not this toggle
   if (e.target.closest(".jr-chat")) return;    // hàng reaction (T2) tự lo nút của nó
   const msgEl = e.target.closest(".msg");
   chatArea.querySelectorAll(".msg.acts-on").forEach(m => { if (m !== msgEl) m.classList.remove("acts-on"); });
@@ -3707,6 +3753,19 @@ async function initGraph() {
   requestAnimationFrame(() => { if (javisGraph) javisGraph.resize(); });
   setTimeout(() => { if (javisGraph) javisGraph.resize(); }, 150);
 }
+
+// The brain graph is built when the home screen is FIRST IN VIEW, not at every start (2026-11-12). Opening the app on
+// Chat or Partners (the page remembered from the last visit) used to download the whole graph, load the graph library
+// and run its warm-up physics on the main thread for a screen nobody was looking at. Measured with 2,600 notes: a
+// 770 KB answer and one 255 ms block on a desktop, about a second on a phone, on every start. console.js tells which
+// page the app opened on (JavisCockpit.firstPage) and calls veManChinh() on every later visit to the home screen.
+let _graphBuilding = null;
+function ensureGraph() {
+  if (!_graphBuilding) _graphBuilding = initGraph().then(connectGraphWatch).catch(connectGraphWatch);
+  return _graphBuilding;
+}
+// Safety net: console.js never reported the first page (a script error there) and the home screen is in view.
+function ensureGraphIfHome() { if (!_graphBuilding && _oManChinh()) ensureGraph(); }
 
 // Click node trong graph → Javis mở & thao tác note đó trong vault
 window.onGraphNodeClick = (node) => {
@@ -3840,8 +3899,10 @@ function capNhatManChinh() {
   checkVault();     // kiểm tra cấu trúc vault mới chọn
 }
 // console.js gọi mỗi lần đổi trang: về tới màn chính thì trả nợ lần đổi brain đang hoãn.
-window.JavisCockpit = { veManChinh() { if (_cockpitCho) capNhatManChinh(); if (window.__javisGraph) window.__javisGraph.resize(); },
-                        dangCho: () => _cockpitCho };
+window.JavisCockpit = { veManChinh() { ensureGraph(); if (_cockpitCho) capNhatManChinh(); if (window.__javisGraph) window.__javisGraph.resize(); },
+                        dangCho: () => _cockpitCho,
+                        // The page the app opened on (console.js boot). Only the home screen shows the graph.
+                        firstPage(id) { if (id === "home") ensureGraph(); } };
 
 // Trang đang mở có MƯỢN khung chat và tự mở phiên của nó không (Cộng sự: phiên agent:<slug>
 // hay workflow:<slug>; Coding: phiên của repo). Phiên đó KHÔNG phải cuộc chính của brain.
@@ -4160,16 +4221,22 @@ document.getElementById("fmUse").addEventListener("click", () => {
 window.addEventListener("resize", () => { if (javisGraph) javisGraph.resize(); });
 
 let _stopBtnTick = 0;
+// How often the pump runs while nothing moves (2026-11-12). It used to ask for a frame on every frame, for good: 60
+// callbacks a second with nothing to do, and each of those frames also made the browser tick every CSS animation on
+// the page. With silence on both sides and no caption following a voice, six runs a second do the same job (the
+// stop button below was already updated six times a second); a level or a caption brings the per-frame rhythm back.
+const PUMP_IDLE_MS = 160;
 function pumpAudioLevel() {
+  let live = false;
   // Only while there is a level to show or the last one is still fading out: with silence on both sides the graph
-  // has nothing to redraw, and this runs on every frame.
-  if (javisGraph) {
-    const _lvl = voice.getLevel();
-    if (_lvl > 0 || (javisGraph.level || 0) > 0.001) javisGraph.setLevel(_lvl);
-  }
-  // Cập nhật hiển thị nút stop ~6 lần/giây (theo dõi cả lúc Javis đang đọc)
+  // has nothing to redraw.
+  const _lvl = voice.getLevel();
+  if (_lvl > 0) live = true;
+  if (javisGraph && (_lvl > 0 || (javisGraph.level || 0) > 0.001)) { javisGraph.setLevel(_lvl); live = true; }
+  if (_theoLoi) live = true;
   if (_theoLoi && (_stopBtnTick % 3) === 0) nhipTheoLoi();   // V3: chữ theo lời ~20 lần/giây
-  if ((_stopBtnTick++ % 10) === 0) {
+  // Cập nhật hiển thị nút stop ~6 lần/giây (theo dõi cả lúc Javis đang đọc)
+  if (!live || (_stopBtnTick % 10) === 0) {
     updateStopBtn();
     // (Voice V1) orb do đạo diễn vẽ từ sự kiện thật: voice.js báo onSpeakEnd khi hết hàng đợi.
     // Chốt an toàn: nếu giọng đã im mà đạo diễn còn tưởng đang nói (vd trình duyệt nuốt sự
@@ -4177,7 +4244,9 @@ function pumpAudioLevel() {
     if (turn.speaking && !voice.isSpeaking() && !voice.isPaused()) runActions(turn.ttsEnd());
     if (_cauChoLuot.length) guiCauChoLuot();   // 0.65.28: lưới cho câu chờ lượt khi sự kiện loa bị nuốt
   }
-  requestAnimationFrame(pumpAudioLevel);
+  _stopBtnTick++;
+  if (live) requestAnimationFrame(pumpAudioLevel);
+  else setTimeout(pumpAudioLevel, PUMP_IDLE_MS);
 }
 stopBtn.addEventListener("click", stopCurrent);
 
@@ -4222,6 +4291,7 @@ function initStarfield() {
   let sky = SKY_DARK;
   let cssW = 0, cssH = 0, dpr = 1, lastDraw = 0;
   const STAR_IDLE_MS = 250;
+  const STAR_PARKED_MS = 400;   // how often the loop looks again while nobody can see the canvas
   let watchingSize = false;  // a ResizeObserver tells us when the panel changes size
   let sizeDirty = true;      // the panel's size may have changed: measure once at the next draw
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
@@ -4267,22 +4337,32 @@ function initStarfield() {
   window.addEventListener("javis-theme-change", e => syncSky(!!(e && e.detail && e.detail.light)));
   syncSky(document.documentElement.getAttribute("data-theme") === "light");
 
+  // Nobody can see the canvas: a hidden tab, or a management page in front of the home screen.
+  const isParked = () => document.hidden || document.body.classList.contains("in-console");
+  // While parked the timer only looks again; it asks for a frame once there is something to draw.
+  const wake = () => { if (isParked()) setTimeout(wake, STAR_PARKED_MS); else requestAnimationFrame(draw); };
   function draw(now) {
-    requestAnimationFrame(draw);
-    if (document.hidden) return;
     // 0.415.0: một trang quản lý (Cộng sự, Cài đặt...) đang che màn chính thì nền sao không ai nhìn thấy; vẽ tiếp chỉ đốt
     // CPU, và đo kích thước ở dưới còn ép trình duyệt tính lại bố cục mỗi lần. Khung cuối vẫn nằm trên canvas khi quay về.
-    if (document.body.classList.contains("in-console")) return;
+    const parked = isParked();
     // Nền 2D từng tự dựng gradient + grid ở 60 FPS dù não đứng yên. 15 FPS lúc nghỉ vẫn
     // đủ cho sao nhấp nháy chậm; khi có giọng/đang nghĩ nâng lên 30 FPS.
-    const lvl = voice.getLevel();
-    const active = lvl > 0.01 || _thinkingActive;
+    const lvl = parked ? 0 : voice.getLevel();
+    const active = !parked && (lvl > 0.01 || _thinkingActive);
     // 2026-11-10: at rest the only thing that moves is the twinkle, and one twinkle takes 9 to 69 seconds. Drawing it 15
     // times a second cost about half of the home screen's idle main-thread time on a throttled phone (measured: 228 ms
     // busy per second, 77 with this canvas off). Four frames a second look the same; the twinkle below advances by
     // elapsed time, so its tempo does not change with the frame rate. Voice or thinking still gets 30 frames.
     const interval = active ? 33 : STAR_IDLE_MS;
-    if (now && now - lastDraw < interval) return;
+    const wait = now ? interval - (now - lastDraw) : 0;
+    // 2026-11-12: the next wake-up is a timer unless a voice or thinking needs every frame. This loop used to ask for
+    // a frame on every frame only to return at once (hidden tab, a management page in front, a draw not due yet): 60
+    // callbacks a second for at most four draws, and every one of those frames made the browser tick all the CSS
+    // animations on the page too. A timer may fire a little late; the twinkle advances by elapsed time, so it shows no
+    // difference. Coming back to the home screen draws within STAR_PARKED_MS; the last frame stays on the canvas.
+    if (active) requestAnimationFrame(draw);
+    else setTimeout(wake, parked ? STAR_PARKED_MS : Math.max(16, wait > 0 ? wait : interval));
+    if (parked || wait > 0) return;
     const dt = (now && lastDraw) ? Math.min(now - lastDraw, 1000) : (active ? 33 : 66);
     lastDraw = now || 0;
     // Tự đo lại kích thước (sửa lỗi nền dồn 1 góc khi layout chưa xong lúc boot). The size comes from a
@@ -4834,6 +4914,10 @@ function chupFile(f) {
 // ============================================
 // Events
 // ============================================
+// How tall the chat box may grow, measured when asked so a resized window still gets the right limit.
+function chatInputCap() {
+  return document.body.classList.contains("on-chat") ? Math.round(window.innerHeight * 0.4) : 200;
+}
 chatInput.addEventListener("input", () => {
   // 0.206.0: the send button shows up next to Stop once there is text; 0.231.0: and in place of voice chat.
   if (isProcessing) syncActiveUI(); else updateStopBtn();
@@ -4842,9 +4926,7 @@ chatInput.addEventListener("input", () => {
   // bản, không phải cuộn trong một ô 3 dòng. Trần ở trang Trò chuyện là 40% màn hình
   // (đo lúc gõ nên đổi cỡ cửa sổ vẫn đúng); màn chính ô nhập nằm trong cột phải hẹp hơn
   // nên trần 200px, quá nữa mới cuộn trong ô. CSS chỉ giữ lưới đỡ 45vh, không chặn nữa.
-  const _cap = document.body.classList.contains("on-chat")
-    ? Math.round(window.innerHeight * 0.4) : 200;
-  chatInput.style.height = Math.min(chatInput.scrollHeight, _cap) + "px";
+  chatInput.style.height = Math.min(chatInput.scrollHeight, chatInputCap()) + "px";
   sendTypingHint();
   try { if (chatSuggest) chatSuggest.onInput(); } catch (e) {}
 });
@@ -4864,12 +4946,15 @@ function sendTypingHint() {
 // Enter sends on a computer; an IME composition and a touch screen (Enter = new line) never send. The rules live in
 // chat-acts.js (JavisActs.enterSends) so the Team chat follows the same ones.
 const chatInputComposing = window.JavisActs.trackComposition(chatInput);
-// 2026-11-07: the likely next message shows grey in the empty box once Javis answers; Tab (or the Tab chip on a
-// phone) fills it in. Shared with the Team chat (chat-suggest.js).
+// 2026-11-07: the likely next message shows grey in the empty box once Javis answers; Tab (or the ">" after it)
+// fills it in. 2026-11-13: it stays while the owner types along it, Right Arrow takes one word, and a draft
+// that goes another way is finished after a short pause. Shared with the Team chat (chat-suggest.js).
 const chatSuggest = window.JavisSuggest ? window.JavisSuggest.attach({
   input: () => chatInput,
-  chipHost: () => { const row = document.getElementById("cpRow"); return row ? [row, row.querySelector(".cp-gap")] : null; },
   composing: () => chatInputComposing(),
+  maxHeight: () => chatInputCap(),
+  // Dictation and a voice call write into the box themselves: no guessing over them.
+  quiet: () => handsFreeActive() || !!document.querySelector("#hudVoice.dictating"),
 }) : null;
 function dropSuggest() { try { if (chatSuggest) chatSuggest.clear(); } catch (e) {} }
 chatInput.addEventListener("keydown", (e) => {
@@ -5334,7 +5419,7 @@ async function initAuthGate() {
   // cookie phiên rất có thể vẫn còn hợp lệ, chỉ là chưa hỏi được. Cứ để nguyên UI, mọi lệnh
   // gọi API thật sự (chat, file...) tự lộ ra nếu phiên đã hết hạn thật.
   if (!s) return;
-  if (s.authed) { initSetup(); return; }
+  if (s.authed) { _authedThisPage = true; initSetup(); return; }
   if (s.needs_setup) {
     _wizardMandatory = !!s.require_login;
     const wz = document.getElementById("setupWizard");
@@ -5369,6 +5454,8 @@ document.getElementById("authSubmit").addEventListener("click", async () => {
   fd.append("username", document.getElementById("authUser").value.trim());
   fd.append("password", document.getElementById("authPass").value);
   if (codeInp && codeInp.value.trim()) fd.append("code", codeInp.value.trim());
+  const keep = document.getElementById("authRemember");
+  fd.append("remember", keep && !keep.checked ? "0" : "1");
   const err = document.getElementById("authErr"); err.textContent = "";
   try {
     const r = await fetch("/auth/login", { method: "POST", body: fd });
@@ -5390,6 +5477,16 @@ document.getElementById("authSubmit").addEventListener("click", async () => {
     err.textContent = d.error || window.t("app.login_failed");
   } catch (e) { err.textContent = window.t("app.err_net"); }
 });
+// "Keep me signed in" box: this device remembers the last choice, so a borrowed device someone unticked once stays
+// unticked next time. Only the tick is stored, never a name or password.
+(() => {
+  const box = document.getElementById("authRemember");
+  if (!box) return;
+  try { if (localStorage.getItem("javis.rememberLogin") === "0") box.checked = false; } catch (e) {}
+  box.addEventListener("change", () => {
+    try { localStorage.setItem("javis.rememberLogin", box.checked ? "1" : "0"); } catch (e) {}
+  });
+})();
 // Eye button: lets the user check what they typed (a Hostinger customer could not tell a typo
 // from a wrong env password, 2026-10-05). Focus stays in the field so Enter still signs in.
 (() => {
@@ -5767,8 +5864,18 @@ if (document.getElementById("wzFinish")) {
     showNow();
   }
   sel.addEventListener("change", showNow);
-  fill();
-  window.addEventListener("javis:i18n", fill);
+  // 2026-11-12: the list is built when the wizard opens, not on every start of the app. Building it asks the browser
+  // for the clock of some 420 timezones (measured: about 100 ms on a desktop, several times that on a phone), and it
+  // ran at each start and again when the dictionary arrived, for a wizard an installed Javis never shows again.
+  const wz = document.getElementById("setupWizard");
+  const shown = () => !!(wz && wz.classList.contains("open"));
+  let filled = false;
+  function fillIfShown() { if (shown()) { filled = true; fill(); } }
+  fillIfShown();
+  if (wz && typeof MutationObserver === "function") {
+    new MutationObserver(() => { if (!filled) fillIfShown(); }).observe(wz, { attributes: true, attributeFilter: ["class"] });
+  }
+  window.addEventListener("javis:i18n", () => { if (filled) fill(); });
 })();
 
 // Wizard - chọn nhà cung cấp (card radio) + hiện ô key OpenRouter + gợi ý cách kết nối
@@ -5803,7 +5910,7 @@ initAuthGate();
 refreshUsage();
 connect();
 initStarfield();
-initGraph().then(connectGraphWatch).catch(connectGraphWatch);
+setTimeout(ensureGraphIfHome, 4000);   // the graph itself starts from JavisCockpit.firstPage / veManChinh
 pumpAudioLevel();
 loadMemStats();
 loadBrainStats();

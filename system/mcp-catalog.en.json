@@ -83,7 +83,7 @@
    "name": "Google Workspace (Gmail, Calendar, Drive, Docs)",
    "description": "Gmail, Calendar, Drive, Docs, Sheets, Slides, Forms, Tasks... in ONE connection. Create an OAuth client once, about 10 minutes, with step-by-step help. The first time a Google tool is called, a browser opens ON THE MACHINE RUNNING JAVIS for you to approve, so that machine needs a screen.",
    "group_line": "Gmail, Calendar, Drive, Docs and Sheets in ONE connection. Needs a machine with a screen; on a VPS use the separate Calendar and Gmail cards.",
-   "risk": "Draft (the default) lets Javis draft email, create events, create documents, and also EDIT existing documents and MOVE files in Drive.\nCombined tools (manage_event, manage_task...) belong here too, so Javis can edit and delete individual calendar events or to-dos.\n\nFull access adds permission to SEND REAL EMAIL, DELETE files and mail, and RUN Apps Script functions from your Google account.\n\nIf you only need to read, lower it to Read-only.",
+   "risk": "Draft (the default) lets Javis draft email, create events, create documents, and also EDIT existing documents and MOVE files in Drive.\nJavis can also edit Google Form questions, add or rename tabs, append rows to Sheets, and rename or copy Drive files.\nCombined tools (manage_event, manage_task...) belong here too, so Javis can edit and delete individual calendar events or to-dos.\n\nFull access adds permission to SEND REAL EMAIL, DELETE files and mail, and RUN Apps Script functions from your Google account.\nAlso at this level: SHARE files or calendars with others, delete a whole tab, task list or contact group, create Gmail filters, publish Apps Script.\n\nIf you only need to read, lower it to Read-only.",
    "guide": "This connection runs ON THE MACHINE WHERE JAVIS IS INSTALLED: the first time a Google tool is called, that machine's own browser\nopens for you to approve. A machine with no screen (a VPS) should use the separate Calendar and Gmail cards instead,\nwhich sign in right inside the dashboard.\n\nOne-time setup, about 10 minutes:\n1. Go to console.cloud.google.com and create a new project, or reuse the one you made for the Calendar/Gmail cards.\n2. Enable the API for each service you want. The four basics: Gmail API, Google Calendar API,\nGoogle Drive API, Google Docs API.\nTo let Javis touch Sheets, Slides, Forms, Contacts or Tasks, also enable the Google Sheets API,\nGoogle Slides API, Google Forms API, People API and Google Tasks API.\nForget one and only that group of tools errors out; the rest keeps working.\n3. OAuth consent screen: choose External, then add your Google email under Test users.\nSkip this and Google blocks the sign-in right away.\n4. Create an OAuth client of type 'Desktop app'.\nThis type needs NO redirect URI at all, unlike the Calendar/Gmail cards, so an empty section is correct.\n5. Download the client's JSON file and drop it on the box below (it fills in the Client ID and Secret),\nor copy those two values by hand.\n6. Fill in the Google email box too, then press Connect.\n\nThe first time Javis calls a Google tool, a browser opens on the machine running Javis. If you see an 'app isn't\nverified' warning, press Advanced, then Continue: this is your own app. Remember to TICK EVERY permission\nbox: untick one and that group of tools dies.",
    "fields": {
     "client_id": {"label": "OAuth Client ID", "placeholder": "e.g. xxxx.apps.googleusercontent.com"},
@@ -195,6 +195,38 @@
      {"label": "Enrol in Developer Preview"},
      {"label": "Enable Gmail MCP API"}
     ]
+   }
+  },
+  "http-api": {
+   "name": "Custom API (API key)",
+   "description": "Connect any service that has a REST API and an API key but no MCP (POS, CRM, shipping, e-invoices...). Paste the base URL and the key and every engine can call that API. The key is encrypted and only the server adds it to calls; the model never sees it.",
+   "risk": "Read-only (the default) lets Javis call GET only, so it can only look at data.\n\nFull access lets Javis call POST, PUT, PATCH and DELETE: create orders, edit, delete and send real messages on that service, which may not be undoable.\nDraft cannot open these methods because Javis cannot know how an unknown API writes.\n\nAn API key has every right of the account that created it: create a separate key for Javis and limit its rights at the service if the service allows it.",
+   "guide": "1. Open the service's API documentation, find the base URL and create an API key.\n2. Check how the docs say the key is sent. The most common is the header Authorization: Bearer, in which case leave Key format empty.\nA service using another header: write X-API-Key: {key}; a query parameter: write ?api_key={key}.\nA name:password key with Authorization: Basic {key} is encoded by Javis.\n3. Paste the docs link and a few notes (endpoints you use often) so Javis calls the right thing from the start.\n\nEach service is its own connection. The key is only sent to the base URL's host. An http:// address only works for a machine on your local network.",
+   "fields": {
+    "base_url": {
+     "label": "API base URL",
+     "placeholder": "e.g. https://api.example.com/v1"
+    },
+    "api_key": {
+     "label": "API key",
+     "placeholder": "Paste the API key..."
+    },
+    "auth_style": {
+     "label": "Key format (optional, empty = Authorization: Bearer)",
+     "placeholder": "e.g. X-API-Key: {key}  or  ?api_key={key}"
+    },
+    "extra_headers": {
+     "label": "Extra headers (optional, one Name: value per line)",
+     "placeholder": "e.g. X-Shop-Id: 12345"
+    },
+    "docs_url": {
+     "label": "API docs link (optional, for Javis to read)",
+     "placeholder": "e.g. https://docs.example.com/api"
+    },
+    "notes": {
+     "label": "Notes for Javis (optional)",
+     "placeholder": "e.g. orders under /orders, stock under /inventory"
+    }
    }
   },
   "substack": {

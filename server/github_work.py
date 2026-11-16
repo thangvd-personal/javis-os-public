@@ -210,12 +210,9 @@ def _slug(text: str) -> str:
 
 
 def _identity_env() -> dict[str, str]:
-    conn = github_repos.status()
-    login = conn.get("login") or "javis"
-    uid = github_repos.user_id()
-    email = f"{uid}+{login}@users.noreply.github.com" if uid else f"{login}@users.noreply.github.com"
-    return {"GIT_AUTHOR_NAME": login, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": login,
-            "GIT_COMMITTER_EMAIL": email}
+    who = github_repos.identity()
+    return {"GIT_AUTHOR_NAME": who["name"], "GIT_AUTHOR_EMAIL": who["email"], "GIT_COMMITTER_NAME": who["name"],
+            "GIT_COMMITTER_EMAIL": who["email"]}
 
 
 def commit_all(worktree: str, message: str) -> str:
@@ -225,7 +222,7 @@ def commit_all(worktree: str, message: str) -> str:
     import winproc
     github_repos.git(["add", "-A"], worktree)
     if github_repos.git_out(["diff", "--cached", "--name-only"], worktree):
-        env = dict(github_repos.git_env(""), **_identity_env())
+        env = dict(github_repos.git_env(), **_identity_env())
         p = subprocess.run(["git", "commit", "-q", "-F", "-"], cwd=worktree, input=message, text=True,
                            capture_output=True, env=env, encoding="utf-8", errors="replace",
                            creationflags=winproc.no_window())
@@ -235,17 +232,70 @@ def commit_all(worktree: str, message: str) -> str:
     return github_repos.git_out(["rev-parse", "HEAD"], worktree)
 
 
+def _task_title(task: str) -> str:
+    """The person's own first line of a request, without the bracketed blocks the dashboard puts in front of it.
+
+    A turn arrives as "[NGỮ CẢNH GIAO DIỆN: trang=workspace]", "[File đính kèm để ĐỌC ...: - /path ...]", "[Giờ gửi
+    tin này: ...]" and then the request. Taking the very first line named every job of a chat the same ("ngu-canh-giao-
+    dien-trang-workspace"), so the second job's branch name was already taken (blogminhquy/javisos-blog, 13/11/2026).
+    """
+    inside = False
+    for raw in str(task or "").splitlines():
+        line = raw.strip()
+        if inside:
+            inside = not line.endswith("]")
+            continue
+        if not line:
+            continue
+        if line.startswith("["):
+            inside = not line.endswith("]")
+            continue
+        if line.startswith("\U0001f4ce"):           # an attached file line ("📎 /path")
+            continue
+        return line
+    return ""
+
+
+def _branch_taken(wt: str, name: str, cur: str) -> bool:
+    """True when pushing HEAD to `name` would clash: another local branch has the name, or origin holds that branch
+    with commits HEAD does not contain (an older job's branch whose PR was squashed, for one)."""
+    if name != cur and github_repos.git(["rev-parse", "--verify", "--quiet", f"refs/heads/{name}"], wt,
+                                        check=False).returncode == 0:
+        return True
+    try:
+        r = github_repos.git(["ls-remote", "origin", f"refs/heads/{name}"], wt, auth=True, check=False, timeout=60)
+    except github_repos.RepoError:
+        return False                                  # cannot ask: the push itself reports the real problem
+    if r.returncode != 0:
+        return False
+    remote = (r.stdout or "").split()
+    if not remote:
+        return False
+    # Ours only when HEAD already contains it (a fast-forward). A sha this machine never fetched fails too: taken.
+    return github_repos.git(["merge-base", "--is-ancestor", remote[0], "HEAD"], wt, check=False).returncode != 0
+
+
 def _final_branch(sid: str, repo: dict[str, Any], title: str) -> str:
-    """`javis/<slug>-<id6>` decided at the first push (spec 6); after that the branch never changes."""
+    """`javis/<slug>-<id6>` decided at the first push (spec 6); after that the branch never changes.
+
+    The name is always one Javis can push to without overwriting anything: when the chosen name is taken locally or
+    on GitHub by other history, `-2`, `-3`... is added. Javis never force-pushes, so a clash used to stop the job with
+    "has commits this machine lacks" until someone renamed the branch by hand.
+    """
     wt = repo["worktree"]
     cur = github_repos.git_out(["rev-parse", "--abbrev-ref", "HEAD"], wt)
     short = github_repos.session_branch(sid)
     slug = _slug(title)
-    if cur != short or not slug:
+    want = f"javis/{slug}-{short.split('/', 1)[1][:6]}" if (cur == short and slug) else cur
+    name = want
+    for n in range(2, 60):
+        if not _branch_taken(wt, name, cur):
+            break
+        name = f"{want}-{n}"
+    if name == cur:
         return cur
-    new = f"javis/{slug}-{short.split('/', 1)[1][:6]}"
-    r = github_repos.git(["branch", "-m", new], wt, check=False)
-    return new if r.returncode == 0 else cur
+    r = github_repos.git(["branch", "-m", name], wt, check=False)
+    return name if r.returncode == 0 else cur
 
 
 class PushError(github_repos.RepoError):
@@ -274,11 +324,11 @@ def auth_message() -> str:
 def _perm_message(full_name: str) -> str:
     login = (github_repos.status().get("login") or "?") if github_repos.token() else "?"
     return _c(f"Tài khoản GitHub {login} không có quyền ghi vào {full_name}. Đăng nhập bằng nút Đăng nhập với GitHub thì "
-              "cài app Javis cho repo này (trang Kết nối, phần chọn repo); dùng token thì token cần quyền ghi Contents "
-              "(token cổ điển: quyền repo). Sửa xong Javis tự đẩy lại.",
+              "cài app Javis cho repository này (trang Kết nối, phần chọn repository); dùng token thì token cần quyền ghi Contents "
+              "(token cổ điển: quyền repository). Sửa xong Javis tự đẩy lại.",
               f"GitHub account {login} cannot write to {full_name}. With Sign in with GitHub, install the Javis app on "
-              "this repo (Connections page, repo picker); with a token, it needs Contents write (classic token: the "
-              "repo scope). Once fixed Javis pushes again on its own.")
+              "this repository (Connections page, repository picker); with a token, it needs Contents write (classic token: the "
+              "repository scope). Once fixed Javis pushes again on its own.")
 
 
 def push_error(stderr: str, branch: str, full_name: str) -> PushError:
@@ -371,7 +421,7 @@ def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> 
     fn = repo["full_name"]
     info = _session(sid)
     # The job's own request names the PR; the chat title only describes the chat's FIRST job.
-    task_line = (str(info.get("task") or "").strip().splitlines() or [""])[0]
+    task_line = _task_title(str(info.get("task") or ""))
     title = (task_line[:100] or (info.get("title") or "").strip() or _c("Thay đổi từ Javis", "Changes from Javis"))
     row = st().ensure(sid, fn, brain=brain, worktree=repo["worktree"], base_branch=_base_name(repo),
                       engine=str(info.get("engine") or ""), model=str(info.get("model") or ""))
@@ -391,7 +441,11 @@ def ship(sid: str, brain: str, repo: dict[str, Any], report: dict[str, Any]) -> 
         row = st().update(sid, fn, branch="", head_sha="", pr_number=0, pr_url="", pr_node_id="", ci="none",
                           integ="no_pr", post_merge="", merged_sha="", fix_rounds=0, rerun_used=0)
     sha = commit_all(repo["worktree"], f"{title[:72]}\n\nJavis chat {sid[:8]}")
-    branch = row.get("branch") or _final_branch(sid, repo, title)
+    # The branch is fixed once a push to it went through. A name stored by a push that never did (GitHub held other
+    # history under it, or a row from before the clash check) is not ours yet: decide again, else every retry and
+    # the "Push again" button hit the same taken name forever (javisos-blog, 14/11/2026).
+    branch = row.get("branch") if (row.get("head_sha") or row.get("pr_number")) else ""
+    branch = branch or _final_branch(sid, repo, title)
     if branch != row.get("branch"):
         st().update(sid, fn, branch=branch)     # decided once: a retry after a failed push uses the same branch
     pushed_sha, pushed_now = push(repo, branch)
@@ -629,13 +683,13 @@ async def retry_ship(sid: str, full_name: str, by_person: bool = False) -> dict[
     when it still fails, so the panel can show it."""
     row = st().get(sid, full_name)
     if not row:
-        raise github_repos.RepoError(_c("Cuộc này chưa có việc GitHub nào cho repo đó.",
-                                        "This chat has no GitHub work for that repo."))
+        raise github_repos.RepoError(_c("Cuộc này chưa có việc GitHub nào cho repository đó.",
+                                        "This chat has no GitHub work for that repository."))
     fn = row["full_name"]
     key = _key(sid, fn)
     if key in _SHIPPING:
         if by_person:
-            raise github_repos.RepoError(_c("Javis đang đẩy repo này rồi, chờ chút.", "Javis is pushing this repo already."))
+            raise github_repos.RepoError(_c("Javis đang đẩy repository này rồi, chờ chút.", "Javis is pushing this repository already."))
         return row
     if not await asyncio.to_thread(github_repos.token):
         if by_person:
@@ -645,8 +699,8 @@ async def retry_ship(sid: str, full_name: str, by_person: bool = False) -> dict[
     repo = next((r for r in repos if r.get("worktree") and r["full_name"].lower() == fn.lower()), None)
     if repo is None:
         if by_person:
-            raise github_repos.RepoError(_c("Repo này không còn gắn với cuộc trò chuyện.",
-                                            "This repo is no longer attached to the chat."))
+            raise github_repos.RepoError(_c("Repository này không còn gắn với cuộc trò chuyện.",
+                                            "This repository is no longer attached to the chat."))
         return row
     _SHIPPING.add(key)
     try:
@@ -899,7 +953,7 @@ def _merge_blockers(row: dict[str, Any], pr: dict[str, Any]) -> list[str]:
     out = []
     rec = github_repos.find(row.get("brain") or "", row["full_name"]) or {}
     if not github_repos.auto_merge_on(rec):
-        out.append(_c("tự merge đang tắt cho repo này", "auto-merge is off for this repo"))
+        out.append(_c("tự merge đang tắt cho repository này", "auto-merge is off for this repository"))
     if row.get("merge_block"):
         what = ", ".join(f"{x['path']} ({x['kind']})" for x in row["merge_block"][:5])
         out.append(_c(f"thay đổi cần người xem: {what}", f"changes a person must look at: {what}"))
@@ -909,8 +963,8 @@ def _merge_blockers(row: dict[str, Any], pr: dict[str, Any]) -> list[str]:
     if review:
         out.append(_c(f"review chéo còn {len(review)} phát hiện mở", f"cross review has {len(review)} open findings"))
     if pr.get("mergeable_state") == "blocked":
-        out.append(_c("repo còn điều kiện chưa đạt (cần người duyệt hoặc kiểm tra bắt buộc)",
-                      "the repo still requires something (a review or a required check)"))
+        out.append(_c("repository còn điều kiện chưa đạt (cần người duyệt hoặc kiểm tra bắt buộc)",
+                      "the repository still requires something (a review or a required check)"))
     return out
 
 
@@ -967,16 +1021,62 @@ async def merge_now(row: dict[str, Any], pr: dict[str, Any], by_person: bool = F
         return st().get(sid, fn) or row
 
 
+def _download_base_for_merge(row: dict[str, Any]) -> str:
+    """Make `git merge origin/<base>` runnable in the worktree WITHOUT a credential. "" when ready, else the reason.
+
+    The engine that resolves the conflict has no token in its shell (github_repos docstring), and the clone is a
+    partial one, so on a private repo it can neither fetch the base nor let git download, in the middle of the merge,
+    the file contents that merge reads. Javis does both here, with its token:
+      1. fetch the base branch;
+      2. download every file content that differs between each merge base and either side. `git diff --shortstat`
+         reads both versions of every changed path, and git batches the download of the missing ones. That covers
+         what the merge reads (base, ours, theirs, rename candidates) and what it writes into the worktree.
+    Nothing in the worktree or the index changes: only objects arrive.
+    """
+    wt = row.get("worktree") or ""
+    if not wt:
+        return ""
+    name = row.get("base_branch") or "main"
+    base = f"origin/{name}"
+    # `git merge` asks who the committer is before it does anything. A worktree made before clones got an identity
+    # of their own would stop the engine right there on a machine that has none.
+    github_repos.ensure_identity(wt)
+    try:
+        github_repos.git(["fetch", "origin", f"+refs/heads/{name}:refs/remotes/{base}"], wt, auth=True, timeout=300)
+        # Usually one merge base; none (unrelated histories) leaves nothing to download.
+        for merge_base in github_repos.git(["merge-base", "--all", "HEAD", base], wt, check=False).stdout.split():
+            for side in ("HEAD", base):
+                github_repos.git(["diff", "--shortstat", "--no-renames", "--no-ext-diff", "--no-textconv",
+                                  merge_base, side], wt, **github_repos.CHECKOUT)
+    except github_repos.RepoError as e:
+        return str(e)
+    return ""
+
+
 async def _conflict(row: dict[str, Any]) -> dict[str, Any]:
     sid, fn = row["sid"], row["full_name"]
+    key = f"{sid}:{fn}:conflict:{row['head_sha']}"
     reason = _c("PR bị xung đột với nhánh chính, cần làm lại.", "The PR conflicts with the base branch.")
+    if not st().step_done("fix:" + key):
+        failed = await asyncio.to_thread(_download_base_for_merge, row)
+        if failed:
+            # No fix round: the merge could not work. `integ` is left alone, so the watcher keeps this row and the
+            # next tick downloads again ("conflict" would take the row off its list).
+            reason += " " + _c(f"Javis chưa tải được nhánh chính về để gộp ({failed}), sẽ tự thử lại.",
+                               f"Javis could not download the base branch to merge it ({failed}) and will try again.")
+            st().update(sid, fn, stuck_reason=reason)
+            await _say(sid, f"**{fn}**: {reason}{_pr_tail(row)}", False,
+                       once=f"conflict-wait:{sid}:{fn}:{row['head_sha']}")
+            return st().get(sid, fn) or row
     st().update(sid, fn, integ="conflict", stuck_reason=reason)
     await _say(sid, f"**{fn}**: {reason}{_pr_tail(row)}", False, once=f"conflict:{sid}:{fn}:{row['head_sha']}")
-    # A conflict is work for the chat: one fix round to merge the base branch in and resolve it.
+    # A conflict is work for the chat: one fix round to merge the base branch in and resolve it. The engine only
+    # merges; it is never asked to fetch, its shell has no GitHub credential.
     await request_fix(st().get(sid, fn) or row, _c("PR xung đột với nhánh chính", "The PR conflicts with the base"),
-                      f"Trong thư mục làm việc của {fn}: `git fetch origin` rồi `git merge origin/{row.get('base_branch')}`, "
+                      f"Javis đã tải sẵn bản mới nhất của nhánh {row.get('base_branch')} về máy, không cần tải lại. "
+                      f"Trong thư mục làm việc của {fn}: `git merge origin/{row.get('base_branch')}`, "
                       "giải quyết xung đột giữ đúng ý của cả hai bên, chạy lại test. Không rebase, không force push.",
-                      f"{sid}:{fn}:conflict:{row['head_sha']}")
+                      key)
     return st().get(sid, fn) or row
 
 
@@ -998,7 +1098,7 @@ def _restart_branch(row: dict[str, Any]) -> None:
         while github_repos.git(["rev-parse", "--verify", "--quiet", f"refs/heads/{stem}-r{n}"], wt,
                                check=False).returncode == 0:
             n += 1
-        github_repos.git(["checkout", "-q", "-b", f"{stem}-r{n}", base], wt)
+        github_repos.git(["checkout", "-q", "-b", f"{stem}-r{n}", base], wt, **github_repos.CHECKOUT)
     except github_repos.RepoError:
         pass
 
@@ -1047,7 +1147,7 @@ async def on_no_ci(row: dict[str, Any], pr: dict[str, Any]) -> dict[str, Any]:
     if pr.get("mergeable") is False:
         return await on_green(row, pr)      # conflict wording and state are the same
     st().update(sid, fn, integ="ready")
-    await _say(sid, _c(f"**{fn}**: repo không có CI cho commit này. Kiểm tra ở máy đã qua; PR #{row['pr_number']} "
+    await _say(sid, _c(f"**{fn}**: repository không có CI cho commit này. Kiểm tra ở máy đã qua; PR #{row['pr_number']} "
                        f"chờ người bấm merge, Javis không tự merge khi không có CI.{_pr_tail(row)}",
                        f"**{fn}**: no CI ran on this commit. Local checks passed; PR #{row['pr_number']} waits for a "
                        f"person to merge, Javis never auto-merges without CI.{_pr_tail(row)}"), True,
@@ -1266,10 +1366,10 @@ def _candidates(row: dict[str, Any], provider: str) -> tuple[list[dict[str, str]
         return out[:REVIEW_TRY_MAX], ""
     return [], _c("chưa có engine nào chạy được ở chế độ chỉ chữ: Claude, hoặc một nhà dùng API key (OpenAI, Gemini, "
                   "DeepSeek, OpenRouter...). Gói ChatGPT, Grok Build và Antigravity chạy qua CLI còn công cụ đọc ghi "
-                  "file nên không được đọc diff của repo.",
+                  "file nên không được đọc diff của repository.",
                   "no engine can run text-only: Claude, or a provider on an API key (OpenAI, Gemini, DeepSeek, "
                   "OpenRouter...). The ChatGPT, Grok Build and Antigravity plans run through a CLI that keeps file "
-                  "tools, so they never read a repo's diff.")
+                  "tools, so they never read a repository's diff.")
 
 
 async def cross_review(row: dict[str, Any], provider: str = "", manual: bool = False) -> dict[str, Any]:
@@ -1367,7 +1467,7 @@ _PERSON_REVIEWS: dict[str, "asyncio.Task[dict[str, Any]]"] = {}
 def _review_row(sid: str, full_name: str) -> dict[str, Any]:
     row = st().get(sid, full_name)
     if not row or not row.get("pr_number"):
-        raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repo đó.", "This chat has no PR for that repo."))
+        raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repository đó.", "This chat has no PR for that repository."))
     if row.get("integ") == "merged":
         raise github_repos.RepoError(_c("PR đã merge, không còn gì để review.", "The PR is merged, nothing to review."))
     return row
@@ -1602,7 +1702,7 @@ def queue_next(sid: str, text: str) -> dict[str, Any]:
     if not text:
         raise ValueError(_c("Chưa có nội dung việc kế tiếp.", "The next job has no text."))
     if not st().for_session(sid) and not github_repos.session_repos(sid):
-        raise ValueError(_c("Cuộc trò chuyện này chưa gắn repo GitHub nào.", "This chat has no GitHub repo attached."))
+        raise ValueError(_c("Cuộc trò chuyện này chưa gắn repository GitHub nào.", "This chat has no GitHub repository attached."))
     qid = st().queue_add(sid, text[:4000])
     return {"id": qid, "queue": [{"id": q["id"], "text": q["text"]} for q in st().queue_list(sid)]}
 
@@ -1656,7 +1756,7 @@ async def merge_by_person(sid: str, full_name: str) -> dict[str, Any]:
 async def _merge_by_person(sid: str, full_name: str) -> dict[str, Any]:
     row = st().get(sid, full_name)
     if not row or not row.get("pr_number"):
-        raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repo đó.", "This chat has no PR for that repo."))
+        raise github_repos.RepoError(_c("Cuộc này chưa có PR cho repository đó.", "This chat has no PR for that repository."))
     if row.get("integ") == "merged":
         return {"row": _row_view(row)}
     if row.get("ci") not in ("green", "no_ci"):

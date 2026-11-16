@@ -3177,6 +3177,16 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .tm-page .ws-btn.tm-primary { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
 .tm-list, .tm-chat, .tm-side { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .tm-list[hidden], .tm-chat[hidden], .tm-side[hidden] { display: none; }
+/* 2026-11-15: a file link clicked in the team chat opens the file editor IN the chat column, the Partners page's rule
+   (.ws-main.edit-on): the editor takes the whole column and every other part of it hides. Hidden with display:none, so
+   the messages, the words typed in the composer and the open team stay; closing the file (X on the editor) brings the
+   chat back. The editor is a floating layer in .hud-center by itself, so here it drops inset and z-index, except while
+   maximized (.ne-full), when it covers the screen on purpose. */
+.tm-edit { display: none; position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; flex-direction: column; }
+.tm-chat.edit-on > .tm-edit { display: flex; }
+.tm-chat.edit-on > :not(.tm-edit) { display: none; }
+.tm-edit > .note-editor:not(.ne-full) { position: static; inset: auto; z-index: auto;
+  flex: 1 1 auto; min-height: 0; min-width: 0; border-radius: 12px; }
 .tm-list { border-right: 1px solid var(--border); padding: 8px; gap: 2px; overflow-y: auto; }
 .tm-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-height: 36px; }
 .tm-bar[hidden] { display: none; }
@@ -3734,6 +3744,11 @@ body.kb-open .tm-composer { padding-bottom: 8px; }
 .tmp-doc-res-text i { font-style: normal; color: var(--text3); font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tmp-doc-note { padding: 10px 12px; color: var(--text3); font-size: 16px; }
 .tmp-doc-warn { color: var(--warn-ink); padding: 0 0 8px; }
+/* 2026-11-15: GitHub repos picked in the create box (team-github.js picker in .tmp-repo-box). */
+.tmp-repo .cp-ic, .tmp-repo-open .cp-ic { width: 16px; height: 16px; }
+.tmp-repo-open { display: inline-flex; align-items: center; gap: 6px; }
+.tmp-repo-box:not([hidden]) { margin-bottom: 8px; }
+.tmp-repo-box .gh-results { max-height: 260px; overflow-y: auto; }
 .tm-info-fsearch { flex: 1; min-width: 0; }
 .tm-info-found li { justify-content: space-between; gap: 8px; }
 .tm-info-found li > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4236,10 +4251,17 @@ button.tm-gh-st { border: 0; background: none; padding: 0; font: inherit; font-s
 .tm-info-members li > span:not(.tm-ava):not(.tm-info-badge) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tm-info-badge { margin-left: auto; font-size: 12.5px; color: var(--accent-ink, var(--accent)); background: var(--accent-wash, rgba(255, 122, 60, .12));
   border-radius: 999px; padding: 1px 8px; }
-.tm-info-list a { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; color: var(--text); text-decoration: none; }
-.tm-info-list a:hover span { text-decoration: underline; }
-.tm-info-list a span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-info-list a, .tm-info-dir { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; color: var(--text); text-decoration: none; }
+/* A folder document (2026-11-12) is a button that opens the Files page; it reads like the file links beside it. */
+.tm-info-dir { background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+.tm-info-list a:hover span, .tm-info-dir:hover span { text-decoration: underline; }
+.tm-info-list a span, .tm-info-dir span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tm-info-list svg { width: 16px; height: 16px; flex: none; color: var(--text2); }
+/* 2026-11-13: what a team document holds, one line under its name. The row wraps so the line can sit below. */
+.tm-info-list li:has(.tm-info-desc) { flex-wrap: wrap; }
+.tm-info-desc { order: 9; flex: 1 0 100%; padding-left: 24px; color: var(--text2); font-size: 14px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tm-chip-x.on { color: var(--accent); }
 .tm-info-row { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .tm-info-row svg { width: 16px; height: 16px; color: var(--accent); flex: none; }
 .tm-info-grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -4335,6 +4357,10 @@ button.tm-gh-st { border: 0; background: none; padding: 0; font: inherit; font-s
 button.tm-quote-ref { width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text2); border: 1px solid transparent;
   cursor: pointer; margin: 0 0 8px; }
 button.tm-quote-ref:hover, button.tm-quote-ref:focus-visible { border-color: var(--accent-line); outline: none; }
+/* 2026-11-14: the quote on top of the owner's message is a button too: it scrolls back to the words it quotes. */
+button.tm-quote-src { width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text2); border: 1px solid transparent;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button.tm-quote-src:hover, button.tm-quote-src:focus-visible { border-color: var(--accent-line); outline: none; }
 .tm-replying { border-left: 0; padding: 6px 6px 6px 6px; background: var(--bg3); border: 1px solid var(--border); }
 .tm-replying-ico { flex: none; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center;
   justify-content: center; background: var(--bg); color: var(--accent); }

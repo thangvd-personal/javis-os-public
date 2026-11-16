@@ -179,11 +179,20 @@
     try { return require("./chat-quote.js"); } catch (e) { return null; }
   }
 
+  // A reply quote is "Name: words" (replyTarget). Returns {who, words}; who is "" when there is no name in front.
+  var QUOTE_WHO = /^([^:\n]{1,60}):\s+([\s\S]*)$/;
+  function quoteParts(q) {
+    var mm = QUOTE_WHO.exec(String(q == null ? "" : q));
+    return mm ? { who: mm[1], words: mm[2] } : { who: "", words: String(q == null ? "" : q) };
+  }
+
   function quoteHtml(q) {
-    var mm = /^([^:\n]{1,60}):\s+([\s\S]*)$/.exec(q);
+    var p = quoteParts(q);
     // 0.192.0: the quote carries the same quote mark as the main chat's quote chip.
-    return '<div class="tm-quote"><span class="tm-quote-ico" aria-hidden="true">' + ic("quote") + "</span><span class=\"tm-quote-body\">" +
-      (mm ? "<b>" + esc(mm[1]) + "</b>" + esc(mm[2]) : esc(q)).replace(/\n/g, "<br>") + "</span></div>";
+    // 2026-11-14: it is a button. A tap scrolls back to the words it quotes, like the main chat (jumpToQuoted).
+    return '<button type="button" class="tm-quote tm-quote-src" data-quote-src="1" title="' + esc(tw("cact.quote_jump")) + '">' +
+      '<span class="tm-quote-ico" aria-hidden="true">' + ic("quote") + "</span><span class=\"tm-quote-body\">" +
+      (p.who ? "<b>" + esc(p.who) + "</b>" + esc(p.words) : esc(p.words)).replace(/\n/g, "<br>") + "</span></button>";
   }
 
   // 0.192.0 (owner, 16/10/2026: "agent phản hồi ai thì phải tag vào hoặc quote lại"): an assistant's message that answers
@@ -1892,6 +1901,14 @@
 
   // ───────────── phần chạy trong trình duyệt ─────────────
 
+  // A file opened from the chat covers the whole chat column (.tm-edit). Opening another team closes it first, so the
+  // team just picked shows instead of the last team's file. closeNote writes what is still unsaved, nothing typed is lost.
+  function closeDockedFile() {
+    var ed = typeof document !== "undefined" ? document.getElementById("noteEditor") : null;
+    if (!ed || !S || !S.el || !S.el.contains(ed)) return;
+    if (typeof window.JavisCloseNote === "function") { try { window.JavisCloseNote(); } catch (e) {} }
+  }
+
   function brain() {
     try {
       if (window.JavisSessions && window.JavisSessions.brain) return window.JavisSessions.brain();
@@ -1973,7 +1990,12 @@
       '<div class="tm-teams"></div><button type="button" class="ws-btn tm-more-teams" hidden>' + esc(tw("teams.next_page")) + "</button></aside>" +
       '<section class="tm-chat"><div class="tm-bar tm-chat-head"></div><div class="tm-search" hidden></div>' +
       '<div class="tm-banners"></div><div class="tm-jobs" hidden></div>' +
-      '<div class="tm-filterbar" hidden></div><div class="tm-pinbar" hidden></div><div class="tm-msgs" aria-live="polite"></div><div class="tm-composer"></div></section>' +
+      '<div class="tm-filterbar" hidden></div><div class="tm-pinbar" hidden></div><div class="tm-msgs" aria-live="polite"></div><div class="tm-composer"></div>' +
+      // 2026-11-15 (owner: files the team writes could not be clicked open): the frame the file editor docks into when a
+      // file link in the chat is clicked, like the Partners page's #wsEdit. It takes the whole chat column while open
+      // (console.css .tm-chat.edit-on); closing the file brings the chat back as it was. `data-ne-host` is how
+      // console.js finds it; without it the editor opened behind this page and nothing showed.
+      '<div class="tm-edit" data-ne-host></div></section>' +
       // Vùng thông báo chung NGOÀI khung chat: trên điện thoại khung chat bị ẩn khi đang ở danh sách, thông báo (vd. ghim
       // lỗi) vẫn phải nhìn thấy (review 4f6268bd #2).
       '<aside class="tm-side" hidden></aside><div class="tm-scrim" hidden></div><div class="tm-note" role="status" aria-live="polite" hidden></div></div>';
@@ -2339,6 +2361,7 @@
     grow(box.querySelector(".tm-input"));
     drawHint();
     drawTyping();
+    if (S.plusOpen) placePlusMenu(box);
     if (teamSuggest) teamSuggest.refresh();
     if (S.focusComposer && !off) {
       S.focusComposer = false;
@@ -2372,6 +2395,21 @@
   function ghLogo() {
     var G = typeof window !== "undefined" && window.JavisGithubRepos;
     return G && G.logo ? G.logo : ic("git-branch");
+  }
+
+  // The + menu and the panels it opens (folder, GitHub) sit just above the + button, not above the whole composer: with a
+  // reply bar, files attached or a few lines typed, the composer's top is far from the button (owner, 14/11/2026, the
+  // same fix as the main chat's popovers in model-picker.js).
+  function placePlusMenu(box) {
+    var menu = box.querySelector(".tm-plus-menu"), pb = box.querySelector(".tm-plus");
+    if (!menu || !pb || pb.offsetParent !== box) return;
+    menu.style.bottom = Math.max(0, box.clientHeight - pb.offsetTop + 6) + "px";
+  }
+  function placeAbovePlus(pop, comp) {
+    var r = comp.getBoundingClientRect(), pb = comp.querySelector(".tm-plus");
+    var top = pb && pb.offsetParent ? pb.getBoundingClientRect().top : r.top;
+    pop.style.left = Math.max(8, r.left + 8) + "px";
+    pop.style.bottom = Math.max(8, window.innerHeight - top + 6) + "px";
   }
 
   function plusMenuHtml(off) {
@@ -2526,6 +2564,40 @@
     if (!S.scroll || S.scroll.stuck()) toLatest(false);
     var inp = S.el.querySelector(".tm-input");
     if (inp) { try { inp.focus(); } catch (e) {} }
+  }
+
+  // Owner, 2026-11-14: a tap on the quote on top of the owner's message scrolls back to the exact words it quotes and
+  // marks them for a moment, like the main chat (quote-jump.js). Only the words after "Name: " are looked for. Not on
+  // screen any more: older pages load until it is. The message is found again by id after each load redraws the list.
+  function jumpToQuoted(btn) {
+    var J = typeof window !== "undefined" && window.JavisQuoteJump;
+    var host = btn && btn.closest && btn.closest(".tm-msg");
+    if (!J || !host || !S) return;
+    var mid = host.getAttribute("data-mid"), cid = host.getAttribute("data-cid");
+    var m = mid ? msgById(Number(mid)) : null;
+    var p = !m && cid ? S.outbox.filter(function (x) { return x.cid === cid; })[0] : null;
+    var Q = quoteApi();
+    var text = m ? String(m.content == null ? "" : m.content) : p ? String(p.text || "") : "";
+    var quote = Q ? Q.tach(skillSplit(text).rest).quote : "";
+    var self = function () {
+      return S.el.querySelector(mid ? '.tm-msgs [data-mid="' + Number(mid) + '"]' : '.tm-msgs [data-cid="' + String(cid).replace(/"/g, "") + '"]');
+    };
+    J.go({
+      quote: quoteParts(quote).words,
+      candidates: function () {
+        var box = S.el.querySelector(".tm-msgs");
+        return box ? J.before(box.querySelectorAll(".tm-msg[data-mid]"), self()) : [];
+      },
+      roots: function (el) { return Array.prototype.slice.call(el.querySelectorAll(".tm-text")); },
+      scroller: function () { return S.el.querySelector(".tm-msgs"); },
+      beforeScroll: function () { if (S.scroll) S.scroll.setStuck(false); },
+      loadOlder: function () {
+        if (!S.hasMore || S.filterTask) return false;
+        var n = S.msgs.length;
+        return loadMsgs(true).then(function () { return S.msgs.length > n; });
+      },
+      flashClass: "tm-msg-flash"
+    });
   }
 
   // What Copy puts on the clipboard, the same as the main chat: an assistant's answer as its visible markdown (headings,
@@ -3062,6 +3134,7 @@
   function openTeam(id, taskId) {
     keepTeam();
     dropNextSug();
+    closeDockedFile();
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
     S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = String(taskId || "");
     S.team = null; S.queue = null; S.msgs = []; S.msgsFor = ""; S.taskTitles = {}; S.openMember = null; S.turns = [];
@@ -3250,11 +3323,33 @@
     }).catch(function (e) { a.busy = false; a.err = uploadError(e); drawComposer(); });
   }
 
-  function pickFiles(onDone) {
+  // The file picker input lives IN the page until the pick is done (2026-11-15). Owner, on an iPhone: "chọn được nhưng
+  // gửi không được, không đính kèm được" when several photos were picked. The input used to be created and clicked
+  // without ever joining the page, so nothing held it while iOS Safari prepared the photos (several take seconds); it
+  // was dropped and its change event never came, so no chip appeared. One photo was quick enough to slip through. The
+  // main chat never had this: its #fileInput is in index.html. One picker at a time; the next pick replaces it.
+  var pickerEl = null;
+  function dropPicker() {
+    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
+    pickerEl = null;
+  }
+  function pickFiles(onDone, accept) {
+    dropPicker();
     var inp = document.createElement("input");
-    inp.type = "file"; inp.multiple = true;
-    inp.addEventListener("change", function () { onDone(Array.prototype.slice.call(inp.files || [])); });
+    inp.type = "file";
+    if (accept) inp.accept = accept; else inp.multiple = true;
+    inp.className = "tm-picker";
+    inp.style.display = "none";
+    inp.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(inp.files || []);
+      if (files.length) onDone(files);
+    });
+    // Closed without a pick: nothing to keep (browsers without this event drop it at the next pick).
+    inp.addEventListener("cancel", function () { if (pickerEl === inp) dropPicker(); });
+    document.body.appendChild(inp);
+    pickerEl = inp;
     inp.click();
+    return inp;
   }
 
   function attachFiles(files) {
@@ -3413,11 +3508,9 @@
     if (!G || !comp || !S.team || !sessionId()) return;
     closeGithubPanel();
     closeFolderPanel();
-    var r = comp.getBoundingClientRect();
     var pop = document.createElement("div");
     pop.className = "cp-menu tm-folder-pop tm-gh-pop";
-    pop.style.left = Math.max(8, r.left + 8) + "px";
-    pop.style.bottom = Math.max(8, window.innerHeight - r.top + 6) + "px";
+    placeAbovePlus(pop, comp);
     pop.innerHTML = '<div class="cp-mi cp-back">' + esc(tw("gh.menu")) + infoBtn() + "</div>" +
       infoBody(esc(tw("teams.gh_how"))) + '<div class="cp-sep"></div><div class="tm-gh-body"></div>';
     document.body.appendChild(pop);
@@ -3427,7 +3520,7 @@
       current: function () { return S.repos.map(function (x) { return x.full_name; }); },
       changed: function (d) { if (sessionId() === sid) setRepos(d); },
       close: closeGithubPanel,
-      connections: function () { try { window.Alpine.store("nav").go("mcp"); } catch (e) { location.hash = "#mcp"; } } });
+      connections: function () { try { window.Alpine.store("nav").go("mcp"); } catch (e) { location.hash = "#p=mcp"; } } });
     setTimeout(function () {
       document.addEventListener("mousedown", githubOutside, true);
       document.addEventListener("keydown", githubEsc, true);
@@ -3461,11 +3554,9 @@
     var comp = S.el.querySelector(".tm-composer");
     if (!P || !comp || !S.team) return;
     closeFolderPanel();
-    var r = comp.getBoundingClientRect();
     var pop = document.createElement("div");
     pop.className = "cp-menu tm-folder-pop";
-    pop.style.left = Math.max(8, r.left + 8) + "px";
-    pop.style.bottom = Math.max(8, window.innerHeight - r.top + 6) + "px";
+    placeAbovePlus(pop, comp);
     pop.innerHTML = '<div class="cp-mi cp-back">' + esc(tw("cp.pin_folder")) + '</div><div class="cp-sep"></div><div class="tm-folder-body"></div>';
     document.body.appendChild(pop);
     P({ brain: brain, current: function () { return S.folder; }, pin: pinTeamFolder,
@@ -3491,6 +3582,12 @@
   // 2026-11-12: a file already in the brain joins the team without being uploaded again. S.infoFind keeps what was
   // typed and found, so a redraw of the panel (a new message, the list reloading) puts both back.
   var infoFindTimer = null;
+  // /files/search rows with a folder's path ending in "/" (team-picker.js owns the rule; the fallback keeps files).
+  function searchRows(items) {
+    var P = TP();
+    return P && P.searchRows ? P.searchRows(items) : (items || []).filter(function (it) { return it.type !== "dir"; })
+      .map(function (it) { return { path: it.path, name: it.name }; });
+  }
   function infoFindRows() {
     var F = S.infoFind;
     if (!F || !String(F.q || "").trim()) return "";
@@ -3500,7 +3597,7 @@
     ((S.info && S.info.files) || []).forEach(function (f) { have[f.path] = true; });
     return '<ul class="tm-info-list tm-info-found">' + F.items.map(function (it, i) {
       var on = !!have[it.path] || !!(F.added || {})[it.path];
-      return "<li><span>" + ic("file-text") + '<span title="' + esc(it.path) + '">' + esc(it.name) + "</span></span>" +
+      return "<li><span>" + ic(it.dir ? "folder" : "file-text") + '<span title="' + esc(it.path) + '">' + esc(it.name) + "</span></span>" +
         '<button type="button" class="ws-btn" data-info-pick="' + i + '"' + (on ? " disabled" : "") + ">" +
         esc(tw(on ? "teams.pick.doc_added" : "teams.pick.doc_add")) + "</button></li>";
     }).join("") + "</ul>";
@@ -3518,11 +3615,12 @@
     F.state = "searching";
     drawInfoFind();
     infoFindTimer = setTimeout(function () {
-      call("GET", "/files/search?mode=name&limit=20&q=" + q(words)).then(function (r) {
+      // include_dirs (2026-11-12): a whole folder of the brain can join the team as one document.
+      call("GET", "/files/search?mode=name&include_dirs=true&limit=20&q=" + q(words)).then(function (r) {
         return r.code === 200 ? (r.j.items || []) : [];
       }, function () { return []; }).then(function (items) {
         if (S.infoFind !== F || F.seq !== seq) return;
-        F.items = items.map(function (it) { return { path: it.path, name: it.name }; });
+        F.items = searchRows(items);
         F.state = "done";
         drawInfoFind();
       });
@@ -3574,6 +3672,26 @@
     });
   }
 
+  // 2026-11-13: one line saying what a team document holds, read by every member turn. Javis writes it (tool
+  // javis_project team=...), the owner writes or fixes it with the pencil. Only a document attached to the team (with an
+  // id) has a row to describe.
+  function descLine(x) {
+    return x.description ? '<span class="tm-info-desc">' + esc(x.description) + "</span>" : "";
+  }
+  function descBtn(x, kind) {
+    if (!(x.manual && x.id)) return "";
+    return '<button type="button" class="tm-chip-x' + (x.description ? " on" : "") + '" data-info-desc="' + kind + '" data-ref="' +
+      esc(kind === "link" ? x.url : x.path) + '" data-desc="' + esc(x.description || "") + '" aria-label="' +
+      esc(tw("teams.info_desc")) + '" title="' + esc(tw("teams.info_desc")) + '">' + ic("pencil") + "</button>";
+  }
+  function describeDoc(kind, ref, old) {
+    var text = window.prompt(tw("teams.info_desc_q"), old || "");
+    if (text == null || text.trim() === (old || "")) return;
+    var f = new FormData();
+    f.append("kind", kind); f.append("ref", ref); f.append("description", text.trim());
+    return assetPost("/describe", f);
+  }
+
   // The info panel (0.191.0): who is in the team, the working folder, pictures, files and links shared in it.
   function infoTabHtml(t) {
     if (!t) return "";
@@ -3620,8 +3738,13 @@
       '" placeholder="' + esc(tw("teams.pick.doc_search_ph")) + '" aria-label="' + esc(tw("teams.pick.doc_search_ph")) + '"></div>' +
       '<div class="tm-info-fresults">' + infoFindRows() + "</div>" +
       (docs.length ? '<ul class="tm-info-list">' + docs.map(function (f) {
-        return '<li><a href="' + esc(rawUrl(f.brain_path || f.path)) + '" target="_blank" rel="noopener">' + ic("file-text") + "<span>" +
-          esc(f.label || f.name) + "</span></a>" + (f.manual && f.id ? '<button type="button" class="tm-chip-x" data-info-del-file="' + esc(f.id) +
+        // 2026-11-12: a folder document opens on the Files page; there is no raw file to serve for it.
+        // It is a <button>: the page's one click handler only looks at buttons.
+        return "<li>" + (f.dir ? '<button type="button" class="tm-info-dir" data-info-open-dir="' + esc(f.brain_path || f.path) + '" title="' +
+          esc(f.brain_path || f.path) + '">' + ic("folder") + "<span>" + esc(f.label || f.name) + "</span></button>"
+          : '<a href="' + esc(rawUrl(f.brain_path || f.path)) + '" target="_blank" rel="noopener">' + ic("file-text") + "<span>" +
+          esc(f.label || f.name) + "</span></a>") + descLine(f) + descBtn(f, "file") +
+          (f.manual && f.id ? '<button type="button" class="tm-chip-x" data-info-del-file="' + esc(f.id) +
           '" aria-label="' + esc(tw("teams.info_remove")) + '" title="' + esc(tw("teams.info_remove")) + '">' + ic("x") + "</button>" : "") + "</li>";
       }).join("") + "</ul>" : '<p class="tm-sub">' + esc(tw("teams.info_no_files")) + "</p>") + "</section>";
     h += '<section class="tm-info-sec"><h4>' + esc(tw("teams.info_links", { n: I.links.length })) + infoBtn() + "</h4>" +
@@ -3630,6 +3753,7 @@
       '<button type="button" class="ws-btn" data-info-add-link="1">' + esc(tw("teams.info_add")) + "</button></div>" +
       (I.links.length ? '<ul class="tm-info-list">' + I.links.map(function (l) {
         return '<li><a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + ic("link") + "<span>" + esc(l.label || l.url) + "</span></a>" +
+          descLine(l) + descBtn(l, "link") +
           (l.manual && l.id ? '<button type="button" class="tm-chip-x" data-info-del-link="' + esc(l.id) + '" aria-label="' +
             esc(tw("teams.info_remove")) + '" title="' + esc(tw("teams.info_remove")) + '">' + ic("x") + "</button>" : "") + "</li>";
       }).join("") + "</ul>" : '<p class="tm-sub">' + esc(tw("teams.info_no_links")) + "</p>") + "</section>";
@@ -4046,11 +4170,9 @@
 
   // 0.200.0: add a team file. A preview first (who comes in, how many skills), then one confirm.
   function importTeam() {
-    var inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = ".zip,application/zip";
-    inp.onchange = function () {
-      var f = inp.files && inp.files[0];
+    // The same in-page picker as attaching (pickFiles), so iOS keeps it while the file is chosen.
+    pickFiles(function (files) {
+      var f = files[0];
       if (!f) return;
       var send = function (preview) {
         var fd = new FormData();
@@ -4070,8 +4192,7 @@
           loadTeams(false);
         });
       });
-    };
-    inp.click();
+    }, ".zip,application/zip");
   }
 
   function muteTeam(id, on, btn) {
@@ -4104,6 +4225,8 @@
       includeHidden: false,
       // 2026-11-12: documents picked in the create box (team-picker.js: docs, links and the brain file search).
       docs: [], links: [], docQuery: "", docResults: [], docState: "idle", docsOpen: false, linkDraft: "", linkBad: false,
+      // 2026-11-15: GitHub repos picked in the create box, attached to the team's chat once it exists.
+      repos: [], repoOpen: false,
       reqId: newClientId() };
     S.pickOpener = opener || null;
     document.removeEventListener("keydown", pickEsc, true);
@@ -4148,6 +4271,7 @@
       host.innerHTML = P.html(st, roster);
       var first = host.querySelector(st.mode === "create" ? ".tmp-name-input" : ".tmp-search-input");
       if (first && !(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) first.focus();
+      pickMountRepos();       // the repo picker is live DOM: a whole redraw drops it, so it is put back
       return;
     }
     var put = function (sel, h) { var box = host.querySelector(sel); if (box) box.innerHTML = h; };
@@ -4196,13 +4320,59 @@
     var P = TP(), st = S.pickSt, host = S.pickHost;
     if (!P || !st || !host) return;
     var put = function (sel, h) { var box = host.querySelector(sel); if (box) box.innerHTML = h; };
-    if (whole) put(".tmp-docs-box", P.docsHtml(st));
+    if (whole) { put(".tmp-docs-box", P.docsHtml(st)); pickMountRepos(); }
     else {
       put(".tmp-docs-chips", P.docChipsHtml(st));
       put(".tmp-doc-results", P.docResultsHtml(st));
       put(".tmp-docs-sum", P.docsSummaryHtml(st));
     }
     put(".tmp-foot-box", P.footerHtml(st));
+  }
+
+  // 2026-11-15: GitHub repos in the create box. The same picker as the team's Info tab (team-github.js), but nothing
+  // is attached while the box is open: ticks only change S.pickSt.repos, and submitPicker attaches them to the new
+  // team's chat. Put back after every whole redraw of the documents block (drawPickDocs(true), drawPicker("all")).
+  function pickToggleRepos() {
+    var st = S.pickSt;
+    if (!st) return;
+    st.repoOpen = !st.repoOpen;
+    var host = S.pickHost, box = host && host.querySelector(".tmp-repo-box"), btn = host && host.querySelector(".tmp-repo-open");
+    if (btn) btn.setAttribute("aria-expanded", st.repoOpen ? "true" : "false");
+    if (box) { box.hidden = !st.repoOpen; if (!st.repoOpen) box.innerHTML = ""; }
+    pickMountRepos();
+  }
+  function pickMountRepos() {
+    var st = S.pickSt, host = S.pickHost, G = window.JavisTeamGithub;
+    var box = host && host.querySelector(".tmp-repo-box");
+    if (!st || !st.repoOpen || !box || !G || st.mode !== "create") return;
+    box.hidden = false;
+    G.panel(box, {
+      brain: brain,
+      current: function () { return (S.pickSt && S.pickSt.repos) || []; },
+      save: function (names) {
+        if (!S.pickSt) return { ok: false };
+        S.pickSt = TP().setRepos(S.pickSt, names);
+        return { ok: true, repos: S.pickSt.repos.map(function (n) { return { full_name: n }; }) };
+      },
+      changed: function () { drawPickDocs(); },
+      close: function () { if (S.pickSt) { S.pickSt.repoOpen = false; drawPickDocs(true); } },
+      connections: function () { closePicker(); try { window.Alpine.store("nav").go("mcp"); } catch (e) { location.hash = "#p=mcp"; } } });
+  }
+  // After POST /teams: attach the picked repos to the new team's chat (cloning can take a while, so the team opens
+  // first and the chip appears when the repos are in). A failure is said on the team, where the Info tab can retry.
+  function attachNewTeamRepos(team, names, quiet) {
+    var sid = team && team.session_id;
+    if (!sid || !(names || []).length) return;
+    var b = new FormData();
+    b.append("brain", brain()); b.append("repos", names.join(","));
+    if (!quiet) setNote(tw("gh.cloning"));      // `quiet`: a note about documents is already on screen
+    fetch("/github/session/" + q(sid) + "/repos", { method: "POST", body: b, credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (!d || d.ok === false) { setNote((d && d.error) || tw("gh.err_net")); return; }
+        if (S.note === tw("gh.cloning")) setNote("");
+        if (sessionId() === sid) setRepos(d);
+      }, function () { setNote(tw("gh.err_net")); });
   }
 
   var pickDocTimer = null;
@@ -4217,11 +4387,11 @@
     st.docState = "searching";
     drawPickDocs();
     pickDocTimer = setTimeout(function () {
-      call("GET", "/files/search?mode=name&limit=20&q=" + q(words)).then(function (r) {
+      call("GET", "/files/search?mode=name&include_dirs=true&limit=20&q=" + q(words)).then(function (r) {
         return r.code === 200 ? (r.j.items || []) : [];
       }, function () { return []; }).then(function (items) {
         if (!S.pickSt || S.pickSt.docSeq !== seq) return;      // an older search, or the box is gone
-        S.pickSt.docResults = items.map(function (it) { return { path: it.path, name: it.name }; });
+        S.pickSt.docResults = searchRows(items);
         S.pickSt.docState = "done";
         drawPickDocs();
       });
@@ -4232,7 +4402,7 @@
     var P = TP(), st = S.pickSt;
     var r = st && (st.docResults || [])[i];
     if (!P || !r) return;
-    S.pickSt = P.addDoc(st, { name: r.name, brain_path: r.path });
+    S.pickSt = P.addDoc(st, { name: r.name, brain_path: r.path, dir: !!r.dir });
     drawPickDocs();
   }
 
@@ -4287,10 +4457,12 @@
           closePicker();
           // The team exists either way; a document the server could not take is said once, with where to add it.
           var missed = (r.j.documents && r.j.documents.failed) || 0;
+          var repos = (st.repos || []).slice();
           S.focusComposer = true;
           loadTeams(false).then(function () {
             openTeam(r.j.team.team_id);
             if (missed) setNote(tw("teams.pick.docs_partial", { n: missed }));
+            attachNewTeamRepos(r.j.team, repos, missed > 0);
           });
         }, function () { pickFail(tw("teams.pick.err_network")); });
       return;
@@ -4420,8 +4592,10 @@
     }
     if (d.infoAddFile) return pickFiles(addTeamFiles);
     if (d.infoPick !== undefined) return infoPick(Number(d.infoPick));
+    if (d.infoOpenDir) { if (typeof window.JavisOpenFiles === "function") window.JavisOpenFiles(d.infoOpenDir); return; }
     if (d.infoDelFile) return assetPost("/files/" + q(d.infoDelFile) + "/delete");
     if (d.infoDelLink) return assetPost("/links/" + q(d.infoDelLink) + "/delete");
+    if (d.infoDesc) return describeDoc(d.infoDesc, d.ref || "", d.desc || "");
     if (d.infoAddLink) return addTeamLink();
     if (t.classList.contains("tm-mic")) return toggleMic();
     if (d.insertAt) {
@@ -4490,6 +4664,8 @@
     if (d.docAdd !== undefined) return pickAddDoc(Number(d.docAdd));
     if (d.docDel !== undefined) { if (S.pickSt) { S.pickSt = TP().removeDoc(S.pickSt, d.docDel); drawPickDocs(); } return; }
     if (d.linkDel !== undefined) { if (S.pickSt) { S.pickSt = TP().removeLink(S.pickSt, d.linkDel); drawPickDocs(); } return; }
+    if (t.classList.contains("tmp-repo-open")) return pickToggleRepos();
+    if (d.repoDel !== undefined) { if (S.pickSt) { S.pickSt = TP().removeRepo(S.pickSt, d.repoDel); drawPickDocs(); pickMountRepos(); } return; }
     if (t.classList.contains("tmp-cancel")) return closePicker();
     if (t.classList.contains("tmp-submit")) return submitPicker();
     if (t.classList.contains("tm-more-teams")) return loadTeams(true);
@@ -4540,6 +4716,7 @@
       return;
     }
     if (t.classList.contains("tm-search-go")) return runSearch();
+    if (d.quoteSrc) return jumpToQuoted(t);
     if (d.jump) {
       var here = S.el.querySelector('.tm-msgs [data-mid="' + Number(d.jump) + '"]');
       if (here && here.scrollIntoView) {
@@ -4931,18 +5108,18 @@
     }
   }
 
-  // 2026-11-07: the likely next message, grey in the empty box once an assistant answers; Tab or the Tab chip fills
-  // it in. The same module as the main chat (chat-suggest.js), one controller for the page.
+  // 2026-11-07: the likely next message, grey in the empty box once an assistant answers; Tab or the ">" after it fills
+  // it in. 2026-11-13: it stays while the owner types along it, Right Arrow takes one word, and a draft that goes
+  // another way is finished after a short pause. The same module as the main chat (chat-suggest.js), one controller
+  // for the page.
   var teamSuggest = null, sugTimer = null, sugFor = 0;
   function nextSug() {
     if (!teamSuggest && typeof window !== "undefined" && window.JavisSuggest) {
       teamSuggest = window.JavisSuggest.attach({
         input: function () { return S && S.el ? S.el.querySelector(".tm-input") : null; },
-        chipHost: function () {
-          var row = S && S.el && S.el.querySelector(".tm-row");
-          return row ? [row, row.querySelector(".tm-mic")] : null;
-        },
         composing: function () { return !!(S && S.composing && S.composing()); },
+        maxHeight: function () { return INPUT_MAX_PX; },
+        quiet: function () { return !!(S && S.dictState && S.dictState !== "idle"); },
       });
     }
     return teamSuggest;
@@ -5327,7 +5504,7 @@
     membersHtml: membersHtml, settingsFormHtml: settingsFormHtml, capsFormHtml: capsFormHtml, capsPayload: capsPayload, saveCapsFlow: saveCapsFlow, teamTabHtml: teamTabHtml, limitsHtml: limitsHtml,
     levelOf: levelOf, grantFor: grantFor, teamAvatarHtml: teamAvatarHtml, savePin: savePin, pinTeamWith: pinTeamWith, noteHtml: noteHtml, levelsHtml: levelsHtml, turnsHtml: turnsHtml,
     bannersHtml: bannersHtml, reactCornerHtml: reactCornerHtml, reactBarHtml: reactBarHtml, sheetHtml: sheetHtml,
-    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, skillSplit: skillSplit, skillCall: skillCall, listSync: listSync, pendingHtml: pendingHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, plainPreview: plainPreview, previewText: previewText,
+    hoverActsHtml: hoverActsHtml, bodyHtml: bodyHtml, skillSplit: skillSplit, skillCall: skillCall, listSync: listSync, pendingHtml: pendingHtml, copyTextOf: copyTextOf, fileChipHtml: fileChipHtml, uploadError: uploadError, pickFiles: pickFiles, plainPreview: plainPreview, previewText: previewText,
     nextReaction: nextReaction, REACTIONS: REACTIONS, authorityHtml: authorityHtml, readGrant: readGrant,
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,

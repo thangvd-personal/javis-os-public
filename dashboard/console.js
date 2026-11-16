@@ -362,6 +362,16 @@
   // bookmark vẫn tới nơi.
   // 0.422.0: Kanban and Scheduled became the Tasks page; the old Scheduled link opens its Recurring list.
   const TRANG_GOP = { runtime: "usage", agents: "workspace", workflows: "workspace", kanban: "tasks", selfimprove: "tasks" };
+  // The page a `#p=<page id>` deep link opens (issue 1346), or "" when the hash is not one. Known ids are the rail's
+  // (RAIL_ITEMS, hidden pages included) and the old ids above, which navigateTo sends on (kanban -> tasks). An
+  // unknown id gives "" and the link is ignored quietly. Own keys only: "constructor" is not a page.
+  function deepLinkPage(hash) {
+    const m = /^#p=([A-Za-z0-9_-]+)$/.exec(String(hash == null ? "" : hash));
+    if (!m) return "";
+    const id = m[1].toLowerCase();
+    const has = (o) => Object.prototype.hasOwnProperty.call(o, id);
+    return has(RAIL_BY_ID) || has(TRANG_GOP) ? id : "";
+  }
   const TRANG_CUOI_KEY = "javis_last_page";
   function khoiPhucTrang() {
     let id = "home";
@@ -420,6 +430,9 @@
     else swap();
   }
 
+  // `#L66`, `#L66-L75`, `#L66-75`, `#L66C3-L70C1` at the end of a file link (issue 1390). Not a heading anchor.
+  const LINE_SUFFIX_RE = /#L\d+(?:C\d+)?(?:-L?\d+(?:C\d+)?)?$/i;
+
   // Mở trang Tệp tin ĐÚNG vị trí một file/thư mục (gọi từ link trong chat qua window.JavisOpenFiles,
   // hoặc từ deep-link #open=<đường-dẫn> khi mở ở tab trình duyệt mới). fullPath tương đối GỐC BRAIN
   // (đúng quy ước AI ghi trong chat); trang Tệp tin sẽ tự ghép tiền tố brain để ra path tương đối trần.
@@ -436,6 +449,19 @@
     else navigateTo("files");
   }
   if (typeof window !== "undefined") window.JavisOpenFiles = openFilesAt;
+  // Can the docked editor (#noteEditor) be seen from the page open now? It shows in its own place on the main screen, in
+  // the file list of the Files page (#fmEdit), and in the [data-ne-host] frame of a page that hosts it (Chat, Partners,
+  // Coding, Teams). Any other page covers the main screen, so opening the docked editor there happened out of sight:
+  // a click on a file link in a team chat did nothing anyone could see (owner, 2026-11-15). Those pages get the popup
+  // editor (file-editor.js) instead, so a page added later without a frame still opens the file.
+  function _neCanDock() {
+    let active = "home";
+    try { active = (window.Alpine && Alpine.store("nav").active) || "home"; } catch (e) {}
+    if (active === "home") return true;
+    const cls = document.body.classList;
+    if (cls.contains("on-files")) return !!document.getElementById("fmEdit");
+    return (cls.contains("on-chat") || cls.contains("on-teams")) && !!document.querySelector("[data-ne-host]");
+  }
   // Bấm một đường dẫn vault: file SỬA ĐƯỢC thì mở thẳng TRÌNH SỬA, còn lại mới về trang Tệp tin.
   //
   // Vì sao gom vào một hàm: cùng một link trong chat có HAI đường đi tới đây - cú bấm thường
@@ -446,6 +472,9 @@
   // quyết định, mọi người gọi chung.
   function openVaultPath(fullPath) {
     fullPath = _goFileUri(fullPath);
+    // `agents/x.md#L66-L75` (issue 1390): an IDE line suffix, same rule as chat-render.js splitLineSuffix. Kept on,
+    // the extension read ".md#l66-l75" and the click fell through to the Files page looking for that literal name.
+    if (fullPath != null) fullPath = String(fullPath).replace(LINE_SUFFIX_RE, "");
     const raw = String(fullPath == null ? "" : fullPath);
     const clean = raw.replace(/^\.?\//, "").replace(/\/+$/, "");
     const base = clean.split("/").pop();
@@ -455,7 +484,8 @@
     if (!laThuMuc && VT_TEXT_EXTS.includes(duoi)) {
       // Màn rộng: trình sửa đính bên cây. Màn hẹp: modal của file-editor.js - ở đây người dùng
       // bấm ĐÚNG một file nên đừng chặn như nhánh node đồ thị.
-      if (!isNarrow() && typeof window.JavisOpenNote === "function") {
+      // A page with no place for the docked editor (see _neCanDock) also gets the popup.
+      if (!isNarrow() && _neCanDock() && typeof window.JavisOpenNote === "function") {
         window.JavisOpenNote(clean); return;
       }
       if (typeof window.JavisEditFile === "function") { window.JavisEditFile(clean); return; }
@@ -690,10 +720,15 @@
       }
       el.classList.add("cview-flush");
       document.body.classList.add("on-teams");
+      // A file opened from the team chat sits in that chat's frame (.tm-edit, see openNote). Leaving the page, or drawing
+      // it again (a brain switch calls renderPage straight), gives the editor back to the main screen first: the frame is
+      // about to be thrown away, and the editor inside it would go with it.
+      _returnNoteEditor();
       _pageLeave = () => {
         el.classList.remove("cview-flush");
         document.body.classList.remove("on-teams");
-        try { if (window.JavisTeams.leave) window.JavisTeams.leave(); } catch (e) { }
+        _returnNoteEditor();
+        try { if (window.JavisTeams.leave) window.JavisTeams.leave(); } catch (e) {}
       };
       return window.JavisTeams.render(el);
     }
@@ -4049,6 +4084,7 @@
         }
         return;
       }
+      forgetModelLists();
       await freshSettings();
       renderModelsCloudTab(el);
     };
@@ -4076,6 +4112,7 @@
         }
         return;
       }
+      forgetModelLists();
       await freshSettings();
       renderModelsCloudTab(el);
     };
@@ -4757,6 +4794,7 @@
         if (r && r.need_models) box("models").focus();
         return (r && r.error) || t("app.err_cap");
       }
+      forgetModelLists();
       setTimeout(c.again, 0);
     }, t(GW_TEXT[ADV].add));
     el.querySelectorAll('.ord-acct[data-dnd^="adv:"]').forEach(li => {
@@ -5195,6 +5233,7 @@
         if (o.cho.length) Promise.all(o.cho).then(() => { if (openPop && openPop.el === pop) draw(); });
       };
       sh.body.onclick = (e) => {
+        if (e.target.closest("[data-goto]")) { closePop(); return; }   // "fix it on the Models page": this IS that page
         if (e.target.closest("[data-bgauto]")) { closePop(); save({ auxiliary: { auto: true } }); return; }
         const it = e.target.closest(".mb-item[data-model]");
         if (it) { closePop(); save({ auxiliary: { provider: it.dataset.prov, model: it.dataset.model } }); return; }
@@ -7813,7 +7852,7 @@
     const sb = document.getElementById("secSessions");
     if (sb) {
       sb.innerHTML = ss.length ? ss.map(x => `<div class="sec-item">
-          <div class="sec-item-main"><b>${esc(secDevice(x.ua))}</b>${x.current ? ` <span class="sec-tag">${esc(t("sec.this_device"))}</span>` : ""}
+          <div class="sec-item-main"><b>${esc(secDevice(x.ua))}</b>${x.current ? ` <span class="sec-tag">${esc(t("sec.this_device"))}</span>` : ""}${x.remember === false ? ` <span class="sec-tag">${esc(t("sec.not_remembered"))}</span>` : ""}
             <span class="sec-meta">${esc([x.last_ip || x.ip, t("sec.last_active") + " " + secWhen(x.last), t("sec.signed_in") + " " + secWhen(x.created)].filter(Boolean).join(" · "))}</span></div>
           ${x.current ? "" : `<button class="gcard-btn ghost sec-end" data-id="${esc(x.id)}">${esc(t("sec.end_one"))}</button>`}
         </div>`).join("") : `<div class="gcard-meta">${esc(t("sec.no_devices"))}</div>`;
@@ -8120,8 +8159,15 @@
     // Đổi model ở trang Models mà thanh model trong chat không đổi theo: hai chỗ đó đọc
     // /settings ở hai thời điểm khác nhau và không ai báo cho ai. Làm mới ngay tại đây để
     // mọi đường đổi model đều đồng bộ, thay vì nhớ gọi ở từng nút.
-    if (section === "model") refreshModelUi();
+    if (section === "model") { forgetModelLists(); refreshModelUi(); }
     return res;
+  }
+
+  // The model lists the pickers keep (model-list.js) belong to the keys and gateways as they WERE. After the Models
+  // page changes one (a gateway connected, edited, switched off, removed) the next open of a picker must ask again,
+  // or it shows the old list, or the old "no model list", for minutes after the fix (2026-11-13).
+  function forgetModelLists() {
+    try { if (window.JavisModelList) window.JavisModelList.clearCache(); } catch (e) {}
   }
 
   // Đồng bộ mọi chỗ hiển thị model: thanh chọn model dưới khung chat và badge engine trên
@@ -9040,12 +9086,10 @@
     const engine = mainProvider?.label || ({ "openrouter": "OpenRouter", "openai": "OpenAI API", "openai-oauth": "ChatGPT OAuth", "anthropic-cli": "Claude CLI" }[mainProviderId] || mainProviderId);
     const currentModel = model.main?.model || (mainProviderId === "openrouter" ? model.openrouter_model : model.claude_model) || t("common.default");
     const opt = (val, label, cur) => `<option value="${esc(val)}"${val === cur ? " selected" : ""}>${esc(label)}</option>`;
-    // NGÔN NGỮ TRẢ LỜI. Danh sách lấy từ /lang/list (sổ đăng ký phía server) chứ KHÔNG khai
-    // lại ở đây: khai hai nơi thì thêm ngôn ngữ mới lại phải nhớ sửa cả hai, và chỗ bị quên
-    // là chỗ hỏng trong im lặng.
+    // Language here is the INTERFACE's only (owner, 2026-11-15): Javis replies in the language of whoever writes,
+    // like Claude or ChatGPT, so the "Javis replies in" picker is gone. A fixed reply language is said in the chat or
+    // written in the profile.
     const lc = s.locale || {};
-    const langs = (s.lang_list || []);
-    const replyLang = lc.reply_lang || "auto";
     const uiLang = (window.JavisI18n && JavisI18n.lang()) || "vi";
     // Timezone (0.443.0): what "today", "yesterday", reminders and report periods mean for Javis. Lives with the language
     // pickers because both are "where and how I live", but it is saved separately (locale.tz), never inferred from language.
@@ -9063,14 +9107,6 @@
         </div>
         ${infoBody(`${esc(t("settings.ui_lang.hint"))}
           <b>${esc(t("settings.ui_lang.beta"))}</b>`)}
-        <div class="qs-field">
-          <label class="qs-lbl" for="vpReplyLang">${esc(t("settings.lang.title"))}${infoBtn()}</label>
-          <select class="js-input" id="vpReplyLang">
-            ${opt("auto", t("settings.lang.auto"), replyLang)}
-            ${langs.map(l => opt(l.ma, l.ten, replyLang)).join("")}
-          </select>
-        </div>
-        ${infoBody(esc(t("settings.lang.hint")))}
         <div class="qs-field">
           <label class="qs-lbl" for="vpTz">${esc(t("settings.tz.title"))}${infoBtn()}</label>
           <select class="js-input" id="vpTz">
@@ -9161,11 +9197,6 @@
     if (langHost) {
       langHost.innerHTML = `<div class="qs-block" id="vpThemeBox"></div>` + langHtml;
       renderThemeBox(document.getElementById("vpThemeBox"));
-      const sel = document.getElementById("vpReplyLang");
-      if (sel) sel.onchange = async () => {
-        const r = await saveSetting("locale", { reply_lang: sel.value });
-        toast(r && r.ok ? t("settings.lang.saved") : t("settings.save_failed"), !(r && r.ok));
-      };
       const selTz = document.getElementById("vpTz");
       const tzNow = document.getElementById("vpTzNow");
       const showTzNow = () => {
@@ -9518,6 +9549,24 @@
   //
   // Trả về hàm `bat()` để nút bật/tắt của trang gọi: màn hẹp thì mở/đóng ngăn kéo, máy tính
   // thì thu/mở cột và nhớ lựa chọn.
+  // Xoay ngang / đổi cỡ cửa sổ: ngăn kéo đang mở mà nhảy sang bố cục máy tính thì lớp
+  // `side-open` treo lại vô nghĩa. Dọn luôn cho sạch.
+  //
+  // ONE listener for every page built on `.chatpage` (2026-11-12), looking the open drawers up when the width changes.
+  // It used to be added on every render, and the browser keeps a MediaQueryList that has a listener for as long as the
+  // document lives, so each closure held that render's whole page: every visit to Chat leaked its DOM (measured after a
+  // forced garbage collection: 1,461 nodes and 167 listeners per visit, 336 nodes per visit to Coding).
+  let _narrowWatchOn = false;
+  function _watchNarrowOnce() {
+    if (_narrowWatchOn) return;
+    _narrowWatchOn = true;
+    try {
+      window.matchMedia("(max-width: 860px)").addEventListener("change", (e) => {
+        if (e.matches) return;
+        document.querySelectorAll('[data-cot-trai-da-neo="1"].side-open').forEach((p) => p.classList.remove("side-open"));
+      });
+    } catch (e) {}
+  }
   function _neoCotTrai(page, sideEl, slot) {
     if (!page || page.dataset.cotTraiDaNeo === "1") return function () { };
     page.dataset.cotTraiDaNeo = "1";
@@ -9529,13 +9578,7 @@
     if (slot) slot.addEventListener("click", dong);
     page.addEventListener("click", (e) => { if (e.target === page) dong(); });
     if (sideEl) sideEl.addEventListener("click", (e) => { if (e.target.closest(".cside-item")) dong(); });
-    // Xoay ngang / đổi cỡ cửa sổ: ngăn kéo đang mở mà nhảy sang bố cục máy tính thì lớp
-    // `side-open` treo lại vô nghĩa. Dọn luôn cho sạch.
-    try {
-      window.matchMedia("(max-width: 860px)").addEventListener("change", (e) => {
-        if (!e.matches) page.classList.remove("side-open");
-      });
-    } catch (e) { }
+    _watchNarrowOnce();
     return function bat() {
       if (hep()) { page.classList.toggle("side-open"); return; }
       const thu = !page.classList.contains("side-thu");
@@ -9588,6 +9631,8 @@
     // cứng ở đây. Danh sách cứng đã cắn hai lần đúng một kiểu: trang Cộng sự (0.59.2) rồi
     // trang Coding (0.63.4) mở file ra LẶNG LẼ không có gì xảy ra, vì tên khung của trang mới
     // không có trong danh sách. Không lỗi, không toast, nên rất khó đoán ra.
+    // The Teams page (2026-11-15) bit a third time the same way: no frame at all, so the editor opened behind the page.
+    // It now has its own frame, and openVaultPath sends any page without one to the popup editor (_neCanDock).
     // Mỗi lúc chỉ một trang dựng trong cviewBody nên chỉ có tối đa một khung mang dấu này.
     into = into || document.querySelector("[data-ne-host]");
     if (!ed || !into) return false;
@@ -10652,6 +10697,9 @@
     if (typeof _neSlotOnClose === "function") { const f = _neSlotOnClose; _neSlotOnClose = null; try { f(); } catch (e) { } }
     try { recomputeGraph(); } catch (e) { }   // chạy lại não (đã gate active===home + không lite + studio đóng)
   }
+  // For a page that hosts the editor and must close it itself: the Teams page closes a file when the owner opens another
+  // team, so the team just picked shows instead of the file of the last one.
+  if (typeof window !== "undefined") window.JavisCloseNote = closeNote;
   // Đổi tên file đang mở: lưu nội dung hiện tại trước (giữ chữ đã gõ), đổi tên, rồi mở lại ở tên mới.
   async function _neRenameCur(rel, it) {
     const oldname = (it && it.name) || rel.split("/").pop();
@@ -11173,7 +11221,8 @@
             const alias = n.getAttribute("data-wiki-alias");
             return "[[" + p + (alias ? "|" + alias : "") + "]]";
           }
-          return "[" + (c || p) + "](" + p + ")";                    // link markdown vault: giữ dạng [chữ](đường-dẫn)
+          // Vault markdown link: keep [text](path), with the line suffix chat-render.js split off (#L66-L75) put back.
+          return "[" + (c || p) + "](" + p + (n.getAttribute("data-vault-line") || "") + ")";
         }
       });
       // Vault image: keep the ORIGINAL syntax. ![[a|300]] (dragged size or alt text after |) saves
@@ -11436,7 +11485,8 @@
     _neLayNoiDung = null; _neGocText = null;   // file mới: mốc so sánh dựng lại ở dưới
     // Đang ở trang Trò chuyện thì trình sửa chiếm chỗ khung chat thay vì đè lên visual não
     // (thứ không hề hiện ở trang này). Trang Tệp tin cũng vậy: chiếm chỗ danh sách file.
-    if (document.body.classList.contains("on-chat")) _borrowNoteEditor();
+    // The Teams page (2026-11-15) hosts it in place of the team chat, the way the Partners page does.
+    if (document.body.classList.contains("on-chat") || document.body.classList.contains("on-teams")) _borrowNoteEditor();
     else if (document.body.classList.contains("on-files")) _borrowNoteEditor(document.getElementById("fmEdit"));
     else if (document.body.classList.contains("on-record")) _borrowNoteEditor(document.getElementById("vrEdit"));
     document.removeEventListener("keydown", _neKeyHandler, true);
@@ -11823,7 +11873,38 @@
     // Khôi phục ngay, trước các lời gọi mạng ở freshSettings, để tránh nháy màn Javis.
     khoiPhucTrang();
     // 2026-11-09: the start-up screen waits from here for the first page's own "Loading..." lines to go (boot-splash.js).
-    try { if (window.JavisBoot) window.JavisBoot.pageStarted(); } catch (e) { }
+    try { if (window.JavisBoot) window.JavisBoot.pageStarted(); } catch (e) {}
+    // 2026-11-12: the brain graph is built only once the home screen is in view (app.js ensureGraph). Opening on Chat
+    // or Partners no longer downloads the graph and runs its physics behind that page.
+    try { if (window.JavisCockpit && window.JavisCockpit.firstPage) window.JavisCockpit.firstPage(Alpine.store("nav").active); } catch (e) {}
+
+    // Deep links in the URL hash: #open=<vault path> (file links in chat), #cs=<agent|workflow:slug[:session]> (a
+    // partner's chat) and #p=<page id> (a dashboard page, issue 1346). Read once on load, after settings (below), and
+    // again each time the hash changes in an open tab, so a link followed there works too. A hash is handled once, so
+    // the load read and a hashchange racing it never open the same thing twice. Nothing here writes the hash, so a
+    // hash the app sets itself (the #p= fallbacks of other modules) cannot loop back into this.
+    let deepHashDone = null;
+    const runDeepLink = () => {
+      const h = location.hash || "";
+      if (h === deepHashDone) return;
+      deepHashDone = h;
+      // #open= goes through openVaultPath, NOT openFilesAt: an editable file opens straight in the editor, exactly like
+      // a plain click on the link (before 0.30.2 the two paths gave two different results).
+      try {
+        const m = /^#open=(.+)$/.exec(h);
+        if (m) openVaultPath(decodeURIComponent(m[1]));
+        const c = /^#cs=(.+)$/.exec(h);
+        if (c) moCongSu(decodeURIComponent(c[1]));
+        const p = deepLinkPage(h);
+        if (p) Alpine.store("nav").go(p);
+        const nv = /^#nav=([a-zA-Z0-9_-]+)$/.exec(h);
+        if (nv) {
+          if (window.JavisNav && typeof window.JavisNav.go === "function") window.JavisNav.go(nv[1]);
+          else if (window.Alpine && window.Alpine.store && window.Alpine.store("nav")) window.Alpine.store("nav").go(nv[1]);
+        }
+      } catch (e) {}
+    };
+    window.addEventListener("hashchange", runDeepLink);
 
     freshSettings().then(async s => {
       // Máy này CHƯA chọn ngôn ngữ (i18n đang đoán theo trình duyệt): ngôn ngữ đã lưu trên
@@ -11872,20 +11953,8 @@
       } catch (e) { /* thiếu ô thì rail vẫn sống */ }
       graphEnabled = !(s.dashboard && s.dashboard.graph_enabled === false);
       recomputeGraph();
-      // Deep-link mở tab mới từ link file trong chat: #open=<đường-dẫn-vault>.
-      // Đi qua openVaultPath chứ KHÔNG phải openFilesAt: file sửa được thì mở thẳng trình sửa,
-      // đúng như cú bấm thường. Trước bản này hai đường cho ra hai kết quả khác nhau.
-      try {
-        const m = /^#open=(.+)$/.exec(location.hash || "");
-        if (m) openVaultPath(decodeURIComponent(m[1]));
-        const c = /^#cs=(.+)$/.exec(location.hash || "");
-        if (c) moCongSu(decodeURIComponent(c[1]));
-        const nv = /^#nav=([a-zA-Z0-9_-]+)$/.exec(location.hash || "");
-        if (nv) {
-          if (window.JavisNav && typeof window.JavisNav.go === "function") window.JavisNav.go(nv[1]);
-          else if (window.Alpine && window.Alpine.store && window.Alpine.store("nav")) window.Alpine.store("nav").go(nv[1]);
-        }
-      } catch (e) { }
+      // Deep link the tab was opened with (#open=, #cs=, #p=, #nav=): see runDeepLink above.
+      runDeepLink();
     });
   }
 

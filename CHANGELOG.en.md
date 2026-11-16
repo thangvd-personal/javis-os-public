@@ -8,6 +8,283 @@ English entries start at 0.66.0. Every earlier release is described in the Vietn
 
 Format: each release is a `## [x.y.z] - date` block, with changes grouped under `### Added / Fixed / Improved / Security`.
 
+## [0.569.1] - 2026-11-16
+### Fixed
+- **Text Javis writes before and after each tool call no longer runs together** (as in "needs a sign-in.Done with item 3"). Each new stretch starts on a new line, on Claude Code, Codex, Grok Build and Antigravity.
+- **The notes Javis writes while it works follow your language too**, instead of drifting into English halfway through code or logs.
+
+## [0.569.0] - 2026-11-16
+### Added
+- **Webhooks can be edited after they are made.** The Configuration part of each webhook has an Edit button: change its name, its workflow or written job, the note and the permission level right in that window. The link and its key stay the same, so whatever sends events there needs no change.
+
+## [0.568.1] - 2026-11-15
+### Improved
+- **Add new repos right from a project's documents.** The GitHub repo picker of a project, an assistant and the create-team box now has the "+ Add repositories on GitHub" row, as in the chat. Grant more repos on GitHub, come back, and the list shows them without a reload.
+
+## [0.568.0] - 2026-11-15
+### Added
+- **Custom API connection.** Any service with a REST API and an API key but no MCP (POS, CRM, shipping, e-invoices...) now connects on the Connections page: paste the base URL and the key, and every engine can call that API.
+- **The key never reaches the model.** It is encrypted, the server adds it to each call and only sends it to the host you entered; a key echoed in a result is masked.
+- **Read-only by default.** At Read-only Javis only calls GET; to create, edit or delete on that service, raise the connection to Full access.
+
+## [0.567.0] - 2026-11-15
+### Improved
+- **The core rules Javis sends to the model are now written in English, one copy for every language.** This covers the rules of each chat channel, token-saving mode, the Javis Core role, and the agent and skill paths. About a quarter of the instructions used to be Vietnamese and pulled replies into Vietnamese; Javis now keeps to the language you write in. Chatting in Vietnamese works as before, with Vietnamese replies.
+- **The instructions take fewer tokens**, so every chat turn is a little lighter.
+### Fixed
+- **Chatting with Javis over Zalo no longer defaults to Vietnamese replies.** Javis answers in whatever language you write.
+- **Reminders set over Telegram mention the time zone you chose in Settings**, instead of "Vietnam time" for everyone.
+
+## [0.566.1] - 2026-11-15
+### Fixed
+- **The Effort level now works on Gemini 4.** On a Gemini API key, Gemini 4 Hydrogen, Argon and Carbon ignored the Effort you picked and always ran at their own default. Your level is now sent, and later Gemini generations are recognised on their own.
+- **The Usage page prices the new Gemini models correctly.** Gemini 4 used the old Gemini price and showed several times cheaper than it is, while Gemini 3.5 Flash-Lite was priced as Pro. Each model now has its own price.
+
+## [0.566.0] - 2026-11-15
+### Improved
+- **Javis replies in the language you write in, any language, like Claude or ChatGPT.** The language box in Settings now only changes the interface, and chatbots always answer customers in the customer's language. To always get one language, tell Javis once; a reply language pinned before becomes a sentence in your profile, so it is not lost.
+### Fixed
+- **Javis no longer answers in Vietnamese while you chat in English.** The language rule is now written in English, says a language you stated wins, and that the Vietnamese around it is no hint.
+- **Background work (Kanban, reminders, loops) no longer always reports in Vietnamese.** It follows the task's own language.
+- **Replies in Japanese, Korean, Chinese and Thai are read aloud by a native voice**, and an English message with an attached file is no longer read as Vietnamese.
+
+## [0.565.1] - 2026-11-15
+### Fixed
+- **Picking several photos at once in a team chat on iPhone now attaches and sends them.** Before, a multi-photo pick put nothing in the composer and only a single photo got through. Adding team documents and importing a team file share the fixed picker.
+
+## [0.565.0] - 2026-11-15
+### Added
+- **ChatGPT and Claude can set the model and effort inside the command they send through Javis Gate.** Tell ChatGPT "have Javis do this on Opus at high effort": the model is pinned on that chat as if you picked it in the model bar (the chip shows it, change it back any time), and the effort counts for that one message only, nothing in your settings changes. A new `javis_chat_models` tool lets the outside AI see which models Javis has.
+- **When work ChatGPT sent finishes after it stopped waiting, the Javis bell rings your phone**, with the answer and the sentence to send ChatGPT ("check Javis results"). ChatGPT and Claude do not let outside servers wake a chat yet, so this is the shortest path: one message, and the new `javis_chat_updates` tool hands over every unread result, even in a new ChatGPT chat.
+### Improved
+- **ChatGPT waits longer for Javis within the same reply** (up to about 10 minutes) instead of giving up after half a minute, and knows how long Javis has been working.
+
+## [0.564.0] - 2026-11-15
+### Added
+- **Add GitHub repositories to a Project.** Open the project panel, Documents tab, Add document, then GitHub repository. Every chat in the project gets the repository from its first message, each on its own branch.
+- **Add repositories to an Assistant's documents.** Every private chat with that assistant gets them too, and Javis still commits, pushes and opens the PR as usual.
+- **Pick repositories while creating a Team.** The documents part of the Create team box has an Attach a GitHub repository button, so the new team starts with its repositories.
+
+## [0.563.1] - 2026-11-15
+### Fixed
+- **Files the team writes open with a click.** A file link in a team chat used to do nothing visible. The file now opens right in the team's chat column; press X to get back to the conversation, with anything you were typing still there.
+- **Pages with no room for the editor open the file in a popup**, such as a file link on the Tasks page, so no click on a file link goes nowhere any more.
+
+## [0.563.0] - 2026-11-15
+### Added
+- **Ask for an improvement and it happens, with undo.** Say "improve yourself" or "rework this skill": the assistant changes its own role, instructions, skills and model, other assistants, skills, workflows, loops and memory. Every change gets an id and a backup; "undo #12" puts it back.
+- **Javis can change its own source code.** With GitHub connected to the javis-os repo, the assistant attaches the repo to the chat and works on its own branch; Javis checks, opens a PR and merges on green CI.
+- **It updates itself to the release.** Say "update now": Javis waits for the chat turn to end, runs exactly what the Update button runs, and rolls back if the new version breaks.
+### Improved
+- **Only you can order it.** Auto's own wake-ups and customer-facing bots may only suggest. Old prompt lines that contradicted this now match.
+
+## [0.562.0] - 2026-11-15
+### Added
+- **With Auto on, an assistant looks around with full access.** In its private chat, each time it wakes on its own it uses every connected tool (email, calendar, sales, web search...) and may take real actions within its role. Whatever it does is always reported to you.
+- **Assistants set their own times to check back.** When something has a date (a race, a meeting, a deadline) the assistant sets a check-back, such as the morning or the evening before. At that time it wakes, checks the sources again, then decides whether to message you.
+- **Suggestions and reminders, not notifications.** An assistant only messages you when something is new, timely and actionable: at most two short paragraphs, one concrete piece of advice, with real source links. Reminders go to the Reminders group, suggestions to the new "Assistant suggestions" group (it still reaches you by default; lower or turn it off on the Notifications page).
+### Improved
+- **Turning Auto on asks once** and says plainly that it gives full access. The old line "Auto is not Full access" now matches how Auto works.
+
+## [0.561.1] - 2026-11-14
+### Fixed
+- **Hanging up while Javis is still working on something asked for in the call no longer drops it.** Javis finishes and posts the result to the call's chat, with a notification.
+- **The Automatic call path no longer switches to ChatGPT Live just because the machine has a Codex sign-in.** ChatGPT Live is picked only when ChatGPT is the main model or connected on the Models page.
+### Improved
+- **System lines Javis adds under answers no longer hardcode a Vietnamese first-person pronoun.** Background job tracking, empty-promise and memory notes and missing-file links are written without a pronoun, so they match the chosen form of address.
+
+## [0.561.0] - 2026-11-14
+### Added
+- **Links that open a dashboard page directly.** A link like `#p=tasks` (or another page name) opens that page, even in a Javis tab that is already open.
+### Fixed
+- **Background commands Javis starts in an API-key chat report when they finish.** They used to stay "running" until the server restarted.
+- **A chat pinned to a model keeps that model.** While the pinned model is out of quota or signed out, turns run on the main model for the moment, then go back to the pinned model once it works again.
+- **File links with line numbers (like `agents/x.md#L66-L75`) open the file.** Answers no longer get a false "file not found in the brain" warning.
+
+## [0.560.0] - 2026-11-14
+### Added
+- **Cancel background jobs right in chat.** Ask Javis to cancel a job and it leaves the queue, a running job stops at once, and the reason goes into the job's log. When sending a job back to be redone, an extra note on how to fix it now reaches the redo.
+- **Connecting a Facebook Page has a "Read post insights" tick.** This optional tick asks for reach and saves of posts. The Messenger checklist shows whether the Page has that permission.
+### Fixed
+- **Messenger conversations show the customer's name instead of a bare ID.** When Meta refuses the profile, Javis takes the name from the Page conversation, and tries again after 10 minutes if it could not get it.
+
+## [0.559.3] - 2026-11-14
+### Fixed
+- **Read-only reminders can see My Tasks.** A reminder that checks progress used to say it could not check; it now reads the list, while adding, editing, deleting and ticking still need write access.
+
+## [0.559.2] - 2026-11-14
+### Fixed
+- **The model picker opens right above the model chip.** A tall composer (a file attached, a few lines typed) used to push it far above the chip, and a long list lost its first rows off the top. The model list, Effort, plan usage and the "+" menu now open just above the row of chips and always stay on screen.
+- **The Team chat's "+" menu does the same**, along with the folder and GitHub panels it opens.
+
+## [0.559.1] - 2026-11-14
+### Fixed
+- **The Google Workspace connection does real work on Forms, Drive and Sheets.** The card only turned on a reduced tool set, so Javis could not edit Form questions, read responses, browse a Drive folder, rename or copy a file, add a tab or append rows to Sheets. All of that works now, with no new Google sign-in.
+- Connections made earlier move to the full tool set after the update.
+### Security
+- **Sharing a file or calendar with someone needs Full access.** So do deleting a whole tab, task list or contact group, creating Gmail filters and publishing Apps Script. At Read only, Javis cannot copy a Drive file or append rows to Sheets.
+
+## [0.559.0] - 2026-11-14
+### Added
+- **Tap a quote to scroll back to the original sentence.** Quote a sentence from a long answer to ask more, then later tap that quote in your message: the chat scrolls up to that exact sentence and highlights it for a few seconds.
+- When the original sits in older messages not loaded yet, Javis loads them to find it. Works in the main chat and on the Teams page.
+
+## [0.558.1] - 2026-11-14
+### Fixed
+- **Editing the compose in hPanel and pressing Deploy works again.** Version 0.557.1 made the Hostinger file 33,167 characters, over hPanel's 32,768 limit. It is now about 28,400 characters, and the update guard runs exactly as before.
+
+## [0.558.0] - 2026-11-14
+### Added
+- **A "Keep me signed in on this device" box on the sign-in screen.** Ticked, as before, the device stays signed in for 30 days. Untick it on someone else's device: closing the browser signs you out, and Javis also signs you out after 4 hours unused or 24 hours at most.
+- The Security page marks devices signed in without being remembered.
+### Fixed
+- Opening Javis for the first time in a new browser no longer shows a wrong red "Your sign-in has expired" line.
+
+## [0.557.3] - 2026-11-14
+### Fixed
+- **"Push again" and the warning mark on the GitHub card no longer stay stuck.** A job that had stored a branch name already taken on GitHub (from before the previous fix) kept pushing to that same name, so every retry said "has commits this machine lacks". Now, while nothing has been pushed yet, Javis picks a free branch name again (or follows the branch checked out on this machine), pushes, opens the PR, and the warning clears.
+
+## [0.557.2] - 2026-11-14
+### Fixed
+- **The second GitHub job in a chat no longer gets stuck at the push.** The PR title and branch name now come from the request itself, skipping the dashboard's bracketed context lines, so every job gets its own name. When the name is already used on this machine or on GitHub, Javis adds -2, -3 and pushes, instead of stopping with "has commits this machine lacks, Javis does not overwrite them".
+
+## [0.557.1] - 2026-11-13
+### Fixed
+- **Javis no longer vanishes (404) after an update.** On a VPS with a slow disk, Watchtower ran out of time while deleting the old container and gave up without creating the new one, so Javis was gone from Docker until a Redeploy.
+- New `javis-guard` container: when Javis has been gone or stopped halfway for 2 minutes, it creates it again (on the new version) or starts it again. A Javis you stop yourself is left alone.
+- An update from the button now gets 30 minutes instead of 10. Redeploy once to get the new compose file.
+
+## [0.557.0] - 2026-11-13
+### Added
+- **Projects learn their own context.** While working in a project, Javis notes what is durable and specific to it (facts, settled decisions, terms) and uses it in every later chat of the project. Read, edit and delete them in the new "Learned" tab. The Instructions box stays yours: Javis changes it only when you say so.
+- **Dropping a document into the chat is enough.** A file or link for long-term use is attached to the project by Javis with one line saying what it holds, so it opens the right document without pinning the whole file.
+- **Partners and teams get document descriptions too.** In a private chat, a partner attaches and describes its own documents; a team's documents carry a line every member reads.
+### Improved
+- **Files, folders and links share one "Documents" tab.** Icons tell them apart and Add document can paste a link too, so the drawer is one tab shorter.
+
+## [0.556.2] - 2026-11-13
+### Fixed
+- **A suggestion you took no longer vanishes when you delete part of it.** Pressing Tab to take the whole sentence (or taking it word by word to the end) and then deleting a few letters used to lose the suggestion. Now the rest shows in grey again as far as you delete. Empty the box and the whole suggestion is back. It only goes away when you send.
+- **The > after a suggestion shows on a computer too.** It used to show on phones only. On a computer, click the **>** right after the last word to take the sentence.
+### Improved
+- **No more "Tab" chip in the button row under the chat box.** The **>** does that job, so the row keeps only its own buttons (attach, model, effort, mic, send). The Tab key still takes the suggestion.
+
+## [0.556.1] - 2026-11-13
+### Fixed
+- **Stopping a dictation answers at once.** The bar switches to "rewriting" the moment stop is pressed, and the recording goes to be heard right away instead of waiting for the browser to close the mic.
+- **The rewrite step is much faster.** The word fix that runs first could take several seconds and now takes a few hundredths of one. The quick model no longer spends its whole turn thinking and returns nothing, and on a subscription the main model thinks at its lowest level for this job.
+- **Long dictations no longer lose words.** Text over about 2,000 characters used to come back cut after the rewrite; every word is kept now.
+- **Fewer everyday words turned into names.** Common Vietnamese word pairs that merely sound like "Javis" or "Canva" are no longer replaced by those names.
+
+## [0.556.0] - 2026-11-13
+### Improved
+- **Approve many waiting groups for a bot in one press.** In the bot's Status panel every waiting group or person is a tick box, with **Select all** and one shared **Allow** / **Ignore** bar. Nine waiting groups used to mean opening the panel and pressing nine times.
+- **The panel no longer closes after each press.** After a batch it stays open with the rows still waiting. The button carries the number of ticked rows, for example "Allow (9)".
+- **Easier to read on a phone.** Larger group names, the whole row is tappable, and the buttons stay within reach however long the list is.
+
+## [0.555.3] - 2026-11-13
+### Fixed
+- **The OpenAI Compatible and Claude Compatible cards no longer say "Could not load the model list" by mistake.** Javis reads the model list of more kinds of gateways, and a Base URL typed without `/v1` finds the right address on its own. A machine upgraded from an older version gets its models back too.
+- **A model name you typed always stays in the picker**, even when the gateway has its own list or stops listing for a while.
+- **When there really is no list, the picker says why** (wrong address, refused key, a gateway that lists nothing) with a link to the Models page to fix it. After the fix the list shows on the next open, with no wait of several minutes.
+- **A key you just connected no longer disappears** when Javis happened to be loading another card's model list at that moment.
+
+## [0.555.2] - 2026-11-13
+### Fixed
+- **A group no longer shows one person's profile.** The note box of a Zalo group used to show the profile of whoever wrote first in it, as if the whole group were one customer. A group now has its own note, and editing it touches nobody's profile.
+- **Facebook, Instagram and Threads comments get no profile.** A commenter is not messaging the shop, so the AI no longer writes a profile from comment threads, and a public reply no longer carries a profile learned in a private chat.
+
+## [0.555.1] - 2026-11-13
+### Fixed
+- **Javis no longer freezes when the server's disk answers slowly.** On a VPS, every few seconds of slow disk froze all pages, bots and connections together, and the server could be reported as down. It was worst right after an update. The work that runs all the time (the sign-in check, the MCP hub, bots, shared links) no longer waits for the disk.
+- **After a Docker update, MCP sources no longer download and install themselves again.** What they installed is kept on the data volume, so the server is not flooded while it starts. The update to this version still reinstalls them one last time.
+- **At start-up, Javis opens MCP sources a few at a time** instead of all at once, so a small server is not overloaded.
+
+## [0.555.0] - 2026-11-13
+### Added
+- **The Windows installer announces every change it makes.** A page before the install lists what will be downloaded and installed (Javis, Git, Python, Node.js, the AI tools), with the privacy statement and how to uninstall.
+- **Two new choices in the installer.** "Start when I sign in to Windows" and "install the AI command-line tools" can be unticked. Left alone, the installer does what it did before.
+- **A code signing policy and a privacy policy.** They state that Javis has no tracking, sends no usage statistics, and on its own only downloads public files to check for updates.
+- **Ready for free code signing through SignPath Foundation.** The signing step in the installer build is wired and switched off; it turns on once SignPath accepts the project. The installer is still unsigned today.
+
+## [0.554.0] - 2026-11-13
+### Improved
+- **The suggestion no longer vanishes at the first key you type.** Type along the suggestion and the rest stays in grey right after your text, even without accents or halfway through a word. Press **Tab** to take the rest, or **Right Arrow** to take one word. On a phone the Tab button is gone from the button row: a small **>** stands right after the last word of the suggestion, and a tap on it takes the suggestion.
+- **Type something else and Javis finishes the sentence.** Pause for a moment and Javis writes the rest of what you are typing, following your new direction, like the predictive text on an iPhone. With an API key on the machine (Groq, OpenAI...) it is almost instant. On a subscription plan alone it takes a few seconds and runs at most 5 times per turn, so it does not eat the allowance.
+- **A long suggestion shows in full.** The chat box grows to show the whole sentence, so a phone no longer cuts it mid line. Works in the main chat and on the Teams page.
+
+## [0.553.8] - 2026-11-13
+### Improved
+- **The Tasks page opens much more smoothly.** It used to draw the whole list twice on every opening and build both the wide and the phone layout. Now it draws once, and only the layout on screen. With 170 tasks on a slow machine: the freeze went from 0.45 seconds to about 0.1, and is all but gone on a phone.
+- **The Partners page opens faster.** The list of assistants used to be drawn five times on each opening, now once, so hovering and scrolling no longer stutter right after the page appears.
+- **Typing in the task search no longer lags.** The list follows a short moment after you stop typing instead of being redrawn after every letter.
+### Fixed
+- **The Tasks page no longer hitches every so often while you look at it.** Every 30 seconds (5 while a task was running) it redrew the whole list even when nothing was new, freezing the screen for a beat and dropping the row under the pointer. Now nothing is redrawn when nothing changed.
+
+## [0.553.7] - 2026-11-13
+### Fixed
+- **Heavy Team use no longer drops the connection to the server.** The more turns a team had run, the longer Javis took to add up its usage every time the team was opened: a team of a few thousand turns took a minute, the page gave up after 30 seconds and asked again, and the whole server stalled. It is now about 100 times faster and never runs twice at once.
+- **A model call no longer makes the server pause.** The usage ledger kept one line for every Team model call for 30 days and was rewritten in full after each call, so the file grew to tens of megabytes and ordinary chat slowed down too. Javis cleans the file when it starts; your usage figures stay the same.
+
+## [0.553.6] - 2026-11-13
+### Fixed
+- **The Windows installer is no longer replaced for no reason.** `JavisOS-Setup.exe` is not code-signed yet, so browsers and antivirus engines know it by its file hash alone. Any change to an install script (even the Linux one) used to replace the file, and each new file made Edge say "isn't commonly downloaded" from scratch. The file now changes only when the installer itself does.
+- **The quick start explains what to do when the download is blocked.** It adds the **Keep anyway** step for when Edge or Chrome will not save the file, and a one-line install without the .exe for PCs where an antivirus or Smart App Control blocks it.
+
+## [0.553.5] - 2026-11-13
+### Improved
+- **Javis opens much faster.** The "Starting Javis…" screen used to stay for a full 4 seconds on any machine with more than one page of chats, although the data was there after about 1 second. Now the app shows as soon as the data arrives. The brain graph is also no longer built in the background when you open straight into Chat or Partners.
+- **Left alone, Javis costs almost nothing.** The mascot's ring, the starfield and the graph no longer make the browser work 60 times a second when nothing changes, so scrolling and typing are smoother and the device runs cooler.
+### Fixed
+- **No more slowing down over a long session.** Every visit to the Chat page left the whole previous page in memory, so the more you switched pages the heavier it got. The old page is now released.
+- **The Graph screen no longer stutters.** The graph remembers where its dots came to rest, so the next opening shows at once instead of working it all out again (a brain of 2,600 notes: the longest freeze went from over 1 second to about 0.2). A dot you pointed at also no longer stays lit and keeps the graph drawing after the pointer has left.
+
+## [0.553.4] - 2026-11-13
+### Fixed
+- **The conflict fix round works on a machine where git has no name and email.** On a fresh server or in Docker, the AI's merge command stopped at once with `empty ident name`. Each repo attached to a chat now has an identity of its own, the GitHub account you connected.
+- **Commits the AI makes itself in that repo now carry the same author as Javis's commits.** A name and email you set for the repo yourself are kept.
+
+## [0.553.3] - 2026-11-13
+### Fixed
+- **The automated tests pass again.** Two GitHub updates landed at the same moment and made one test fail for the wrong reason; that test is rewritten. Nothing changes in how Javis runs.
+
+## [0.553.2] - 2026-11-12
+### Security
+- **Hooks and git config inside a repo can no longer read the GitHub token.** A hook sitting in the clone (installed husky-style by `npm install`, or written by the model) used to run while Javis fetched or pushed, and could see the token. Javis's git calls that carry the token now ignore every hook of the repo.
+- **The token only goes to the repo on GitHub.** If the clone's git config was changed to steer the connection elsewhere (a different `origin`, `insteadOf`, a proxy), Javis stops and names the setting to remove instead of sending the token.
+- **Worth knowing:** a repo's `pre-push` hook no longer runs when Javis pushes (Javis's own checks and CI run as before). Repos using Git LFS: new LFS files made in a chat are not uploaded by the push yet.
+
+## [0.553.1] - 2026-11-12
+### Fixed
+- **A conflicting PR on a private repo is merged back by Javis again.** The conflict fix round used to stop at downloading the main branch, because the AI's shell has no access to GitHub. Javis now downloads the main branch first, and the AI only merges and resolves the conflict.
+- **If GitHub is unreachable at that moment, Javis waits and tries again.** A fix round is no longer spent on a merge that cannot work; the repo card says why it is waiting.
+
+## [0.553.0] - 2026-11-12
+### Added
+- **A whole folder can be a document.** The search box under Add file for a project, a partner, a chat and a team (the create box and the Info tab) now lists folders whose name matches, with their own folder icon. Press Add to attach the whole folder instead of picking files one by one.
+- **Javis knows what the folder holds.** An unpinned folder gives Javis its path, and it opens the files inside when it needs them. A pinned folder has its file list loaded into every turn. A folder added to a team is pinned at once.
+- **Safer rows for folders.** A folder row has no delete-from-brain button, only remove from the list. Tapping the folder's name opens it on the Files page.
+
+## [0.552.1] - 2026-11-12
+### Fixed
+- **Attaching a private repo to a chat no longer fails once its main branch has new files.** A private repo used to attach only the first time; as soon as the main branch gained or changed a file, a new chat stopped with `could not fetch ... from promisor remote`.
+- **Changing a chat's base branch works on private repos too.** The same fault broke Change branch and the fresh branch Javis starts after a merge; both are fixed.
+
+## [0.552.0] - 2026-11-12
+### Added
+- **New Claude models show up in the model picker on their own.** Javis also reads the model catalog Claude Code downloads from Anthropic, so a model released after the installed CLI was built appears right away instead of waiting for a Javis release to add its name.
+
+## [0.551.3] - 2026-11-12
+### Fixed
+- **The Reply judge item is always in the "..." menu of a bot card.** It used to appear only for a bot in Auto-judge mode, so many people could not find it.
+- **For a bot not in Auto-judge mode the panel says the judge is idle**, with an Edit button to turn it on, instead of an empty list.
+
+## [0.551.2] - 2026-11-12
+### Fixed
+- **Rules on the Profile page now apply to shortcut answers too.** 0.546.2 brought the profile to the saving levels, but one gap was left: a greeting or a thank-you (at every level) and a simple question at the Max saving level were still answered without it, so Javis could get your form of address wrong on the very first hello.
+- Answers written from data Javis has just read (on API-key brains) follow the profile as well.
+- An empty profile changes nothing. The longest profile (4,000 characters) adds about 1,400 tokens to a shortcut turn.
+
 ## [0.551.1] - 2026-11-12
 ### Fixed
 - **When ChatGPT (or Claude, Grok) loses its sign-in, Javis moves to another connected model by itself.** Before, only running out of quota moved a turn on; a lost sign-in failed every turn until you signed in again.
