@@ -15483,10 +15483,23 @@ async def _bo_vao_hom_thu(owner_chat, text, *, kind="answer", label="", source="
         kenh = ""
         if sid:
             try:
-                kenh = str((get_store().get_session(sid) or {}).get("channel") or "")
+                s_row = get_store().get_session(sid) or {}
+                kenh = str(s_row.get("channel") or "")
                 # 0.205.0: a muted partner's report still lands in its chat and the bell, just quietly.
-                if kenh.startswith("agent:") and _partner_muted(get_store().get_session(sid) or {}):
+                if kenh.startswith("agent:") and _partner_muted(s_row):
                     quiet = True
+                # Nếu kenh là agent:<slug> hoặc workflow:<slug> nhưng không tồn tại file trong Workspace,
+                # chuyển về "web" để thông báo mở thẳng ở trang Trò chuyện thay vì điều hướng nhầm vào Cộng sự.
+                if kenh.startswith("agent:"):
+                    slug_ag = kenh[len("agent:"):]
+                    s_brain = s_row.get("brain") or brain or "brain"
+                    if not (_agents_dir(s_brain) / f"{slug_ag}.md").exists():
+                        kenh = "web"
+                elif kenh.startswith("workflow:"):
+                    slug_wf = kenh[len("workflow:"):]
+                    s_brain = s_row.get("brain") or brain or "brain"
+                    if not (_workflows_dir(s_brain) / f"{slug_wf}.md").exists():
+                        kenh = "web"
             except Exception as e:
                 print(f"[inbox] không đọc được kênh của phiên {sid[:8]}: "
                       f"{type(e).__name__}: {e}", file=sys.stderr)
@@ -22770,11 +22783,9 @@ async def _chat_socket(ws):
             # của trợ lý đó. Đọc MỘT lần ở đây, mọi chỗ chọn prompt bên dưới đều hỏi `_persona`.
             _persona = workflow_chat.persona_cua_phien(_row0)
             if _persona and _persona[0] == "agent" and not (_agents_dir(brain) / f"{_persona[1]}.md").exists():
-                await ws.send_text(json.dumps({"type": "error",
-                    "content": localefmt.chu(
-                        f"Trợ lý '{_persona[1]}' không còn trong brain này. Mở trang Cộng sự để chọn trợ lý khác.",
-                        f"Assistant '{_persona[1]}' is no longer in this brain. Open the Partners page to pick another one.")}))
-                return ""
+                # Tác tử không có file .md trong agents/ (vd: từ team/pulse hoặc file đã xoá):
+                # không chặn lỗi mà fallback coi như phiên chat bình thường để người dùng tiếp tục trao đổi.
+                _persona = None
             # 2026-11-15: the GitHub repos of the chat's project or assistant join the chat before any engine reads
             # its folder (`_cwd_luot_chat`, `_khoi_coding` below). A rerun on another route finds them already there.
             if not _route:
@@ -35696,9 +35707,11 @@ def _pulse_dm_session(key):
         return None, ""
     root, slug = reg[0]["brain_id"], reg[0]["slug"]
     ss = get_store()
-    sid = agent_jobs.report_session(key, slug, _brain_keys(root), ss, _resonance_store())
+    la_ws = (_agents_dir(root) / f"{slug}.md").exists()
+    kenh = f"agent:{slug}" if la_ws else "web"
+    sid = agent_jobs.report_session(key, slug, _brain_keys(root), ss, _resonance_store()) if la_ws else None
     if not sid:
-        sid = ss.create_session(brain=root, channel=f"agent:{slug}", title=slug[:120])
+        sid = ss.create_session(brain=root, channel=kenh, title=slug[:120])
     return sid, slug
 
 
@@ -35727,8 +35740,9 @@ def _pulse_post(key, ctx, text, meta):
             except Exception as _e:  # noqa: BLE001 - nhãn tin không được làm hỏng việc gửi
                 print(f"[pulse meta] {type(_e).__name__}: {_e}", file=sys.stderr)
         group, level = _PULSE_KIND_GROUP.get(kind, ("", ""))
+        s_row = ss.get_session(sid) or {}
         _pulse_on_loop(_bo_vao_hom_thu(f"{WEB_CHAT_PREFIX}{sid}", text, kind="report", label=slug, source="pulse",
-                                       group=group, level=level))
+                                       brain=s_row.get("brain") or "", group=group, level=level))
         return {"session_id": sid, "message_id": mid}
     return None
 

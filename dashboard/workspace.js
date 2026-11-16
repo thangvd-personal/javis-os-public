@@ -701,8 +701,29 @@
     S.loai = cmd.kind; S.chon[cmd.kind] = cmd.slug; S.q = ""; S.nhom = "";
     luuChon(); veTrai();
     var item = dangChon();
-    if (!item) { cmd.resolve(false); return; }
+    if (!item) {
+      chonMacDinh();
+      cmd.resolve(false);
+      return;
+    }
     cmd.resolve(await moPhien(item, false, cmd.sid));
+  }
+  async function hasPartner(kind, slug) {
+    if (!slug) return false;
+    var b = brain();
+    var loai = kind === "workflow" ? "workflow" : "agent";
+    var list = loai === "agent" ? S.agents : S.workflows;
+    if (list && list.length) {
+      return list.some(function (x) { return x.slug === slug; });
+    }
+    try {
+      var url = (loai === "agent" ? "/agents?prompt=0&system=1&brain=" : "/workflows?brain=") + encodeURIComponent(b);
+      var r = await fetch(url).then(function (res) { return res.json(); });
+      var items = (loai === "agent" ? r && r.agents : r && r.workflows) || (Array.isArray(r) ? r : []);
+      return items.some(function (x) { return x.slug === slug; });
+    } catch (e) {
+      return false;
+    }
   }
   // `sid` (tuỳ chọn): mở ĐÚNG hội thoại đó thay vì cuộc gần nhất của cộng sự này. Hòm thư
   // truyền vào, vì mẩu thư trỏ tới một hội thoại CỤ THỂ - kết quả việc nền của tuần trước
@@ -2381,7 +2402,7 @@
     if (inp) inp.placeholder = t("bar.input_ph");
   }
 
-  window.JavisWorkspace = { gioNgan: gioNgan, render: render, roi: roi, openCommand: openCommand, openTab: openTab, onTurnDone: onTurnDone, canSend: function () { return !active || ready; }, dungKhiChuaCoTuDien: function () { return dungKhiChuaCoTuDien; }, onChatState: onChatState, chayQuyTrinh: chayQuyTrinh, onWfEvent: onWfEvent, sapXep: sapXep, loc: loc, tienDoMoi: tienDoMoi, apDung: apDung, phanTram: phanTram,
+  window.JavisWorkspace = { gioNgan: gioNgan, render: render, roi: roi, openCommand: openCommand, hasPartner: hasPartner, openTab: openTab, onTurnDone: onTurnDone, canSend: function () { return !active || ready; }, dungKhiChuaCoTuDien: function () { return dungKhiChuaCoTuDien; }, onChatState: onChatState, chayQuyTrinh: chayQuyTrinh, onWfEvent: onWfEvent, sapXep: sapXep, loc: loc, tienDoMoi: tienDoMoi, apDung: apDung, phanTram: phanTram,
     dangChay: dangChay, tabPhai: chonTabPhai, gomNhom: gomNhom, nhomHtml: nhomHtml, chonNhom: chonNhom, state: function () { return S; },
     tagsCua: tagsCua, tagCap: tagCap, laKhoa: laKhoa, demTag: demTag, coTag: coTag, khoaTag: khoaTag,
     dongChonTag: dongChonTag, chipTagHtml: chipTagHtml, TAG_NONE: TAG_NONE, TAG_AUTO: TAG_AUTO, TAG_HIDDEN: TAG_HIDDEN, laLocGia: laLocGia, autoBat: autoBat, autoBlocked: autoBlocked,

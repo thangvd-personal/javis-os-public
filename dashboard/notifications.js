@@ -252,7 +252,7 @@
     if (chuyenBrainNeuCan(item)) { setTimeout(function () { moThuTiep(item); }, 450); return; }
     moThuTiep(item);
   }
-  function moThuTiep(item) {
+  async function moThuTiep(item) {
     // Hội thoại của một TRỢ LÝ / QUY TRÌNH phải mở ở trang Cộng sự, không đổ vào khung chat
     // của bộ não chính. Đổ nhầm thì hai chuyện xảy ra cùng lúc: người dùng nhìn một đoạn chat
     // với trợ lý trên màn Javis mà không hiểu vì sao, và phiên đang mở trở thành phiên của
@@ -274,11 +274,19 @@
       try { window.JavisTeams.open(nhom); return; } catch (e) {}
     }
     var cs = congSuCuaThu(item);
-    if (cs && window.JavisWorkspace && window.JavisWorkspace.openCommand) {
-      try {
-        window.JavisWorkspace.openCommand(cs.loai, cs.slug, item.session_id);
-        return;
-      } catch (e) {}
+    if (cs && window.JavisWorkspace) {
+      var exists = true;
+      if (typeof window.JavisWorkspace.hasPartner === "function") {
+        try {
+          exists = await window.JavisWorkspace.hasPartner(cs.loai, cs.slug);
+        } catch (e) { exists = true; }
+      }
+      if (exists && window.JavisWorkspace.openCommand) {
+        try {
+          var ok = await window.JavisWorkspace.openCommand(cs.loai, cs.slug, item.session_id);
+          if (ok) return;
+        } catch (e) {}
+      }
     }
     try {
       if (window.Alpine && Alpine.store("nav") && Alpine.store("nav").active !== "home"
