@@ -347,13 +347,75 @@ check("console.css contains styling for vr-queue-log-link and column classes",
   && consoleCss.includes(".vr-queue-col-finished")
   && consoleCss.includes(".vr-queue-col-actual"));
 
-// 13. PhoWhisper UI updates: speakers dropdown with off option & active model info
+// 13. PhoWhisper UI updates: speakers dropdown with off option & clickable active model badge
 check("vrMtNumSpk includes off option for disabling diarization and active model info row",
   vrJsSrc.includes('<option value="off">\' + esc(tw("vr.meeting.speakers_none"))')
   && vrJsSrc.includes('id="vrMtActiveModelInfo"')
   && vrJsSrc.includes('id="vrMtActiveModelBadge"')
+  && vrJsSrc.includes('is-clickable')
+  && !vrJsSrc.includes('id="vrMtBtnGoSettingsModel"')
   && viJson["vr.meeting.speakers_none"] === "Không tách người nói"
-  && enJson["vr.meeting.speakers_none"] === "Do not separate speakers");
+  && enJson["vr.meeting.speakers_none"] === "Do not separate speakers"
+  && viJson["vr.meeting.model_badge_tip"]
+  && enJson["vr.meeting.model_badge_tip"]
+  && viJson["vr.meeting.model_badge_tip_ready"]
+  && enJson["vr.meeting.model_badge_tip_ready"]);
+
+// 14. STT Model column, row log deletion CTA, debug mode toggle, and log cleanup
+check("queue tables include STT Model column, action column, and delete log button",
+  vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_model")) + \'</th>')
+  && vrJsSrc.includes('<th>\' + esc(tw("vr.queue.col_actions")) + \'</th>')
+  && vrJsSrc.includes('vr-queue-col-model')
+  && vrJsSrc.includes('vr-queue-col-actions')
+  && vrJsSrc.includes('vr-queue-btn-del-log')
+  && vrJsSrc.includes('data-del-log-id')
+  && viJson["vr.queue.col_model"] === "Mô hình STT"
+  && enJson["vr.queue.col_model"] === "STT Model"
+  && viJson["vr.queue.btn_delete_log"] === "Xóa nhật ký"
+  && consoleCss.includes(".vr-queue-col-model")
+  && consoleCss.includes(".vr-queue-col-actions")
+  && consoleCss.includes(".vr-queue-btn-del-log"));
+
+check("settings pane includes debug mode checkbox and clean all logs button",
+  vrJsSrc.includes('id="vrDebugLoggingEnable"')
+  && vrJsSrc.includes('id="vrBtnCleanAllLogs"')
+  && vrJsSrc.includes('id="vrLogsStorageSummary"')
+  && viJson["vr.meeting.debug_section_title"] === "Chế độ gỡ lỗi & Nhật ký (Debug & Logs)"
+  && viJson["vr.meeting.debug_enable_label"] === "Bật chế độ debug (nhật ký nâng cao)"
+  && viJson["vr.meeting.btn_clean_all_logs"] === "Xóa toàn bộ nhật ký"
+  && enJson["vr.meeting.btn_clean_all_logs"] === "Clean all logs");
+
+// 15. Plain-language tooltips and interactive guides for STT settings and parameters
+check("voice-record.js provides tooltips and guide popups for assistants on all technical settings",
+  vrJsSrc.includes('infoBtn(tw("vr.meeting.speakers_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.speakers_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_beam_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_beam_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_temp_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_temp_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_no_speech_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_no_speech_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_vad_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_vad_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_cond_prev_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_cond_prev_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.stt_params_word_ts_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.stt_params_word_ts_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.audio_inspect_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.audio_inspect_guide"))')
+  && vrJsSrc.includes('infoBtn(tw("vr.meeting.debug_enable_tip"))')
+  && vrJsSrc.includes('infoBody(tw("vr.meeting.debug_enable_guide"))')
+  && [
+    "stt_params_beam_tip", "stt_params_beam_guide", "stt_params_beam_sub",
+    "stt_params_temp_tip", "stt_params_temp_guide", "stt_params_temp_sub",
+    "stt_params_no_speech_tip", "stt_params_no_speech_guide", "stt_params_no_speech_sub",
+    "stt_params_vad_tip", "stt_params_vad_guide",
+    "stt_params_cond_prev_tip", "stt_params_cond_prev_guide", "stt_params_cond_prev_sub",
+    "stt_params_word_ts_tip", "stt_params_word_ts_guide", "stt_params_word_ts_sub",
+    "speakers_tip", "speakers_guide",
+    "audio_inspect_tip", "audio_inspect_guide",
+    "debug_enable_tip", "debug_enable_guide"
+  ].every(k => viJson["vr.meeting." + k] && enJson["vr.meeting." + k]));
 
 
 

@@ -265,6 +265,7 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         lang = "vi"
     diarize = True if "diarize" not in raw else bool(raw.get("diarize"))
     vad_filter = False if "vad_filter" not in raw else bool(raw.get("vad_filter"))
+    debug_mode = True if "debug_mode" not in raw else bool(raw.get("debug_mode"))
     try:
         keep_days = int(raw.get("keep_audio_days", 30))
     except (TypeError, ValueError):
@@ -312,6 +313,7 @@ def get_config(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "client_api_key": client_api_key,
         "stt_profiles": stt_profiles,
         "audio_inspect": audio_inspect_cfg,
+        "debug_mode": debug_mode,
     }
 
 
@@ -420,6 +422,8 @@ def update_config(patch: dict[str, Any]) -> dict[str, Any]:
                 ai_clean["mode"] = m
         if ai_clean:
             clean["audio_inspect"] = ai_clean
+    if "debug_mode" in patch:
+        clean["debug_mode"] = bool(patch["debug_mode"])
 
     if clean:
         new_cfg = cfgmod.update_settings({"voice": {"meeting_stt": clean}})
@@ -719,6 +723,7 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
         },
         "stt_profiles": mc.get("stt_profiles", {}),
         "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
+        "debug_mode": mc.get("debug_mode", True),
         "config": {
             "whisper_model": mc["whisper_model"],
             "device": mc["device"],
@@ -731,6 +736,7 @@ def status(cfg: dict[str, Any] | None = None, install_job: dict[str, Any] | None
             "client_base_uri": mc["client_base_uri"],
             "stt_profiles": mc.get("stt_profiles", {}),
             "audio_inspect": mc.get("audio_inspect", {"enabled": True, "mode": "warn"}),
+            "debug_mode": mc.get("debug_mode", True),
         },
     }
 
@@ -855,3 +861,168 @@ def remove() -> dict[str, Any]:
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def get_logs_stats() -> dict[str, Any]:
+    """Calculate storage usage for meeting logs and intermediate artifacts."""
+    base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+    if not base.is_dir():
+        return {
+            "ok": True,
+            "total_files": 0,
+            "total_bytes": 0,
+            "total_dirs": 0,
+            "formatted_size": "0 B",
+        }
+    total_bytes = 0
+    total_files = 0
+    total_dirs = 0
+    for root, dirs, files in os.walk(base):
+        total_dirs += len(dirs)
+        for f in files:
+            fp = Path(root) / f
+            try:
+                if fp.is_file():
+                    total_bytes += fp.stat().st_size
+                    total_files += 1
+            except Exception:
+                pass
+
+    def _fmt(b: int) -> str:
+        if b < 1024:
+            return f"{b} B"
+        if b < 1024 * 1024:
+            return f"{b / 1024:.1f} KB"
+        if b < 1024 * 1024 * 1024:
+            return f"{b / (1024 * 1024):.1f} MB"
+        return f"{b / (1024 * 1024 * 1024):.2f} GB"
+
+    return {
+        "ok": True,
+        "total_files": total_files,
+        "total_bytes": total_bytes,
+        "total_dirs": total_dirs,
+        "formatted_size": _fmt(total_bytes),
+    }
+
+
+def clean_all_logs() -> dict[str, Any]:
+    """Clean all meeting execution logs and intermediate debug artifacts to free disk space."""
+    base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+    freed_bytes = 0
+    deleted_files = 0
+    if base.is_dir():
+        for item in base.iterdir():
+            try:
+                if item.is_file():
+                    freed_bytes += item.stat().st_size
+                    item.unlink(missing_ok=True)
+                    deleted_files += 1
+                elif item.is_dir():
+                    for root, _, files in os.walk(item):
+                        for f in files:
+                            fp = Path(root) / f
+                            try:
+                                freed_bytes += fp.stat().st_size
+                                deleted_files += 1
+                            except Exception:
+                                pass
+                    shutil.rmtree(item, ignore_errors=True)
+            except Exception:
+                pass
+
+    try:
+        import voice_records
+        store = voice_records.get_store()
+        with store._lock:
+            store._db.execute("UPDATE meeting_jobs SET log_path='' WHERE log_path != ''")
+            store._db.commit()
+    except Exception:
+        pass
+
+    def _fmt(b: int) -> str:
+        if b < 1024:
+            return f"{b} B"
+        if b < 1024 * 1024:
+            return f"{b / 1024:.1f} KB"
+        if b < 1024 * 1024 * 1024:
+            return f"{b / (1024 * 1024):.1f} MB"
+        return f"{b / (1024 * 1024 * 1024):.2f} GB"
+
+    return {
+        "ok": True,
+        "deleted_files": deleted_files,
+        "freed_bytes": freed_bytes,
+        "formatted_freed": _fmt(freed_bytes),
+    }
+
+
+def delete_job_log(job_id: str) -> dict[str, Any]:
+    """Delete log and intermediate debug artifacts for a single meeting job."""
+    jid = str(job_id or "").strip()
+    if not jid:
+        return {"ok": False, "error": localefmt.chu("Thiếu job_id", "Missing job_id")}
+
+    try:
+        import voice_records
+        store = voice_records.get_store()
+        job = store.get_job(jid)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    if not job:
+        return {"ok": False, "error": localefmt.chu("Không tìm thấy tác vụ", "Job not found")}
+
+    base = Path(cfgmod.STATE_DIR) / "meeting-logs"
+    freed_bytes = 0
+    deleted = False
+
+    log_path = str(job.get("log_path") or "").strip()
+    target_dir: Path | None = None
+    if log_path:
+        lp = Path(log_path)
+        if lp.is_file():
+            try:
+                freed_bytes += lp.stat().st_size
+                lp.unlink(missing_ok=True)
+                deleted = True
+            except Exception:
+                pass
+            if lp.parent != base and lp.parent.is_dir():
+                target_dir = lp.parent
+        elif lp.is_dir() and lp != base:
+            target_dir = lp
+
+    if not target_dir and base.is_dir():
+        for d in base.iterdir():
+            if d.is_dir() and jid in d.name:
+                target_dir = d
+                break
+
+    if target_dir and target_dir.is_dir() and target_dir != base:
+        for root, _, files in os.walk(target_dir):
+            for f in files:
+                fp = Path(root) / f
+                try:
+                    freed_bytes += fp.stat().st_size
+                except Exception:
+                    pass
+        shutil.rmtree(target_dir, ignore_errors=True)
+        deleted = True
+
+    cand = base / f"{jid}.log"
+    if cand.is_file():
+        try:
+            freed_bytes += cand.stat().st_size
+            cand.unlink(missing_ok=True)
+            deleted = True
+        except Exception:
+            pass
+
+    store.update_job(jid, log_path="")
+    return {
+        "ok": True,
+        "job_id": jid,
+        "deleted": deleted,
+        "freed_bytes": freed_bytes,
+    }

@@ -4728,6 +4728,11 @@ button.tm-quote-src:hover, button.tm-quote-src:focus-visible { border-color: var
 .vr-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text2); border: 1px solid var(--border); }
 .vr-pill.is-ok { background: rgba(63, 220, 134, .12); border-color: rgba(63, 220, 134, .35); color: var(--green, #3fdc86); }
 .vr-pill.is-warn { background: var(--warn-wash, rgba(245, 166, 35, .14)); border-color: rgba(245, 166, 35, .35); color: var(--warn-ink, #d97706); }
+button.vr-pill { font: inherit; font-size: 12px; font-weight: 600; line-height: inherit; cursor: pointer; }
+.vr-pill.is-clickable { cursor: pointer; user-select: none; transition: all .15s ease; }
+.vr-pill.is-clickable:hover { filter: brightness(1.08); border-color: currentColor; box-shadow: 0 1px 4px rgba(0,0,0,.08); transform: translateY(-0.5px); }
+.vr-pill.is-clickable:active { transform: translateY(0); filter: brightness(0.95); }
+.vr-pill.is-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .vr-warn-banner { margin-top: 10px; padding: 9px 12px; border-radius: 10px; background: var(--warn-wash, rgba(245, 166, 35, .14)); border: 1px solid rgba(245, 166, 35, .32); color: var(--warn-ink, var(--text)); font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .vr-mt-form { display: grid; grid-template-columns: minmax(200px, 2.5fr) minmax(130px, 1fr) minmax(180px, 1.3fr); gap: 10px; align-items: end; margin-bottom: 10px; }
 .vr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -5070,8 +5075,37 @@ button.tm-quote-src:hover, button.tm-quote-src:focus-visible { border-color: var
 .vr-queue-col-started,
 .vr-queue-col-finished,
 .vr-queue-col-actual,
-.vr-queue-col-est {
+.vr-queue-col-est,
+.vr-queue-col-model {
   white-space: nowrap;
+}
+.vr-queue-col-actions {
+  white-space: nowrap;
+  text-align: center;
+  width: 48px;
+}
+.vr-queue-btn-del-log {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.vr-queue-btn-del-log:hover {
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+.vr-queue-empty-act {
+  color: var(--text-sub);
+  font-size: 12px;
 }
 .vr-queue-log-link {
   display: inline-flex;

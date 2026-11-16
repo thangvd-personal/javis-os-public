@@ -583,6 +583,53 @@ eff = voice_records.effective_segments(test_drop_segs, {}, normalized_segments=t
 check("effective_segments excludes dropped segments from rendering",
       len(eff) == 1 and eff[0]["text"] == "Câu bình thường.")
 
+# 6. Test debug_mode config and log management APIs
+st_dbg = meeting_stt.update_config({"debug_mode": False})
+check("update_config updates debug_mode to False", st_dbg.get("debug_mode") is False)
+st_dbg2 = meeting_stt.update_config({"debug_mode": True})
+check("update_config updates debug_mode to True", st_dbg2.get("debug_mode") is True)
+
+# Create dummy job logs in meeting-logs
+mt_logs_dir = Path(cfgmod.STATE_DIR) / "meeting-logs"
+job_log_dir = mt_logs_dir / "2026.11.16-10.00.00_job123"
+job_log_dir.mkdir(parents=True, exist_ok=True)
+(job_log_dir / "execution.log").write_text("dummy execution log content", encoding="utf-8")
+(job_log_dir / "whisper_output.json").write_text("{}", encoding="utf-8")
+
+# Test get_logs_stats
+stats = meeting_stt.get_logs_stats()
+check("get_logs_stats detects log files and bytes", stats.get("total_files") >= 2 and stats.get("total_bytes") > 0)
+
+# Test GET /voice-records/meeting/logs/stats
+r_stats = client.get("/voice-records/meeting/logs/stats")
+check("GET /voice-records/meeting/logs/stats returns 200 with formatted_size",
+      r_stats.status_code == 200 and "formatted_size" in r_stats.json())
+
+# Test delete_job_log
+dummy_del_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Job for log delete",
+    status="done",
+    created_at=time.time(),
+    created_iso="2026-11-16T10:00:00+07:00",
+)
+store.update_job(dummy_del_job["id"], log_path=str(job_log_dir / "execution.log"))
+check("dummy_del_job has log before delete", voice_records.public_job(store.get_job(dummy_del_job["id"])).get("has_log") is True)
+
+r_del_log = client.delete(f"/voice-records/meeting/jobs/{dummy_del_job['id']}/log")
+check("DELETE /voice-records/meeting/jobs/{id}/log deletes job log",
+      r_del_log.status_code == 200 and r_del_log.json().get("ok") is True)
+check("dummy_del_job has_log is False after delete",
+      voice_records.public_job(store.get_job(dummy_del_job["id"])).get("has_log") is False)
+
+# Test clean_all_logs and POST /voice-records/meeting/logs/clean
+r_clean = client.post("/voice-records/meeting/logs/clean")
+check("POST /voice-records/meeting/logs/clean returns 200 and cleans logs",
+      r_clean.status_code == 200 and r_clean.json().get("ok") is True)
+stats_after = meeting_stt.get_logs_stats()
+check("stats after clean shows 0 files", stats_after.get("total_files") == 0)
+
 # Cleanup mocks and temp dirs
 main.cfgmod.gate_active = _orig_gate
 voice_records.get_store = _orig_store_get

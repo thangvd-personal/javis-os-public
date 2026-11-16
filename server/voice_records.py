@@ -969,8 +969,9 @@ class VoiceRecordStore:
             self._db.commit()
             return cur.rowcount or 0
 
-    def get_queue_summary(self, limit_recent: int = 10) -> dict[str, Any]:
-        """Return active running jobs, queued waiting jobs (with position), and recent completed/failed jobs."""
+    def get_queue_summary(self, limit_recent: int = 50) -> dict[str, Any]:
+        """Return active running jobs, queued waiting jobs (with position), and recent completed/failed jobs within 24h."""
+        cutoff_24h = time.time() - 86400.0
         with self._lock:
             active_rows = self._db.execute(
                 "SELECT * FROM meeting_jobs "
@@ -981,8 +982,10 @@ class VoiceRecordStore:
                 "SELECT * FROM meeting_jobs WHERE status = 'queued' ORDER BY created_at ASC"
             ).fetchall()
             recent_rows = self._db.execute(
-                "SELECT * FROM meeting_jobs WHERE status IN ('done', 'failed') ORDER BY updated_at DESC LIMIT ?",
-                (max(1, min(int(limit_recent or 10), 50)),),
+                "SELECT * FROM meeting_jobs "
+                "WHERE status IN ('done', 'failed') AND (created_at >= ? OR updated_at >= ?) "
+                "ORDER BY updated_at DESC LIMIT ?",
+                (cutoff_24h, cutoff_24h, max(1, min(int(limit_recent or 50), 200))),
             ).fetchall()
 
         active = [_job_to_dict(r) for r in active_rows if r]

@@ -531,7 +531,7 @@ async def _execute_job(
                 "output_json": str(out_json),
                 "log_dir": str(log_dir),
                 "job_id": job_id,
-                "debug": True,
+                "debug": bool(mc.get("debug_mode", True)),
             }
             job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
 
@@ -928,7 +928,7 @@ async def _execute_remote_diarize_job(job_id: str) -> None:
                 "output_json": str(out_json),
                 "log_dir": str(log_dir),
                 "job_id": job_id,
-                "debug": True,
+                "debug": bool(mc.get("debug_mode", True)),
             }
             job_json.write_text(json.dumps(worker_payload, ensure_ascii=False), encoding="utf-8")
 

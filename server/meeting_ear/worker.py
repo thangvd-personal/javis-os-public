@@ -1159,8 +1159,9 @@ def run_diarize_only(job_path: str) -> int:
         if job.get("max_speakers") and int(job["max_speakers"]) > 0:
             pipeline_kwargs_record["max_speakers"] = int(job["max_speakers"])
 
-        # Also save audio_conversion.json for diarize-only
-        (log_dir / "audio_conversion.json").write_text(
+        if log_dir and bool(job.get("debug", True)):
+            # Also save audio_conversion.json for diarize-only
+            (log_dir / "audio_conversion.json").write_text(
             json.dumps({
                 "ok": True,
                 "note": "Input audio passed directly to diarize-only worker",
@@ -1328,6 +1329,7 @@ def run_job(job_path: str) -> int:
     output_json = str(job.get("output_json") or "").strip()
 
     _log_debug("JOB_START", f"Starting meeting worker for job {job.get('job_id', 'unknown')}")
+    is_debug = bool(job.get("debug", True))
 
     with tempfile.TemporaryDirectory(prefix="javis-meeting-") as tmpdir:
         wav_path = os.path.join(tmpdir, "audio_16k.wav")
@@ -1364,7 +1366,7 @@ def run_job(job_path: str) -> int:
             "target_duration_clock": tgt_meta.get("duration_clock"),
             "ffmpeg_command_str": conv_meta.get("ffmpeg_command_str"),
         }
-        if log_dir:
+        if log_dir and is_debug:
             (log_dir / "audio_conversion.json").write_text(
                 json.dumps(conv_meta, ensure_ascii=False, indent=2), encoding="utf-8"
             )
@@ -1565,7 +1567,7 @@ def run_job(job_path: str) -> int:
                 "beam_size": beam_size,
             }
 
-            if log_dir:
+            if log_dir and is_debug:
                 resolved_model_path = _resolve_model_path_or_name(model_name, model_dir)
                 try:
                     rel_model_path = str(Path(resolved_model_path).relative_to(Path(model_dir).parent))
@@ -1716,7 +1718,7 @@ def run_job(job_path: str) -> int:
             "max_speakers": job.get("max_speakers"),
         }
 
-        if log_dir and want_diarize:
+        if log_dir and want_diarize and is_debug:
             diarize_data = {
                 "pipeline": {
                     "name": "pyannote/speaker-diarization-3.1",
@@ -1823,7 +1825,7 @@ def run_job(job_path: str) -> int:
             else:
                 raw_text_lines.append(f"[{ts}] {seg['text']}")
 
-        if log_dir:
+        if log_dir and is_debug:
             (log_dir / "merged_segments.json").write_text(json.dumps(merged_segments, ensure_ascii=False, indent=2), encoding="utf-8")
             (log_dir / "meeting_raw.txt").write_text("\n".join(raw_text_lines), encoding="utf-8")
             _log_debug("ARTIFACT", f"Saved merged_segments.json and meeting_raw.txt to {log_dir}")
@@ -1835,7 +1837,7 @@ def run_job(job_path: str) -> int:
             "overall_rtf": round(total_dur / max(0.1, duration), 4),
         }
 
-        if log_dir:
+        if log_dir and is_debug:
             debug_timing = {
                 "job_id": job.get("job_id") or "",
                 "timestamp": datetime.now().astimezone().isoformat(),

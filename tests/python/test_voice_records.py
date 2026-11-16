@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import tempfile
 from datetime import datetime
+import time
 from pathlib import Path
 
 from _paths import ROOT, SERVER  # noqa: F401
@@ -337,6 +338,48 @@ dummy_log_file.unlink(missing_ok=True)
 r_log_404 = client.get(f"/voice-records/meeting/jobs/{log_test_job['id']}/log")
 check("GET /voice-records/meeting/jobs/{id}/log returns 404 when log file is removed",
       r_log_404.status_code == 404)
+
+# 8b. Test 24h cutoff in get_queue_summary
+now_time = time.time()
+old_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Old Job >24h",
+    status="done",
+    created_at=now_time - 100000.0,
+    created_iso="2026-11-14T00:00:00+07:00",
+)
+with store._lock:
+    store._db.execute(
+        "UPDATE meeting_jobs SET created_at=?, updated_at=?, finished_at=? WHERE id=?",
+        (now_time - 100000.0, now_time - 100000.0, now_time - 100000.0, old_job["id"]),
+    )
+    store._db.commit()
+
+recent_job = store.create_job(
+    brain="brain",
+    brain_path=str(_BRAIN),
+    title="Recent Job <24h",
+    status="done",
+    created_at=now_time - 3600.0,
+    created_iso="2026-11-16T12:00:00+07:00",
+)
+with store._lock:
+    store._db.execute(
+        "UPDATE meeting_jobs SET created_at=?, updated_at=?, finished_at=? WHERE id=?",
+        (now_time - 3600.0, now_time - 3600.0, now_time - 3600.0, recent_job["id"]),
+    )
+    store._db.commit()
+
+q_sum = store.get_queue_summary()
+recent_ids = [j["id"] for j in q_sum.get("recent", [])]
+check("get_queue_summary includes job from last 24h", recent_job["id"] in recent_ids)
+check("get_queue_summary excludes job older than 24h", old_job["id"] not in recent_ids)
+check("old job is NOT deleted from SQLite database", store.get_job(old_job["id"]) is not None)
+
+# Check model attribute is present in public_job and queue items
+check("queue summary items include model attribute",
+      any("model" in j for j in q_sum.get("recent", [])))
 
 # 9. Test In-Memory Waveform Preloading for Pyannote
 import wave

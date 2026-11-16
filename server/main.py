@@ -20254,6 +20254,28 @@ def voice_meeting_job_log(job_id: str, file: str = Query("")):
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
 
 
+@app.delete("/voice-records/meeting/jobs/{job_id}/log")
+@app.post("/voice-records/meeting/jobs/{job_id}/delete-log")
+def voice_meeting_job_delete_log(job_id: str):
+    """Delete log and intermediate debug artifacts for a single meeting job."""
+    res = meeting_stt.delete_job_log(job_id)
+    if not res.get("ok"):
+        return JSONResponse(res, status_code=404)
+    return res
+
+
+@app.get("/voice-records/meeting/logs/stats")
+def voice_meeting_logs_stats():
+    """Get storage usage stats for meeting logs and intermediate artifacts."""
+    return meeting_stt.get_logs_stats()
+
+
+@app.post("/voice-records/meeting/logs/clean")
+def voice_meeting_logs_clean():
+    """Clean all meeting logs and intermediate artifacts to free disk space."""
+    return meeting_stt.clean_all_logs()
+
+
 @app.post("/voice-records/normalize")
 async def voice_records_normalize(request: Request):
     """Save raw voice transcript to SQLite audit first, normalize grammar, write VoiceRecord/YYYY.MM.DD-HH.MM.SS.md."""
