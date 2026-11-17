@@ -235,7 +235,7 @@ check("get-javis.sh only replaces the app bundle, never ~/JavisOS (the brain)",
       'rm -rf "${DEST}/JAVIS OS.app"' in gsh and not any("rm -rf" in ln and "JavisOS" in ln and ".app" not in ln
                                                          for ln in gsh.splitlines()))
 check("get-javis.sh is executable", os.access(GET_SH, os.X_OK))
-raw = "https://raw.githubusercontent.com/blogminhquy/javis-os/main/"
+raw = "https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/"
 for doc in ("QUICKSTART.md", "QUICKSTART.en.md"):
     d = (ROOT / doc).read_text(encoding="utf-8")
     check(f"{doc} gives the Windows one-liner", f"irm {raw}packaging/windows/get-javis.ps1 | iex" in d)

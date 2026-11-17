@@ -16,11 +16,11 @@ Bấm vào biểu tượng là Javis mở thành cửa sổ riêng (không thanh
 **Cách cài không bị màn hình cảnh báo (khuyên dùng).** Hai bộ cài chưa ký số, nên tải bằng trình duyệt thì lần đầu máy sẽ chặn lại. Dán một dòng lệnh dưới đây thì không bị chặn, vẫn ra đúng bộ cài có logo Javis:
 - **Windows:** bấm Start, gõ `PowerShell`, mở lên, dán dòng này rồi Enter:
   ```
-  irm https://raw.githubusercontent.com/blogminhquy/javis-os/main/packaging/windows/get-javis.ps1 | iex
+  irm https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/packaging/windows/get-javis.ps1 | iex
   ```
 - **macOS:** mở **Terminal** (Launchpad, gõ Terminal), dán dòng này rồi Enter:
   ```
-  curl -fsSL https://raw.githubusercontent.com/blogminhquy/javis-os/main/packaging/macos/get-javis.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/packaging/macos/get-javis.sh | bash
   ```
 
 Bộ cài thay đổi gì trên máy, ai ký số, Javis gửi gì đi đâu: [Code signing policy](docs/code-signing-policy.md) · [Privacy policy](PRIVACY.md) (tiếng Anh).

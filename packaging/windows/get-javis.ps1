@@ -1,7 +1,7 @@
 # ============================================================
 # JAVIS OS - one-line install for Windows, no red SmartScreen screen
 #
-#   irm https://raw.githubusercontent.com/blogminhquy/javis-os/main/packaging/windows/get-javis.ps1 | iex
+#   irm https://raw.githubusercontent.com/thangvd-personal/javis-os-public/main/packaging/windows/get-javis.ps1 | iex
 #
 # Downloads the same JavisOS-Setup.exe the website links to and opens its wizard.
 # Why this avoids "Windows protected your PC": SmartScreen checks files the BROWSER saved

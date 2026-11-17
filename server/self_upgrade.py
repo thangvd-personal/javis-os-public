@@ -36,7 +36,7 @@ from typing import Any, Awaitable, Callable, Iterable, Optional
 
 from config import STATE_DIR
 
-SOURCE_REPO = "blogminhquy/javis-os"        # the repo every install updates from (updater.release_source)
+SOURCE_REPO = "thangvd-personal/javis-os-public"        # the repo every install updates from (updater.release_source)
 STORE_DIR = STATE_DIR / "self_upgrade"
 OWNER_SCHEDULED = ("kanban", "reminder")     # background work the owner set up runs with the owner's word
 MAX_CHARS = 200_000
