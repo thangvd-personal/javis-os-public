@@ -7691,12 +7691,18 @@ def _routing_view(mcfg, providers) -> dict:
         sched_ok, sched_reason, sched_until = model_routing.provider_in_schedule(mcfg, p, now_ts)
         if not sched_ok and sched_until > now_ts:
             limited[p] = int(sched_until)
+            p_label = (_provider_def(p) or {}).get("label") or p
+            if p == "deepseek":
+                detail_msg = localefmt.chu("Đang trong giờ cao điểm của DeepSeek, tạm nghỉ để tiết kiệm chi phí.",
+                                           "DeepSeek peak hours, resting to save cost.")
+            else:
+                detail_msg = localefmt.chu(f"Ngoài khung giờ hoạt động đã thiết lập cho {p_label}, tạm nghỉ theo lịch.",
+                                           f"Outside scheduled active hours for {p_label}, resting according to schedule.")
             resting_info[p] = {
                 "until": int(sched_until),
                 "secs_left": max(1, int(sched_until - now_ts)),
-                "reason": sched_reason or localefmt.chu("Ngoài khung giờ ưu tiên (Off-peak)", "Outside active hours (Off-peak)"),
-                "detail": localefmt.chu("Đang trong giờ cao điểm của DeepSeek, tạm nghỉ để tiết kiệm chi phí.",
-                                        "DeepSeek peak hours, resting to save cost."),
+                "reason": sched_reason or localefmt.chu("Ngoài khung giờ hoạt động", "Outside active hours"),
+                "detail": detail_msg,
                 "schedule": True,
             }
         else:
@@ -7717,11 +7723,12 @@ def _routing_view(mcfg, providers) -> dict:
     if background.get("auto"):
         # Automatic: the page names both models, the one for Javis's own work and the one for handed-over jobs.
         background["light"] = model_routing.background_spec(mcfg, "light")["model"]
+    all_sched_providers = set(o) | set((mcfg.get("schedules") or {}).keys())
     return {"order": o, "profiles": {p: model_routing.profile(mcfg, p) for p in o}, "limited": limited, "resting_info": resting_info,
             "background": background, "chat_in_use": chat, "bg_in_use": bg,
             "multi_key": list(_routing_key_fields()), "multi_plan": [p for p in plan_accounts.KIND if plan_accounts.available(p)],
             "defaults": {p["id"]: d for p in providers if (d := _default_model_name(mcfg, p["id"]))},
-            "schedules": {p: model_routing.schedule(mcfg, p) for p in o if model_routing.has_schedule_support(p)}}
+            "schedules": {p: model_routing.schedule(mcfg, p) for p in all_sched_providers if model_routing.has_schedule_support(p)}}
 
 
 @app.post("/settings")

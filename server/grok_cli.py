@@ -1092,6 +1092,14 @@ class GrokCLI:
         return 0.0 if co_co("--permission-mode") else NO_PERMISSION_FLAG_CAP
 
     def is_available(self) -> bool:
+        try:
+            import model_routing, config as cfgmod
+            s = cfgmod.read_settings()
+            sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), "grok-cli")
+            if not sched_ok:
+                return False
+        except Exception:
+            pass
         return self.cli_path is not None
 
     def _build_args(self, prompt_file: str | None = None,

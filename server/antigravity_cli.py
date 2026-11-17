@@ -1416,6 +1416,14 @@ class AntigravityCLI:
         return 0.0 if str(self.mode or "").strip().lower() in ("full", "auto") else SUGGEST_MODE_CAP
 
     def is_available(self) -> bool:
+        try:
+            import model_routing, config as cfgmod
+            s = cfgmod.read_settings()
+            sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), "antigravity-cli")
+            if not sched_ok:
+                return False
+        except Exception:
+            pass
         return self.cli_path is not None
 
     def _build_args(self, prompt_argv: str | None, noi_mach: bool = True,

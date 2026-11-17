@@ -973,6 +973,12 @@ class _FallbackChain:
     def is_available(self) -> bool:
         for e in self._all():
             try:
+                prov = getattr(e, "provider", None) or getattr(e, "account_provider", None) or _PLAN_CLASS_PROVIDER.get(type(e).__name__, "")
+                if prov:
+                    s = cfgmod.read_settings()
+                    sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), prov)
+                    if not sched_ok:
+                        continue
                 if e.is_available():
                     return True
             except Exception:
@@ -1027,6 +1033,16 @@ class _FallbackChain:
         order = list(self._order())
         for idx, e in enumerate(order):
             try:
+                prov = getattr(e, "provider", None) or getattr(e, "account_provider", None) or _PLAN_CLASS_PROVIDER.get(type(e).__name__, "")
+                if prov:
+                    try:
+                        s = cfgmod.read_settings()
+                        sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), prov)
+                        if not sched_ok:
+                            fail = f"{self._name(e)} đang tạm nghỉ theo khung giờ"
+                            continue
+                    except Exception:
+                        pass
                 if not e.is_available():
                     fail = f"{self._name(e)} không sẵn sàng"
                     continue

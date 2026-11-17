@@ -315,15 +315,15 @@ DEFAULT_DEEPSEEK_SCHEDULE = {
 
 
 def has_schedule_support(provider: str) -> bool:
-    return provider == "deepseek"
+    return bool(provider)
 
 
-def default_schedule(provider: str = "deepseek") -> dict:
+def default_schedule(provider: str = "") -> dict:
     if provider == "deepseek":
         return json.loads(json.dumps(DEFAULT_DEEPSEEK_SCHEDULE))
     return {
         "enabled": False,
-        "timezone": "UTC",
+        "timezone": "local",
         "days": [1, 2, 3, 4, 5, 6, 7],
         "windows": [{"start": "00:00", "end": "24:00"}],
         "weekend_all_day": True,
@@ -345,8 +345,9 @@ def set_schedule(m: dict, provider: str, sched: dict) -> None:
         return
     cur = default_schedule(provider)
     cur["enabled"] = bool(sched.get("enabled", False))
-    tz = str(sched.get("timezone") or "UTC").strip()
-    cur["timezone"] = tz if tz else "UTC"
+    dfl_tz = "UTC" if provider == "deepseek" else "local"
+    tz = str(sched.get("timezone") or dfl_tz).strip()
+    cur["timezone"] = tz if tz else dfl_tz
     if isinstance(sched.get("days"), list):
         parsed_days = []
         for x in sched["days"]:

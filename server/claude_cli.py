@@ -2137,6 +2137,14 @@ class CodexCLI:
         self.codex_home = None
 
     def is_available(self) -> bool:
+        try:
+            import model_routing, config as cfgmod
+            s = cfgmod.read_settings()
+            sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), "openai-oauth")
+            if not sched_ok:
+                return False
+        except Exception:
+            pass
         return self.cli_path is not None
 
     def _build_args(self) -> list[str]:

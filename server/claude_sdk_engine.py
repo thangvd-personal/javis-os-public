@@ -566,6 +566,14 @@ class ClaudeSDK:
     def is_available(self) -> bool:
         if not _SDK_OK:
             return False
+        try:
+            import model_routing, config as cfgmod
+            s = cfgmod.read_settings()
+            sched_ok, _, _ = model_routing.provider_in_schedule(s.get("model", {}), "anthropic-cli")
+            if not sched_ok:
+                return False
+        except Exception:
+            pass
         trial_profile = getattr(self, "trial_profile", None)
         if trial_profile is not None:
             return os.path.isfile(trial_profile.pin["cli_path"])

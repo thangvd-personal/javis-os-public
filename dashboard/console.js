@@ -3554,18 +3554,29 @@
     const KEYFIELD = { "openrouter": "openrouter_key", "anthropic-api": "anthropic_api_key", "openai": "openai_api_key", "gemini": "gemini_api_key", "groq": "groq_api_key", "deepseek": "deepseek_api_key", "ollama": "ollama_key", "openai-compat": "openai_compat_key", "anthropic-compat": "anthropic_compat_key" };
     const schedules = R.schedules || {};
     const schedOf = (pid) => (schedules && schedules[pid]) || {
-      enabled: false, timezone: "UTC", days: [1, 2, 3, 4, 5],
-      windows: [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }],
+      enabled: false,
+      timezone: pid === "deepseek" ? "UTC" : "local",
+      days: pid === "deepseek" ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7],
+      windows: pid === "deepseek"
+        ? [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }]
+        : [{ start: "00:00", end: "24:00" }],
       weekend_all_day: true
     };
-    const hasSched = (pid) => pid === "deepseek" || (schedules && !!schedules[pid]);
+    const hasSched = (pid) => true;
     const schedChip = (pid) => {
-      if (!hasSched(pid)) return "";
       const sc = schedOf(pid);
+      if (!sc.enabled && pid !== "deepseek") return "";
       const isRest = limitedAt[pid] && restingInfo[pid] && restingInfo[pid].schedule;
-      const label = sc.enabled
-        ? (isRest ? t("models.sched_chip_rest") : t("models.sched_chip_on"))
-        : t("models.sched_btn");
+      let label;
+      if (sc.enabled) {
+        if (pid === "deepseek") {
+          label = isRest ? t("models.sched_chip_rest") : t("models.sched_chip_on");
+        } else {
+          label = isRest ? t("models.sched_chip_resting_gen") : t("models.sched_chip_active_gen");
+        }
+      } else {
+        label = t("models.sched_btn");
+      }
       const cls = sc.enabled ? (isRest ? " rest" : " on") : "";
       return `<button type="button" class="mb-chip ord-schip${cls}" data-sched="${esc(pid)}" title="${esc(t("models.sched_title"))}">${ic("clock")}<span class="ord-mtxt">${esc(label)}</span></button>`;
     };
@@ -4557,12 +4568,14 @@
       sh.pop.setAttribute("aria-label", title);
 
       let enabled = !!cur.enabled;
-      let tzChoice = cur.timezone || "UTC";
-      let days = new Set(cur.days || [1, 2, 3, 4, 5]);
+      let tzChoice = cur.timezone || (pid === "deepseek" ? "UTC" : "local");
+      let days = new Set(cur.days || (pid === "deepseek" ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7]));
       let weekendAll = cur.weekend_all_day !== false;
       let windows = (cur.windows && cur.windows.length)
         ? cur.windows.map(w => ({ start: w.start || "00:00", end: w.end || "24:00" }))
-        : [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }];
+        : (pid === "deepseek"
+           ? [{ start: "00:00", end: "01:00" }, { start: "04:00", end: "06:00" }, { start: "10:00", end: "24:00" }]
+           : [{ start: "00:00", end: "24:00" }]);
 
       const userTz = (window.JavisTz && window.JavisTz.name) || (typeof Intl !== "undefined" && Intl.DateTimeFormat().resolvedOptions().timeZone) || "UTC+7";
 
@@ -4587,6 +4600,33 @@
           </div>
         `).join("");
 
+        const isDs = pid === "deepseek";
+        const noteHtml = isDs
+          ? `<div class="ord-offnote" style="margin:0;">
+              ${ic("info")}
+              <div style="font-size:13px;line-height:1.5;">${esc(t("models.sched_ds_note"))}</div>
+            </div>`
+          : `<div class="ord-offnote" style="margin:0;">
+              ${ic("info")}
+              <div style="font-size:13px;line-height:1.5;">${esc(t("models.sched_gen_note"))}</div>
+            </div>`;
+
+        const presetHtml = isDs
+          ? `<button type="button" class="ord-btn" id="schedPreset" style="min-height:42px;font-size:14px;font-weight:600;">
+              ${ic("sparkles")} <span>${esc(t("models.sched_preset_ds"))}</span>
+            </button>`
+          : `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="gcard-btn ghost" id="schedPresetWork" style="font-size:13px;padding:6px 10px;">
+                ${ic("briefcase")} <span>${esc(t("models.sched_preset_work"))}</span>
+              </button>
+              <button type="button" class="gcard-btn ghost" id="schedPresetNight" style="font-size:13px;padding:6px 10px;">
+                ${ic("moon")} <span>${esc(t("models.sched_preset_night"))}</span>
+              </button>
+              <button type="button" class="gcard-btn ghost" id="schedPresetAll" style="font-size:13px;padding:6px 10px;">
+                ${ic("sun")} <span>${esc(t("models.sched_preset_all"))}</span>
+              </button>
+            </div>`;
+
         sh.body.innerHTML = `
           <div class="ord-sform" style="gap:14px;">
             <label class="prov-auth-opt" style="margin-bottom:4px;cursor:pointer;">
@@ -4595,14 +4635,9 @@
               <div style="font-size:13px;color:var(--text3);margin-top:2px;">${esc(t("models.sched_enable_sub"))}</div></span>
             </label>
 
-            <div class="ord-offnote" style="margin:0;">
-              ${ic("info")}
-              <div style="font-size:13px;line-height:1.5;">${esc(t("models.sched_ds_note"))}</div>
-            </div>
+            ${noteHtml}
 
-            <button type="button" class="ord-btn" id="schedPreset" style="min-height:42px;font-size:14px;font-weight:600;">
-              ${ic("sparkles")} <span>${esc(t("models.sched_preset_ds"))}</span>
-            </button>
+            ${presetHtml}
 
             <div class="sched-sec">
               <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${esc(t("models.sched_tz_label"))}</div>
@@ -4693,6 +4728,39 @@
             { start: "04:00", end: "06:00" },
             { start: "10:00", end: "24:00" }
           ];
+          render();
+        };
+
+        const pwBtn = sh.body.querySelector("#schedPresetWork");
+        if (pwBtn) pwBtn.onclick = () => {
+          enabled = true;
+          tzChoice = "local";
+          days = new Set([1, 2, 3, 4, 5]);
+          weekendAll = false;
+          windows = [{ start: "08:00", end: "18:00" }];
+          render();
+        };
+
+        const pnBtn = sh.body.querySelector("#schedPresetNight");
+        if (pnBtn) pnBtn.onclick = () => {
+          enabled = true;
+          tzChoice = "local";
+          days = new Set([1, 2, 3, 4, 5, 6, 7]);
+          weekendAll = true;
+          windows = [
+            { start: "00:00", end: "08:00" },
+            { start: "18:00", end: "24:00" }
+          ];
+          render();
+        };
+
+        const paBtn = sh.body.querySelector("#schedPresetAll");
+        if (paBtn) paBtn.onclick = () => {
+          enabled = true;
+          tzChoice = "local";
+          days = new Set([1, 2, 3, 4, 5, 6, 7]);
+          weekendAll = true;
+          windows = [{ start: "00:00", end: "24:00" }];
           render();
         };
 
