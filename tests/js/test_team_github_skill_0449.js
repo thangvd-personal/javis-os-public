@@ -72,7 +72,21 @@ check("a chosen repo the list lacks stays listed so it can be unticked", v.selec
 v = TG.split([{ full_name: "a/x" }], ["a/z"], "x");
 check("while searching, only what matches", v.all.length === 1 && v.all[0].full_name === "a/x");
 
-[["team-github.js", fs.readFileSync(path.join(ROOT, "dashboard", "team-github.js"), "utf8")]].forEach(function (f) {
+// ───────────── team file tree panel (0.570.0) ─────────────
+check("teams.js has team and files list tabs", teamsJs.indexOf('data-tm-list-tab="teams"') >= 0 && teamsJs.indexOf('data-tm-list-tab="files"') >= 0);
+check("teams.js has worktree and clone options", teamsJs.indexOf('data-tm-tree-kind="worktree"') >= 0 && teamsJs.indexOf('data-tm-tree-kind="clone"') >= 0);
+check("teams.js has brain root option", teamsJs.indexOf('data-tm-tree-kind="brain"') >= 0);
+check("teams.js has context menu and action button", teamsJs.indexOf("data-tm-tree-more") >= 0 && teamsJs.indexOf("openTreeMenu") >= 0);
+check("teams.js has pull and push buttons", teamsJs.indexOf('data-tm-tree-git="pull"') >= 0 && teamsJs.indexOf('data-tm-tree-git="push"') >= 0);
+check("teams.js moves new and import buttons to footer", teamsJs.indexOf("tm-list-foot") >= 0);
+check("teams.js opens note on file click", teamsJs.indexOf("window.JavisOpenNote(d.tmTreeFile)") >= 0);
+["teams.tab_files", "teams.tree_worktree", "teams.tree_clone", "teams.tree_brain", "teams.search_file", "teams.tree_no_team", "teams.tree_empty", "teams.tree_no_files", "teams.git_pull", "teams.git_push"].forEach(function (k) {
+  check("tree key " + k + " in vi and en", !!vi[k] && !!en[k]);
+});
+check("tree css styles defined", css.indexOf(".tm-list-tabs") >= 0 && css.indexOf(".tm-pane-files") >= 0 && css.indexOf(".tm-tree-list") >= 0 && css.indexOf(".tm-tree-git-btn") >= 0 && css.indexOf(".tm-tree-more") >= 0);
+
+[["team-github.js", fs.readFileSync(path.join(ROOT, "dashboard", "team-github.js"), "utf8")],
+ ["teams.js", teamsJs]].forEach(function (f) {
   check(f[0] + " has no em dash", f[1].indexOf("—") < 0);
 });
 

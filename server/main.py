@@ -11177,8 +11177,41 @@ def _files_root(brain: str) -> Path:
     return _files_ceiling(brain)
 
 
+def _is_allowed_extra_path(target: Path, brain: str = "") -> bool:
+    try:
+        rp = target.resolve()
+        state_dir = cfgmod.STATE_DIR.resolve()
+        repos_dir = (state_dir / "repos").resolve()
+        wts_dir = (state_dir / "worktrees").resolve()
+        if repos_dir == rp or repos_dir in rp.parents:
+            return True
+        if wts_dir == rp or wts_dir in rp.parents:
+            return True
+        import coding_store
+        for f in coding_store.danh_sach_thu_muc():
+            dp = Path(f.get("duong_dan") or "").resolve()
+            if rp == dp or dp in rp.parents:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _safe_path(brain: str, rel: str) -> Path:
     """Resolve rel TRONG trần duyệt; ném ValueError nếu vượt ra ngoài (chống ../)."""
+    try:
+        p_str = str(rel or "").strip()
+        raw_p = Path(p_str).resolve()
+        broot = Path(_brain_root(brain)).resolve()
+        froot = _files_root(brain)
+        if _is_allowed_extra_path(raw_p, brain) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents:
+            return raw_p
+        if not p_str.startswith("/") and not (len(p_str) > 1 and p_str[1] == ":"):
+            raw_p2 = Path("/" + p_str).resolve()
+            if _is_allowed_extra_path(raw_p2, brain) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents:
+                return raw_p2
+    except Exception:
+        pass
     root = _files_root(brain)
     rel = (rel or "").strip().replace("\\", "/").lstrip("/")
     target = (root / rel).resolve()
@@ -11195,6 +11228,19 @@ def _safe_serve_path(brain: str, rel: str) -> Path:
     'videos/x.mp4' nếu chỉ tính theo trần sẽ thành 'D:/videos/x.mp4' → 404. Cả hai nhánh đều bị
     KHOÁ trong trần (chống ../). CHỈ dùng cho endpoint CHỈ-ĐỌC (raw/read/download) - KHÔNG dùng cho
     ghi/xoá/đổi tên để tránh mơ hồ khi tạo file mới."""
+    try:
+        p_str = str(rel or "").strip()
+        raw_p = Path(p_str).resolve()
+        broot = Path(_brain_root(brain)).resolve()
+        froot = _files_root(brain)
+        if (_is_allowed_extra_path(raw_p, brain) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents) and raw_p.exists():
+            return raw_p
+        if not p_str.startswith("/") and not (len(p_str) > 1 and p_str[1] == ":"):
+            raw_p2 = Path("/" + p_str).resolve()
+            if (_is_allowed_extra_path(raw_p2, brain) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents) and raw_p2.exists():
+                return raw_p2
+    except Exception:
+        pass
     root = _files_root(brain)
     rel = (rel or "").strip().replace("\\", "/").lstrip("/")
     ceil_target = (root / rel).resolve()

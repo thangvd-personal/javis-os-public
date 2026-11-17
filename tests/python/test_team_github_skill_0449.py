@@ -179,5 +179,48 @@ check("or in the job it works on", "Tối đa 120 chữ" in runner._skills(team,
 check("no block: no skills", runner._skills(team, "Viết email cho khách sỉ") == "")
 check("the same skill twice is read once", runner._skills(team, text, text).count("Tối đa 120 chữ") == 1)
 
+# ---- team file tree panel (0.570.0) ----
+wt_dir = Path(tempfile.mkdtemp(prefix="fake-wt-"))
+(wt_dir / ".git").mkdir()
+(wt_dir / "src").mkdir()
+(wt_dir / "src" / "index.js").write_text("console.log('hi');", encoding="utf-8")
+(wt_dir / "README.md").write_text("# Test", encoding="utf-8")
+clone_dir = Path(tempfile.mkdtemp(prefix="fake-clone-"))
+(clone_dir / "main.py").write_text("print(1)", encoding="utf-8")
+
+real_srepos = github_repos.session_repos
+github_repos.session_repos = lambda s, r: [
+    {"full_name": "owner/repo1", "clone": str(clone_dir), "worktree": str(wt_dir), "branch": "main"}
+] if s == sid else []
+try:
+    rtree_wt = client.get(f"/teams/{tid}/tree", params={"brain": b, "kind": "worktree"}, headers=H).json()
+    check("tree endpoint returns worktree files", rtree_wt.get("ok") is True and len(rtree_wt.get("tree", [])) == 2, rtree_wt)
+    names = [x["name"] for x in rtree_wt.get("tree", [])]
+    check("tree excludes .git folder", ".git" not in names and "README.md" in names and "src" in names, names)
+    check("tree has target_label for worktree", rtree_wt.get("target_label") == "Thư mục làm việc", rtree_wt)
+
+    rtree_clone = client.get(f"/teams/{tid}/tree", params={"brain": b, "kind": "clone"}, headers=H).json()
+    check("tree endpoint returns clone files", rtree_clone.get("ok") is True and len(rtree_clone.get("tree", [])) == 1, rtree_clone)
+    check("tree has target_label for clone", rtree_clone.get("target_label") == "Thư mục chính", rtree_clone)
+
+    rtree_brain = client.get(f"/teams/{tid}/tree", params={"brain": b, "kind": "brain"}, headers=H).json()
+    check("tree endpoint returns brain root files", rtree_brain.get("ok") is True and rtree_brain.get("target_label") == "Thư mục gốc brain", rtree_brain)
+
+    real_git = github_repos.git
+    git_calls = []
+    github_repos.git = lambda args, cwd, **kwargs: (git_calls.append((args, cwd)), type("Proc", (), {"returncode": 0, "stdout": "ok", "stderr": ""})())[1]
+    try:
+        r_pull = client.post(f"/teams/{tid}/git/sync", params={"brain": b}, headers=H, json={"action": "pull", "kind": "worktree"}).json()
+        check("git pull sync succeeds", r_pull.get("ok") is True and r_pull.get("action") == "pull", r_pull)
+        check("git pull invoked fetch", any(c[0][0] == "fetch" for c in git_calls), git_calls)
+
+        r_push = client.post(f"/teams/{tid}/git/sync", params={"brain": b}, headers=H, json={"action": "push", "kind": "worktree"}).json()
+        check("git push sync succeeds", r_push.get("ok") is True and r_push.get("action") == "push", r_push)
+        check("git push invoked push", any(c[0][0] == "push" for c in git_calls), git_calls)
+    finally:
+        github_repos.git = real_git
+finally:
+    github_repos.session_repos = real_srepos
+
 print("\n" + ("XANH" if not fails else f"ĐỎ: {len(fails)} lỗi"))
 raise SystemExit(1 if fails else 0)

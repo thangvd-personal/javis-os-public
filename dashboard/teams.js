@@ -1949,7 +1949,8 @@
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle", dictSend: false,
       atts: [], folder: null, repos: [], ghIcon: null, skills: null, skillsBrain: "", info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
-      autoOpened: false, unclamped: {}, outbox: [] };
+      autoOpened: false, unclamped: {}, outbox: [],
+      listTab: "teams", treeKind: "worktree", treeRepo: "", treeData: null, treeLoading: false, treeSearch: "", treeExpanded: {}, treeActiveFile: "", treeItemMap: {} };
   }
 
   function teamUrl(path) { return "/teams/" + q(S.activeId) + (path || ""); }
@@ -1982,12 +1983,21 @@
   function shell() {
     S.el.innerHTML =
       '<div class="tm-page" data-view="' + S.view + '" data-side="0">' +
-      '<aside class="tm-list"><div class="tm-bar tm-list-bar"><strong class="tm-list-title">' + esc(tw("page.teams.label")) + "</strong>" +
+      '<aside class="tm-list">' +
+      '<div class="cside-tabs tm-list-tabs">' +
+      '<button type="button" class="cside-tab' + (S.listTab === "teams" ? " active" : "") + '" data-tm-list-tab="teams">' + ic("users") + '<span>' + esc(tw("page.teams.label")) + "</span></button>" +
+      '<button type="button" class="cside-tab' + (S.listTab === "files" ? " active" : "") + '" data-tm-list-tab="files">' + ic("folder-tree") + '<span>' + esc(tw("teams.tab_files")) + "</span></button>" +
+      "</div>" +
+      '<div class="cside-pane tm-pane-teams' + (S.listTab === "teams" ? " on" : "") + '">' +
+      '<div class="cside-proj ws-nhom-bar tm-tagbar" hidden></div>' +
+      '<div class="tm-teams"></div><button type="button" class="ws-btn tm-more-teams" hidden>' + esc(tw("teams.next_page")) + "</button>" +
+      '<div class="tm-bar tm-list-bar tm-list-foot">' +
       '<button type="button" class="ws-btn tm-new">' + ic("plus") + esc(tw("teams.create")) + "</button>" +
       '<button type="button" class="ws-btn tm-import" title="' + esc(tw("teams.import_title")) + '">' + ic("upload-cloud") +
-      esc(tw("teams.import")) + "</button></div>" +
-      '<div class="cside-proj ws-nhom-bar tm-tagbar" hidden></div>' +
-      '<div class="tm-teams"></div><button type="button" class="ws-btn tm-more-teams" hidden>' + esc(tw("teams.next_page")) + "</button></aside>" +
+      esc(tw("teams.import")) + "</button></div></div>" +
+      '<div class="cside-pane tm-pane-files' + (S.listTab === "files" ? " on" : "") + '">' +
+      '<div class="tm-files-body"></div></div>' +
+      "</aside>" +
       '<section class="tm-chat"><div class="tm-bar tm-chat-head"></div><div class="tm-search" hidden></div>' +
       '<div class="tm-banners"></div><div class="tm-jobs" hidden></div>' +
       '<div class="tm-filterbar" hidden></div><div class="tm-pinbar" hidden></div><div class="tm-msgs" aria-live="polite"></div><div class="tm-composer"></div>' +
@@ -2030,6 +2040,408 @@
     var bar = S.el.querySelector(".tm-list-bar");
     // Chưa có nhóm nào: thẻ hướng dẫn đã có nút Tạo nhóm, khỏi lặp nút ở thanh trên.
     if (bar) bar.classList.toggle("tm-list-bar-empty", S.loaded && !S.teams.length);
+  }
+
+  function fmtSize(b) {
+    if (!b || b <= 0) return "";
+    if (b < 1024) return b + " B";
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+    return (b / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function dirMatches(item, q) {
+    var low = q.toLowerCase();
+    if (item.name.toLowerCase().indexOf(low) >= 0) return true;
+    if (!item.children) return false;
+    return item.children.some(function (c) {
+      if (c.type === "dir") return dirMatches(c, q);
+      return c.name.toLowerCase().indexOf(low) >= 0;
+    });
+  }
+
+  function treeCreateFile(targetPath, isDir) {
+    var dir = isDir ? targetPath : (targetPath.lastIndexOf("/") >= 0 ? targetPath.slice(0, targetPath.lastIndexOf("/")) : "");
+    var n = (prompt(tw("cs.vt_new_file")) || "").trim();
+    if (!n) return;
+    if (!/\.[a-z0-9]+$/i.test(n)) n += ".md";
+    var filePath = dir ? dir.replace(/\/+$/, "") + "/" + n : n;
+    var fd = new FormData();
+    fd.append("brain", brain());
+    fd.append("path", filePath);
+    fd.append("content", "");
+    fetch("/files/write", { method: "POST", body: fd }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      if (j.error) {
+        setNote(j.error);
+      } else {
+        loadTree(true);
+        if (typeof window !== "undefined" && typeof window.JavisOpenNote === "function") {
+          window.JavisOpenNote(filePath);
+        }
+      }
+    }).catch(function (e) {
+      setNote(String(e));
+    });
+  }
+
+  function treeCreateDir(targetPath, isDir) {
+    var dir = isDir ? targetPath : (targetPath.lastIndexOf("/") >= 0 ? targetPath.slice(0, targetPath.lastIndexOf("/")) : "");
+    var n = (prompt(tw("cs.vt_new_dir")) || "").trim();
+    if (!n) return;
+    var fd = new FormData();
+    fd.append("brain", brain());
+    fd.append("path", dir);
+    fd.append("name", n);
+    fetch("/files/mkdir", { method: "POST", body: fd }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      if (j.error) {
+        setNote(j.error);
+      } else {
+        loadTree(true);
+      }
+    }).catch(function (e) {
+      setNote(String(e));
+    });
+  }
+
+  function treeAttachChat(item) {
+    var isImg = /\.(png|jpe?g|gif|webp|svg)$/i.test(item.ext || item.name);
+    var att = {
+      path: item.abs_path,
+      name: item.name,
+      size: item.size || 0,
+      kind: isImg ? "image" : "file"
+    };
+    if (isImg) {
+      att.url = "/files/raw?brain=" + encodeURIComponent(brain()) + "&path=" + encodeURIComponent(item.abs_path);
+    }
+    S.atts.push(att);
+    drawComposer();
+    var inp = S.el.querySelector(".tm-input");
+    if (inp) {
+      try { inp.focus(); } catch (e) {}
+    }
+  }
+
+  function treeDownload(targetPath, name, isDir) {
+    var url = isDir
+      ? "/files/zip?brain=" + encodeURIComponent(brain()) + "&path=" + encodeURIComponent(targetPath)
+      : "/files/raw?brain=" + encodeURIComponent(brain()) + "&path=" + encodeURIComponent(targetPath) + "&dl=1";
+    var a = document.createElement("a");
+    a.href = url;
+    if (!isDir) a.download = name || "download";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { a.remove(); }, 100);
+  }
+
+  function treeRename(targetPath, oldname) {
+    var nn = (prompt(tw("cs.fm_new_name"), oldname) || "").trim();
+    if (!nn || nn === oldname) return;
+    var fd = new FormData();
+    fd.append("brain", brain());
+    fd.append("path", targetPath);
+    fd.append("newname", nn);
+    fetch("/files/rename", { method: "POST", body: fd }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      if (j.error) {
+        setNote(j.error);
+      } else {
+        loadTree(true);
+      }
+    }).catch(function (e) {
+      setNote(String(e));
+    });
+  }
+
+  function treeDelete(targetPath, name, isDir) {
+    var promptMsg = tw(isDir ? "cs.vt_del_dir" : "cs.vt_del_file", { ten: name });
+    if (!confirm(promptMsg)) return;
+    var fd = new FormData();
+    fd.append("brain", brain());
+    fd.append("path", targetPath);
+    fetch("/files/delete", { method: "POST", body: fd }).then(function (r) {
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) {
+      if (j.error) {
+        setNote(j.error);
+      } else {
+        if (S.treeActiveFile === targetPath) {
+          S.treeActiveFile = null;
+          closeNote();
+        }
+        loadTree(true);
+      }
+    }).catch(function (e) {
+      setNote(String(e));
+    });
+  }
+
+  function openTreeMenu(anchorEl, item, isDir, clientX, clientY) {
+    var old = document.getElementById("tmTreeMenu");
+    if (old) old.remove();
+
+    var items = [
+      { icon: "file-text", label: tw(isDir ? "cs.vt_create_file" : "cs.vt_create_file_here"), run: function () { treeCreateFile(item.abs_path, isDir); } },
+      { icon: "folder-plus", label: tw(isDir ? "cs.vt_create_dir" : "cs.vt_create_dir_here"), run: function () { treeCreateDir(item.abs_path, isDir); } }
+    ];
+    if (!isDir) {
+      items.push({ icon: "paperclip", label: tw("cs.vt_attach_chat"), run: function () { treeAttachChat(item); } });
+    }
+    items.push({ sep: true });
+    items.push({ icon: "download", label: tw(isDir ? "cs.fm_zip_btn" : "common.download"), run: function () { treeDownload(item.abs_path, item.name, isDir); } });
+    items.push({ icon: "pencil", label: tw("cs.fm_rename"), run: function () { treeRename(item.abs_path, item.name); } });
+    items.push({ icon: "trash-2", label: tw("common.delete"), danger: true, run: function () { treeDelete(item.abs_path, item.name, isDir); } });
+
+    var menu = document.createElement("div");
+    menu.id = "tmTreeMenu";
+    menu.className = "tm-tree-menu vt-create-menu";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML = items.map(function (it, idx) {
+      return it.sep ? "<hr>" :
+        '<button type="button" role="menuitem" data-i="' + idx + '"' + (it.danger ? ' class="danger"' : "") + ">" +
+        ic(it.icon) + " " + esc(it.label) + "</button>";
+    }).join("");
+
+    menu.querySelectorAll("button").forEach(function (btn) {
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        menu.remove();
+        var idx = Number(btn.dataset.i);
+        if (items[idx] && typeof items[idx].run === "function") items[idx].run();
+      };
+    });
+
+    document.body.appendChild(menu);
+
+    var w = menu.offsetWidth || 210, h = menu.offsetHeight || 220;
+    var left, top;
+    if (anchorEl) {
+      var rect = anchorEl.getBoundingClientRect();
+      var below = rect.bottom + 4;
+      top = (below + h <= window.innerHeight - 8) ? below : Math.max(8, rect.top - h - 4);
+      left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
+    } else if (clientX !== undefined && clientY !== undefined) {
+      top = (clientY + h <= window.innerHeight - 8) ? clientY : Math.max(8, clientY - h);
+      left = Math.max(8, Math.min(clientX, window.innerWidth - w - 8));
+    } else {
+      top = 100; left = 100;
+    }
+    menu.style.position = "fixed";
+    menu.style.top = top + "px";
+    menu.style.left = left + "px";
+
+    var firstBtn = menu.querySelector("button");
+    if (firstBtn) firstBtn.focus();
+
+    var onDocClick = function (e) {
+      if (!menu.contains(e.target)) {
+        menu.remove();
+        document.removeEventListener("click", onDocClick, true);
+        document.removeEventListener("contextmenu", onDocClick, true);
+      }
+    };
+    setTimeout(function () {
+      document.addEventListener("click", onDocClick, true);
+      document.addEventListener("contextmenu", onDocClick, true);
+    }, 10);
+  }
+
+  function indexTreeItems(items, map) {
+    if (!items || !items.length) return;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (it && it.abs_path) {
+        map[it.abs_path] = it;
+        if (it.children && it.children.length) indexTreeItems(it.children, map);
+      }
+    }
+  }
+
+  function renderTreeItem(item, depth, query) {
+    var isDir = item.type === "dir";
+    var hasChildren = isDir && item.children && item.children.length > 0;
+    var expanded = S.treeExpanded[item.abs_path];
+    if (expanded === undefined) {
+      expanded = depth === 0;
+      S.treeExpanded[item.abs_path] = expanded;
+    }
+    if (query) {
+      if (isDir) {
+        if (!dirMatches(item, query)) return "";
+        expanded = true;
+      } else {
+        if (item.name.toLowerCase().indexOf(query.toLowerCase()) < 0) return "";
+      }
+    }
+    var indent = depth * 14;
+    if (isDir) {
+      var childrenHtml = "";
+      if (expanded && hasChildren) {
+        childrenHtml = item.children.map(function (c) {
+          return renderTreeItem(c, depth + 1, query);
+        }).join("");
+      }
+      return '<div class="tm-tree-dir-block">' +
+        '<div class="tm-tree-row tm-tree-dir" role="button" tabindex="0" data-tm-tree-dir="' + esc(item.abs_path) + '" style="padding-left:' + (indent + 8) + 'px">' +
+          '<span class="tm-tree-caret">' + ic(expanded ? "chevron-down" : "chevron-right") + '</span>' +
+          '<span class="tm-tree-ico">' + ic(expanded ? "folder-open" : "folder") + '</span>' +
+          '<span class="tm-tree-name" title="' + esc(item.name) + '">' + esc(item.name) + '</span>' +
+          '<span class="tm-tree-act">' +
+            '<button type="button" class="tm-tree-more" data-tm-tree-more="' + esc(item.abs_path) + '" aria-haspopup="menu" title="' + esc(tw("cs.vt_more")) + '" aria-label="' + esc(tw("cs.vt_more")) + '">' +
+              ic("ellipsis") +
+            '</button>' +
+          '</span>' +
+        '</div>' +
+        (childrenHtml ? '<div class="tm-tree-children">' + childrenHtml + '</div>' : '') +
+      '</div>';
+    } else {
+      var isActive = S.treeActiveFile === item.abs_path;
+      var ext = (item.ext || "").toLowerCase();
+      var fIcon = "file-text";
+      if (ext === ".js" || ext === ".ts" || ext === ".py" || ext === ".json" || ext === ".html" || ext === ".css" || ext === ".sh" || ext === ".sql") {
+        fIcon = "file-code";
+      }
+      return '<div class="tm-tree-row tm-tree-file' + (isActive ? " active" : "") + '" role="button" tabindex="0" data-tm-tree-file="' + esc(item.abs_path) + '" style="padding-left:' + (indent + 22) + 'px">' +
+        '<span class="tm-tree-ico">' + ic(fIcon) + '</span>' +
+        '<span class="tm-tree-name" title="' + esc(item.name) + '">' + esc(item.name) + '</span>' +
+        (item.size ? '<span class="tm-tree-size">' + fmtSize(item.size) + '</span>' : '') +
+        '<span class="tm-tree-act">' +
+          '<button type="button" class="tm-tree-more" data-tm-tree-more="' + esc(item.abs_path) + '" aria-haspopup="menu" title="' + esc(tw("cs.vt_more")) + '" aria-label="' + esc(tw("cs.vt_more")) + '">' +
+            ic("ellipsis") +
+          '</button>' +
+        '</span>' +
+      '</div>';
+    }
+  }
+
+  function renderTreeListHtml(data, query) {
+    S.treeItemMap = {};
+    if (data && data.tree) indexTreeItems(data.tree, S.treeItemMap);
+    if (!data || !data.tree || !data.tree.length) {
+      var hintKey = (data && (data.chosen_repo || data.target_path)) ? "teams.tree_no_files" : "teams.tree_empty";
+      var rootAddHtml = "";
+      if (data && data.target_path) {
+        rootAddHtml = '<div class="tm-tree-empty-actions">' +
+          '<button type="button" class="ws-btn tm-tree-btn-newfile" data-tm-tree-root-add="file">' + ic("file-plus") + " " + esc(tw("cs.vt_create_file")) + '</button>' +
+          '<button type="button" class="ws-btn tm-tree-btn-newdir" data-tm-tree-root-add="dir">' + ic("folder-plus") + " " + esc(tw("cs.vt_create_dir")) + '</button>' +
+        '</div>';
+      }
+      return '<div class="tm-tree-empty"><p class="tm-tree-hint">' + esc(tw(hintKey)) + '</p>' + rootAddHtml + '</div>';
+    }
+    var html = data.tree.map(function (item) {
+      return renderTreeItem(item, 0, query);
+    }).join("");
+    if (!html && query) {
+      return '<div class="tm-tree-empty"><p class="tm-tree-hint">' + esc(tw("teams.tree_no_matches")) + '</p></div>';
+    }
+    return html;
+  }
+
+  function drawTreeListOnly() {
+    var box = S.el.querySelector(".tm-tree-list");
+    if (!box || !S.treeData) return;
+    box.innerHTML = renderTreeListHtml(S.treeData, S.treeSearch);
+  }
+
+  function drawFilesPane() {
+    var box = S.el.querySelector(".tm-files-body");
+    if (!box) return;
+    if (!S.activeId) {
+      box.innerHTML = '<div class="tm-tree-empty"><p class="tm-tree-hint">' + esc(tw("teams.tree_no_team")) + '</p></div>';
+      return;
+    }
+    if (S.treeLoading && !S.treeData) {
+      box.innerHTML = loadingHtml("teams.loading_tree");
+      return;
+    }
+    var td = S.treeData;
+    if (!td || td.ok === false) {
+      box.innerHTML = '<div class="tm-tree-empty"><p class="tm-tree-hint">' + esc(tw("teams.tree_empty")) + '</p>' +
+        '<button type="button" class="ws-btn tm-tree-retry" data-tm-tree-refresh="1">' + esc(tw("teams.refresh")) + '</button></div>';
+      return;
+    }
+
+    var repos = td.repos || [];
+    var repoSelectHtml = "";
+    if (repos.length > 1) {
+      repoSelectHtml = '<div class="tm-tree-repo-bar"><select class="tm-tree-repo-select">' +
+        repos.map(function (r) {
+          var sel = (r.full_name || "") === (td.chosen_repo || "") ? " selected" : "";
+          return '<option value="' + esc(r.full_name) + '"' + sel + '>' + esc(r.full_name) + '</option>';
+        }).join("") + '</select></div>';
+    } else if (td.chosen_repo) {
+      repoSelectHtml = '<div class="tm-tree-repo-bar">' +
+        '<span class="tm-tree-repo-name" title="' + esc(td.chosen_repo) + '">' + ghLogo() + ' ' + esc(td.chosen_repo) + '</span>' +
+        (td.branch ? '<span class="tm-tree-branch" title="branch">' + esc(td.branch) + '</span>' : '') +
+      '</div>';
+    }
+
+    var kindHtml = '<div class="tm-tree-kind-tabs">' +
+      '<button type="button" class="tm-tree-kind-tab' + (S.treeKind === "worktree" ? " active" : "") + '" data-tm-tree-kind="worktree" title="' + esc(tw("teams.tree_worktree_desc")) + '">' + esc(tw("teams.tree_worktree")) + '</button>' +
+      '<button type="button" class="tm-tree-kind-tab' + (S.treeKind === "clone" ? " active" : "") + '" data-tm-tree-kind="clone" title="' + esc(tw("teams.tree_clone_desc")) + '">' + esc(tw("teams.tree_clone")) + '</button>' +
+      '<button type="button" class="tm-tree-kind-tab' + (S.treeKind === "brain" ? " active" : "") + '" data-tm-tree-kind="brain" title="' + esc(tw("teams.tree_brain_desc")) + '">' + esc(tw("teams.tree_brain")) + '</button>' +
+      '<button type="button" class="tm-tree-refresh" data-tm-tree-refresh="1" title="' + esc(tw("teams.refresh")) + '" aria-label="' + esc(tw("teams.refresh")) + '">' + ic("refresh-cw") + '</button>' +
+      '<button type="button" class="tm-tree-git-btn tm-tree-pull" data-tm-tree-git="pull" title="' + esc(tw("teams.git_pull")) + '" aria-label="' + esc(tw("teams.git_pull")) + '">' + ic("arrow-down") + '</button>' +
+      '<button type="button" class="tm-tree-git-btn tm-tree-push" data-tm-tree-git="push" title="' + esc(tw("teams.git_push")) + '" aria-label="' + esc(tw("teams.git_push")) + '">' + ic("arrow-up") + '</button>' +
+    '</div>';
+
+    var searchHtml = '<div class="tm-tree-filter-wrap">' +
+      '<input type="search" class="cside-search tm-tree-search" placeholder="' + esc(tw("teams.search_file")) + '" value="' + esc(S.treeSearch || "") + '">' +
+    '</div>';
+
+    var listHtml = '<div class="tm-tree-list">' + renderTreeListHtml(td, S.treeSearch) + '</div>';
+
+    box.innerHTML = repoSelectHtml + kindHtml + searchHtml + listHtml;
+  }
+
+  function loadTree(force) {
+    if (!S.activeId) {
+      S.treeData = null;
+      drawFilesPane();
+      return Promise.resolve();
+    }
+    if (S.treeLoading && !force) return Promise.resolve();
+    S.treeLoading = true;
+    if (!S.treeData) drawFilesPane();
+    var url = teamUrl("/tree?kind=" + encodeURIComponent(S.treeKind || "worktree") +
+      (S.treeRepo ? "&repo=" + encodeURIComponent(S.treeRepo) : ""));
+    return call("GET", url).then(function (r) {
+      S.treeLoading = false;
+      if (r.code === 200 && r.j && r.j.ok) {
+        S.treeData = r.j;
+        if (r.j.chosen_repo && !S.treeRepo) S.treeRepo = r.j.chosen_repo;
+      } else {
+        S.treeData = { ok: false, error: (r.j && r.j.error) || r.code, tree: [] };
+      }
+      drawFilesPane();
+    }).catch(function (err) {
+      S.treeLoading = false;
+      S.treeData = { ok: false, error: String(err), tree: [] };
+      drawFilesPane();
+    });
+  }
+
+  function switchListTab(tab) {
+    S.listTab = tab === "files" ? "files" : "teams";
+    var tabs = S.el.querySelectorAll(".tm-list-tabs .cside-tab");
+    tabs.forEach(function (btn) {
+      btn.classList.toggle("active", btn.dataset.tmListTab === S.listTab);
+    });
+    var paneTeams = S.el.querySelector(".tm-pane-teams");
+    var paneFiles = S.el.querySelector(".tm-pane-files");
+    if (paneTeams) paneTeams.classList.toggle("on", S.listTab === "teams");
+    if (paneFiles) paneFiles.classList.toggle("on", S.listTab === "files");
+    if (S.listTab === "files") {
+      if (!S.treeData || S.treeData.team_id !== S.activeId) {
+        loadTree();
+      } else {
+        drawFilesPane();
+      }
+    }
   }
 
   function drawPage() {
@@ -2922,6 +3334,7 @@
 
   function drawAll(stick) {
     drawPage(); drawList(); drawHead(); drawJobs(); drawMsgs(stick); drawComposer(); drawSide();
+    if (S.listTab === "files") drawFilesPane();
   }
 
   // Mở ngăn: nhớ nút đã mở (chip việc, ba chấm, nút trên băng hay thẻ việc) để lúc đóng trả focus về đúng nút đó.
@@ -3043,6 +3456,7 @@
     if (!S || S.activeId !== id) return;
     S.activeId = ""; S.team = null; S.queue = null; S.msgs = []; S.view = "list"; S.side = false;
     S.picker = null; S.draft = null; S.picked = []; S.filterTask = ""; S.turns = [];
+    S.treeData = null; S.treeActiveFile = "";
     drawAll(false);
     setNote(tw("teams.gone"));
   }
@@ -3138,6 +3552,7 @@
     S.jumped = null; S.searchResults = null; S.searchQuery = ""; S.searchOpen = false;
     S.activeId = id; S.view = "chat"; S.asJob = false; S.pending = null; S.filterTask = String(taskId || "");
     S.team = null; S.queue = null; S.msgs = []; S.msgsFor = ""; S.taskTitles = {}; S.openMember = null; S.turns = [];
+    S.treeData = null; S.treeActiveFile = "";
     // 2026-11-09 (owner): a team opens with its Info tab showing on a wide screen, unless the owner closed the panel
     // last time (remembered per device). A phone keeps the panel as a drawer that opens on demand.
     S.side = sideByDefault();
@@ -3163,6 +3578,7 @@
       drawAll(true);
       keepTeam(); loadFolder(); loadSkills();
       if (S.side && S.tab === "info") loadInfo();
+      if (S.listTab === "files") loadTree();
     });
     markOpened(id);
   }
@@ -4492,7 +4908,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest ? e.target.closest("button, [data-team], summary, .tm-scrim, .tmp-scrim") : null;
+    var t = e.target.closest ? e.target.closest("button, [data-team], [data-tm-tree-dir], [data-tm-tree-file], [data-tm-tree-root-add], summary, .tm-scrim, .tmp-scrim") : null;
     // Bấm ở bất cứ đâu ngoài menu ghim thì đóng menu.
     if (S.rowMenu && !(e.target.closest && e.target.closest(".tm-row-menu")) && !(t && t.dataset && t.dataset.pinTeam)) {
       if (!(t && t.dataset && t.dataset.team && S.swallowClick)) closeRowMenu();
@@ -4516,6 +4932,58 @@
       return;
     }
     var d = t.dataset || {};
+    if (d.tmListTab) return switchListTab(d.tmListTab);
+    if (d.tmTreeKind) { S.treeKind = d.tmTreeKind; return loadTree(true); }
+    if (d.tmTreeRefresh || (t.classList && t.classList.contains("tm-tree-refresh"))) return loadTree(true);
+    if (d.tmTreeGit) {
+      var act = d.tmTreeGit;
+      var repo = S.treeRepo || (S.treeData && S.treeData.chosen_repo) || "";
+      setNote(tw(act === "push" ? "teams.git_pushing" : "teams.git_pulling"));
+      call("POST", teamUrl("/git/sync"), { action: act, kind: S.treeKind === "clone" ? "clone" : "worktree", repo: repo }).then(function (r) {
+        if (r.code === 200 && r.j && r.j.ok) {
+          setNote(r.j.message || tw(act === "push" ? "teams.git_push_ok" : "teams.git_pull_ok"));
+          loadTree(true);
+        } else {
+          setNote((r.j && r.j.error) || tw("teams.err", { e: r.code }));
+        }
+      }).catch(function () {
+        setNote(tw("teams.err_network"));
+      });
+      return;
+    }
+    if (d.tmTreeRootAdd) {
+      if (!S.treeData || !S.treeData.target_path) return;
+      if (d.tmTreeRootAdd === "file") {
+        treeCreateFile(S.treeData.target_path, true);
+      } else {
+        treeCreateDir(S.treeData.target_path, true);
+      }
+      return;
+    }
+    if (d.tmTreeMore) {
+      e.stopPropagation();
+      var mItem = S.treeItemMap && S.treeItemMap[d.tmTreeMore];
+      if (mItem) openTreeMenu(t, mItem, mItem.type === "dir");
+      return;
+    }
+    if (d.tmTreeDir) {
+      S.treeExpanded[d.tmTreeDir] = !S.treeExpanded[d.tmTreeDir];
+      drawTreeListOnly();
+      return;
+    }
+    if (d.tmTreeFile) {
+      S.treeActiveFile = d.tmTreeFile;
+      var list = S.el.querySelector(".tm-tree-list");
+      if (list) {
+        list.querySelectorAll(".tm-tree-file").forEach(function (f) {
+          f.classList.toggle("active", f.dataset.tmTreeFile === d.tmTreeFile);
+        });
+      }
+      if (typeof window !== "undefined" && typeof window.JavisOpenNote === "function") {
+        window.JavisOpenNote(d.tmTreeFile);
+      }
+      return;
+    }
     if (d.rowMenu) {
       if (S.rowMenu === d.rowMenu) return closeRowMenu(true);
       return openRowMenu(d.rowMenu);
@@ -5042,6 +5510,10 @@
   }
 
   function onChange(e) {
+    if (e.target.classList && e.target.classList.contains("tm-tree-repo-select")) {
+      S.treeRepo = e.target.value;
+      return loadTree(true);
+    }
     if (S.pickSt && e.target.classList && e.target.classList.contains("tmp-hidden-check")) {
       S.pickSt.includeHidden = !!e.target.checked;
       drawPicker("filter");
@@ -5145,7 +5617,24 @@
     }, 2500);
   }
 
+  function onContextMenu(e) {
+    var row = e.target.closest ? e.target.closest("[data-tm-tree-dir], [data-tm-tree-file]") : null;
+    if (row && S && S.el && S.el.contains(row)) {
+      e.preventDefault();
+      var path = row.dataset.tmTreeDir || row.dataset.tmTreeFile;
+      var item = S.treeItemMap && S.treeItemMap[path];
+      if (item) {
+        openTreeMenu(null, item, item.type === "dir", e.clientX, e.clientY);
+      }
+    }
+  }
+
   function onKey(e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("tm-tree-row")) {
+      e.preventDefault();
+      e.target.click();
+      return;
+    }
     if (e.target.classList && e.target.classList.contains("tm-search-input") && e.key === "Enter") {
       e.preventDefault();
       runSearch();
@@ -5195,6 +5684,11 @@
   }
 
   function onInput(e) {
+    if (e.target.classList && e.target.classList.contains("tm-tree-search")) {
+      S.treeSearch = e.target.value;
+      drawTreeListOnly();
+      return;
+    }
     if (S.pickSt && e.target.classList.contains("tmp-search-input")) {
       S.pickSt.query = e.target.value;
       drawPicker("filter");
@@ -5372,6 +5866,7 @@
     el.addEventListener("change", onChange);
     el.addEventListener("input", onInput);
     el.addEventListener("keydown", onKey);
+    el.addEventListener("contextmenu", onContextMenu);
     var AC = actsApi();
     S.composing = AC && AC.trackComposition ? AC.trackComposition(el) : null;
     // 0.192.0: paste and drop land in this team, not in the hidden main chat (see onPaste).

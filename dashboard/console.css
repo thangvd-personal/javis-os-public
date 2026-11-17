@@ -3198,6 +3198,73 @@ body.on-teams .cview-head { display: none; }
 @media (min-width: 761px) { .tm-list-title { display: none; } .tm-list-bar .tm-new { margin-left: auto; } }
 .tm-list-bar-empty .tm-new { display: none; }
 
+/* Team list tabs & panes */
+.tm-list-tabs { margin-bottom: 6px; flex: none; }
+.tm-pane-teams, .tm-pane-files { display: none; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 4px; }
+.tm-pane-teams.on, .tm-pane-files.on { display: flex; }
+.tm-files-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 6px; }
+
+/* Tree kind selector (Worktree vs Clone vs Brain) */
+.tm-tree-kind-tabs { display: flex; align-items: center; gap: 4px; padding: 2px 2px; }
+.tm-tree-kind-tab { flex: 1 1 0; font-size: 11px; font-weight: 500; padding: 4px 4px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--card-bg, transparent); color: var(--text3);
+  cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: all .15s ease; }
+.tm-tree-kind-tab:hover { color: var(--text); border-color: var(--border2); }
+.tm-tree-kind-tab.active { background: var(--accent-wash-2); border-color: var(--accent-line); color: var(--accent); font-weight: 600; }
+.tm-tree-refresh { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text3); cursor: pointer; }
+.tm-tree-refresh:hover { color: var(--text); border-color: var(--border2); }
+.tm-tree-git-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text3); cursor: pointer; transition: all .15s ease; }
+.tm-tree-git-btn:hover { color: var(--accent); border-color: var(--accent-line); background: var(--accent-wash-2); }
+
+.tm-list-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 8px 4px 4px; gap: 8px; flex: none; display: flex; align-items: center; }
+.tm-list-foot .ws-btn { flex: 1 1 0; justify-content: center; font-size: 13px; min-height: 36px; }
+
+/* Tree repo bar */
+.tm-tree-repo-bar { display: flex; align-items: center; gap: 6px; padding: 2px 4px; font-size: 12px; color: var(--text2); }
+.tm-tree-repo-name { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-tree-branch { display: inline-flex; align-items: center; gap: 3px; padding: 1px 5px; border-radius: 4px; background: var(--wash); font-size: 11px; color: var(--text3); }
+.tm-tree-repo-select { width: 100%; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
+
+/* Tree search filter */
+.tm-tree-filter-wrap { padding: 0 2px; }
+.tm-tree-search { width: 100%; font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+
+/* Tree list */
+.tm-tree-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 1px; padding: 2px 0; }
+.tm-tree-row { display: flex; align-items: center; gap: 4px; width: 100%; padding: 3px 6px; border: none; background: transparent; border-radius: 4px; cursor: pointer; text-align: left; font-size: 12px; color: var(--text); line-height: 1.4; transition: background .12s ease; position: relative; }
+.tm-tree-row:hover { background: var(--wash); }
+.tm-tree-row.active { background: var(--accent-wash-2); color: var(--accent); font-weight: 600; }
+.tm-tree-caret { display: inline-flex; align-items: center; justify-content: center; width: 12px; flex: none; color: var(--text3); }
+.tm-tree-ico { display: inline-flex; align-items: center; justify-content: center; width: 15px; flex: none; color: var(--accent); }
+.tm-tree-file .tm-tree-ico { color: var(--text3); }
+.tm-tree-file.active .tm-tree-ico { color: var(--accent); }
+.tm-tree-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tm-tree-size { flex: none; font-size: 10.5px; color: var(--text3); margin-left: auto; padding-left: 4px; }
+.tm-tree-act { display: none; gap: 1px; flex: none; margin-left: auto; padding-left: 2px; }
+.tm-tree-row:hover .tm-tree-act, .tm-tree-row:focus-within .tm-tree-act { display: flex; }
+@media (hover: none) { .tm-tree-act { display: flex; opacity: .75; } }
+.tm-tree-more { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; font-size: 12px; background: none; border: none; color: var(--text3); cursor: pointer; padding: 0; line-height: 1; }
+.tm-tree-more:hover, .tm-tree-more:focus-visible { background: var(--surface-2); color: var(--accent); }
+.tm-tree-menu { position: fixed; margin: 0; padding: 5px; width: max-content; min-width: 190px; max-width: min(300px, calc(100vw - 16px)); border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); box-shadow: var(--shadow-1); z-index: 9999; }
+.tm-tree-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.tm-tree-menu button:hover, .tm-tree-menu button:focus-visible { background: var(--surface-2); }
+.tm-tree-menu button.danger { color: var(--red); }
+.tm-tree-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--border); }
+.tm-tree-children { display: flex; flex-direction: column; gap: 1px; }
+.tm-tree-empty { padding: 24px 10px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tm-tree-empty-actions { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.tm-tree-empty-actions .ws-btn { font-size: 11.5px; padding: 4px 8px; min-height: 28px; }
+.tm-tree-hint { font-size: 12px; color: var(--text3); margin: 0; line-height: 1.4; }
+
+@media (min-width: 1061px) {
+  .tm-page.tm-mini .tm-list-tabs .cside-tab span { display: none; }
+  .tm-page.tm-mini .tm-list-tabs .cside-tab { padding: 6px; }
+  .tm-page.tm-mini .tm-pane-files { display: none !important; }
+}
+
 /* Ảnh đại diện: chữ đầu trên nền màu cố định theo tên. */
 .tm-ava { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%;
   background: var(--surface-2); color: #fff; font-size: 12px; font-weight: 600; flex: none; }

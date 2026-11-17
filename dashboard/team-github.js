@@ -151,11 +151,11 @@
             e.preventDefault();
             if (busy || !repoName) return;
             busy = true;
-            err.textContent = tw("gh.initing") || "Đang khởi tạo repository...";
+            err.textContent = tw("gh.initing");
             api("/github/local/init", { brain: opts.brain(), full_name: repoName }).then(function (res) {
               busy = false;
               if (!res || res.ok === false) {
-                err.textContent = (res && res.error) || tw("gh.init_failed") || "Khởi tạo repository thất bại";
+                err.textContent = (res && res.error) || tw("gh.init_failed");
                 return;
               }
               if (chosen.indexOf(repoName) < 0) chosen.push(repoName);

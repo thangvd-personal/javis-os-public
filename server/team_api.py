@@ -858,6 +858,176 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             return {"ok": True, "team": view, "typing": api.teams().active_turns(team_id), "pinned": pinned}
         return await api.io(_do)
 
+    @app.get("/teams/{team_id}/tree")
+    async def teams_tree(team_id: str, kind: str = "worktree", repo: str = "", brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            sid = team.get("session_id") or ""
+            root = _root(brain)
+            import github_repos
+            import coding_store
+
+            repos = github_repos.session_repos(sid, root) if root else []
+            chosen_repo = None
+            if repos:
+                if repo:
+                    for r in repos:
+                        if (r.get("full_name") or "").lower() == repo.lower() or r.get("repo_id") == repo:
+                            chosen_repo = r
+                            break
+                if not chosen_repo:
+                    chosen_repo = repos[0]
+
+            target_path = None
+            target_label = ""
+            if kind in ("brain", "root"):
+                target_path = Path(root) if root else None
+                target_label = "Thư mục gốc brain"
+            elif chosen_repo:
+                if kind in ("clone", "main"):
+                    target_path = Path(chosen_repo["clone"]) if chosen_repo.get("clone") else None
+                    target_label = "Thư mục chính"
+                else:
+                    target_path = Path(chosen_repo["worktree"]) if chosen_repo.get("worktree") else None
+                    target_label = "Thư mục làm việc"
+            else:
+                folders = coding_store.thu_muc_cua_phien(sid)
+                if folders:
+                    target_path = Path(folders[0]["duong_dan"])
+                    target_label = "Thư mục làm việc"
+
+            EXCLUDE = {".git", "node_modules", "__pycache__", ".venv", "venv", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode"}
+            def _scan(d: Path, base: Path, depth: int = 0):
+                if depth > 6:
+                    return []
+                items = []
+                try:
+                    entries = sorted(d.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+                except OSError:
+                    return []
+                for entry in entries:
+                    if entry.name in EXCLUDE or entry.name.startswith(".git"):
+                        continue
+                    is_dir = entry.is_dir()
+                    rel = str(entry.relative_to(base)).replace("\\", "/")
+                    item = {
+                        "name": entry.name,
+                        "path": rel,
+                        "abs_path": str(entry.resolve()),
+                        "type": "dir" if is_dir else "file",
+                    }
+                    if is_dir:
+                        item["children"] = _scan(entry, base, depth + 1)
+                    else:
+                        try:
+                            item["size"] = entry.stat().st_size
+                        except OSError:
+                            item["size"] = 0
+                        item["ext"] = entry.suffix.lower()
+                    items.append(item)
+                return items
+
+            tree_items = []
+            if target_path and target_path.is_dir():
+                tree_items = _scan(target_path, target_path)
+
+            return {
+                "ok": True,
+                "team_id": team_id,
+                "kind": kind,
+                "target_label": target_label,
+                "target_path": str(target_path) if target_path else "",
+                "repos": [
+                    {
+                        "full_name": r.get("full_name") or "",
+                        "clone": r.get("clone") or "",
+                        "worktree": r.get("worktree") or "",
+                        "branch": r.get("branch") or "",
+                        "default_branch": r.get("default_branch") or "",
+                    } for r in repos
+                ],
+                "chosen_repo": chosen_repo.get("full_name") if chosen_repo else "",
+                "branch": chosen_repo.get("branch") if chosen_repo else "",
+                "tree": tree_items,
+                "empty": len(tree_items) == 0,
+            }
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/git/sync")
+    async def teams_git_sync(team_id: str, request: Request, brain: str = "brain"):
+        body = await _body(request)
+        action = str(body.get("action") or "pull").lower().strip()
+        kind = str(body.get("kind") or "worktree").lower().strip()
+        repo = str(body.get("repo") or "").strip()
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            sid = team.get("session_id") or ""
+            root = _root(brain)
+            import github_repos
+            import coding_store
+
+            repos = github_repos.session_repos(sid, root) if root else []
+            if not repos:
+                return {"ok": False, "error": "Chưa có repository GitHub nào được liên kết với nhóm này."}
+
+            chosen_repo = None
+            if repo:
+                for r in repos:
+                    if (r.get("full_name") or "").lower() == repo.lower() or r.get("repo_id") == repo:
+                        chosen_repo = r
+                        break
+            if not chosen_repo:
+                chosen_repo = repos[0]
+
+            if kind in ("clone", "main"):
+                target_path = Path(chosen_repo["clone"]) if chosen_repo.get("clone") else None
+            else:
+                target_path = Path(chosen_repo["worktree"]) if chosen_repo.get("worktree") else None
+
+            if not target_path or not target_path.is_dir():
+                if kind not in ("clone", "main"):
+                    rec = github_repos.find(root, chosen_repo["full_name"]) or {}
+                    if rec:
+                        try:
+                            wt_info = github_repos.ensure_worktree(sid, rec)
+                            target_path = Path(wt_info["worktree"])
+                        except Exception as e:
+                            return {"ok": False, "error": f"Chưa khởi tạo thư mục làm việc: {e}"}
+                if not target_path or not target_path.is_dir():
+                    return {"ok": False, "error": "Thư mục không tồn tại."}
+
+            clone_url = chosen_repo.get("clone_url") or f"https://github.com/{chosen_repo['full_name']}.git"
+            current_branch = coding_store.nhanh_hien_tai(str(target_path)) or chosen_repo.get("branch") or "main"
+
+            try:
+                github_repos.ensure_identity(str(target_path))
+                if action == "push":
+                    p = github_repos.git(["push", "-u", "origin", current_branch], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    return {"ok": True, "action": "push", "message": "Đã push thành công.", "out": (p.stdout or "").strip()}
+                else:
+                    github_repos.git(["fetch", "origin"], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    if kind in ("clone", "main"):
+                        p = github_repos.git(["pull", "--ff-only", "origin", current_branch], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    else:
+                        base = chosen_repo.get("base_branch") or chosen_repo.get("default_branch") or "main"
+                        has_remote = github_repos.git(["rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{current_branch}"], str(target_path), check=False).returncode == 0
+                        if has_remote:
+                            p = github_repos.git(["pull", "origin", current_branch], str(target_path), auth=True, timeout=120, origin=clone_url)
+                        else:
+                            p = github_repos.git(["merge", f"origin/{base}"], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    return {"ok": True, "action": "pull", "message": "Đã pull thành công.", "out": (p.stdout or "").strip()}
+            except github_repos.RepoError as e:
+                return {"ok": False, "error": str(e)}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        return await api.io(_do)
+
     @app.patch("/teams/{team_id}")
     async def teams_patch(team_id: str, request: Request, brain: str = "brain"):
         body = await _body(request)

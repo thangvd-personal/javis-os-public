@@ -540,15 +540,14 @@
       else alert(window.t("cs.note_mobile_off_alert"));
       return;
     }
-    const ceilingRel = _vtHome ? _vtHome + "/" + brainRel : brainRel;   // ghép tiền tố trần như cây
-    const name = brainRel.split("/").pop();
+    const isAbs = /^\/|^[a-zA-Z]:[/\\]/.test(brainRel);
+    const ceilingRel = isAbs ? brainRel : (_vtHome ? _vtHome + "/" + brainRel : brainRel);   // ghép tiền tố trần như cây
+    const name = brainRel.split("/").pop().split("\\").pop();
     const ext = name.includes(".") ? "." + name.split(".").pop().toLowerCase() : ".md";
     openNote(ceilingRel, { name: name, ext: ext, type: "file" });
-    // Đi tới một file bằng LINK thì cây bên cạnh phải sổ tới đúng nhánh chứa nó. Không có
-    // nhát này thì mở xong vẫn không biết file nằm đâu, lần sau lại phải đi tìm lại từ đầu.
-    // Đặt ở wrapper chứ không trong openNote: openNote còn được chính cây gọi khi bấm node,
-    // ở đó cây đã đúng chỗ rồi, dựng lại là thừa.
-    try { _vtRevealInTree(ceilingRel); } catch (e) { }
+    if (!isAbs) {
+      try { _vtRevealInTree(ceilingRel); } catch (e) { }
+    }
   };
   // Mở lại một file bằng đường dẫn THEO TRẦN DUYỆT (đã có sẵn tiền tố nhà brain). Người gọi:
   // chip "file đang mở" dưới khung chat (app.js) - ghim giữ đúng dạng path mà openNote nhận,
