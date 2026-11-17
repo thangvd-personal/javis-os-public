@@ -696,6 +696,37 @@
           (addUrl ? ' <a data-gh-add="1" target="_blank" rel="noopener" href="' + esc(addUrl) + '">' + esc(tw("gh.add_on_github")) + "</a>" : "") +
           "</div>" : "");
     }
+    function showErr(msg, repoName) {
+      if (!msg) { err.innerHTML = ""; return; }
+      if (msg.indexOf("or click here to create new") >= 0) {
+        var base = msg.replace(/\s*or\s+click\s+here\s+to\s+create\s+new/i, "");
+        err.innerHTML = esc(base) + ' or click <a href="#" class="gh-init-action" style="text-decoration:underline;cursor:pointer;font-weight:600">' + esc(tw("gh.here") || "here") + '</a> ' + esc(tw("gh.to_create_new") || "to create new");
+        var btn = err.querySelector(".gh-init-action");
+        if (btn) {
+          btn.onclick = function (e) {
+            e.preventDefault();
+            if (busy || !repoName) return;
+            busy = true;
+            err.textContent = tw("gh.initing") || "Đang khởi tạo repository...";
+            api("/github/local/init", { brain: chatBrain(), full_name: repoName }).then(function (res) {
+              busy = false;
+              if (!res || res.ok === false) {
+                err.textContent = (res && res.error) || tw("gh.init_failed") || "Khởi tạo repository thất bại";
+                return;
+              }
+              if (chosen.indexOf(repoName) < 0) chosen.push(repoName);
+              draw();
+              sync();
+            }).catch(function () {
+              busy = false;
+              err.textContent = tw("gh.err_net");
+            });
+          };
+        }
+      } else {
+        err.textContent = msg;
+      }
+    }
     function sync() {
       if (busy) return;
       if (sameSet(chosen, sent)) return;
@@ -704,9 +735,9 @@
       err.textContent = adds ? tw("gh.cloning") : "";
       setRepos(list).then(function (msg) {
         busy = false;
-        if (msg) { chosen = sent.slice(); err.textContent = msg; draw(); return; }
+        if (msg) { chosen = sent.slice(); err.textContent = msg; draw(); showErr(msg, list.filter(function (x) { return sent.indexOf(x) < 0; })[0] || (list[list.length - 1] || "")); return; }
         sent = list;
-        err.textContent = "";
+        err.innerHTML = "";
         sync();
       });
     }

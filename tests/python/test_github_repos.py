@@ -184,6 +184,23 @@ out = github_repos.forget_session("chat-z")
 check("deleting a chat removes its clean worktree", not out["kept"] and not wtz.exists())
 check("the binding of the deleted chat is gone", coding_store.rang_buoc("chat-z") == {})
 
+# ---- 6. Empty repo with no commits ----
+bare_empty = fake.root / "acme__empty.git"
+git(["init", "-q", "--bare", "-b", "main", str(bare_empty)], fake.root)
+fake.repos["acme/empty"] = {"full_name": "acme/empty", "default_branch": "main", "private": False,
+                           "clone_url": bare_empty.as_uri(), "bare": str(bare_empty),
+                           "permissions": {"push": True, "pull": True, "admin": False}, "description": ""}
+fake.pulls.setdefault("acme/empty", [])
+
+err_msg = raises(github_repos.attach, "chat-empty", BRAIN, BRAIN, ["acme/empty"])
+check("empty repo attach error contains click here to create new",
+      "fatal: invalid reference: origin/main or click here to create new" in err_msg)
+
+res_init = github_repos.init_empty(BRAIN, BRAIN, "acme/empty")
+check("init_empty succeeds on empty repo", res_init.get("default_branch") == "main")
+v_empty = github_repos.attach("chat-empty", BRAIN, BRAIN, ["acme/empty"])
+check("attach succeeds after init_empty", bool(v_empty.get("repos")))
+
 fake.close()
 print()
 if _fails:

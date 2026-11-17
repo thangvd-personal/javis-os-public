@@ -498,7 +498,7 @@ def _redact(text: str) -> str:
 
 
 def git(args: list[str], cwd: str, *, timeout: int = GIT_TIMEOUT, auth: bool = False,
-        check: bool = True, origin: str = "") -> subprocess.CompletedProcess:
+        check: bool = True, origin: str = "", extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     """Run git in `cwd`. `auth=True` puts the token in the call's environment, for the clone's registered origin
     only and isolated from the repo's hooks and config (`auth_env`); it raises RepoError, even with `check=False`,
     when that isolation cannot be had. `origin` names the URL when the registry cannot (a clone being made)."""
@@ -507,6 +507,8 @@ def git(args: list[str], cwd: str, *, timeout: int = GIT_TIMEOUT, auth: bool = F
     if tok:
         cloning = list(args[:1]) == ["clone"]       # no repo yet: the caller names the origin, the registry cannot
         env = auth_env(cwd, origin or ("" if cloning else trusted_origin(cwd)), tok, in_repo=not cloning)
+    if extra_env:
+        env = dict(env, **extra_env)
     try:
         p = subprocess.run(["git"] + list(args), cwd=cwd, capture_output=True, text=True, encoding="utf-8",
                            errors="replace", timeout=timeout, env=env, creationflags=winproc.no_window())
@@ -804,6 +806,62 @@ def ensure_clone(brain: str, brain_root: str, full_name: str) -> dict[str, Any]:
     return dict(rec)
 
 
+def init_empty(brain: str, brain_root: str, full_name: str) -> dict[str, Any]:
+    """Initialize an empty repository with README.md, commit, and push to origin main."""
+    full_name = norm_full_name(full_name)
+    owner, name = full_name.split("/", 1)
+    rec = find(brain, full_name)
+    clone_url = rec.get("clone_url") if rec else ""
+    if not clone_url:
+        try:
+            meta = client().repo(full_name)
+            clone_url = meta.get("clone_url") or f"https://github.com/{full_name}.git"
+        except Exception:
+            clone_url = f"https://github.com/{full_name}.git"
+    dest = clone_path(brain_root, full_name)
+    with _repo_lock(str(dest)):
+        dest.mkdir(parents=True, exist_ok=True)
+        if not (dest / ".git").exists():
+            git(["init"], str(dest))
+        git(["remote", "remove", "origin"], str(dest), check=False)
+        git(["remote", "add", "origin", clone_url], str(dest), check=False)
+        git(["remote", "set-url", "origin", clone_url], str(dest), check=False)
+
+        readme = dest / "README.md"
+        if not readme.exists():
+            readme.write_text(f"# {name}\n", encoding="utf-8")
+
+        ensure_identity(str(dest))
+        git(["add", "README.md"], str(dest))
+        who = identity()
+        ident_env = {
+            "GIT_AUTHOR_NAME": who["name"],
+            "GIT_AUTHOR_EMAIL": who["email"],
+            "GIT_COMMITTER_NAME": who["name"],
+            "GIT_COMMITTER_EMAIL": who["email"],
+        }
+        git(["commit", "-m", "first commit"], str(dest), extra_env=ident_env, check=False)
+        git(["branch", "-M", "main"], str(dest))
+        git(["push", "-u", "origin", "main"], str(dest), auth=True, timeout=CLONE_TIMEOUT, origin=clone_url)
+        git(["fetch", "origin"], str(dest), auth=True, timeout=CLONE_TIMEOUT, origin=clone_url)
+
+        if not rec:
+            rec = {"id": uuid.uuid4().hex[:12], "brain": brain, "added_at": _now()}
+        rec.update({
+            "full_name": full_name,
+            "path": str(dest),
+            "default_branch": "main",
+            "clone_url": clone_url,
+            "can_push": True,
+            "fetched_at": _now(),
+        })
+        folder = coding_store.them_thu_muc(str(dest), brain=brain, ten=name,
+                                           nguon=SOURCE, repo=full_name)
+        rec["folder_id"] = folder["id"]
+        _put(rec)
+    return dict(rec)
+
+
 # ============================================================
 # Attach to a conversation
 # ============================================================
@@ -841,7 +899,13 @@ def ensure_worktree(sid: str, rec: dict[str, Any]) -> dict[str, str]:
                     timeout=300)
             base = f"origin/{base_name}"
             args = ["worktree", "add", str(dest), branch] if have else ["worktree", "add", "-b", branch, str(dest), base]
-            git(args, clone, **CHECKOUT)
+            try:
+                git(args, clone, **CHECKOUT)
+            except RepoError as e:
+                msg = str(e)
+                if "invalid reference" in msg:
+                    raise RepoError(f"{msg} or click here to create new")
+                raise
             # The branch tracks nothing yet; the first push sets its upstream.
             git(["config", f"branch.{branch}.javisBase", base_name], clone, check=False)
     coding_store.dat_worktree_thu_muc(sid, rec["folder_id"], str(dest))

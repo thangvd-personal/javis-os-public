@@ -12,6 +12,7 @@
     GET  /github/branches?full_name=           a repo's branches, the default one first (the branch picker)
     GET  /github/local?brain=                  repos cloned in this brain
     POST /github/local/remove                  brain, full_name: delete the local clone (GitHub untouched)
+    POST /github/local/init                    brain, full_name: initialize empty repo (README commit -> origin/main)
     GET  /github/local/checks                  the repo's local check commands (saved, or suggested from its CI)
     POST /github/local/checks                  brain, full_name, commands (one per line) or reset=1
     POST /github/local/automerge               brain, full_name, on: the per-repo auto-merge switch (default on)
@@ -149,6 +150,10 @@ def _make_router() -> APIRouter:
     async def gh_local_remove(brain: str = Form(""), full_name: str = Form(...)):
         busy = _DEPS.busy_jobs(brain, full_name) if (_DEPS and _DEPS.busy_jobs) else []
         return await _call(github_repos.remove_from_brain, brain, full_name, busy)
+
+    @r.post("/github/local/init")
+    async def gh_local_init(brain: str = Form(""), full_name: str = Form(...)):
+        return await _call(github_repos.init_empty, brain, _root(brain), full_name)
 
     @r.get("/github/local/checks")
     async def gh_checks(brain: str = Query(""), full_name: str = Query(...)):

@@ -140,6 +140,37 @@
           (addUrl ? ' <a data-tg-add="1" target="_blank" rel="noopener" href="' + esc(addUrl) + '">' + esc(tw("gh.add_on_github")) + "</a>" : "") +
           "</div>" : "");
     }
+    function showErr(msg, repoName) {
+      if (!msg) { err.innerHTML = ""; return; }
+      if (msg.indexOf("or click here to create new") >= 0) {
+        var base = msg.replace(/\s*or\s+click\s+here\s+to\s+create\s+new/i, "");
+        err.innerHTML = esc(base) + ' or click <a href="#" class="gh-init-action" style="text-decoration:underline;cursor:pointer;font-weight:600">' + esc(tw("gh.here") || "here") + '</a> ' + esc(tw("gh.to_create_new") || "to create new");
+        var btn = err.querySelector(".gh-init-action");
+        if (btn) {
+          btn.onclick = function (e) {
+            e.preventDefault();
+            if (busy || !repoName) return;
+            busy = true;
+            err.textContent = tw("gh.initing") || "Đang khởi tạo repository...";
+            api("/github/local/init", { brain: opts.brain(), full_name: repoName }).then(function (res) {
+              busy = false;
+              if (!res || res.ok === false) {
+                err.textContent = (res && res.error) || tw("gh.init_failed") || "Khởi tạo repository thất bại";
+                return;
+              }
+              if (chosen.indexOf(repoName) < 0) chosen.push(repoName);
+              if (box.isConnected) draw();
+              sync();
+            }).catch(function () {
+              busy = false;
+              err.textContent = tw("gh.err_net");
+            });
+          };
+        }
+      } else {
+        err.textContent = msg;
+      }
+    }
     function sync() {
       if (busy || sameSet(chosen, sent)) return;
       var want = chosen.slice(), adds = want.some(function (x) { return sent.indexOf(x) < 0; });
@@ -152,13 +183,14 @@
       }).then(function (d) {
         busy = false;
         if (!d || d.ok === false) {
+          var lastAdded = want.filter(function (x) { return sent.indexOf(x) < 0; })[0] || (want[want.length - 1] || "");
           chosen = sent.slice();
-          err.textContent = (d && d.error) || tw("gh.err_net");
+          showErr((d && d.error) || tw("gh.err_net"), lastAdded);
           if (box.isConnected) draw();
           return;
         }
         sent = want;
-        err.textContent = "";
+        err.innerHTML = "";
         if (opts.changed) opts.changed({ repos: d.repos || [], icon: d.icon || null });
         sync();
       });
