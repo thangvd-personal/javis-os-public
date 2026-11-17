@@ -839,13 +839,260 @@
       '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
   }
 
-  function runningRowHtml(t, withView) {
+  function stepStatusBadge(k) {
+    k = k || "queued";
+    var labelKey = "teams.step_status_" + k;
+    var label = tw(labelKey);
+    if (label === labelKey) {
+      if (k === "running") label = "Đang làm";
+      else if (k === "waiting_owner") label = "Chờ duyệt";
+      else if (k === "done") label = "Đã xong";
+      else if (k === "held") label = "Chờ bước trước";
+      else if (k === "queued") label = "Chờ chạy";
+      else if (k === "failed") label = "Lỗi";
+      else if (k === "cancelled") label = "Đã huỷ";
+      else if (k === "continued") label = "Đã chuyển";
+      else label = k;
+    }
+    return '<span class="tm-step-badge is-' + esc(k) + '">' + esc(label) + "</span>";
+  }
+
+  function runningStepsHtml(t, view) {
+    if (!t || !t.id) return "";
+    var steps = (view && view.taskSteps && view.taskSteps[t.id]) || t.steps || null;
+    if (!steps) {
+      if (typeof window !== "undefined" && typeof loadTaskSteps === "function") {
+        loadTaskSteps(t.id);
+      }
+      return typeof window === "undefined" ? "" :
+        '<div class="tm-job-steps tm-sub"><span class="tm-spin" aria-hidden="true">' +
+        ic("loader") + "</span> " + esc(tw("teams.step_loading")) + "</div>";
+    }
+    if (!steps.length) return "";
+    var members = (view && view.members) || [];
+    var stepsOpen = (view && view.stepsOpen) || {};
+
+    // 1. Tách thành 2 danh sách:
+    // Đang thực hiện: running, waiting_owner, queued, held (các bước chưa xong)
+    var inProgress = steps.filter(function (s) {
+      return s.status === "running" || s.status === "waiting_owner" || s.status === "queued" || s.status === "held";
+    }).slice().sort(function (a, b) {
+      // Ưu tiên running / waiting_owner lên trước, sau đó xếp theo seq giảm dần (yêu cầu sau cùng lên trên)
+      var aActive = a.status === "running" || a.status === "waiting_owner" ? 1 : 0;
+      var bActive = b.status === "running" || b.status === "waiting_owner" ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      return (b.seq || 0) - (a.seq || 0);
+    });
+
+    // Đã hoàn thành: done, continued, failed, cancelled (xếp theo seq giảm dần, mới nhất lên trên)
+    var completed = steps.filter(function (s) {
+      return s.status === "done" || s.status === "continued" || s.status === "failed" || s.status === "cancelled";
+    }).slice().sort(function (a, b) {
+      return (b.seq || 0) - (a.seq || 0);
+    });
+
+    var activeKey = "active:" + t.id;
+    var doneKey = "done:" + t.id;
+    // Đang thực hiện luôn mở mặc định (true) trừ khi người dùng chủ động bấm đóng;
+    // Đã hoàn thành giữ trạng thái người dùng (nếu chưa chọn gì thì mở nếu không có bước nào đang làm).
+    var isActiveOpen = stepsOpen[activeKey] !== false;
+    var isDoneOpen = doneKey in stepsOpen ? !!stepsOpen[doneKey] : (!inProgress.length);
+
+    function stepJumpMid(s) {
+      if (!s) return null;
+      if (s.result_msg_id) return Number(s.result_msg_id);
+      if (Array.isArray(s.input_refs) && s.input_refs.length) {
+        for (var i = s.input_refs.length - 1; i >= 0; i--) {
+          var ref = s.input_refs[i];
+          if (typeof ref === "number" && ref > 0) return ref;
+          if (typeof ref === "string") {
+            var mr = ref.match(/(\d+)$/);
+            if (mr) return Number(mr[1]);
+          }
+        }
+      }
+      if (t && t.source_ref) {
+        var tm = String(t.source_ref).match(/:(\d+)$/);
+        if (tm) return Number(tm[1]);
+      }
+      return null;
+    }
+
+    function stepAttrs(s) {
+      var mid = stepJumpMid(s);
+      var ts = s.updated_at || s.created_at || "";
+      if (mid) {
+        var lbl = tw("teams.jump_to_msg", { id: mid }) || ("Cuộn tới tin nhắn #" + mid);
+        return {
+          mid: mid,
+          ts: ts,
+          attrs: ' data-jump="' + esc(mid) + '"' + (ts ? ' data-ts="' + esc(ts) + '"' : "") +
+            ' role="button" tabindex="0" title="' + esc(lbl) + '"',
+          btn: '<button type="button" class="tm-step-jump-btn" data-jump="' + esc(mid) + '"' +
+            (ts ? ' data-ts="' + esc(ts) + '"' : "") + ' title="' + esc(lbl) + '" aria-label="' + esc(lbl) + '">' +
+            ic("message-circle") + '</button>'
+        };
+      }
+      if (t && t.id) {
+        var viewLbl = tw("teams.view_msgs");
+        return {
+          mid: null,
+          ts: "",
+          attrs: ' data-view-task="' + esc(t.id) + '" role="button" tabindex="0" title="' + esc(viewLbl) + '"',
+          btn: '<button type="button" class="tm-step-jump-btn" data-view-task="' + esc(t.id) + '" title="' + esc(viewLbl) + '" aria-label="' + esc(viewLbl) + '">' +
+            ic("message-circle") + '</button>'
+        };
+      }
+      return { mid: null, ts: "", attrs: "", btn: "" };
+    }
+
+    var h = '<div class="tm-job-steps">';
+
+    // DANH SÁCH 1: ĐANG THỰC HIỆN
+    if (inProgress.length) {
+      var runningCount = inProgress.filter(function (s) { return s.status === "running" || s.status === "waiting_owner"; }).length;
+      h += '<details class="tm-steps-toggle is-active" data-steps-key="' + esc(activeKey) + '"' + (isActiveOpen ? " open" : "") + ">" +
+        '<summary class="tm-steps-summary tm-steps-summary-active">' +
+        (runningCount ? '<span class="tm-spin" aria-hidden="true">' + ic("loader") + "</span> " : "") +
+        "<strong>" + esc(tw("teams.steps_in_progress")) + " (" + inProgress.length +
+        (runningCount ? ", " + runningCount + " " + esc(tw("teams.step_status_running").toLowerCase()) : "") + "):</strong>" +
+        "</summary>" +
+        '<div class="tm-steps-list">';
+      inProgress.forEach(function (s) {
+        var m = memberOf(members, s.agent_key) || { name: s.agent_key };
+        var name = m.name || m.slug || s.agent_key;
+        var isCard = s.status === "running" || s.status === "waiting_owner";
+        var act = stepAttrs(s);
+        h += '<div class="' + (isCard ? "tm-step-card is-" + esc(s.status) : "tm-step-mini is-" + esc(s.status)) +
+          (act.attrs ? " is-jumpable" : "") + '"' + act.attrs + '>' +
+          '<div class="' + (isCard ? "tm-step-card-head" : "tm-step-mini-head") + '">' +
+          '<span class="tm-step-seq">#' + s.seq + "</span> " +
+          agentAva(m, isCard ? 18 : 16) +
+          '<b class="' + (isCard ? "tm-step-who" : "tm-step-mini-who") + '">' + esc(name) + "</b>" +
+          stepStatusBadge(s.status) +
+          act.btn + "</div>" +
+          '<div class="' + (isCard ? "tm-step-brief" : "tm-step-mini-brief") + '">' + esc(s.brief || "") + "</div>" +
+          "</div>";
+      });
+      h += "</div></details>";
+    }
+
+    // DANH SÁCH 2: ĐÃ HOÀN THÀNH
+    if (completed.length) {
+      h += '<details class="tm-steps-toggle is-done" data-steps-key="' + esc(doneKey) + '"' + (isDoneOpen ? " open" : "") + ">" +
+        '<summary class="tm-steps-summary tm-steps-summary-done">' +
+        '<span class="tm-step-done-icon" aria-hidden="true">' + ic("check") + "</span> " +
+        "<strong>" + esc(tw("teams.steps_completed")) + " (" + completed.length + "):</strong>" +
+        "</summary>" +
+        '<div class="tm-steps-list">';
+      completed.forEach(function (s) {
+        var m = memberOf(members, s.agent_key) || { name: s.agent_key };
+        var name = m.name || m.slug || s.agent_key;
+        var act = stepAttrs(s);
+        h += '<div class="tm-step-mini is-' + esc(s.status) + (act.attrs ? " is-jumpable" : "") + '"' + act.attrs + '>' +
+          '<div class="tm-step-mini-head">' +
+          '<span class="tm-step-seq">#' + s.seq + "</span> " +
+          agentAva(m, 16) +
+          '<span class="tm-step-mini-who">' + esc(name) + "</span> " +
+          stepStatusBadge(s.status) +
+          act.btn + "</div>" +
+          '<div class="tm-step-mini-brief">' + esc(s.brief || "") + "</div>" +
+          "</div>";
+      });
+      h += "</div></details>";
+    }
+
+    h += "</div>";
+    return h;
+  }
+
+  function formatToolLabel(tool) {
+    if (!tool) return "";
+    if (typeof tool === "string") return tool;
+    var name = tool.tool || tool.tool_name || tool.action || "";
+    var cmd = tool.cmd || (tool.input && (tool.input.command || tool.input.cmd || tool.input.CommandLine)) || "";
+    if (cmd) {
+      var shortCmd = String(cmd).split("\n")[0].trim();
+      if (shortCmd.length > 80) shortCmd = shortCmd.slice(0, 77) + "...";
+      return tw("teams.tools_cmd") + ": " + shortCmd;
+    }
+    var path = (tool.input && (tool.input.path || tool.input.Path || tool.input.file_path)) || "";
+    if (path) {
+      var base = path.split("/").pop() || path;
+      if (name.indexOf("read") !== -1) return tw("teams.tools_read") + ": " + base;
+      if (name.indexOf("write") !== -1 || name.indexOf("edit") !== -1) return tw("teams.tools_write") + ": " + base;
+    }
+    if (tool.label) return tool.label;
+    if (name) return name;
+    return JSON.stringify(tool.input || tool).slice(0, 60);
+  }
+
+  function runningToolsCardHtml(t, view) {
+    view = view || {};
+    var taskId = (t && t.id) || "";
+    var tools = (view.taskTools && view.taskTools[taskId]) || (S && S.taskTools && S.taskTools[taskId]) || [];
+    var isRunning = t && (t.status === "running" || t.status === "waiting_owner");
+    var toolsKey = "tools_" + (taskId || "job");
+    var isOpen = S && S.openTools && S.openTools[toolsKey] !== undefined ? S.openTools[toolsKey] : true;
+
+    var count = tools.length;
+    var title = isRunning ? (count ? tw("teams.tools_running_n", { n: count }) : tw("teams.tools_running_title"))
+                          : (count ? tw("teams.tools_done_n", { n: count }) : tw("teams.tools_running_title"));
+    var latestCmd = count ? formatToolLabel(tools[0]) : "";
+
+    var h = '<details class="tm-job-tools-card" data-tools-key="' + esc(toolsKey) + '"' + (isOpen ? " open" : "") + ">" +
+      '<summary class="tm-tools-summary">' +
+      (isRunning ? '<span class="tm-spin" aria-hidden="true">' + ic("loader") + "</span> " : ic("terminal") + " ") +
+      "<span>" + esc(title) + "</span>" +
+      (latestCmd ? '<span class="tm-tools-now" title="' + esc(latestCmd) + '"> · ' + esc(latestCmd) + "</span>" : "") +
+      '<span class="tm-view-only-badge">' + esc(tw("teams.tools_view_only")) + "</span>" +
+      "</summary>";
+
+    if (!count) {
+      h += '<div class="tm-tools-empty">' + esc(tw("teams.tools_empty")) + "</div>";
+    } else {
+      h += '<div class="tm-tools-list">';
+      tools.slice(0, 30).forEach(function (tool, idx) {
+        var label = formatToolLabel(tool);
+        var isToolRunning = isRunning && idx === 0 && (!tool.finished_at && !tool.duration_ms && !tool.head);
+        var timeStr = "";
+        if (tool.ts) {
+          timeStr = String(tool.ts).split("T")[1] || String(tool.ts);
+          if (timeStr.length > 8) timeStr = timeStr.slice(0, 8);
+        } else if (tool.created_at) {
+          var d = new Date(tool.created_at * 1000);
+          timeStr = d.toTimeString().slice(0, 8);
+        }
+        var rawOut = tool.output || tool.head || (tool.result ? JSON.stringify(tool.result, null, 2) : "");
+        var who = tool.agent_name || tool.agent_key || "";
+
+        h += '<div class="tm-tool-item' + (isToolRunning ? " is-running" : " is-done") + '">' +
+          '<div class="tm-tool-item-head">' +
+          '<span class="tm-tool-dot"></span>' +
+          (who ? '<span class="tm-tool-who" style="font-size:11px;font-weight:600;color:var(--text3);">' + esc(who) + ":</span> " : "") +
+          '<span class="tm-tool-cmd" title="' + esc(label) + '">' + esc(label) + "</span>" +
+          (timeStr ? '<span class="tm-tool-time">' + esc(timeStr) + "</span>" : "") +
+          "</div>" +
+          (rawOut ? '<pre class="tm-tool-output">' + esc(String(rawOut).slice(0, 800)) + "</pre>" : "") +
+          "</div>";
+      });
+      h += "</div>";
+    }
+
+    h += "</details>";
+    return h;
+  }
+
+  function runningRowHtml(t, withView, view) {
     return '<div class="tm-qrow tm-jrun"><span class="tm-spin" aria-hidden="true">' + ic("loader") + "</span>" +
       '<span class="tm-qtitle">' + esc(tw("teams.doing", { title: t.title })) + '</span><span class="tm-actions">' +
       (withView ? '<button type="button" class="ws-btn" data-view-task="' + esc(t.id) + '">' + esc(tw("teams.view_msgs")) + "</button>" : "") +
       '<button type="button" class="ws-btn" data-amend="' + esc(t.id) + '">' + esc(tw("teams.amend")) + "</button>" +
       (withView ? '<button type="button" class="ws-btn" data-acc-edit="' + esc(t.id) + '">' + esc(tw("teams.acc.set")) + "</button>" : "") +
-      '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span></div>";
+      '<button type="button" class="ws-btn" data-cancel="' + esc(t.id) + '">' + esc(tw("teams.cancel")) + "</button></span>" +
+      (withView ? runningStepsHtml(t, view) : "") +
+      (withView ? runningToolsCardHtml(t, view) : "") +
+      "</div>";
   }
 
   // 0.209.0: acceptance criteria of a job, one per line (parsed by parseCriteria):
@@ -930,6 +1177,7 @@
         typeof value === "boolean" || (!empty && (!Number.isFinite(amount) || amount < 0))) return { ok: false };
     var body = { enabled: !!input.enabled, reference_usd: amount };
     if (mode) body.limit_migration = mode;
+    if (input.audit_enabled !== undefined) body.audit_enabled = !!input.audit_enabled;
     return { ok: true, body: body };
   }
 
@@ -955,6 +1203,9 @@
       infoBody(esc(tw("teams.quality.explain"))) +
       '<form class="tm-form tm-quality-form" onsubmit="return false"><label class="tm-radio"><input type="checkbox" class="tm-quality-enabled"' +
       (p.enabled ? " checked" : "") + "><span>" + esc(tw("teams.quality.enable")) + "</span></label>" +
+      '<label class="tm-radio tm-audit-radio"><input type="checkbox" class="tm-audit-enabled"' +
+      (p.audit_enabled ? " checked" : "") + "><span>" + esc(tw("teams.audit_log_enable")) + "</span></label>" +
+      '<div class="tm-note-line tm-audit-explain">' + esc(tw("teams.audit_log_explain")) + "</div>" +
       '<label class="tm-field"><span>' + esc(tw("teams.quality.limit_choice")) + '</span><select class="tm-quality-migration">' +
       [["", "teams.quality.choose"], ["observe", "teams.quality.observe"], ["retain", "teams.quality.retain"]].map(function (r) {
         var selected = p.limit_migration_selected ? p.limit_migration : "";
@@ -1034,7 +1285,7 @@
     var h = "";
     if (running.length) {
       h += '<div class="tm-qhead">' + esc(tw("teams.queue_running")) + "</div>";
-      h += running.map(function (t) { return runningRowHtml(t, true) + accEditorHtml(t, view); }).join("");
+      h += running.map(function (t) { return runningRowHtml(t, true, view) + accEditorHtml(t, view); }).join("");
     }
     if (blocked.length) {
       h += '<div class="tm-qhead">' + esc(tw("teams.queue_blocked")) + "</div>";
@@ -1322,6 +1573,25 @@
 
   function rsText(on) { return tw(on ? "resonance.t0_state_on" : "resonance.t0_state_off"); }
 
+  var EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
+
+  function memberLlmText(m, agents) {
+    var ag = (agents || []).find(function (x) { return x && x.slug === m.slug; }) || {};
+    var prov = m.provider_label || ag.provider_label || m.provider || ag.provider || "";
+    var model = m.model || ag.model || "";
+    var reasoning = m.reasoning || ag.reasoning || "";
+    var parts = [];
+    if (prov) parts.push(prov);
+    if (model) parts.push(model);
+    if (reasoning && reasoning !== "off") {
+      var effKey = (typeof window !== "undefined" && window.JavisEffortSlider && window.JavisEffortSlider.LABEL_KEY && window.JavisEffortSlider.LABEL_KEY[reasoning])
+        || EFF_KEY[reasoning];
+      var effName = effKey ? tw(effKey) : (reasoning.charAt(0).toUpperCase() + reasoning.slice(1));
+      parts.push(effName);
+    }
+    return parts.length ? parts.join(" - ") : "";
+  }
+
   // Mỗi thành viên một dòng (tên đủ, vai ở dòng dưới); chạm dòng mở các thao tác.
   function membersHtml(team, agents, openKey) {
     var mem = team.members || [];
@@ -1330,9 +1600,17 @@
       var open = openKey === m.agent_key;
       var sub = [tw(lead ? "teams.leader" : "teams.member")];
       if (m.resonance_enabled) sub.push(rsText(true));
+      var llm = memberLlmText(m, agents);
+      if (llm) sub.push(llm);
+      var ag = (agents || []).find(function (a) { return a && a.slug === m.slug; });
+      var uninst = ag && (ag.uninstalled_skills || []);
+      var warnIco = (uninst && uninst.length)
+        ? '<span class="ws-warn-skills tm-mwarn" title="' + esc(tw("ws.uninstalled_skills_warn", { count: uninst.length, skills: uninst.join(", ") })) + '">' +
+            ic("triangle-alert", { cls: "ic-warn" }) + '</span>'
+        : "";
       return '<div class="tm-mrow"><button type="button" class="tm-mhead" data-expand="' + esc(m.agent_key) + '" aria-expanded="' +
         (open ? "true" : "false") + '">' + agentAva(m, 34) + '<span class="tm-mtext"><span class="tm-mname">' +
-        esc(m.name || m.slug) + '</span><span class="tm-mrole">' + esc(sub.join(" · ")) + "</span></span>" +
+        esc(m.name || m.slug) + warnIco + '</span><span class="tm-mrole">' + esc(sub.join(" · ")) + "</span></span>" +
         '<span class="tm-chev" aria-hidden="true">' + ic("chevron-down") + "</span></button>" +
         '<div class="tm-mact"' + (open ? "" : " hidden") + ">" +
         '<label class="tm-rs"><input type="checkbox" class="tm-rs-toggle" data-slug="' + esc(m.slug) + '"' +
@@ -1949,6 +2227,7 @@
       picked: [], retrying: {}, pickSt: null, pickOpener: null, pickHost: null, roster: [],
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle", dictSend: false,
       atts: [], folder: null, repos: [], ghIcon: null, skills: null, skillsBrain: "", info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
+      taskSteps: {}, loadingSteps: {}, stepsOpen: {},
       autoOpened: false, unclamped: {}, outbox: [],
       listTab: "teams", treeKind: "worktree", treeRepo: "", treeData: null, treeLoading: false, treeSearch: "", treeExpanded: {}, treeActiveFile: "", treeItemMap: {} };
   }
@@ -2526,6 +2805,10 @@
 
   // Nhảy tới một tin cũ: tải trang kết thúc ở đúng tin đó (tin đó và các tin trước), tô sáng, có nút về tin mới nhất.
   function jumpTo(mid, ts) {
+    if (!ts && S.msgs) {
+      var found = S.msgs.find(function (m) { return Number(m.id) === Number(mid); });
+      if (found && found.ts) ts = found.ts;
+    }
     S.filterTask = "";
     var forTeam = S.activeId;
     return call("GET", teamUrl("/messages?before_ts=" + q(ts) + "&before_id=" + q(Number(mid) + 1))).then(function (r) {
@@ -2537,7 +2820,11 @@
       drawHead();
       drawMsgs(false);
       var hit = S.el.querySelector('[data-mid="' + Number(mid) + '"]');
-      if (hit && hit.scrollIntoView) hit.scrollIntoView({ block: "center" });
+      if (hit && hit.scrollIntoView) {
+        hit.scrollIntoView({ block: "center", behavior: "smooth" });
+        hit.classList.add("tm-msg-flash");
+        setTimeout(function () { hit.classList.remove("tm-msg-flash"); }, 1600);
+      }
     });
   }
 
@@ -3305,6 +3592,11 @@
     var scrim = S.el.querySelector(".tm-scrim");
     if (scrim) scrim.hidden = side.hidden;
     if (side.hidden) { side.innerHTML = ""; return; }
+    S.stepsOpen = S.stepsOpen || {};
+    Array.prototype.forEach.call(side.querySelectorAll("details[data-steps-key]"), function (el) {
+      var k = el.getAttribute("data-steps-key");
+      if (k) S.stepsOpen[k] = el.open;
+    });
     var keep = side.querySelector(".tm-side-body");
     var top = keep ? keep.scrollTop : 0;
     var tabs = ["info", "jobs", "team"].map(function (k) {
@@ -3312,7 +3604,7 @@
         '">' + esc(tw(TAB_KEY[k])) + "</button>";
     }).join("");
     var body = S.tab === "info" ? infoTabHtml(S.team) : S.tab === "jobs" ? queueHtml(S.queue,
-      { openFin: S.openFin, archOpen: S.archOpen, members: S.team ? S.team.members : [], accEdit: S.accEdit })
+      { openFin: S.openFin, archOpen: S.archOpen, members: S.team ? S.team.members : [], accEdit: S.accEdit, taskSteps: S.taskSteps, stepsOpen: S.stepsOpen })
       : teamTabHtml(S.team, S.agents, { openMember: S.openMember, advOpen: S.advOpen, turns: S.turns, mandateEdit: S.mandateEdit });
     side.innerHTML = '<div class="tm-bar tm-side-bar"><div class="tm-tabs" role="tablist">' + tabs + "</div>" +
       '<button type="button" class="ws-btn tm-icon tm-close" aria-label="' + esc(tw("teams.close")) + '" title="' +
@@ -3347,6 +3639,7 @@
     drawSide(true);
     drawHead();
     if (tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
+    if (tab === "jobs") loadRunningSteps();
     if (tab === "info") { loadInfo(); loadFolder(); }
     var first = S.el.querySelector(".tm-side .tm-tab[aria-selected=\"true\"]");
     if (first) first.focus();
@@ -3439,6 +3732,82 @@
     });
   }
 
+  var stepsPollTimer = null;
+  function scheduleStepsPoll() {
+    clearTimeout(stepsPollTimer);
+    if (!S || !S.activeId || !S.side || S.tab !== "jobs") return;
+    if (!S.queue || !S.queue.running || !S.queue.running.length) return;
+    stepsPollTimer = setTimeout(function () {
+      if (!S || !S.activeId || !S.side || S.tab !== "jobs") return;
+      if (!S.queue || !S.queue.running || !S.queue.running.length) return;
+      loadRunningSteps();
+    }, 4000);
+  }
+
+  function loadTaskSteps(taskId) {
+    if (!S || !S.activeId || !taskId) return Promise.resolve();
+    if (S.loadingSteps && S.loadingSteps[taskId]) return Promise.resolve();
+    S.loadingSteps = S.loadingSteps || {};
+    S.loadingSteps[taskId] = true;
+    var forTeam = S.activeId;
+    return call("GET", teamUrl("/tasks/" + q(taskId))).then(function (r) {
+      if (S && S.loadingSteps) delete S.loadingSteps[taskId];
+      if (r.code === 200 && r.j && S && S.activeId === forTeam) {
+        S.taskSteps = S.taskSteps || {};
+        S.taskSteps[taskId] = r.j.steps || [];
+        S.taskTools = S.taskTools || {};
+        if (r.j.tools && r.j.tools.length) S.taskTools[taskId] = r.j.tools;
+        if (S.side && S.tab === "jobs") drawSide();
+      }
+    }).catch(function () {
+      if (S && S.loadingSteps) delete S.loadingSteps[taskId];
+    });
+  }
+
+  function loadRunningSteps() {
+    if (!S || !S.activeId || !S.queue || !S.queue.running || !S.queue.running.length) return Promise.resolve();
+    var forTeam = S.activeId;
+    var promises = S.queue.running.map(function (t) {
+      return call("GET", teamUrl("/tasks/" + q(t.id))).then(function (r) {
+        if (r.code === 200 && r.j && S && S.activeId === forTeam) {
+          S.taskSteps = S.taskSteps || {};
+          S.taskSteps[t.id] = r.j.steps || [];
+          S.taskTools = S.taskTools || {};
+          if (r.j.tools && r.j.tools.length) S.taskTools[t.id] = r.j.tools;
+        }
+      }).catch(function () {});
+    });
+    // Dong bo them cong cu tu lich su audit mcp
+    var auditPromise = call("GET", "/connect/audit?limit=200").then(function (r) {
+      if (r.code === 200 && r.j && S && S.activeId === forTeam) {
+        var all = r.j.entries || r.j.items || (Array.isArray(r.j) ? r.j : []);
+        var teamShort = forTeam.replace(/^tm_/, "").slice(-8);
+        var teamTools = all.filter(function (x) {
+          var s = x.session || "";
+          return s.indexOf(teamShort) !== -1 || s.indexOf(forTeam) !== -1;
+        });
+        if (teamTools.length) {
+          S.taskTools = S.taskTools || {};
+          S.queue.running.forEach(function (t) {
+            if (!S.taskTools[t.id] || !S.taskTools[t.id].length) {
+              var tShort = String(t.id).replace(/^team:/, "").slice(-10);
+              var matched = teamTools.filter(function (x) {
+                return (x.session || "").indexOf(tShort) !== -1;
+              });
+              S.taskTools[t.id] = matched.length ? matched : teamTools.slice(0, 15);
+            }
+          });
+        }
+      }
+    }).catch(function () {});
+    promises.push(auditPromise);
+
+    return Promise.all(promises).then(function () {
+      if (S && S.activeId === forTeam && S.side && S.tab === "jobs") drawSide();
+      scheduleStepsPoll();
+    });
+  }
+
   function loadQueue() {
     if (!S.activeId) return Promise.resolve();
     var forTeam = S.activeId;
@@ -3447,6 +3816,9 @@
       S.queue = r.j;
       learnTitles(S.queue);
       drawHead(); drawJobs(); if (S.tab === "jobs") drawSide();
+      if (S.queue && S.queue.running && S.queue.running.length) {
+        loadRunningSteps();
+      }
     });
   }
 
@@ -3454,6 +3826,7 @@
   // thái trống thay vì giữ một nhóm không còn, ô soạn vẫn mở mà gửi tin nào cũng lỗi.
   function closeGone(id) {
     if (!S || S.activeId !== id) return;
+    clearTimeout(stepsPollTimer);
     S.activeId = ""; S.team = null; S.queue = null; S.msgs = []; S.view = "list"; S.side = false;
     S.picker = null; S.draft = null; S.picked = []; S.filterTask = ""; S.turns = [];
     S.treeData = null; S.treeActiveFile = "";
@@ -4908,7 +5281,7 @@
   }
 
   function onClick(e) {
-    var t = e.target.closest ? e.target.closest("button, [data-team], [data-tm-tree-dir], [data-tm-tree-file], [data-tm-tree-root-add], summary, .tm-scrim, .tmp-scrim") : null;
+    var t = e.target.closest ? e.target.closest("button, [data-team], [data-tm-tree-dir], [data-tm-tree-file], [data-tm-tree-root-add], summary, .tm-scrim, .tmp-scrim, [data-jump], [data-view-task]") : null;
     // Bấm ở bất cứ đâu ngoài menu ghim thì đóng menu.
     if (S.rowMenu && !(e.target.closest && e.target.closest(".tm-row-menu")) && !(t && t.dataset && t.dataset.pinTeam)) {
       if (!(t && t.dataset && t.dataset.team && S.swallowClick)) closeRowMenu();
@@ -4936,12 +5309,12 @@
     if (d.tmTreeKind) { S.treeKind = d.tmTreeKind; return loadTree(true); }
     if (d.tmTreeRefresh || (t.classList && t.classList.contains("tm-tree-refresh"))) return loadTree(true);
     if (d.tmTreeGit) {
-      var act = d.tmTreeGit;
+      var gitAct = d.tmTreeGit;
       var repo = S.treeRepo || (S.treeData && S.treeData.chosen_repo) || "";
-      setNote(tw(act === "push" ? "teams.git_pushing" : "teams.git_pulling"));
-      call("POST", teamUrl("/git/sync"), { action: act, kind: S.treeKind === "clone" ? "clone" : "worktree", repo: repo }).then(function (r) {
+      setNote(tw(gitAct === "push" ? "teams.git_pushing" : "teams.git_pulling"));
+      call("POST", teamUrl("/git/sync"), { action: gitAct, kind: S.treeKind === "clone" ? "clone" : "worktree", repo: repo }).then(function (r) {
         if (r.code === 200 && r.j && r.j.ok) {
-          setNote(r.j.message || tw(act === "push" ? "teams.git_push_ok" : "teams.git_pull_ok"));
+          setNote(r.j.message || tw(gitAct === "push" ? "teams.git_push_ok" : "teams.git_pull_ok"));
           loadTree(true);
         } else {
           setNote((r.j && r.j.error) || tw("teams.err", { e: r.code }));
@@ -5156,6 +5529,7 @@
     if (d.tab) {
       S.tab = d.tab; drawSide(true); drawHead();
       if (d.tab === "team") loadAgents().then(function () { if (S.side && S.tab === "team") drawSide(); });
+      if (d.tab === "jobs") loadRunningSteps();
       return;
     }
     if (d.expand) { S.openMember = S.openMember === d.expand ? null : d.expand; drawSide(true); return; }
@@ -5186,6 +5560,18 @@
     if (t.classList.contains("tm-search-go")) return runSearch();
     if (d.quoteSrc) return jumpToQuoted(t);
     if (d.jump) {
+      if (window.matchMedia && window.matchMedia("(max-width: 1060px)").matches) {
+        S.side = false;
+        drawSide();
+      }
+      if (S.filterTask) {
+        var check = S.el.querySelector('.tm-msgs [data-mid="' + Number(d.jump) + '"]');
+        if (!check) {
+          S.filterTask = "";
+          drawFilterbar();
+          return jumpTo(d.jump, d.ts);
+        }
+      }
       var here = S.el.querySelector('.tm-msgs [data-mid="' + Number(d.jump) + '"]');
       if (here && here.scrollIntoView) {
         here.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -5296,13 +5682,17 @@
     }
     if (t.classList.contains("tm-quality-save")) {
       var qform = t.closest(".tm-quality-form");
+      var auditEl = qform ? qform.querySelector(".tm-audit-enabled") : null;
+      var auditVal = auditEl ? auditEl.checked : false;
       var qp = qualityPolicyPayload({ enabled: qform.querySelector(".tm-quality-enabled").checked,
         limit_migration: qform.querySelector(".tm-quality-migration").value,
-        reference_usd: qform.querySelector(".tm-quality-reference").value });
+        reference_usd: qform.querySelector(".tm-quality-reference").value,
+        audit_enabled: auditVal });
       if (!qp.ok) return setNote(tw("teams.quality.invalid"));
       t.disabled = true;
       return call("PUT", teamUrl("/quality-policy"), qp.body).then(function (r) {
         if (r.code !== 200) { t.disabled = false; return fail(r); }
+        call("POST", teamUrl("/audit/toggle"), { enabled: auditVal }).catch(function () {});
         setNote(tw("teams.saved"));
         loadTeam();
       }).catch(function () { t.disabled = false; setNote(tw("teams.err_network")); });
@@ -5509,7 +5899,26 @@
     });
   }
 
+  function onToggle(e) {
+    if (!S) return;
+    var t = e.target;
+    if (t && t.matches && t.matches("details[data-steps-key]")) {
+      S.stepsOpen = S.stepsOpen || {};
+      var k = t.getAttribute("data-steps-key");
+      if (k) S.stepsOpen[k] = t.open;
+    }
+    if (t && t.matches && t.matches("details[data-tools-key]")) {
+      S.openTools = S.openTools || {};
+      var tk = t.getAttribute("data-tools-key");
+      if (tk) S.openTools[tk] = t.open;
+    }
+  }
+
   function onChange(e) {
+    if (e.target.classList && e.target.classList.contains("tm-audit-enabled")) {
+      var isAud = !!e.target.checked;
+      call("POST", teamUrl("/audit/toggle"), { enabled: isAud }).catch(function () {});
+    }
     if (e.target.classList && e.target.classList.contains("tm-tree-repo-select")) {
       S.treeRepo = e.target.value;
       return loadTree(true);
@@ -5630,7 +6039,8 @@
   }
 
   function onKey(e) {
-    if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("tm-tree-row")) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList &&
+        (e.target.classList.contains("tm-tree-row") || e.target.classList.contains("is-jumpable"))) {
       e.preventDefault();
       e.target.click();
       return;
@@ -5718,6 +6128,17 @@
       if (S.activeId) { loadMsgs(false); loadQueue(); loadTeam(); }
       return;
     }
+    if (d.type === "team_tool_event" && (!d.team_id || d.team_id === S.activeId)) {
+      S.taskTools = S.taskTools || {};
+      var tid = d.task_id || (S.queue && S.queue.running && S.queue.running[0] ? S.queue.running[0].id : "");
+      if (tid) {
+        S.taskTools[tid] = S.taskTools[tid] || [];
+        var toolObj = d.tool || { tool: d.tool_name, cmd: d.cmd, input: d.input, output: d.output, ts: d.ts || new Date().toISOString() };
+        S.taskTools[tid].unshift(toolObj);
+        if (S.side && S.tab === "jobs") drawSide();
+      }
+      return;
+    }
     if (d.type === "team_typing") {
       if (d.team_id === S.activeId) { S.typing = d.typing || []; drawTyping(); }
       return;
@@ -5773,6 +6194,7 @@
   function leave() {
     keepTeam();
     clearTimeout(refreshTimer);
+    clearTimeout(stepsPollTimer);
     if (colResize()) colResize().miniTip.hide();
     if (S && S.pickSt) closePicker();
     if (S) { S.side = false; S.picker = null; stopMic(); stopReveal(); if (S.unpress) { S.unpress(); S.unpress = null; }
@@ -5863,6 +6285,7 @@
       if (e.target.classList && e.target.classList.contains("tm-team") && colResize()) colResize().miniTip.hide();
     });
     el.addEventListener("click", onClick);
+    el.addEventListener("toggle", onToggle, true);
     el.addEventListener("change", onChange);
     el.addEventListener("input", onInput);
     el.addEventListener("keydown", onKey);
@@ -5993,6 +6416,7 @@
     qualityPolicyHtml: qualityPolicyHtml, qualityPolicyPayload: qualityPolicyPayload, qualityTemplatePayload: qualityTemplatePayload,
     qualityUsageHtml: qualityUsageHtml,
     taskQualityHtml: taskQualityHtml,
+    runningToolsCardHtml: runningToolsCardHtml, formatToolLabel: formatToolLabel,
     jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,

@@ -6,6 +6,8 @@ __pycache__/
 
 # Environment (cấu hình local; env.example là bản mẫu)
 .env
+.agents
+.claude
 
 # Runtime / temp
 .staging/

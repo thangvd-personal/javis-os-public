@@ -288,6 +288,10 @@ def register_agents(app, deps: ResonanceApiDeps):
                 "registered": reg is not None, "agent_key": (reg or {}).get("agent_key"),
                 "enabled": bool((reg or {}).get("enabled")), "status": (reg or {}).get("status") or "unregistered",
                 "config_version": (reg or {}).get("config_version"),
+                "provider": meta.get("provider") or "",
+                "provider_label": meta.get("provider_label") or "",
+                "model": meta.get("model") or "",
+                "reasoning": meta.get("reasoning") or "",
                 "goals_open": len(store.list_open(RS.Principal("owner", "owner", root), agent_key=reg["agent_key"]))
                 if reg else 0,
                 "reviewer": _reviewer_of(store, root, reg)}

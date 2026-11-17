@@ -3567,16 +3567,33 @@ def _resonance_agents_meta(root):
     """A1: trợ lý của brain cho trang Cộng hưởng: slug, tên và engine thật sự chạy phiên của nó (model riêng của trợ
     lý, hay bộ não chính khi trợ lý không chọn model) để giao diện báo đúng khả năng theo engine."""
     try:
-        main_prov = _chat_provider(cfgmod.read_settings().get("model", {}) or {})[0]
+        settings = cfgmod.read_settings() or {}
+        main_info = _effective_main(settings)
+        main_prov = str(main_info.get("provider") or "")
+        main_model = str(main_info.get("model") or "")
+        main_reasoning = str((settings.get("model") or {}).get("reasoning") or "")
     except Exception:  # noqa: BLE001
         main_prov = ""
+        main_model = ""
+        main_reasoning = ""
     out = []
     for a in agents_index(root, kem_prompt=False):
-        prov = _agent_model_provider(a.get("model") or "", a.get("model_provider") or "") if a.get("model") else main_prov
+        has_own = bool((a.get("model") or "").strip())
+        if has_own:
+            model = str(a.get("model") or "").strip()
+            prov = _agent_model_provider(model, str(a.get("model_provider") or ""))
+            reasoning = str(a.get("reasoning") or "").strip()
+        else:
+            model = main_model
+            prov = main_prov
+            reasoning = str(a.get("reasoning") or "").strip() or main_reasoning
+        pdef = _provider_def(prov)
+        prov_label = pdef["label"] if pdef else prov
         # avatar: trang Nhóm vẽ đúng ảnh trợ lý đang dùng (cùng nhân dạng với trang Cộng sự).
         # title: vai của trợ lý (dòng "role" ở trang Cộng sự) cho gợi ý @ của trang Nhóm (0.142.0).
-        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov, "avatar": a.get("avatar"),
-                    "title": str(a.get("role") or "")[:120]})
+        out.append({"slug": a["slug"], "name": a.get("name") or a["slug"], "provider": prov,
+                    "provider_label": prov_label, "model": model, "reasoning": reasoning,
+                    "avatar": a.get("avatar"), "title": str(a.get("role") or "")[:120]})
     return out
 
 
@@ -3584,15 +3601,28 @@ def _resonance_agents_meta_core(root):
     """The Auto page's list: Javis Core first (Auto always on, owner 05/11/2026), then the brain's agents. Teams keep
     `_resonance_agents_meta`, without Javis Core."""
     try:
-        main_prov = _chat_provider(cfgmod.read_settings().get("model", {}) or {})[0]
+        settings = cfgmod.read_settings() or {}
+        main_info = _effective_main(settings)
+        main_prov = str(main_info.get("provider") or "")
+        main_model = str(main_info.get("model") or "")
+        main_reasoning = str((settings.get("model") or {}).get("reasoning") or "")
     except Exception:  # noqa: BLE001
         main_prov = ""
+        main_model = ""
+        main_reasoning = ""
     out = []
     try:
         _cm = javis_core.read_core(root)[0]
-        _cp = _core_pin(cfgmod.read_settings().get("model", {}) or {})
+        _cp = _core_pin(settings.get("model", {}) or {})
+        core_prov = _cp.get("provider") or main_prov
+        core_model = _cp.get("model") or main_model
+        core_reasoning = str(settings.get("model", {}).get("core_reasoning") or "") or main_reasoning
+        pdef = _provider_def(core_prov)
+        core_prov_label = pdef["label"] if pdef else core_prov
         out.append({"slug": javis_core.SLUG, "name": _cm.get("name") or javis_core.NAME,
-                    "provider": _cp.get("provider") or main_prov, "avatar": agent_avatar.for_agent(_cm, javis_core.SLUG),
+                    "provider": core_prov, "provider_label": core_prov_label,
+                    "model": core_model, "reasoning": core_reasoning,
+                    "avatar": agent_avatar.for_agent(_cm, javis_core.SLUG),
                     "title": str(_cm.get("role") or "")[:120], "system": True})
     except Exception as e:  # noqa: BLE001
         print(f"[resonance meta core] {type(e).__name__}: {e}", file=sys.stderr)
@@ -10424,14 +10454,24 @@ def agents_index(brain: str, *, kem_prompt: bool = True) -> list:
             in_teams = _TEAM_API.teams().active_member_slugs(_brain_key(brain))
     except Exception:
         in_teams = set()
+    try:
+        sk_dir = _skills_dir(brain)
+        installed_skills = {p.name for p in sk_dir.iterdir() if p.is_dir() and not p.name.startswith(".")} if sk_dir.is_dir() else set()
+    except Exception:
+        installed_skills = set()
     for f in sorted(_agents_dir(brain).glob("*.md")):
         if javis_core.is_core_slug(f.stem):
             continue   # reserved for the system assistant (GET /agents adds it first)
         meta, body = _read_md(f)
+        ag_skills = meta.get("skills", []) or []
+        uninstalled = [s for s in ag_skills if s not in installed_skills] if installed_skills is not None else []
         out.append({"slug": f.stem, "name": meta.get("name", f.stem),
-                    "role": meta.get("role", ""), "skills": meta.get("skills", []) or [],
+                    "role": meta.get("role", ""), "skills": ag_skills,
+                    "uninstalled_skills": uninstalled,
+                    "has_uninstalled_skills": bool(uninstalled),
                     "model": meta.get("model", ""), **_agent_tag_fields(meta),
                     "model_provider": meta.get("model_provider", ""),
+                    "reasoning": _agent_reasoning(meta),
                     "chatgpt_voice": meta.get("chatgpt_voice", ""),
                     "pinned": bool(meta.get("pinned")),
                     "hidden": bool(meta.get("hidden")),
@@ -10484,6 +10524,8 @@ def _javis_core_entry(brain: str) -> dict:
     pin = _core_pin(mcfg)
     e["model"], e["model_provider"] = pin.get("model") or "", pin.get("provider") or ""
     e["reasoning"] = _core_reasoning(mcfg)
+    e["uninstalled_skills"] = []
+    e["has_uninstalled_skills"] = False
     _core_auto_on(brain)
     return e
 
@@ -34086,6 +34128,30 @@ def _team_engine_for(team, agent_key, role):
             try:
                 async for ev in stream:
                     outcome.note(ev)
+                    if tools_on and isinstance(ev, dict) and ev.get("type") in ("tool_call", "tool_use", "tool_result"):
+                        try:
+                            t_tid = req.get("team_id")
+                            if t_tid:
+                                t_detail = ""
+                                try:
+                                    import tool_label
+                                    t_detail = tool_label.chi_tiet(ev)
+                                except Exception:
+                                    t_detail = str(ev.get("detail") or "")
+                                if "_CHAT_RUNTIME" in globals() and _CHAT_RUNTIME:
+                                    _CHAT_RUNTIME.publish({
+                                        "type": "team_tool_event",
+                                        "team_id": t_tid,
+                                        "task_id": req.get("task_id"),
+                                        "step_id": req.get("step_id"),
+                                        "agent_key": req.get("agent_key"),
+                                        "tool": str(ev.get("name") or ev.get("tool") or ""),
+                                        "detail": t_detail,
+                                        "ev_type": ev.get("type"),
+                                        "ts": time.time()
+                                    })
+                        except Exception:
+                            pass
                 res = outcome.result()
                 # Claude Code sometimes prints the out-of-quota sentence as the ANSWER, not as an error (see the chat
                 # turn). Left alone it was posted as the member's reply and no other account ever got the turn.

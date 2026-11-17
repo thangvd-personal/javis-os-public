@@ -2792,6 +2792,24 @@ class TeamRunner:
             res = dict(res or {})
             if gate_out is not None:
                 res["gate"] = gate_out
+            try:
+                import team_audit
+                if team_audit.is_audit_enabled(team_id):
+                    team_audit.record_audit(
+                        team_id, agent_key, role,
+                        task_id=task_id, step_id=step_id, turn_id=turn_id,
+                        model=str(prep.get("model") or ""),
+                        provider=str(prep.get("engine") or ""),
+                        system_prompt=str(req.get("system") or ""),
+                        user_prompt=str(req.get("prompt") or ""),
+                        response_text=str(res.get("text") or ""),
+                        tokens_in=res.get("tokens_in"),
+                        tokens_out=res.get("tokens_out"),
+                        cost_usd=res.get("cost_usd"),
+                        extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode")}
+                    )
+            except Exception:
+                log.debug("team audit record failed", exc_info=True)
             await self._io(self._settle_turn, turn_id, "ok", res.get("tokens_in"), res.get("tokens_out"),
                            res.get("cost_usd"))
         finally:

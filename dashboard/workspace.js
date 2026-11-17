@@ -1299,6 +1299,11 @@
     var title = laAgent ? [x.name, x.role || ""].concat(tg.length ? [t("ws.tags_aria") + ": " + tg.join(", ")] : [])
       .filter(Boolean).join("\n") : "";
     var nTin = laAgent ? chuaDoc(x.slug) : 0;
+    var uninst = laAgent ? (x.uninstalled_skills || []) : [];
+    var warnIco = uninst.length
+      ? '<span class="ws-warn-skills" title="' + esc(t("ws.uninstalled_skills_warn", { count: uninst.length, skills: uninst.join(", ") })) + '">' +
+          ic("triangle-alert", { cls: "ic-warn" }) + '</span>'
+      : "";
     var info = laAgent ? agentInfoHtml(x, tg) : "";
     return '<div class="ws-item-wrap' + (x.pinned ? " ghim" : "") + (x.hidden ? " an" : "") + (he ? " he" : "") + (coTt ? " co-tt" : "") + (nTin ? " has-unread" : "") +
       (laAgent ? " has-end" : "") + (info ? " has-info" : "") + '"' + (jst ? ' data-st="' + jst + '"' : "") + '>' +
@@ -1306,7 +1311,7 @@
         (title ? ' title="' + esc(title) + '"' : "") + '>' +
       '<span class="ws-item-ic">' + (laAgent ? avatar(x, 40)
         : (chay ? ic("loader", { cls: "ic-spin", title: t("ws.running") }) : ic("workflow"))) + '</span>' +
-      '<span class="ws-item-text"><span class="ws-item-top"><strong>' + esc(x.name) + '</strong></span>' +
+      '<span class="ws-item-text"><span class="ws-item-top"><strong>' + esc(x.name) + warnIco + '</strong></span>' +
       (laAgent ? cardSubHtml(x, he) : "") +
       (phu ? '<small>' + esc(phu) + '</small>' : "") +
       (coTt ? '<span class="ws-item-tt">' + bd + '</span>' : "") + '</span>' +
@@ -1328,11 +1333,18 @@
   function agentInfoHtml(x, tg) {
     var J = typeof window !== "undefined" && window.JavisInfo;
     var role = String(x.role || "").trim();
-    if (!J || (!role && !tg.length)) return "";
+    var uninst = (x.uninstalled_skills || []);
+    if (!J || (!role && !tg.length && !uninst.length)) return "";
+    var uninstLine = uninst.length
+      ? '<p class="ws-info-warn" style="color:var(--warn-ink,#d97706);font-size:12px;margin-top:6px;display:flex;align-items:center;gap:5px">' +
+          ic("triangle-alert", { cls: "ic-warn" }) + ' ' +
+          esc(t("ws.uninstalled_skills_warn", { count: uninst.length, skills: uninst.join(", ") })) + '</p>'
+      : "";
     return '<span class="ws-item-info">' + J.btn(t("ws.about_agent", { ten: x.name || x.slug })) +
       J.body('<p class="ws-info-name"><strong>' + esc(x.name || x.slug) + '</strong></p>' +
         (role ? '<p class="ws-info-role">' + esc(role) + '</p>' : "") +
-        (tg.length ? '<p class="ws-info-tags">' + esc(t("ws.tags_aria")) + ": " + esc(tg.join(", ")) + '</p>' : "")) +
+        (tg.length ? '<p class="ws-info-tags">' + esc(t("ws.tags_aria")) + ": " + esc(tg.join(", ")) + '</p>' : "") +
+        uninstLine) +
       '</span>';
   }
   // Nối dây cho các nút vừa vẽ. Gọi lại sau MỖI lần vẽ: innerHTML mới là node mới, handler cũ

@@ -196,6 +196,9 @@ check("ghi chú cho chủ đọc không bị lọc (chỉ lọc mã như daily_c
 const consoleJs = fs.readFileSync(path.join(ROOT, "dashboard", "console.js"), "utf8");
 check("Vị trí file ở trang Cộng sự: mở trang Tệp tin (không còn tab Thư mục)",
   /if \(workspace\) \{[\s\S]{0,300}window\.JavisNav\.go\("files"\)/.test(consoleJs) && !/\[data-rtab="files"\]'\)\?\.click\(\)/.test(consoleJs));
+check("Vị trí file ở trang Cộng sự/Nhóm: chuyển vị trí file qua openFilesAt",
+  /if \(workspace\) \{[\s\S]{0,100}openFilesAt\(_vtChuanHoaRel\(rel\)\)/.test(consoleJs) &&
+  /else if \(teams\) \{[\s\S]{0,100}openFilesAt\(_vtChuanHoaRel\(rel\)\)/.test(consoleJs));
 
 // ───────────── i18n đủ hai thứ tiếng ─────────────
 const need = ["teams.calls", "teams.uncall", "teams.head_people", "teams.head_leader", "teams.reply.why.timeout",

@@ -2368,9 +2368,19 @@ body.has-rail .hud { margin-left: var(--rail-w); width: calc(100% - var(--rail-w
 .agent-editor .sp-clear { justify-self:end; }
 .agent-editor .sp-groups { max-height:240px; scrollbar-width:thin; }
 .agent-editor .sp-g-body { padding:5px 4px 10px 12px; }
-.agent-editor .sp-g-body label.sp { display:flex; align-items:flex-start; gap:9px; margin:0; padding:7px 4px; color:var(--text); font-size:12.5px; font-weight:400; }
-.agent-editor .sp-g-body input[type="checkbox"] { width:16px; height:16px; flex:0 0 16px; margin:2px 0 0; padding:0; accent-color:var(--accent); }
-.agent-editor .sp-g-body .sp span { min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5; }
+.agent-editor .sp-g-body label.sp { display:flex; align-items:center; gap:9px; margin:0; padding:7px 4px; color:var(--text); font-size:12.5px; font-weight:400; }
+.agent-editor .sp-g-body input[type="checkbox"] { width:16px; height:16px; flex:0 0 16px; margin:0; padding:0; accent-color:var(--accent); }
+.agent-editor .sp-g-body .sp span { flex:1 1 auto; min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5; }
+.agent-editor .sp-uninstalled-alert { margin:6px 0 10px; padding:10px 12px; background:color-mix(in srgb, var(--accent) 7%, var(--field-bg)); border:1px solid color-mix(in srgb, var(--accent) 26%, var(--border)); border-radius:9px; font-size:12px; line-height:1.5; }
+.agent-editor .sp-ua-head { display:flex; align-items:center; gap:6px; font-weight:600; color:var(--warn-ink, #d97706); margin-bottom:4px; font-size:12.5px; }
+.agent-editor .sp-ua-head .ic { width:15px; height:15px; flex:none; }
+.agent-editor .sp-ua-desc { color:var(--text2); margin-bottom:8px; }
+.agent-editor .sp-ua-actions { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.agent-editor .sp-ua-actions button { min-height:28px; padding:4px 10px; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; }
+.agent-editor .sp-ua-actions button .ic { width:13px; height:13px; }
+.agent-editor .sp-row-install-btn { display:inline-flex; align-items:center; justify-content:center; gap:4px; margin-left:auto; flex:none; padding:3px 7px; background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--accent); cursor:pointer; font-size:11px; line-height:1.2; transition:all .15s ease; }
+.agent-editor .sp-row-install-btn:hover { background:var(--accent); color:var(--on-accent, #fff); border-color:var(--accent); }
+.agent-editor .sp-row-install-btn .ic { width:12px; height:12px; }
 .agent-editor .editor-actions { position:sticky; bottom:-20px; background:var(--bg2); padding:12px 0; border-top:1px solid var(--border); z-index:1; }
 .agent-editor .editor-actions button { min-height:36px; }
 /* 0.298.0: the agent's save bar. A filled primary button with an icon and a clear label, a line that says
@@ -4092,6 +4102,10 @@ span.tmp-lead { cursor: default; }
 .ws-item-text { flex: 1 1 auto; }
 .ws-item-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .ws-item-top > strong { flex: 1 1 auto; min-width: 0; }
+.ws-warn-skills { display: inline-flex; align-items: center; justify-content: center; margin-left: 5px; vertical-align: middle; color: var(--warn-ink, #d97706); flex-shrink: 0; line-height: 1; }
+.ws-warn-skills .ic { width: 14px; height: 14px; }
+.tm-mwarn { vertical-align: -1px; }
+.tm-mwarn .ic { width: 13px; height: 13px; }
 /* 0.185.0: Javis Core, the system assistant. A small System badge on its card; the row keeps the accent edge like a
    pinned one. */
 .ws-sys { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 600; line-height: 1.5;
@@ -4467,6 +4481,76 @@ button.tm-quote-src:hover, button.tm-quote-src:focus-visible { border-color: var
 .tm-side-body .tm-qrow .tm-spin, .tm-side-body .tm-qrow .tm-qpos { margin-top: 2px; }
 .tm-side-body .tm-qrow .tm-actions { flex: 1 1 100%; padding-left: 26px; }
 .tm-side-body .tm-jcard-text .tm-actions { margin-top: 8px; }
+
+/* Danh sách các phần việc / bước con của việc đang làm trong panel Việc */
+.tm-job-steps { flex: 1 1 100%; padding-left: 26px; margin-top: 8px; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.tm-job-steps[hidden] { display: none; }
+.tm-steps-toggle { margin-top: 2px; }
+.tm-steps-toggle[open] > .tm-steps-summary { margin-bottom: 6px; }
+.tm-steps-summary { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); padding: 4px 0; }
+.tm-steps-summary:hover { color: var(--accent); }
+.tm-steps-summary-active strong { color: var(--accent); }
+.tm-steps-summary-done strong { color: var(--text2); }
+.tm-step-done-icon { display: inline-flex; color: var(--green, #16a34a); }
+.tm-step-done-icon .ic { width: 14px; height: 14px; }
+.tm-steps-list { display: flex; flex-direction: column; gap: 6px; padding-left: 2px; }
+.tm-step-card { background: var(--surface-1, #f8f9fa); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.tm-step-card.is-waiting_owner { border-left-color: var(--warn-ink, #d97706); background: var(--warn-wash, #fffbeb); }
+.tm-step-card-head { display: flex; align-items: center; gap: 6px; font-size: 13px; flex-wrap: wrap; }
+.tm-step-who { color: var(--text); font-weight: 600; }
+.tm-step-badge { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--text2); }
+.tm-step-badge.is-running { background: var(--accent-wash, #e0e7ff); color: var(--accent); }
+.tm-step-badge.is-waiting_owner { background: var(--warn-wash, #fef3c7); color: var(--warn-ink, #d97706); }
+.tm-step-badge.is-done { background: var(--green-wash, #dcfce7); color: var(--green, #16a34a); }
+.tm-step-card.is-jumpable,
+.tm-step-mini.is-jumpable {
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.tm-step-card.is-jumpable:hover {
+  border-color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.tm-step-mini.is-jumpable:hover {
+  background: var(--surface-1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.tm-step-jump-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.55;
+  transition: opacity .15s ease, color .15s ease, background-color .15s ease;
+}
+.tm-step-jump-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-wash, rgba(99, 102, 241, 0.1));
+}
+.tm-step-card:hover .tm-step-jump-btn,
+.tm-step-mini:hover .tm-step-jump-btn {
+  opacity: 0.9;
+}
+.tm-step-brief { font-size: 12.5px; color: var(--text2); line-height: 1.4; overflow-wrap: anywhere; }
+
+.tm-step-mini { display: flex; flex-direction: column; gap: 2px; padding: 5px 8px; border-radius: 6px; background: var(--surface-2); font-size: 12px; }
+.tm-step-mini.is-running { border-left: 2px solid var(--accent); background: var(--surface-1); }
+.tm-step-mini.is-waiting_owner { border-left: 2px solid var(--warn-ink); }
+.tm-step-mini.is-done { border-left: 2px solid var(--green, #16a34a); }
+.tm-step-mini-head { display: flex; align-items: center; gap: 6px; }
+.tm-step-seq { font-weight: 600; color: var(--text3); font-size: 11px; }
+.tm-step-mini-who { font-weight: 600; color: var(--text); }
+.tm-step-mini-brief { color: var(--text2); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
 /* 0.192.0 (owner, 16/10/2026: "avatar đang ở dưới cùng hội thoại ko thấy tên người gửi"): an assistant's picture sits at
    the top of its message, next to its name, so a long answer still says who wrote it at a glance. */
 .tm-msg-agent { align-items: flex-start; }
@@ -5587,3 +5671,137 @@ button.vr-pill { font: inherit; font-size: 12px; font-weight: 600; line-height: 
 
 
 
+
+/* Card nhat ky cong cu trong danh sach viec lam cua team (chi xem khong sua) */
+.tm-job-tools-card {
+  margin-top: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text2);
+}
+.tm-job-tools-card .tm-tools-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 550;
+  color: var(--text);
+  list-style: none;
+}
+.tm-job-tools-card .tm-tools-summary::-webkit-details-marker {
+  display: none;
+}
+.tm-job-tools-card .tm-tools-summary svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.tm-job-tools-card .tm-tools-now {
+  font-weight: normal;
+  font-size: 12px;
+  color: var(--text3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+.tm-job-tools-card .tm-view-only-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.tm-tools-list {
+  margin-top: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tm-tool-item {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text2);
+}
+.tm-tool-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.tm-tool-item-head:hover {
+  color: var(--text);
+}
+.tm-tool-item .tm-tool-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.tm-tool-item.is-done .tm-tool-dot {
+  background: var(--green, #10b981);
+}
+.tm-tool-item.is-running .tm-tool-dot {
+  background: var(--accent2, #f59e0b);
+  animation: actDot 1s infinite;
+}
+.tm-tool-cmd {
+  font-family: var(--font-code, monospace);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.tm-tool-time {
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  margin-left: auto;
+}
+.tm-tool-output {
+  margin: 4px 0 2px 14px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-code, monospace);
+  font-size: 11.5px;
+  color: var(--text2);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+  user-select: text;
+}
+.tm-tools-empty {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text3);
+  font-style: italic;
+}
+
+/* Checkbox nhat ky viec lam trong Team -> Nang cao */
+.tm-audit-radio {
+  margin-top: 8px;
+}
+.tm-audit-explain {
+  margin-left: 24px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.4;
+}

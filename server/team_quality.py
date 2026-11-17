@@ -46,9 +46,10 @@ class QualityStore:
         if row:
             out = json.loads(row['body'])
             out.setdefault('limit_migration_selected', True)
+            out.setdefault('audit_enabled', False)
             return out
         return {'enabled': False, 'cost_behavior': 'observe_only', 'limit_migration': 'retain',
-                'reference_usd': None, 'limit_migration_selected': False}
+                'reference_usd': None, 'limit_migration_selected': False, 'audit_enabled': False}
 
     def set_policy(self, team_id, body):
         if not isinstance(body, dict):
@@ -60,6 +61,8 @@ class QualityStore:
             out = dict(old)
             if 'enabled' in body and not isinstance(body['enabled'], bool):
                 raise QualityError('invalid_enabled', 'Trạng thái phải là bật hoặc tắt', 'Enabled must be a boolean')
+            if 'audit_enabled' in body and not isinstance(body['audit_enabled'], bool):
+                raise QualityError('invalid_audit_enabled', 'Trạng thái ghi nhật ký phải là bật hoặc tắt', 'Audit enabled must be a boolean')
             if body.get('enabled') and not old['enabled'] and 'limit_migration' not in body:
                 raise QualityError('limit_migration_required', 'Chọn giữ hoặc chuyển các giới hạn cũ một lần',
                                    'Choose whether to retain or observe legacy limits once')
@@ -76,7 +79,7 @@ class QualityStore:
                 if not valid:
                     raise QualityError('invalid_reference', 'Mức tham khảo phải là số hữu hạn không âm',
                                        'Reference must be a finite non-negative number')
-            out.update({k: body[k] for k in ('enabled', 'limit_migration', 'reference_usd') if k in body})
+            out.update({k: body[k] for k in ('enabled', 'limit_migration', 'reference_usd', 'audit_enabled') if k in body})
             out['limit_migration_selected'] = bool(old.get('limit_migration_selected') or 'limit_migration' in body)
             if out['enabled'] and (not old['enabled'] or out['limit_migration'] != old['limit_migration']):
                 out['limit_migrated_at'] = self.clock()

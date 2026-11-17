@@ -756,12 +756,40 @@
     let mModel = (a && a.model) || "";
     let mProv = mModel ? ((a && a.model_provider) || doanNha(mModel)) : "";
     let mLoc = "", mMo = mProv || (provs.find(p => p.configured) || {}).id || "";
-    // Nhãn trên nút. Model đang lưu mà nhà đã ngắt key thì nói thẳng "(đang lưu)" chứ KHÔNG
-    // âm thầm tụt về Mặc định - đó là lựa chọn của người dùng, chỉ là tạm chưa chạy được.
-    const nhanModel = () => !mModel
-      ? t("studio.model_default")
-      : (provCua(mProv).label ? provCua(mProv).label + " · " + mModel : mModel)
-        + (mProv && !provCua(mProv).configured ? " " + t("studio.saved_suffix") : "");
+    const EFF_KEY = { off: "eff.off", low: "eff.low", medium: "eff.medium", high: "eff.high", xhigh: "eff.xhigh", ultra: "eff.ultra" };
+    const curReason = (a && a.reasoning) || "medium";
+    const layReasoning = () => {
+      const el = box && box.querySelector ? box.querySelector("#agReasoning") : null;
+      return (el && el.value) || (a && a.reasoning) || curReason || (st.model && st.model.reasoning) || "";
+    };
+    const dinhDangLlm = (pId, modelName, reasonVal) => {
+      const p = provCua(pId) || ((st.model && st.model.providers) || []).find(x => x.id === pId) || {};
+      const pLabel = p.label || pId || "";
+      const effKey = (typeof window !== "undefined" && window.JavisEffortSlider && window.JavisEffortSlider.LABEL_KEY && window.JavisEffortSlider.LABEL_KEY[reasonVal])
+        || EFF_KEY[reasonVal];
+      const effName = (reasonVal && reasonVal !== "off") ? (effKey ? t(effKey) : reasonVal) : "";
+      const parts = [];
+      if (pLabel) parts.push(pLabel);
+      if (modelName) parts.push(modelName);
+      if (effName) parts.push(effName);
+      return parts.join(" - ");
+    };
+    const defaultLlmStr = () => {
+      const mainProv = (st.model && st.model.main && st.model.main.provider) || "";
+      const mainModel = (st.model && st.model.main && st.model.main.model) || "";
+      const r = layReasoning() || (st.model && st.model.reasoning) || "";
+      return dinhDangLlm(mainProv, mainModel, r);
+    };
+    // Nhãn trên nút. Bổ sung tên model đang áp dụng (Provider - Model - Thinking).
+    const nhanModel = () => {
+      if (!mModel) {
+        const def = defaultLlmStr();
+        return def ? (t("studio.model_default") + " · " + def) : t("studio.model_default");
+      }
+      const p = provCua(mProv);
+      const customStr = dinhDangLlm(mProv, mModel, layReasoning());
+      return (customStr || mModel) + (mProv && !p.configured ? " " + t("studio.saved_suffix") : "");
+    };
     const box = opts.host || document.getElementById("editorBox");
     if (opts.host && !box.isConnected) return;
     let avatar = window.JavisAvatar ? (a ? window.JavisAvatar.of(a) : window.JavisAvatar.random()) : null;
@@ -773,7 +801,6 @@
     // Same English level names as the main chat's effort chip (eff.*, owner 22/10/2026).
     const REASONING = [["off", "eff.off"], ["low", "eff.low"], ["medium", "eff.medium"], ["high", "eff.high"],
                        ["xhigh", "eff.xhigh"], ["ultra", "eff.ultra"]];
-    const curReason = (a && a.reasoning) || "medium";
     const CALL_VOICES = ["juniper", "maple", "spruce", "ember", "vale", "breeze", "arbor", "sol", "cove"];
     const selectedCallVoice = (a && a.chatgpt_voice) || "";
     const chatBtn = opts.chatButton && a && a.slug
@@ -790,7 +817,7 @@
       ${a && a.slug && JI ? JI.body(`<div class="dim ag-assets-hint">${esc(t("studio.assets_hint"))}</div>`) : ""}
       <label>${esc(t("studio.sys_prompt"))}</label><textarea id="agPrompt" rows="4">${esc(a ? (a.prompt || "") : "")}</textarea>
       <label>Skills</label>
-      ${skills.length ? `<div class="sp-box">
+      ${(skills.length || (a && a.skills && a.skills.length)) ? `<div class="sp-box">
         <div class="sp-bar"><input id="spSearch" placeholder="${esc(t("studio.sp_search_ph"))}">
           <span class="sp-count" id="spCount"></span>
           <button type="button" class="s-btn-ghost sp-clear" id="spClear">${esc(t("studio.sp_clear"))}</button></div>
@@ -850,6 +877,13 @@
       else if (window.JavisChatSide && window.JavisChatSide.moKhungAgent)
         window.JavisChatSide.moKhungAgent(a.slug, a.name || a.slug);
     };
+    const selReason = box.querySelector("#agReasoning");
+    if (selReason) {
+      selReason.addEventListener("change", () => {
+        const txt = box.querySelector("#agModelTxt");
+        if (txt) txt.textContent = nhanModel();
+      });
+    }
     box.querySelectorAll("label").forEach(label => { const input = label.nextElementSibling; if (input && /^(INPUT|SELECT|TEXTAREA)$/.test(input.tagName)) label.htmlFor = input.id; });
     // ----- Bảng chọn model: CÙNG thân với bảng dưới khung chat (model-list.js) -----
     // Danh sách model của một nhà chỉ nạp khi nhà đó được sổ ra, nên mở form sửa trợ lý không
@@ -859,9 +893,11 @@
     const dongPop = () => { if (mPop) mPop.hidden = true; };
     async function veModelPop() {
       if (!mPop) return;
+      const defStr = defaultLlmStr();
+      const defLabel = defStr ? (t("studio.model_default") + " · " + defStr) : t("studio.model_default");
       const hangMacDinh = `<div class="mb-item ${mModel ? "" : "cur"}" data-prov="" data-model="">`
         + `<span class="tick">${mModel ? "" : ic("check", { cls: "ic-ok" })}</span>`
-        + `<span>${esc(t("studio.model_default"))}</span></div>`;
+        + `<span>${esc(defLabel)}</span></div>`;
       const o = {
         providers: provs, expanded: mMo, filter: mLoc,
         selected: { provider: mProv, model: mModel },
@@ -935,7 +971,7 @@
     // khung có bộ lọc: vẽ lại theo bộ lọc rồi lúc lưu mới đi đọc DOM thì mọi skill đang bị lọc
     // ra khỏi màn hình sẽ mất tick, im lặng, và người dùng chỉ phát hiện sau khi agent chạy sai.
     const chosen = new Set(a ? (a.skills || []) : []);
-    renderSkillPick(box, skills, chosen);
+    renderSkillPick(box, skills, chosen, opts, moDong);
     // Vẽ trong host thì nút Huỷ vô nghĩa (form nằm sẵn ở cột phải, không có gì để đóng) nên
     // nó đã bị ẩn ở trên; giữ handler để bấm nhầm bằng bàn phím cũng không đóng modal người
     // khác đang mở.
@@ -974,33 +1010,74 @@
     moDong(true);
   }
 
+  // Bảng ánh xạ skill ECC sang gói kỹ năng tương ứng trong Cửa hàng
+  const ECC_SKILL_PACKS = {
+    "api-design": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "backend-patterns": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "frontend-patterns": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "postgres-patterns": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "database-migrations": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "python-patterns": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "python-testing": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "e2e-testing": { id: "javis.ecc-backend-web", name: "ECC: Backend & web" },
+    "coding-standards": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "error-handling": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "ecc-security-review": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "verification-loop": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "tdd-workflow": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "search-first": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+    "codebase-onboarding": { id: "javis.ecc-code-quality", name: "ECC: Code chất lượng" },
+  };
+
   // ===== Khung chọn skill trong màn sửa Agent =====
   // Brain thật đang có 55+ skill, nên danh sách checkbox phẳng là dò bằng mắt qua cả trang.
   // Ở đây: ô tìm + gom nhóm theo field `group` sẵn có của skill (đúng nhóm mà trang Skills
   // dùng, không đẻ cách phân loại thứ hai), mỗi nhóm sổ ra thu vào được.
-  function renderSkillPick(box, skills, chosen) {
+  function renderSkillPick(box, skills, chosen, opts, moDong) {
     const host = box.querySelector("#skillPick");
     if (!host) return;
     const countEl = box.querySelector("#spCount");
     const searchEl = box.querySelector("#spSearch");
+    const dongModal = () => {
+      if (typeof moDong === "function") moDong(false);
+      const se = document.getElementById("studioEditor");
+      if (se) se.classList.remove("open");
+    };
+    // Nhận diện các skill đã gán trong agent nhưng chưa cài đặt trong brain
+    const knownSlugs = new Set(skills.map(s => s.slug));
+    const uninstalledGroup = t("studio.sp_uninstalled_group") || "Chưa cài đặt";
+    const uninstalledItems = [...chosen]
+      .filter(slug => !knownSlugs.has(slug))
+      .map(slug => ({
+        slug,
+        name: slug,
+        group: uninstalledGroup,
+        description: t("studio.sp_uninstalled_desc") || "Kỹ năng chưa có trong bộ não",
+        uninstalled: true,
+      }));
+    const allSkills = uninstalledItems.length ? skills.concat(uninstalledItems) : skills;
     // Nhóm nào đang có skill được tick thì mở sẵn: người sửa agent quan tâm cái đang bật trước.
-    const openGroups = new Set(skills.filter(s => chosen.has(s.slug)).map(s => s.group || "Chung"));
+    const openGroups = new Set(allSkills.filter(s => chosen.has(s.slug)).map(s => s.group || "Chung"));
     let q = "";
 
     const draw = () => {
       const nq = _spNoAccent(q.trim());
       const hop = (s) => !nq || nq.split(/\s+/).every(word => _spNoAccent(`${s.name} ${s.slug} ${s.group || ""} ${s.description || ""}`).includes(word));
       const groups = new Map();
-      skills.forEach(s => {
+      allSkills.forEach(s => {
         if (!hop(s)) return;
         const g = s.group || "Chung";
         if (!groups.has(g)) groups.set(g, []);
         groups.get(g).push(s);
       });
-      if (countEl) countEl.textContent = t("studio.sp_count", { a: chosen.size, b: skills.length });
+      if (countEl) countEl.textContent = t("studio.sp_count", { a: chosen.size, b: allSkills.length });
       if (!groups.size) { host.innerHTML = `<div class="dim sp-empty">${esc(t("studio.sp_empty", { q }))}</div>`; return; }
       host.innerHTML = "";
-      [...groups.keys()].sort((x, y) => x.localeCompare(y, LOC())).forEach(g => {
+      [...groups.keys()].sort((x, y) => {
+        if (x === uninstalledGroup) return 1;
+        if (y === uninstalledGroup) return -1;
+        return x.localeCompare(y, LOC());
+      }).forEach(g => {
         const list = groups.get(g);
         const nSel = list.filter(s => chosen.has(s.slug)).length;
         // Đang tìm thì mọi nhóm còn khớp đều sổ ra - lọc xong mà vẫn phải bấm mở từng nhóm
@@ -1011,14 +1088,111 @@
         wrap.innerHTML = `<button type="button" class="sp-g-head">
             <span class="sp-g-caret">${ic("chevron-right")}</span>
             <span class="sp-g-name">${esc(g)}</span>
-            <span class="sp-g-n">${nSel ? `${nSel}/${list.length}` : list.length}</span>
+            <span class="sp-g-n">${nSel}/${list.length}</span>
           </button><div class="sp-g-body"></div>`;
         const body = wrap.querySelector(".sp-g-body");
+
+        // Nếu là nhóm Chưa cài đặt: hiển thị thông báo rõ ràng kèm CTA mở Cửa hàng hoặc cài đặt gói tương ứng
+        if (g === uninstalledGroup) {
+          const neededPacksMap = new Map();
+          list.forEach(s => {
+            const p = ECC_SKILL_PACKS[s.slug];
+            if (p) neededPacksMap.set(p.id, p);
+          });
+          const neededPacks = [...neededPacksMap.values()];
+          const alertWrap = document.createElement("div");
+          alertWrap.className = "sp-uninstalled-alert";
+          const packNames = neededPacks.map(p => p.name).join(", ");
+          const descText = packNames
+            ? t("studio.sp_uninstalled_alert_desc_packs", { packs: packNames })
+            : t("studio.sp_uninstalled_alert_desc");
+
+          let actionBtns = neededPacks.map(p =>
+            `<button type="button" class="s-btn sp-cta-install" data-pack="${esc(p.id)}" title="${esc(t("studio.sp_install_pack_hint", { name: p.name }))}">${ic("download")} <span>${esc(t("studio.sp_install_pack_btn", { name: p.name }))}</span></button>`
+          ).join("");
+          actionBtns += `<button type="button" class="s-btn-ghost sp-cta-store" title="${esc(t("studio.sp_open_store_hint"))}">${ic("shopping-bag")} <span>${esc(t("studio.sp_open_store"))}</span></button>`;
+
+          alertWrap.innerHTML = `
+            <div class="sp-ua-head">${ic("alert-circle")} <span>${esc(t("studio.sp_uninstalled_alert_title"))}</span></div>
+            <div class="sp-ua-desc">${esc(descText)}</div>
+            <div class="sp-ua-actions">${actionBtns}</div>
+          `;
+
+          // Mở Cửa hàng
+          alertWrap.querySelectorAll(".sp-cta-store").forEach(btn => {
+            btn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              dongModal();
+              const searchKw = neededPacks.length ? "ECC" : "";
+              if (window.JavisPacks && typeof window.JavisPacks.moKho === "function") {
+                window.JavisPacks.moKho("skill", "teams", "Team", searchKw);
+              } else if (window.Alpine && window.Alpine.store && window.Alpine.store("nav")) {
+                window.Alpine.store("nav").go("packs");
+              } else if (window.JavisNav && typeof window.JavisNav.go === "function") {
+                window.JavisNav.go("packs");
+              }
+            };
+          });
+
+          // Cài đặt trực tiếp gói từ kho
+          alertWrap.querySelectorAll(".sp-cta-install").forEach(btn => {
+            btn.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const pid = btn.dataset.pack;
+              dongModal();
+              if (window.JavisPacks && typeof window.JavisPacks.caiGoiKho === "function") {
+                window.JavisPacks.caiGoiKho(pid, {
+                  batSan: true,
+                  sauKhiCai: () => {
+                    if (typeof quenForm === "function") quenForm();
+                    if (typeof loadAgents === "function") loadAgents();
+                  }
+                });
+              } else if (window.JavisPacks && typeof window.JavisPacks.moKho === "function") {
+                window.JavisPacks.moKho("skill", "teams", "Team", "ECC");
+              }
+            };
+          });
+
+          body.appendChild(alertWrap);
+        }
+
         list.forEach(s => {
           const lb = document.createElement("label");
           lb.className = "sp";
           lb.title = s.description || s.name;
-          lb.innerHTML = `<input type="checkbox" value="${esc(s.slug)}"${chosen.has(s.slug) ? " checked" : ""}> <span>${esc(s.name)}</span>`;
+          const badge = s.uninstalled
+            ? ` <span class="dim" style="font-size:11px;color:var(--warn-ink,#e08c28)">(${esc(t("studio.sp_uninstalled_tag") || "chưa cài đặt")})</span>`
+            : "";
+          const packInfo = s.uninstalled ? ECC_SKILL_PACKS[s.slug] : null;
+          const rowBtn = packInfo
+            ? `<button type="button" class="sp-row-install-btn" data-pack="${esc(packInfo.id)}" title="${esc(t("studio.sp_install_pack_hint", { name: packInfo.name }))}">${ic("download")} <span>${esc(t("common.install") || "Cài đặt")}</span></button>`
+            : "";
+          lb.innerHTML = `<input type="checkbox" value="${esc(s.slug)}"${chosen.has(s.slug) ? " checked" : ""}> <span>${esc(s.name)}${badge}</span>${rowBtn}`;
+
+          const nutRow = lb.querySelector(".sp-row-install-btn");
+          if (nutRow) {
+            nutRow.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const pid = nutRow.dataset.pack;
+              dongModal();
+              if (window.JavisPacks && typeof window.JavisPacks.caiGoiKho === "function") {
+                window.JavisPacks.caiGoiKho(pid, {
+                  batSan: true,
+                  sauKhiCai: () => {
+                    if (typeof quenForm === "function") quenForm();
+                    if (typeof loadAgents === "function") loadAgents();
+                  }
+                });
+              } else if (window.JavisPacks && typeof window.JavisPacks.moKho === "function") {
+                window.JavisPacks.moKho("skill", "teams", "Team", "ECC");
+              }
+            };
+          }
+
           lb.querySelector("input").onchange = (e) => {
             if (e.target.checked) { chosen.add(s.slug); openGroups.add(g); } else chosen.delete(s.slug);
             // Vẽ lại để con số của nhóm và ô đếm khớp ngay; Set là nguồn sự thật nên an toàn.

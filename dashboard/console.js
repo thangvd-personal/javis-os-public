@@ -446,6 +446,7 @@
     _fmPending = isDir ? { dir: clean, file: "" } : { dir: parent, file: base };
     const active = window.Alpine ? Alpine.store("nav").active : "";
     if (active === "files") renderPage("files");   // đã ở trang Tệp tin → nạp lại để nhảy tới vị trí mới
+    else if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("files");
     else navigateTo("files");
   }
   if (typeof window !== "undefined") window.JavisOpenFiles = openFilesAt;
@@ -1986,6 +1987,11 @@
       let home = "";
       try { const d = await (await fetch(`/files/list?brain=${encodeURIComponent(fbrain())}`)).json(); home = d.home || ""; }
       catch (e) { }
+      if (home && brainRelDir) {
+        const h = home.replace(/\/+$/, "");
+        if (brainRelDir === h) brainRelDir = "";
+        else if (brainRelDir.indexOf(h + "/") === 0) brainRelDir = brainRelDir.slice(h.length + 1);
+      }
       const full = brainRelDir ? (home ? home + "/" + brainRelDir : brainRelDir) : (home || undefined);
       const d = await load(full);
       // Đường dẫn hoá ra trỏ vào một FILE (server trả `focus` kèm thư mục cha): đó là thứ người
@@ -10813,14 +10819,21 @@
     const workspace = document.getElementById("wsPage");
     const chat = document.getElementById("chatPage");
     const files = document.getElementById("fmEdit");
+    const teams = document.body.classList.contains("on-teams");
     if (workspace) {
-      // Từ 0.142.0 trang Cộng sự không còn tab Thư mục (thay bằng Công việc): "Vị trí file" mở trang Tệp tin, nơi có
-      // cây thư mục thật, rồi soi file trong cây đó.
+      closeNote();
+      openFilesAt(_vtChuanHoaRel(rel));
       if (window.JavisNav && window.JavisNav.go) {
         window.JavisNav.go("files");
-        await new Promise((r) => setTimeout(r, 350));
       }
       document.body.classList.remove("vault-thu");
+      return;
+    } else if (teams) {
+      closeNote();
+      openFilesAt(_vtChuanHoaRel(rel));
+      if (window.JavisNav && window.JavisNav.go) window.JavisNav.go("files");
+      document.body.classList.remove("vault-thu");
+      return;
     } else if (chat) {
       window.JavisChatSide?.tab("files");
       chat.classList.remove("side-thu");

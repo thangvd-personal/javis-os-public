@@ -120,6 +120,15 @@ check("mã tin client mới mỗi lần, dạng chuỗi", TM.newClientId() !== T
 h = TM.membersHtml(team, [{ slug: "hoa", name: "Hoa", agent_key: null, status: "unregistered" }, { slug: "lan", name: "Lan" }]);
 check("thành viên: vai bằng chữ, trạng thái Cộng hưởng bằng chữ", h.includes(vi["teams.leader"]) && h.includes(vi["teams.member"])
       && h.includes(vi["resonance.t0_state_on"]) && h.includes(vi["resonance.t0_state_off"]), h);
+var hLlm = TM.membersHtml({
+  leader_key: "ag_lan",
+  members: [
+    { agent_key: "ag_lan", slug: "lan", name: "Lan", provider: "anthropic-cli", provider_label: "Claude Code", model: "opus", reasoning: "high" },
+    { agent_key: "ag_minh", slug: "minh", name: "Minh", provider: "gemini", provider_label: "Google Gemini (API)", model: "gemini-2.5-pro", reasoning: "off" }
+  ]
+}, []);
+check("thành viên: hiển thị Provider - Model - Thinking (nếu có)",
+      hLlm.includes("Claude Code - opus - High") && hLlm.includes("Google Gemini (API) - gemini-2.5-pro") && !hLlm.includes("gemini-2.5-pro - Off"));
 check("thành viên: nút Đặt làm trưởng nhóm, Bỏ khỏi nhóm", /data-leader="ag_minh"/.test(h) && /data-remove="ag_minh"/.test(h), h);
 check("thêm thành viên: một nút mở hộp chọn (0.142.0; hộp chọn loại người đã trong nhóm, test ở test_team_chat_0142.js)",
       h.includes("tm-add-open") && !h.includes("tm-add-pick"), h);

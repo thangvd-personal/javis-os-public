@@ -1480,7 +1480,7 @@ function handleMessage(data) {
     return;
   }
   if (data.type === "team_message" || data.type === "team_state" || data.type === "team_replies" || data.type === "team_typing" ||
-      data.type === "team_read") {
+      data.type === "team_read" || data.type === "team_tool_event") {
     // Nhóm chat team (T1): tin mới của thành viên, hàng đợi đổi. Trang Nhóm (teams.js) nghe sự kiện này để vẽ lại;
     // trang khác bỏ qua. Không đụng khung chat chính.
     try { window.dispatchEvent(new CustomEvent("javis:team-event", { detail: data })); } catch (e) {}

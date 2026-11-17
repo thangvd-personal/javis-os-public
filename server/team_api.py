@@ -325,8 +325,13 @@ class TeamApi:
         for m in members:
             reg = regs.get(m["agent_key"]) or {}
             ident = self._identity(team, m, reg, by_slug)
-            out.append(dict(ident, agent_key=m["agent_key"], title=str((by_slug.get(ident.get("slug")) or {}).get("title") or "")
-                            if reg.get("status") == "active" else "",
+            meta_info = by_slug.get(ident.get("slug")) or {}
+            out.append(dict(ident, agent_key=m["agent_key"],
+                            title=str(meta_info.get("title") or "") if reg.get("status") == "active" else "",
+                            provider=str(meta_info.get("provider") or ""),
+                            provider_label=str(meta_info.get("provider_label") or ""),
+                            model=str(meta_info.get("model") or ""),
+                            reasoning=str(meta_info.get("reasoning") or ""),
                             role=m["role"], status=m["status"], agent_status=reg.get("status") or "",
                             resonance_enabled=bool(reg.get("enabled")), joined_at=m["joined_at"],
                             managed=bool(m.get("managed_by_team"))))
@@ -1196,9 +1201,11 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 m["reaction"] = got.get(int(m["id"]))
                 m["agent_reactions"] = api.runner().agent_reactions_view(team, agents.get(int(m["id"])))
             import team_usage
+            import team_audit
             acceptance = api.runner().acceptance_view(team, task_id)
             return {"ok": True, "task": task, "steps": api.teams().steps(task_id), "messages": msgs,
                     "acceptance": acceptance,
+                    "tools": team_audit.get_team_tool_records(team_id),
                     "completion_valid": acceptance.get("completion_valid", False) if acceptance else False,
                     "usage": team_usage.task_usage(team_id, task_id)}
         return await api.io(_do)
@@ -1922,6 +1929,31 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             api.teams().set_muted(team_id, on)
             api.runner()._publish({"type": "team_state", "team_id": team_id})
             return {"ok": True, "muted": on}
+        return await api.io(_do)
+
+    @app.get("/teams/{team_id}/audit")
+    async def teams_audit_get(team_id: str, limit: int = 100, brain: str = "brain"):
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            import team_audit
+            return {"ok": True, "entries": team_audit.get_audit_entries(team_id, limit),
+                    "audit_enabled": team_audit.is_audit_enabled(team_id)}
+        return await api.io(_do)
+
+    @app.post("/teams/{team_id}/audit/toggle")
+    async def teams_audit_toggle(team_id: str, request: Request, brain: str = "brain"):
+        body = await _body(request)
+
+        def _do():
+            team, err = _team(team_id, brain)
+            if err:
+                return err
+            import team_audit
+            enabled = bool(body.get("enabled"))
+            ok = team_audit.set_audit_enabled(team_id, enabled)
+            return {"ok": ok, "audit_enabled": enabled}
         return await api.io(_do)
 
     return api
