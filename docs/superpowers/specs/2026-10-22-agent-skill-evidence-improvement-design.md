@@ -863,10 +863,10 @@ Tiêu chuẩn giá trị cuối cùng: sản phẩm đúng hơn, chủ phải s�
 
 Mã đã đối chiếu trực tiếp ở main `a02e45fc`: `VERSION`, `learn.py`, `resonance.py`, `resonance_learning.py`, `team_runner.py`, `team_acceptance.py`, `team_gate.py`, `team_long_memory.py`, `agent_review.py`, `agent_lessons.py`, `agent_rules.py`, `skill_router.py`, `lazy_skill_runtime.py`, `capability_executor.py`, `turn_context.py`, `feedback_projector.py`; cùng các tài liệu T3 learning, Resonance A3/A4. Các đường integration khác tham khảo thêm snapshot `d6781404` ngày 22/10 và phải xác minh lại trên main khi viết plan.
 
-- [Mã nguồn Javis tại snapshot nền](https://github.com/blogminhquy/javis-os/tree/a02e45fcd7c58bb3fde4eac3a850cb87c618621c).
-- [Học trong đội](https://github.com/blogminhquy/javis-os/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/docs/dev/team-chat-t3-learn.md).
-- [Học có kiểm chứng Resonance](https://github.com/blogminhquy/javis-os/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/server/resonance_learning.py).
-- [Quyền Team](https://github.com/blogminhquy/javis-os/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/server/team_gate.py).
+- [Mã nguồn Javis tại snapshot nền](https://github.com/thangvd-personal/javis-os-public/tree/a02e45fcd7c58bb3fde4eac3a850cb87c618621c).
+- [Học trong đội](https://github.com/thangvd-personal/javis-os-public/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/docs/dev/team-chat-t3-learn.md).
+- [Học có kiểm chứng Resonance](https://github.com/thangvd-personal/javis-os-public/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/server/resonance_learning.py).
+- [Quyền Team](https://github.com/thangvd-personal/javis-os-public/blob/a02e45fcd7c58bb3fde4eac3a850cb87c618621c/server/team_gate.py).
 - [Spec Team chất lượng trước chi phí](2026-10-22-team-quality-first-design.md), bản làm việc cục bộ cùng ngày; là dependency thiết kế, không mặc định đã phát hành.
 
 Không có số liệu pilot mới, benchmark model thật, thay đổi sản phẩm hoặc quyết định auto áp dụng được thực hiện trong lần viết tài liệu này. Các cổng trong spec phải được hiện thực và kiểm trước khi báo đã hỗ trợ.

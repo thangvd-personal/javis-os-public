@@ -4,8 +4,8 @@ name: Desktop installers
 #   JavisOS-Setup.exe   (Windows, Inno Setup)   packaging/windows/
 #   JavisOS-macOS.dmg   (macOS, drag to Applications)   packaging/macos/
 # and publishes them on the fixed release tag "desktop", so the download links never change:
-#   https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe
-#   https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg
+#   https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe
+#   https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg
 #
 # Both installers are thin: they clone the newest Javis on first run, so they only need a
 # rebuild when the installer files themselves change, not on every release.

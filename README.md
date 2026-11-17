@@ -148,7 +148,7 @@ Pick the brain on the **Models** page and change it whenever you like. Javis sup
 Every brain can call your connected MCP servers, read and write the brain, run skills, queue Kanban work, and create agents, workflows, loops and reminders. The CLI engines additionally run **shell commands**, **fetch and search the web**, and **spawn parallel sub-agents**.
 
 > [!WARNING]
-> **A note before letting a subscription run background work.** Anthropic scopes Claude Pro/Ultra to **ordinary personal use** of Claude Code. Continuous background execution (loops, reminders, Kanban jobs, chatbots), running on a VPS, or several people sharing one account fall outside that scope, so there is a risk of the account **being locked**, although Javis has no reported case so far. If it happens to you, please tell the developer through [Issues](https://github.com/blogminhquy/javis-os/issues/new/choose). Javis never reads your login token: it runs the real `claude` binary, but that does not make round-the-clock background use legitimate. To be safe, set Claude Code to run on an **API key** on the Models page, or point the **background-work model** at another provider. The same caution applies to the xAI plan. See `server/claude_auth.py`.
+> **A note before letting a subscription run background work.** Anthropic scopes Claude Pro/Ultra to **ordinary personal use** of Claude Code. Continuous background execution (loops, reminders, Kanban jobs, chatbots), running on a VPS, or several people sharing one account fall outside that scope, so there is a risk of the account **being locked**, although Javis has no reported case so far. If it happens to you, please tell the developer through [Issues](https://github.com/thangvd-personal/javis-os-public/issues/new/choose). Javis never reads your login token: it runs the real `claude` binary, but that does not make round-the-clock background use legitimate. To be safe, set Claude Code to run on an **API key** on the Models page, or point the **background-work model** at another provider. The same caution applies to the xAI plan. See `server/claude_auth.py`.
 
 ---
 
@@ -245,7 +245,7 @@ flowchart LR
 > [!IMPORTANT]
 > Javis runs an AI brain with **full rights** on the machine. When it runs publicly (Docker, VPS, Hostinger), Javis **forces login by itself**: opening the app shows a create-account or sign-in screen, and nobody can drive it without a password.
 
-> 💻 **On your own Windows or Mac computer?** Download the installer and open it like any app: [JavisOS-Setup.exe](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe) (Windows 10/11) or [JavisOS-macOS.dmg](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg) (macOS 11+). It checks what is missing (Git, Python, Node, AI brains), installs it, and leaves a JAVIS OS icon to click. Steps: [QUICKSTART.en.md](QUICKSTART.en.md).
+> 💻 **On your own Windows or Mac computer?** Download the installer and open it like any app: [JavisOS-Setup.exe](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe) (Windows 10/11) or [JavisOS-macOS.dmg](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg) (macOS 11+). It checks what is missing (Git, Python, Node, AI brains), installs it, and leaves a JAVIS OS icon to click. Steps: [QUICKSTART.en.md](QUICKSTART.en.md).
 
 <details open>
 <summary><b>Option 1: Hostinger Docker Manager (domain + HTTPS, one click)</b></summary>

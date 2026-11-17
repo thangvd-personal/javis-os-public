@@ -17,7 +17,7 @@
 set -u
 
 JAVIS_HOME="${JAVIS_HOME:-$HOME/JavisOS}"
-REPO="${JAVIS_REPO:-https://github.com/blogminhquy/javis-os.git}"
+REPO="${JAVIS_REPO:-https://github.com/thangvd-personal/javis-os-public.git}"
 BRANCH="${JAVIS_BRANCH:-main}"
 
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; RED='\033[0;31m'; NC='\033[0m'

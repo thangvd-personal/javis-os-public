@@ -20,12 +20,12 @@ cho finalwholebranch; không suppress. Initial review3Important đã sửa; fix1
 review phát hiện I4 contention mới, fix2 re-review I4ADDRESSED/0newbreakage.
 Root kiểm78+32+22indexedfiles, reportprefixes20602/33374 và14currentpins.
 
-Linux initial [40090227041](https://github.com/blogminhquy/javis-os/actions/runs/40090227041)
+Linux initial [40090227041](https://github.com/thangvd-personal/javis-os-public/actions/runs/40090227041)
 24PASS/37skip/1ERROR được giữ nguyên. Portable fixture sửa với validator thật,
 offending RECORD row cũ NOT_CAPTURED. Affected retry
-[40091515738](https://github.com/blogminhquy/javis-os/actions/runs/40091515738)
+[40091515738](https://github.com/thangvd-personal/javis-os-public/actions/runs/40091515738)
 9PASS, finalsource affected
-[40092465143](https://github.com/blogminhquy/javis-os/actions/runs/40092465143)
+[40092465143](https://github.com/thangvd-personal/javis-os-public/actions/runs/40092465143)
 4PASS/0skip. Không gộp thành full final CI hay Windows/native proof.
 
 Root audit12:06:38UTC:97cleanupreceipts/188PID,0current process khớp birth/native
@@ -79,7 +79,7 @@ quả hiệu quả. M2 chỉ dùng mô phỏng; pilot thật vẫn PENDING ngoà
 | Checkout chính cần bảo toàn | `D:\Project\Javis-OS`, có thể bẩn; không reset/clean/checkout/ghi đè |
 | Nhánh | `codex/agent-skill-improvement-m2d1` |
 | HEAD docs trước scope override | `f2c8f3fe` (xác minh full SHA bằng Git) |
-| PR | [draft803](https://github.com/blogminhquy/javis-os/pull/803) |
+| PR | [draft803](https://github.com/thangvd-personal/javis-os-public/pull/803) |
 | Task branch remote đã kiểm | `4ba9624a76cd4bfb54d3d229263baa223944383b`; local code đi trước remote |
 | VERSION | `0.299.0`, không tự coi đã phát hành |
 | Schema đã commit | `10`; schema11 consent chưa triển khai |
@@ -128,10 +128,10 @@ Further owned Library/native/downstream consumers và orchestration comparison
 - [Owned technical preflight](../../superpowers/evidence/2026-10-24-m2-owned-technical-preflight.json):
   source `bee28e3e` + portability test `faa5a221` + I1 fix `0549380e`.
   Original Windows62PASS+1symlinkskip; corrected selector1PASS. Linux retry
-  [40085906579](https://github.com/blogminhquy/javis-os/actions/runs/40085906579)
+  [40085906579](https://github.com/thangvd-personal/javis-os-public/actions/runs/40085906579)
   26PASS/37platformskip. Review phát hiện I1 final-thread-handoff race;3case
   RED thật rồi focusedWindows8PASS, Linux fix-source3PASS/5Windows skip tại
-  [40086473971](https://github.com/blogminhquy/javis-os/actions/runs/40086473971).
+  [40086473971](https://github.com/thangvd-personal/javis-os-public/actions/runs/40086473971).
   Scoped re-review I1 ADDRESSED,0new breakage. ProofSHA `52b482e0a894e75d4fdc29486abbae3d4a830344552bd9935dda0f4fad2f8827`.
   Retain2Minor: raw slowcallbacks và disclosed interim serialization violation;
   final/fixchecks serial, không suppress/rerun nguyên63bài. Root đã kiểm93+15+25
@@ -144,7 +144,7 @@ Further owned Library/native/downstream consumers và orchestration comparison
 - [Product capability exclusion](../../superpowers/evidence/2026-10-24-m2-qualification-capability-exclusion.json):
   source `d0d5b27c` chỉ thêm2điều kiện từ chối vào4boundary hiện có và test thật;
   cleanRED12marker failures, Windows13PASS/Linux13PASS,0skip.
-  Early Linux [40083817343](https://github.com/blogminhquy/javis-os/actions/runs/40083817343)
+  Early Linux [40083817343](https://github.com/thangvd-personal/javis-os-public/actions/runs/40083817343)
   exact5pins, scoped specPASS/qualityApproved0Critical/0Important/1MinorM1.
   ProofSHA `ac258798bd7cf5221bbf9c80fbd0d218cea3e3225120c0ef811122562d2d23b7`.
   M1: slow-task noise17Windows09/14Linux, thêm1ở Windows operation selector;
@@ -154,13 +154,13 @@ Further owned Library/native/downstream consumers và orchestration comparison
   Đây là negative-control gate, không cấp native/account readiness hay chốt M2.
 - [Source observer proof](../../superpowers/evidence/2026-10-24-recipe-source-observer.json):
   source `269d3892`, review snapshot `429d9334`; Windows42pass+1skip và
-  early Linux [40081705134](https://github.com/blogminhquy/javis-os/actions/runs/40081705134)
+  early Linux [40081705134](https://github.com/thangvd-personal/javis-os-public/actions/runs/40081705134)
   exact6pins/43PASS. ProofSHA
   `a0ec009bb3eab3e53756cd37e560429f7f7dc8107de99760b4b6045a9fe43cf9`.
   Root verified69raw artifacts/frozen bytes/cleanup; no final M2/native claim.
 - [Archive view proof](../../superpowers/evidence/2026-10-24-recipe-archive-views.json):
   implementation `bc1a3a68`, docs checkpoint `b3e8901a`; local64PASS,
-  early Linux [40078670232](https://github.com/blogminhquy/javis-os/actions/runs/40078670232)
+  early Linux [40078670232](https://github.com/thangvd-personal/javis-os-public/actions/runs/40078670232)
   exact13pins/76PASS. Independent scoped specPASS/qualityApproved.
   **Không phải full final-task-head CI hoặc native/business proof.**
 - [Archive authoring proof](../../superpowers/evidence/2026-10-24-recipe-archive-authoring.json):

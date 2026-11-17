@@ -44,7 +44,7 @@
       "scope": "consumer11 4.778s plus root-owned cancellation-failure1 .363s,14pins stable; two Important findings closed; no broad review"
     },
     "early_linux": {
-      "url": "https://github.com/blogminhquy/javis-os/actions/runs/40053479314",
+      "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40053479314",
       "commit": "cfdc8cd181a23b51a9585b22802c988ba5469cf5",
       "scripts": 10,
       "passed": 10,

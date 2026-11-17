@@ -587,7 +587,7 @@ full new migration/role/view validation stayed enabled. Final independent root5
 PASS21.636s/12stablepins/no findings, original reviewer-authored6 excluded from
 self-approval. Report9416129700e71677164fad7ee9b3c77ccc02031c9a2ddc26ae5b9900bfd72ca9.
 
-Early isolated [Linux40058375830](https://github.com/blogminhquy/javis-os/actions/runs/40058375830)
+Early isolated [Linux40058375830](https://github.com/thangvd-personal/javis-os-public/actions/runs/40058375830)
 SUCCESS46/46: migration6/boundaries5/execution13/profile7/view15, exact12rawpins,
 commit4a2877aedbdd45e7978f65aa7d6d1757a543c631. Earlier40058040941 retained
 future-version exception failure after103PASS/104tested; unchanged candidate12/
@@ -631,7 +631,7 @@ new-output/current-ref preserving fix. Independent rootrace4+historical1 PASS5/5
 14.943s,15pins stable/no findings; own original7 excluded self-approval. Report
 e6c9055afaf75487ebdddb7590cc4bea80332dc13b381e7f5766f1433f774422.
 
-Early isolated [Linux40056590938](https://github.com/blogminhquy/javis-os/actions/runs/40056590938)
+Early isolated [Linux40056590938](https://github.com/thangvd-personal/javis-os-public/actions/runs/40056590938)
 SUCCESS33/33 across protocol11,host7,races4,existing byte validator11. Exact8 raw
 source/test/license pins verified on isolated commit50a73cc28262e4bf1a9b9159c0d38e3df3f47890,
 fresh Ubuntu/Python3.12, serial no-real-engine fixtures. One initial dispatch500
@@ -802,7 +802,7 @@ consumer11+root-owned cancellation1:12PASS5.141s,14pins stable; report
 fb8a1670e1f0776c1f1bc61c80fe8f9816c65f8af2a5a75e9a882dd70294883f.
 Own author tests/core are explicitly excluded from self-approval.
 
-Early genuine Linux [40053479314](https://github.com/blogminhquy/javis-os/actions/runs/40053479314)
+Early genuine Linux [40053479314](https://github.com/thangvd-personal/javis-os-public/actions/runs/40053479314)
 succeeded10/10scripts17s on isolatedcfdc8cd181a23b51a9585b22802c988ba5469cf5,
 with nine exact selected raw files and fresh remote HOME/DB/filesystem. This is
 not exact-final-task-head full CI. [Public evidence](../evidence/2026-10-24-m2d2-task-skill-snapshots.json)
@@ -2801,7 +2801,7 @@ controls and independent whole-D1 review/CI remain open; Task3 is not done.
   limits and missing preparation/navigation. Those boundaries are in the plan;
   actual effort/internal semantic use stay unknown where unobservable.
 - Reserved VERSION/both changelogs in a2f1b074 and attached draft PR800 before
-  implementation: https://github.com/blogminhquy/javis-os/pull/800.
+  implementation: https://github.com/thangvd-personal/javis-os-public/pull/800.
   Changed-candidate execution, compose, real activation and live canary remain
   unavailable until their actual prerequisites and owner scope grants exist.
 - Task1 tests preserve actual A encrypted authoring and M1 context/case/contract/
@@ -2907,7 +2907,7 @@ controls and independent whole-D1 review/CI remain open; Task3 is not done.
 
 - Worktree: `C:/Users/admin/.codex/worktrees/agent-skill-improvement-m2a/Javis-OS`;
   branch `codex/agent-skill-improvement-m2a`, release0.292.0 reservationf6d8d356,
-  attached draft PR799: https://github.com/blogminhquy/javis-os/pull/799.
+  attached draft PR799: https://github.com/thangvd-personal/javis-os-public/pull/799.
 - Dependency M1 is published as0.291.0 on main9dd7a9f9. Replayed only A's six
   own commits onto that actual merged source; the resulting tree is byte-identical
   to the reviewed A checkpoint b01ddf1b. PR799 targets main for final CI/integration;

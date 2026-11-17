@@ -11,8 +11,8 @@ Faites tourner Javis OS en quelques minutes. Guides complets : [docs/en/](../../
 
 Installez Javis comme n'importe quelle application : téléchargez un fichier, ouvrez-le, et vous avez une icône JAVIS OS à cliquer chaque jour. L'installeur vérifie ce qui manque à l'ordinateur (Git, Python, Node, les cerveaux IA) et n'installe que cela.
 
-- **Windows 10/11 :** téléchargez [JavisOS-Setup.exe](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe), double-cliquez et appuyez sur Next jusqu'au bout. Une fenêtre noire affiche la progression (quelques minutes). À la fin, une icône JAVIS OS apparaît sur le Bureau et dans le menu Démarrer.
-- **macOS 11 ou plus récent :** téléchargez [JavisOS-macOS.dmg](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg), ouvrez-le, glissez **JAVIS OS** dans **Applications**, puis ouvrez-le depuis le Launchpad. La première fois, le Terminal s'ouvre pour installer (il peut demander une fois de créer un compte administrateur Javis et le mot de passe du Mac).
+- **Windows 10/11 :** téléchargez [JavisOS-Setup.exe](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe), double-cliquez et appuyez sur Next jusqu'au bout. Une fenêtre noire affiche la progression (quelques minutes). À la fin, une icône JAVIS OS apparaît sur le Bureau et dans le menu Démarrer.
+- **macOS 11 ou plus récent :** téléchargez [JavisOS-macOS.dmg](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg), ouvrez-le, glissez **JAVIS OS** dans **Applications**, puis ouvrez-le depuis le Launchpad. La première fois, le Terminal s'ouvre pour installer (il peut demander une fois de créer un compte administrateur Javis et le mot de passe du Mac).
 
 Un clic sur l'icône ouvre Javis dans sa propre fenêtre (sans barre d'adresse), Javis démarre avec l'ordinateur et le bouton **Update** de l'application fonctionne comme d'habitude. Vos données sont dans le dossier `JavisOS` de votre dossier utilisateur ; désinstaller l'application conserve ce dossier.
 

@@ -41,4 +41,4 @@ If you run Javis as a chatbot for your own customers (Telegram, Zalo, Messenger 
 
 ## Questions
 
-Open an issue at <https://github.com/blogminhquy/javis-os/issues>. For a security problem, follow [SECURITY.md](SECURITY.md).
+Open an issue at <https://github.com/thangvd-personal/javis-os-public/issues>. For a security problem, follow [SECURITY.md](SECURITY.md).

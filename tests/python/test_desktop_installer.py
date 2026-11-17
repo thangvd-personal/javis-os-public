@@ -219,7 +219,7 @@ check(".dmg mounts with the Javis icon (.VolumeIcon.icns + custom-icon flag)",
       ".VolumeIcon.icns" in build_dmg and "-a C" in build_dmg and "UDRW" in build_dmg)
 
 # ---- one-line installs, no SmartScreen / Gatekeeper block (0.439.1) ----
-REL = "https://github.com/blogminhquy/javis-os/releases/download/desktop/"
+REL = "https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/"
 GET_PS1 = PK / "windows" / "get-javis.ps1"
 GET_SH = PK / "macos" / "get-javis.sh"
 gps = GET_PS1.read_text(encoding="utf-8")
@@ -263,7 +263,7 @@ check("in-repo JAVIS OS.app now has the icon its Info.plist names",
       (ROOT / "JAVIS OS.app" / "Contents" / "Resources" / "javis.icns").exists())
 
 # ---- publishing and docs agree on the download links ----
-base = "https://github.com/blogminhquy/javis-os/releases/download/desktop/"
+base = "https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/"
 PUBLISH = PK / "publish-desktop.sh"
 publish = PUBLISH.read_text(encoding="utf-8")
 check("workflow publishes through packaging/publish-desktop.sh on the fixed 'desktop' release",

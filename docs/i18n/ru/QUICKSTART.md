@@ -11,8 +11,8 @@
 
 Установите Javis как обычное приложение: скачайте один файл, откройте его, и у вас появится значок JAVIS OS для ежедневного запуска. Установщик проверяет, чего не хватает на компьютере (Git, Python, Node, ИИ-движки), и ставит только это.
 
-- **Windows 10/11:** скачайте [JavisOS-Setup.exe](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe), дважды щёлкните и нажимайте Next до конца. Чёрное окно показывает ход установки (несколько минут). После этого на рабочем столе и в меню «Пуск» появится значок JAVIS OS.
-- **macOS 11 и новее:** скачайте [JavisOS-macOS.dmg](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg), откройте, перетащите **JAVIS OS** в **Applications** и запустите из Launchpad. В первый раз откроется Терминал для установки (он может один раз попросить создать учётную запись администратора Javis и ввести пароль Mac).
+- **Windows 10/11:** скачайте [JavisOS-Setup.exe](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe), дважды щёлкните и нажимайте Next до конца. Чёрное окно показывает ход установки (несколько минут). После этого на рабочем столе и в меню «Пуск» появится значок JAVIS OS.
+- **macOS 11 и новее:** скачайте [JavisOS-macOS.dmg](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg), откройте, перетащите **JAVIS OS** в **Applications** и запустите из Launchpad. В первый раз откроется Терминал для установки (он может один раз попросить создать учётную запись администратора Javis и ввести пароль Mac).
 
 По щелчку на значке Javis открывается в отдельном окне (без адресной строки), запускается вместе с компьютером, а кнопка **Update** в приложении работает как обычно. Данные хранятся в папке `JavisOS` в папке пользователя; удаление приложения эту папку не трогает.
 

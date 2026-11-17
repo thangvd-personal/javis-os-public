@@ -62,7 +62,7 @@
   function guideUrl(which) {
     var vi = typeof window !== "undefined" && window.JavisI18n && window.JavisI18n.lang() === "vi";
     var g = GUIDE[which];
-    return "https://github.com/blogminhquy/javis-os/blob/main/docs/" + (vi ? g[0] : "en/" + g[1]);
+    return "https://github.com/thangvd-personal/javis-os-public/blob/main/docs/" + (vi ? g[0] : "en/" + g[1]);
   }
   function guideLink(which, key) {
     return '<a class="msc-guide" href="' + esc(guideUrl(which)) + '" target="_blank" rel="noopener">' + esc(tw(key)) + " ↗</a>";

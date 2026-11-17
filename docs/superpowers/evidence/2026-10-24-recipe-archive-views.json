@@ -762,7 +762,7 @@
       "workflow_sha256": "4891fc582482895fa5eeaee249bd1ec3e81709b670806ac3419dd33b5fc66be6",
       "boundary": "engineering-only; not task-branch CI, native qualification, model or business proof"
     },
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40078670232"
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40078670232"
   },
   "prior_immutable_authoring_proof_sha256": "b19e63eb1f6a5401c7386ad265c89744ad64d7ae80bc4023d70b2f4dd0fa0745",
   "protected_test_sha256": "0577b5181fb090ba897ec8c3d0fce10fe88d2d09d03839497150cdacf6e793e0",

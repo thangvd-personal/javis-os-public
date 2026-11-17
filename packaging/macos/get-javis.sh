@@ -12,7 +12,7 @@
 # ============================================================
 set -euo pipefail
 
-URL="https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg"
+URL="https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg"
 [ "$(uname -s)" = "Darwin" ] || { echo "This installer is for macOS. On Linux run ./install.sh from the repo."; exit 1; }
 
 TMP="$(mktemp -d)"

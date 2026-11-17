@@ -1,7 +1,7 @@
 {
   "version": 1,
   "status": "early_component_ci_success_not_final_head_ci",
-  "run": "https://github.com/blogminhquy/javis-os/actions/runs/40029282316",
+  "run": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40029282316",
   "snapshot": "a86c716e7ae1ff222b5d66c20b9d4254e609d231",
   "snapshot_base": "4ba9624a76cd4bfb54d3d229263baa223944383b",
   "branch": "codex/agent-skill-improvement-channel-linux-check",

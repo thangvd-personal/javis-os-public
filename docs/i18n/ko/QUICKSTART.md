@@ -11,8 +11,8 @@
 
 Javis를 일반 앱처럼 설치하세요. 파일 하나를 내려받아 열면 매일 클릭할 JAVIS OS 아이콘이 생깁니다. 설치 프로그램은 컴퓨터에 없는 것(Git, Python, Node, AI 브레인)을 확인하고 그것만 설치합니다.
 
-- **Windows 10/11:** [JavisOS-Setup.exe](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe)를 내려받아 더블클릭하고 끝까지 Next를 누르세요. 검은 창에 설치 진행 상황이 표시됩니다(몇 분). 끝나면 바탕 화면과 시작 메뉴에 JAVIS OS 아이콘이 생깁니다.
-- **macOS 11 이상:** [JavisOS-macOS.dmg](https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-macOS.dmg)를 내려받아 열고 **JAVIS OS**를 **Applications**로 끌어 놓은 뒤 Launchpad에서 여세요. 처음에는 설치를 위해 터미널이 열립니다(Javis 관리자 계정 설정과 Mac 암호를 한 번 물어볼 수 있습니다).
+- **Windows 10/11:** [JavisOS-Setup.exe](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe)를 내려받아 더블클릭하고 끝까지 Next를 누르세요. 검은 창에 설치 진행 상황이 표시됩니다(몇 분). 끝나면 바탕 화면과 시작 메뉴에 JAVIS OS 아이콘이 생깁니다.
+- **macOS 11 이상:** [JavisOS-macOS.dmg](https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-macOS.dmg)를 내려받아 열고 **JAVIS OS**를 **Applications**로 끌어 놓은 뒤 Launchpad에서 여세요. 처음에는 설치를 위해 터미널이 열립니다(Javis 관리자 계정 설정과 Mac 암호를 한 번 물어볼 수 있습니다).
 
 아이콘을 클릭하면 Javis가 별도 창(주소 표시줄 없음)으로 열리고, 컴퓨터와 함께 자동으로 시작되며, 앱의 **Update** 버튼도 평소처럼 동작합니다. 데이터는 사용자 폴더의 `JavisOS` 폴더에 있으며, 앱을 제거해도 이 폴더는 남습니다.
 

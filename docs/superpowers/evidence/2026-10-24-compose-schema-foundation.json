@@ -121,7 +121,7 @@
     "job_id": 120766305344,
     "status": "completed",
     "conclusion": "success",
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40058375830",
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40058375830",
     "head_sha": "4a2877aedbdd45e7978f65aa7d6d1757a543c631",
     "total_tests": 46,
     "passed": 46,

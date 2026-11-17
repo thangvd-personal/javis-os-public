@@ -151,7 +151,7 @@
     "run_id": 40071193085,
     "job_id": 120804788438,
     "conclusion": "success",
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40071193085",
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40071193085",
     "snapshot_commit": "8e82cdb1cd731a1c9d696444b64c138d5ae92b93",
     "snapshot_parent": "efef01c26a1677f2df240be233ff530dcdc3e583",
     "workflow_sha256": "9e65ef1c60151226e56d02e487bef3ab4642f67b9f0c8a8b83ec9841b9ef0b74",

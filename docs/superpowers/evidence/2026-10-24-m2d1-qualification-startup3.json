@@ -115,7 +115,7 @@
   "dependency_report_sha256": "15298658d9cd7d76ab652101fbbd84686a36fe768ab87bb0479d214255d75440",
   "early_linux": {
     "run_id": 40051859131,
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40051859131",
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40051859131",
     "conclusion": "success",
     "head_sha": "fe7ecb0185f5835527b8042843248f88c5b951a7",
     "snapshot": {

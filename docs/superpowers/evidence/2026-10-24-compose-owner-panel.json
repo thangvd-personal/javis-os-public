@@ -288,7 +288,7 @@
   "early_linux": {
     "run_id": 40068923965,
     "job_id": 120797950847,
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40068923965",
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40068923965",
     "snapshot": "d11365108d7a3fbc1fd8f644880584247ab2919e",
     "parent": "95790edbbb240bc794b7a48f44a0db6001ff8e9d",
     "exact_raw_pins": 12,

@@ -6,7 +6,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
 
 ## What is signed
 
-Only one file: **`JavisOS-Setup.exe`**, the Windows installer of JAVIS OS, published on the [`desktop` release](https://github.com/blogminhquy/javis-os/releases/tag/desktop).
+Only one file: **`JavisOS-Setup.exe`**, the Windows installer of JAVIS OS, published on the [`desktop` release](https://github.com/thangvd-personal/javis-os-public/releases/tag/desktop).
 
 - It is built from this repository by the public workflow [`.github/workflows/desktop-installers.yml`](../.github/workflows/desktop-installers.yml), on GitHub-hosted runners, from [`packaging/windows/javis-setup.iss`](../packaging/windows/javis-setup.iss). Nobody builds or signs a release on a personal computer.
 - It contains the installer script `bootstrap.ps1`, two short text pages, an icon and the wizard pictures. No third-party binary is packed inside it.

@@ -28,7 +28,7 @@
 # ============================================================
 param(
   [string]$Dir = (Join-Path $env:USERPROFILE "JavisOS"),
-  [string]$Repo = "https://github.com/blogminhquy/javis-os.git",
+  [string]$Repo = "https://github.com/thangvd-personal/javis-os-public.git",
   [string]$Branch = "main",
   [string]$LogFile = "",
   [switch]$SkipCli,   # passed on to install.ps1: no third-party CLI installers (wizard task unticked)

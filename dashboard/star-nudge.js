@@ -185,14 +185,14 @@
     the = el;
 
     var mo = function () {
-      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) { }
+      try { window.open(d.url || "https://github.com/thangvd-personal/javis-os-public", "_blank", "noopener"); } catch (e) { }
       post("/star-nudge/action", { action: "opened" });
       el.querySelector(".sn-moi").hidden = true;
       el.querySelector(".sn-cho").hidden = false;
     };
     el.querySelector(".sn-go").onclick = mo;
     el.querySelector(".sn-molai").onclick = function () {
-      try { window.open(d.url || "https://github.com/blogminhquy/javis-os", "_blank", "noopener"); } catch (e) { }
+      try { window.open(d.url || "https://github.com/thangvd-personal/javis-os-public", "_blank", "noopener"); } catch (e) { }
     };
     el.querySelector(".sn-xong").onclick = function () {
       post("/star-nudge/action", { action: "done" });

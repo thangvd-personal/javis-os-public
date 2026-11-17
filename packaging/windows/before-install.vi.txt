@@ -1,7 +1,7 @@
 ﻿JAVIS OS Setup: bộ cài này làm những gì
 
 JAVIS OS là phần mềm mã nguồn mở (giấy phép MIT):
-https://github.com/blogminhquy/javis-os
+https://github.com/thangvd-personal/javis-os-public
 
 NHỮNG THAY ĐỔI TRÊN MÁY NÀY
 
@@ -23,7 +23,7 @@ JAVIS OS chạy trên chính máy của bạn. Không theo dõi, không gửi s�
 
 Tự nó, Javis chỉ tải các file công khai từ GitHub và PyPI để xem có bản cập nhật hay không, và giữ các công cụ AI dòng lệnh ở bản mới qua trình cập nhật của chính hãng.
 
-Bản đầy đủ (tiếng Anh): https://github.com/blogminhquy/javis-os/blob/main/PRIVACY.md
+Bản đầy đủ (tiếng Anh): https://github.com/thangvd-personal/javis-os-public/blob/main/PRIVACY.md
 
 GỠ CÀI ĐẶT
 

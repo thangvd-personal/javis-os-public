@@ -17,7 +17,7 @@
   $ErrorActionPreference = "Stop"
   $ProgressPreference = "SilentlyContinue"   # the PS 5.1 progress bar makes downloads 10x slower
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-  $url = "https://github.com/blogminhquy/javis-os/releases/download/desktop/JavisOS-Setup.exe"
+  $url = "https://github.com/thangvd-personal/javis-os-public/releases/download/desktop/JavisOS-Setup.exe"
   $out = Join-Path $env:TEMP "JavisOS-Setup.exe"
   Write-Host ""
   Write-Host "  JAVIS OS: dang tai bo cai... (downloading the installer)" -ForegroundColor Cyan

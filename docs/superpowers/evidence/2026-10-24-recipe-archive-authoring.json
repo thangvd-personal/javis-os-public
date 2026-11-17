@@ -540,7 +540,7 @@
         "workflow_sha256": "eb715c236ead625a2ec600fe0991d1bcc40ad3a6218e4e1992394e15a41aca93",
         "boundary": "engineering-only; not task-branch CI, native qualification, model or business proof"
       },
-      "url": "https://github.com/blogminhquy/javis-os/actions/runs/40074394806"
+      "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40074394806"
     },
     {
       "run_id": 40075062683,
@@ -579,7 +579,7 @@
         "workflow_sha256": "2968522fbda12d81899cfa9619cf29b28a70607e02d7f63810230c2135f062f7",
         "boundary": "engineering-only; not task-branch CI, native qualification, model or business proof"
       },
-      "url": "https://github.com/blogminhquy/javis-os/actions/runs/40075062683"
+      "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40075062683"
     }
   ],
   "protected_test_sha256": "0577b5181fb090ba897ec8c3d0fce10fe88d2d09d03839497150cdacf6e793e0",

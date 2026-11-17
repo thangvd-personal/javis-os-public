@@ -225,7 +225,7 @@
     "run_id": 40081705134,
     "job_id": 120836433669,
     "conclusion": "success",
-    "url": "https://github.com/blogminhquy/javis-os/actions/runs/40081705134",
+    "url": "https://github.com/thangvd-personal/javis-os-public/actions/runs/40081705134",
     "source_head": "429d9334afa792116ad80e02f0f3bf2fd11e46af",
     "sha256": {
       "server/improvement_recipe_sources.py": "fea6886fc6fbcfa56f50f79aefb90c07d4222d1c7b3cc82e589d680a51f0d986",
