@@ -17,6 +17,7 @@ Host kiểm từng op theo vai của lượt; op sai bị bỏ kèm ghi chú tr�
 """
 from __future__ import annotations
 
+import ast
 import asyncio
 import contextlib
 import hashlib
@@ -300,6 +301,92 @@ EngineFn = Callable[[dict], Awaitable[dict]]
 _UNPINNED = object()
 
 
+def _repair_and_parse_json(raw: str) -> dict | None:
+    """Cố gắng giải mã JSON của khối JAVIS_TEAM, tự động hiệu chỉnh các lỗi cú pháp nhẹ của model."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+
+    # 1. Thử chuẩn
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return obj
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    # 2. Thử strict=False (cho phép ký tự xuống dòng hoặc điều khiển chưa escape trong chuỗi)
+    try:
+        obj = json.loads(raw, strict=False)
+        if isinstance(obj, dict):
+            log.info("Khối JAVIS_TEAM được giải mã thành công với strict=False")
+            return obj
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    # 3. Gọt markdown code fence nếu có
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+    if cleaned != raw:
+        try:
+            obj = json.loads(cleaned, strict=False)
+            if isinstance(obj, dict):
+                log.info("Khối JAVIS_TEAM được giải mã sau khi gọt markdown fence")
+                return obj
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    # 4. Thử raw_decode nếu bị thừa ký tự ở đuôi (ví dụ thừa dấu đóng "} }")
+    try:
+        decoder = json.JSONDecoder(strict=False)
+        obj, idx = decoder.raw_decode(cleaned)
+        remainder = cleaned[idx:].strip()
+        if isinstance(obj, dict) and (not remainder or re.fullmatch(r"[\s,;}\]]*", remainder)):
+            log.info("Khối JAVIS_TEAM được giải mã sau khi bỏ ký tự thừa ở đuôi: %r", remainder[:40])
+            return obj
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    # 5. Khắc phục dấu phẩy thừa trước ] hoặc }
+    without_trailing_commas = re.sub(r",\s*([\]}])", r"\1", cleaned)
+    try:
+        obj = json.loads(without_trailing_commas, strict=False)
+        if isinstance(obj, dict):
+            log.info("Khối JAVIS_TEAM được giải mã sau khi bỏ dấu phẩy thừa")
+            return obj
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    try:
+        decoder = json.JSONDecoder(strict=False)
+        obj, idx = decoder.raw_decode(without_trailing_commas)
+        remainder = without_trailing_commas[idx:].strip()
+        if isinstance(obj, dict) and (not remainder or re.fullmatch(r"[\s,;}\]]*", remainder)):
+            log.info("Khối JAVIS_TEAM được giải mã sau khi bỏ dấu phẩy và ký tự thừa")
+            return obj
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    # 6. Thử ast.literal_eval nếu model dùng nháy đơn kiểu dict Python
+    try:
+        val = ast.literal_eval(cleaned)
+        if isinstance(val, dict):
+            log.info("Khối JAVIS_TEAM dạng literal dict được giải mã thành công")
+            return val
+    except Exception:
+        pass
+
+    try:
+        val = ast.literal_eval(without_trailing_commas)
+        if isinstance(val, dict):
+            log.info("Khối JAVIS_TEAM dạng literal dict được giải mã thành công sau khi bỏ dấu phẩy thừa")
+            return val
+    except Exception:
+        pass
+
+    return None
+
+
 def parse_directives(text: str) -> tuple[str, list, list]:
     """Tách khối JAVIS_TEAM khỏi câu trả lời. Trả (chữ sạch, danh sách op, ghi chú lỗi)."""
     ops: list = []
@@ -307,9 +394,8 @@ def parse_directives(text: str) -> tuple[str, list, list]:
 
     def take(m: re.Match) -> str:
         raw = m.group(1).strip()
-        try:
-            obj = json.loads(raw)
-        except (json.JSONDecodeError, TypeError, ValueError):
+        obj = _repair_and_parse_json(raw)
+        if obj is None:
             notes.append("Khối JAVIS_TEAM hỏng (không đọc được JSON), đã bỏ")
             return ""
         if not isinstance(obj, dict) or not isinstance(obj.get("op"), str):

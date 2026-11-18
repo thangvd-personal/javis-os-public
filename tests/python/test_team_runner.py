@@ -694,6 +694,15 @@ run(r.run_replies(r.submit(T["team_id"], "Minh?", mentions=["ag_minh"], client_m
 check("lượt trò chuyện không được giao việc hay nhờ người khác", len(fake.calls) == 1
       and not ts.team_queue(T["team_id"])["waiting"])
 
+# Tự động nắn chỉnh lỗi JSON nhẹ (thừa dấu đóng, newline chưa escape, trailing comma, nháy đơn)
+clean_r, ops_r, notes_r = TR.parse_directives(
+    'Báo cáo.\n<!-- JAVIS_TEAM: {"op": "open_job", "title": "Mockup", "brief": "Mô tả\nXuống dòng"} } -->\n'
+    '<!-- JAVIS_TEAM: {\x27op\x27: \x27assign\x27, \x27agent\x27: \x27ag_minh\x27, \x27brief\x27: \x27làm\x27, } -->'
+)
+check("tự sửa lỗi JSON khối JAVIS_TEAM (thừa ngoặc, newline, trailing comma, nháy đơn)",
+      clean_r == "Báo cáo." and len(ops_r) == 2 and ops_r[0]["op"] == "open_job"
+      and ops_r[1]["agent"] == "ag_minh" and not notes_r)
+
 # ---------- Sửa sau review cuối T1 ----------
 ss, ts, tm, fake, r, pub, inbox, gone = world("review")
 T = make_team(tm, ss, "Review")
