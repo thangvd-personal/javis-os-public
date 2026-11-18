@@ -142,6 +142,7 @@ def record_audit(
     tokens_in: int | None = None,
     tokens_out: int | None = None,
     cost_usd: float | None = None,
+    status: str = "completed",
     extra_details: dict[str, Any] | None = None
 ) -> dict[str, Any] | None:
     """Ghi mot ban ghi audit day du vao ca JSONL lan SQLite."""
@@ -160,6 +161,7 @@ def record_audit(
         "action": action,
         "model": model,
         "provider": provider,
+        "status": status or "completed",
         "tool_calls": tools_list,
         "llm_request": {
             "system_prompt": system_prompt,
@@ -220,17 +222,18 @@ def record_audit(
     return entry
 
 
-def get_audit_entries(team_id: str, limit: int = 100) -> list[dict[str, Any]]:
+def get_audit_entries(team_id: str, limit: int = 300) -> list[dict[str, Any]]:
     """Lay danh sach cac ban ghi audit cua team tu SQLite hoac file JSONL."""
     if not team_id:
         return []
     out = []
     try:
+        lim = max(1, min(int(limit or 300), 1000))
         if TEAM_DB_PATH.exists():
             with closing(_conn()) as conn:
                 rows = conn.execute(
                     "SELECT details_json FROM team_audit_log WHERE team_id=? ORDER BY id DESC LIMIT ?",
-                    (team_id, max(1, min(int(limit), 500)))
+                    (team_id, lim)
                 ).fetchall()
                 for r in rows:
                     try:
@@ -242,12 +245,22 @@ def get_audit_entries(team_id: str, limit: int = 100) -> list[dict[str, Any]]:
             team_file = STATE_DIR / f"team_audit_{team_id}.jsonl"
             if team_file.exists():
                 lines = team_file.read_text(encoding="utf-8").splitlines()
-                for line in reversed(lines[-limit:]):
+                for line in reversed(lines[-lim:]):
                     if line.strip():
                         try:
                             out.append(json.loads(line))
                         except Exception:
                             pass
+        for e in out:
+            if not e.get("status"):
+                res_txt = str((e.get("llm_response") or {}).get("text") or "")
+                extra = e.get("extra") or {}
+                if extra.get("error") or res_txt.startswith("ERROR:"):
+                    e["status"] = "error"
+                elif "ask_approval" in res_txt or (extra.get("gate") or {}).get("needs_approval"):
+                    e["status"] = "approval"
+                else:
+                    e["status"] = "completed"
     except Exception as ex:
         log.debug("get_audit_entries error for %s: %s", team_id, ex)
     return out

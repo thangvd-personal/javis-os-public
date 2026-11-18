@@ -1932,13 +1932,25 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
         return await api.io(_do)
 
     @app.get("/teams/{team_id}/audit")
-    async def teams_audit_get(team_id: str, limit: int = 100, brain: str = "brain"):
+    async def teams_audit_get(team_id: str, limit: int = 300, brain: str = "brain"):
         def _do():
             team, err = _team(team_id, brain)
             if err:
                 return err
             import team_audit
-            return {"ok": True, "entries": team_audit.get_audit_entries(team_id, limit),
+            entries = team_audit.get_audit_entries(team_id, limit)
+            try:
+                task_store = deps.task_store()
+                if task_store:
+                    for e in entries:
+                        tid = e.get("task_id")
+                        if tid and not e.get("task_title"):
+                            t = task_store.get_task(tid)
+                            if t and t.get("title"):
+                                e["task_title"] = t["title"]
+            except Exception:
+                pass
+            return {"ok": True, "entries": entries,
                     "audit_enabled": team_audit.is_audit_enabled(team_id)}
         return await api.io(_do)
 

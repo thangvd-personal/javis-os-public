@@ -2758,7 +2758,24 @@ class TeamRunner:
                 else:
                     await self._io(self._refund_if_unmarked, turn_id)
                 mins = max(1, round(limit / 60))
-                return {"status": "error", "error": f"quá {mins} phút chưa có câu trả lời", "reason": "timeout",
+                err_msg = f"quá {mins} phút chưa có câu trả lời"
+                try:
+                    import team_audit
+                    if team_audit.is_audit_enabled(team_id):
+                        team_audit.record_audit(
+                            team_id, agent_key, role,
+                            task_id=task_id, step_id=step_id, turn_id=turn_id,
+                            model=str(prep.get("model") or ""),
+                            provider=str(prep.get("engine") or ""),
+                            system_prompt=str(req.get("system") or ""),
+                            user_prompt=str(req.get("prompt") or ""),
+                            response_text=f"ERROR: {err_msg}",
+                            status="error",
+                            extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode"), "error": err_msg}
+                        )
+                except Exception:
+                    pass
+                return {"status": "error", "error": err_msg, "reason": "timeout",
                         "detail": f"{mins}", "turn_id": turn_id, "before_engine": not marked}
             except asyncio.CancelledError:
                 if marked:
@@ -2770,7 +2787,24 @@ class TeamRunner:
                 if not marked:
                     # Chưa tới mốc gọi model (engine chưa dựng được): hoàn đúng một lần, bước thành lỗi để Chạy lại.
                     await self._io(self._refund_if_unmarked, turn_id)
-                    return {"status": "error", "error": f"Không dựng được engine: {str(ex)[:300]}",
+                    err_msg = f"Không dựng được engine: {str(ex)[:300]}"
+                    try:
+                        import team_audit
+                        if team_audit.is_audit_enabled(team_id):
+                            team_audit.record_audit(
+                                team_id, agent_key, role,
+                                task_id=task_id, step_id=step_id, turn_id=turn_id,
+                                model=str(prep.get("model") or ""),
+                                provider=str(prep.get("engine") or ""),
+                                system_prompt=str(req.get("system") or ""),
+                                user_prompt=str(req.get("prompt") or ""),
+                                response_text=f"ERROR: {err_msg}",
+                                status="error",
+                                extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode"), "error": err_msg}
+                            )
+                    except Exception:
+                        pass
+                    return {"status": "error", "error": err_msg,
                             "before_engine": True, "turn_id": turn_id}
                 await self._io(self._settle_turn, turn_id, "error")
                 msg = (OUTCOME_TEXT.get(ex.kind, ex.kind) + (f" ({ex.detail})" if ex.detail else "")
@@ -2778,10 +2812,25 @@ class TeamRunner:
                 # `detail`: riêng câu của engine (dòng trạng thái lượt trả lời đã có nhãn lý do, khỏi lặp lại).
                 detail = (ex.detail or OUTCOME_TEXT.get(ex.kind, ex.kind)) if isinstance(ex, EngineOutcomeError) else str(ex)
                 kind = "auth" if isinstance(ex, EngineOutcomeError) and ex.kind == "auth" else ""
-                # 0.436.0 (team_retry): how many tools the failed turn called (None = unknown, set by the real engine)
-                # and which engine ran it, so a temporary error may run again without repeating an action.
                 calls = getattr(ex, "team_tool_calls", None)
-                return {"status": "error", "error": msg[:500], "detail": detail[:500], "turn_id": turn_id,
+                err_msg = msg[:500]
+                try:
+                    import team_audit
+                    if team_audit.is_audit_enabled(team_id):
+                        team_audit.record_audit(
+                            team_id, agent_key, role,
+                            task_id=task_id, step_id=step_id, turn_id=turn_id,
+                            model=str(prep.get("model") or ""),
+                            provider=str(prep.get("engine") or ""),
+                            system_prompt=str(req.get("system") or ""),
+                            user_prompt=str(req.get("prompt") or ""),
+                            response_text=f"ERROR: {err_msg}",
+                            status="error",
+                            extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode"), "error": err_msg}
+                        )
+                except Exception:
+                    pass
+                return {"status": "error", "error": err_msg, "detail": detail[:500], "turn_id": turn_id,
                         "reason": kind, "tool_calls": calls if isinstance(calls, int) else None,
                         "engine": prep["engine"]}
             finally:
@@ -2796,18 +2845,25 @@ class TeamRunner:
             try:
                 import team_audit
                 if team_audit.is_audit_enabled(team_id):
+                    st_val = "completed"
+                    if "ask_approval" in str(res.get("text") or "") or (gate_out and gate_out.get("needs_approval")):
+                        st_val = "approval"
+                    elif (res.get("extra") or {}).get("report", {}).get("outcome") == "failed":
+                        st_val = "error"
                     team_audit.record_audit(
                         team_id, agent_key, role,
                         task_id=task_id, step_id=step_id, turn_id=turn_id,
                         model=str(prep.get("model") or ""),
                         provider=str(prep.get("engine") or ""),
+                        tool_calls=res.get("tool_calls"),
                         system_prompt=str(req.get("system") or ""),
                         user_prompt=str(req.get("prompt") or ""),
                         response_text=str(res.get("text") or ""),
                         tokens_in=res.get("tokens_in"),
                         tokens_out=res.get("tokens_out"),
                         cost_usd=res.get("cost_usd"),
-                        extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode")}
+                        status=st_val,
+                        extra_details={"attempt": (task or {}).get("attempts"), "work_mode": req.get("work_mode"), "gate": gate_out}
                     )
             except Exception:
                 log.debug("team audit record failed", exc_info=True)
@@ -4091,7 +4147,10 @@ class TeamRunner:
             retry = self._auto_retry_plan(team, task, step, out)
             if retry is not None:
                 return self._block_for_retry(team, task, step, out, retry)
-            return self._block(task["id"], "failed", f"Trợ lý gặp lỗi khi làm: {out['error']}")
+            who = self._name(team, step.get("agent_key") or "") or "Trợ lý"
+            return self._block(task["id"], "failed", localefmt.chu(
+                "{w} gặp lỗi khi làm: {e}", "{w} hit an error while working: {e}",
+                w=who, e=out["error"]))
         mid = out.get("message_id")
         if st == "lease_lost":
             # Mất quyền giữ giữa lượt (review T1 #3). Việc đã sang tiến trình khác: không đụng bước, dừng vòng này.

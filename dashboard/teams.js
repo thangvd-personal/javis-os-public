@@ -2228,6 +2228,8 @@
       renaming: "", renamingHead: false, replyTo: null, plusOpen: false, dict: null, dictBase: "", dictState: "idle", dictSend: false,
       atts: [], folder: null, repos: [], ghIcon: null, skills: null, skillsBrain: "", info: null, typing: [], pinned: [], pinsOpen: false, tagFilter: readTagFilter(),
       taskSteps: {}, loadingSteps: {}, stepsOpen: {},
+      auditOpen: false, auditEntries: [], auditLoading: false, auditEnabled: false,
+      auditKw: "", auditTime: "all", auditAgent: "all", auditAction: "all", auditTool: "all", auditStatus: "all",
       autoOpened: false, unclamped: {}, outbox: [],
       listTab: "teams", treeKind: "worktree", treeRepo: "", treeData: null, treeLoading: false, treeSearch: "", treeExpanded: {}, treeActiveFile: "", treeItemMap: {} };
   }
@@ -2284,7 +2286,8 @@
       // file link in the chat is clicked, like the Partners page's #wsEdit. It takes the whole chat column while open
       // (console.css .tm-chat.edit-on); closing the file brings the chat back as it was. `data-ne-host` is how
       // console.js finds it; without it the editor opened behind this page and nothing showed.
-      '<div class="tm-edit" data-ne-host></div></section>' +
+      '<div class="tm-edit" data-ne-host></div>' +
+      '<div class="tm-audit-view" hidden></div></section>' +
       // Vùng thông báo chung NGOÀI khung chat: trên điện thoại khung chat bị ẩn khi đang ở danh sách, thông báo (vd. ghim
       // lỗi) vẫn phải nhìn thấy (review 4f6268bd #2).
       '<aside class="tm-side" hidden></aside><div class="tm-scrim" hidden></div><div class="tm-note" role="status" aria-live="polite" hidden></div></div>';
@@ -2774,6 +2777,10 @@
         '<button type="button" class="ws-btn tm-icon tm-search-btn" aria-label="' + esc(tw("teams.search")) + '" title="' +
         esc(tw("teams.search")) + '"' + (S.searchOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("search") +
         "</button>" +
+        '<button type="button" class="ws-btn tm-icon tm-audit-btn' + (S.auditOpen ? " on" : "") + '" aria-label="' +
+        esc(tw(S.auditOpen ? "teams.audit_log_close" : "teams.audit_log_view")) + '" title="' +
+        esc(tw(S.auditOpen ? "teams.audit_log_close" : "teams.audit_log_view")) + '"' +
+        (S.auditOpen ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" + ic("scroll-text") + "</button>" +
         '<button type="button" class="ws-btn tm-icon tm-gear" aria-expanded="' + (S.side && S.tab === "team" ? "true" : "false") +
         '" aria-label="' + esc(tw("teams.settings_btn")) + '" title="' + esc(tw("teams.settings_btn")) + '">' +
         ic("settings") + "</button>";
@@ -3055,6 +3062,395 @@
     var h = S.team ? jobStripHtml(S.queue) : "";
     bar.hidden = !h;
     bar.innerHTML = h;
+  }
+
+  function formatAuditTime(ts) {
+    if (!ts) return "";
+    var d = new Date(Number(ts) * 1000);
+    return pad2(d.getDate()) + "/" + pad2(d.getMonth() + 1) + "/" + d.getFullYear() + " " +
+      pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+  }
+
+  function timeAgo(ts) {
+    if (!ts) return "";
+    var diff = Math.max(0, Math.floor((Date.now() - Number(ts) * 1000) / 1000));
+    if (diff < 60) return "vừa xong";
+    if (diff < 3600) return Math.floor(diff / 60) + " phút trước";
+    if (diff < 86400) return Math.floor(diff / 3600) + " giờ trước";
+    return Math.floor(diff / 86400) + " ngày trước";
+  }
+
+  function filterAuditEntries(entries, opts) {
+    if (!entries || !entries.length) return [];
+    var opt = opts || {};
+    var nowSec = Date.now() / 1000;
+    var kw = (opt.kw != null ? opt.kw : (S && S.auditKw) || "").trim().toLowerCase();
+    var timeFilter = opt.time != null ? opt.time : (S && S.auditTime) || "all";
+    var agentFilter = opt.agent != null ? opt.agent : (S && S.auditAgent) || "all";
+    var actionFilter = opt.action != null ? opt.action : (S && S.auditAction) || "all";
+    var toolFilter = opt.tool != null ? opt.tool : (S && S.auditTool) || "all";
+    var statusFilter = opt.status != null ? opt.status : (S && S.auditStatus) || "all";
+
+    return entries.filter(function (e) {
+      if (timeFilter === "1h" && e.ts && (nowSec - e.ts > 3600)) return false;
+      if (timeFilter === "24h" && e.ts && (nowSec - e.ts > 86400)) return false;
+      if (timeFilter === "7d" && e.ts && (nowSec - e.ts > 7 * 86400)) return false;
+      if (timeFilter === "30d" && e.ts && (nowSec - e.ts > 30 * 86400)) return false;
+
+      if (agentFilter && agentFilter !== "all" && e.agent_key !== agentFilter) return false;
+      if (actionFilter && actionFilter !== "all" && e.action !== actionFilter) return false;
+
+      var calls = e.tool_calls || [];
+      if (toolFilter === "_has_tools" && calls.length === 0) return false;
+      if (toolFilter === "_no_tools" && calls.length > 0) return false;
+      if (toolFilter && toolFilter !== "all" && toolFilter !== "_has_tools" && toolFilter !== "_no_tools") {
+        var hasTool = calls.some(function (tc) { return (tc.tool || tc.name) === toolFilter; });
+        if (!hasTool) return false;
+      }
+
+      var st = e.status || "completed";
+      if (statusFilter && statusFilter !== "all" && st !== statusFilter) return false;
+
+      if (kw) {
+        var txt = "";
+        var req = e.llm_request || {};
+        var res = e.llm_response || {};
+        var extra = e.extra || {};
+        txt += (req.user_prompt || e.user_prompt || e.prompt || "") + " " +
+               (req.system_prompt || e.system_prompt || "") + " " +
+               (res.text || e.response_text || e.response || "") + " " +
+               (e.model || "") + " " + (e.provider || "") + " " +
+               (e.task_id || "") + " " + (e.task_title || "") + " " + (e.step_id || "") + " " +
+               (e.action || "") + " " + (extra.error || e.error || "");
+        for (var i = 0; i < calls.length; i++) {
+          var tc = calls[i];
+          txt += " " + (tc.tool || tc.name || "") + " " + (tc.cmd || "") + " " + (tc.output || tc.head || "");
+        }
+        var members = opt.members || ((S && S.team) ? S.team.members : []);
+        var mName = nameOf(members, e.agent_key);
+        if (mName) txt += " " + mName;
+        if (e.agent_name) txt += " " + e.agent_name;
+        if (txt.toLowerCase().indexOf(kw) < 0) return false;
+      }
+
+      return true;
+    });
+  }
+
+  function auditEntryCardHtml(e, members) {
+    var m = memberOf(members, e.agent_key);
+    var name = m ? (m.name || m.slug || e.agent_key) : e.agent_key;
+    var ava = agentAva(m || { name: name }, 28);
+    var st = e.status || "completed";
+    var stClass = st === "error" ? "is-error" : st === "approval" ? "is-approval" : "is-completed";
+    var stBadgeClass = st === "error" ? "tm-status-error" : st === "approval" ? "tm-status-approval" : "tm-status-completed";
+    var stLabel = st === "error" ? tw("teams.audit_status_error") : st === "approval" ? tw("teams.audit_status_approval") : tw("teams.audit_status_done");
+
+    var actLabel = e.action === "work" ? tw("teams.audit_action_work") :
+                   e.action === "plan" ? tw("teams.audit_action_plan") :
+                   e.action === "synthesize" ? tw("teams.audit_action_synthesize") :
+                   e.action === "help" ? tw("teams.audit_action_help") :
+                   e.action === "leader_reply" ? tw("teams.audit_action_reply") :
+                   e.action === "member_volunteer" ? tw("teams.audit_action_volunteer") : e.action;
+
+    var fullTime = formatAuditTime(e.ts);
+    var ago = timeAgo(e.ts);
+
+    var res = e.llm_response || {};
+    var req = e.llm_request || {};
+    var calls = e.tool_calls || [];
+    var extra = e.extra || {};
+
+    var tokens = [];
+    if (res.tokens_in != null) tokens.push(res.tokens_in + " in");
+    if (res.tokens_out != null) tokens.push(res.tokens_out + " out");
+    if (res.cost_usd != null && res.cost_usd > 0) tokens.push("$" + Number(res.cost_usd).toFixed(4));
+    var tokensStr = tokens.length ? tokens.join(" • ") : "";
+
+    var taskInfo = "";
+    if (e.task_id) {
+      var tTitle = e.task_title || (S && S.taskTitles && S.taskTitles[e.task_id]) || e.task_id;
+      taskInfo = '<span class="tm-tag" title="' + esc(e.task_id) + '">' + ic("list-todo") + '<span class="tm-tag-text">' + esc(tTitle) + '</span></span>';
+    }
+
+    var toolsHtml = "";
+    if (calls.length) {
+      toolsHtml = '<div class="tm-audit-tools"><div class="tm-audit-tools-head">' +
+        ic("wrench") + ' <strong>' + esc(tw("teams.audit_tool_calls_title")) + ' (' + calls.length + ')</strong></div>' +
+        '<div class="tm-audit-tools-list">' +
+        calls.map(function (tc) {
+          var tcTool = tc.tool || tc.name || "tool";
+          var isOk = tc.ok !== false;
+          var cmdStr = typeof tc.cmd === "string" ? tc.cmd : tc.arguments ? JSON.stringify(tc.arguments, null, 2) : "";
+          var outStr = typeof (tc.head || tc.output) === "string" ? (tc.head || tc.output) : tc.output ? JSON.stringify(tc.output, null, 2) : "";
+          return '<div class="tm-audit-tool-call' + (!isOk ? " is-err" : "") + '">' +
+            '<div class="tm-audit-tc-hdr"><span class="tm-audit-tc-name">' + esc(tcTool) + '</span>' +
+            '<span class="tm-audit-tc-ok">' + (!isOk ? "✕ " + esc(tw("teams.audit_status_error")) : "✓ " + esc(tw("teams.audit_status_done"))) + '</span></div>' +
+            (cmdStr ? '<pre class="tm-audit-code-sm"><code>' + esc(cmdStr) + '</code></pre>' : '') +
+            (outStr ? '<div class="tm-audit-tc-out-lbl">Kết quả:</div><pre class="tm-audit-code-sm tm-audit-tc-out"><code>' + esc(outStr) + '</code></pre>' : '') +
+            '</div>';
+        }).join("") + '</div></div>';
+    }
+
+    var errHtml = "";
+    if (st === "error" || extra.error || e.error) {
+      var errMsg = extra.error || e.error || res.text || "Lỗi thực thi";
+      errHtml = '<div class="tm-audit-error-box">' + ic("triangle-alert") +
+        '<div class="tm-audit-error-msg">' + esc(errMsg) + '</div></div>';
+    }
+
+    var sysPrompt = (req.system_prompt || e.system_prompt || "").trim();
+    var userPrompt = (req.user_prompt || e.user_prompt || e.prompt || "").trim();
+    var respText = (res.text || e.response_text || e.response || "").trim();
+
+    return '<article class="tm-audit-card ' + stClass + '" data-turn-id="' + esc(e.turn_id || "") + '">' +
+      '<div class="tm-audit-card-head">' +
+        '<div class="tm-audit-card-author">' +
+          ava +
+          '<div class="tm-audit-card-name-block">' +
+            '<div class="tm-audit-card-name-row">' +
+              '<strong class="tm-audit-agent-name">' + esc(name) + '</strong>' +
+              '<span class="tm-audit-chip">' + esc(actLabel) + '</span>' +
+              '<span class="tm-audit-status-badge ' + stBadgeClass + '">' + esc(stLabel) + '</span>' +
+            '</div>' +
+            '<div class="tm-audit-card-sub-row">' +
+              (e.model ? '<span class="tm-audit-model-badge">' + esc(e.model) + (e.provider ? ' (' + esc(e.provider) + ')' : '') + '</span>' : '') +
+              taskInfo +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tm-audit-card-meta">' +
+          '<time class="tm-audit-time-full" title="' + esc(ago) + '">' + esc(fullTime) + '</time>' +
+          (tokensStr ? '<div class="tm-audit-tokens">' + esc(tokensStr) + '</div>' : '') +
+        '</div>' +
+      '</div>' +
+      errHtml +
+      toolsHtml +
+      '<div class="tm-audit-accordion-group">' +
+        (userPrompt || sysPrompt ?
+          '<details class="tm-audit-details">' +
+            '<summary class="tm-audit-summary">' + ic("chevron-right") +
+              '<span>' + esc(tw("teams.audit_request")) + '</span>' +
+              '<span class="tm-audit-len">' + userPrompt.length + ' chars</span></summary>' +
+            '<div class="tm-audit-details-body">' +
+              (sysPrompt ? '<div class="tm-audit-prompt-title">System Prompt</div><pre class="tm-audit-code"><code>' + esc(sysPrompt) + '</code></pre>' : '') +
+              (userPrompt ? '<div class="tm-audit-prompt-title">User Prompt</div><pre class="tm-audit-code"><code>' + esc(userPrompt) + '</code></pre>' : '') +
+            '</div></details>' : '') +
+        (respText ?
+          '<details class="tm-audit-details" open>' +
+            '<summary class="tm-audit-summary">' + ic("chevron-right") +
+              '<span>' + esc(tw("teams.audit_response")) + '</span>' +
+              '<span class="tm-audit-len">' + respText.length + ' chars</span></summary>' +
+            '<div class="tm-audit-details-body">' +
+              '<pre class="tm-audit-code tm-audit-response-code"><code>' + esc(respText) + '</code></pre>' +
+            '</div></details>' : '') +
+      '</div>' +
+    '</article>';
+  }
+
+  function buildAuditListHtml(filtered, entries, members) {
+    if (S && S.auditLoading) {
+      return loadingHtml("teams.loading_chat");
+    }
+    var list = entries || (S && S.auditEntries) || filtered || [];
+    if (!list.length) {
+      return '<div class="tm-audit-empty">' + ic("scroll-text") +
+        '<p>' + esc(tw("teams.audit_empty")) + '</p>' +
+        ((S && !S.auditEnabled) ? '<div class="tm-note-line">' + esc(tw("teams.audit_log_explain")) + '</div>' : '') +
+      '</div>';
+    }
+    if (!filtered.length) {
+      return '<div class="tm-audit-empty">' + ic("search") +
+        '<p>' + esc(tw("teams.audit_no_match")) + '</p>' +
+      '</div>';
+    }
+    var mems = members || ((S && S.team) ? S.team.members : []);
+    return filtered.map(function (e) {
+      return auditEntryCardHtml(e, mems);
+    }).join("");
+  }
+
+  function drawAuditView() {
+    var chatEl = S.el.querySelector(".tm-chat");
+    var auditEl = S.el.querySelector(".tm-audit-view");
+    if (!chatEl || !auditEl) return;
+
+    if (!S.auditOpen || !S.team) {
+      chatEl.classList.remove("audit-on");
+      auditEl.hidden = true;
+      auditEl.innerHTML = "";
+      return;
+    }
+
+    chatEl.classList.add("audit-on");
+    auditEl.hidden = false;
+
+    var agentMap = {};
+    (S.team.members || []).forEach(function (m) {
+      agentMap[m.agent_key] = m.name || m.slug || m.agent_key;
+    });
+    (S.auditEntries || []).forEach(function (e) {
+      if (e.agent_key && !agentMap[e.agent_key]) {
+        agentMap[e.agent_key] = nameOf(S.team.members, e.agent_key);
+      }
+    });
+
+    var toolSet = {};
+    (S.auditEntries || []).forEach(function (e) {
+      (e.tool_calls || []).forEach(function (tc) {
+        var tName = tc.tool || tc.name;
+        if (tName) toolSet[tName] = true;
+      });
+    });
+    var toolNames = Object.keys(toolSet).sort();
+
+    var filtered = filterAuditEntries(S.auditEntries);
+    var countText = (S.auditLoading ? "Đang tải..." : filtered.length + " / " + (S.auditEntries || []).length);
+    var hasFilter = S.auditKw || S.auditTime !== "all" || S.auditAgent !== "all" || S.auditAction !== "all" || S.auditTool !== "all" || S.auditStatus !== "all";
+
+    var headHtml =
+      '<div class="tm-audit-head">' +
+        '<div class="tm-audit-head-title">' +
+          '<span class="tm-audit-icon">' + ic("scroll-text") + '</span>' +
+          '<strong>' + esc(tw("teams.audit_title")) + '</strong>' +
+          '<label class="tm-audit-toggle-lbl" title="' + esc(tw("teams.audit_log_explain")) + '">' +
+            '<input type="checkbox" class="tm-audit-live-toggle"' + (S.auditEnabled ? " checked" : "") + '>' +
+            '<span>' + esc(tw(S.auditEnabled ? "teams.audit_enabled_badge" : "teams.audit_disabled_badge")) + '</span>' +
+          '</label>' +
+        '</div>' +
+        '<div class="tm-audit-head-acts">' +
+          '<button type="button" class="ws-btn tm-audit-refresh" title="' + esc(tw("teams.audit_refresh")) + '">' + ic("refresh-cw") + esc(tw("teams.audit_refresh")) + '</button>' +
+          '<button type="button" class="ws-btn tm-audit-export" title="' + esc(tw("teams.audit_export")) + '"' + ((!S.auditEntries || !S.auditEntries.length) ? " disabled" : "") + '>' + ic("download") + esc(tw("teams.audit_export")) + '</button>' +
+          '<button type="button" class="ws-btn tm-icon tm-audit-close" aria-label="' + esc(tw("teams.audit_log_close")) + '" title="' + esc(tw("teams.audit_log_close")) + '">' + ic("x") + '</button>' +
+        '</div>' +
+      '</div>';
+
+    var filtersHtml =
+      '<div class="tm-audit-filters">' +
+        '<div class="tm-audit-search-row">' +
+          '<span class="tm-audit-search-ic">' + ic("search") + '</span>' +
+          '<input type="search" class="tm-audit-kw" placeholder="' + esc(tw("teams.audit_search_ph")) + '" value="' + esc(S.auditKw || "") + '">' +
+          (S.auditKw ? '<button type="button" class="tm-audit-kw-clear" title="Xóa">&times;</button>' : '') +
+        '</div>' +
+        '<div class="tm-audit-selects-row">' +
+          '<label class="tm-audit-filter-item"><span>' + esc(tw("teams.audit_filter_time")) + '</span>' +
+            '<select class="tm-audit-filter-time">' +
+              '<option value="all"' + (S.auditTime === "all" ? " selected" : "") + '>' + esc(tw("teams.audit_time_all")) + '</option>' +
+              '<option value="1h"' + (S.auditTime === "1h" ? " selected" : "") + '>' + esc(tw("teams.audit_time_1h")) + '</option>' +
+              '<option value="24h"' + (S.auditTime === "24h" ? " selected" : "") + '>' + esc(tw("teams.audit_time_24h")) + '</option>' +
+              '<option value="7d"' + (S.auditTime === "7d" ? " selected" : "") + '>' + esc(tw("teams.audit_time_7d")) + '</option>' +
+              '<option value="30d"' + (S.auditTime === "30d" ? " selected" : "") + '>' + esc(tw("teams.audit_time_30d")) + '</option>' +
+            '</select>' +
+          '</label>' +
+          '<label class="tm-audit-filter-item"><span>' + esc(tw("teams.audit_filter_agent")) + '</span>' +
+            '<select class="tm-audit-filter-agent">' +
+              '<option value="all"' + (S.auditAgent === "all" ? " selected" : "") + '>' + esc(tw("teams.audit_agent_all")) + '</option>' +
+              Object.keys(agentMap).map(function (k) {
+                return '<option value="' + esc(k) + '"' + (S.auditAgent === k ? " selected" : "") + '>' + esc(agentMap[k]) + '</option>';
+              }).join("") +
+            '</select>' +
+          '</label>' +
+          '<label class="tm-audit-filter-item"><span>' + esc(tw("teams.audit_filter_action")) + '</span>' +
+            '<select class="tm-audit-filter-action">' +
+              '<option value="all"' + (S.auditAction === "all" ? " selected" : "") + '>' + esc(tw("teams.audit_action_all")) + '</option>' +
+              '<option value="work"' + (S.auditAction === "work" ? " selected" : "") + '>' + esc(tw("teams.audit_action_work")) + '</option>' +
+              '<option value="plan"' + (S.auditAction === "plan" ? " selected" : "") + '>' + esc(tw("teams.audit_action_plan")) + '</option>' +
+              '<option value="synthesize"' + (S.auditAction === "synthesize" ? " selected" : "") + '>' + esc(tw("teams.audit_action_synthesize")) + '</option>' +
+              '<option value="help"' + (S.auditAction === "help" ? " selected" : "") + '>' + esc(tw("teams.audit_action_help")) + '</option>' +
+              '<option value="leader_reply"' + (S.auditAction === "leader_reply" ? " selected" : "") + '>' + esc(tw("teams.audit_action_reply")) + '</option>' +
+              '<option value="member_volunteer"' + (S.auditAction === "member_volunteer" ? " selected" : "") + '>' + esc(tw("teams.audit_action_volunteer")) + '</option>' +
+            '</select>' +
+          '</label>' +
+          '<label class="tm-audit-filter-item"><span>' + esc(tw("teams.audit_filter_tool")) + '</span>' +
+            '<select class="tm-audit-filter-tool">' +
+              '<option value="all"' + (S.auditTool === "all" ? " selected" : "") + '>' + esc(tw("teams.audit_tool_all")) + '</option>' +
+              '<option value="_has_tools"' + (S.auditTool === "_has_tools" ? " selected" : "") + '>' + esc(tw("teams.audit_tool_has")) + '</option>' +
+              '<option value="_no_tools"' + (S.auditTool === "_no_tools" ? " selected" : "") + '>' + esc(tw("teams.audit_tool_none")) + '</option>' +
+              toolNames.map(function (tn) {
+                return '<option value="' + esc(tn) + '"' + (S.auditTool === tn ? " selected" : "") + '>' + esc(tn) + '</option>';
+              }).join("") +
+            '</select>' +
+          '</label>' +
+          '<label class="tm-audit-filter-item"><span>' + esc(tw("teams.audit_filter_status")) + '</span>' +
+            '<select class="tm-audit-filter-status">' +
+              '<option value="all"' + (S.auditStatus === "all" ? " selected" : "") + '>' + esc(tw("teams.audit_status_all")) + '</option>' +
+              '<option value="completed"' + (S.auditStatus === "completed" ? " selected" : "") + '>' + esc(tw("teams.audit_status_done")) + '</option>' +
+              '<option value="error"' + (S.auditStatus === "error" ? " selected" : "") + '>' + esc(tw("teams.audit_status_error")) + '</option>' +
+              '<option value="approval"' + (S.auditStatus === "approval" ? " selected" : "") + '>' + esc(tw("teams.audit_status_approval")) + '</option>' +
+            '</select>' +
+          '</label>' +
+          (hasFilter ? '<button type="button" class="ws-btn tm-audit-reset-btn">' + esc(tw("teams.audit_reset_filters")) + '</button>' : '') +
+        '</div>' +
+        '<div class="tm-audit-stats-row"><span class="tm-audit-count">' + countText + '</span></div>' +
+      '</div>';
+
+    var listHtml = buildAuditListHtml(filtered);
+    auditEl.innerHTML = headHtml + filtersHtml + '<div class="tm-audit-body" role="list">' + listHtml + '</div>';
+  }
+
+  function renderAuditListOnly() {
+    var auditEl = S.el.querySelector(".tm-audit-view");
+    if (!auditEl || auditEl.hidden) return;
+    var filtered = filterAuditEntries(S.auditEntries);
+    var countEl = auditEl.querySelector(".tm-audit-count");
+    if (countEl) {
+      countEl.textContent = (S.auditLoading ? "Đang tải..." : filtered.length + " / " + (S.auditEntries || []).length);
+    }
+    var bodyEl = auditEl.querySelector(".tm-audit-body");
+    if (bodyEl) {
+      bodyEl.innerHTML = buildAuditListHtml(filtered);
+    }
+    var resetBtn = auditEl.querySelector(".tm-audit-reset-btn");
+    var hasFilter = S.auditKw || S.auditTime !== "all" || S.auditAgent !== "all" || S.auditAction !== "all" || S.auditTool !== "all" || S.auditStatus !== "all";
+    if (hasFilter && !resetBtn) {
+      var row = auditEl.querySelector(".tm-audit-selects-row");
+      if (row) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ws-btn tm-audit-reset-btn";
+        btn.textContent = tw("teams.audit_reset_filters");
+        row.appendChild(btn);
+      }
+    } else if (!hasFilter && resetBtn) {
+      resetBtn.remove();
+    }
+  }
+
+  function loadAudit() {
+    if (!S || !S.activeId) return Promise.resolve();
+    S.auditLoading = true;
+    drawAuditView();
+    var forTeam = S.activeId;
+    return call("GET", teamUrl("/audit?limit=300")).then(function (r) {
+      if (!S || S.activeId !== forTeam) return;
+      S.auditLoading = false;
+      if (r.code === 200 && r.j && r.j.ok) {
+        S.auditEntries = r.j.entries || [];
+        S.auditEnabled = !!r.j.audit_enabled;
+      } else {
+        S.auditEntries = [];
+      }
+      drawAuditView();
+    }).catch(function () {
+      if (!S || S.activeId !== forTeam) return;
+      S.auditLoading = false;
+      drawAuditView();
+    });
+  }
+
+  function exportAuditJson() {
+    if (!S || !S.auditEntries || !S.auditEntries.length) return;
+    try {
+      var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(S.auditEntries, null, 2));
+      var a = document.createElement("a");
+      a.setAttribute("href", dataStr);
+      a.setAttribute("download", "team_audit_" + (S.team ? S.team.slug || S.activeId : S.activeId) + "_" + Date.now() + ".json");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      setNote("Không xuất được file JSON");
+    }
   }
 
   function drawComposer() {
@@ -3649,6 +4045,7 @@
   function drawAll(stick) {
     drawPage(); drawList(); drawHead(); drawJobs(); drawMsgs(stick); drawComposer(); drawSide();
     if (S.listTab === "files") drawFilesPane();
+    if (S.auditOpen) drawAuditView();
   }
 
   // Mở ngăn: nhớ nút đã mở (chip việc, ba chấm, nút trên băng hay thẻ việc) để lúc đóng trả focus về đúng nút đó.
@@ -5571,6 +5968,42 @@
     if (d.mention) return pickMention(d.mention);
     if (d.skill) return pickSkill(d.skill);
     if (d.unmention) return unMention(d.unmention);
+    if (t.classList.contains("tm-audit-btn")) {
+      S.auditOpen = !S.auditOpen;
+      drawHead();
+      drawAuditView();
+      if (S.auditOpen) loadAudit();
+      return;
+    }
+    if (t.classList.contains("tm-audit-close")) {
+      S.auditOpen = false;
+      drawHead();
+      drawAuditView();
+      return;
+    }
+    if (t.classList.contains("tm-audit-refresh")) {
+      return loadAudit();
+    }
+    if (t.classList.contains("tm-audit-export")) {
+      return exportAuditJson();
+    }
+    if (t.classList.contains("tm-audit-reset-btn")) {
+      S.auditKw = "";
+      S.auditTime = "all";
+      S.auditAgent = "all";
+      S.auditAction = "all";
+      S.auditTool = "all";
+      S.auditStatus = "all";
+      drawAuditView();
+      return;
+    }
+    if (t.classList.contains("tm-audit-kw-clear")) {
+      S.auditKw = "";
+      var inp = S.el.querySelector(".tm-audit-kw");
+      if (inp) inp.value = "";
+      renderAuditListOnly();
+      return;
+    }
     if (t.classList.contains("tm-search-btn")) {
       S.searchOpen = !S.searchOpen;
       if (!S.searchOpen) { S.searchResults = null; S.searchQuery = ""; }
@@ -5937,9 +6370,42 @@
   }
 
   function onChange(e) {
-    if (e.target.classList && e.target.classList.contains("tm-audit-enabled")) {
+    if (e.target.classList && (e.target.classList.contains("tm-audit-enabled") || e.target.classList.contains("tm-audit-live-toggle"))) {
       var isAud = !!e.target.checked;
-      call("POST", teamUrl("/audit/toggle"), { enabled: isAud }).catch(function () {});
+      S.auditEnabled = isAud;
+      call("POST", teamUrl("/audit/toggle"), { enabled: isAud }).then(function (r) {
+        if (r.code === 200 && r.j) {
+          S.auditEnabled = !!r.j.audit_enabled;
+          var other = S.el.querySelector(e.target.classList.contains("tm-audit-live-toggle") ? ".tm-audit-enabled" : ".tm-audit-live-toggle");
+          if (other) other.checked = S.auditEnabled;
+        }
+      }).catch(function () {});
+      return;
+    }
+    if (e.target.classList && e.target.classList.contains("tm-audit-filter-time")) {
+      S.auditTime = e.target.value;
+      renderAuditListOnly();
+      return;
+    }
+    if (e.target.classList && e.target.classList.contains("tm-audit-filter-agent")) {
+      S.auditAgent = e.target.value;
+      renderAuditListOnly();
+      return;
+    }
+    if (e.target.classList && e.target.classList.contains("tm-audit-filter-action")) {
+      S.auditAction = e.target.value;
+      renderAuditListOnly();
+      return;
+    }
+    if (e.target.classList && e.target.classList.contains("tm-audit-filter-tool")) {
+      S.auditTool = e.target.value;
+      renderAuditListOnly();
+      return;
+    }
+    if (e.target.classList && e.target.classList.contains("tm-audit-filter-status")) {
+      S.auditStatus = e.target.value;
+      renderAuditListOnly();
+      return;
     }
     if (e.target.classList && e.target.classList.contains("tm-tree-repo-select")) {
       S.treeRepo = e.target.value;
@@ -6116,6 +6582,11 @@
   }
 
   function onInput(e) {
+    if (e.target.classList && e.target.classList.contains("tm-audit-kw")) {
+      S.auditKw = e.target.value;
+      renderAuditListOnly();
+      return;
+    }
     if (e.target.classList && e.target.classList.contains("tm-tree-search")) {
       S.treeSearch = e.target.value;
       drawTreeListOnly();
@@ -6208,7 +6679,7 @@
       var full = !!refreshOpen && !!S && refreshOpen === S.activeId;
       refreshOpen = "";
       loadTeams(false);
-      if (full) { loadQueue(); loadTeam(); }
+      if (full) { loadQueue(); loadTeam(); if (S.auditOpen) loadAudit(); }
     }, 300);
   }
 
@@ -6439,6 +6910,7 @@
     qualityUsageHtml: qualityUsageHtml,
     taskQualityHtml: taskQualityHtml,
     runningToolsCardHtml: runningToolsCardHtml, formatToolLabel: formatToolLabel,
+    filterAuditEntries: filterAuditEntries, auditEntryCardHtml: auditEntryCardHtml, buildAuditListHtml: buildAuditListHtml,
     jobsChip: jobsChip, jobsChipHtml: jobsChipHtml, timeShort: timeShort,
     mentionMatches: mentionMatches, mentionsFromText: mentionsFromText, mentionScan: mentionScan, removeMention: removeMention,
     callsHtml: callsHtml, foldName: foldName, emailBefore: emailBefore, composerHint: composerHint, newClientId: newClientId,
