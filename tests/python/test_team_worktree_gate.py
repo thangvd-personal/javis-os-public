@@ -199,10 +199,78 @@ def test_main_team_repo_trees():
             check("_team_repo_trees finds clone as main_tree", str(clone.resolve()) in main_trees)
 
 
+def test_files_serve_and_search_context():
+    d = TEMP / "serve_test_brain"
+    d.mkdir(parents=True, exist_ok=True)
+    wt = TEMP / "serve_test_wt"
+    wt.mkdir(parents=True, exist_ok=True)
+    clone = TEMP / "serve_test_clone"
+    clone.mkdir(parents=True, exist_ok=True)
+
+    # Create test docs in worktree and clone
+    wt_doc = wt / "docs" / "11-review-kien-truc-ban-1.md"
+    wt_doc.parent.mkdir(parents=True, exist_ok=True)
+    wt_doc.write_text("# Review Ban 1 in Worktree", encoding="utf-8")
+
+    clone_doc = clone / "docs" / "01-cau-truc-du-an.md"
+    clone_doc.parent.mkdir(parents=True, exist_ok=True)
+    clone_doc.write_text("# Structure in Clone/Main", encoding="utf-8")
+
+    with patch.object(main, "_brain_root", return_value=str(d)), \
+         patch.object(main, "_files_root", return_value=d), \
+         patch.object(main, "_is_allowed_extra_path", return_value=True), \
+         patch.object(main, "_get_team_trees_for_serve", return_value=([wt.resolve()], [clone.resolve()])):
+
+        # 1. Test _safe_serve_path with relative paths
+        p_wt = main._safe_serve_path(str(d), "docs/11-review-kien-truc-ban-1.md", team_id="team-serve-1")
+        check("_safe_serve_path resolves relative path in worktree", p_wt == wt_doc.resolve(), f"got {p_wt}")
+
+        p_clone = main._safe_serve_path(str(d), "docs/01-cau-truc-du-an.md", team_id="team-serve-1")
+        check("_safe_serve_path resolves relative path in maintree", p_clone == clone_doc.resolve(), f"got {p_clone}")
+
+        # 2. Test files_read
+        resp_wt = main.files_read(str(d), "docs/11-review-kien-truc-ban-1.md", team_id="team-serve-1")
+        if hasattr(resp_wt, "body"):
+            check("files_read wt not error", False, f"got status {resp_wt.status_code}")
+        else:
+            check("files_read wt content matches", resp_wt.get("content") == "# Review Ban 1 in Worktree")
+            check("files_read wt is editable", resp_wt.get("editable") is True)
+            check("files_read wt is not readonly", resp_wt.get("readonly") is False)
+            check("files_read wt tree_kind is worktree", resp_wt.get("tree_kind") == "worktree")
+
+        resp_clone = main.files_read(str(d), "docs/01-cau-truc-du-an.md", team_id="team-serve-1")
+        if hasattr(resp_clone, "body"):
+            check("files_read clone not error", False, f"got status {resp_clone.status_code}")
+        else:
+            check("files_read clone content matches", resp_clone.get("content") == "# Structure in Clone/Main")
+            check("files_read clone is NOT editable", resp_clone.get("editable") is False)
+            check("files_read clone is readonly", resp_clone.get("readonly") is True)
+            check("files_read clone tree_kind is clone", resp_clone.get("tree_kind") == "clone")
+
+        # 3. Test files_write (worktree allowed, main-tree blocked)
+        res_write_wt = run(main.files_write(str(d), str(wt_doc), "# Updated Worktree", team_id="team-serve-1"))
+        check("files_write to worktree succeeds", res_write_wt.get("ok") is True)
+        check("worktree file content updated", wt_doc.read_text(encoding="utf-8") == "# Updated Worktree")
+
+        res_write_clone = run(main.files_write(str(d), str(clone_doc), "# Malicious Edit", team_id="team-serve-1"))
+        check("files_write to main-tree blocked with 403", getattr(res_write_clone, "status_code", 200) == 403)
+        check("clone file content unchanged", clone_doc.read_text(encoding="utf-8") == "# Structure in Clone/Main")
+
+        # 4. Test files_search
+        res_search = run(main.files_search(str(d), q="11-review", team_id="team-serve-1"))
+        items = res_search.get("items") or []
+        hit_wt = next((it for it in items if "11-review" in it.get("name", "")), None)
+        check("files_search finds file in worktree", hit_wt is not None)
+        if hit_wt:
+            check("files_search hit has tree_kind worktree", hit_wt.get("tree_kind") == "worktree")
+            check("files_search hit has rel_path", hit_wt.get("rel_path") == "docs/11-review-kien-truc-ban-1.md")
+
+
 def main_all():
     test_team_gate_roots()
     test_mcp_hub_tools()
     test_main_team_repo_trees()
+    test_files_serve_and_search_context()
 
     if fails:
         print(f"\n{len(fails)} test(s) failed!")

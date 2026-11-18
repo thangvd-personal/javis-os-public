@@ -3532,7 +3532,7 @@
   "cs.ne_miss_a": "Link trỏ tới",
   "cs.ne_miss_b": "nhưng chỗ đó không có gì.",
   "cs.ne_miss_c": "File có thể đã đổi tên, bị xoá, hoặc link ghi sai đường dẫn.",
-  "cs.ne_miss_none": "Tìm cả brain cũng không có file nào tên gần giống.",
+  "cs.ne_miss_none": "Không tìm thấy file nào tên gần giống trong brain hoặc kho mã nguồn.",
   "cs.ne_miss_confirm": "Xác nhận",
   "cs.ne_miss_confirm_title": "Cập nhật liên kết trong {src} trỏ tới {path}",
   "cs.ne_miss_updating": "Đang cập nhật…",

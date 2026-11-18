@@ -76,9 +76,29 @@ Mô hình phân vùng quyền hạn trong bước việc nhóm (`HUB_MODE = "gat
 - `docs/07-agents-va-workflows.md`: Cập nhật tài liệu hướng dẫn về chế độ "Cần chủ duyệt" của Team.
 - `dashboard/i18n/vi.json` và `en.json`: Cập nhật tooltip mô tả chế độ `teams.wm.gated_desc`.
 
+### 3.5. Bổ sung ngữ cảnh Worktree & Main-tree khi xem và tìm kiếm file trên Dashboard
+Khi agent trả lời trong cuộc hội thoại nhóm và dẫn link tới file (ví dụ `docs/11-review-kien-truc-ban-1.md` hoặc `[docs/11-review-kien-truc-ban-1.md](docs/11-review-kien-truc-ban-1.md)`), trước đây client và server mặc định chỉ tìm trong vault/brain khiến người dùng gặp lỗi "Không tìm thấy file" ("Tìm cả brain cũng không có file nào tên gần giống").
+
+Đã xử lý đồng bộ từ client đến server:
+- **Server (`server/main.py`)**:
+  - `_get_team_trees_for_serve(brain, team_id=None)`: Trích xuất danh sách `worktrees` và `main_trees` từ phiên làm việc của team (kết hợp `team_gate.current()`, `team_api`, `team_store`, `github_repos` và `coding_store`).
+  - `_safe_serve_path(brain, rel, team_id=None)`: Mở rộng khả năng resolve đường dẫn tương đối. Khi không tìm thấy trong trần duyệt hay gốc brain, tự động đối chiếu trong `worktrees` (ưu tiên hàng đầu) và `main_trees` (chỉ đọc). Đồng thời tự động bóc tiền tố vault nếu client truyền kèm.
+  - `/files/read`: Tiếp nhận tham số `team_id`. Khi file được đọc từ `main-tree`, tự động đánh dấu `readonly: True`, `editable: False`, `tree_kind: "clone"`. Khi đọc từ `worktree`, đánh dấu `editable: True`, `tree_kind: "worktree"`.
+  - `/files/raw`: Tiếp nhận tham số `team_id` và chuyển tiếp cho `_safe_serve_path`.
+  - `/files/write`: Ngăn chặn tuyệt đối việc ghi/sửa đè vào `main-tree` (trả về mã 403 nếu đường dẫn rơi vào `main_trees`).
+  - `/files/search`: Mở rộng tìm kiếm ngoài gốc brain sang cả các thư mục `worktrees` và `main_trees` của nhóm. Trả về thông tin `tree_kind` ("worktree" hoặc "clone") và đường dẫn tương đối `rel_path` để hiển thị trực quan.
+- **Client (`dashboard/teams.js` & `dashboard/console.js`)**:
+  - `dashboard/teams.js`:
+    - `indexTreeItems`: Index các node cây thư mục theo cả đường dẫn tương đối `it.path` (và chữ thường) để tra cứu nhanh.
+    - Cung cấp hàm `resolveTeamPath(p)` và xuất ra `window.JavisTeams`: `activeTeamId()`, `resolveTeamPath(p)`, `activeTreeKind()`.
+  - `dashboard/console.js`:
+    - `openVaultPath(fullPath)`: Khi đang ở trang Team (`on-teams`), ưu tiên dùng `resolveTeamPath` để ánh xạ đường dẫn tương đối sang đường dẫn thực tế trong worktree hoặc main-tree.
+    - `openNote(rel, it, opts)`: Tự động đính kèm `&team_id=...` khi gọi `/files/read` và `/files/write`. Hiển thị nhãn huy hiệu `[Worktree]` hoặc `[Thư mục chính (read-only)]` trên thanh tiêu đề note; tự động ẩn nút Lưu khi file thuộc main-tree (read-only).
+    - `_neTimFileGan`: Đính kèm `&team_id=...` vào `/files/search`. Khi có gợi ý tên gần giống từ worktree hoặc main-tree, hiển thị rõ huy hiệu nguồn tương ứng để bấm mở ngay lập tức.
+
 ## 4. Kiểm thử và Xác nhận chất lượng
 
-File kiểm thử chuyên biệt: `tests/python/test_team_worktree_gate.py` với 29 tiêu chí kiểm tra:
+File kiểm thử chuyên biệt: `tests/python/test_team_worktree_gate.py` với 47 tiêu chí kiểm tra:
 1. **Kiểm tra Gate**:
    - `worktree` nằm trong `g.roots`; `main-tree` nằm trong `g.readonly_roots`.
    - Native `Write` và `Edit` trong `worktree`: kết quả `"free"` (thực thi tự do).
@@ -92,5 +112,12 @@ File kiểm thử chuyên biệt: `tests/python/test_team_worktree_gate.py` vớ
    - `javis_write_file` và `javis_edit_file` thao tác ghi và sửa đổi file trong `worktree` thành công.
    - `javis_write_file` và `javis_edit_file` bị chặn khi cố gắng can thiệp vào file trong `main-tree`, nội dung file gốc được bảo vệ nguyên vẹn.
    - `discover_all` tự động nhận diện `readonly_workspace_root` từ `team_gate.current()`.
-3. **Kiểm tra tương thích ngược**:
+3. **Kiểm tra ngữ cảnh xem và tìm kiếm file trên Server (`_safe_serve_path`, `files_read`, `files_write`, `files_search`)**:
+   - `_safe_serve_path` resolve chính xác đường dẫn tương đối trong worktree và main-tree khi có `team_id`.
+   - `files_read` đọc đúng nội dung file trong worktree, trả về `editable: True`, `readonly: False`, `tree_kind: "worktree"`.
+   - `files_read` đọc đúng nội dung file trong main-tree, trả về `editable: False`, `readonly: True`, `tree_kind: "clone"`.
+   - `files_write` ghi thành công vào file worktree và cập nhật nội dung trên đĩa.
+   - `files_write` trả mã lỗi 403 khi cố gắng sửa file trong main-tree, bảo vệ toàn vẹn origin/main.
+   - `files_search` tìm thấy file trong worktree và main-tree khi gõ từ khóa, trả về đúng `tree_kind` và `rel_path`.
+4. **Kiểm tra tương thích ngược**:
    - `tests/python/test_team_gate_factory_0207.py` và `tests/python/test_team_runner.py` chạy qua 100% không có bất kỳ lỗi hồi quy nào.

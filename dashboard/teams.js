@@ -2535,9 +2535,31 @@
       var it = items[i];
       if (it && it.abs_path) {
         map[it.abs_path] = it;
+        if (it.path) {
+          map[it.path] = it;
+          map[it.path.toLowerCase()] = it;
+        }
         if (it.children && it.children.length) indexTreeItems(it.children, map);
       }
     }
+  }
+
+  function resolveTeamPath(p) {
+    if (!p) return null;
+    var clean = String(p).trim().replace(/^file:\/\//i, "").replace(/^\.?\//, "").replace(/\/+$/, "");
+    if (!clean) return null;
+    if (S && S.treeItemMap) {
+      if (S.treeItemMap[clean]) return S.treeItemMap[clean].abs_path;
+      var lower = clean.toLowerCase();
+      if (S.treeItemMap[lower]) return S.treeItemMap[lower].abs_path;
+      for (var k in S.treeItemMap) {
+        var it = S.treeItemMap[k];
+        if (it && it.path && (it.path === clean || it.path.toLowerCase() === lower)) {
+          return it.abs_path;
+        }
+      }
+    }
+    return null;
   }
 
   function renderTreeItem(item, depth, query) {
@@ -6428,7 +6450,10 @@
     searchResultsHtml: searchResultsHtml, replyStatusHtml: replyStatusHtml, headLine: headLine,
     typingHtml: typingHtml, pinsHtml: pinsHtml, markMentions: markMentions, replyRefHtml: replyRefHtml,
     allTags: allTags, filterTeams: filterTeams, tagBarHtml: tagBarHtml, tagMenuRows: tagMenuRows, tagPickRows: tagPickRows,
-    lastWorkedTeam: lastWorkedTeam, TAG_NONE: TAG_NONE, unreadHtml: unreadHtml };
+    lastWorkedTeam: lastWorkedTeam, TAG_NONE: TAG_NONE, unreadHtml: unreadHtml,
+    activeTeamId: function () { return (S && S.activeId) || ""; },
+    resolveTeamPath: resolveTeamPath,
+    activeTreeKind: function () { return (S && S.treeKind) || "worktree"; } };
   if (typeof window !== "undefined") window.JavisTeams = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

@@ -3533,7 +3533,7 @@
   "cs.ne_miss_a": "The link points to",
   "cs.ne_miss_b": "but there is nothing there.",
   "cs.ne_miss_c": "The file may have been renamed or deleted, or the link has the wrong path.",
-  "cs.ne_miss_none": "Searching the whole brain turned up no file with a similar name.",
+  "cs.ne_miss_none": "No file with a similar name was found in brain or repositories.",
   "cs.ne_miss_confirm": "Confirm",
   "cs.ne_miss_confirm_title": "Update link in {src} to point to {path}",
   "cs.ne_miss_updating": "Updating…",

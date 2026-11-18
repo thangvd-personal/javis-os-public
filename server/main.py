@@ -11239,6 +11239,145 @@ def _is_allowed_extra_path(target: Path, brain: str = "") -> bool:
     return False
 
 
+def _team_repo_trees(team, root):
+    """(worktrees, main_trees) for a team.
+    worktrees: worktree directories (read & write, full access)
+    main_trees: clone directories (origin/main, read-only)
+    """
+    sid = team.get("session_id") or ""
+    if not sid:
+        return [], []
+    worktrees, main_trees = [], []
+    try:
+        import github_repos
+        repos = github_repos.session_repos(sid, root) if root else []
+        for r in repos:
+            wt = r.get("worktree") or ""
+            if not wt and r.get("folder_id"):
+                try:
+                    rec = github_repos.find(root, r.get("full_name") or "") or {}
+                    if rec:
+                        wt_info = github_repos.ensure_worktree(sid, rec)
+                        wt = wt_info.get("worktree") or ""
+                except Exception:
+                    pass
+            if wt and Path(wt).is_dir():
+                p_wt = str(Path(wt).resolve())
+                if p_wt not in worktrees:
+                    worktrees.append(p_wt)
+            clone = r.get("clone") or ""
+            if clone and Path(clone).is_dir():
+                p_clone = str(Path(clone).resolve())
+                if p_clone not in main_trees and p_clone not in worktrees:
+                    main_trees.append(p_clone)
+    except Exception as e:
+        print(f"[team repo trees github] {e}", file=sys.stderr)
+
+    try:
+        import coding_store
+        for folder in coding_store.thu_muc_cua_phien(sid):
+            wt = coding_store.worktree_thu_muc(sid, folder["id"])
+            if wt and Path(wt).is_dir():
+                p_wt = str(Path(wt).resolve())
+                if p_wt not in worktrees:
+                    worktrees.append(p_wt)
+            dd = folder.get("duong_dan") or ""
+            if dd and Path(dd).is_dir():
+                p_dd = str(Path(dd).resolve())
+                if p_dd not in main_trees and p_dd not in worktrees:
+                    main_trees.append(p_dd)
+    except Exception as e:
+        print(f"[team repo trees coding] {e}", file=sys.stderr)
+
+    return worktrees, main_trees
+
+
+def _get_team_trees_for_serve(brain: str, team_id: str = None) -> tuple[list[Path], list[Path]]:
+    """Trả về (worktrees, main_trees) dưới dạng danh sách Path đã resolve.
+    Ưu tiên ngữ cảnh team_id nếu được cung cấp."""
+    if hasattr(team_id, "default"):
+        team_id = team_id.default
+    wts: list[Path] = []
+    mts: list[Path] = []
+    root = _brain_root(brain)
+
+    # Nếu đang trong turn của team gate
+    try:
+        import team_gate
+        cg = team_gate.current()
+        if cg:
+            broot_path = Path(root).resolve() if root else None
+            for r in cg.roots:
+                rp = Path(r).resolve()
+                if rp.is_dir() and rp != broot_path and (broot_path is None or broot_path not in rp.parents) and rp not in wts:
+                    wts.append(rp)
+            for r in cg.readonly_roots:
+                rp = Path(r).resolve()
+                if rp.is_dir() and rp not in mts and rp not in wts:
+                    mts.append(rp)
+    except Exception:
+        pass
+
+    if team_id:
+        try:
+            team = None
+            if "team_api" in globals():
+                ops = team_api.current()
+                if ops:
+                    team = ops.team(root, team_id) if hasattr(ops, "team") else (ops.teams().get(team_id) if hasattr(ops, "teams") else None)
+            if not team:
+                import team_store
+                st = team_store.open_store(root)
+                team = st.get(team_id)
+            if team:
+                w_list, m_list = _team_repo_trees(team, root)
+                for w in w_list:
+                    wp = Path(w).resolve()
+                    if wp.is_dir() and wp not in wts:
+                        wts.append(wp)
+                for m in m_list:
+                    mp = Path(m).resolve()
+                    if mp.is_dir() and mp not in mts:
+                        mts.append(mp)
+        except Exception:
+            pass
+
+    # Quét bổ sung từ worktrees và repos của hệ thống
+    try:
+        state_dir = cfgmod.STATE_DIR.resolve()
+        wts_base = (state_dir / "worktrees").resolve()
+        if wts_base.is_dir():
+            for repo_dir in wts_base.iterdir():
+                if repo_dir.is_dir() and not repo_dir.name.startswith("."):
+                    for wt_dir in repo_dir.iterdir():
+                        if wt_dir.is_dir() and not wt_dir.name.startswith("."):
+                            p = wt_dir.resolve()
+                            if p not in wts:
+                                wts.append(p)
+        repos_base = (state_dir / "repos").resolve()
+        if repos_base.is_dir():
+            for repo_dir in repos_base.iterdir():
+                if repo_dir.is_dir() and not repo_dir.name.startswith("."):
+                    clone_dir = repo_dir / "clone"
+                    if clone_dir.is_dir():
+                        p = clone_dir.resolve()
+                        if p not in mts and p not in wts:
+                            mts.append(p)
+    except Exception:
+        pass
+
+    try:
+        import coding_store
+        for f in coding_store.danh_sach_thu_muc():
+            dp = Path(f.get("duong_dan") or "").resolve()
+            if dp.is_dir() and dp not in wts:
+                wts.append(dp)
+    except Exception:
+        pass
+
+    return wts, mts
+
+
 def _safe_path(brain: str, rel: str) -> Path:
     """Resolve rel TRONG trần duyệt; ném ValueError nếu vượt ra ngoài (chống ../)."""
     try:
@@ -11262,16 +11401,21 @@ def _safe_path(brain: str, rel: str) -> Path:
     return target
 
 
-def _safe_serve_path(brain: str, rel: str) -> Path:
-    """Resolve rel để PHỤC VỤ/ĐỌC file, chấp nhận CẢ HAI quy ước đường dẫn:
-    - tương đối TRẦN duyệt (File Manager, path lấy từ /files/list) → thử trước;
-    - tương đối GỐC BRAIN/vault (link & ảnh trong chat, do AI ghi theo CLAUDE.md) → dự phòng.
+def _safe_serve_path(brain: str, rel: str, team_id: str = None) -> Path:
+    """Resolve rel để PHỤC VỤ/ĐỌC file, chấp nhận:
+    - tương đối TRẦN duyệt (File Manager, path lấy từ /files/list) -> thử trước;
+    - tương đối GỐC BRAIN/vault (link & ảnh trong chat, do AI ghi theo CLAUDE.md) -> dự phòng;
+    - tương đối THƯ MỤC LÀM VIỆC (worktree) hoặc THƯ MỤC CHÍNH (main-tree) của repo khi làm việc nhóm.
     Lý do: khi trần duyệt nằm CAO hơn gốc brain (vd localhost = tới ổ đĩa), đường dẫn vault kiểu
-    'videos/x.mp4' nếu chỉ tính theo trần sẽ thành 'D:/videos/x.mp4' → 404. Cả hai nhánh đều bị
+    'videos/x.mp4' nếu chỉ tính theo trần sẽ thành 'D:/videos/x.mp4' -> 404. Cả hai nhánh đều bị
     KHOÁ trong trần (chống ../). CHỈ dùng cho endpoint CHỈ-ĐỌC (raw/read/download) - KHÔNG dùng cho
     ghi/xoá/đổi tên để tránh mơ hồ khi tạo file mới."""
     try:
         p_str = str(rel or "").strip()
+        if p_str.lower().startswith("file://"):
+            p_str = p_str[7:]
+            if p_str.startswith("/") and len(p_str) > 2 and p_str[2] == ":":
+                p_str = p_str[1:]
         raw_p = Path(p_str).resolve()
         broot = Path(_brain_root(brain)).resolve()
         froot = _files_root(brain)
@@ -11294,6 +11438,30 @@ def _safe_serve_path(brain: str, rel: str) -> Path:
         brain_target = (broot / rel).resolve()
         if (brain_target == broot or broot in brain_target.parents) and brain_target.exists():
             return brain_target                         # đường dẫn vault, vẫn nằm trong gốc brain
+
+    # Thử resolve trong ngữ cảnh worktree và main-tree (team hoặc connected repo)
+    try:
+        wts, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+        norm_rels = [rel]
+        broot_name = broot.name
+        for pref in [f"brains/{broot_name}/", f"{broot_name}/"]:
+            if rel.startswith(pref):
+                norm_rels.append(rel[len(pref):])
+
+        for r_cand in norm_rels:
+            # Ưu tiên worktree trước (full access)
+            for wt in wts:
+                cand = (wt / r_cand).resolve()
+                if (cand == wt or wt in cand.parents) and cand.exists():
+                    return cand
+            # Sau đó kiểm tra main-tree (read-only)
+            for mt in mts:
+                cand = (mt / r_cand).resolve()
+                if (cand == mt or mt in cand.parents) and cand.exists():
+                    return cand
+    except Exception:
+        pass
+
     if not ceil_in:
         raise ValueError(localefmt.chu("Đường dẫn ngoài phạm vi cho phép", "The path is outside the allowed area"))
     return ceil_target                                  # không thấy: trả theo trần để 404 nhất quán
@@ -11421,13 +11589,19 @@ def _fold_accents(s: str) -> str:
 
 @app.get("/files/search")
 async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: int = Query(50),
-                       mode: str = Query("all"), include_dirs: bool = False, only_dirs: bool = False):
-    """Tìm note trong GỐC BRAIN (KHÔNG phải trần duyệt - tránh quét cả ổ đĩa trên localhost).
+                       mode: str = Query("all"), include_dirs: bool = False, only_dirs: bool = False,
+                       team_id: str = Query(None)):
+    """Tìm note trong GỐC BRAIN và ngữ cảnh worktree/main-tree khi có team (KHÔNG phải trần duyệt).
     `mode=name` khớp TÊN file (mọi loại, không phân biệt dấu tiếng Việt), `mode=content` tìm
     trong NỘI DUNG file text, còn `mode=all` giữ hành vi cũ là tìm cả hai; bỏ file >1MB
     và thư mục ẩn/nặng. Path trả về tính theo TRẦN (giống /files/list) để mở bằng cùng quy ước.
     Walk chạy trong threadpool để không chặn event loop FastAPI."""
     from starlette.concurrency import run_in_threadpool
+    if hasattr(mode, "default"): mode = mode.default
+    if hasattr(limit, "default"): limit = limit.default
+    if hasattr(include_dirs, "default"): include_dirs = include_dirs.default
+    if hasattr(only_dirs, "default"): only_dirs = only_dirs.default
+    if hasattr(team_id, "default"): team_id = team_id.default
     q = (q or "").strip()
     if not q:
         return {"items": [], "q": q}
@@ -11502,6 +11676,68 @@ async def files_search(brain: str = Query("brain"), q: str = Query(""), limit: i
                     out.append({"path": rel, "name": fn, "ext": ext, "snippet": snippet,
                                 "line": line_no,
                                 "match": "content" if (mode == "content" or (mode == "all" and content_hit)) else "name"})
+
+        # Quét thêm trong worktrees và main_trees
+        try:
+            wts, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+            seen_trees = set()
+            def _scan_extra(base_dir: Path, tree_kind: str):
+                if not base_dir.is_dir():
+                    return
+                for dirpath, dirnames, filenames in os.walk(base_dir):
+                    dirnames[:] = [dn for dn in dirnames if not dn.startswith(".") and dn not in SKIP_DIRS]
+                    if (include_dirs or only_dirs) and mode in ("name", "all"):
+                        for dn in sorted(dirnames):
+                            if len(out) >= limit:
+                                return
+                            if not _name_hit(dn):
+                                continue
+                            p = Path(dirpath) / dn
+                            rel = str(p.relative_to(base_dir)).replace("\\", "/")
+                            out.append({"path": str(p.resolve()), "rel_path": rel, "name": dn, "type": "dir", "ext": "",
+                                        "snippet": "", "line": 0, "match": "name", "tree_kind": tree_kind})
+                    if only_dirs:
+                        continue
+                    for fn in sorted(filenames):
+                        if fn.startswith(".") or fn == "__pycache__":
+                            continue
+                        if len(out) >= limit:
+                            return
+                        p = Path(dirpath) / fn
+                        ext = p.suffix.lower()
+                        name_hit = mode in ("name", "all") and _name_hit(fn)
+                        content_hit = False
+                        snippet, line_no = "", 0
+                        if mode in ("content", "all") and ext in _TEXT_EXTS:
+                            try:
+                                if p.stat().st_size <= 1_000_000:
+                                    txt = p.read_text(encoding="utf-8", errors="ignore")
+                                    idx = txt.lower().find(ql)
+                                    if idx >= 0:
+                                        content_hit = True
+                                        line_no = txt.count("\n", 0, idx) + 1
+                                        a = max(0, idx - 40)
+                                        snippet = txt[a:idx + 80].replace("\n", " ").replace("\r", " ").strip()
+                            except (OSError, ValueError):
+                                pass
+                        if name_hit or content_hit:
+                            rel = str(p.relative_to(base_dir)).replace("\\", "/")
+                            out.append({"path": str(p.resolve()), "rel_path": rel, "name": fn, "ext": ext, "snippet": snippet,
+                                        "line": line_no,
+                                        "match": "content" if (mode == "content" or (mode == "all" and content_hit)) else "name",
+                                        "tree_kind": tree_kind})
+
+            for wt in wts:
+                if wt not in seen_trees and wt != broot and broot not in wt.parents:
+                    seen_trees.add(wt)
+                    _scan_extra(wt, "worktree")
+            for mt in mts:
+                if mt not in seen_trees and mt != broot and broot not in mt.parents:
+                    seen_trees.add(mt)
+                    _scan_extra(mt, "clone")
+        except Exception:
+            pass
+
         return out
 
     items = await run_in_threadpool(_walk)
@@ -11649,9 +11885,9 @@ async def files_md_hong_sua(brain: str = Form("brain"), paths: str = Form("")):
 
 
 @app.get("/files/read")
-def files_read(brain: str = Query("brain"), path: str = Query(...)):
+def files_read(brain: str = Query("brain"), path: str = Query(...), team_id: str = Query(None)):
     try:
-        f = _safe_serve_path(brain, path)
+        f = _safe_serve_path(brain, path, team_id=team_id)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     if not f.is_file():
@@ -11662,19 +11898,44 @@ def files_read(brain: str = Query("brain"), path: str = Query(...)):
         text = f.read_text(encoding="utf-8")
     except Exception:
         return JSONResponse({"error": localefmt.chu("File nhị phân - không xem được dạng văn bản", "Binary file - cannot be shown as text")}, status_code=415)
+
+    is_readonly = False
+    tree_kind = ""
+    try:
+        wts, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+        rf = f.resolve()
+        if any(rf == mt or mt in rf.parents for mt in mts):
+            is_readonly = True
+            tree_kind = "clone"
+        elif any(rf == wt or wt in rf.parents for wt in wts):
+            tree_kind = "worktree"
+    except Exception:
+        pass
+
+    editable = (not is_readonly) and (f.suffix.lower() in _TEXT_EXTS)
     # `abs` để trình sửa ghim được file đang mở vào khung chat: engine cần ĐƯỜNG DẪN THẬT
     # mới mở được file, mà đường dẫn tương đối ở đây tính theo TRẦN DUYỆT chứ không theo gốc
     # brain (hai cái khác nhau khi trần cao hơn brain) nên client tự ghép là ghép sai.
     return {"path": path, "name": f.name, "content": text, "abs": str(f),
-            "editable": f.suffix.lower() in _TEXT_EXTS, "ext": f.suffix.lower()}
+            "editable": editable, "readonly": is_readonly, "tree_kind": tree_kind, "ext": f.suffix.lower()}
 
 
 @app.post("/files/write")
-async def files_write(brain: str = Form("brain"), path: str = Form(...), content: str = Form("")):
+async def files_write(brain: str = Form("brain"), path: str = Form(...), content: str = Form(""), team_id: str = Form(None)):
     try:
         f = _safe_path(brain, path)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+    try:
+        _, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+        rf = f.resolve()
+        if any(rf == mt or mt in rf.parents for mt in mts):
+            return JSONResponse({"error": localefmt.chu("Thư mục chính (main-tree) là chỉ đọc (read-only), không thể chỉnh sửa",
+                                                         "Main tree is read-only, cannot modify")}, status_code=403)
+    except Exception:
+        pass
+
     f.parent.mkdir(parents=True, exist_ok=True)
     _atomic_write_text(f, content)
     return {"ok": True}
@@ -12024,11 +12285,11 @@ def _csp_neu_chay_script(resp, media_type: str):
     return resp
 
 
-def raw_file_response(brain: str, path: str, dl: bool = False):
+def raw_file_response(brain: str, path: str, dl: bool = False, team_id: str = None):
     """Lõi thuần của /files/raw (route handler KHÔNG được gọi nhau như hàm thường, xem
     test_handler_khong_goi_truc_tiep). Trả file inline, hoặc ép tải khi dl=True."""
     try:
-        f = _safe_serve_path(brain, path)
+        f = _safe_serve_path(brain, path, team_id=team_id)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     if not f.is_file():
@@ -12046,11 +12307,11 @@ def raw_file_response(brain: str, path: str, dl: bool = False):
 
 
 @app.get("/files/raw")
-async def files_raw(brain: str = Query("brain"), path: str = Query(...), dl: int = Query(0)):
+async def files_raw(brain: str = Query("brain"), path: str = Query(...), dl: int = Query(0), team_id: str = Query(None)):
     """Phục vụ file THÔ để XEM INLINE trong trình duyệt: ảnh hiện trong <img>, pdf mở thẳng trên
     tab, mọi file khác có URL tĩnh để mở/tải. Khác /files/download (luôn ép tải về): mặc định
     inline; truyền dl=1 để ép tải. Cùng rào chống traversal (_safe_serve_path)."""
-    return raw_file_response(brain, path, dl=bool(dl))
+    return raw_file_response(brain, path, dl=bool(dl), team_id=team_id)
 
 
 _LOCAL_OPEN_MSG = {
@@ -33999,59 +34260,6 @@ def _step_engine(eng, provider: str):
     except Exception as e:  # noqa: BLE001 - rotation must never cost the step
         print(f"[plan accounts] step engine {provider}: {type(e).__name__}: {e}", file=sys.stderr)
     return eng
-
-
-def _team_repo_trees(team, root):
-    """(worktrees, main_trees) for a team.
-    worktrees: worktree directories (read & write, full access)
-    main_trees: clone directories (origin/main, read-only)
-    """
-    sid = team.get("session_id") or ""
-    if not sid:
-        return [], []
-    worktrees, main_trees = [], []
-    try:
-        import github_repos
-        repos = github_repos.session_repos(sid, root) if root else []
-        for r in repos:
-            wt = r.get("worktree") or ""
-            if not wt and r.get("folder_id"):
-                try:
-                    rec = github_repos.find(root, r.get("full_name") or "") or {}
-                    if rec:
-                        wt_info = github_repos.ensure_worktree(sid, rec)
-                        wt = wt_info.get("worktree") or ""
-                except Exception:
-                    pass
-            if wt and Path(wt).is_dir():
-                p_wt = str(Path(wt).resolve())
-                if p_wt not in worktrees:
-                    worktrees.append(p_wt)
-            clone = r.get("clone") or ""
-            if clone and Path(clone).is_dir():
-                p_clone = str(Path(clone).resolve())
-                if p_clone not in main_trees and p_clone not in worktrees:
-                    main_trees.append(p_clone)
-    except Exception as e:
-        print(f"[team repo trees github] {e}", file=sys.stderr)
-
-    try:
-        import coding_store
-        for folder in coding_store.thu_muc_cua_phien(sid):
-            wt = coding_store.worktree_thu_muc(sid, folder["id"])
-            if wt and Path(wt).is_dir():
-                p_wt = str(Path(wt).resolve())
-                if p_wt not in worktrees:
-                    worktrees.append(p_wt)
-            dd = folder.get("duong_dan") or ""
-            if dd and Path(dd).is_dir():
-                p_dd = str(Path(dd).resolve())
-                if p_dd not in main_trees and p_dd not in worktrees:
-                    main_trees.append(p_dd)
-    except Exception as e:
-        print(f"[team repo trees coding] {e}", file=sys.stderr)
-
-    return worktrees, main_trees
 
 
 def _team_engine_for(team, agent_key, role):

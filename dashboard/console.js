@@ -476,8 +476,12 @@
     // `agents/x.md#L66-L75` (issue 1390): an IDE line suffix, same rule as chat-render.js splitLineSuffix. Kept on,
     // the extension read ".md#l66-l75" and the click fell through to the Files page looking for that literal name.
     if (fullPath != null) fullPath = String(fullPath).replace(LINE_SUFFIX_RE, "");
-    const raw = String(fullPath == null ? "" : fullPath);
-    const clean = raw.replace(/^\.?\//, "").replace(/\/+$/, "");
+    let raw = String(fullPath == null ? "" : fullPath);
+    let clean = raw.replace(/^\.?\//, "").replace(/\/+$/, "");
+    if (document.body.classList.contains("on-teams") && window.JavisTeams && typeof window.JavisTeams.resolveTeamPath === "function") {
+      const resolved = window.JavisTeams.resolveTeamPath(clean);
+      if (resolved) { clean = resolved; raw = resolved; }
+    }
     const base = clean.split("/").pop();
     // Không có dấu chấm trong tên = thư mục, cùng luật với openFilesAt và chat-render.js.
     const laThuMuc = /\/$/.test(raw) || !base || base.indexOf(".") < 0;
@@ -9985,7 +9989,14 @@
   let _neDangDiLichSu = false; // cờ: lần openNote này là do bấm Lùi/Tiến, đừng ghi thêm vệt
   let _nePendingLink = null;   // thông tin liên kết vừa bấm trong #noteEditor (file nguồn + đích hụt)
   const NE_LICH_SU_MAX = 50;   // vệt là để quay lại chỗ vừa đọc, không phải nhật ký cả phiên
-  const _vtRaw = (rel, dl) => `/files/raw?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}${dl ? "&dl=1" : ""}`;
+  const _vtRaw = (rel, dl) => {
+    let tParam = "";
+    if (typeof window !== "undefined" && window.JavisTeams && typeof window.JavisTeams.activeTeamId === "function") {
+      const at = window.JavisTeams.activeTeamId();
+      if (at) tParam = `&team_id=${encodeURIComponent(at)}`;
+    }
+    return `/files/raw?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}${tParam}${dl ? "&dl=1" : ""}`;
+  };
   const _vtNoAccent = (s) => (s || "").toString().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
 
   async function _vtList(path) {
@@ -11142,8 +11153,13 @@
   async function _neTimFileGan(ten, host, linkOrigin) {
     if (!host || !ten) return;
     let items = [];
+    let tParam = "";
+    if (typeof window !== "undefined" && window.JavisTeams && typeof window.JavisTeams.activeTeamId === "function") {
+      const at = window.JavisTeams.activeTeamId();
+      if (at) tParam = `&team_id=${encodeURIComponent(at)}`;
+    }
     try {
-      const r = await fetch(`/files/search?brain=${encodeURIComponent(fbrain())}&q=${encodeURIComponent(ten)}&mode=name&limit=8`);
+      const r = await fetch(`/files/search?brain=${encodeURIComponent(fbrain())}&q=${encodeURIComponent(ten)}&mode=name&limit=8${tParam}`);
       items = ((await r.json()) || {}).items || [];
     } catch (e) { }
     if (!host.isConnected) return;
@@ -11159,8 +11175,12 @@
       b.className = "ne-hit-open";
       // Cắt tiền tố nhà brain cho dễ đọc: người dùng nghĩ theo "06 - Sources/x.md", không phải
       // theo đường dẫn đầy đủ trên đĩa.
-      const nhan = (_vtHome && String(hit.path || "").indexOf(_vtHome + "/") === 0)
-        ? hit.path.slice(_vtHome.length + 1) : (hit.path || hit.name);
+      let nhan = hit.rel_path || hit.path || hit.name;
+      if (!hit.rel_path && _vtHome && String(hit.path || "").indexOf(_vtHome + "/") === 0) {
+        nhan = hit.path.slice(_vtHome.length + 1);
+      }
+      if (hit.tree_kind === "worktree") nhan += ` [${window.t("teams.tree_worktree")}]`;
+      else if (hit.tree_kind === "clone") nhan += ` [${window.t("teams.tree_clone")}]`;
       b.title = nhan;
       b.innerHTML = `${_fileIcon(hit.ext || "")} <span class="ne-hit-name">${esc(nhan)}</span>`;
       b.onclick = () => {
@@ -11601,8 +11621,13 @@
     }
     if (VT_TEXT_EXTS.includes(ext)) {
       body.innerHTML = `<div class="vt-info" style="padding:16px">${esc(window.t("cs.ne_opening"))}</div>`;
+      let teamParam = "";
+      if (typeof window !== "undefined" && window.JavisTeams && typeof window.JavisTeams.activeTeamId === "function") {
+        const at = window.JavisTeams.activeTeamId();
+        if (at) teamParam = `&team_id=${encodeURIComponent(at)}`;
+      }
       let resp, d = {};
-      try { resp = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}`, { cache: "no-store" }); d = await resp.json().catch(() => ({})); }
+      try { resp = await fetch(`/files/read?brain=${encodeURIComponent(fbrain())}&path=${encodeURIComponent(rel)}${teamParam}`, { cache: "no-store" }); d = await resp.json().catch(() => ({})); }
       catch (e) { if (!ed.hidden && _neOpenRel === (rel || "")) _neRenderDownload(body, actions, rel, it); return; }
       if (ed.hidden || _neOpenRel !== (rel || "")) return;
       // 404 = không có file ở đường dẫn đó (server trả rõ như vậy). Mọi lỗi còn lại - nhị phân,
@@ -11613,6 +11638,11 @@
       // nên chỉ cần gọi set() ở đây, không phải dọn ghim cũ. Đóng trình sửa KHÔNG bỏ ghim:
       // đóng ra để quay sang chat về chính file đó là luồng thường gặp nhất.
       try { if (window.JavisPin && d.abs) window.JavisPin.set({ name: d.name || it.name || rel, rel, abs: d.abs }); } catch (e) { }
+      if (d.tree_kind === "worktree") {
+        document.getElementById("neTitle").innerHTML += ` <span class="tm-tree-branch" style="font-size:11px;margin-left:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.08);">${esc(window.t("teams.tree_worktree"))}</span>`;
+      } else if (d.tree_kind === "clone" || d.readonly) {
+        document.getElementById("neTitle").innerHTML += ` <span class="tm-tree-branch" style="font-size:11px;margin-left:8px;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.08);">${esc(window.t("teams.tree_clone"))} (${esc(window.t("common.readonly") || "read-only")})</span>`;
+      }
       const isMd = ext === ".md";
       if (isMd) { try { await _ensureTurndown(); } catch (e) { } }   // để lưu bản render (WYSIWYG) → markdown
       if (ed.hidden || _neOpenRel !== (rel || "")) return;
@@ -11685,6 +11715,9 @@
         }
       }
       const saveBtn = document.createElement("button"); saveBtn.innerHTML = SAVE_ICON + " " + esc(window.t("common.save")); saveBtn.title = window.t("cs.ne_save_title");
+      if (d.readonly) {
+        saveBtn.style.display = "none";
+      }
       // Mốc so sánh "đã sửa gì chưa": lấy SAU khi dựng xong khung soạn, tức là bản đã vòng
       // qua markdown một lượt - xem chú thích ở `_neCoSuaChua`.
       const getter = () => (mdGetter ? mdGetter() : ta.value);
@@ -11693,7 +11726,12 @@
       // One write of the file. Autosave, Save, Ctrl+S and every "save before leaving" path go through it. Returns
       // true/false: the automatic callers (leaving the file, Back) decide from it whether to go on or stay.
       const write = async (content, o) => {
-        const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", rel); fd.append("content", content);
+        let activeTeam = "";
+        if (typeof window !== "undefined" && window.JavisTeams && typeof window.JavisTeams.activeTeamId === "function") {
+          activeTeam = window.JavisTeams.activeTeamId() || "";
+        }
+        const fd = new FormData(); fd.append("brain", fbrain()); fd.append("path", d.abs || rel); fd.append("content", content);
+        if (activeTeam) fd.append("team_id", activeTeam);
         try {
           const r = await (await fetch("/files/write", { method: "POST", body: fd, keepalive: !!(o && o.keepalive) })).json();
           if (r.ok) {
