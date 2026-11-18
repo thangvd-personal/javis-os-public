@@ -2655,8 +2655,8 @@
     } else if (td.chosen_repo) {
       repoSelectHtml = '<div class="tm-tree-repo-bar">' +
         '<span class="tm-tree-repo-name" title="' + esc(td.chosen_repo) + '">' + ghLogo() + ' ' + esc(td.chosen_repo) + '</span>' +
-        (td.branch ? '<span class="tm-tree-branch" title="branch">' + esc(td.branch) + '</span>' : '') +
-      '</div>';
+      '</div>' + 
+      (td.branch ? '<div class="tm-tree-repo-bar"><span class="tm-tree-branch" title="Nhánh làm việc hiện tại">Branch: ' + esc(td.branch) + '</span></div>' : '');
     }
 
     var kindHtml = '<div class="tm-tree-kind-tabs">' +

@@ -94,13 +94,14 @@ NO_GATE_NOTE = ("ERROR: Hành động ra ngoài của nhóm cần chủ nhóm du
 
 
 class Gate:
-    __slots__ = ("blocked", "gate_id", "lock", "passed", "roots", "snap", "step_id", "store", "task_id", "team_id")
+    __slots__ = ("blocked", "gate_id", "lock", "passed", "roots", "readonly_roots", "snap", "step_id", "store", "task_id", "team_id")
 
     def __init__(self, store, team_id: str, task_id: str, step_id: str):
         self.gate_id = "tg_" + secrets.token_hex(8)
         self.team_id, self.task_id, self.step_id = team_id, task_id, step_id
         self.store = store
         self.roots: list = []
+        self.readonly_roots: list = []
         self.blocked: list = []
         self.passed: list = []
         self.lock = threading.Lock()
@@ -118,19 +119,45 @@ def open_gate(store, team_id: str, task_id: str, step_id: str) -> Gate:
     return g
 
 
-def set_roots(gate_id: str, roots: list) -> None:
-    """Folders a gated step may write natively (the team folder, the brain). Set by the host that built the engine."""
+def set_roots(gate_id: str, roots: list, readonly_roots: list | None = None) -> None:
+    """Folders a gated step may access natively.
+    roots: writable folders (the team folder, the brain, worktrees).
+    readonly_roots: read-only folders (main-tree clones).
+    Set by the host that built the engine.
+    """
     g = get(gate_id)
     if g is not None:
         out = []
         for r in roots or []:
             if r:
                 try:
-                    out.append(str(Path(r).expanduser().resolve()))
+                    p = str(Path(r).expanduser().resolve())
+                    if p not in out:
+                        out.append(p)
                 except Exception:  # noqa: BLE001
                     continue
         g.roots = out
+        ro = []
+        for r in readonly_roots or []:
+            if r:
+                try:
+                    p = str(Path(r).expanduser().resolve())
+                    if p not in ro and p not in out:
+                        ro.append(p)
+                except Exception:  # noqa: BLE001
+                    continue
+        g.readonly_roots = ro
         g.snap = protect_snapshot(out)
+
+
+def get_roots(gate_id: str | None = None) -> list:
+    g = get(gate_id) if gate_id else current()
+    return list(g.roots) if g is not None else []
+
+
+def get_readonly_roots(gate_id: str | None = None) -> list:
+    g = get(gate_id) if gate_id else current()
+    return list(g.readonly_roots) if g is not None else []
 
 
 def close_gate(gate_id: str) -> dict:
@@ -276,7 +303,20 @@ def _inside(path: str, roots: list) -> bool:
     if not path or not roots:
         return False
     try:
-        p = Path(path).expanduser().resolve()
+        raw_p = Path(path).expanduser()
+        if not raw_p.is_absolute():
+            # Check candidate resolutions against every root
+            for r in roots:
+                candidate = (Path(r) / raw_p).resolve()
+                try:
+                    rel = candidate.relative_to(r)
+                except ValueError:
+                    continue
+                if not protected_rel(rel):
+                    return True
+            p = raw_p.resolve()
+        else:
+            p = raw_p.resolve()
     except Exception:  # noqa: BLE001
         return False
     for r in roots:
@@ -330,7 +370,7 @@ def native_label(tool: str, inp: Any) -> str:
     return f"{tool}: {what}" if what else str(tool or "")
 
 
-def classify_native(tool: str, inp: dict, roots: list) -> str:
+def classify_native(tool: str, inp: dict, roots: list, readonly_roots: list | None = None) -> str:
     """'free' (runs) or 'outside' (needs approval)."""
     name = str(tool or "")
     if name.startswith("mcp__javis__") or name.startswith("mcp__javis-plugins__"):
@@ -339,6 +379,9 @@ def classify_native(tool: str, inp: dict, roots: list) -> str:
         return "free"
     if name in NATIVE_WRITE:
         path = (inp or {}).get("file_path") or (inp or {}).get("notebook_path") or ""
+        # Writing to a read-only root (e.g. main-tree) is strictly outside scope (requires owner approval)
+        if readonly_roots and _inside(str(path), readonly_roots):
+            return "outside"
         return "free" if _inside(str(path), roots) else "outside"
     if name == "Bash":
         return "free" if bash_readonly((inp or {}).get("command")) else "outside"
@@ -354,7 +397,7 @@ def native_check(gate_id: str | None, tool: str, inp: dict) -> tuple:
     g = get(gate_id)
     if g is None:
         return False, NO_GATE_NOTE
-    if classify_native(tool, inp, g.roots) == "free":
+    if classify_native(tool, inp, g.roots, g.readonly_roots) == "free":
         return True, ""
     args = _native_args(tool, inp)
     return decide(g, "native", tool, args, native_label(tool, inp))

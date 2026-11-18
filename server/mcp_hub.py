@@ -643,44 +643,21 @@ def _ten_goc(workspace_root):
     return ", ".join(str(g) for g in _goc_lam_viec(workspace_root))
 
 
-def _safe_path(vault_root, p, workspace_root=None):
-    """Đường dẫn hợp lệ trong vault, HOẶC trong một thư mục làm việc của phiên Coding.
+def _safe_path(vault_root, p, workspace_root=None, readonly_workspace_root=None):
+    """Đường dẫn hợp lệ trong vault, HOẶC trong một thư mục làm việc của phiên Coding / Team.
 
-    `workspace_root` là gốc thứ hai, thêm ở 0.64 để engine KHÔNG có tool file native (sáu
-    engine API và engine Web) đọc ghi được cây mã nguồn. Trước đó hub luôn nhận
-    `vault_root = brain`, nên một phiên Coding chạy bằng engine API không chạm nổi vào repo:
-    `_read` chặn mọi đường dẫn ngoài vault và trả "nằm ngoài bộ não đang làm việc".
-
-    Nhận CẢ DANH SÁCH: một phiên Coding gắn được nhiều thư mục từ 0.63.9, và engine không có
-    tool native thì không "đứng" ở đâu cả, nên nó không bị giới hạn một gốc như engine CLI.
-    Thứ tự trong danh sách là thứ tự ưu tiên; cái đầu là thư mục chính.
-
-    None hoặc rỗng (mặc định) = hành vi y hệt trước, chỉ một gốc là vault. Đây là điều kiện
-    để thay đổi này không đụng một lượt chat thường nào.
-
-    CHỌN GỐC NÀO khi có nhiều gốc: xét theo thứ tự dưới đây. Không được chỉ xét "nằm trong
-    gốc", vì mọi đường dẫn tương đối đều nằm trong MỌI gốc về mặt chữ - `server/auth.py` ghép
-    vào brain vẫn ra một đường dẫn hợp lệ, chỉ là không có file ở đó. Xét thiếu bước này thì
-    mọi lời gọi đọc file repo đều rơi vào brain rồi trả "không có file", đúng cái chặn cứng
-    mà tham số này sinh ra để gỡ.
-
-      1. File CÓ THẬT ở gốc nào đó   -> gốc đó, xét theo thứ tự (vault trước, rồi từng thư
-                                        mục làm việc), nên vault thắng khi nhiều gốc cùng có
-      2. THƯ MỤC CHA có thật ở gốc nào đó -> gốc đó, nhưng thư mục làm việc TRƯỚC brain (cảnh
-                                        GHI file mới, đổi ở 0.256.0)
-      3. Không đâu có                -> vault, để câu báo lỗi nói về brain như cũ
-
-    Bước 2 là thứ làm `javis_write_file` ghi đúng chỗ: ghi `server/moi.py` trong một phiên
-    coding thì brain không có thư mục `server/` còn repo có, nên file rơi vào repo.
+    `workspace_root` là gốc thứ hai (thư mục làm việc / worktree, ghi & đọc).
+    `readonly_workspace_root` là gốc chỉ đọc (main-tree clone chứa origin/main).
     """
     tv = _trong_goc(vault_root, p)
     goc_lv = _goc_lam_viec(workspace_root)
-    if not goc_lv:
+    goc_ro = _goc_lam_viec(readonly_workspace_root)
+    if not goc_lv and not goc_ro:
         if tv is not None:
             return tv
         raise ValueError(f"đường dẫn '{p}' nằm ngoài vault")
 
-    ung_vien = [tv] + [_trong_goc(g, p) for g in goc_lv]
+    ung_vien = [tv] + [_trong_goc(g, p) for g in goc_lv] + [_trong_goc(g, p) for g in goc_ro]
     co_that = [u for u in ung_vien if u is not None]
     if not co_that:
         raise ValueError(f"đường dẫn '{p}' nằm ngoài cả bộ não lẫn thư mục làm việc")
@@ -688,17 +665,16 @@ def _safe_path(vault_root, p, workspace_root=None):
     for u in co_that:
         if u.exists():
             return u
-    # File MỚI: thư mục làm việc xét TRƯỚC brain (0.256.0). Trước đây xét theo cùng thứ tự với
-    # file có sẵn (brain trước), nên tạo `test_moi.py` ở GỐC repo trong một phiên Coding lại rơi
-    # vào gốc brain, vì gốc brain cũng là một thư mục cha có thật. File mới trong phiên Coding
-    # là của repo; thư mục chỉ brain có (notes/...) thì vẫn rơi vào brain như cũ.
-    for u in [x for x in co_that if x is not tv] + ([tv] if tv is not None else []):
+    # File MỚI: thư mục làm việc (writable) xét TRƯỚC brain (0.256.0). KHÔNG rơi vào readonly_workspace_root!
+    ung_vien_moi = [_trong_goc(g, p) for g in goc_lv]
+    co_that_moi = [u for u in ung_vien_moi if u is not None]
+    for u in co_that_moi + ([tv] if tv is not None else []):
         try:
             if u.parent.is_dir():
                 return u
         except OSError:
             continue
-    return tv if tv is not None else co_that[0]
+    return tv if tv is not None else (co_that_moi[0] if co_that_moi else co_that[0])
 
 
 def _vung_nhan_file():
@@ -714,25 +690,12 @@ def _vung_nhan_file():
         return None
 
 
-def _safe_read_path(vault_root, p, cho_phep_staging=False, workspace_root=None):
-    """Như `_safe_path` nhưng cho ĐỌC, và biết thêm vùng nhận file của khung chat.
-
-    Vì sao phải có: dashboard chèn vào câu hỏi khối "[File đính kèm để ĐỌC (đường dẫn): …]"
-    với ĐƯỜNG DẪN TUYỆT ĐỐI trong `.staging` rồi dặn model "đọc thẳng file rồi trả lời".
-    Sáu engine API không có tool đọc file nào ngoài `javis_read_file`, mà tool đó khoá trong
-    vault - nên lượt nào đính kèm file cũng nổ `ValueError: nằm ngoài vault`, và model đọc
-    lỗi đó xong quay ra bảo người dùng "chuyển file vào thư mục Brain đi rồi tôi đọc". Người
-    dùng báo đúng cảnh này 23/08 với một đoạn văn dán dài.
-
-    Nới ĐÚNG một thư mục và CHỈ cho đọc: file trong đó là file chính chủ vừa gửi lên ở lượt
-    này, cùng mức tin cậy với file trong vault. Ghi vẫn khoá trong vault như cũ. Và phải xin
-    tường minh (`cho_phep_staging`) chứ không mặc định - bot chuyên trách nói chuyện với
-    người lạ cũng gọi hub bằng chính nhóm tool này, mở sẵn cho nó là biến tài liệu chủ vừa
-    dán thành thứ khách đoán tên file là đọc được.
-    """
+def _safe_read_path(vault_root, p, cho_phep_staging=False, workspace_root=None, readonly_workspace_root=None):
+    """Như `_safe_path` nhưng cho ĐỌC, và biết thêm vùng nhận file của khung chat."""
     trong_vault, loi = None, None
     try:
-        trong_vault = _safe_path(vault_root, p, workspace_root=workspace_root)
+        trong_vault = _safe_path(vault_root, p, workspace_root=workspace_root,
+                                 readonly_workspace_root=readonly_workspace_root)
         if trong_vault.exists():
             return trong_vault          # vault LUÔN thắng: không để staging che file thật
     except ValueError as e:
@@ -871,7 +834,8 @@ def _ghi_vung_bao_ve(p, vault_root, workspace_root, mode, for_bot=False) -> str:
 
 
 def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang="", staging=False,
-                   bo_qua=None, workspace_root=None, coding_ctx_cua_phien=None, for_bot=False):
+                   bo_qua=None, workspace_root=None, coding_ctx_cua_phien=None, for_bot=False,
+                   readonly_workspace_root=None):
     """(tools_spec, route) các tool nội bộ cho engine API. Claude/Codex có tool file native
     nên hub HTTP không trả nhóm này (chỉ meta javis_connections).
     include_ambient=True (đường engine Claude): javis_connections kèm cả connector tài khoản
@@ -965,15 +929,17 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         _off, _lim = (args or {}).get("offset"), (args or {}).get("limit")
         try:
             p = _safe_read_path(vault_root, rel, cho_phep_staging=staging,
-                                workspace_root=workspace_root)
+                                workspace_root=workspace_root,
+                                readonly_workspace_root=readonly_workspace_root)
         except ValueError:
             # Nói THẲNG đây là ranh giới brain, kèm việc-cần-làm. Bản cũ để ValueError rơi ra
             # nguyên văn "nằm ngoài vault", model đọc xong tự dựng một lời khuyên sai (bảo
             # người dùng tự chép file vào thư mục Brain rồi mới đọc được).
-            if workspace_root:
+            all_roots = (_ten_goc(workspace_root) + (", " + _ten_goc(readonly_workspace_root) if readonly_workspace_root else "")).strip(", ")
+            if all_roots:
                 return (f"ERROR: '{rel}' nằm ngoài MỌI nơi tool này được phép đọc, nên "
                         f"không đọc được. Những nơi đó là: bộ não đang làm việc, và thư mục "
-                        f"làm việc của phiên này ({_ten_goc(workspace_root)}). Dùng đường dẫn "
+                        f"làm việc của phiên này ({all_roots}). Dùng đường dẫn "
                         f"tương đối so với một trong số đó, hoặc file vừa đính kèm vào khung "
                         f"chat.")
             return (f"ERROR: '{rel}' nằm ngoài bộ não đang làm việc nên tool này không đọc "
@@ -1012,7 +978,8 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
 
     async def _ls(args):
         p = _safe_path(vault_root, (args or {}).get("path") or ".",
-                       workspace_root=workspace_root)
+                       workspace_root=workspace_root,
+                       readonly_workspace_root=readonly_workspace_root)
         if not p.is_dir():
             return f"ERROR: không có thư mục '{(args or {}).get('path')}'"
         rows = []
@@ -1039,7 +1006,8 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         # chạy vòng tool bằng chữ: một exception bay ra giữa lô tool là chết cả lượt, còn một
         # câu lỗi thì model đọc rồi tự sửa đường dẫn ở vòng sau.
         try:
-            p = _safe_path(vault_root, (args or {}).get("path"), workspace_root=workspace_root)
+            p = _safe_path(vault_root, (args or {}).get("path"), workspace_root=workspace_root,
+                           readonly_workspace_root=readonly_workspace_root)
         except ValueError:
             if workspace_root:
                 return None, (f"ERROR: '{(args or {}).get('path')}' nằm ngoài MỌI nơi được phép "
@@ -1048,6 +1016,20 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
                         f"trong số đó.")
             return None, (f"ERROR: '{(args or {}).get('path')}' nằm ngoài bộ não đang làm việc nên "
                     f"tool này không ghi được. Dùng đường dẫn tương đối trong brain.")
+
+        # Thư mục chính (main-tree) luôn là chỉ đọc - không được phép ghi đè hay sửa code origin/main
+        if readonly_workspace_root:
+            for ro in _goc_lam_viec(readonly_workspace_root):
+                try:
+                    rp = p.resolve()
+                    r_ro = Path(ro).resolve()
+                    if rp == r_ro or r_ro in rp.parents:
+                        return None, (f"ERROR: Thư mục chính (main-tree) là chỉ đọc (read-only), không được phép ghi hoặc "
+                                      f"sửa file tại '{(args or {}).get('path')}'. Hãy thực hiện các thao tác ghi/sửa trong "
+                                      f"thư mục làm việc (worktree) hoặc vault.")
+                except (OSError, ValueError):
+                    pass
+
         # 0.188.0 (Javis Core spec 13, 14): the learning switch and the forgotten list are the person's, never the
         # model's; and with learning off nothing new is written under memory/.
         try:
@@ -1125,10 +1107,12 @@ def _builtin_tools(mode, vault_root, include_ambient=False, hidden=None, lang=""
         goc = _goc_lv[0] if _goc_lv else str(vault_root)
         raw = str(args.get("path") or "").strip()
         try:
-            dich = _safe_path(vault_root, raw, workspace_root=workspace_root) if raw else Path(goc)
+            dich = _safe_path(vault_root, raw, workspace_root=workspace_root,
+                              readonly_workspace_root=readonly_workspace_root) if raw else Path(goc)
         except ValueError:
+            all_roots = (_ten_goc(workspace_root) + (", " + _ten_goc(readonly_workspace_root) if readonly_workspace_root else "")).strip(", ")
             return (f"ERROR: '{raw}' nằm ngoài nơi tool này được phép tìm"
-                    + (f" (bộ não và thư mục làm việc: {_ten_goc(workspace_root)})." if workspace_root else
+                    + (f" (bộ não và thư mục làm việc: {all_roots})." if all_roots else
                        " (bộ não đang làm việc)."))
         hien_thi = _goc_cua(dich) or (str(vault_root) if vault_root else str(dich))
         return await asyncio.to_thread(
@@ -1834,7 +1818,8 @@ def _scope_tools(tools, route, allowlist):
 
 async def discover_all(mode="full", vault_root=None, include_plugins=True, include_ambient=False,
                        force_refresh=False, force_lazy=False, staging=False, workspace_root=None,
-                       coding_ctx_cua_phien=None, for_bot=False, tool_allowlist=None):
+                       coding_ctx_cua_phien=None, for_bot=False, tool_allowlist=None,
+                       readonly_workspace_root=None):
     """(tools_spec, route) đầy đủ cho 1 mode. route entries ĐÃ bọc quyền + audit.
     include_plugins=False: bỏ nhóm tool plugin - dùng khi engine SDK đã đấu plugin
     IN-PROCESS (header X-Javis-No-Plugins) để model không thấy tool trùng chức năng.
@@ -1844,10 +1829,19 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
     tool native để mà chỉ tới).
     staging=True: cho `javis_read_file` đọc thêm vùng nhận file của khung chat - CHỈ đường chat
     của chủ truyền vào (xem `_safe_read_path`).
-    workspace_root: thư mục làm việc của phiên Coding - tool FILE nhận thêm gốc đó (0.64).
+    workspace_root: thư mục làm việc của phiên Coding / worktree của Team - tool FILE nhận thêm gốc đó (0.64).
         Nhận cả DANH SÁCH: một phiên gắn được nhiều thư mục từ 0.63.9.
+    readonly_workspace_root: thư mục chỉ đọc (main-tree clone chứa origin/main của repo).
     Nằm TRONG khoá cache vì hai phiên coding khác repo phải thấy hai danh sách route khác nhau."""
     mode = (mode or "full").strip().lower()
+    if mode == team_gate.HUB_MODE:
+        g = team_gate.current()
+        if g is not None:
+            if not workspace_root and g.roots:
+                vr = str(Path(vault_root).resolve()) if vault_root else ""
+                workspace_root = [r for r in g.roots if r != vr]
+            if not readonly_workspace_root and getattr(g, "readonly_roots", None):
+                readonly_workspace_root = list(g.readonly_roots)
     # A bot at the "read_docs" level (0.80.0) gets its three document tools and NOTHING else: no
     # connection, no builtin, no plugin, no lazy tier. Returned before any of those are discovered so
     # a later change to them cannot leak into this level. See chatbot_doc_tools.
@@ -1876,8 +1870,8 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
     pins_key = tool_pins.key(vault_root, bot=for_bot)
     pins = tool_pins.pinned(pins_key)
     key = (mode, str(vault_root or ""), bool(include_plugins), bool(include_ambient),
-           bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _quyen_ctx, bool(for_bot),
-           pins, str(_sid_ctx or ""))
+           bool(force_lazy), lang, bool(staging), _ten_goc(workspace_root), _ten_goc(readonly_workspace_root),
+           _quyen_ctx, bool(for_bot), pins, str(_sid_ctx or ""))
     if tool_allowlist is not None:
         tool_allowlist = tuple(sorted(set(tool_allowlist)))
         key = key[:-1] + (tool_allowlist,) + key[-1:]
@@ -1902,7 +1896,8 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
                     await discover_all(mode, vault_root, include_plugins, include_ambient, force_refresh=True,
                                        force_lazy=force_lazy, staging=staging, workspace_root=workspace_root,
                                        coding_ctx_cua_phien=coding_ctx_cua_phien, for_bot=for_bot,
-                                       tool_allowlist=tool_allowlist)
+                                       tool_allowlist=tool_allowlist,
+                                       readonly_workspace_root=readonly_workspace_root)
                 except Exception as e:  # noqa: BLE001 - the next caller simply dials again
                     print(f"[hub] background refresh failed: {type(e).__name__}: {e}", file=sys.stderr)
                 finally:
@@ -1961,7 +1956,8 @@ async def discover_all(mode="full", vault_root=None, include_plugins=True, inclu
 
     b_tools, b_route = await asyncio.to_thread(
         _builtin_tools, mode, vault_root, include_ambient, hidden, lang, staging,
-        bo_qua, workspace_root=workspace_root, coding_ctx_cua_phien=coding_ctx_cua_phien, for_bot=for_bot)
+        bo_qua, workspace_root=workspace_root, coding_ctx_cua_phien=coding_ctx_cua_phien, for_bot=for_bot,
+        readonly_workspace_root=readonly_workspace_root)
     tools_spec += b_tools
     route.update(b_route)
     # javis_query: reads a stored large result back, or computes over a read-only tool's pages, so the data

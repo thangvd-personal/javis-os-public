@@ -34001,6 +34001,59 @@ def _step_engine(eng, provider: str):
     return eng
 
 
+def _team_repo_trees(team, root):
+    """(worktrees, main_trees) for a team.
+    worktrees: worktree directories (read & write, full access)
+    main_trees: clone directories (origin/main, read-only)
+    """
+    sid = team.get("session_id") or ""
+    if not sid:
+        return [], []
+    worktrees, main_trees = [], []
+    try:
+        import github_repos
+        repos = github_repos.session_repos(sid, root) if root else []
+        for r in repos:
+            wt = r.get("worktree") or ""
+            if not wt and r.get("folder_id"):
+                try:
+                    rec = github_repos.find(root, r.get("full_name") or "") or {}
+                    if rec:
+                        wt_info = github_repos.ensure_worktree(sid, rec)
+                        wt = wt_info.get("worktree") or ""
+                except Exception:
+                    pass
+            if wt and Path(wt).is_dir():
+                p_wt = str(Path(wt).resolve())
+                if p_wt not in worktrees:
+                    worktrees.append(p_wt)
+            clone = r.get("clone") or ""
+            if clone and Path(clone).is_dir():
+                p_clone = str(Path(clone).resolve())
+                if p_clone not in main_trees and p_clone not in worktrees:
+                    main_trees.append(p_clone)
+    except Exception as e:
+        print(f"[team repo trees github] {e}", file=sys.stderr)
+
+    try:
+        import coding_store
+        for folder in coding_store.thu_muc_cua_phien(sid):
+            wt = coding_store.worktree_thu_muc(sid, folder["id"])
+            if wt and Path(wt).is_dir():
+                p_wt = str(Path(wt).resolve())
+                if p_wt not in worktrees:
+                    worktrees.append(p_wt)
+            dd = folder.get("duong_dan") or ""
+            if dd and Path(dd).is_dir():
+                p_dd = str(Path(dd).resolve())
+                if p_dd not in main_trees and p_dd not in worktrees:
+                    main_trees.append(p_dd)
+    except Exception as e:
+        print(f"[team repo trees coding] {e}", file=sys.stderr)
+
+    return worktrees, main_trees
+
+
 def _team_engine_for(team, agent_key, role):
     """Engine CHỈ CHỮ cho một lượt nhóm (phán quyết R3 của kế hoạch T1): thư mục trống, không MCP, cổng từ chối mọi công
     cụ. Model theo hợp đồng chat tương tác và giao việc (`team_engine`, 0.142.0): model riêng của trợ lý, thiếu hay chưa
@@ -34039,11 +34092,14 @@ def _team_engine_for(team, agent_key, role):
                 raise team_runner.EngineUnavailable(team_gate.unsupported_text(
                     sup["reason"], assistant=info.get("name") or "", choices=tuple(_team_gate_choices(prov, settings))))
         vault = str(_brain_root(root))
+        worktrees, main_trees = _team_repo_trees(team, root)
         cwd = ""
         try:
             cwd = coding_store.cwd_cua_phien(team.get("session_id") or "") if team.get("session_id") else ""
         except Exception:  # noqa: BLE001 - a broken folder binding falls back to the brain
             cwd = ""
+        if not cwd and worktrees:
+            cwd = worktrees[0]
         hub_mode = team_gate.HUB_MODE if gate_id else TEAM_WORK_MODE
         if gate_id and prov == aux_engine.CODEX and not cwd:
             # Review 0.207.0: Codex's own file tools write anywhere under its working folder (no hook), so a gated step
@@ -34052,10 +34108,19 @@ def _team_engine_for(team, agent_key, role):
             cwd = str(Path(vault) / "teams" / str(team["team_id"]))
             Path(cwd).mkdir(parents=True, exist_ok=True)
         base = claude_engine(system_prompt=system, cwd=cwd or vault, tag=tag)
+        base.workspace_root = worktrees
+        base.readonly_workspace_root = main_trees
         _apply_mcp(base, mode=hub_mode, brain=root)
         if gate_id:
             base.team_gate = gate_id
-            team_gate.set_roots(gate_id, [cwd or vault, vault])
+            write_roots = [r for r in ([cwd] if cwd else []) + worktrees + [vault] if r]
+            seen_wr = set()
+            dedup_wr = []
+            for r in write_roots:
+                if r not in seen_wr:
+                    seen_wr.add(r)
+                    dedup_wr.append(r)
+            team_gate.set_roots(gate_id, dedup_wr, readonly_roots=main_trees)
         build_mode = (("auto" if prov in (aux_engine.CODEX, aux_engine.GROK_CLI) else hub_mode) if gate_id
                       else TEAM_WORK_MODE)
         try:

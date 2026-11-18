@@ -419,7 +419,7 @@ class _ApiAuxEngine:
 
     def __init__(self, provider, model, system_prompt=None, vault_root=None,
                  mode="full", tag="aux", reasoning="off", api_key="", account_id="",
-                 terminal=False):
+                 terminal=False, workspace_root=None, readonly_workspace_root=None):
         self.provider = provider
         self.model = model
         # 0.350.0: one link per account of the card, so the chain moves to key 2 when key 1 is out of quota.
@@ -427,6 +427,8 @@ class _ApiAuxEngine:
         self.account_id = account_id or ""
         self.system_prompt = system_prompt
         self.vault_root = vault_root
+        self.workspace_root = workspace_root
+        self.readonly_workspace_root = readonly_workspace_root
         self.javis_mode = mode
         self.tag = tag
         self.reasoning = reasoning
@@ -493,11 +495,14 @@ class _ApiAuxEngine:
         ctx = None
         if not getattr(self, "no_tools", False):
             ctx = self._ngu_canh_terminal()
+            ws_root = self.workspace_root if self.workspace_root is not None else (list(ctx.workspace_roots) if ctx is not None else None)
+            ro_root = self.readonly_workspace_root
             try:
-                if ctx is not None:
+                if ctx is not None or ws_root or ro_root:
                     tools, route = await mcp_hub.discover_all(
                         self.javis_mode or "full", vault_root=self.vault_root,
-                        workspace_root=list(ctx.workspace_roots), coding_ctx_cua_phien=ctx)
+                        workspace_root=ws_root, readonly_workspace_root=ro_root,
+                        coding_ctx_cua_phien=ctx)
                     co_terminal = "javis_terminal" in route
                 else:
                     tools, route = await mcp_hub.discover_all(self.javis_mode or "full",
@@ -1170,6 +1175,8 @@ def _build_api(spec, claude_cli_obj, mode, tag):
         mode=_mode,
         tag=tag or getattr(claude_cli_obj, "tag", "aux"),
         terminal=_mode == "full" and cli_cho_bash(claude_cli_obj),
+        workspace_root=getattr(claude_cli_obj, "workspace_root", None),
+        readonly_workspace_root=getattr(claude_cli_obj, "readonly_workspace_root", None),
     )
 
 

@@ -226,8 +226,9 @@ APPROVAL_HINT = ('Cần chủ nhóm quyết trước khi làm tiếp (phương �
                  'chưa được duyệt thì chưa làm.')
 # Gated tool step (teams.work_mode = gated, 0.207.0): what runs freely and what waits for the owner.
 GATED_NOTE = ("# QUYỀN CỦA NHÓM: CẦN DUYỆT\nNhóm này đang ở quyền 'cần duyệt'. Trong phạm vi bước bạn làm tự do: đọc, tìm, ghi "
-              "file trong bộ não và thư mục của nhóm, đọc kết nối, chạy lệnh chỉ đọc (ls, cat, grep, git status...). Hành động "
-              "ra ngoài (gửi tin, đăng bài, thanh toán, đặt hàng, xoá dữ liệu, lệnh máy khác) sẽ bị chặn TRƯỚC khi chạy và "
+              "file trong bộ não và thư mục làm việc của nhóm (worktree của repo GitHub nếu có, toàn quyền đọc và ghi), đọc trong thư mục chính "
+              "(main-tree clone chứa origin/main, chỉ đọc), đọc kết nối, chạy lệnh chỉ đọc (ls, cat, grep, git status...). Hành động "
+              "ra ngoài (gửi tin, đăng bài, thanh toán, đặt hàng, xoá dữ liệu, lệnh máy khác, ghi sửa trong thư mục chính) sẽ bị chặn TRƯỚC khi chạy và "
               "Javis ghi đúng lời gọi đó thành yêu cầu duyệt cho chủ nhóm. Gặp chặn thì đừng tìm đường khác để làm cùng "
               "việc: làm xong phần trong phạm vi rồi kết thúc bước. Muốn xin trước thì dùng khối ask_approval.")
 GATED_APPROVED_NOTE = ("Chủ nhóm ĐÃ DUYỆT đúng các lời gọi dưới đây cho bước này. Gọi lại ĐÚNG công cụ và ĐÚNG tham số (khác một "
