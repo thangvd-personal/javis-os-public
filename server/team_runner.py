@@ -534,7 +534,9 @@ class ToolTurnOutcome(TextOnlyOutcome):
 
     def note(self, ev: Any) -> None:
         if isinstance(ev, dict) and ev.get("type") in ("tool_call", "tool_use"):
-            self.tool_calls += 1
+            name = str(ev.get("name") or ev.get("tool") or "")
+            if not name.startswith("javis_wait_") and name not in ("javis_thinking_off", "javis_no_tools"):
+                self.tool_calls += 1
         super().note(ev)
 
 

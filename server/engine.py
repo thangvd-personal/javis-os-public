@@ -249,7 +249,21 @@ def _parse_retry_after(headers, cap: float = 600.0):
 
 # Trần thời gian CHỜ cửa sổ hạn mức trượt qua. Quá ngưỡng này thì báo cho người dùng thay
 # vì ngồi im: chờ 10 giây là chấp nhận được, chờ một phút thì người ta tưởng treo.
-_WINDOW_WAIT_MAX = 25.0
+_WINDOW_WAIT_MAX = 35.0
+
+# Nghẽn tạm thời (502/503/504/529): tạm ngưng khoảng 30s rồi thử lại trước khi báo lỗi cho nhóm
+def _transient_502_retries() -> int:
+    try:
+        return max(0, int(os.getenv("JAVIS_TRANSIENT_502_RETRIES", "1")))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _transient_502_wait_s() -> float:
+    try:
+        return max(0.01, float(os.getenv("JAVIS_TRANSIENT_502_WAIT_S", "30.0")))
+    except (TypeError, ValueError):
+        return 30.0
 
 # Model tự bịa cú pháp gọi tool thay vì JSON chuẩn. Provider trả 400 kèm mã riêng; bắt theo
 # MÃ và cụm từ đặc trưng chứ không theo status, vì 400 còn dùng cho cả chục lỗi khác mà thử
@@ -326,9 +340,9 @@ def provider_message(body_text) -> str:
 
 
 def _qua_tai(ev: dict) -> bool:
-    """The provider is overloaded (503/529 or an "overloaded"/"high demand" body), not a broken request."""
+    """The provider is overloaded (502/503/504/529 or an "overloaded"/"high demand" body), not a broken request."""
     low = str(ev.get("content") or "").lower()
-    return ev.get("ma") in (503, 529) or any(p in low for p in ("overloaded", "high demand", "at capacity"))
+    return ev.get("ma") in (502, 503, 504, 529) or any(p in low for p in ("overloaded", "high demand", "at capacity"))
 
 
 def ev_loi_exc(nhan, exc):
@@ -1203,61 +1217,77 @@ async def _openai_compat_stream(url, label, api_key, model, messages, reasoning,
         payload["reasoning_effort"] = api_effort(reasoning)
     payload.update(extra_payload or {})
     payload.update(fast_extra or {})   # Fast mode (0.164.0)
-    try:
-        timeout = httpx.Timeout(120.0, connect=15.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
-                if r.status_code != 200:
-                    body = await r.aread()
-                    body_text = body.decode("utf-8", "replace")
-                    if fast_extra and fast_mode.refused(r.status_code, body_text, "service_tier"):
-                        yield {"type": "_fast_refused", "detail": body_text[:160]}
+    transient_502_retries = 0
+    while True:
+        try:
+            timeout = httpx.Timeout(120.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
+                    if r.status_code != 200:
+                        body = await r.aread()
+                        body_text = body.decode("utf-8", "replace")
+                        if fast_extra and fast_mode.refused(r.status_code, body_text, "service_tier"):
+                            yield {"type": "_fast_refused", "detail": body_text[:160]}
+                            return
+                        # Nhà cung cấp vừa nói thẳng hạn mức thật của tài khoản này. Đó là con
+                        # số đáng tin nhất đang có - đáng tin hơn mọi thứ tra từ tài liệu - nên
+                        # phải học lấy thay vì vứt đi rồi bắt người dùng tự khai.
+                        _fact = limit_learner.parse_limit_error(r.status_code, body_text)
+                        if _fact:
+                            limit_learner.remember(label, model, _fact)
+                            yield {"type": "limit_exceeded", "provider": label, "model": model,
+                                   "kind": _fact.kind, "limit": _fact.limit,
+                                   "requested": _fact.requested,
+                                   "shrink_to": limit_learner.shrink_target(_fact),
+                                   "remedy": _fact.remedy, "raw": _fact.raw}
+                            yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
+                            return
+                        is_transient_502 = (r.status_code in (502, 503, 504, 529)
+                                            or (r.status_code >= 500 and _is_transient_body(body_text)))
+                        if is_transient_502 and transient_502_retries < _transient_502_retries():
+                            transient_502_retries += 1
+                            wait_s = _transient_502_wait_s()
+                            cho = max(wait_s, _parse_retry_after(r.headers) or wait_s)
+                            print(f"[{label}] {r.status_code} tạm nghẽn, tạm ngưng {cho:.0f}s rồi thử lại...",
+                                  file=sys.stderr)
+                            await asyncio.sleep(cho)
+                            continue
+                        yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
                         return
-                    # Nhà cung cấp vừa nói thẳng hạn mức thật của tài khoản này. Đó là con
-                    # số đáng tin nhất đang có - đáng tin hơn mọi thứ tra từ tài liệu - nên
-                    # phải học lấy thay vì vứt đi rồi bắt người dùng tự khai.
-                    _fact = limit_learner.parse_limit_error(r.status_code, body_text)
-                    if _fact:
-                        limit_learner.remember(label, model, _fact)
-                        yield {"type": "limit_exceeded", "provider": label, "model": model,
-                               "kind": _fact.kind, "limit": _fact.limit,
-                               "requested": _fact.requested,
-                               "shrink_to": limit_learner.shrink_target(_fact),
-                           "remedy": _fact.remedy, "raw": _fact.raw}
-                    yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
+                    got = thought = False
+                    usage = None
+                    async for line in r.aiter_lines():
+                        line = (line or "").strip()
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            obj = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        if obj.get("usage"):
+                            usage = obj["usage"]
+                            _observe_team_request(_request_usage(obj, usage_event_id))
+                        delta = (obj.get("choices") or [{}])[0].get("delta") or {}
+                        if delta.get("reasoning") or delta.get("reasoning_content"):
+                            thought = True      # thinking text is never shown, only remembered for the error below
+                        c = delta.get("content")
+                        if c:
+                            got = True
+                            yield {"type": "text", "content": c}
+                    if usage:
+                        yield {"type": "usage", "input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
+                    if not got and thought:
+                        yield _thought_without_answer(label)
+                    elif not got:
+                        yield {"type": "error", "content": _c(f"{label} trả về rỗng. Thử model khác.",
+                                                              f"{label} returned nothing. Try another model.")}
                     return
-                got = thought = False
-                usage = None
-                async for line in r.aiter_lines():
-                    line = (line or "").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        obj = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    if obj.get("usage"):
-                        usage = obj["usage"]
-                        _observe_team_request(_request_usage(obj, usage_event_id))
-                    delta = (obj.get("choices") or [{}])[0].get("delta") or {}
-                    if delta.get("reasoning") or delta.get("reasoning_content"):
-                        thought = True      # thinking text is never shown, only remembered for the error below
-                    c = delta.get("content")
-                    if c:
-                        got = True
-                        yield {"type": "text", "content": c}
-                if usage:
-                    yield {"type": "usage", "input": usage.get("prompt_tokens", 0), "output": usage.get("completion_tokens", 0)}
-                if not got and thought:
-                    yield _thought_without_answer(label)
-                elif not got:
-                    yield {"type": "error", "content": _c(f"{label} trả về rỗng. Thử model khác.",
-                                                          f"{label} returned nothing. Try another model.")}
-    except Exception as e:
-        yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)
+        except Exception as e:
+            yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)
+            return
 
 
 async def openai_stream(api_key, model, messages, reasoning="off"):
@@ -1440,91 +1470,107 @@ async def _anthropic_stream_once(api_key, model, messages, reasoning="off", fast
     if sys_txt:
         payload["system"] = sys_txt
     _apply_anthropic_cache(payload)   # system + 3 msg cuối được cache → giảm ~75% input cost
-    try:
-        timeout = httpx.Timeout(120.0, connect=15.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
-                if r.status_code != 200:
-                    body = await r.aread()
-                    body_text = body.decode("utf-8", "replace")
-                    if fast_b and fast_mode.refused(r.status_code, body_text, "speed"):
-                        yield {"type": "_fast_refused", "detail": body_text[:160]}
+    transient_502_retries = 0
+    while True:
+        try:
+            timeout = httpx.Timeout(120.0, connect=15.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                async with _observed_stream(client, "POST", url, headers=headers, json=payload) as (r, usage_event_id):
+                    if r.status_code != 200:
+                        body = await r.aread()
+                        body_text = body.decode("utf-8", "replace")
+                        if fast_b and fast_mode.refused(r.status_code, body_text, "speed"):
+                            yield {"type": "_fast_refused", "detail": body_text[:160]}
+                            return
+                        # A gateway serving a non-Claude model may not take this thinking shape: answer
+                        # without it rather than fail the turn (the tool loop below does the same).
+                        if compat and r.status_code == 400 and "thinking" in payload and "thinking" in body_text.lower():
+                            async for ev in _anthropic_stream_once(api_key, model, messages, "off", False, compat=True):
+                                yield ev
+                            return
+                        _fact = limit_learner.parse_limit_error(r.status_code, body_text)
+                        if _fact:
+                            limit_learner.remember(lprov, model, _fact)
+                            yield {"type": "limit_exceeded", "provider": lprov, "model": model,
+                                   "kind": _fact.kind, "limit": _fact.limit,
+                                   "requested": _fact.requested,
+                                   "shrink_to": limit_learner.shrink_target(_fact),
+                                   "remedy": _fact.remedy, "raw": _fact.raw}
+                            yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
+                            return
+                        is_transient_502 = (r.status_code in (502, 503, 504, 529)
+                                            or (r.status_code >= 500 and _is_transient_body(body_text)))
+                        if is_transient_502 and transient_502_retries < _transient_502_retries():
+                            transient_502_retries += 1
+                            wait_s = _transient_502_wait_s()
+                            cho = max(wait_s, _parse_retry_after(r.headers) or wait_s)
+                            print(f"[{label}] {r.status_code} tạm nghẽn, tạm ngưng {cho:.0f}s rồi thử lại...",
+                                  file=sys.stderr)
+                            await asyncio.sleep(cho)
+                            continue
+                        yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
                         return
-                    # A gateway serving a non-Claude model may not take this thinking shape: answer
-                    # without it rather than fail the turn (the tool loop below does the same).
-                    if compat and r.status_code == 400 and "thinking" in payload and "thinking" in body_text.lower():
-                        async for ev in _anthropic_stream_once(api_key, model, messages, "off", False, compat=True):
-                            yield ev
-                        return
-                    _fact = limit_learner.parse_limit_error(r.status_code, body_text)
-                    if _fact:
-                        limit_learner.remember(lprov, model, _fact)
-                        yield {"type": "limit_exceeded", "provider": lprov, "model": model,
-                               "kind": _fact.kind, "limit": _fact.limit,
-                               "requested": _fact.requested,
-                               "shrink_to": limit_learner.shrink_target(_fact),
-                           "remedy": _fact.remedy, "raw": _fact.raw}
-                    yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
-                    return
-                yield {"type": "meta", "model": model}
-                got = False
-                stop_reason = None
-                usage_in = usage_out = 0
-                request_usage = {}
-                async for line in r.aiter_lines():
-                    line = (line or "").strip()
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if not data:
-                        continue
-                    try:
-                        obj = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    t = obj.get("type")
-                    if t == "message_start":
-                        u = (obj.get("message") or {}).get("usage") or {}
-                        request_usage = dict(u)
-                        request_usage["output_tokens"] = None
-                        _observe_team_request(_request_usage({"usage": request_usage, "content": []}, usage_event_id))
-                        usage_in = ((u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
-                                    + (u.get("cache_creation_input_tokens") or 0))
-                    elif t == "content_block_delta":
-                        txt = (obj.get("delta") or {}).get("text") or ""
-                        if txt:
-                            got = True
-                            yield {"type": "text", "content": txt}
-                    elif t == "message_delta":
-                        sr = (obj.get("delta") or {}).get("stop_reason")
-                        if sr:
-                            stop_reason = sr
-                        if (obj.get("usage") or {}).get("output_tokens"):
-                            usage_out = obj["usage"]["output_tokens"]
-                        if "output_tokens" in (obj.get("usage") or {}):
-                            request_usage["output_tokens"] = obj["usage"]["output_tokens"]
+                    yield {"type": "meta", "model": model}
+                    got = False
+                    stop_reason = None
+                    usage_in = usage_out = 0
+                    request_usage = {}
+                    async for line in r.aiter_lines():
+                        line = (line or "").strip()
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data:
+                            continue
+                        try:
+                            obj = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        t = obj.get("type")
+                        if t == "message_start":
+                            u = (obj.get("message") or {}).get("usage") or {}
+                            request_usage = dict(u)
+                            request_usage["output_tokens"] = None
                             _observe_team_request(_request_usage({"usage": request_usage, "content": []}, usage_event_id))
-                    elif t == "error":
-                        yield {"type": "error", "content": f"{label}: {(obj.get('error') or {}).get('message', _c('lỗi', 'error'))}"}
+                            usage_in = ((u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
+                                        + (u.get("cache_creation_input_tokens") or 0))
+                        elif t == "content_block_delta":
+                            txt = (obj.get("delta") or {}).get("text") or ""
+                            if txt:
+                                got = True
+                                yield {"type": "text", "content": txt}
+                        elif t == "message_delta":
+                            sr = (obj.get("delta") or {}).get("stop_reason")
+                            if sr:
+                                stop_reason = sr
+                            if (obj.get("usage") or {}).get("output_tokens"):
+                                usage_out = obj["usage"]["output_tokens"]
+                            if "output_tokens" in (obj.get("usage") or {}):
+                                request_usage["output_tokens"] = obj["usage"]["output_tokens"]
+                                _observe_team_request(_request_usage({"usage": request_usage, "content": []}, usage_event_id))
+                        elif t == "error":
+                            yield {"type": "error", "content": f"{label}: {(obj.get('error') or {}).get('message', _c('lỗi', 'error'))}"}
+                            return
+                    if usage_in or usage_out:
+                        yield {"type": "usage", "input": usage_in, "output": usage_out}
+                    if not got:
+                        yield {"type": "error", "content": _c(f"{label} trả về rỗng (stop_reason={stop_reason}). Thử model khác trong Models.",
+                                                              f"{label} returned nothing (stop_reason={stop_reason}). Try another model in Models.")}
                         return
-                if usage_in or usage_out:
-                    yield {"type": "usage", "input": usage_in, "output": usage_out}
-                if not got:
-                    yield {"type": "error", "content": _c(f"{label} trả về rỗng (stop_reason={stop_reason}). Thử model khác trong Models.",
-                                                          f"{label} returned nothing (stop_reason={stop_reason}). Try another model in Models.")}
+                    # Stream xong nhưng KHÔNG phải end_turn/stop_sequence (max_tokens / refusal / ...) → báo user
+                    if stop_reason and stop_reason not in ("end_turn", "stop_sequence"):
+                        notes = {
+                            "max_tokens": _c("⚠️ Phản hồi bị cắt do hết max_tokens. Nhắn 'tiếp tục' để model viết tiếp.",
+                                             "⚠️ The reply was cut off at max_tokens. Say 'continue' to let the model keep writing."),
+                            "refusal": _c("⚠️ Model từ chối phản hồi (refusal).", "⚠️ The model refused to answer (refusal)."),
+                        }
+                        yield {"type": "text", "content": "\n\n" + notes.get(stop_reason, _c(
+                            f"⚠️ Stream kết thúc bất thường (stop_reason={stop_reason}).",
+                            f"⚠️ The stream ended abnormally (stop_reason={stop_reason})."))}
                     return
-                # Stream xong nhưng KHÔNG phải end_turn/stop_sequence (max_tokens / refusal / ...) → báo user
-                if stop_reason and stop_reason not in ("end_turn", "stop_sequence"):
-                    notes = {
-                        "max_tokens": _c("⚠️ Phản hồi bị cắt do hết max_tokens. Nhắn 'tiếp tục' để model viết tiếp.",
-                                         "⚠️ The reply was cut off at max_tokens. Say 'continue' to let the model keep writing."),
-                        "refusal": _c("⚠️ Model từ chối phản hồi (refusal).", "⚠️ The model refused to answer (refusal)."),
-                    }
-                    yield {"type": "text", "content": "\n\n" + notes.get(stop_reason, _c(
-                        f"⚠️ Stream kết thúc bất thường (stop_reason={stop_reason}).",
-                        f"⚠️ The stream ended abnormally (stop_reason={stop_reason})."))}
-    except Exception as e:
-        yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)
+        except Exception as e:
+            yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)
+            return
 
 
 async def single_tool_plan(provider, api_key, model, messages, reasoning, tool_spec):
@@ -2450,6 +2496,7 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
         requirement_pending = False
     _n_vong = _max_tool_rounds()
     da_hien = False   # đã nhả chữ xem trước ở vòng nào chưa (để chèn dòng trống giữa hai vòng)
+    transient_502_retries = 0
     for _vong in range(_n_vong):
         _gon_ket_qua_cu(msgs)
         payload = {"model": model, "messages": msgs, "stream": False}
@@ -2556,9 +2603,21 @@ async def _cc_tool_loop(url, headers, model, messages, mcp_tools, mcp_route, rea
                            "retry_after": _fact.retry_after,
                            "shrink_to": limit_learner.shrink_target(_fact),
                            "remedy": _fact.remedy, "raw": _fact.raw}
+                is_transient_502 = (r.status_code in (502, 503, 504, 529)
+                                    or (r.status_code >= 500 and _is_transient_body(body_text)))
+                if is_transient_502 and transient_502_retries < _transient_502_retries():
+                    transient_502_retries += 1
+                    wait_s = _transient_502_wait_s()
+                    cho = max(wait_s, _parse_retry_after(r.headers) or wait_s)
+                    yield {"type": "tool_call", "name": "javis_wait_retry",
+                           "content": _c(f"⚙ {label} tạm nghẽn ({r.status_code}), tạm ngưng {cho:.0f}s rồi thử lại...",
+                                         f"⚙ {label} transient error ({r.status_code}), waiting {cho:.0f}s before retrying...")}
+                    await asyncio.sleep(cho)
+                    continue
                 yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
                 return
             data = r.json()
+            transient_502_retries = 0
         except Exception as e:
             yield ev_loi_exc(_c(f"{label} lỗi", f"{label} error"), e)
             return
@@ -3137,6 +3196,7 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
         guard = _LapGuard()   # phanh chống kẹt vòng lặp (xem _LapGuard)
         _n_vong = _max_tool_rounds()
         da_hien = False   # 0.438.5: đã nhả chữ xem trước ở vòng nào chưa
+        transient_502_retries = 0
         for _vong in range(_n_vong):
             _gon_ket_qua_cu(conv)
             # Cache theo lối không-mutate (system dựng mới mỗi vòng, conv copy-khi-đánh-dấu)
@@ -3192,8 +3252,20 @@ async def anthropic_chat_with_mcp(api_key, model, messages, reasoning, mcp_tools
                            "requested": _fact.requested,
                            "shrink_to": limit_learner.shrink_target(_fact),
                            "remedy": _fact.remedy, "raw": _fact.raw}
+                is_transient_502 = (r.status_code in (502, 503, 504, 529)
+                                    or (r.status_code >= 500 and _is_transient_body(body_text)))
+                if is_transient_502 and transient_502_retries < _transient_502_retries():
+                    transient_502_retries += 1
+                    wait_s = _transient_502_wait_s()
+                    cho = max(wait_s, _parse_retry_after(r.headers) or wait_s)
+                    yield {"type": "tool_call", "name": "javis_wait_retry",
+                           "content": _c(f"⚙ {label} tạm nghẽn ({r.status_code}), tạm ngưng {cho:.0f}s rồi thử lại...",
+                                         f"⚙ {label} transient error ({r.status_code}), waiting {cho:.0f}s before retrying...")}
+                    await asyncio.sleep(cho)
+                    continue
                 yield ev_loi_http(label, r.status_code, body_text, r.headers, _fact)
                 return
+            transient_502_retries = 0
             try:
                 data = r.json()
             except Exception:
