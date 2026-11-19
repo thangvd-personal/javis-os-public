@@ -1334,10 +1334,18 @@ def _build_antigravity(spec, claude_cli_obj, mode, tag):
     """
     import antigravity_cli as _a
     muc = mode or getattr(claude_cli_obj, "javis_mode", None) or "full"
+    instructions = getattr(claude_cli_obj, "system_prompt", None) or ""
+    agy_bg_note = (
+        "\n\n[QUY TẮC QUẢN LÝ TÁC VỤ NỀN CHO ANTIGRAVITY]: Nếu bạn dùng các công cụ tạo tác vụ chạy ngầm "
+        "hoặc hẹn giờ (schedule, run_command chạy nền), bạn PHẢI kiểm tra và huỷ (kill) hoặc đợi tất cả các "
+        "tác vụ nền hoàn tất bằng manage_task trước khi kết thúc lượt. Tuyệt đối không để sót tác vụ nền treo khi kết thúc lượt."
+    )
+    if agy_bg_note.strip() not in instructions:
+        instructions = (instructions.rstrip() + agy_bg_note).lstrip()
     ac = _a.AntigravityCLI(cwd=getattr(claude_cli_obj, "cwd", None),
                            tag=tag or getattr(claude_cli_obj, "tag", "aux"),
                            model=spec.get("model") or None,
-                           instructions=getattr(claude_cli_obj, "system_prompt", None))
+                           instructions=instructions)
     ac.mode = muc
     vault = getattr(claude_cli_obj, "javis_vault", None) or getattr(claude_cli_obj, "cwd", None)
     if vault:

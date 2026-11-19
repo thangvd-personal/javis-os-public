@@ -273,6 +273,17 @@ def _la_het_gio_luot(loi: str) -> bool:
         "timeout" in l and "turn in progress" in l)
 
 
+def _la_thong_bao_nen_vo_hai(loi: str) -> bool:
+    """Các thông báo chẩn đoán hoặc trạng thái chờ tác vụ nền mồ côi của agy trên stderr không phải lỗi thật.
+
+    Khi agent dùng `schedule` hoặc chạy nền mà quên huỷ, `agy` in:
+    `root agent idle; waiting up to 720h0m0s for X background task(s)`.
+    Đây là trạng thái nhàn rỗi chờ nền, không phải lỗi thực thi và không được làm hỏng câu trả lời đã có.
+    """
+    l = (loi or "").lower()
+    return any(k in l for k in ("root agent idle", "background task(s)"))
+
+
 # What Javis hands `agy --print-timeout` when there is no cap. Left unset, agy cuts itself off at minute 5, so
 # "no cap" still has to pass a number: 30 days is far past any real turn. Go duration syntax, like "900s".
 NO_CAP_PRINT_TIMEOUT = "720h"
@@ -1595,6 +1606,8 @@ class AntigravityCLI:
             await asyncio.to_thread(nho_duong, self.cli_path, duong, "đã chạy được")
         else:
             for _l in ket.get("cac_loi") or []:      # không thử lại thì phải đưa lỗi ra
+                if _la_thong_bao_nen_vo_hai(_l):
+                    continue
                 # Gãy tạm thời mà thử lại hết nhịp vẫn không xong: người dùng cần biết ĐÂY LÀ
                 # LỖI PHÍA GOOGLE và Javis đã tự thử lại rồi, chứ không phải một câu tiếng Anh
                 # sáu dòng nghe như mình cấu hình sai (chủ repo gửi đúng ảnh đó, 2026-09-08).
@@ -1689,6 +1702,8 @@ class AntigravityCLI:
         stop_requested = threading.Event()
         reader_finished = threading.Event()
         deadline_expired = threading.Event()
+        da_xong_result = threading.Event()
+        idle_seen = threading.Event()
 
         # agy stops itself at --print-timeout and still prints a partial answer; the watchdog only steps in after
         # that, so it does not win the race and lose the partial output (its clock starts earlier, at Popen).
@@ -1757,6 +1772,17 @@ class AntigravityCLI:
                     try:
                         for dl in iter(proc.stderr.readline, ""):
                             phan_loi.append(dl)
+                            if "root agent idle" in dl:
+                                idle_seen.set()
+                                def _delayed_kill():
+                                    time.sleep(2.0)
+                                    if proc and proc.poll() is None:
+                                        try:
+                                            _kill_tree(proc)
+                                        except Exception:
+                                            pass
+                                threading.Thread(target=_delayed_kill, daemon=True,
+                                                 name=f"javis-agy-idle-{self.tag}").start()
                     except Exception:
                         pass
 
@@ -1768,9 +1794,29 @@ class AntigravityCLI:
                     if not line:
                         continue
                     try:
-                        publish(json.loads(line))
+                        obj = json.loads(line)
+                        publish(obj)
+                        t = str(obj.get("type") or obj.get("event") or "").lower()
+                        if t in ("result", "final", "done", "complete"):
+                            da_xong_result.set()
+                            if idle_seen.is_set():
+                                try:
+                                    if proc.poll() is None:
+                                        _kill_tree(proc)
+                                except Exception:
+                                    pass
+                                break
                     except json.JSONDecodeError:
                         publish({"_raw": line})
+                        if "<!-- JAVIS_TEAM:" in line:
+                            da_xong_result.set()
+                            if idle_seen.is_set():
+                                try:
+                                    if proc.poll() is None:
+                                        _kill_tree(proc)
+                                except Exception:
+                                    pass
+                                break
                 ma = proc.wait(timeout=cap or None)
                 luong_loi.join(timeout=5)
                 err = "".join(phan_loi).strip()
@@ -1779,8 +1825,16 @@ class AntigravityCLI:
                     # that may already have performed outside actions.
                     publish({"_exit": -1, "_err":
                              f"[agy] print timeout after {cap:g}s with turn in progress"})
-                elif ma != 0 or err:
+                elif da_xong_result.is_set() or idle_seen.is_set():
+                    # Đã có kết quả cuối cùng hoặc root agent đã kết thúc lượt và nhàn rỗi.
+                    # Tiến trình con được giải phóng khỏi việc chờ vô hạn tác vụ nền mồ côi.
+                    if err:
+                        print(f"[antigravity stderr] {err[:2000]}", file=sys.stderr)
+                elif ma != 0:
                     publish({"_exit": ma, "_err": err})
+                elif err:
+                    # Thoát 0 mà stderr có chữ KHÔNG phải lỗi (log chẩn đoán, cảnh báo, Node/Python deprecation...).
+                    print(f"[antigravity stderr] {err[:2000]}", file=sys.stderr)
             except subprocess.TimeoutExpired:
                 publish({"_exit": -1, "_err": localefmt.chu(
                         f"Antigravity CLI chạy quá {int(cap)}s nên bị "
@@ -1908,7 +1962,11 @@ class AntigravityCLI:
             return []
         if "_exit" in ev:
             loi = str(ev.get("_err") or "").strip()
-            if ev.get("_exit") == 0 and not loi:
+            if ev.get("_exit") == 0:
+                if loi:
+                    print(f"[antigravity stderr] {loi[:2000]}", file=sys.stderr)
+                return []
+            if _la_thong_bao_nen_vo_hai(loi):
                 return []
             if _la_loi_chua_dang_nhap(loi):
                 return [{"type": "error",

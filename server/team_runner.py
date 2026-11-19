@@ -216,7 +216,9 @@ WORK_TOOLS_NOTE = ("# LƯỢT LÀM VIỆC CÓ CÔNG CỤ\nĐây là lượt bạ
                    "chạy, số liệu đã lấy), đừng bảo chủ nhóm chuyển sang chat riêng. Trả lời trong nhóm NGẮN bằng kết quả: đã "
                    "làm gì, file hay link nào, còn vướng gì. Chỉ làm đúng phạm vi bước được giao; hành động ra ngoài (gửi tin, đăng "
                    "bài, thanh toán, xoá dữ liệu) chỉ làm khi việc nói rõ. Thành viên khác làm lần lượt trên cùng thư mục, "
-                   "nên đừng sửa file của bước khác khi bước của bạn không cần.\n\n" + team_step_report.HINT)
+                   "nên đừng sửa file của bước khác khi bước của bạn không cần. "
+                   "Nếu sử dụng các công cụ hẹn giờ hoặc tiến trình chạy nền (schedule, run_command async), bạn PHẢI huỷ (kill) "
+                   "hoặc đợi hoàn tất toàn bộ trước khi gửi câu trả lời kết thúc lượt.\n\n" + team_step_report.HINT)
 # 0.207.0: owner approval is a real gate (team_approval.py, team_gate.py). Any step of a job may ask with this directive;
 # the step then waits (the job leaves its slot) and nothing it asked for runs until the owner decides on the card.
 APPROVAL_OP = "ask_approval"

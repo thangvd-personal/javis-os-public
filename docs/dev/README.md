@@ -42,6 +42,7 @@ Hai tài liệu này ghi **vì sao** kiến trúc thành ra như hiện tại. �
 - [Tra cứu GitHub PR và HEAD SHA trong Team](2026-11-github-team-head-sha-spec.md) - nâng cấp `javis_github` tự nhận diện phiên trong nhóm, bổ sung `HEAD SHA` và `op="pr"` / `op="head"` với quyền `readonly` để khắc phục lỗi git ls-remote thoát mã 128. **Đã triển khai 19/11/2026.**
 - [Tự động tạm ngưng 30s và thử lại khi LLM lỗi 502](2026-11-engine-transient-502-retry-spec.md) - tự động bắt lỗi nghẽn cổng 502/tạm thời, tạm dừng 30s rồi thử lại request trước khi báo lỗi về nhóm; bảo toàn bộ đếm công cụ cho `team_retry`. **Đã triển khai 19/11/2026.**
 - [Ngoại lệ điều phối thuần văn bản cho Antigravity CLI](2026-11-team-antigravity-coordinator-spec.md) - áp dụng cơ chế ngoại lệ 2 lớp (sandbox suggest mode kết hợp prompt guard rào không gọi công cụ) cho Antigravity CLI trong lượt điều phối/nhận việc thuần văn bản của nhóm, tránh lỗi dừng engine. **Đã triển khai 19/11/2026.**
+- [Cơ chế phòng ngừa treo lượt và dọn dẹp tác vụ nền cho Antigravity CLI](2026-11-antigravity-background-tasks-guard-spec.md) - cơ chế 3 tầng phòng ngừa treo lượt và ngắt êm đẹp (graceful idle exit) khi agent quên huỷ tác vụ nền mồ côi (`schedule`, async command) làm CLI chờ 720 giờ hoặc báo lỗi sai khi thoát mã 0. **Đã triển khai 19/11/2026.**
 
 ## Đã cân nhắc rồi quyết định KHÔNG làm
 
