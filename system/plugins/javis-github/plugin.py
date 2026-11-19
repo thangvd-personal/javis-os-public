@@ -24,12 +24,103 @@ except Exception:
 
 def _sid(args, ctx) -> str:
     cid = str((args or {}).get("chat_id") or "").strip()
-    if not cid and luot_dang_chay is not None and ctx.vault_root:
+    if cid:
+        if cid.startswith("web:"):
+            return cid[len("web:"):]
+        if cid.startswith("team:"):
+            try:
+                import team_store
+                t = team_store.store().get(cid[len("team:"):])
+                if t and t.get("session_id"):
+                    return t["session_id"]
+            except Exception:
+                pass
+        if cid.startswith("tm_"):
+            try:
+                import team_store
+                t = team_store.store().get(cid)
+                if t and t.get("session_id"):
+                    return t["session_id"]
+            except Exception:
+                pass
+        import re
+        if re.match(r"^[0-9a-f]{32}$", cid):
+            return cid
+        return cid
+
+    # 1. Tra cứu qua turn_context
+    try:
+        import turn_context
+        tc = turn_context.current() or {}
+        if tc.get("session_id"):
+            return tc["session_id"]
+        tc_cid = str(tc.get("chat_id") or "")
+        if tc_cid.startswith("web:"):
+            return tc_cid[len("web:"):]
+        if tc_cid.startswith("team:"):
+            import team_store
+            t = team_store.store().get(tc_cid[len("team:"):])
+            if t and t.get("session_id"):
+                return t["session_id"]
+        if tc.get("team_gate"):
+            import team_gate
+            g = team_gate.get(tc["team_gate"])
+            if g and g.team_id:
+                import team_store
+                t = team_store.store().get(g.team_id)
+                if t and t.get("session_id"):
+                    return t["session_id"]
+    except Exception:
+        pass
+
+    # 2. Tra cứu qua team_gate hiện tại
+    try:
+        import team_gate
+        g = team_gate.current()
+        if g and g.team_id:
+            import team_store
+            t = team_store.store().get(g.team_id)
+            if t and t.get("session_id"):
+                return t["session_id"]
+    except Exception:
+        pass
+
+    # 3. Đoán từ luot_dang_chay
+    if luot_dang_chay is not None and ctx.vault_root:
         try:
-            cid = luot_dang_chay.doan_chat_id(ctx.vault_root) or ""
+            guess = luot_dang_chay.doan_chat_id(ctx.vault_root) or ""
+            if guess.startswith("web:"):
+                return guess[len("web:"):]
+            if guess:
+                return guess
         except Exception:
-            cid = ""
-    return cid[len("web:"):] if cid.startswith("web:") else ""
+            pass
+
+    # 4. Tra cứu từ kho công việc GitHub theo repo hoặc vault_root
+    try:
+        import github_work
+        repo_arg = str((args or {}).get("repo") or "").strip().lower()
+        if repo_arg:
+            with github_work.st()._lock:
+                rows = github_work.st()._db.execute(
+                    "SELECT sid FROM work WHERE lower(full_name)=? OR lower(full_name) LIKE ? ORDER BY updated_at DESC",
+                    (repo_arg, f"%/{repo_arg}")
+                ).fetchall()
+            if rows:
+                return rows[0]["sid"]
+        elif ctx.vault_root:
+            with github_work.st()._lock:
+                rows = github_work.st()._db.execute(
+                    "SELECT sid FROM work WHERE brain=? ORDER BY updated_at DESC",
+                    (str(ctx.vault_root),)
+                ).fetchall()
+            sids = list(dict.fromkeys(r["sid"] for r in rows))
+            if len(sids) == 1:
+                return sids[0]
+    except Exception:
+        pass
+
+    return ""
 
 
 _CI = {"none": "chưa đẩy", "pending": "chờ CI", "running": "CI đang chạy", "green": "CI xanh", "red": "CI đỏ",
@@ -50,6 +141,8 @@ def _status(sid: str) -> str:
         bits = [r["full_name"], r.get("branch") or "", ci, _INTEG.get(r["integ"], r["integ"])]
         if r.get("pr_url"):
             bits.append(r["pr_url"])
+        if r.get("head_sha"):
+            bits.append("HEAD: " + r["head_sha"])
         if r.get("post_merge") == "red":
             bits.append("kiểm tra sau merge ĐỎ")
         if r.get("stuck_reason"):
@@ -64,15 +157,47 @@ def _status(sid: str) -> str:
     return "\n".join(lines)
 
 
+def _pr_info(sid: str, name: str = "") -> str:
+    import json
+    import github_work
+    s = github_work.session_state(sid)
+    rows = s.get("repos") or []
+    if name:
+        hit = [r for r in rows if r["full_name"].lower() == name.lower()
+               or r["full_name"].split("/")[-1].lower() == name.lower()]
+        if not hit:
+            return f"ERROR: không tìm thấy PR cho repository '{name}'."
+        r = hit[0]
+    elif len(rows) == 1:
+        r = rows[0]
+    elif not rows:
+        return "ERROR: phiên này chưa có thông tin PR nào."
+    else:
+        return "ERROR: có nhiều PR đang mở, hỏi lại người dùng repo nào: " + ", ".join(r["full_name"] for r in rows)
+
+    return json.dumps({
+        "full_name": r.get("full_name"),
+        "branch": r.get("branch"),
+        "pr_number": r.get("pr_number") or 0,
+        "pr_url": r.get("pr_url") or "",
+        "head_sha": r.get("head_sha") or "",
+        "ci": r.get("ci"),
+        "integ": r.get("integ"),
+        "stuck_reason": r.get("stuck_reason") or "",
+    }, ensure_ascii=False)
+
+
 def _chay(args, ctx) -> str:
     op = str((args or {}).get("op") or "").strip().lower()
     sid = _sid(args, ctx)
     if not sid:
-        return ("ERROR: chỉ dùng được trong khung chat web có gắn repo GitHub. Truyền chat_id dạng web:<mã phiên> "
-                "lấy từ khối KÊNH HỘI THOẠI HIỆN TẠI.")
+        return ("ERROR: không xác định được phiên làm việc GitHub. Hãy truyền chat_id dạng web:<mã phiên> "
+                "hoặc repo='<owner/repo>'.")
     import github_work
     if op == "status":
         return _status(sid)
+    if op in ("pr", "head"):
+        return _pr_info(sid, str((args or {}).get("repo") or "").strip())
     if op == "next":
         text = str((args or {}).get("text") or "").strip()
         if not text:
@@ -142,25 +267,26 @@ def register(ctx):
         "javis_github",
         "GitHub của khung chat này. Sau mỗi lượt có sửa code, Javis TỰ kiểm tra, commit, đẩy lên, mở PR, theo dõi CI "
         "và merge theo cài đặt của repo, bạn không làm mấy việc đó và không hứa 'xong em báo'. "
-        "op=status: trạng thái nhánh, PR, CI, merge, lý do kẹt. op=next text=...: xếp MỘT việc người dùng đã giao để "
-        "Javis tự làm khi PR hiện tại đã merge xong (chỉ việc người dùng yêu cầu, không phải kế hoạch bạn tự nghĩ). "
+        "op=status: trạng thái nhánh, PR, HEAD SHA, CI, merge, lý do kẹt. "
+        "op=pr hoặc op=head: trả về thông tin chi tiết của PR dạng JSON (bao gồm head_sha, pr_number, pr_url). "
+        "op=next text=...: xếp MỘT việc người dùng đã giao để Javis tự làm khi PR hiện tại đã merge xong. "
         "op=cancel id=...: bỏ một việc đang chờ. "
         "op=review [repo] [provider]: CHỈ khi người dùng bảo review chéo PR, chạy nền, mặc định bằng chính engine đang "
-        "chat. op=review_skip [repo]: người dùng chọn bỏ qua các phát hiện review và merge. Người dùng bảo sửa các "
-        "phát hiện thì bạn tự sửa code ngay trong lượt này.",
+        "chat. op=review_skip [repo]: người dùng chọn bỏ qua các phát hiện review và merge.",
         _chay,
         schema={
             "type": "object",
             "properties": {
-                "op": {"type": "string", "enum": ["status", "next", "cancel", "review", "review_skip"]},
-                "repo": {"type": "string", "description": "owner/repo khi khung chat có nhiều PR (op=review, review_skip)"},
+                "op": {"type": "string", "enum": ["status", "pr", "head", "next", "cancel", "review", "review_skip"]},
+                "repo": {"type": "string", "description": "owner/repo khi khung chat có nhiều PR (op=review, review_skip, pr, head)"},
                 "provider": {"type": "string", "description": "Engine review khi người dùng chỉ định, vd deepseek, groq, gemini, anthropic-cli (op=review)"},
                 "text": {"type": "string", "description": "Việc kế tiếp (op=next)"},
                 "id": {"type": "integer", "description": "Mã việc kế tiếp (op=cancel)"},
-                "chat_id": {"type": "string", "description": "Khung chat dạng web:<mã phiên>; bỏ trống để tự nhận"},
+                "chat_id": {"type": "string", "description": "Khung chat dạng web:<mã phiên> hoặc <mã phiên>; bỏ trống để tự nhận"},
             },
             "required": ["op"],
         },
         min_mode="safe",
+        op_modes={"status": "readonly", "pr": "readonly", "head": "readonly"},
         emoji="🐙",
     )

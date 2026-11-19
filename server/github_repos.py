@@ -1226,6 +1226,9 @@ def prompt_block(sid: str, brain: str = "") -> str:
                      f"tách từ {r.get('base_branch') or r['default_branch'] or 'main'})")
     lines.append("Chỉ sửa trong các thư mục trên, KHÔNG sửa bản clone gốc. KHÔNG tự `git push`, không tự merge, "
                  "không đổi remote: việc đẩy lên GitHub do Javis làm.")
+    lines.append("HEAD SHA của PR trên GitHub do Javis theo dõi qua kết nối GitHub xác thực và hiển thị ở phần Trạng thái bên dưới "
+                 "(đồng thời nạp vào ref cục bộ `origin/pr/<số_pr>`). Không tự chạy `git ls-remote` hoặc gọi API GitHub trực tiếp "
+                 "vì token xác thực được bảo vệ bởi Javis Core.")
     lines.append("Trước khi kết thúc lượt có sửa code: tự chạy test và lint của repo. Sửa lỗi thì viết hoặc chạy một "
                  "test TÁI HIỆN lỗi trước (đỏ), sửa, rồi chạy lại đúng test đó cho xanh. KHÔNG bỏ qua, xoá hay nới "
                  "test, không sửa workflow CI để cho xanh. Sau mỗi lượt Javis tự chạy bộ kiểm tra của repo; xanh thì Javis "
@@ -1270,8 +1273,10 @@ def _work_state_lines(sid: str, repos: list[dict[str, Any]]) -> list[str]:
                            "ngay sau lượt này, định kỳ vài phút một lần, và ngay khi GitHub được kết nối lại; nút Đẩy lại "
                            "ở bảng GitHub của cuộc này cũng được.")
             elif row.get("pr_number"):
-                out.append(f"Trạng thái {fn}: nhánh {row.get('branch')}, PR #{row['pr_number']} {row.get('pr_url') or ''}, "
-                           f"CI {row.get('ci')}, PR {row.get('integ')}"
+                head_sha = row.get("head_sha") or ""
+                sha_txt = f", HEAD SHA trên GitHub: {head_sha}" if head_sha else ""
+                out.append(f"Trạng thái {fn}: nhánh {row.get('branch')}, PR #{row['pr_number']} {row.get('pr_url') or ''}"
+                           f"{sha_txt}, CI {row.get('ci')}, PR {row.get('integ')}"
                            + (f", đang kẹt: {row['stuck_reason']}" if row.get("exec") == "stuck" and row.get("stuck_reason")
                               else "") + ".")
         if out:

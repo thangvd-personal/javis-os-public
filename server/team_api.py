@@ -938,6 +938,19 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             if target_path and target_path.is_dir():
                 tree_items = _scan(target_path, target_path)
 
+            pr_info = {}
+            try:
+                import github_work
+                if chosen_repo and chosen_repo.get("full_name"):
+                    row = github_work.st().get(sid, chosen_repo["full_name"]) or {}
+                    pr_info = {
+                        "pr_number": row.get("pr_number") or 0,
+                        "pr_url": row.get("pr_url") or "",
+                        "head_sha": row.get("head_sha") or "",
+                    }
+            except Exception:
+                pass
+
             return {
                 "ok": True,
                 "team_id": team_id,
@@ -955,6 +968,9 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
                 ],
                 "chosen_repo": chosen_repo.get("full_name") if chosen_repo else "",
                 "branch": chosen_repo.get("branch") if chosen_repo else "",
+                "pr_number": pr_info.get("pr_number") or 0,
+                "pr_url": pr_info.get("pr_url") or "",
+                "head_sha": pr_info.get("head_sha") or "",
                 "tree": tree_items,
                 "empty": len(tree_items) == 0,
             }
@@ -1009,13 +1025,35 @@ def register(app, deps: TeamApiDeps) -> TeamApi:
             clone_url = chosen_repo.get("clone_url") or f"https://github.com/{chosen_repo['full_name']}.git"
             current_branch = coding_store.nhanh_hien_tai(str(target_path)) or chosen_repo.get("branch") or "main"
 
+            def _refresh_pr_work(sid_val, fn_val):
+                try:
+                    import github_work
+                    row_work = github_work.st().get(sid_val, fn_val)
+                    if row_work and row_work.get("pr_number"):
+                        gh_cli = github_repos.client()
+                        pr_remote = gh_cli.get(f"/repos/{fn_val}/pulls/{row_work['pr_number']}")
+                        if pr_remote and pr_remote.get("head", {}).get("sha"):
+                            github_work.st().update(sid_val, fn_val, head_sha=pr_remote["head"]["sha"])
+                except Exception:
+                    pass
+
             try:
                 github_repos.ensure_identity(str(target_path))
                 if action == "push":
                     p = github_repos.git(["push", "-u", "origin", current_branch], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    try:
+                        github_repos.git(["fetch", "origin", "+refs/pull/*/head:refs/remotes/origin/pr/*"], str(target_path), auth=True, timeout=60, origin=clone_url)
+                    except Exception:
+                        pass
+                    _refresh_pr_work(sid, chosen_repo["full_name"])
                     return {"ok": True, "action": "push", "message": "Đã push thành công.", "out": (p.stdout or "").strip()}
                 else:
                     github_repos.git(["fetch", "origin"], str(target_path), auth=True, timeout=120, origin=clone_url)
+                    try:
+                        github_repos.git(["fetch", "origin", "+refs/pull/*/head:refs/remotes/origin/pr/*"], str(target_path), auth=True, timeout=60, origin=clone_url)
+                    except Exception:
+                        pass
+                    _refresh_pr_work(sid, chosen_repo["full_name"])
                     if kind in ("clone", "main"):
                         p = github_repos.git(["pull", "--ff-only", "origin", current_branch], str(target_path), auth=True, timeout=120, origin=clone_url)
                     else:

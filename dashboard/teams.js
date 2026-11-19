@@ -2698,10 +2698,16 @@
           return '<option value="' + esc(r.full_name) + '"' + sel + '>' + esc(r.full_name) + '</option>';
         }).join("") + '</select></div>';
     } else if (td.chosen_repo) {
+      var prBar = "";
+      if (td.pr_number) {
+        var headShort = td.head_sha ? " (HEAD: " + esc(td.head_sha.slice(0, 7)) + ")" : "";
+        prBar = '<div class="tm-tree-repo-bar"><span class="tm-tree-branch" title="Pull Request trên GitHub"><a href="' + esc(td.pr_url || "#") + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none">PR #' + esc(td.pr_number) + "</a>" + headShort + "</span></div>";
+      }
       repoSelectHtml = '<div class="tm-tree-repo-bar">' +
         '<span class="tm-tree-repo-name" title="' + esc(td.chosen_repo) + '">' + ghLogo() + ' ' + esc(td.chosen_repo) + '</span>' +
       '</div>' + 
-      (td.branch ? '<div class="tm-tree-repo-bar"><span class="tm-tree-branch" title="Nhánh làm việc hiện tại">Branch: ' + esc(td.branch) + '</span></div>' : '');
+      (td.branch ? '<div class="tm-tree-repo-bar"><span class="tm-tree-branch" title="Nhánh làm việc hiện tại">Branch: ' + esc(td.branch) + '</span></div>' : '') +
+      prBar;
     }
 
     var kindHtml = '<div class="tm-tree-kind-tabs">' +
