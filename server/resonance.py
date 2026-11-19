@@ -42,7 +42,7 @@ RECEIPT_STATUSES = ("succeeded", "failed", "uncertain", "cancelled")
 ACTION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,80}$")
 CLAUDE_PROVIDER = "anthropic-cli"
 # Engine CLI không mang thuộc tính provider; aux_engine._build_codex / _build_grok dựng đúng các loại này.
-_PROVIDER_OF_KIND = {"CodexCLI": "openai-oauth", "GrokCLI": "grok-cli"}
+_PROVIDER_OF_KIND = {"CodexCLI": "openai-oauth", "GrokCLI": "grok-cli", "AntigravityCLI": "antigravity-cli"}
 OUTPUT_MAX_CHARS = 200_000
 ERROR_DETAIL_MAX = 300
 

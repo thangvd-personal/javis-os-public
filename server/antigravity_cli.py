@@ -1404,6 +1404,9 @@ class AntigravityCLI:
         # Time cap for one turn in seconds, 0 = none (the default since 2026-11-07, see `turn_cap_seconds`). The old
         # 900s default stopped heavy tool work half way. Read it through `turn_cap()`, which adds the suggest-mode net.
         self.timeout = turn_cap_seconds()
+        self.provider = "antigravity-cli"
+        self.text_only = False
+        self.no_tools = False
 
     def turn_cap(self) -> float:
         """The cap this turn really runs under, in seconds; 0 = none.

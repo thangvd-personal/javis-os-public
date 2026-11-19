@@ -23,8 +23,8 @@ Cơ chế chỉ chữ theo provider:
   ("writing is blocked by read-only sandbox"). Đã thử với Codex 0.153.4 qua một máy chủ Responses giả: danh sách công cụ
   gửi cho model chỉ còn `request_user_input` và `apply_patch`, và một `apply_patch` ghi file ngoài thư mục bị từ chối.
 - Engine API: `no_tools` (không hỏi hub, model không được đưa công cụ nào).
-- Grok Build, Antigravity: chưa có cơ chế chỉ chữ được kiểm (Grok còn công cụ đọc native; `agy` đọc MCP từ file chung
-  của máy). Báo lỗi rõ, không chạy thay bằng provider khác.
+- Grok Build: chưa có cơ chế chỉ chữ được kiểm (Grok còn công cụ đọc native). Báo lỗi rõ, không chạy thay bằng provider khác.
+- Antigravity CLI: áp dụng cơ chế ngoại lệ 2 lớp: (1) Siết sandbox/suggest mode, ngắt mcp_config riêng; (2) Prompt guard chèn quy tắc bắt buộc không gọi công cụ trong lượt điều phối/nhận việc thuần văn bản; đồng thời gắn cờ text_only và no_tools.
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ def choose_spec(agent_model: str, agent_provider: str, main: dict, resolve: Call
         prov = resolve(model, str(agent_provider or ""))
         spec = {"provider": prov, "model": model, "source": "agent", "note": ""}
         if not (tools_supported(prov) if tools else text_only_supported(prov)):
-            # Grok Build, Antigravity: chưa có cơ chế chỉ chữ được kiểm. Chạy bằng model chính và NÓI RÕ trên tin (không
+            # Grok Build: chưa có cơ chế chỉ chữ được kiểm. Chạy bằng model chính và NÓI RÕ trên tin (không
             # âm thầm đổi provider), thay vì để trợ lý im hay báo lỗi mỗi tin.
             ok, why = False, "chưa chạy được lượt nhóm chỉ chữ (còn công cụ native không tắt riêng được)"
         else:
@@ -80,9 +80,9 @@ def choose_spec(agent_model: str, agent_provider: str, main: dict, resolve: Call
 
 
 def text_only_supported(provider: str) -> bool:
-    """Provider có cơ chế chỉ chữ đã kiểm cho lượt nhóm: Claude (cổng chặn), Codex (cờ + sandbox read-only), engine API."""
+    """Provider có cơ chế chỉ chữ đã kiểm cho lượt nhóm: Claude (cổng chặn), Codex (cờ + sandbox read-only), engine API, và Antigravity CLI (ngoại lệ prompt guard + sandbox)."""
     p = str(provider or "")
-    return p in (CLAUDE, CODEX) or p in aux_engine.API_PROVIDERS
+    return p in (CLAUDE, CODEX, aux_engine.ANTIGRAVITY) or p in aux_engine.API_PROVIDERS
 
 
 def tools_supported(provider: str) -> bool:
@@ -107,6 +107,29 @@ def codex_text_only(cc: Any) -> Any:
     return cc
 
 
+def antigravity_text_only(ac: Any, instructions: str | None = None) -> Any:
+    """Đặt một AntigravityCLI về chế độ chỉ chữ cho lượt điều phối/nhận việc nhóm.
+
+    Do Antigravity CLI chưa có cờ dòng lệnh riêng để tắt cứng từng công cụ native (read_file, write_file...),
+    hệ thống áp dụng 2 lớp ngoại lệ:
+    1. Siết sandbox/suggest mode, ngắt mcp_config riêng, đánh dấu text_only = True và no_tools = True.
+    2. Bổ sung prompt guard nhắc nhở model tuyệt đối không gọi công cụ trong lượt này, chỉ trả về văn bản/JSON.
+    """
+    ac.mode = "suggest"
+    ac.mcp_config = None
+    ac.text_only = True
+    ac.no_tools = True
+    reminder = (
+        "[QUY TẮC ĐIỀU PHỐI / NHẬN VIỆC THUẦN VĂN BẢN]\n"
+        "- Lượt này là lượt điều phối hoặc nhận việc thuần văn bản trong nhóm (text-only team turn).\n"
+        "- TUYỆT ĐỐI KHÔNG gọi bất kỳ công cụ nào (không gọi read_file, write_file, edit_file, run_command, manage_task...).\n"
+        "- Hãy trả lời trực tiếp bằng văn bản hoặc JSON theo đúng yêu cầu."
+    )
+    curr = instructions if instructions is not None else getattr(ac, "instructions", None)
+    ac.instructions = f"{curr.strip()}\n\n{reminder}" if curr and str(curr).strip() else reminder
+    return ac
+
+
 def build(spec: dict, base: Any, tag: str, settings: dict | None = None) -> Any:
     """Engine chỉ chữ cho `spec`. `base` là engine Claude hộp cát (thư mục trống, MCP rỗng, cổng từ chối mọi công cụ)
     mà caller đã dựng với lời nhắc hệ thống của trợ lý. Ném TeamEngineUnavailable khi không dựng được."""
@@ -125,6 +148,11 @@ def build(spec: dict, base: Any, tag: str, settings: dict | None = None) -> Any:
         cc = CodexCLI(cwd=getattr(base, "cwd", None), tag=tag, model=model or None,
                       instructions=getattr(base, "system_prompt", None))
         return codex_text_only(cc)
+    if prov == aux_engine.ANTIGRAVITY:
+        import antigravity_cli as _a
+        ac = _a.AntigravityCLI(cwd=getattr(base, "cwd", None), tag=tag, model=model or None,
+                               instructions=getattr(base, "system_prompt", None))
+        return antigravity_text_only(ac, instructions=getattr(base, "system_prompt", None))
     if prov in aux_engine.API_PROVIDERS:
         eng = aux_engine._ApiAuxEngine(provider=prov, model=model, system_prompt=getattr(base, "system_prompt", None),
                                        vault_root=None, mode="suggest", tag=tag)

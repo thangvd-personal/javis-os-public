@@ -41,6 +41,7 @@ Hai tài liệu này ghi **vì sao** kiến trúc thành ra như hiện tại. �
 - [Hỗ trợ tệp Worktree và Main-tree trong Team](2026-11-team-worktree-maintree-files-spec.md) - cho phép thêm tệp worktree/main-tree vào danh mục File nhóm và tự động nạp nội dung tệp vào prompt khi người dùng trích dẫn đường dẫn. **Đã triển khai 19/11/2026.**
 - [Tra cứu GitHub PR và HEAD SHA trong Team](2026-11-github-team-head-sha-spec.md) - nâng cấp `javis_github` tự nhận diện phiên trong nhóm, bổ sung `HEAD SHA` và `op="pr"` / `op="head"` với quyền `readonly` để khắc phục lỗi git ls-remote thoát mã 128. **Đã triển khai 19/11/2026.**
 - [Tự động tạm ngưng 30s và thử lại khi LLM lỗi 502](2026-11-engine-transient-502-retry-spec.md) - tự động bắt lỗi nghẽn cổng 502/tạm thời, tạm dừng 30s rồi thử lại request trước khi báo lỗi về nhóm; bảo toàn bộ đếm công cụ cho `team_retry`. **Đã triển khai 19/11/2026.**
+- [Ngoại lệ điều phối thuần văn bản cho Antigravity CLI](2026-11-team-antigravity-coordinator-spec.md) - áp dụng cơ chế ngoại lệ 2 lớp (sandbox suggest mode kết hợp prompt guard rào không gọi công cụ) cho Antigravity CLI trong lượt điều phối/nhận việc thuần văn bản của nhóm, tránh lỗi dừng engine. **Đã triển khai 19/11/2026.**
 
 ## Đã cân nhắc rồi quyết định KHÔNG làm
 
