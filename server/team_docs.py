@@ -77,17 +77,36 @@ def rows_to_drop(rows: Iterable[dict], team_dir_rel: str, need: int = 1) -> list
 def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_dir: Path,
          to_rel: Callable[[Path], str], add: Callable[[str, str], str | None],
          pin: Callable[[str], object], readable: Iterable[str],
-         extract: Callable[[Path], str] | None = None, extract_suffixes: Iterable[str] = ()) -> list[dict]:
-    """Keep the files attached in a team (from the upload staging area, or already in the brain) as team documents.
+         extract: Callable[[Path], str] | None = None, extract_suffixes: Iterable[str] = (),
+         extra_roots: Iterable[Path] = (),
+         is_allowed: Callable[[Path], bool] | None = None) -> list[dict]:
+    """Keep the files attached in a team (from upload staging, brain, or team worktree/main-tree) as team documents.
 
     A staged upload is copied into `dest_dir` (inside the brain: the staging area is swept after a few days). A file
-    already in the brain stays where it is. Every file becomes a document row of the team's conversation; text files are
-    pinned so team turns read them; a PDF or Word file gets a pinned `.txt` copy. Anything outside the staging area and
-    the brain is refused. A folder of the brain is kept as one row, pinned (its tree is what turns read). Returns
-    [{name, path, image}] for the files kept."""
+    already in the brain, worktree or main-tree stays where it is. Every file becomes a document row of the team's
+    conversation; text files are pinned so team turns read them; a PDF or Word file gets a pinned `.txt` copy.
+    Anything outside the staging area, the brain, and authorized trees is refused. A folder is kept as one row, pinned
+    (its tree is what turns read). Returns [{name, path, image, dir}] for the files kept."""
     staging, brain_root = Path(staging).resolve(), Path(brain_root).resolve()
+    resolved_extra_roots = [Path(r).resolve() for r in (extra_roots or []) if str(r).strip()]
     readable = {s.lower() for s in readable}
     extract_suffixes = {s.lower() for s in extract_suffixes}
+
+    def _is_valid_source(p: Path) -> bool:
+        if _inside(p, staging) or _inside(p, brain_root / "temporary"):
+            return True
+        if _inside(p, brain_root):
+            return True
+        if any(_inside(p, r) for r in resolved_extra_roots):
+            return True
+        if is_allowed is not None:
+            try:
+                if is_allowed(p):
+                    return True
+            except Exception:
+                pass
+        return False
+
     out = []
     for a in list(attachments or [])[:MAX_PER_SEND]:
         if not isinstance(a, dict):
@@ -97,11 +116,12 @@ def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_d
         except (OSError, RuntimeError):
             continue
         if src.is_dir():
-            # 2026-11-12 (owner: "chọn được cả thư mục"): a folder of the brain joins as ONE document, stored with a
-            # trailing "/". It is pinned, which loads a short tree of what it holds: a text-only team turn cannot list a
-            # folder, so the tree is all it can read of it. A staged folder does not exist, and the brain root itself
-            # is not something to attach.
-            if src == brain_root or not _inside(src, brain_root):
+            # 2026-11-12 (owner: "chọn được cả thư mục"): a folder of the brain, worktree or main-tree joins as ONE document,
+            # stored with a trailing "/". It is pinned, which loads a short tree of what it holds.
+            # Root itself cannot be attached.
+            if src == brain_root or any(src == r for r in resolved_extra_roots):
+                continue
+            if not _is_valid_source(src):
                 continue
             name = _safe_name(a.get("name") or src.name)
             rel = to_rel(src).rstrip("/") + "/"
@@ -114,9 +134,8 @@ def save(attachments: Iterable[dict], *, staging: Path, brain_root: Path, dest_d
         if not src.is_file():
             continue
         staged = _inside(src, staging) or _inside(src, brain_root / "temporary")
-        in_brain = _inside(src, brain_root)
-        if not (staged or in_brain):
-            continue                       # never pull a file from elsewhere on the machine into a team
+        if not (staged or _is_valid_source(src)):
+            continue                       # never pull a file from unauthorized paths on the machine into a team
         name = _safe_name(a.get("name") or src.name)
         if staged:
             dest_dir.mkdir(parents=True, exist_ok=True)

@@ -270,7 +270,7 @@
     return '<div class="tm-text">' + esc(text).replace(/\n/g, "<br>") + "</div>";
   }
 
-  function rawUrl(path) { return "/files/raw?brain=" + q(brain()) + "&path=" + q(path); }
+  function rawUrl(path) { return "/files/raw?brain=" + q(brain()) + "&path=" + q(path) + (S.activeId ? "&team_id=" + q(S.activeId) : ""); }
   // A file sent with an owner's message. A picture opens in the in-app viewer (chat-render.js lightbox, a.jv-img-link,
   // named by data-img-ten) like every other picture in the chats, and a picture that cannot load any more becomes the
   // main chat's "not available" box (jvImgGone) instead of a broken icon. `ver` (the message time) is the picture's
@@ -2462,6 +2462,25 @@
     });
   }
 
+  function treeAddToTeamFiles(item, isDir) {
+    if (!S.team || !item) return;
+    var targetPath = item.abs_path || item.path;
+    if (isDir && !targetPath.endsWith("/")) targetPath += "/";
+    setNote(tw("teams.uploading") || "Đang thêm vào tài liệu nhóm...");
+    call("POST", teamUrl("/files"), {
+      attachments: [{ path: targetPath, brain_path: targetPath, name: item.name }]
+    }).then(function (r) {
+      if (r.code === 200) {
+        setNote(tw("teams.pick.doc_added") || "Đã thêm vào File của nhóm");
+        loadInfo();
+      } else {
+        setNote((r.j && r.j.error) || tw("teams.attach_err") || "Lỗi thêm file");
+      }
+    }).catch(function (e) {
+      setNote(String(e) || tw("teams.err_network"));
+    });
+  }
+
   function openTreeMenu(anchorEl, item, isDir, clientX, clientY) {
     var old = document.getElementById("tmTreeMenu");
     if (old) old.remove();
@@ -2473,6 +2492,7 @@
     if (!isDir) {
       items.push({ icon: "paperclip", label: tw("cs.vt_attach_chat"), run: function () { treeAttachChat(item); } });
     }
+    items.push({ icon: "plus-circle", label: tw("teams.info_add_file") || "Thêm vào File nhóm", run: function () { treeAddToTeamFiles(item, isDir); } });
     items.push({ sep: true });
     items.push({ icon: "download", label: tw(isDir ? "cs.fm_zip_btn" : "common.download"), run: function () { treeDownload(item.abs_path, item.name, isDir); } });
     items.push({ icon: "pencil", label: tw("cs.fm_rename"), run: function () { treeRename(item.abs_path, item.name); } });

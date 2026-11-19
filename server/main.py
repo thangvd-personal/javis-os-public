@@ -1060,7 +1060,7 @@ def _project_team_find(root: str, ref: str):
 
 def _project_team_attach(team, raw: str) -> list:
     """Attach one file or folder to a team the way the team's own panel does (`_team_attach`): a file just dropped into
-    a chat is copied into the team folder, a file of the brain stays where it is. Raises ValueError outside the brain."""
+    a chat is copied into the team folder, a file of the brain, worktree or main-tree stays where it is."""
     text = (raw or "").strip().replace("\\", "/")
     if not text:
         return []
@@ -1070,11 +1070,13 @@ def _project_team_attach(team, raw: str) -> list:
     if candidate.is_absolute() and staging in candidate.resolve().parents:
         target = candidate.resolve()
     else:
-        target = candidate.resolve() if candidate.is_absolute() else _safe_serve_path(brain, text)
+        target = candidate.resolve() if candidate.is_absolute() else _safe_serve_path(brain, text, team_id=team.get("team_id"))
         broot = Path(_brain_root(brain)).resolve()
-        if broot not in target.parents:
-            raise ValueError(localefmt.chu("Chỉ gắn được file hay thư mục nằm trong brain của nhóm",
-                                           "Only a file or folder inside the team's brain can be attached"))
+        wts, mts = _team_repo_trees(team, _brain_root(brain))
+        in_extra = _is_allowed_extra_path(target, brain) or any(target == Path(r).resolve() or Path(r).resolve() in target.parents for r in wts + mts)
+        if broot != target and broot not in target.parents and not in_extra:
+            raise ValueError(localefmt.chu("Chỉ gắn được file hay thư mục nằm trong brain, worktree hoặc main-tree của nhóm",
+                                           "Only a file or folder inside the team's brain, worktree or main-tree can be attached"))
     if not target.exists():
         return []
     return _team_attach(team, [{"path": str(target), "name": target.name}])
@@ -1124,7 +1126,7 @@ def _project_attach_target(brain: str, raw: str):
     return _asset_target(brain, _files_rel(ceiling, target))
 
 
-def _liet_ke_tai_lieu(brain: str, files: list, links: list):
+def _liet_ke_tai_lieu(brain: str, files: list, links: list, team_id: str = None):
     """Observe ordinary pinned file rows; the shared pure renderer owns templates.
 
     Preserve the legacy read order and per-row errors, including duplicate stored
@@ -1136,11 +1138,11 @@ def _liet_ke_tai_lieu(brain: str, files: list, links: list):
         prepared = None
         path = item.get("path") or ""
         if item.get("pinned") and path.endswith("/"):
-            prepared = _folder_asset_text(brain, path)
+            prepared = _folder_asset_text(brain, path, team_id=team_id)
         elif item.get("pinned") and os.path.splitext(path)[1].lower() in PROJECT_GHIM_DUOI:
             try:
                 # Read policy includes the serving ceiling, as in the legacy path.
-                text = _safe_serve_path(brain, path).read_text(encoding="utf-8", errors="replace")
+                text = _safe_serve_path(brain, path, team_id=team_id).read_text(encoding="utf-8", errors="replace")
                 prepared = main_attachment_rendering.PreparedAttachmentText(text[:PROJECT_GHIM_FILE_MAX], len(text))
                 del text
             except Exception:
@@ -1151,13 +1153,13 @@ def _liet_ke_tai_lieu(brain: str, files: list, links: list):
         file_max=PROJECT_GHIM_FILE_MAX, total_max=PROJECT_GHIM_TONG_MAX)
 
 
-def _folder_asset_text(brain: str, path: str):
+def _folder_asset_text(brain: str, path: str, team_id: str = None):
     """What a PINNED folder loads into the prompt (2026-11-12): a short tree of what it holds, so the model knows which
     files are there without listing the folder first. None when the folder is gone (the row then says it cannot be
     read). The tree is the one a team's working folder shows (team_docs.tree: two levels, capped)."""
     import team_docs
     try:
-        folder = _safe_serve_path(brain, path)
+        folder = _safe_serve_path(brain, path, team_id=team_id)
         if not folder.is_dir():
             return None
         lines = team_docs.tree(str(folder))
@@ -11234,6 +11236,24 @@ def _is_allowed_extra_path(target: Path, brain: str = "") -> bool:
             dp = Path(f.get("duong_dan") or "").resolve()
             if rp == dp or dp in rp.parents:
                 return True
+        try:
+            import team_gate
+            cg = team_gate.current()
+            if cg:
+                for r in cg.roots + cg.readonly_roots:
+                    pr = Path(r).resolve()
+                    if rp == pr or pr in rp.parents:
+                        return True
+        except Exception:
+            pass
+        if brain:
+            try:
+                wts, mts = _get_team_trees_for_serve(brain)
+                for r in wts + mts:
+                    if rp == r or r in rp.parents:
+                        return True
+            except Exception:
+                pass
     except Exception:
         pass
     return False
@@ -11378,18 +11398,25 @@ def _get_team_trees_for_serve(brain: str, team_id: str = None) -> tuple[list[Pat
     return wts, mts
 
 
-def _safe_path(brain: str, rel: str) -> Path:
+def _safe_path(brain: str, rel: str, team_id: str = None) -> Path:
     """Resolve rel TRONG trần duyệt; ném ValueError nếu vượt ra ngoài (chống ../)."""
     try:
         p_str = str(rel or "").strip()
         raw_p = Path(p_str).resolve()
         broot = Path(_brain_root(brain)).resolve()
         froot = _files_root(brain)
-        if _is_allowed_extra_path(raw_p, brain) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents:
+        try:
+            wts, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+        except Exception:
+            wts, mts = [], []
+        def _in_trees(p: Path) -> bool:
+            return any(p == r or r in p.parents for r in wts + mts)
+
+        if _is_allowed_extra_path(raw_p, brain) or _in_trees(raw_p) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents:
             return raw_p
         if not p_str.startswith("/") and not (len(p_str) > 1 and p_str[1] == ":"):
             raw_p2 = Path("/" + p_str).resolve()
-            if _is_allowed_extra_path(raw_p2, brain) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents:
+            if _is_allowed_extra_path(raw_p2, brain) or _in_trees(raw_p2) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents:
                 return raw_p2
     except Exception:
         pass
@@ -11419,11 +11446,18 @@ def _safe_serve_path(brain: str, rel: str, team_id: str = None) -> Path:
         raw_p = Path(p_str).resolve()
         broot = Path(_brain_root(brain)).resolve()
         froot = _files_root(brain)
-        if (_is_allowed_extra_path(raw_p, brain) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents) and raw_p.exists():
+        try:
+            wts, mts = _get_team_trees_for_serve(brain, team_id=team_id)
+        except Exception:
+            wts, mts = [], []
+        def _in_trees(p: Path) -> bool:
+            return any(p == r or r in p.parents for r in wts + mts)
+
+        if (_is_allowed_extra_path(raw_p, brain) or _in_trees(raw_p) or raw_p == broot or broot in raw_p.parents or raw_p == froot or froot in raw_p.parents) and raw_p.exists():
             return raw_p
         if not p_str.startswith("/") and not (len(p_str) > 1 and p_str[1] == ":"):
             raw_p2 = Path("/" + p_str).resolve()
-            if (_is_allowed_extra_path(raw_p2, brain) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents) and raw_p2.exists():
+            if (_is_allowed_extra_path(raw_p2, brain) or _in_trees(raw_p2) or raw_p2 == broot or broot in raw_p2.parents or raw_p2 == froot or froot in raw_p2.parents) and raw_p2.exists():
                 return raw_p2
     except Exception:
         pass
@@ -25991,14 +26025,18 @@ PHIEN_TS_MAX_LINK = 200
 
 
 def _ts_trong_brain(broot: Path, duong: Path):
-    """Path có nằm trong gốc brain và không thuộc thư mục rác không? Trả path đã chuẩn hoá."""
+    """Path có nằm trong gốc brain hoặc extra roots/worktrees và không thuộc thư mục rác không? Trả path đã chuẩn hoá."""
     try:
         rp = Path(os.path.normpath(os.path.abspath(str(duong))))
     except (OSError, ValueError):
         return None
+    in_brain = False
     try:
         rp.relative_to(broot)
+        in_brain = True
     except ValueError:
+        pass
+    if not in_brain and not _is_allowed_extra_path(rp, ""):
         return None
     if any(part in channel_context._EXCLUDE_PARTS for part in rp.parts):
         return None
@@ -26047,9 +26085,17 @@ def sessions_assets(session_id: str, brain: str = Query("")):
         # The label is the one of the FIRST mention, as when the messages were read in order: a bare path named
         # before the link leaves the row without a label.
         first_is_link = bool(lk) and (not br or lk["first"] < br["first"])
+        try:
+            p_rel = _files_rel(ceil, rp)
+        except ValueError:
+            p_rel = str(rp)
+        try:
+            b_rel = _files_rel(broot, rp)
+        except ValueError:
+            b_rel = str(rp)
         ra_file.append({
-            "path": _files_rel(ceil, rp),                 # theo TRẦN: đúng khuôn JavisOpenNoteAt nhận
-            "brain_path": _files_rel(broot, rp),          # theo GỐC BRAIN: để hiện cho người đọc
+            "path": p_rel,                                # theo TRẦN: đúng khuôn JavisOpenNoteAt nhận
+            "brain_path": b_rel,                          # theo GỐC BRAIN: để hiện cho người đọc
             "name": rp.name,
             "label": lk["label"] if first_is_link else "",
             "image": lk["image"] if first_is_link else False,
@@ -26100,6 +26146,7 @@ def _cuoc_tai_lieu_tay(session_id: str, sess: dict):
     notes = store.session_asset_notes(session_id)   # 2026-11-13: one-line descriptions
     brain = (sess.get("brain") or "brain").strip() or "brain"
     broot = Path(_brain_root(brain)).resolve()
+    tid = sess.get("channel", "").split(":", 1)[1] if str(sess.get("channel") or "").startswith("team:") else None
     ra_f = []
     for f in store.list_session_files(session_id):
         duong = f.get("path") or ""
@@ -26109,7 +26156,7 @@ def _cuoc_tai_lieu_tay(session_id: str, sess: dict):
             # `_safe_serve_path` (không phải `_safe_path`): đây là đường ĐỌC, và trần duyệt có
             # thể cao hơn gốc brain nên đường dẫn lưu theo trần lẫn theo gốc đều phải giải
             # được. Cùng lý do như chỗ nạp file ghim của project.
-            rp = Path(_safe_serve_path(brain, duong))
+            rp = Path(_safe_serve_path(brain, duong, team_id=tid))
             co = rp.is_dir() if is_dir else rp.is_file()
         except Exception:
             rp = None
@@ -35002,24 +35049,54 @@ def _team_attach(team, attachments):
     store, sid = get_store(), team.get("session_id") or ""
     if not sid:
         return []
-    # 2026-11-12: a file picked from the brain (the create-team box, the Info tab's search) comes as `brain_path`, the
-    # path /files/search returns. It is resolved here, inside the brain's own fence; a path that escapes it is dropped.
+    tid = str(team.get("team_id") or "team")
     picked = []
     for a in list(attachments or []):
-        if isinstance(a, dict) and a.get("brain_path") and not a.get("path"):
+        if not isinstance(a, dict):
+            continue
+        raw_path = str(a.get("path") or a.get("brain_path") or "").strip()
+        if not raw_path:
+            continue
+        resolved = None
+        try:
+            resolved = _safe_serve_path(brain, raw_path, team_id=tid)
+        except Exception:
+            pass
+        if not resolved or not resolved.exists():
             try:
-                a = dict(a, path=str(_safe_path(brain, str(a.get("brain_path") or ""))))
-            except ValueError:
-                continue
-        picked.append(a)
+                resolved = _safe_path(brain, raw_path, team_id=tid)
+            except Exception:
+                pass
+        if resolved and resolved.exists():
+            picked.append(dict(a, path=str(resolved.resolve())))
+        elif a.get("path"):
+            picked.append(a)
     attachments = picked
-    dest_dir = broot / "attachments" / "teams" / str(team.get("team_id") or "team")
+    dest_dir = broot / "attachments" / "teams" / tid
+
+    w_list, m_list = _team_repo_trees(team, _brain_root(brain))
+    extra_roots = [Path(w).resolve() for w in w_list] + [Path(m).resolve() for m in m_list]
+
+    def _to_rel(p: Path) -> str:
+        try:
+            return _files_rel(root, Path(p))
+        except ValueError:
+            return str(Path(p).resolve())
+
+    def _dest_rel():
+        try:
+            return _files_rel(root, dest_dir)
+        except ValueError:
+            return str(dest_dir.resolve())
+
     return team_docs.save(attachments, staging=STAGING, brain_root=broot,
                           dest_dir=dest_dir,
-                          to_rel=lambda p: _files_rel(root, Path(p)),
-                          add=_team_doc_adder(store, sid, _files_rel(root, dest_dir)),
+                          to_rel=_to_rel,
+                          add=_team_doc_adder(store, sid, _dest_rel()),
                           pin=lambda fid: store.set_session_file_pinned(sid, fid, True),
-                          readable=PROJECT_GHIM_DUOI, extract=doc_text.extract, extract_suffixes=doc_text.SUFFIXES)
+                          readable=PROJECT_GHIM_DUOI, extract=doc_text.extract, extract_suffixes=doc_text.SUFFIXES,
+                          extra_roots=extra_roots,
+                          is_allowed=lambda p: _is_allowed_extra_path(p, brain))
 
 
 async def _team_describe(team, pics, caption):
@@ -35031,9 +35108,10 @@ async def _team_describe(team, pics, caption):
     if not sid or not pics:
         return
     paths = []
+    tid = team.get("team_id")
     for f in pics:
         try:
-            paths.append(str(_safe_path(brain, f.get("path") or "")))
+            paths.append(str(_safe_serve_path(brain, f.get("path") or "", team_id=tid)))
         except ValueError:
             continue
     if not paths:
@@ -35045,15 +35123,84 @@ async def _team_describe(team, pics, caption):
     root = _files_root(brain)
     store = get_store()
     dest_dir = broot / "attachments" / "teams" / str(team.get("team_id") or "team")
+    def _to_rel_d(p: Path) -> str:
+        try:
+            return _files_rel(root, Path(p))
+        except ValueError:
+            return str(Path(p).resolve())
+    def _dest_rel_d():
+        try:
+            return _files_rel(root, dest_dir)
+        except ValueError:
+            return str(dest_dir.resolve())
     await asyncio.to_thread(
         team_docs.save_description, [f.get("name") or "" for f in pics], mo_ta, who,
         dest_dir=dest_dir,
-        to_rel=lambda p: _files_rel(root, Path(p)),
-        add=_team_doc_adder(store, sid, _files_rel(root, dest_dir)),
+        to_rel=_to_rel_d,
+        add=_team_doc_adder(store, sid, _dest_rel_d()),
         pin=lambda fid: store.set_session_file_pinned(sid, fid, True))
 
 
-def _team_docs_block(team, tools=False):
+def _team_mentioned_files_block(team: dict, text: str, already_paths: set = None) -> str:
+    """Đọc tệp văn bản được nhắc tới trong tin nhắn từ worktree, main-tree hoặc brain
+    để các agent trong lượt chỉ chữ đọc được ngay nội dung tệp mà không cần chuyển thủ công."""
+    if not text or not isinstance(text, str):
+        return ""
+    already_paths = set(already_paths or ())
+    brain = team.get("brain_id") or "brain"
+    tid = team.get("team_id")
+
+    candidates = set()
+    try:
+        import channel_context
+        for p in channel_context.extract_paths(text):
+            candidates.add(p.strip())
+    except Exception:
+        pass
+    for m in re.finditer(r"(?:^|[\s\"'‘“`(\[])((?:/[a-zA-Z0-9_.-]+)+/[a-zA-Z0-9_.-]+\.[a-zA-Z0-9_]+)", text):
+        candidates.add(m.group(1).strip())
+    for m in re.finditer(r"(?:^|[\s\"'‘“`(\[])([a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)+\.[a-zA-Z0-9_]+)", text):
+        candidates.add(m.group(1).strip())
+    for m in re.finditer(r"\[([^\]]+)\]\(([^)]+)\)", text):
+        target = m.group(2).strip()
+        if not target.startswith(("http://", "https://", "#", "mailto:")):
+            candidates.add(target)
+
+    read_blocks = []
+    seen_resolved = set()
+    for cand in candidates:
+        if not cand:
+            continue
+        try:
+            resolved = _safe_serve_path(brain, cand, team_id=tid)
+        except Exception:
+            continue
+        if not resolved or not resolved.is_file():
+            continue
+        res_str = str(resolved.resolve())
+        if res_str in seen_resolved or res_str in already_paths or cand in already_paths:
+            continue
+        seen_resolved.add(res_str)
+        suf = resolved.suffix.lower()
+        if suf not in PROJECT_GHIM_DUOI and suf not in _TEXT_EXTS:
+            continue
+        try:
+            size = resolved.stat().st_size
+            if size > 1_000_000:
+                continue
+            content = resolved.read_text(encoding="utf-8", errors="replace")
+            if len(content) > PROJECT_GHIM_FILE_MAX:
+                content = content[:PROJECT_GHIM_FILE_MAX] + "\n... (còn nữa, đã cắt bớt)"
+            read_blocks.append(f"## {resolved.name} ({cand})\n```\n{content}\n```")
+        except Exception:
+            continue
+
+    if not read_blocks:
+        return ""
+    return "# TỆP ĐƯỢC NHẮC ĐẾN TRONG TIN NHẮN (WORKTREE / MAIN-TREE / BRAIN)\n" + "\n\n".join(read_blocks)
+
+
+def _team_docs_block(team, tools=False, extra_text=""):
     """Documents, links and the pinned working folder of a team, for every member turn (0.191.0, team_docs.block).
     `tools=True`: the wording of a Work/Help turn that can open them itself (0.194.0)."""
     import team_docs
@@ -35063,7 +35210,9 @@ def _team_docs_block(team, tools=False):
     try:
         store = get_store()
         files, links = store.list_session_files(sid), store.list_session_links(sid)
-        listed, loaded = _liet_ke_tai_lieu(team.get("brain_id") or "brain", files, links) if (files or links) else ([], [])
+        tid = team.get("team_id")
+        brain = team.get("brain_id") or "brain"
+        listed, loaded = _liet_ke_tai_lieu(brain, files, links, team_id=tid) if (files or links) else ([], [])
         block = team_docs.block(listed, loaded, coding_store.cwd_cua_phien(sid), tools=bool(tools))
         # 2026-11-13: what each team document holds, one line each (written by Javis or the owner).
         notes = store.session_asset_notes(sid) if (files or links) else {}
@@ -35075,6 +35224,11 @@ def _team_docs_block(team, tools=False):
             if desc:
                 block += ("\n\nWhich document holds what:\n" + "\n".join(desc)
                           + (f"\n({hidden} more descriptions)" if hidden else ""))
+        if extra_text:
+            already = {f.get("path") for f in files}
+            mentioned_blk = _team_mentioned_files_block(team, extra_text, already_paths=already)
+            if mentioned_blk:
+                block = (block + "\n\n" if block else "") + mentioned_blk
     except Exception as e:  # noqa: BLE001 - a broken document must not stop the team from answering
         print(f"[team docs] {type(e).__name__}: {e}", file=sys.stderr)
         block = ""

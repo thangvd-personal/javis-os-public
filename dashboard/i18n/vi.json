@@ -5394,7 +5394,7 @@
   "teams.pick.desc_add": "Thêm mô tả (không bắt buộc)",
   "teams.pick.docs_add": "Thêm tài liệu cho team (file, link, repository)",
   "teams.pick.docs_help": "Cộng sự trong team đọc được các file và link này ngay từ tin đầu tiên.",
-  "teams.pick.doc_search_ph": "Tìm file hoặc thư mục có sẵn trong brain (gõ tên)",
+  "teams.pick.doc_search_ph": "Tìm file hoặc thư mục trong brain, worktree, main-tree (gõ tên)",
   "teams.pick.doc_upload": "Tải từ máy",
   "teams.pick.doc_add": "Thêm",
   "teams.pick.doc_added": "Đã thêm",

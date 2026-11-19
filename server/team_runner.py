@@ -2703,6 +2703,7 @@ class TeamRunner:
         work_mode = team.get("work_mode") or team_gate.GATED
         if tool_turn and work_mode != team_gate.FULL:
             note += "\n\n" + GATED_NOTE
+        self._turn_body = body
         req = {"team_id": team_id, "brain": team["brain_id"], "agent_key": agent_key, "role": role,
                "system": (str(info.get("system") or "").rstrip() + "\n\n" + note + "\n\n" +
                           "\n".join(INTERNAL_GROUP_NOTE)).lstrip(),
@@ -2717,15 +2718,24 @@ class TeamRunner:
         return {"pre": "done", "engine": str(engine or ""), "model": str(model or ""), "fn": fn, "req": req,
                 "tool_key": self._work_key(team) if tool_turn else ""}
 
-    def _docs(self, team: dict, tools: bool = False) -> str:
+    def _docs(self, team: dict, tools: bool = False, extra_text: str = "") -> str:
         if self.docs_block is None:
             return ""
+        extra = extra_text or getattr(self, "_turn_body", "")
         try:
             if tools:
+                try:
+                    return str(self.docs_block(team, tools=True, extra_text=extra) or "")
+                except TypeError:
+                    pass
                 try:
                     return str(self.docs_block(team, tools=True) or "")
                 except TypeError:  # an older docs_block(team) without the tool-turn wording
                     pass
+            try:
+                return str(self.docs_block(team, extra_text=extra) or "")
+            except TypeError:
+                pass
             return str(self.docs_block(team) or "")
         except Exception:  # noqa: BLE001 - documents are context; a broken one must not cost the turn
             return ""

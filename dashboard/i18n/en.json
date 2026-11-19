@@ -5395,7 +5395,7 @@
   "teams.pick.desc_add": "Add a description (optional)",
   "teams.pick.docs_add": "Add documents for the team (files, links, repositories)",
   "teams.pick.docs_help": "Team members can read these files and links from the first message.",
-  "teams.pick.doc_search_ph": "Find a file or folder already in the brain (type its name)",
+  "teams.pick.doc_search_ph": "Find a file or folder in brain, worktree, main-tree (type its name)",
   "teams.pick.doc_upload": "Upload",
   "teams.pick.doc_add": "Add",
   "teams.pick.doc_added": "Added",
