@@ -214,7 +214,7 @@ WORK_TOOLS_NOTE = ("# LƯỢT LÀM VIỆC CÓ CÔNG CỤ\nĐây là lượt bạ
                    "chủ chat riêng với bạn: đọc và ghi file trong bộ não và thư mục làm việc của nhóm, gọi kết nối (MCP) đã "
                    "nối, dùng skill, chạy lệnh nếu engine của bạn có. TỰ LÀM bước này tới kết quả thật (file đã ghi, link đã "
                    "chạy, số liệu đã lấy), đừng bảo chủ nhóm chuyển sang chat riêng. Trả lời trong nhóm NGẮN bằng kết quả: đã "
-                   "làm gì, file hay link nào, còn vướng gì. Chỉ làm đúng phạm vi bước được giao; hành động ra ngoài (gửi tin, đăng "
+                   "làm gì, file hay link nào, còn vướng gì. Bàn giao kết quả rõ ràng để người điều phối nghiệm thu hoặc giao tiếp. Chỉ làm đúng phạm vi bước được giao; hành động ra ngoài (gửi tin, đăng "
                    "bài, thanh toán, xoá dữ liệu) chỉ làm khi việc nói rõ. Thành viên khác làm lần lượt trên cùng thư mục, "
                    "nên đừng sửa file của bước khác khi bước của bạn không cần. "
                    "Nếu sử dụng các công cụ hẹn giờ hoặc tiến trình chạy nền (schedule, run_command async), bạn PHẢI huỷ (kill) "
@@ -254,8 +254,9 @@ INTERNAL_GROUP_NOTE = ("# NHÓM NỘI BỘ CỦA CHỦ",
                        # 0.197.0 (owner, 17/10/2026): "agent trưởng nhóm sẽ được quyền tag chủ nhóm vào tin nhắn để đọc".
                        # Only the leader's call flags the owner and reaches the owner's devices (_post), so a busy team
                        # does not ring the owner for every member's question.
-                       ("Gọi tên như nhóm chat thật: khi trả lời hay nhờ một trợ lý khác, gọi \"@Tên\" của người đó. Chỉ "
-                        "trưởng nhóm (người ghi \"trưởng nhóm\" trong danh sách thành viên) được gọi \"@Chủ nhóm\", ngay "
+                       ("Gọi tên như nhóm chat thật: khi trả lời hay nhờ một trợ lý khác, gọi \"@Tên\" của người đó. Khi hoàn "
+                        "thành công việc được giao, thành viên bàn giao kết quả cho người điều phối (@Tên điều phối) để nghiệm "
+                        "thu. Chỉ trưởng nhóm (người ghi \"trưởng nhóm\" trong danh sách thành viên) được gọi \"@Chủ nhóm\", ngay "
                         "trước câu chủ cần đọc, trả lời hay quyết định; tin đó báo về máy chủ nhóm. Thành viên khác cần chủ "
                         "quyết thì gọi trưởng nhóm, trưởng nhóm gom lại rồi hỏi chủ một lần. Không gọi ai khi không cần họ "
                         "đáp."),
@@ -1922,6 +1923,16 @@ class TeamRunner:
 
     # ───────────── 0.452.0: jobs opened from the chat ─────────────
 
+    def _is_team_autonomous(self, team: dict) -> bool:
+        """Kiểm tra nhóm có đang ở chế độ Tự quản cả team (Level 3 - Toàn quyền can_interrupt)."""
+        if not team or not team.get("leader_key"):
+            return False
+        auth = self.teams.active_authority(team["team_id"])
+        if not auth or auth.get("leader_key") != team.get("leader_key"):
+            return False
+        grant = auth.get("grant") or {}
+        return bool(grant.get("can_interrupt"))
+
     def _leader_with_authority(self, team_id: str, agent_key: str, role: str) -> bool:
         """The leader under Full authority opens jobs through its admin ops (no daily cap of this path)."""
         if role != "leader_reply":
@@ -3398,7 +3409,21 @@ class TeamRunner:
         if self.tasks.team_finish(task_id, text, expected_rev=rev) is not None:
             self._judge_job_changed(task_id, team["team_id"])
             self._job_done(team, task_id)
-            self.sessions.update_team_message_meta(team["session_id"], msg_id, {"job_result": True})
+            meta_patch = {"job_result": True}
+            if self._is_team_autonomous(team):
+                q = self.tasks.team_queue(team["team_id"])
+                has_more_jobs = any(t.get("id") != task_id for t in (q.get("waiting") or []) + (q.get("running") or []))
+                m = self.sessions.team_message(team["session_id"], msg_id)
+                if not has_more_jobs and m and not (m.get("meta") or {}).get("asks_owner"):
+                    if (m.get("author_ref") or "") == team.get("leader_key"):
+                        meta_patch["asks_owner"] = True
+                        self._notify(team["team_id"], localefmt.chu(
+                            "{ten} báo cáo kết quả hoàn thành việc \"{viec}\" trong nhóm \"{nhom}\"",
+                            "{ten} reported job \"{viec}\" finished in team \"{nhom}\"",
+                            ten=self._name(team, team.get("leader_key") or ""),
+                            viec=(self.tasks.get_task(task_id) or {}).get("title") or "",
+                            nhom=team.get("name") or ""))
+            self.sessions.update_team_message_meta(team["session_id"], msg_id, meta_patch)
             self._publish({"type": "team_message", "team_id": team["team_id"],
                            "message": self.sessions.team_message(team["session_id"], msg_id)})
             self._state(team["team_id"])
@@ -3856,10 +3881,18 @@ class TeamRunner:
                     'trước thì ghi "wait": true.\n'
                     "Việc nhỏ thì tự làm luôn và trả kết quả, không cần giao.")
         if step["kind"] == "synthesize":
-            return ("Tổng hợp kết quả các bước (ở phần Đầu vào) thành một kết quả cuối NGẮN cho chủ nhóm: kết quả chính, "
+            base = ("Tổng hợp kết quả các bước (ở phần Đầu vào) thành một kết quả cuối NGẮN cho chủ nhóm: kết quả chính, "
                     "file hay link nào, còn vướng gì. Không kể lại từng bước. Một thành viên có nhiều tin thì tin mới nhất "
                     "(số # lớn hơn) thay cho tin cũ.")
-        return ("Làm phần việc của bạn và trả kết quả. Cần hỏi thành viên khác thì dùng: "
+            if self._is_team_autonomous(self._team(task["team_id"])):
+                base += ("\n# ĐIỀU PHỐI TỰ QUẢN\n"
+                         "Bạn là người điều phối đang tự quản cả team. Sau khi nhận kết quả từ cộng sự:\n"
+                         "- Nếu quy trình cần làm tiếp bước sau: mở việc mới hoặc giao việc cho cộng sự bằng khối JAVIS_TEAM (vd: open_job).\n"
+                         "- Nếu KHÔNG giao thêm nhiệm vụ nào cho cộng sự và mọi yêu cầu đã hoàn tất: bạn PHẢI báo cáo lại cho Chủ nhóm (bắt buộc gọi @Chủ nhóm ở đầu hoặc cuối câu báo cáo).")
+            return base
+        lead_key = (self._team(task["team_id"]) or {}).get("leader_key")
+        lead_name = self._name(self._team(task["team_id"]), lead_key) if lead_key else "Người điều phối"
+        return ("Làm phần việc của bạn và trả kết quả. Nêu rõ kết quả để @" + lead_name + " nghiệm thu hoặc điều phối tiếp. Cần hỏi thành viên khác thì dùng: "
                 '<!-- JAVIS_TEAM: {"op": "request_help", "agent": "<mã thành viên>", "question": "..."} -->')
 
     def _approved_block(self, step: dict) -> str:
@@ -4181,6 +4214,11 @@ class TeamRunner:
         results = [s for s in steps if s["kind"] == "work" and s["status"] == "done" and s["applied"]
                    and int(s["job_revision"]) == int(task["team_rev"])]
         if len(results) == 1:
+            # Tự quản cả team (Level 3): khi cộng sự làm xong, chuyển giao kết quả cho người điều phối tổng hợp/nghiệm thu
+            if team.get("leader_key") and results[0]["agent_key"] != team["leader_key"] and self._is_team_autonomous(team):
+                ok = self._add_steps(team, task, [{"kind": "synthesize", "agent": team["leader_key"], "brief": "",
+                                                   "inputs": [results[0]["result_msg_id"]]}])
+                return None if ok else "team_blocked"
             m = self.sessions.team_message(team["session_id"], results[0]["result_msg_id"])
             return self._finish(team, task["id"], results[0]["result_msg_id"], (m or {}).get("content", ""),
                                 int(results[0]["job_revision"]))
@@ -4346,6 +4384,18 @@ class TeamRunner:
                     self.teams.set_step_status(self.teams.steps(task["id"])[-1]["step_id"], "queued", "resynth")
                 return None if ok else "team_blocked"
             self.teams.finish_step(sid, "done", mid, True)
+            if self._is_team_autonomous(team):
+                opened_jobs = [op for op in (out.get("ops") or []) if op.get("op") == "open_job"]
+                q = self.tasks.team_queue(team["team_id"])
+                has_more_jobs = bool(opened_jobs) or any(t.get("id") != task["id"] for t in (q.get("waiting") or []) + (q.get("running") or []))
+                if not has_more_jobs and mid:
+                    m = self.sessions.team_message(team["session_id"], mid)
+                    if m and not (m.get("meta") or {}).get("asks_owner"):
+                        self.sessions.update_team_message_meta(team["session_id"], mid, {"asks_owner": True})
+                        self._notify(team["team_id"], localefmt.chu(
+                            "{ten} báo cáo kết quả hoàn thành trong nhóm \"{nhom}\"",
+                            "{ten} reported completed results in team \"{nhom}\"",
+                            ten=self._name(team, step["agent_key"]), nhom=team.get("name") or ""))
             return self._finish(team, task["id"], mid, out["text"], int(step["job_revision"]))
         # work, help
         helps = out["ops"]
